@@ -1,0 +1,6 @@
+{
+  "PrepareNoncoding.noncoding_bed_list": "File", 
+
+  "PrepareNoncoding.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3"
+}
+

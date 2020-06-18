@@ -1,0 +1,9 @@
+{
+  "Module02Metrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module02Metrics.linux_docker" : "ubuntu:18.04",
+  "Module02Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+
+  "Module02Metrics.name" : "test_small",
+  "Module02Metrics.metrics" : "gs://gatk-sv-resources/test/module02/small/output/test_small.metrics",
+  "Module02Metrics.metrics_common" : "gs://gatk-sv-resources/test/module02/small/output/test_small.common.metrics"
+}

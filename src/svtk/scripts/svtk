@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+#
+# Copyright 2017 Matthew Stone <mstone5@mgh.harvard.edu>
+# Distributed under terms of the MIT license.
+
+"""
+SVTK: A toolkit for manipulating structural variation
+
+usage: svtk [-h] <subcommand> [options]
+
+[ Preprocessing ]
+    standardize    Convert SV calls to a standardized format.
+    rdtest2vcf     Convert an RdTest-formatted bed to a standardized VCF.
+    vcf2bed        Convert a standardized VCF to an RdTest-formatted bed.
+
+[ Algorithm integration ]
+    vcfcluster     Cluster SV calls from a list of VCFs. (Generally PE/SR.)
+    bedcluster     Cluster SV calls from a BED. (Generally depth.)
+
+[ Statistics ]
+    count-svtypes  Count instances of each svtype in each sample in a VCF
+
+[ Read-depth analysis ]
+    bincov         Calculate normalized genome-wide depth of coverage.
+    rdtest*        Calculate comparative coverage statistics at CNV sites.
+
+[ PE/SR analysis ]
+    collect-pesr   Count clipped reads and extract discordant pairs genomewide.
+    sr-test        Calculate enrichment of clipped reads at SV breakpoints.
+    pe-test        Calculate enrichment of discordant pairs at SV breakpoints.
+
+[ Variant analysis ]
+    resolve        Resolve complex variants from VCF of breakpoints.
+    annotate       Annotate genic effects and ovelrap with noncoding elements.
+
+* Not yet implemented
+"""
+
+import argparse
+import sys
+import svtk.cli as cli
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        usage=argparse.SUPPRESS,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('subcommand', help=argparse.SUPPRESS)
+
+    if len(sys.argv) < 2:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args(sys.argv[1:2])
+    command = args.subcommand.replace('-', '_')
+
+    if not hasattr(cli, command):
+        print('Unrecognized command: {0}'.format(args.subcommand))
+        parser.print_help()
+        sys.exit(1)
+
+    getattr(cli, command)(sys.argv[2:])
+
+if __name__ == '__main__':
+    main()

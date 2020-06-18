@@ -1,0 +1,70 @@
+{
+  "Module00b.run_vcf_qc" : "true",
+  "Module00b.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
+  "Module00b.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "Module00b.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
+  "Module00b.wgd_scoring_mask": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
+  "Module00b.genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
+
+  "Module00b.batch": "test_small",
+  "Module00b.counts": [
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZQ.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZR.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZS.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZT.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZU.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZV.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZNZW.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZO12.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZO13.tsv.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/coverage_counts/counts_100bp.SM-BZO14.tsv.gz"
+  ],
+  "Module00b.manta_vcfs": [
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZQ.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZR.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZS.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZT.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZU.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZV.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZNZW.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZO12.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZO13.manta.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/manta_vcf/SM-BZO14.manta.vcf.gz"
+  ],
+  "Module00b.melt_vcfs": [
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZQ.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZR.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZS.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZT.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZU.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZV.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZNZW.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZO12.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZO13.melt.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/melt_vcf/SM-BZO14.melt.vcf.gz"
+  ],
+  "Module00b.wham_vcfs": [
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZQ.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZR.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZS.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZT.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZU.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZV.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZNZW.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZO12.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZO13.wham.vcf.gz",
+    "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/SM-BZO14.wham.vcf.gz"
+  ],
+  "Module00b.samples": [
+    "SM-BZNZQ",
+    "SM-BZNZR",
+    "SM-BZNZS",
+    "SM-BZNZT",
+    "SM-BZNZU",
+    "SM-BZNZV",
+    "SM-BZNZW",
+    "SM-BZO12",
+    "SM-BZO13",
+    "SM-BZO14"
+  ]
+}
