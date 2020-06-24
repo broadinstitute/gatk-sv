@@ -54,8 +54,8 @@ workflow Module07 {
 
   call pav.PruneAndAddVafs as PruneAndAddVafs {
     input:
-      vcf                    = vcf,
-      vcf_idx                = vcf_idx,
+      vcf                    = AnnotateVcf.annotated_vcf,
+      vcf_idx                = AnnotateVcf.annotated_vcf_idx,
       prefix                 = prefix,
       sample_pop_assignments = sample_pop_assignments,
       prune_list             = prune_list,
