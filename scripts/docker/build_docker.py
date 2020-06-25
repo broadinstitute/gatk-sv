@@ -198,8 +198,8 @@ class Project_Build:
 
     INTERM_RESOURCE_IMG = 'gatksv-pipeline-v1-resources'
 
-    GITHUB_ORG     = 'talkowski-lab'
-    GITHUB_REPO    = 'gatk-sv-v1'
+    GITHUB_ORG     = 'broadinstitute'
+    GITHUB_REPO    = 'gatk-sv'
 
     #### for constructing an ordered build chain, to resolve dependency
     DEP_DICT = {'delly': None, 'manta': None, 'melt': None, 'wham': None,
