@@ -32,7 +32,7 @@
   "GATKSVPipelineSingleSample.sv_base_docker": "gatksv/sv-base:b3af2e3",
   "GATKSVPipelineSingleSample.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "GATKSVPipelineSingleSample.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "GATKSVPipelineSingleSample.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "GATKSVPipelineSingleSample.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "GATKSVPipelineSingleSample.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
   "GATKSVPipelineSingleSample.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "GATKSVPipelineSingleSample.wham_docker": "gatksv/wham:8645aa",
@@ -86,6 +86,12 @@
   "GATKSVPipelineSingleSample.clean_vcf_samples_per_clean_vcf_step2_shard": 100,
   "GATKSVPipelineSingleSample.clean_vcf_random_seed": 0,
   "GATKSVPipelineSingleSample.run_vcf_qc" : false,
+
+  "GATKSVPipelineSingleSample.protein_coding_gtf" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.canonical_pc.gtf.gz",
+  "GATKSVPipelineSingleSample.linc_rna_gtf" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.lincRNA.gtf.gz",
+  "GATKSVPipelineSingleSample.promoter_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/promoter.bed",
+  "GATKSVPipelineSingleSample.noncoding_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
+  "GATKSVPipelineSingleSample.annotation_sv_per_shard" : "5000",
 
   "GATKSVPipelineSingleSample.cnmops_mem_gb_override_sample3": 24,
 

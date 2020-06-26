@@ -60,7 +60,7 @@
   ],
 
   "Module00cTest.Module00c.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00cTest.Module00c.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "Module00cTest.Module00c.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "Module00cTest.Module00c.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
   "Module00cTest.Module00c.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "Module00cTest.Module00c.linux_docker" : "ubuntu:18.04",

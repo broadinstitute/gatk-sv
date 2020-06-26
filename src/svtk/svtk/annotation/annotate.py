@@ -39,12 +39,18 @@ def annotate_noncoding(sv, noncoding):
     noncoding_hits = annotate_intersection(sv, noncoding, filetype='bed')
     noncoding_hits = noncoding_hits.drop_duplicates()
 
-    noncoding_hits.loc[noncoding_hits.hit_type == 'SPAN', 'effect'] = 'NONCODING_SPAN'
-    noncoding_hits.loc[noncoding_hits.hit_type != 'SPAN', 'effect'] = 'NONCODING_BREAKPOINT'
+    if noncoding_hits.shape[0] > 0:
+        if len(noncoding_hits.hit_type == 'SPAN') != 0:
+            noncoding_hits.loc[noncoding_hits.hit_type == 'SPAN', 'effect'] = 'NONCODING_SPAN'
+        if len(noncoding_hits.hit_type != 'SPAN') != 0:
+            noncoding_hits.loc[noncoding_hits.hit_type != 'SPAN', 'effect'] = 'NONCODING_BREAKPOINT'
+        noncoding_cols = 'name svtype gene_name effect'.split()
+        effects = noncoding_hits[noncoding_cols].drop_duplicates()
+    else:
+        # no hits found, add an empty 'effect' column
+        noncoding_hits['effect'] = ''
+        effects = noncoding_hits
 
-    noncoding_cols = 'name svtype gene_name effect'.split()
-
-    effects = noncoding_hits[noncoding_cols].drop_duplicates()
     return effects
 
 

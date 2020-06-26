@@ -11,6 +11,7 @@ import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
 import "Module04.wdl" as m04
 import "Module05_06.wdl" as m0506
+import "Module07.wdl" as m07
 import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
@@ -359,6 +360,16 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
+
+    ############################################################
+    ## Module 07
+    ############################################################
+
+    File protein_coding_gtf
+    File linc_rna_gtf
+    File promoter_bed
+    File noncoding_bed
+    Int annotation_sv_per_shard
 
     ############################################################
     ## Single sample filtering
@@ -885,10 +896,25 @@ workflow GATKSVPipelineSingleSample {
         sv_base_mini_docker=sv_base_mini_docker
     }
 
+  call m07.Module07 as Module07 {
+       input:
+        vcf = ResetBothsidesSupportFilter.out,
+        vcf_idx = ResetBothsidesSupportFilter.out_idx,
+        prefix = batch,
+        contig_list = primary_contigs_list,
+        protein_coding_gtf = protein_coding_gtf,
+        linc_rna_gtf = linc_rna_gtf,
+        promoter_bed = promoter_bed,
+        noncoding_bed = noncoding_bed,
+        sv_per_shard = annotation_sv_per_shard,
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_docker = sv_pipeline_docker
+  }
+
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
     input:
-      single_sample_vcf=ResetBothsidesSupportFilter.out,
-      single_sample_vcf_idx=ResetBothsidesSupportFilter.out_idx,
+      single_sample_vcf=Module07.output_vcf,
+      single_sample_vcf_idx=Module07.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
       sv_pipeline_docker=sv_pipeline_docker
@@ -924,6 +950,13 @@ workflow GATKSVPipelineSingleSample {
   output {
     File final_vcf = FinalVCFCleanup.out
     File final_vcf_idx = FinalVCFCleanup.out_idx
+
+    # These files contain events reported in the internal VCF representation
+    # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
+    # on the output.
+    File pre_cleanup_vcf = Module07.output_vcf
+    File pre_cleanup_vcf_idx = Module07.output_vcf_idx
+
     File ploidy_matrix = select_first([Module00c.ploidy_matrix])
     File ploidy_plots = select_first([Module00c.ploidy_plots])
     File metrics_file = SingleSampleMetrics.metrics_file

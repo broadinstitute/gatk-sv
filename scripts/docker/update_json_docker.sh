@@ -62,7 +62,7 @@ fi
 #################################################
 
 shopt -s nullglob
-JSON_ARR=(${BASE_DIR}/*.json ${BASE_DIR}/test/*/*.json ${BASE_DIR}/single_sample/*.json)
+JSON_ARR=(${BASE_DIR}/*.json ${BASE_DIR}/test/*/*.json ${BASE_DIR}/inputs/*.json)
 JSONS=$(printf "%s "  "${JSON_ARR[@]}")
 
 for name in "${DOCKER_NAME_ARR[@]}"; do
