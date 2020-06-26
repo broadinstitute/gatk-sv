@@ -950,6 +950,13 @@ workflow GATKSVPipelineSingleSample {
   output {
     File final_vcf = FinalVCFCleanup.out
     File final_vcf_idx = FinalVCFCleanup.out_idx
+
+    # These files contain events reported in the internal VCF representation
+    # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
+    # on the output.
+    File pre_cleanup_vcf = Module07.output_vcf
+    File pre_cleanup_vcf_idx = Module07.output_vcf_idx
+
     File ploidy_matrix = select_first([Module00c.ploidy_matrix])
     File ploidy_plots = select_first([Module00c.ploidy_plots])
     File metrics_file = SingleSampleMetrics.metrics_file
