@@ -87,6 +87,12 @@
   "GATKSVPipelineSingleSample.clean_vcf_random_seed": 0,
   "GATKSVPipelineSingleSample.run_vcf_qc" : false,
 
+  "GATKSVPipelineSingleSample.protein_coding_gtf" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.canonical_pc.gtf.gz",
+  "GATKSVPipelineSingleSample.linc_rna_gtf" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.lincRNA.gtf.gz",
+  "GATKSVPipelineSingleSample.promoter_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/promoter.bed",
+  "GATKSVPipelineSingleSample.noncoding_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
+  "GATKSVPipelineSingleSample.annotation_sv_per_shard" : "5000",
+
   "GATKSVPipelineSingleSample.cnmops_mem_gb_override_sample3": 24,
 
   "GATKSVPipelineSingleSample.ref_samples" : [

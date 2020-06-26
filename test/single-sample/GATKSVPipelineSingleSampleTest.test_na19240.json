@@ -192,6 +192,12 @@
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.run_vcf_qc" : false,
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
 
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.protein_coding_gtf" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.canonical_pc.gtf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.linc_rna_gtf" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.lincRNA.gtf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.promoter_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/promoter.bed",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.noncoding_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.annotation_sv_per_shard" : "5000",
+
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_std_manta_vcfs" : [
     "gs://gatk-sv-resources/clinical/reference_panel_v1b/manta_std/std_000.manta.SM-BZNZQ.vcf.gz",
     "gs://gatk-sv-resources/clinical/reference_panel_v1b/manta_std/std_001.manta.SM-BZNZR.vcf.gz",
