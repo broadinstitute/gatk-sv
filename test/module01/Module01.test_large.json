@@ -1,6 +1,6 @@
 {
   "Module01.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module01.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "Module01.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
 
   "Module01.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module01.depth_flags": "--merge-coordinates",

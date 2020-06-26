@@ -454,7 +454,7 @@
 
   "Module00aBatchTest.Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
   "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "Module00aBatchTest.Module00aBatch.delly_docker": "gatksv/delly:8645aa",
   "Module00aBatchTest.Module00aBatch.manta_docker": "gatksv/manta:8645aa",
   "Module00aBatchTest.Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",

@@ -120,7 +120,7 @@
   "Module03Test.Module03Metrics.Module03Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
   "Module03Test.Module03Metrics.Module03Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
 
-  "Module03Test.Module03.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "Module03Test.Module03.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "Module03Test.Module03.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module03Test.Module03.linux_docker" : "ubuntu:18.04",
 

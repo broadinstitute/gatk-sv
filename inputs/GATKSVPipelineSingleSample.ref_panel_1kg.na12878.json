@@ -32,7 +32,7 @@
   "GATKSVPipelineSingleSample.sv_base_docker": "gatksv/sv-base:b3af2e3",
   "GATKSVPipelineSingleSample.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "GATKSVPipelineSingleSample.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "GATKSVPipelineSingleSample.sv_pipeline_docker": "gatksv/sv-pipeline:b3af2e3",
+  "GATKSVPipelineSingleSample.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "GATKSVPipelineSingleSample.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
   "GATKSVPipelineSingleSample.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "GATKSVPipelineSingleSample.wham_docker": "gatksv/wham:8645aa",
