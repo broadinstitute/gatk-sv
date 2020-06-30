@@ -240,7 +240,7 @@ workflow GATKSVPipelineSingleSample {
     # Reference panel standardized caller VCFs
     Array[File] ref_std_manta_vcfs
     Array[File] ref_std_wham_vcfs
-    Array[File] ref_std_melt_vcfs
+    Array[File]? ref_std_melt_vcfs
     File ref_panel_del_bed
     File ref_panel_dup_bed
 
@@ -581,7 +581,10 @@ workflow GATKSVPipelineSingleSample {
   # Merge calls with reference panel
   Array[File] merged_manta_vcfs_array = flatten([select_first([Module00c.std_manta_vcf]), ref_std_manta_vcfs])
   Array[File] merged_wham_vcfs_array = flatten([select_first([Module00c.std_wham_vcf]), ref_std_wham_vcfs])
-  Array[File] merged_melt_vcfs_array = flatten([select_first([Module00c.std_melt_vcf]), ref_std_melt_vcfs])
+  if (defined(Module00c.std_melt_vcf)) {
+    Array[File]? merged_melt_vcfs_array = flatten([select_first([Module00c.std_melt_vcf]), select_first([ref_std_melt_vcfs])])
+  }
+
   call dpn.MergeSet as MergeSetDel {
     input:
       beds=[Module00c.merged_dels, ref_panel_del_bed],
@@ -628,30 +631,47 @@ workflow GATKSVPipelineSingleSample {
   }
 
   # Pull out clustered calls from this sample only
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
-    input :
-      vcf_gz=select_first([Module01.manta_vcf]),
-      sample_id=sample_id,
-      evidence="RD,PE,SR",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  if (use_manta) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
+        input :
+            vcf_gz=select_first([Module01.manta_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
   }
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
-    input :
-      vcf_gz=select_first([Module01.wham_vcf]),
-      sample_id=sample_id,
-      evidence="RD,PE,SR",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  if (use_wham) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
+        input :
+            vcf_gz=select_first([Module01.wham_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
   }
-  call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterMelt {
-    input :
-      vcf_gz=select_first([Module01.melt_vcf]),
-      sample_id=sample_id,
-      evidence="RD,PE,SR",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_filter_vcf_by_id
+  if (use_melt) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterMelt {
+        input :
+            vcf_gz=select_first([Module01.melt_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
   }
+  if (use_melt) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
+        input :
+            vcf_gz=select_first([Module01.delly_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
+  }
+
   call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
       vcf_gz=Module01.depth_vcf,
@@ -666,6 +686,7 @@ workflow GATKSVPipelineSingleSample {
       manta_vcf=FilterManta.out,
       wham_vcf=FilterWham.out,
       melt_vcf=FilterMelt.out,
+      delly_vcf=FilterDelly.out,
       batch=batch,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_merge_pesr_vcfs
