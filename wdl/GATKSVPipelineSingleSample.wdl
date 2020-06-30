@@ -661,7 +661,7 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_melt) {
+  if (use_delly) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
         input :
             vcf_gz=select_first([Module01.delly_vcf]),
