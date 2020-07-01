@@ -316,6 +316,7 @@ class ComplexSV:
             self.vcf_record.chrom = plus.chrom
             self.vcf_record.pos = plus.pos
             self.vcf_record.info['CHR2'] = plus.info['CHR2']
+            self.vcf_record.info['END2'] = plus.stop
             self.vcf_record.stop = plus.stop
             self.vcf_record.info['SVLEN'] = -1
 
@@ -351,6 +352,7 @@ class ComplexSV:
             self.vcf_record.stop = sink_end
 
             self.vcf_record.info['CHR2'] = source_chrom
+            self.vcf_record.info['END2'] = sink_end
             self.vcf_record.info['SVLEN'] = abs(source_end - source_start)
 
             interval = '{0}_{1}:{2}-{3}'

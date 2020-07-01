@@ -23,7 +23,7 @@ def rmcpx(vcf, fout):
         svtype = record.info['SVTYPE']
 
         #Clear CPX info fields for non-CPX variants
-        if svtype != "CPX":
+        if svtype != "CPX" and svtype != "CTX":
             for info in 'CPX_TYPE CPX_INTERVALS'.split():
                 if info in record.info.keys():
                     record.info.pop(info)
