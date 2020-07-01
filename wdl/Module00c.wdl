@@ -442,7 +442,7 @@ workflow Module00c {
   File? baf_out_index = if defined(EvidenceMerging.merged_BAF_idx) then EvidenceMerging.merged_BAF_idx else BAFFromGVCFs.out_index
   if (run_matrix_qc) {
     call mqc.MatrixQC as MatrixQC {
-      input: 
+      input:
         distance = matrix_qc_distance,
         genome_file = genome_file,
         batch = batch,
@@ -460,8 +460,14 @@ workflow Module00c {
     }
   }
 
+  call WriteSampleLines {
+    input:
+      samples = all_samples,
+      linux_docker = linux_docker
+  }
+
   output {
-    File sample_list = write_lines(samples)
+    File sample_list = WriteSampleLines.samples_list_file
     File? merged_BAF = baf_out
     File? merged_BAF_index = baf_out_index
     File merged_SR = EvidenceMerging.merged_SR
@@ -551,6 +557,42 @@ task AddCaseSampleToPed {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task WriteSampleLines {
+  input {
+    Array[String] samples
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+      File samples_list_file = "samples.list"
+  }
+
+  command <<<
+    cp ~{write_lines(samples)} samples.list
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
