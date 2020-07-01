@@ -442,7 +442,7 @@ workflow Module00c {
   File? baf_out_index = if defined(EvidenceMerging.merged_BAF_idx) then EvidenceMerging.merged_BAF_idx else BAFFromGVCFs.out_index
   if (run_matrix_qc) {
     call mqc.MatrixQC as MatrixQC {
-      input: 
+      input:
         distance = matrix_qc_distance,
         genome_file = genome_file,
         batch = batch,
@@ -461,7 +461,6 @@ workflow Module00c {
   }
 
   output {
-    File sample_list = write_lines(samples)
     File? merged_BAF = baf_out
     File? merged_BAF_index = baf_out_index
     File merged_SR = EvidenceMerging.merged_SR
