@@ -13,7 +13,7 @@ ENV HOME=/root
 # G-Cloud
 ARG CLOUD_SDK_VERSION=235.0.0
 ARG GCLOUD_SDK_EXTRA_COMPONENTS
-ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools "
+ARG GCLOUD_SDK_TRANSIENT_DEP="gpg-agent gnupg python-pip python-setuptools "
 ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
@@ -53,8 +53,12 @@ RUN apt-get -qqy update --fix-missing && \
 #  4. final clean up
 COPY install_R_packages.R /opt/
 COPY install_bioconductor_packages.R /opt/
+COPY install_deprecated_R_package.sh /opt/
 ARG R_DEP_TRANSIENT="make gpg-agent gnupg"
-ARG R_DEPENDENCIES="software-properties-common build-essential ${R_DEP_TRANSIENT} libz-dev libncurses5-dev libbz2-dev liblzma-dev libcurl4-openssl-dev libssl-dev libxml2-dev ca-certificates apt-transport-https openssh-client"
+ARG R_DEPENDENCIES="software-properties-common build-essential \
+    ${R_DEP_TRANSIENT} libz-dev libncurses5-dev libbz2-dev liblzma-dev \
+    libcurl4-openssl-dev libssl-dev libxml2-dev ca-certificates \
+    apt-transport-https openssh-client"
 ARG R_RELEASE_VERSION="3.5.1"
 ARG SV_BASE_R_PKGS="optparse BiocManager"
 ARG SLIM_R_LIB_CMD="find .  -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
