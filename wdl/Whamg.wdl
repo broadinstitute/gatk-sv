@@ -173,16 +173,25 @@ task RunWhamg {
         ln -s "~{reference_index_file}" "~{reference_fasta}.fai"
     fi
         
-    echo "Invoking whamg"
+    # We need to update both the VCF sample ID and the TAGS INFO field in the WHAM output VCFs.
+    # WHAM uses both to store the sample identifier, and by default uses the SM identifier from the BAM file.
+    # We need to update both to reflect the potentially-renamed sample identifier used by the pipeline (sample_id) --
+    # svtk standardize_vcf uses the TAGS field to identify the sample for WHAM VCFs.
+
     VCF_FILE_FIXED_HEADER="~{sample_id}.wham.vcf.gz"
     VCF_FILE_BAD_TAGS="~{sample_id}.wham_bad_header_bad_tags.vcf.gz"
     VCF_FILE_BAD_HEADER="~{sample_id}.wham_bad_header.vcf.gz"
+
+    echo "Invoking whamg"
+
     whamg -c "~{sep=","  chr_list}" -x ~{num_cpu} -a ~{reference_fasta} -f ~{bam_file} \
       | bgzip -c > "$VCF_FILE_BAD_TAGS"
-
     tabix -p vcf "$VCF_FILE_BAD_TAGS"
+
+    # write out a an annotation table with the new sample ID for each variant record.
     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t~{sample_id}\n' $VCF_FILE_BAD_TAGS | bgzip -c > tags_annotation_file.tsv.gz
     tabix -f -s1 -b2 -e2 tags_annotation_file.tsv.gz
+    # Use bcftools annotate to re-write the TAGS field in each variant based on the annotation table.
     bcftools annotate -a tags_annotation_file.tsv.gz -c CHROM,POS,REF,ALT,INFO/TAGS  $VCF_FILE_BAD_TAGS | bgzip -c > $VCF_FILE_BAD_HEADER
     tabix -p vcf "$VCF_FILE_BAD_HEADER"
 
@@ -326,16 +335,24 @@ task RunWhamgWhitelist {
       fi
     done
     
-    # concatenate resulting vcfs into final vcf
-    echo "Concatenating results"
+    # We need to update both the VCF sample ID and the TAGS INFO field in the WHAM output VCFs.
+    # WHAM uses both to store the sample identifier, and by default uses the SM identifier from the BAM file.
+    # We need to update both to reflect the potentially-renamed sample identifier used by the pipeline (sample_id) --
+    # svtk standardize_vcf uses the TAGS field to identify the sample for WHAM VCFs.
+
     VCF_FILE_FIXED_HEADER="~{sample_id}.wham.vcf.gz"
     VCF_FILE_BAD_TAGS="~{sample_id}.wham_bad_header_bad_tags.vcf.gz"
     VCF_FILE_BAD_HEADER="~{sample_id}.wham_bad_header.vcf.gz"
-    bcftools concat -a -O z -o "$VCF_FILE_BAD_TAGS" $VCFS
 
+    # concatenate resulting vcfs into final vcf
+    echo "Concatenating results"
+    bcftools concat -a -O z -o "$VCF_FILE_BAD_TAGS" $VCFS
     tabix -p vcf "$VCF_FILE_BAD_TAGS"
+
+    # write out a an annotation table with the new sample ID for each variant record.
     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t~{sample_id}\n' $VCF_FILE_BAD_TAGS | bgzip -c > tags_annotation_file.tsv.gz
     tabix -f -s1 -b2 -e2 tags_annotation_file.tsv.gz
+    # Use bcftools annotate to re-write the TAGS field in each variant based on the annotation table.
     bcftools annotate -a tags_annotation_file.tsv.gz -c CHROM,POS,REF,ALT,INFO/TAGS  $VCF_FILE_BAD_TAGS | bgzip -c > $VCF_FILE_BAD_HEADER
     tabix -p vcf "$VCF_FILE_BAD_HEADER"
 
