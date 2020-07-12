@@ -117,9 +117,6 @@
   "Module04Test.Module04Metrics.baseline_genotyped_pesr_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.pesr.vcf.gz",
   "Module04Test.Module04Metrics.baseline_genotyped_depth_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.depth.vcf.gz",
 
-  "Module04Test.Module04Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
-  "Module04Test.Module04Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
-
   "Module04Test.Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
   "Module04Test.Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
   "Module04Test.Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
@@ -130,6 +127,7 @@
   "Module04Test.Module04.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module04Test.Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "Module04Test.Module04.reference_build": "hg38",
+  "Module04Test.Module04.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module04Test.Module04.batch": "test_large",
   "Module04Test.Module04.rf_cutoffs": "gs://gatk-sv-resources/test/module03/large/output/test_large.cutoffs",

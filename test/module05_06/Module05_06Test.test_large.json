@@ -117,9 +117,6 @@
   "Module05_06Test.Module05_06Metrics.baseline_final_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.resolved_regenotyped.vcf.gz",
   "Module05_06Test.Module05_06Metrics.baseline_cleaned_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.cleaned.vcf.gz",
 
-  "Module05_06Test.Module05_06Metrics.Final_VCF_Metrics.mem_gib" : "3.75",
-  "Module05_06Test.Module05_06Metrics.Cleaned_VCF_Metrics.mem_gib" : "3.75",
-
   "Module05_06Test.Module05_06.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
   "Module05_06Test.Module05_06.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module05_06Test.Module05_06.cytobands": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
@@ -127,6 +124,7 @@
   "Module05_06Test.Module05_06.pe_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module05_06Test.Module05_06.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
   "Module05_06Test.Module05_06.empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
+  "Module05_06Test.Module05_06.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module05_06Test.Module05_06.thousand_genomes_tarballs": [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",

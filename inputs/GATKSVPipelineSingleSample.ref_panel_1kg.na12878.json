@@ -22,10 +22,10 @@
 
   "GATKSVPipelineSingleSample.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
 
-  "GATKSVPipelineSingleSample.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatksv/cnmops:b3af2e3",
-  "GATKSVPipelineSingleSample.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
-  "GATKSVPipelineSingleSample.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.2.0",
-  "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.0",
+  "GATKSVPipelineSingleSample.cnmops_docker": "mwalker174/cnmops:mw-gatk-tabix-e3d3b0d",
+  "GATKSVPipelineSingleSample.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
+  "GATKSVPipelineSingleSample.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
   "GATKSVPipelineSingleSample.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "GATKSVPipelineSingleSample.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
   "GATKSVPipelineSingleSample.manta_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/manta:8645aa",

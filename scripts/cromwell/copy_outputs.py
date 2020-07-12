@@ -24,8 +24,8 @@ FILENAME_MAP = {
         'merged_SR_index': 'SR.txt.gz.tbi',
         'merged_PE': 'PE.txt.gz',
         'merged_PE_index': 'PE.txt.gz.tbi',
-        'merged_bincov': 'bincov.bed.gz',
-        'merged_bincov_index': 'bincov.bed.gz.tbi',
+        'merged_bincov': 'RD.txt.gz',
+        'merged_bincov_index': 'RD.txt.gz.tbi',
         'median_cov': 'median_cov.bed'
     },
     'MergeCohortVcfs': {

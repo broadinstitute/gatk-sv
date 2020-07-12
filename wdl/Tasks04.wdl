@@ -31,14 +31,14 @@ task SplitVariants {
     set -euo pipefail
     svtk vcf2bed ~{vcf} stdout \
       | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2>=5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split -l ~{n_per_split} -a 6 - gt5kb.
+      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - gt5kb.
     svtk vcf2bed ~{vcf} stdout \
       | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2<5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split -l ~{n_per_split} -a 6 - lt5kb.
+      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
     if [ ~{generate_bca} == "true" ]; then
       svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP") {print $1, $2, $3, $4, $6, $5}' \
-        | split -l ~{n_per_split} -a 6 - bca.
+        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP") {print $1, $2RDTestGenotype, $3, $4, $6, $5}' \
+        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
     fi
 
   >>>
@@ -64,8 +64,8 @@ task SplitVcf {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -89,7 +89,7 @@ task SplitVcf {
       sed -e '/^#/d' ~{vcf} | split -l ~{n_per_split} - ~{evidence_type}.;
     fi
     for f in ~{evidence_type}.*; do cat header.vcf $f ~{if bgzip then "| bgzip -c > $f.vcf.gz" else "> $f.vcf"}; done
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -113,7 +113,7 @@ task AddGenotypes {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -141,7 +141,7 @@ task AddGenotypes {
       clean.vargq.txt.gz \
       ~{prefix}.genotyped.vcf;
     vcf-sort -c ~{prefix}.genotyped.vcf | bgzip -c > ~{prefix}.genotyped.vcf.gz
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -163,8 +163,8 @@ task MakeSubsetVcf {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -183,7 +183,7 @@ task MakeSubsetVcf {
     zcat ~{vcf} | fgrep -e "#" > ~{prefix}.vcf;
     zcat ~{vcf} | fgrep -w -f <(cut -f4 ~{bed}) >> ~{prefix}.vcf;
     bgzip ~{prefix}.vcf
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -208,7 +208,7 @@ task ConcatGenotypedVcfs {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -228,7 +228,7 @@ task ConcatGenotypedVcfs {
       | vcf-sort -c \
       | bgzip -c > ~{batch}.~{evidence_type}.vcf.gz
     tabix -p vcf ~{batch}.~{evidence_type}.vcf.gz
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -251,8 +251,8 @@ task MergePESRCounts {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -270,7 +270,7 @@ task MergePESRCounts {
     zcat ~{sep=" " count_list} | fgrep -v -e "name" | gzip -c > ~{evidence_type}_counts.txt.gz
     echo "" | gzip -c > empty_file.gz
     cat ~{sep=" " sum_list} empty_file.gz > ~{evidence_type}_sum.txt.gz
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -291,6 +291,7 @@ task RDTestGenotype {
     File coveragefile
     File medianfile
     File famfile
+    File ref_dict
     Array[String] samples
     File gt_cutoffs
     Int n_bins
@@ -307,14 +308,17 @@ task RDTestGenotype {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.7)
 
   output {
     File genotypes = "${prefix}.geno"
@@ -327,10 +331,18 @@ task RDTestGenotype {
   command <<<
 
     set -euo pipefail
-    /opt/RdTest/localize_bincov.sh ~{bed} ~{coveragefile}
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{coveragefile} \
+      -L ~{bed} \
+      -O local.RD.txt.gz
+
+    tabix -p bed local.RD.txt.gz
+
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz \
       -m ~{medianfile} \
       -f ~{famfile} \
       -n ~{prefix} \
@@ -338,18 +350,18 @@ task RDTestGenotype {
       -i ~{n_bins} \
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
-      -g TRUE;
+      -g TRUE
     if [ ~{generate_melted_genotypes} == "true" ]; then
-      /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed;
+      /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
     else
       echo "" | bgzip -c > rd.geno.cnv.bed.gz
     fi
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_rdtest_docker
@@ -364,6 +376,7 @@ task CountPE {
     File vcf
     File discfile
     File medianfile
+    File ref_dict
     Array[String] samples
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -376,15 +389,18 @@ task CountPE {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  
+
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.7)
+
   String prefix = basename(vcf, ".vcf")
 
   output {
@@ -394,20 +410,28 @@ task CountPE {
 
     set -euo pipefail
     svtk vcf2bed --split-bnd --no-header ~{vcf} test.bed
-    awk -v OFS="\t" -v window=5000 '{if ($2-window>0){print $1,$2-window,$2+window}else{print $1,0,$2+window}}' test.bed  >> region.bed
-    awk -v OFS="\t" -v window=5000 '{if ($3-window>0){print $1,$3-window,$3+window}else{print $1,0,$3+window}}' test.bed  >> region.bed
+    awk -v OFS="\t" -v window=500 '{if ($2-window>0){print $1,$2-window,$2+window}else{print $1,0,$2+window}}' test.bed  > region.bed
+    awk -v OFS="\t" -v window=500 '{if ($3-window>0){print $1,$3-window,$3+window}else{print $1,0,$3+window}}' test.bed  >> region.bed
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \
-      tabix -R region.merged.bed ~{discfile} | bgzip -c > PE.txt.gz
-    tabix -b 2 -e 2 PE.txt.gz
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{discfile} \
+      -L region.merged.bed \
+      -O PE.txt
+
+    # GATK does not block compress
+    bgzip PE.txt
+
+    tabix -s1 -b2 -e2 PE.txt.gz
     svtk count-pe --index PE.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
@@ -421,6 +445,7 @@ task CountSR {
     File vcf
     File splitfile
     File medianfile
+    File ref_dict
     Array[String] samples
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -433,15 +458,18 @@ task CountSR {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
+    cpu_cores: 1,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  
+
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.7)
+
   String prefix = basename(vcf, ".vcf")
 
   output {
@@ -456,17 +484,25 @@ task CountSR {
     awk -v OFS="\t" '{if ($3-250>0){print $1,$3-250,$3+250}else{print $1,0,$3+250}}' test.bed  >> region.bed
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \
-      tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR.txt.gz
-    tabix -b 2 -e 2 SR.txt.gz
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{splitfile} \
+      -L region.merged.bed \
+      -O SR.txt
+
+    # GATK does not block compress
+    bgzip SR.txt
+
+    tabix -s1 -b2 -e2 SR.txt.gz
     svtk count-sr --index SR.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

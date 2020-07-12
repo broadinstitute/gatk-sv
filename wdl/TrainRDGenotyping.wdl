@@ -25,6 +25,7 @@ workflow TrainRDGenotyping {
     Int n_bins              # number of RdTest bins
     Int n_per_split         # number of variants per RdTest split
     String reference_build  #hg19 or hg38
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_rdtest_docker
@@ -61,6 +62,7 @@ workflow TrainRDGenotyping {
       n_bins = n_bins,
       prefix = prefix,
       generate_melted_genotypes = false,
+      ref_dict = ref_dict,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_override = runtime_attr_genotype_train
   }
@@ -106,6 +108,7 @@ workflow TrainRDGenotyping {
         n_bins = n_bins,
         prefix = basename(pesr_bed),
         generate_melted_genotypes = false,
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
@@ -125,6 +128,7 @@ workflow TrainRDGenotyping {
         n_bins = n_bins,
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = false,
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }

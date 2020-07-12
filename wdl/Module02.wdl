@@ -36,13 +36,13 @@ workflow Module02 {
     Int PE_split_size
     Int SR_split_size
     Int common_cnv_size_cutoff
-    Int tabix_retries = 5
 
     File rmsk
     File segdups
     File ped_file
     File autosome_contigs
     File allosome_contigs
+    File ref_dict
 
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -53,6 +53,7 @@ workflow Module02 {
 
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_sample_list
+    RuntimeAttr? runtime_attr_baf_samples
     RuntimeAttr? runtime_attr_aggregate_tests
     RuntimeAttr? runtime_attr_aggregate_callers
     RuntimeAttr? runtime_attr_petest
@@ -104,11 +105,11 @@ workflow Module02 {
             flags = "",
             algorithm = algorithm,
             allosome_contigs = allosome_contigs,
+            ref_dict = ref_dict,
             batch = batch,
             samples = GetSampleLists.samples_file,
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
-            tabix_retries = tabix_retries,
             sv_pipeline_docker = sv_pipeline_docker,
             sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
             linux_docker = linux_docker,
@@ -123,11 +124,11 @@ workflow Module02 {
             baf_metrics = baf_metrics,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
+            ref_dict = ref_dict,
             split_size = BAF_split_size,
             algorithm = algorithm,
             batch = batch,
             samples = GetSampleIdsFromVcf.out_array,
-            tabix_retries = tabix_retries,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_baftest = runtime_attr_baftest,
@@ -145,6 +146,7 @@ workflow Module02 {
             ped_file = ped_file,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
+            ref_dict = ref_dict,
             split_size = SR_split_size,
             algorithm = algorithm,
             allosome_contigs = allosome_contigs,
@@ -154,7 +156,6 @@ workflow Module02 {
             female_samples = GetSampleLists.female_samples,
             run_common = true,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
-            tabix_retries = tabix_retries,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
@@ -173,6 +174,7 @@ workflow Module02 {
             ped_file = ped_file,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
+            ref_dict = ref_dict,
             split_size = PE_split_size,
             algorithm = algorithm,
             allosome_contigs = allosome_contigs,
@@ -181,7 +183,6 @@ workflow Module02 {
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
-            tabix_retries = tabix_retries,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
@@ -205,7 +206,7 @@ workflow Module02 {
           runtime_attr_override = runtime_attr_aggregate_tests
       }
 
-      call tasks02.SplitCommonVCF as SplitCommonVCF {
+      call tasks02.GetCommonVCF {
         input:
           vcf = vcf,
           cnv_size_cutoff = common_cnv_size_cutoff,
@@ -215,7 +216,7 @@ workflow Module02 {
 
       call AggregateTests as AggregateTestsCommon {
         input:
-          vcf = SplitCommonVCF.common_vcf,
+          vcf = GetCommonVCF.common_vcf,
           petest = PETest.petest_common,
           srtest = SRTest.srtest_common,
           segdups = segdups,
@@ -405,4 +406,3 @@ task AggregateCallers {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-

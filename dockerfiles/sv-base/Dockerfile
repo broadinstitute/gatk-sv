@@ -7,6 +7,33 @@ FROM ${MINIBASE_IMAGE}
 
 ENV HOME=/root
 
+####################################################################################################
+# GATK needed for PrintSVEvidence
+ARG GATK_TRANSIENT_DEP="git git-lfs"
+ARG GATK_DEP="openjdk-8-jdk ${GATK_TRANSIENT_DEP}"
+ARG GATK_COMMIT="7f7ad3cda878e3816d56e540cfa089331a344254"
+ENV GATK_JAR="/opt/gatk.jar"
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy dist-upgrade && \
+    apt-get -qqy install --no-install-recommends \
+                 ${GATK_DEP} && \
+    cd / && git clone https://github.com/broadinstitute/gatk.git && \
+    cd gatk && git lfs install && \
+    git checkout ${GATK_COMMIT} && ./gradlew localJar && \
+    mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR} && \
+    cd / && \
+    apt-get -qqy purge ${GATK_TRANSIENT_DEP} && \
+    apt-get -qqy clean && \
+    rm -rf /gatk \
+           /tmp/* \
+           /var/tmp/* \
+           /var/cache/apt/* \
+           /var/lib/apt/lists/* \
+           /usr/share/man/?? \
+           /usr/share/man/??_* && \
+    java -jar ${GATK_JAR}
+
 # we settle on this order because the autoremove steps in G-Cloud and R blocks simply hate python and remove it
 
 ####################################################################################################

@@ -41,6 +41,9 @@ workflow Module00c {
     File ped_file
     File genome_file
     File primary_contigs_fai            # .fai file of included contigs
+    File ref_fasta
+    File ref_fasta_index
+    File ref_dict
 
     # PE/SR/BAF/bincov files
     Array[File] counts
@@ -61,9 +64,6 @@ workflow Module00c {
     Array[File]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
-    File? ref_fasta
-    File? ref_fasta_index
-    File? ref_dict
 
     # BAF Option #2, position-sharded VCFs
     Array[File]? snp_vcfs
@@ -241,9 +241,9 @@ workflow Module00c {
         samples = samples,
         unpadded_intervals_file = select_first([unpadded_intervals_file]),
         dbsnp_vcf = select_first([dbsnp_vcf]),
-        ref_fasta = select_first([ref_fasta]),
-        ref_fasta_index = select_first([ref_fasta_index]),
-        ref_dict = select_first([ref_dict]),
+        ref_fasta = ref_fasta,
+        ref_fasta_index = ref_fasta_index,
+        ref_dict = ref_dict,
         inclusion_bed = inclusion_bed,
         batch = batch,
         gatk_docker = gatk_docker,
@@ -298,6 +298,7 @@ workflow Module00c {
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
+      ref_dict = ref_dict,
       prefix = "header",
       stitch_and_clean_large_events = false,
       mem_gb_override_sample10 = cnmops_mem_gb_override_sample10,
@@ -323,6 +324,7 @@ workflow Module00c {
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
+      ref_dict = ref_dict,
       prefix = "large",
       min_size=cnmops_large_min_size,
       stitch_and_clean_large_events = true,
@@ -464,6 +466,7 @@ workflow Module00c {
         RD_idx = merged_bincov_idx_,
         SR_file = EvidenceMerging.merged_SR,
         SR_idx = EvidenceMerging.merged_SR_idx,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_pesrbaf = matrix_qc_pesrbaf_runtime_attr,
         runtime_attr_rd = matrix_qc_rd_runtime_attr

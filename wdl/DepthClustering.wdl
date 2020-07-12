@@ -227,7 +227,11 @@ task BedCluster {
       > ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed
 
     ~{if defined(exclude_list) then
-       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed) <(bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed -b ~{exclude_list} | awk '$NF < ~{exclude_list_frac_max}' | rev | cut -f5- | rev) > ~{batch}.~{svtype}.~{chrom}.bed"
+      "bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed -b ~{exclude_list} | awk '$NF < ~{exclude_list_frac_max}' | rev | cut -f5- | rev > excluded.filtered.bed"
+      else
+      ""}
+    ~{if defined(exclude_list) then
+       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed) excluded.filtered.bed > ~{batch}.~{svtype}.~{chrom}.bed"
       else
        "mv ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed ~{batch}.~{svtype}.~{chrom}.bed"}
   >>>

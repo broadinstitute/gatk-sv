@@ -18,6 +18,7 @@ workflow PETestChromosome {
     File vcf
     File discfile
     File medianfile
+    File ref_dict
     String batch
     Int split_size
     File ped_file
@@ -27,7 +28,6 @@ workflow PETestChromosome {
     File samples
     Boolean allosome
     Int common_cnv_size_cutoff
-    Int tabix_retries
 
     String sv_base_mini_docker
     String linux_docker
@@ -62,8 +62,8 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           include_list = male_samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -76,8 +76,8 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           include_list = female_samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -101,28 +101,46 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           include_list = samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
-      call tasks02.SplitCommonVCF as SplitCommonVCF {
-        input:
-          vcf = split,
-          cnv_size_cutoff = common_cnv_size_cutoff,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_split_vcf
-      }
+    }
+  }
+
+  if (!allosome) {
+    call tasks02.GetCommonVCF {
+      input:
+        vcf = vcf,
+        cnv_size_cutoff = common_cnv_size_cutoff,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_split_vcf
+    }
+
+    call tasks02.SplitVCF as SplitCommonVCF {
+      input:
+        vcf = GetCommonVCF.common_vcf,
+        batch = batch,
+        algorithm = algorithm,
+        chrom = chrom,
+        split_size = split_size,
+        suffix_len = select_first([suffix_len, 4]),
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_split_vcf
+    }
+
+    scatter (split in SplitCommonVCF.split_vcfs) {
       call PETest as PETestAutosomeCommon {
         input:
-          vcf = SplitCommonVCF.common_vcf,
+          vcf = split,
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
           include_list = samples,
+          ref_dict = ref_dict,
           prefix = basename(split),
           common_model = true,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -130,7 +148,7 @@ workflow PETestChromosome {
   }
 
   Array[File] unmerged_stats = if allosome then select_all(MergeAllosomes.merged_test) else select_all(PETestAutosome.stats)
-  Array[File] unmerged_stats_common = if allosome then [] else select_all(PETestAutosomeCommon.stats)
+  Array[File] unmerged_stats_common = select_first([PETestAutosomeCommon.stats, []])
 
   call tasks02.MergeStats as MergeStats {
     input:
@@ -164,8 +182,8 @@ task PETest {
     File discfile_idx
     File include_list
     Boolean common_model
+    File ref_dict
     String prefix
-    Int tabix_retries
     String sv_pipeline_docker
     Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
@@ -195,6 +213,9 @@ task PETest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "${prefix}.stats"
   }
@@ -207,33 +228,19 @@ task PETest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    if [ -s region.merged.bed ]; then
-      # Temporary workaround for corrupted tabix downloads
-      x=0
-      while [ $x -lt ~{tabix_retries} ]
-      do
-        # Download twice
-        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_1.txt.gz
-        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_2.txt.gz
-        # Done if the downloads were identical, otherwise retry
-        cmp --silent PE_1.txt.gz PE_2.txt.gz && break
-        x=$(( $x + 1))
-      done
-      echo "PE-tabix retry:" $x
-      cmp --silent PE_1.txt.gz PE_2.txt.gz || exit 1
-      mv PE_1.txt.gz PE.txt.gz
-      tabix -b 2 -e 2 PE.txt.gz
-    else
-      touch PE.txt
-      bgzip PE.txt
-      tabix -b 2 -e 2 PE.txt.gz
-    fi
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --skip-header \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{discfile} \
+      -L region.merged.bed \
+      -O local.PE.txt.gz
 
-    svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} PE.txt.gz ~{prefix}.stats
+    tabix -s1 -b2 -e2 local.PE.txt.gz
+    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

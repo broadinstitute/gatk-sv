@@ -377,6 +377,7 @@ workflow GATKSVPipelinePhase1 {
       PE_split_size=PE_split_size,
       SR_split_size=SR_split_size,
       common_cnv_size_cutoff=common_cnv_size_cutoff,
+      ref_dict=reference_dict,
       rmsk=rmsk,
       segdups=segdups,
       ped_file=ped_file,

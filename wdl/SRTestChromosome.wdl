@@ -25,10 +25,10 @@ workflow SRTestChromosome {
     File male_samples
     File female_samples
     File samples
+    File ref_dict
     Boolean allosome
     Boolean run_common
     Int? common_cnv_size_cutoff
-    Int tabix_retries
 
     String sv_pipeline_docker
     String linux_docker
@@ -64,7 +64,7 @@ workflow SRTestChromosome {
           include_list = female_samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -78,7 +78,7 @@ workflow SRTestChromosome {
           include_list = male_samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -104,39 +104,53 @@ workflow SRTestChromosome {
           include_list = samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
+    }
+  }
 
-      if (run_common) {
-        call tasks02.SplitCommonVCF as SplitCommonVCF {
-          input:
-            vcf = split,
-            cnv_size_cutoff = select_first([common_cnv_size_cutoff]),
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_split_vcf
-        }
+  if (run_common && !allosome) {
+    call tasks02.GetCommonVCF {
+      input:
+        vcf = vcf,
+        cnv_size_cutoff = select_first([common_cnv_size_cutoff]),
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_split_vcf
+    }
 
-        call SRTest as SRTestAutosomeCommon {
-          input:
-            vcf = SplitCommonVCF.common_vcf,
-            splitfile = splitfile,
-            medianfile = medianfile,
-            splitfile_idx = splitfile_idx,
-            include_list = samples,
-            common_model = true,
-            prefix = basename(split),
-            tabix_retries = tabix_retries,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_srtest
-        }
+    call tasks02.SplitVCF as SplitCommonVCF {
+      input:
+        vcf = GetCommonVCF.common_vcf,
+        batch = batch,
+        algorithm = algorithm,
+        chrom = chrom,
+        split_size = split_size,
+        suffix_len = select_first([suffix_len, 4]),
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_split_vcf
+    }
+
+    scatter (split in SplitCommonVCF.split_vcfs) {
+      call SRTest as SRTestAutosomeCommon {
+        input:
+          vcf = split,
+          splitfile = splitfile,
+          medianfile = medianfile,
+          splitfile_idx = splitfile_idx,
+          include_list = samples,
+          common_model = true,
+          prefix = basename(split),
+          ref_dict = ref_dict,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_srtest
       }
     }
   }
   
   Array[File] unmerged_stats = if allosome then select_all(MergeAllosomes.merged_test) else select_all(SRTestAutosome.stats)
-  Array[File] unmerged_stats_common = if allosome then [] else select_all(SRTestAutosomeCommon.stats)
+  Array[File] unmerged_stats_common = select_first([SRTestAutosomeCommon.stats, []])
 
   call tasks02.MergeStats as MergeStats {
     input:
@@ -171,7 +185,7 @@ task SRTest {
     File include_list
     Boolean common_model
     String prefix
-    Int tabix_retries
+    File ref_dict
     String sv_pipeline_docker
     Int disk_gb_baseline = 50
     RuntimeAttr? runtime_attr_override
@@ -199,6 +213,9 @@ task SRTest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "${prefix}.stats"
   }
@@ -211,34 +228,19 @@ task SRTest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    if [ -s region.merged.bed ]; then
-      # Temporary workaround for corrupted tabix downloads
-      x=0
-      while [ $x -lt ~{tabix_retries} ]
-      do
-        # Download twice
-        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_1.txt.gz
-        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_2.txt.gz
-        # Done if the downloads were identical, otherwise retry
-        cmp --silent SR_1.txt.gz SR_2.txt.gz && break
-        x=$(( $x + 1))
-      done
-      echo "SR-tabix retry:" $x
-      cmp --silent SR_1.txt.gz SR_2.txt.gz || exit 1
-    
-      mv SR_1.txt.gz SR.txt.gz
-      tabix -b 2 -e 2 SR.txt.gz
-    else
-      touch SR.txt
-      bgzip SR.txt
-      tabix -b 2 -e 2 SR.txt.gz
-    fi
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --skip-header \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{splitfile} \
+      -L region.merged.bed \
+      -O local.SR.txt.gz
 
-    svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} SR.txt.gz ~{prefix}.stats
+    tabix -s1 -b2 -e2 local.SR.txt.gz
+    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

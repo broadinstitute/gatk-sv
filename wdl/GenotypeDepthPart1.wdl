@@ -24,6 +24,7 @@ workflow GenotypeDepthPart1 {
     Int n_RD_genotype_bins  # number of RdTest bins
     Int n_per_RD_split      # number of variants per RdTest split
     String reference_build  #hg19 or hg38
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_rdtest_docker
@@ -51,6 +52,7 @@ workflow GenotypeDepthPart1 {
       n_per_split = n_per_RD_split,
       vcf = batch_vcf,
       famfile = famfile,
+      ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,

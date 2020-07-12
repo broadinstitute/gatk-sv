@@ -27,7 +27,7 @@ workflow RDTestChromosome {
     File female_samples
     File samples
     Boolean allosome
-    Int tabix_retries
+    File ref_dict
 
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -64,7 +64,7 @@ workflow RDTestChromosome {
           include_list = female_samples,
           prefix = basename(split),
           flags = flags,
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -79,7 +79,7 @@ workflow RDTestChromosome {
           include_list = male_samples,
           prefix = basename(split),
           flags = flags,
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -106,7 +106,7 @@ workflow RDTestChromosome {
           ped_file = ped_file,
           prefix = basename(split),
           flags = flags,
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -136,9 +136,9 @@ task RDTest {
     File medianfile
     File ped_file
     File include_list
+    File ref_dict
     String prefix
     String flags
-    Int tabix_retries
     String sv_pipeline_rdtest_docker
     Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
@@ -164,38 +164,32 @@ task RDTest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "~{prefix}.metrics"
   }
   command <<<
 
     set -eu
-    start=$(cut -f2 ~{bed} | sort -k1,1n | head -n1);
-    end=$(cut -f3 ~{bed} | sort -k1,1n | tail -n1);
-    chrom=$(cut -f1 ~{bed} | head -n1);
+    start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) ))
+    end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) ))
+    chrom=$(cut -f1 ~{bed} | head -n1)
     set -o pipefail
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -h ~{coveragefile} "$chrom":"$start"-"$end" | sed 's/Chr/chr/g' | sed 's/Start/start/g' | sed 's/End/end/' | bgzip -c > local_coverage_1.bed.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -h ~{coveragefile} "$chrom":"$start"-"$end" | sed 's/Chr/chr/g' | sed 's/Start/start/g' | sed 's/End/end/' | bgzip -c > local_coverage_2.bed.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent local_coverage_1.bed.gz local_coverage_2.bed.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "RD-tabix retry:" $x
-    cmp --silent local_coverage_1.bed.gz local_coverage_2.bed.gz || exit 1
-    
-    mv local_coverage_1.bed.gz local_coverage.bed.gz
-    tabix -p bed local_coverage.bed.gz;
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{coveragefile} \
+      -L "${chrom}:${start}-${end}" \
+      -O local.RD.txt.gz
+
+    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -n ~{prefix} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz\
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{include_list} \
@@ -204,7 +198,7 @@ task RDTest {
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_rdtest_docker

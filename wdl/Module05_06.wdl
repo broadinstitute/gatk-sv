@@ -57,6 +57,7 @@ workflow Module05_06 {
     File mei_bed
     File pe_exclude_list
     File depth_exclude_list
+    File ref_dict
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
     Int samples_per_clean_vcf_step2_shard
@@ -347,6 +348,7 @@ workflow Module05_06 {
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=true,
+        ref_dict=ref_dict,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -382,6 +384,7 @@ workflow Module05_06 {
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=false,
+        ref_dict=ref_dict,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -439,6 +442,7 @@ workflow Module05_06 {
         prefix=cohort_name,
         contig=contig,
         ped_files=ped_files,
+        ref_dict=ref_dict,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -547,6 +551,7 @@ workflow Module05_06 {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
   #Final outputs

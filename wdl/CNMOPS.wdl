@@ -24,6 +24,7 @@ workflow CNMOPS {
     File ped_file
     File exclude_list
     File allo_file
+    File ref_dict
     Array[String] samples
     String prefix
     Int? min_size
@@ -49,6 +50,7 @@ workflow CNMOPS {
         ped = ped_file,
         mode = "1",
         r = r2,
+        ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
         mem_gb_override = mem_gb_override_sample10,
@@ -63,6 +65,7 @@ workflow CNMOPS {
         ped = ped_file,
         mode = "1",
         r = r1,
+        ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
         mem_gb_override = mem_gb_override_sample3,
@@ -79,6 +82,7 @@ workflow CNMOPS {
         ped = ped_file,
         mode = "normal",
         r = r2,
+        ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
         mem_gb_override = mem_gb_override_sample10,
@@ -93,6 +97,7 @@ workflow CNMOPS {
         ped = ped_file,
         mode = "normal",
         r = r1,
+        ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
         mem_gb_override = mem_gb_override_sample3,
@@ -108,6 +113,7 @@ workflow CNMOPS {
       ped = ped_file,
       mode = "2",
       r = r2,
+        ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
       mem_gb_override = mem_gb_override_sample10,
@@ -122,6 +128,7 @@ workflow CNMOPS {
       ped = ped_file,
       mode = "2",
       r = r1,
+        ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
       mem_gb_override = mem_gb_override_sample3,
@@ -299,6 +306,7 @@ task CNSampleNormal {
     File ped
     String mode
     String r
+    File ref_dict
     File bincov_matrix
     File bincov_matrix_index
     Float? mem_gb_override
@@ -328,29 +336,36 @@ task CNSampleNormal {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File Gff = "calls/cnMOPS.cnMOPS.gff"
   }
   command <<<
 
     set -euo pipefail
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \
-      tabix -h ~{bincov_matrix} "~{chr}" | sed 's/Start/start/' | sed 's/Chr/chr/' | sed 's/End/end/' > bincov_~{chr}.bed
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{bincov_matrix} \
+      -L ~{chr} \
+      -O ~{chr}.RD.txt
 
     if [ ~{mode} == "normal" ]; then  
-      mv bincov_~{chr}.bed bincov_~{chr}_~{mode}.bed
+      mv ~{chr}.RD.txt ~{chr}.~{mode}.RD.txt
     else 
       awk -v sex="~{mode}" '$5==sex' ~{ped} | cut -f2 > ids.to.include
-      col=$(head -n 1 bincov_~{chr}.bed | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
+      col=$(head -n 1 ~{chr}.RD.txt | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
       col_a="{print \$1,\$2,\$3,$col}"
-      awk -f <(echo "$col_a") bincov_~{chr}.bed | tr ' ' '\t' > bincov_~{chr}_~{mode}.bed
+      awk -f <(echo "$col_a") ~{chr}.RD.txt | tr ' ' '\t' > ~{chr}.~{mode}.RD.txt
     fi
 
     # redirect stdout and stderr to cnmops.out so that EMPTY_OUTPUT_ERROR can be detected, but use tee to also output them to
     # terminal so that errors can be debugged
     EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
     set +e
-    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{exclude} -x ~{exclude} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed 2>&1 | tee cnmops.out
+    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{exclude} -x ~{exclude} -r ~{r} -o . -M ~{chr}.~{mode}.RD.txt 2>&1 | tee cnmops.out
     RC=$?
     set -e
     if [ ! $RC -eq 0 ]; then
@@ -365,7 +380,7 @@ task CNSampleNormal {
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([mem_gb_override, runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: cnmops_docker

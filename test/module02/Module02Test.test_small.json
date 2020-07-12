@@ -35,6 +35,7 @@
   "Module02Test.Module02.autosome_contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
   "Module02Test.Module02.rmsk": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "Module02Test.Module02.segdups": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
+  "Module02Test.Module02.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module02Test.Module02.batch": "test_small",
   "Module02Test.Module02.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",

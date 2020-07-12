@@ -51,7 +51,7 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_concat_shards
   }
   
-  #Remote tabix each vcf & join into a single vcf
+  #Stream each vcf & join into a single vcf
   call JoinContigFromRemoteVcfs as JoinVcfs {
     input:
       vcfs=vcfs,
@@ -117,7 +117,7 @@ workflow VcfClusterSingleChrom {
 }
 
 
-# Task to remote tabix a single chromosome for all VCFs, then merge row-wise
+# Task to stream a single chromosome for all VCFs, then merge row-wise
 task JoinContigFromRemoteVcfs {
   input {
     Array[File] vcfs
@@ -152,8 +152,12 @@ task JoinContigFromRemoteVcfs {
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
@@ -164,10 +168,37 @@ task JoinContigFromRemoteVcfs {
   
   command <<<
     set -eu -o pipefail
-    
+
+    ## This doesn't quite work (but almost!) as a replacement for tabix below
+    ##   1) Downstream scripts expect empty format fields to be present (as ".") but GATK removes them
+    ##   2) duplicate records are problematic for bcftools annotate
+    ##   3) fields should only be replaced when missing (depth-only calls)
+    #touch subsetted_vcfs.list
+    #paste ~{write_lines(batches)} ~{write_lines(vcfs)} | while read BATCH VCF_PATH; do
+      #java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} SelectVariants \
+      #  -V "${VCF_PATH}" \
+      #  -L "~{contig}" \
+      #  -O "tmp.vcf.gz"
+
+      # GATK removed empty FORMAT fields
+      #bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t[.\t]\n" tmp.vcf.gz | bgzip -c > ann.tab.gz
+      #tabix -s1 -b2 -e2 ann.tab.gz
+      #bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/PE_GT tmp.vcf.gz \
+      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/PE_GQ \
+      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/SR_GT \
+      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/SR_GQ \
+      #  | sed "s/AN=[0-9]*;//g" \
+      #  | sed "s/AC=[0-9]*;//g" \
+      #  | bgzip -c \
+      #  > $BATCH.~{contig}.vcf.gz
+      #rm tmp.vcf.gz ann.tab.gz
+      #tabix $BATCH.~{contig}.vcf.gz
+      #echo "$BATCH.~{contig}.vcf.gz" >> subsetted_vcfs.list
+    #done
+
     #Remote tabix all vcfs to chromosome of interest
     1>&2 echo "REMOTE TABIXING VCFs"
-    
+
     # needed for tabix to operate on remote files
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
@@ -242,7 +273,7 @@ task JoinContigFromRemoteVcfs {
       | sed -e 's/ID=EV,Number=.,Type=String/ID=EV,Number=1,Type=Integer/g' \
       | bgzip -c > ~{prefix}.unclustered.vcf.gz
 
-    tabix -f -p vcf "~{prefix}.unclustered.vcf.gz"
+    tabix -p vcf "~{prefix}.unclustered.vcf.gz"
   >>>
 
   output {
