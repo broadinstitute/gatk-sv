@@ -25,8 +25,8 @@ RUN apt-get -qqy update --fix-missing && \
                  libopenblas-dev \
                  libxml2-dev && \
     mkdir -p /tmp/R_pkg_download/ && \
+    /opt/install_deprecated_R_package.sh https://cran.r-project.org/src/contrib/Archive/XML/XML_3.99-0.3.tar.gz && \
     cd /opt/ && \
-    Rscript --vanilla install_R_packages.R XML && \
     Rscript --vanilla install_bioconductor_packages.R cn.mops rtracklayer && \
     cd "/usr/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
     cd "/usr/local/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \

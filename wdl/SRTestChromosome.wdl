@@ -25,10 +25,10 @@ workflow SRTestChromosome {
     File male_samples
     File female_samples
     File samples
+    File ref_dict
     Boolean allosome
     Boolean run_common
     Int? common_cnv_size_cutoff
-    Int tabix_retries
 
     String sv_pipeline_docker
     String linux_docker
@@ -64,7 +64,7 @@ workflow SRTestChromosome {
           whitelist = female_samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -78,7 +78,7 @@ workflow SRTestChromosome {
           whitelist = male_samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -104,7 +104,7 @@ workflow SRTestChromosome {
           whitelist = samples,
           common_model = false,
           prefix = basename(split),
-          tabix_retries = tabix_retries,
+          ref_dict = ref_dict,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_srtest
       }
@@ -127,7 +127,7 @@ workflow SRTestChromosome {
             whitelist = samples,
             common_model = true,
             prefix = basename(split),
-            tabix_retries = tabix_retries,
+            ref_dict = ref_dict,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_srtest
         }
@@ -171,7 +171,7 @@ task SRTest {
     File whitelist
     Boolean common_model
     String prefix
-    Int tabix_retries
+    File ref_dict
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -194,6 +194,9 @@ task SRTest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "${prefix}.stats"
   }
@@ -206,29 +209,22 @@ task SRTest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_1.txt.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_2.txt.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent SR_1.txt.gz SR_2.txt.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "SR-tabix retry:" $x
-    cmp --silent SR_1.txt.gz SR_2.txt.gz || exit 1
-    
-    mv SR_1.txt.gz SR.txt.gz
-    tabix -b 2 -e 2 SR.txt.gz
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{splitfile} \
+      -L region.merged.bed \
+      -O SR.txt
 
+    # GATK does not block compress
+    bgzip SR.txt
+
+    tabix -b 2 -e 2 SR.txt.gz
     svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} SR.txt.gz ~{prefix}.stats
   
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

@@ -37,6 +37,7 @@ workflow Module04 {
     File? cohort_combined_bed
     File? cohort_sort
     File bin_exclude
+    File ref_dict
     # If all specified, training will be skipped (for single sample pipeline)
     File? genotype_pesr_pesr_sepcutoff
     File? genotype_pesr_depth_sepcutoff
@@ -143,6 +144,7 @@ workflow Module04 {
         splitfile = splitfile,
         n_per_RD_split = n_per_split,
         n_per_SR_split = n_per_split,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -180,6 +182,7 @@ workflow Module04 {
       n_per_split = n_per_split,
       famfile = famfile,
       splitfile = splitfile,
+      ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -213,6 +216,7 @@ workflow Module04 {
         reference_build = select_first([reference_build]),
         famfile = famfile,
         n_per_RD_split = n_per_split,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -240,6 +244,7 @@ workflow Module04 {
       famfile = famfile,
       cohort_combined_bed=cohort_combined_bed,
       cohort_sort=cohort_sort,
+      ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,

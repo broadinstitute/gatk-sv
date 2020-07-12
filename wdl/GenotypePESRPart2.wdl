@@ -22,6 +22,7 @@ workflow GenotypePESRPart2 {
     Int n_per_split
     Int n_RdTest_bins
     String batch
+    File ref_dict
 
     File medianfile
     File famfile
@@ -75,6 +76,7 @@ workflow GenotypePESRPart2 {
         discfile = discfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_pe
     }
@@ -93,6 +95,7 @@ workflow GenotypePESRPart2 {
         splitfile = splitfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_sr
     }
@@ -120,6 +123,7 @@ workflow GenotypePESRPart2 {
         n_bins = n_RdTest_bins,
         prefix = basename(lt5kb_bed, ".bed"),
         generate_melted_genotypes = true,
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
@@ -163,6 +167,7 @@ workflow GenotypePESRPart2 {
         discfile = discfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_pe
     }
@@ -181,6 +186,7 @@ workflow GenotypePESRPart2 {
         splitfile = splitfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_sr
     }
@@ -208,6 +214,7 @@ workflow GenotypePESRPart2 {
         n_bins = n_RdTest_bins,
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = true,
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
@@ -251,6 +258,7 @@ workflow GenotypePESRPart2 {
         discfile = discfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_pe
     }
@@ -269,6 +277,7 @@ workflow GenotypePESRPart2 {
         splitfile = splitfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_sr
     }

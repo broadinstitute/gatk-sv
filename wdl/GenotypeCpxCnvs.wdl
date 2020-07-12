@@ -29,6 +29,7 @@ workflow GenotypeCpxCnvs {
     String prefix
     File merged_ped_file
     String contig
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -81,6 +82,7 @@ workflow GenotypeCpxCnvs {
         n_per_split_small=n_per_split_small,
         n_per_split_large=n_per_split_large,
         n_rd_test_bins=n_rd_test_bins,
+        ref_dict=ref_dict,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,

@@ -1,9 +1,9 @@
 {
-  "Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
-  "Module02.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
+  "Module02.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
+  "Module02.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
   "Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module02.sv_base_docker": "gatksv/sv-base:b3af2e3",
-  "Module02.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module02.sv_base_docker": "mwalker174/sv-base:mw-gatk-tabix-e3d3b0d",
+  "Module02.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
   "Module02.linux_docker" : "ubuntu:18.04",
 
   "Module02.BAF_split_size": "10000",
@@ -15,6 +15,7 @@
   "Module02.autosome_contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
   "Module02.rmsk": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "Module02.segdups": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
+  "Module02.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module02.batch": "test_small",
   "Module02.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",

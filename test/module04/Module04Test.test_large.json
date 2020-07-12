@@ -109,8 +109,8 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module04Test.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module04Test.Module04Metrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module04Test.PlotMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
+  "Module04Test.Module04Metrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
   "Module04Test.Module04Metrics.linux_docker" : "ubuntu:18.04",
   "Module04Test.Module04Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
@@ -121,8 +121,8 @@
   "Module04Test.Module04Metrics.Module04Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
 
   "Module04Test.Module04.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module04Test.Module04.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
-  "Module04Test.Module04.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
+  "Module04Test.Module04.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
+  "Module04Test.Module04.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
   "Module04Test.Module04.linux_docker" : "ubuntu:18.04",
 
   "Module04Test.Module04.n_RD_genotype_bins": "100000", 
@@ -130,6 +130,7 @@
   "Module04Test.Module04.pesr_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module04Test.Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "Module04Test.Module04.reference_build": "hg38",
+  "Module04Test.Module04.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module04Test.Module04.batch": "test_large",
   "Module04Test.Module04.rf_cutoffs": "gs://gatk-sv-resources/test/module03/large/output/test_large.cutoffs",

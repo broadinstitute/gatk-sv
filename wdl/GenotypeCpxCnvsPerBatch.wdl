@@ -27,6 +27,7 @@ workflow GenotypeCpxCnvsPerBatch {
     File ped_file
     File samples_list
     File coverage_file
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_rdtest_docker
@@ -64,6 +65,7 @@ workflow GenotypeCpxCnvsPerBatch {
         gt_cutoffs=rd_depth_sep_cutoff,
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_attr_override=runtime_override_rd_genotype
     }
@@ -183,6 +185,7 @@ task RdTestGenotype {
     File samples_list
     File bin_exclude
     File gt_cutoffs
+    File ref_dict
     Int n_bins
     String prefix
     String sv_pipeline_rdtest_docker
@@ -214,9 +217,13 @@ task RdTestGenotype {
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -227,27 +234,22 @@ task RdTestGenotype {
   command <<<
     set -eu
 
-    # replacing this line:
-    # /opt/RdTest/localize_bincov.sh ${bed} ${coveragefile} ${coveragefile_idx} ${svc_acct_key}
-    # from this url: https://github.com/talkowski-lab/RdTest/blob/master/localize_bincov.sh
-
     grep -v "^#" ~{bed} | sort -k1,1V -k2,2n | bedtools merge -i stdin -d 1000000 > merged.bed
 
     set -o pipefail
 
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+      --include-header \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{coverage_file} \
+      -L merged.bed \
+      -O local_coverage.bed
 
-    bedtools merge -i merged.bed -d 1000000 \
-     | while read CONTIG START END; do
-        1>&2 echo "Fetching $CONTIG:$START-$END"
-        tabix -h ~{coverage_file} "$CONTIG:$START-$END"
-       done \
-     | sed '1s/Chr/chr/g; 1s/Start/start/g; 1s/End/end/g; 1n; n; d' \
-     | bgzip -c \
-     > local_coverage.bed.gz
+    # GATK does not block compress
+    bgzip local_coverage.bed
 
     tabix -p bed local_coverage.bed.gz
-    # done replacing localize_bincov.sh
+    tabix -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \

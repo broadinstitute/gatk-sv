@@ -36,7 +36,7 @@ task SplitVCF {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf};
+    tabix -p vcf ~{vcf}
     mkdir splits
     tabix ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
 

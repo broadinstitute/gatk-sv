@@ -18,6 +18,7 @@ workflow PETestChromosome {
     File vcf
     File discfile
     File medianfile
+    File ref_dict
     String batch
     Int split_size
     File ped_file
@@ -27,7 +28,6 @@ workflow PETestChromosome {
     File samples
     Boolean allosome
     Int common_cnv_size_cutoff
-    Int tabix_retries
 
     String sv_base_mini_docker
     String linux_docker
@@ -62,8 +62,8 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           whitelist = male_samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -76,8 +76,8 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           whitelist = female_samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -101,8 +101,8 @@ workflow PETestChromosome {
           discfile_idx = discfile_idx,
           whitelist = samples,
           prefix = basename(split),
+          ref_dict = ref_dict,
           common_model = false,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -119,10 +119,10 @@ workflow PETestChromosome {
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
+          ref_dict = ref_dict,
           whitelist = samples,
           prefix = basename(split),
           common_model = true,
-          tabix_retries = tabix_retries,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -164,8 +164,8 @@ task PETest {
     File discfile_idx
     File whitelist
     Boolean common_model
+    File ref_dict
     String prefix
-    Int tabix_retries
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -189,6 +189,9 @@ task PETest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "${prefix}.stats"
   }
@@ -201,29 +204,22 @@ task PETest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_1.txt.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_2.txt.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent PE_1.txt.gz PE_2.txt.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "PE-tabix retry:" $x
-    cmp --silent PE_1.txt.gz PE_2.txt.gz || exit 1
-    
-    mv PE_1.txt.gz PE.txt.gz
-    tabix -b 2 -e 2 PE.txt.gz
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{discfile} \
+      -L region.merged.bed \
+      -O PE.txt
 
+    # GATK does not block compress
+    bgzip PE.txt
+
+    tabix -b 2 -e 2 PE.txt.gz
     svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} PE.txt.gz ~{prefix}.stats
   
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

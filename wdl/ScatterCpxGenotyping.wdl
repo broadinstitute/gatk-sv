@@ -31,6 +31,7 @@ workflow ScatterCpxGenotyping {
     String prefix
     File merged_ped_file
     String contig
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -81,6 +82,7 @@ workflow ScatterCpxGenotyping {
         prefix=prefix,
         merged_ped_file=merged_ped_file,
         contig=contig,
+        ref_dict=ref_dict,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,

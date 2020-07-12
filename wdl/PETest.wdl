@@ -21,12 +21,12 @@ workflow PETest {
     Int split_size
     File allosome_contigs
     File autosome_contigs
+    File ref_dict
     File ped_file
     File male_samples
     File female_samples
     File samples
     Int common_cnv_size_cutoff
-    Int tabix_retries
 
     String sv_base_mini_docker
     String linux_docker
@@ -56,8 +56,8 @@ workflow PETest {
         male_samples = male_samples,
         female_samples = female_samples,
         allosome = false,
+        ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
-        tabix_retries = tabix_retries,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -84,8 +84,8 @@ workflow PETest {
         male_samples = male_samples,
         female_samples = female_samples,
         allosome = true,
+        ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
-        tabix_retries = tabix_retries,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,

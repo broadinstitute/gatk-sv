@@ -1,12 +1,12 @@
 {
   "GATKSVPipelinePhase1.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "GATKSVPipelinePhase1.sv_base_docker": "gatksv/sv-base:b3af2e3",
-  "GATKSVPipelinePhase1.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "GATKSVPipelinePhase1.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
-  "GATKSVPipelinePhase1.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
+  "GATKSVPipelinePhase1.sv_base_docker": "mwalker174/sv-base:mw-gatk-tabix-e3d3b0d",
+  "GATKSVPipelinePhase1.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
+  "GATKSVPipelinePhase1.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
+  "GATKSVPipelinePhase1.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
   "GATKSVPipelinePhase1.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
   "GATKSVPipelinePhase1.linux_docker" : "ubuntu:18.04",
-  "GATKSVPipelinePhase1.cnmops_docker": "gatksv/cnmops:b3af2e3",
+  "GATKSVPipelinePhase1.cnmops_docker": "mwalker174/cnmops:mw-gatk-tabix-e3d3b0d",
   "GATKSVPipelinePhase1.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
   "GATKSVPipelinePhase1.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   

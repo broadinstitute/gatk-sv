@@ -20,7 +20,7 @@ workflow BAFTestChromosome {
     String algorithm
     Int split_size
     Int? suffix_len
-    Int tabix_retries
+    File ref_dict
 
     String linux_docker
     String sv_pipeline_docker
@@ -49,10 +49,10 @@ workflow BAFTestChromosome {
         bed = split,
         baf_metrics = baf_metrics,
         baf_metrics_idx = baf_metrics_idx,
+        ref_dict = ref_dict,
         samples = samples,
         prefix = basename(split),
         batch = batch,
-        tabix_retries = tabix_retries,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_baftest
     }
@@ -76,10 +76,10 @@ task BAFTest {
     File bed
     File baf_metrics
     File baf_metrics_idx
+    File ref_dict
     Array[String] samples
     String prefix
     String batch
-    Int tabix_retries
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -100,6 +100,9 @@ task BAFTest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "${prefix}.metrics"
   }
@@ -114,28 +117,22 @@ task BAFTest {
     chrom=$(cut -f1 ~{bed} | head -n1)
     set -o pipefail
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix ~{baf_metrics} "$chrom":"$start"-"$end" | bgzip -c > local_baf_1.bed.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix ~{baf_metrics} "$chrom":"$start"-"$end" | bgzip -c > local_baf_2.bed.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent local_baf_1.bed.gz local_baf_2.bed.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "BAF-tabix retry:" $x
-    cmp --silent local_baf_1.bed.gz local_baf_2.bed.gz || exit 1
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{baf_metrics} \
+      -L "${chrom}:${start}-${end}" \
+      -O local_baf.bed
 
-    mv local_baf_1.bed.gz local_baf.bed.gz
+    # GATK does not block compress
+    bgzip local_baf.bed
+
     tabix -b2 local_baf.bed.gz
     svtk baf-test ~{bed} local_baf.bed.gz --batch batch.key > ~{prefix}.metrics
   
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
@@ -219,7 +216,7 @@ task SplitBafVcf {
   command <<<
 
     set -euo pipefail 
-    tabix -p vcf ~{vcf};
+    tabix -p vcf ~{vcf}
     #TODO : split -a parameter should be scaled properly (using suffix_len does not always work)
     tabix -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \

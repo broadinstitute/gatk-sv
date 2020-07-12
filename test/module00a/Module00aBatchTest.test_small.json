@@ -14,8 +14,8 @@
     "SM-HXUD2"
   ],
 
-  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
+  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
   "Module00aBatchTest.Module00aBatchMetrics.linux_docker" : "ubuntu:18.04",
   "Module00aBatchTest.Module00aBatchMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "Module00aBatchTest.Module00aBatchMetrics.contig_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
@@ -75,7 +75,7 @@
 
   "Module00aBatchTest.Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
   "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
+  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
   "Module00aBatchTest.Module00aBatch.manta_docker": "gatksv/manta:8645aa",
   "Module00aBatchTest.Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
   "Module00aBatchTest.Module00aBatch.wham_docker": "gatksv/wham:8645aa",

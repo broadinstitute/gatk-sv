@@ -14,8 +14,8 @@
     "SM-HXUD2"
   ],
 
-  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
+  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
   "Module00cTest.Module00cMetrics.linux_docker" : "ubuntu:18.04",
   "Module00cTest.Module00cMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
@@ -60,9 +60,9 @@
   ],
 
   "Module00cTest.Module00c.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00cTest.Module00c.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
+  "Module00cTest.Module00c.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
   "Module00cTest.Module00c.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
-  "Module00cTest.Module00c.cnmops_docker": "gatksv/cnmops:b3af2e3",
+  "Module00cTest.Module00c.cnmops_docker": "mwalker174/cnmops:mw-gatk-tabix-e3d3b0d",
   "Module00cTest.Module00c.linux_docker" : "ubuntu:18.04",
   "Module00cTest.Module00c.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
   "Module00cTest.Module00c.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
