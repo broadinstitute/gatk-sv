@@ -12,7 +12,7 @@ import "CramToBam.wdl" as ctb
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
-import "PESRCollection.wdl" as pesr
+import "PESRCollectionGATK.wdl" as pesr
 import "Whamg.wdl" as wham
 
 # Runs selected tools on BAM/CRAM files
@@ -185,7 +185,10 @@ workflow Module00a {
         cram = bam_file_,
         cram_index = bam_index_,
         sample_id = sample_id,
-        sv_pipeline_docker = sv_pipeline_docker,
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        reference_dict = reference_dict,
+        gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_pesr
     }
   }
