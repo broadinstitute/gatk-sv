@@ -49,7 +49,7 @@ workflow Module00a {
     Int? disk_space_gb_for_collect_counts
 
     # Delly inputs
-    File? delly_blacklist_intervals_file  # Required if run_delly True
+    File? delly_exclude_intervals_file  # Required if run_delly True
     Array[String]? delly_sv_types
 
     # Manta inputs
@@ -70,7 +70,7 @@ workflow Module00a {
     Array[Int]? pf_reads_improper_pairs
 
     # Wham inputs
-    File wham_whitelist_bed_file
+    File wham_include_list_bed_file
 
     # Docker
     String sv_pipeline_docker
@@ -95,7 +95,7 @@ workflow Module00a {
     RuntimeAttr? runtime_attr_melt
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_whitelist
+    RuntimeAttr? runtime_attr_wham_include_list
 
     # Never assign these values! (workaround until None type is implemented)
     Float? NONE_FLOAT_
@@ -153,7 +153,7 @@ workflow Module00a {
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
-        blacklist_intervals_file = select_first([delly_blacklist_intervals_file]),
+        exclude_intervals_file = select_first([delly_exclude_intervals_file]),
         sv_types = delly_sv_types,
         sv_base_mini_docker = sv_base_mini_docker,
         delly_docker = select_first([delly_docker]),
@@ -232,11 +232,11 @@ workflow Module00a {
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
-        whitelist_bed_file = wham_whitelist_bed_file,
+        include_bed_file = wham_include_list_bed_file,
         chr_file = primary_contigs_list,
         samtools_cloud_docker = samtools_cloud_docker,
         wham_docker = select_first([wham_docker]),
-        runtime_attr_whitelist = runtime_attr_wham_whitelist,
+        runtime_attr_includelist = runtime_attr_wham_include_list,
         runtime_attr_wham = runtime_attr_wham
     }
   }

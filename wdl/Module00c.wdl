@@ -40,7 +40,7 @@ workflow Module00c {
     # Global files
     File ped_file
     File genome_file
-    File primary_contigs_fai            # .fai file of whitelisted contigs
+    File primary_contigs_fai            # .fai file of included contigs
 
     # PE/SR/BAF/bincov files
     Array[File] counts
@@ -128,7 +128,7 @@ workflow Module00c {
 
     # CNMops files
     File cnmops_chrom_file
-    File cnmops_blacklist
+    File cnmops_exclude_list
     File cnmops_allo_file
     Int? cnmops_large_min_size      # minimum size call to be detected by CNMOPS running in large mode
 
@@ -286,7 +286,7 @@ workflow Module00c {
       bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx,
       chrom_file = cnmops_chrom_file,
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
-      blacklist = cnmops_blacklist,
+      exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       prefix = "header",
       stitch_and_clean_large_events = false,
@@ -311,7 +311,7 @@ workflow Module00c {
       bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx,
       chrom_file = cnmops_chrom_file,
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
-      blacklist = cnmops_blacklist,
+      exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       prefix = "large",
       min_size=cnmops_large_min_size,

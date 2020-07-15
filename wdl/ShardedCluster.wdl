@@ -23,7 +23,7 @@ workflow ShardedCluster {
     String contig
     String sv_type
     Float sample_overlap
-    File? blacklist
+    File? exclude_list
     Int sv_size
     Array[String] sv_types
 
@@ -43,8 +43,8 @@ workflow ShardedCluster {
   }
 
   File vcf_idx = vcf + ".tbi"
-  if (defined(blacklist)) {
-    File blacklist_idx = blacklist + ".tbi"
+  if (defined(exclude_list)) {
+    File exclude_list_idx = exclude_list + ".tbi"
   }
   String sv_type_prefix = prefix + "." + contig + "." + sv_type
 
@@ -76,8 +76,8 @@ workflow ShardedCluster {
         dist=dist,
         frac=frac,
         sample_overlap=sample_overlap,
-        blacklist=blacklist,
-        blacklist_idx=blacklist_idx,
+        exclude_list=exclude_list,
+        exclude_list_idx=exclude_list_idx,
         svsize=sv_size,
         sv_types=sv_types,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -225,8 +225,8 @@ task SvtkVcfCluster {
     Int dist
     Float frac
     Float sample_overlap
-    File? blacklist
-    File? blacklist_idx
+    File? exclude_list
+    File? exclude_list_idx
     Int svsize
     Array[String] sv_types
     String sv_pipeline_docker
@@ -235,7 +235,7 @@ task SvtkVcfCluster {
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
-  Float shard_size = size(select_all([vcf, VIDs, blacklist, blacklist_idx]), "GiB")
+  Float shard_size = size(select_all([vcf, VIDs, exclude_list, exclude_list_idx]), "GiB")
   Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   Float input_mem_scale = 3.0
@@ -271,14 +271,14 @@ task SvtkVcfCluster {
       input.vcf.gz
 
 
-    ~{if defined(blacklist) && !defined(blacklist_idx) then "tabix -f -p bed ~{blacklist}" else ""}
+    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -f -p bed ~{exclude_list}" else ""}
 
     #Run clustering
     echo "input.vcf.gz" > unclustered_vcfs.list
     svtk vcfcluster unclustered_vcfs.list clustered.vcf \
       -d ~{dist} \
       -f ~{frac} \
-      ~{if defined(blacklist) then "-x ~{blacklist}" else ""} \
+      ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
       -z ~{svsize} \
       -p ~{prefix} \
       -t ~{sep=',' sv_types} \

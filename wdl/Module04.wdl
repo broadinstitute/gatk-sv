@@ -31,7 +31,7 @@ workflow Module04 {
     File? seed_cutoffs      # Required unless skipping training
     Int n_RD_genotype_bins  # number of RdTest bins
     File discfile
-    File? pesr_blacklist    # Required unless skipping training
+    File? pesr_exclude_list    # Required unless skipping training
     File splitfile
     String? reference_build  #hg19 or hg38, Required unless skipping training
     File? cohort_combined_bed
@@ -128,7 +128,7 @@ workflow Module04 {
       input:
         bin_exclude=bin_exclude,
         samples = GetSampleIdsFromVcf.out_array,
-        pesr_blacklist = select_first([pesr_blacklist]),
+        pesr_exclude_list = select_first([pesr_exclude_list]),
         discfile = discfile,
         n_RD_genotype_bins = n_RD_genotype_bins,
         batch_vcf = batch_pesr_vcf,

@@ -60,7 +60,7 @@ workflow PETestChromosome {
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
-          whitelist = male_samples,
+          include_list = male_samples,
           prefix = basename(split),
           common_model = false,
           tabix_retries = tabix_retries,
@@ -74,7 +74,7 @@ workflow PETestChromosome {
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
-          whitelist = female_samples,
+          include_list = female_samples,
           prefix = basename(split),
           common_model = false,
           tabix_retries = tabix_retries,
@@ -99,7 +99,7 @@ workflow PETestChromosome {
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
-          whitelist = samples,
+          include_list = samples,
           prefix = basename(split),
           common_model = false,
           tabix_retries = tabix_retries,
@@ -119,7 +119,7 @@ workflow PETestChromosome {
           discfile = discfile,
           medianfile = medianfile,
           discfile_idx = discfile_idx,
-          whitelist = samples,
+          include_list = samples,
           prefix = basename(split),
           common_model = true,
           tabix_retries = tabix_retries,
@@ -162,7 +162,7 @@ task PETest {
     File discfile
     File medianfile
     File discfile_idx
-    File whitelist
+    File include_list
     Boolean common_model
     String prefix
     Int tabix_retries
@@ -218,7 +218,7 @@ task PETest {
     mv PE_1.txt.gz PE.txt.gz
     tabix -b 2 -e 2 PE.txt.gz
 
-    svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} PE.txt.gz ~{prefix}.stats
+    svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} PE.txt.gz ~{prefix}.stats
   
   >>>
   runtime {

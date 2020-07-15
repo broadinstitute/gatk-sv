@@ -22,7 +22,7 @@ workflow CNMOPS {
     File chrom_file
     File bincov_matrix_index
     File ped_file
-    File blacklist
+    File exclude_list
     File allo_file
     Array[String] samples
     String prefix
@@ -45,7 +45,7 @@ workflow CNMOPS {
     call CNSampleNormal as MaleR2 {
       input:
         chr = Allo[0],
-        black = blacklist,
+        exclude = exclude_list,
         ped = ped_file,
         mode = "1",
         r = r2,
@@ -59,7 +59,7 @@ workflow CNMOPS {
     call CNSampleNormal as MaleR1 {
       input:
         chr = Allo[0],
-        black = blacklist,
+        exclude = exclude_list,
         ped = ped_file,
         mode = "1",
         r = r1,
@@ -75,7 +75,7 @@ workflow CNMOPS {
     call CNSampleNormal as NormalR2 {
       input:
         chr = Chrom[0],
-        black = blacklist,
+        exclude = exclude_list,
         ped = ped_file,
         mode = "normal",
         r = r2,
@@ -89,7 +89,7 @@ workflow CNMOPS {
     call CNSampleNormal as NormalR1 {
       input:
         chr = Chrom[0],
-        black = blacklist,
+        exclude = exclude_list,
         ped = ped_file,
         mode = "normal",
         r = r1,
@@ -104,7 +104,7 @@ workflow CNMOPS {
   call CNSampleNormal as FemaleR2 {
     input:
       chr = "chrX",
-      black = blacklist,
+      exclude = exclude_list,
       ped = ped_file,
       mode = "2",
       r = r2,
@@ -118,7 +118,7 @@ workflow CNMOPS {
   call CNSampleNormal as FemaleR1 {
     input:
       chr = "chrX",
-      black = blacklist,
+      exclude = exclude_list,
       ped = ped_file,
       mode = "2",
       r = r1,
@@ -142,7 +142,7 @@ workflow CNMOPS {
       chrom_file=chrom_file,
       allo_file=allo_file,
       samplelist = GetPed.batchped,
-      black = blacklist,
+      exclude = exclude_list,
       batch = batch,
       NR1 = NormalR1.Gff,
       NR2 = NormalR2.Gff,
@@ -203,7 +203,7 @@ task GetPed {
 task CleanCNMops {
   input {
     File samplelist
-    File black
+    File exclude
     String batch
     Array[File] NR1
     Array[File] NR2
@@ -245,7 +245,7 @@ task CleanCNMops {
     mkdir calls
     grep -v "#" cnmops.gff > cnmops.gff1
     echo "./cnmops.gff1">GFF.list
-    /opt/WGD/bin/cleancnMOPS.sh -z -o calls/ -S ~{black} sample.list GFF.list
+    /opt/WGD/bin/cleancnMOPS.sh -z -o calls/ -S ~{exclude} sample.list GFF.list
 
     zcat calls/*/*.cnMOPS.DEL.bed.gz > DELS.bed 
     awk -v batch=~{batch}_DEL_ 'BEGIN{OFS="\t"} {print $1,$2,$3,batch,$4,"cnmops"}' DELS.bed | cat -n |\
@@ -295,7 +295,7 @@ task CleanCNMops {
 task CNSampleNormal {
   input {
     String chr
-    File black
+    File exclude
     File ped
     String mode
     String r
@@ -342,7 +342,7 @@ task CNSampleNormal {
 
     EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
     set +e
-    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{black} -x ~{black} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed &> cnmops.out
+    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{exclude} -x ~{exclude} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed &> cnmops.out
     RC=$?
     set -e
     if [ ! $RC -eq 0 ]; then

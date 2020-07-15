@@ -133,10 +133,10 @@
   "Module01Test.Module01.pesr_svsize": "0",
   "Module01Test.Module01.pesr_frac": "0.1",
   "Module01Test.Module01.pesr_flags": "--preserve-ids",
-  "Module01Test.Module01.pesr_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "Module01Test.Module01.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module01Test.Module01.pesr_distance": "300",
-  "Module01Test.Module01.depth_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
-  "Module01Test.Module01.depth_blacklist_frac_max": "0.5",
+  "Module01Test.Module01.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
+  "Module01Test.Module01.depth_exclude_list_frac_max": "0.5",
 
   "Module01Test.Module01.batch": "test_large",
   "Module01Test.Module01.del_bed": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.DEL.bed.gz",

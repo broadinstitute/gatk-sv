@@ -26,8 +26,8 @@ workflow TrainGCNV {
     Array[String]? allosomal_contigs
 
     # Interval filtering inputs
-    File? blacklist_intervals_for_filter_intervals_ploidy
-    File? blacklist_intervals_for_filter_intervals_cnv
+    File? exclude_intervals_for_filter_intervals_ploidy
+    File? exclude_intervals_for_filter_intervals_cnv
 
     # gCNV cohort mode inputs
     Boolean? filter_intervals
@@ -127,8 +127,8 @@ workflow TrainGCNV {
       ref_fasta_dict = reference_dict,
       ref_fasta_fai = reference_index,
       ref_fasta = reference_fasta,
-      blacklist_intervals_for_filter_intervals_ploidy=blacklist_intervals_for_filter_intervals_ploidy,
-      blacklist_intervals_for_filter_intervals_cnv=blacklist_intervals_for_filter_intervals_cnv,
+      exclude_intervals_for_filter_intervals_ploidy=exclude_intervals_for_filter_intervals_ploidy,
+      exclude_intervals_for_filter_intervals_cnv=exclude_intervals_for_filter_intervals_cnv,
       do_explicit_gc_correction = do_explicit_gc_correction,
       gcnv_enable_bias_factors = gcnv_enable_bias_factors,
       ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,

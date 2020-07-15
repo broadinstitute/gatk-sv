@@ -106,7 +106,7 @@ workflow GATKSVPipelineSingleSample {
     Float? total_reads
 
     # Wham inputs
-    File wham_whitelist_bed_file
+    File wham_include_list_bed_file
 
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_baf
@@ -118,7 +118,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_melt
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_whitelist
+    RuntimeAttr? runtime_attr_wham_include_list
 
     ############################################################
     ## Module 00b
@@ -193,7 +193,7 @@ workflow GATKSVPipelineSingleSample {
     Int gcnv_qs_cutoff              # QS filtering cutoff
 
     # CNMops files
-    File cnmops_blacklist
+    File cnmops_exclude_list
 
     Int? cnmops_large_min_size
 
@@ -248,7 +248,7 @@ workflow GATKSVPipelineSingleSample {
     Float pesr_frac
     String pesr_flags
     Int pesr_distance
-    File pesr_blacklist
+    File pesr_exclude_list
     String depth_flags
     Float depth_frac
     File? Sanders_2015_tarball
@@ -340,8 +340,8 @@ workflow GATKSVPipelineSingleSample {
     File cytobands
 
     File mei_bed
-    File pe_blacklist
-    File depth_blacklist
+    File pe_exclude_list
+    File depth_exclude_list
     File empty_file
     
     Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
@@ -425,7 +425,7 @@ workflow GATKSVPipelineSingleSample {
       pf_reads_improper_pairs=pf_reads_improper_pairs_input,
       pct_chimeras=pct_chimeras_input,
       total_reads=total_reads_input,
-      wham_whitelist_bed_file=wham_whitelist_bed_file,
+      wham_include_list_bed_file=wham_include_list_bed_file,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       delly_docker=delly_docker_,
@@ -442,7 +442,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_melt=runtime_attr_melt,
       runtime_attr_pesr=runtime_attr_pesr,
       runtime_attr_wham=runtime_attr_wham,
-      runtime_attr_wham_whitelist=runtime_attr_wham_whitelist,
+      runtime_attr_wham_include_list=runtime_attr_wham_include_list,
   }
 
   call m00b.Module00b as Module00b {
@@ -536,7 +536,7 @@ workflow GATKSVPipelineSingleSample {
       wham_vcfs=wham_vcfs_,
       min_svsize=min_svsize,
       cnmops_chrom_file=autosome_file,
-      cnmops_blacklist=cnmops_blacklist,
+      cnmops_exclude_list=cnmops_exclude_list,
       cnmops_allo_file=allosome_file,
       cnmops_large_min_size=cnmops_large_min_size,
       matrix_qc_distance=matrix_qc_distance,
@@ -614,9 +614,9 @@ workflow GATKSVPipelineSingleSample {
       pesr_frac=pesr_frac,
       pesr_flags=pesr_flags,
       pesr_distance=pesr_distance,
-      pesr_blacklist=pesr_blacklist,
-      depth_blacklist=depth_blacklist,
-      depth_blacklist_frac_max=0.5,
+      pesr_exclude_list=pesr_exclude_list,
+      depth_exclude_list=depth_exclude_list,
+      depth_exclude_list_frac_max=0.5,
       depth_flags=depth_flags,
       depth_frac=depth_frac,
       contigs=primary_contigs_fai,
@@ -828,8 +828,8 @@ workflow GATKSVPipelineSingleSample {
       bincov_files=[Module00c.merged_bincov],
 
       mei_bed=mei_bed,
-      pe_blacklist=pe_blacklist,
-      depth_blacklist=depth_blacklist,
+      pe_exclude_list=pe_exclude_list,
+      depth_exclude_list=depth_exclude_list,
       empty_file=empty_file,
 
       cohort_name=batch,

@@ -20,7 +20,7 @@ workflow VcfClusterSingleChrom {
     Int dist
     Float frac
     Float sample_overlap
-    File? blacklist
+    File? exclude_list
     Array[String] batches
     Int sv_size
     Array[String] sv_types
@@ -73,7 +73,7 @@ workflow VcfClusterSingleChrom {
       dist=dist,
       frac=frac,
       sample_overlap=sample_overlap,
-      blacklist=blacklist,
+      exclude_list=exclude_list,
       sv_size=sv_size,
       sv_types=sv_types,
       sv_pipeline_docker=sv_pipeline_docker,

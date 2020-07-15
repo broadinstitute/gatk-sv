@@ -22,7 +22,7 @@ workflow TrainPEGenotyping {
     File RF_cutoffs
     File RD_genotypes
     File RD_melted_genotypes
-    File blacklist
+    File exclude_list
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -80,7 +80,7 @@ workflow TrainPEGenotyping {
       PE_counts = MergePECounts.counts,
       RD_genotypes = RD_genotypes,
       RD_melted_genotypes = RD_melted_genotypes,
-      blacklist = blacklist,
+      exclude_list = exclude_list,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_genotype
   }
@@ -137,7 +137,7 @@ task GenotypePEPart1 {
     File PE_counts
     File RD_genotypes
     File RD_melted_genotypes
-    File blacklist
+    File exclude_list
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -166,7 +166,7 @@ task GenotypePEPart1 {
       ~{RD_genotypes} \
       ~{RD_melted_genotypes} \
       ~{RF_cutoffs} \
-      ~{blacklist} \
+      ~{exclude_list} \
       /opt/RdTest/generate_cutoff_PE.R 
   
   >>>

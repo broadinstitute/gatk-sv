@@ -22,7 +22,7 @@ workflow ResolveComplexSv {
     File mei_bed
     Array[File] disc_files
     Array[File] rf_cutoff_files
-    File pe_blacklist
+    File pe_exclude_list
     Boolean inv_only
 
     String sv_pipeline_docker
@@ -40,7 +40,7 @@ workflow ResolveComplexSv {
   }
 
   File vcf_idx = vcf + ".tbi"
-  File pe_blacklist_idx = pe_blacklist + ".tbi"
+  File pe_exclude_list_idx = pe_exclude_list + ".tbi"
   File cytobands_idx = cytobands + ".tbi"
 
   # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
@@ -92,8 +92,8 @@ workflow ResolveComplexSv {
           cytobands=cytobands,
           cytobands_idx=cytobands_idx,
           mei_bed=mei_bed,
-          pe_blacklist=pe_blacklist,
-          pe_blacklist_idx=pe_blacklist_idx,
+          pe_exclude_list=pe_exclude_list,
+          pe_exclude_list_idx=pe_exclude_list_idx,
           se_pe_cutoff=GetSeCutoff.median_PE_cutoff,
           noref_vids=ResolvePrep.noref_vids,
           merged_discfile=ResolvePrep.merged_discfile,
@@ -400,8 +400,8 @@ task SvtkResolve {
     File cytobands
     File cytobands_idx
     File mei_bed
-    File pe_blacklist
-    File pe_blacklist_idx
+    File pe_exclude_list
+    File pe_exclude_list_idx
     Int se_pe_cutoff
     File noref_vids
     File merged_discfile
@@ -416,7 +416,7 @@ task SvtkResolve {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(
-    [full_vcf, noref_vcf, cytobands, cytobands_idx, mei_bed, pe_blacklist, pe_blacklist_idx, noref_vids,
+    [full_vcf, noref_vcf, cytobands, cytobands_idx, mei_bed, pe_exclude_list, pe_exclude_list_idx, noref_vids,
      merged_discfile, merged_discfile_idx],
     "GiB"
   )
@@ -455,7 +455,7 @@ task SvtkResolve {
           --mei-bed ~{mei_bed} \
           --cytobands ~{cytobands} \
           --min-rescan-pe-support ~{se_pe_cutoff} \
-          -x ~{pe_blacklist}
+          -x ~{pe_exclude_list}
 
         echo "svtk resolve complete"
         else

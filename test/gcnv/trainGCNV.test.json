@@ -7,8 +7,8 @@
   "TrainGCNV.allosomal_contigs": ["chrX", "chrY"],
 
   "TrainGCNV.contig_ploidy_priors": "gs://broad-sv-dev-data/gcnv/hg38.contig_ploidy_priors_homo_sapiens.tsv",
-  "TrainGCNV.blacklist_intervals_for_filter_intervals_ploidy": "gs://gatk-sv-resources/resources/hg38.wgs.blacklist.wPAR.bed",
-  "TrainGCNV.blacklist_intervals_for_filter_intervals_cnv": "gs://gatk-sv-resources/resources/hg38.wgs.blacklist.wPAR.bed",
+  "TrainGCNV.exclude_intervals_for_filter_intervals_ploidy": "gs://gatk-sv-resources/resources/hg38.wgs.blacklist.wPAR.bed",
+  "TrainGCNV.exclude_intervals_for_filter_intervals_cnv": "gs://gatk-sv-resources/resources/hg38.wgs.blacklist.wPAR.bed",
   "TrainGCNV.num_intervals_per_scatter": "5000",
   "TrainGCNV.do_explicit_gc_correction": "true",
   "TrainGCNV.gcnv_enable_bias_factors": "false",

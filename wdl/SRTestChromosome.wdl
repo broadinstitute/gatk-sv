@@ -61,7 +61,7 @@ workflow SRTestChromosome {
           splitfile = splitfile,
           medianfile = medianfile,
           splitfile_idx = splitfile_idx,
-          whitelist = female_samples,
+          include_list = female_samples,
           common_model = false,
           prefix = basename(split),
           tabix_retries = tabix_retries,
@@ -75,7 +75,7 @@ workflow SRTestChromosome {
           splitfile = splitfile,
           medianfile = medianfile,
           splitfile_idx = splitfile_idx,
-          whitelist = male_samples,
+          include_list = male_samples,
           common_model = false,
           prefix = basename(split),
           tabix_retries = tabix_retries,
@@ -101,7 +101,7 @@ workflow SRTestChromosome {
           splitfile = splitfile,
           medianfile = medianfile,
           splitfile_idx = splitfile_idx,
-          whitelist = samples,
+          include_list = samples,
           common_model = false,
           prefix = basename(split),
           tabix_retries = tabix_retries,
@@ -124,7 +124,7 @@ workflow SRTestChromosome {
             splitfile = splitfile,
             medianfile = medianfile,
             splitfile_idx = splitfile_idx,
-            whitelist = samples,
+            include_list = samples,
             common_model = true,
             prefix = basename(split),
             tabix_retries = tabix_retries,
@@ -168,7 +168,7 @@ task SRTest {
     File splitfile
     File medianfile
     File splitfile_idx
-    File whitelist
+    File include_list
     Boolean common_model
     String prefix
     Int tabix_retries
@@ -223,7 +223,7 @@ task SRTest {
     mv SR_1.txt.gz SR.txt.gz
     tabix -b 2 -e 2 SR.txt.gz
 
-    svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} SR.txt.gz ~{prefix}.stats
+    svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} SR.txt.gz ~{prefix}.stats
   
   >>>
   runtime {

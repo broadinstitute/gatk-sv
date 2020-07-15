@@ -46,7 +46,7 @@ workflow Manta {
     sample_id: "sample name. Outputs will be sample_name + 'manta.vcf.gz' and sample_name + 'manta.vcf.gz.tbi'"
     reference_fasta: ".fasta file with reference used to align bam or cram file"
     reference_index: "[optional] If omitted, the WDL will look for an index by appending .fai to the .fasta file"
-    region_bed: "[optional] gzipped bed file with whitelisted regions where manta should make SV calls."
+    region_bed: "[optional] gzipped bed file with included regions where manta should make SV calls."
     region_bed_index: "[optional]If omitted, the WDL will look for an index by appending .tbi to the region_bed file"
     jobs_per_cpu: "[optional] number of manta threads, i.e. num_jobs = round(num_cpu * jobs_per_cpu). If omitted, defaults to 1.3."
     mem_gb_per_job: "[optional] Memory to request for VM (in GB) = round(num_jobs * mem_gb_per_job). If omitted, defaults to 2."

@@ -127,7 +127,7 @@
 
   "Module04Test.Module04.n_RD_genotype_bins": "100000", 
   "Module04Test.Module04.n_per_split": "5000", 
-  "Module04Test.Module04.pesr_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "Module04Test.Module04.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module04Test.Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "Module04Test.Module04.reference_build": "hg38",
 

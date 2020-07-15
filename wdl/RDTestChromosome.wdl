@@ -61,7 +61,7 @@ workflow RDTestChromosome {
           coveragefile_idx = coveragefile_idx,
           medianfile = medianfile,
           ped_file = ped_file,
-          whitelist = female_samples,
+          include_list = female_samples,
           prefix = basename(split),
           flags = flags,
           tabix_retries = tabix_retries,
@@ -76,7 +76,7 @@ workflow RDTestChromosome {
           coveragefile_idx = coveragefile_idx,
           medianfile = medianfile,
           ped_file = ped_file,
-          whitelist = male_samples,
+          include_list = male_samples,
           prefix = basename(split),
           flags = flags,
           tabix_retries = tabix_retries,
@@ -102,7 +102,7 @@ workflow RDTestChromosome {
           coveragefile = coveragefile,
           coveragefile_idx = coveragefile_idx,
           medianfile = medianfile,
-          whitelist = samples,
+          include_list = samples,
           ped_file = ped_file,
           prefix = basename(split),
           flags = flags,
@@ -135,7 +135,7 @@ task RDTest {
     File coveragefile_idx
     File medianfile
     File ped_file
-    File whitelist
+    File include_list
     String prefix
     String flags
     Int tabix_retries
@@ -193,7 +193,7 @@ task RDTest {
       -c local_coverage.bed.gz \
       -m ~{medianfile} \
       -f ~{ped_file} \
-      -w ~{whitelist} \
+      -w ~{include_list} \
       ~{flags}
   
   >>>
