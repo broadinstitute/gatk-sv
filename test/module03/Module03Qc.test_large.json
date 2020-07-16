@@ -1,0 +1,43 @@
+{
+  "Module03Qc.contigs" : [
+    "chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr13","chr14","chr15","chr16","chr17","chr18","chr19","chr20","chr21","chr22","chrX","chrY"
+  ],
+
+  "Module03Qc.thousand_genomes_tarballs": [
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.ALL.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AMR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EAS.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EUR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.SAS.bed.gz"
+  ],
+  "Module03Qc.hgsv_tarballs": [
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.AFR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.ALL.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.AMR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.EAS.bed.gz"
+  ],
+  "Module03Qc.asc_tarballs": [
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.ALL.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.EUR.bed.gz",
+    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.OTH.bed.gz"
+  ],
+  "Module03Qc.sanders_2015_tarball": "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
+  "Module03Qc.collins_2017_tarball": "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz",
+  "Module03Qc.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
+
+  
+  "Module03Qc.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
+  "Module03Qc.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
+  "Module03Qc.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
+
+  
+  "Module03Qc.batch": "test_large",
+  
+  "Module03Qc.ped_file": "gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam",
+  "Module03Qc.depth_vcf_noOutliers": "gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz",
+  "Module03Qc.merged_pesr_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz"
+}
+
+
+

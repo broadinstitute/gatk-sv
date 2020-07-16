@@ -631,11 +631,11 @@ task SplitVcf {
                                                 else ''} \
         > records.vcf
       N_RECORDS=$(wc -l < records.vcf)
+      rm uncompressed.vcf
 
       # specifying split -n instead of split -l produces more even splits
       N_CHUNKS=$((N_RECORDS / ~{min_vars_per_shard}))
       if [ $N_CHUNKS -gt 1 ]; then
-        rm uncompressed.vcf
         rm "~{vcf}"
         MAX_CHUNKS=~{if defined(n_shards) then n_shards else 0}
         if [ $MAX_CHUNKS -gt 0 ] && [ $MAX_CHUNKS -lt $N_CHUNKS ]; then
@@ -662,8 +662,9 @@ task SplitVcf {
           rm $VCF_RECORD
         done
       else
-        # just one chunk, so just move the original file to be named like a chunk
-        bgzip -c uncompressed.vcf > "~{prefix}1.vcf.gz"
+        # just one chunk, so use full records.vcf. add header, compress, and name like a chunk
+        # use records.vcf in case vcf_idx not defined and uncompressed.vcf not result of tabix call
+        cat header.vcf records.vcf | bgzip -c > "~{prefix}1.vcf.gz"
       fi
     fi
   >>>
