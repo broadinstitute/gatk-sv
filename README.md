@@ -174,7 +174,6 @@ Note: a list of sample IDs must be provided. These IDs should be unique and cont
 
 #### Inputs:
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
-* Per-sample GVCFs generated with HaplotypeCaller.
 
 #### Outputs:
 * Caller VCFs (Delly, Manta, MELT, and/or Wham)
@@ -229,6 +228,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [Module 00b](#module00b) sex assignments)
+* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input)
 * Read count, BAF, PE, and SR files ([Module 00a](#module00a))
 * Caller VCFs ([Module 00a](#module00a))
 * Contig ploidy model and gCNV model files (gCNV training)
@@ -291,7 +291,7 @@ Filters poor quality variants and filters outlier samples.
 
 
 ## <a name="module04">Merge Cohort VCFs</a>
-Combines filtered variants across batches. The WDL can be found at: `/module04/MergeCohortVcfs.wdl`.
+Combines filtered variants across batches. The WDL can be found at: `/wdl/MergeCohortVcfs.wdl`.
 
 #### Prerequisites:
 * [Module 03](#module03)
