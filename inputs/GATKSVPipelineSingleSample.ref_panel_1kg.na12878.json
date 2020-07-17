@@ -22,6 +22,8 @@
 
   "GATKSVPipelineSingleSample.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
 
+  "GATKSVPipelineSingleSample.gatk_jar_override": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-package-4.1.8.0-local.jar",
+
   "GATKSVPipelineSingleSample.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "GATKSVPipelineSingleSample.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "GATKSVPipelineSingleSample.gatk_docker" : "broadinstitute/gatk:4.1.2.0",

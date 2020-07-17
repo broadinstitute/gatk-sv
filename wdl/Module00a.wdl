@@ -72,6 +72,9 @@ workflow Module00a {
     # Wham inputs
     File wham_whitelist_bed_file
 
+    # GATK Jar file override
+    File? gatk_jar_override
+
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -189,6 +192,7 @@ workflow Module00a {
         reference_index = reference_index,
         reference_dict = reference_dict,
         gatk_docker = gatk_docker,
+        gatk_jar_override = gatk_jar_override,
         runtime_attr_override = runtime_attr_pesr
     }
   }
