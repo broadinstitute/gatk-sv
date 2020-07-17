@@ -228,7 +228,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [Module 00b](#module00b) sex assignments)
-* Per-sample GVCFs generated with HaplotypeCaller
+* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input)
 * Read count, BAF, PE, and SR files ([Module 00a](#module00a))
 * Caller VCFs ([Module 00a](#module00a))
 * Contig ploidy model and gCNV model files (gCNV training)
