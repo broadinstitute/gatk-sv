@@ -137,7 +137,7 @@
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-15c2f97",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.wham_docker": "gatksv/wham:8645aa",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
