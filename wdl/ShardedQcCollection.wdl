@@ -17,6 +17,8 @@ workflow ShardedQcCollection {
     Int sv_per_shard
     String prefix
 
+    File? vcf_idx
+
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -30,8 +32,6 @@ workflow ShardedQcCollection {
     RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
   }
 
-  File vcf_idx = vcf + ".tbi"
-  
   # Tabix to chromosome of interest, and shard input VCF for stats collection
   call MiniTasks.SplitVcf as SplitVcfToQc {
     input:

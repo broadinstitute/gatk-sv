@@ -4,7 +4,7 @@
   "GATKSVPipelinePhase1.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "GATKSVPipelinePhase1.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "GATKSVPipelinePhase1.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "GATKSVPipelinePhase1.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
+  "GATKSVPipelinePhase1.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
   "GATKSVPipelinePhase1.linux_docker" : "ubuntu:18.04",
   "GATKSVPipelinePhase1.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "GATKSVPipelinePhase1.gatk_docker" : "broadinstitute/gatk:4.1.2.0",

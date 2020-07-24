@@ -34,6 +34,7 @@ workflow MasterVcfQc {
     Array[File]? custom_comparison_sets
     Array[String] contigs
     Int? random_seed
+    File? vcf_idx
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -82,6 +83,7 @@ workflow MasterVcfQc {
     call ShardedQcCollection.ShardedQcCollection as CollectQcVcfwide {
       input:
         vcf=vcf,
+        vcf_idx=vcf_idx,
         contig=contig,
         sv_per_shard=sv_per_shard,
         prefix="~{prefix}.~{contig}.shard",

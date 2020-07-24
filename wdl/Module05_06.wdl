@@ -531,6 +531,7 @@ workflow Module05_06 {
   call VcfQc.MasterVcfQc as QcCleanedVcf {
     input:
       vcf=ConcatCleanedVcfs.concat_vcf,
+      vcf_idx=ConcatCleanedVcfs.concat_vcf + ".tbi",
       ped_file=merged_ped_file,
       prefix="~{cohort_name}_cleaned_VCF",
       sv_per_shard=10000,
