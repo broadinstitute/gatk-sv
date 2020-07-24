@@ -162,7 +162,7 @@
   "Module05_06Test.Module05_06.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
   "Module05_06Test.Module05_06.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module05_06Test.Module05_06.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module05_06Test.Module05_06.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-15c2f97",
+  "Module05_06Test.Module05_06.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
 
   "Module05_06Test.Module05_06.cohort_name": "test_large",
   "Module05_06Test.Module05_06.batches": [

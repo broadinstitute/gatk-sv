@@ -1,7 +1,7 @@
 {
   "Module00c.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module00c.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_3c9d26c_single_sample_annotations",
-  "Module00c.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-15c2f97",
+  "Module00c.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
   "Module00c.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "Module00c.linux_docker" : "ubuntu:18.04",
   "Module00c.gatk_docker" : "broadinstitute/gatk:4.1.2.0",

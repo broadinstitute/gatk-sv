@@ -15,6 +15,7 @@ workflow Module03Qc {
     File? manta_vcf_noOutliers
     File? delly_vcf_noOutliers
     File? melt_vcf_noOutliers
+    File? wham_vcf_noOutliers
     File? depth_vcf_noOutliers
     File? merged_pesr_vcf
     String batch
@@ -27,7 +28,7 @@ workflow Module03Qc {
     File? werling_2018_tarball
 
     Array[File]? custom_comparison_sets
-    Array[String] contigs
+    File contig_list
     Int? random_seed
 
     String sv_base_mini_docker
@@ -72,9 +73,11 @@ workflow Module03Qc {
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
 
-  Array[String] algorithms = ["manta", "delly", "melt", "depth", "pesr"]
-  Array[File?] vcfs_array = [manta_vcf_noOutliers, delly_vcf_noOutliers, melt_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
+  Array[String] algorithms = ["manta", "delly", "melt", "wham", "depth", "pesr"]
+  Array[File?] vcfs_array = [manta_vcf_noOutliers, delly_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
   Int num_algorithms = length(algorithms)
+
+  Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
@@ -132,8 +135,9 @@ workflow Module03Qc {
     File? filtered_manta_vcf_qc = VcfQc.sv_vcf_qc_output[0]
     File? filtered_delly_vcf_qc = VcfQc.sv_vcf_qc_output[1]
     File? filtered_melt_vcf_qc = VcfQc.sv_vcf_qc_output[2]
-    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[3]
-    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[4]
+    File? filtered_wham_vcf_qc = VcfQc.sv_vcf_qc_output[3]
+    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[4]
+    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[5]
   }
 
 }
