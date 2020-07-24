@@ -1344,13 +1344,8 @@ if(nrow(trios)>0){
   })
   names(trio.dat) <- trios[,1]
   
-  # if there are no GQ values, do not make GQ plots
-  gq <- F
-  for(i in 1:length(trio.dat)) {
-    if(sum(!is.na(trio.dat[[i]]$pro.GQ)) > 0) {
-      gq <- T
-    }
-  }
+  # if there are no GQ values in any of the trios, do not make GQ plots
+  gq <- any(unlist(lapply(trio.dat, function(trio){ sum(!is.na(trio$pro.GQ)) > 0 })))
   
   #Master wrapper
   masterInhWrapper(fam.dat.list=trio.dat,fam.type="trio", gq=gq)
