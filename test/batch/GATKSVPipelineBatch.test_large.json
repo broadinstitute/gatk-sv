@@ -342,6 +342,7 @@
   "GATKSVPipelineBatch.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "GATKSVPipelineBatch.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "GATKSVPipelineBatch.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "GATKSVPipelineBatch.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "GATKSVPipelineBatch.linux_docker" : "ubuntu:18.04",
   "GATKSVPipelineBatch.manta_docker": "gatksv/manta:8645aa",

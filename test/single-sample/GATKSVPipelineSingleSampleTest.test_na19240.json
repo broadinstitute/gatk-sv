@@ -126,11 +126,10 @@
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.PE_metrics" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/genotyping/pe_metric_file.txt",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.SR_metrics" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/genotyping/sr_metric_file.txt",
 
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.gatk_jar_override": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-package-4.1.8.0-local.jar",
-
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.linux_docker" : "ubuntu:18.04",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.manta_docker": "gatksv/manta:8645aa",

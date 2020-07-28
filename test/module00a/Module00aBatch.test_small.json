@@ -24,6 +24,7 @@
   "Module00aBatch.wham_docker": "gatksv/wham:8645aa",
   "Module00aBatch.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "Module00aBatch.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "Module00aBatch.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
 
   "Module00aBatch.bam_or_cram_files": [
     "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BI/v1/NA19240_NA19240_1a_SM-GN4BI_v1.cram",
