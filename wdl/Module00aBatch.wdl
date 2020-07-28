@@ -64,6 +64,7 @@ workflow Module00aBatch {
     String? melt_docker
     String? wham_docker
     String gatk_docker
+    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
 
     # Runtime configuration overrides
@@ -126,6 +127,7 @@ workflow Module00aBatch {
         melt_docker = melt_docker,
         wham_docker = wham_docker,
         gatk_docker = gatk_docker,
+        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,
         runtime_attr_cram_to_bam = runtime_attr_cram_to_bam,

@@ -53,8 +53,6 @@ workflow GATKSVPipelineSingleSample {
     File autosome_file      # fai of autosomal contigs
     File allosome_file      # fai of allosomal contigs
 
-    File? gatk_jar_override
-
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
@@ -64,6 +62,7 @@ workflow GATKSVPipelineSingleSample {
     String linux_docker
     String cnmops_docker
     String gatk_docker
+    String? gatk_docker_pesr_override
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
@@ -428,7 +427,6 @@ workflow GATKSVPipelineSingleSample {
       pct_chimeras=pct_chimeras_input,
       total_reads=total_reads_input,
       wham_whitelist_bed_file=wham_whitelist_bed_file,
-      gatk_jar_override=gatk_jar_override,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       delly_docker=delly_docker_,
@@ -436,6 +434,7 @@ workflow GATKSVPipelineSingleSample {
       melt_docker=melt_docker_,
       wham_docker=wham_docker_,
       gatk_docker=gatk_docker,
+      gatk_docker_pesr_override = gatk_docker_pesr_override,
       genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
       samtools_cloud_docker=samtools_cloud_docker,
       runtime_attr_cram_to_bam=runtime_attr_cram_to_bam,

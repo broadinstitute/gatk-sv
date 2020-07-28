@@ -12,7 +12,7 @@ import "CramToBam.wdl" as ctb
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
-import "PESRCollectionGATK.wdl" as pesr
+import "PESRCollection.wdl" as pesr
 import "Whamg.wdl" as wham
 
 # Runs selected tools on BAM/CRAM files
@@ -72,9 +72,6 @@ workflow Module00a {
     # Wham inputs
     File wham_whitelist_bed_file
 
-    # GATK Jar file override
-    File? gatk_jar_override
-
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -84,6 +81,7 @@ workflow Module00a {
     String? melt_docker
     String? wham_docker
     String gatk_docker
+    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
 
     # Runtime configuration overrides
@@ -191,8 +189,7 @@ workflow Module00a {
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
-        gatk_docker = gatk_docker,
-        gatk_jar_override = gatk_jar_override,
+        gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
         runtime_attr_override = runtime_attr_pesr
     }
   }
