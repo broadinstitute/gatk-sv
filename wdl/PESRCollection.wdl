@@ -73,8 +73,8 @@ task RunPESRCollection {
     mem_gb: 3.75,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 0
+    preemptible_tries: 3,
+    max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
