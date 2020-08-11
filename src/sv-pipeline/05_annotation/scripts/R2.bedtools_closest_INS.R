@@ -106,7 +106,22 @@ add_SV_Size<-function(chs){
   return(chs)
 	}
 
+pop=read.table(pop_file)
+pop_colname = paste(pop[,1],'AF',sep='_')
+pop_colname[pop_colname=='ALL_AF']='AF'
+
+out_columns <- c('name','name.1',pop_colname,'INS_dis','INS_ratio')
+
 dat=read.table(input_bed,sep='\t', header=T)
+# if there's no data write an empty table and exit
+if (nrow(dat) == 0) {
+	out_columns[c(1,2)]=c('query_svid','ref_svid')
+	out2 <- data.frame(matrix(ncol = length(out_columns), nrow = 0))
+	names(out2) <- out_columns
+	write.table(out2, output_bed, quote=F, sep='\t', col.names=T, row.names=F)
+	quit()
+}
+
 dat[,ncol(dat)+1] =abs(dat[,8]-dat[,2])
 colnames(dat)[ncol(dat)]='INS_dis'
 dat[,ncol(dat)+1] = dat[,13]/dat[,6]
@@ -127,11 +142,7 @@ out=out[order(out[,3]),]
 out=out[order(out[,2]),]
 out=out[order(out[,1]),]
 
-pop=read.table(pop_file)
-pop_colname = paste(pop[,1],'AF',sep='_')
-pop_colname[pop_colname=='ALL_AF']='AF'
-
-out2 = out[,c('name','name.1',pop_colname,'INS_dis','INS_ratio')]
+out2 = out[,out_columns]
 colnames(out2)[c(1,2)]=c('query_svid','ref_svid')
 
 out2=out2[out2$INS_dis<100 & out2$INS_ratio<10 & out2$INS_ratio>.1,]

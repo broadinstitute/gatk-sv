@@ -106,7 +106,23 @@ add_SV_Size<-function(chs){
   return(chs)
 	}
 
+pop=read.table(pop_file)
+pop_colname = paste(pop[,1],'AF',sep='_')
+pop_colname[pop_colname=='ALL_AF']='AF'
+
+out_columns <- c('name','name.1',pop_colname,'Reciprocal_Overlap')
+
 dat=read.table(input_bed,sep='\t', header=T)
+# if there's no data write an empty table and exit
+if (nrow(dat) == 0) {
+	out_columns[c(1,2)]=c('query_svid','ref_svid')
+	out2 <- data.frame(matrix(ncol = length(out_columns), nrow = 0))
+	names(out2) <- out_columns
+	write.table(out2, output_bed, quote=F, sep='\t', col.names=T, row.names=F)
+	quit()
+}
+
+
 dat[,ncol(dat)+1] = apply(dat,1,function(x){return(max(c(as.integer(x[2]), as.integer(x[8]))))})
 dat[,ncol(dat)+1] = apply(dat,1,function(x){return(min(c(as.integer(x[3]), as.integer(x[9]))))})
 dat[,ncol(dat)+1] = dat[,ncol(dat)]-dat[,ncol(dat)-1]
@@ -128,11 +144,7 @@ out=out[order(out[,2]),]
 out=out[order(out[,1]),]
 colnames(out)[ncol(out)]='Reciprocal_Overlap'
 
-pop=read.table(pop_file)
-pop_colname = paste(pop[,1],'AF',sep='_')
-pop_colname[pop_colname=='ALL_AF']='AF'
-
-out2 = out[,c('name','name.1',pop_colname,'Reciprocal_Overlap')]
+out2 = out[,out_columns]
 colnames(out2)[c(1,2)]=c('query_svid','ref_svid')
 out2=out2[out2$Reciprocal_Overlap>.5,]
 write.table(out2, output_bed, quote=F, sep='\t', col.names=T, row.names=F)
