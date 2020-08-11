@@ -2,6 +2,7 @@ version 1.0
 
 import "AnnotateVcf.wdl" as ann
 import "PruneAndAddVafs.wdl" as pav
+import "AnnotateExternalAF.wdl" as eaf
 
 workflow Module07 {
   
@@ -21,6 +22,10 @@ workflow Module07 {
     File? ped_file                # Used for M/F AF calculations
     Int   sv_per_shard
 
+    File? ref_bed              # File with external allele frequencies
+    String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
+    Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
+
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -32,6 +37,7 @@ workflow Module07 {
     RuntimeAttr? runtime_attr_shard_vcf
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_combine_vcfs
+    RuntimeAttr? runtime_attr_modify_vcf
   }
 
   call ann.AnnotateVcf as AnnotateVcf {
@@ -71,8 +77,22 @@ workflow Module07 {
       runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs
   }
 
+  if (defined(ref_bed)) {
+    call eaf.AnnotateExternalAF as AnnotateExternalAF {
+      input:
+        vcf = PruneAndAddVafs.output_vcf,
+        ref_bed = select_first([ref_bed]),
+        population = select_first([population]),
+        ref_prefix = select_first([ref_prefix]),
+        contigs = read_lines(contig_list),
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_modify_vcf = runtime_attr_modify_vcf
+    }
+  }
+
   output {
-    File output_vcf     = PruneAndAddVafs.output_vcf
-    File output_vcf_idx = PruneAndAddVafs.output_vcf_idx
+    File output_vcf     = select_first([AnnotateExternalAF.annotated_vcf, PruneAndAddVafs.output_vcf])
+    File output_vcf_idx = select_first([AnnotateExternalAF.annotated_vcf_tbi, PruneAndAddVafs.output_vcf_idx])
   }
 }

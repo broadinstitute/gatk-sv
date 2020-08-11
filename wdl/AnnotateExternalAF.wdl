@@ -19,8 +19,6 @@ workflow AnnotateExternalAF {
         String sv_pipeline_docker
 
         # overrides for local tasks
-        RuntimeAttr? runtime_override_plot_qc_vcf_wide
-        RuntimeAttr? runtime_override_thousand_g_benchmark
         RuntimeAttr? runtime_attr_modify_vcf
     }
     call SplitBed as split_ref_bed{
@@ -139,7 +137,7 @@ workflow AnnotateExternalAF {
     }
 
     output{
-        File annotate_vcf = ModifyVcf.annotated_vcf
+        File annotated_vcf = ModifyVcf.annotated_vcf
         File annotated_vcf_tbi = ModifyVcf.annotated_vcf_tbi
     }
 
