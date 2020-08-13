@@ -227,7 +227,11 @@ task BedCluster {
       > ~{batch}.~{svtype}.~{chrom}.preblacklist.bed
 
     ~{if defined(blacklist) then
-       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preblacklist.bed) <(bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preblacklist.bed -b ~{blacklist} | awk '$NF < ~{blacklist_frac_max}' | rev | cut -f5- | rev) > ~{batch}.~{svtype}.~{chrom}.bed"
+      "bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preblacklist.bed -b ~{blacklist} | awk '$NF < ~{blacklist_frac_max}' | rev | cut -f5- | rev > blacklist.filtered.bed"
+      else
+      ""}
+    ~{if defined(blacklist) then
+       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preblacklist.bed) blacklist.filtered.bed > ~{batch}.~{svtype}.~{chrom}.bed"
       else
        "mv ~{batch}.~{svtype}.~{chrom}.preblacklist.bed ~{batch}.~{svtype}.~{chrom}.bed"}
   >>>
