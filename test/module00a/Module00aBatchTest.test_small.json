@@ -14,8 +14,8 @@
     "SM-HXUD2"
   ],
 
-  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module00aBatchTest.Module00aBatchMetrics.linux_docker" : "ubuntu:18.04",
   "Module00aBatchTest.Module00aBatchMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "Module00aBatchTest.Module00aBatchMetrics.contig_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
@@ -74,8 +74,8 @@
   "Module00aBatchTest.Module00aBatch.wham_include_list_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
   "Module00aBatchTest.Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
-  "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
+  "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
   "Module00aBatchTest.Module00aBatch.manta_docker": "gatksv/manta:8645aa",
   "Module00aBatchTest.Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
   "Module00aBatchTest.Module00aBatch.wham_docker": "gatksv/wham:8645aa",

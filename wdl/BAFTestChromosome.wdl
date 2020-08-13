@@ -81,6 +81,7 @@ task BAFTest {
     String batch
     Int tabix_retries
     String sv_pipeline_docker
+    Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
   }
 
@@ -90,10 +91,14 @@ task BAFTest {
     }
   }
 
+  Int disk_gb = disk_gb_baseline + ceil(
+                                      size(bed, "GiB")
+                                      + 2 * size([baf_metrics, baf_metrics_idx], "GiB")
+                                   )
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -150,13 +155,15 @@ task MergeBAFSplits {
     Array[File] stats
     String prefix
     String linux_docker
+    Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
   }
 
+  Int disk_gb = disk_gb_baseline + ceil(2 * size(stats, "GiB"))
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -200,13 +207,15 @@ task SplitBafVcf {
     Int split_size
     Int suffix_len
     String sv_pipeline_docker
+    Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
   }
 
+  Int disk_gb = disk_gb_baseline + ceil(size(vcf, "GiB"))
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

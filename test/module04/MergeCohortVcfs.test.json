@@ -1,5 +1,5 @@
 {
-  "MergeCohortVcfs.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
+  "MergeCohortVcfs.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
   "MergeCohortVcfs.pesr_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz"],
   "MergeCohortVcfs.depth_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz"]
 }

@@ -43,11 +43,11 @@ workflow Module00b {
 
     # Runtime parameters
     String sv_base_mini_docker
+    String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
     Int? disk_overhead_bincov_gb
-    Int? bincov_size_mb
 
     Boolean run_ploidy = true
 
@@ -67,8 +67,8 @@ workflow Module00b {
       count_files = counts,
       batch = batch,
       disk_overhead_gb = disk_overhead_bincov_gb,
-      bincov_size_mb = bincov_size_mb,
       sv_base_mini_docker = sv_base_mini_docker,
+      sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_bincov_attr
   }
 
@@ -153,5 +153,8 @@ workflow Module00b {
     File WGD_dist = WGD.WGD_dist
     File WGD_matrix = WGD.WGD_matrix
     File WGD_scores = WGD.WGD_scores
+
+    File bincov_matrix = MakeBincovMatrix.merged_bincov
+    File bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx
   }
 }

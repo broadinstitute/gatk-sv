@@ -14,16 +14,16 @@
     "SM-HXUD2"
   ],
 
-  "Module02Test.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module02Test.Module02Metrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module02Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module02Test.Module02Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module02Test.Module02Metrics.linux_docker" : "ubuntu:18.04",
   "Module02Test.Module02Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
-  "Module02Test.Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
+  "Module02Test.Module02.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
   "Module02Test.Module02.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module02Test.Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module02Test.Module02.sv_base_docker": "gatksv/sv-base:b3af2e3",
-  "Module02Test.Module02.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module02Test.Module02.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module02Test.Module02.sv_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base:tb_update_gcnv_version_88bfceb",
+  "Module02Test.Module02.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module02Test.Module02.linux_docker" : "ubuntu:18.04",
 
   "Module02Test.Module02.BAF_split_size": "10000",
