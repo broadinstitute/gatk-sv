@@ -81,6 +81,7 @@ workflow Module00a {
     String? melt_docker
     String? wham_docker
     String gatk_docker
+    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
 
     # Runtime configuration overrides
@@ -185,7 +186,10 @@ workflow Module00a {
         cram = bam_file_,
         cram_index = bam_index_,
         sample_id = sample_id,
-        sv_pipeline_docker = sv_pipeline_docker,
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        reference_dict = reference_dict,
+        gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
         runtime_attr_override = runtime_attr_pesr
     }
   }
