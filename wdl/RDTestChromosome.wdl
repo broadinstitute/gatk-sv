@@ -169,9 +169,9 @@ task RDTest {
   command <<<
 
     set -eu
-    start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) + 500 ))
-    end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) - 500 ))
-    if [ "$end" -lt "0" ]; then end=0; fi
+    start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) - 500 ))
+    end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) + 500 ))
+    if [ "$start" -lt "0" ]; then start=0; fi
     chrom=$(cut -f1 ~{bed} | head -n1);
     set -o pipefail
 
