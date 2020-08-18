@@ -140,6 +140,7 @@ task RDTest {
     String prefix
     String flags
     String sv_pipeline_rdtest_docker
+    Int window = 500
     RuntimeAttr? runtime_attr_override
   }
 
@@ -168,8 +169,9 @@ task RDTest {
   command <<<
 
     set -eu
-    start=$(cut -f2 ~{bed} | sort -k1,1n | head -n1);
-    end=$(cut -f3 ~{bed} | sort -k1,1n | tail -n1);
+    start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) + 500 ))
+    end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) - 500 ))
+    if [ "$end" -lt "0" ]; then end=0; fi
     chrom=$(cut -f1 ~{bed} | head -n1);
     set -o pipefail
 

@@ -332,12 +332,16 @@ task RDTestGenotype {
 
     set -euo pipefail
 
+    awk -v OFS="\t" -v window=500 '{if ($2-window>0){print $1,$2-window,$3+window}else{print $1,0,$3+window}}' ~{bed} > region.bed
+    sort -k1,1 -k2,2n region.bed > region.sorted.bed
+    bedtools merge -i region.sorted.bed > region.merged.bed
+
     # Ensure proper bed file extension
     java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
       --include-header \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{coveragefile} \
-      -L ~{bed} \
+      -L region.merged.bed \
       -O local_coverage.bed
 
     # GATK does not block compress

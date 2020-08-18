@@ -117,9 +117,6 @@
   "Module04Test.Module04Metrics.baseline_genotyped_pesr_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.pesr.vcf.gz",
   "Module04Test.Module04Metrics.baseline_genotyped_depth_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.depth.vcf.gz",
 
-  "Module04Test.Module04Metrics.Module04Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
-  "Module04Test.Module04Metrics.Module04Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
-
   "Module04Test.Module04.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module04Test.Module04.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
   "Module04Test.Module04.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
