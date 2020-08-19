@@ -36,6 +36,7 @@ workflow Module02 {
     Int PE_split_size
     Int SR_split_size
     Int common_cnv_size_cutoff
+    Boolean use_baf_samples
 
     File rmsk
     File segdups
@@ -53,6 +54,7 @@ workflow Module02 {
 
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_sample_list
+    RuntimeAttr? runtime_attr_baf_samples
     RuntimeAttr? runtime_attr_aggregate_tests
     RuntimeAttr? runtime_attr_aggregate_callers
     RuntimeAttr? runtime_attr_petest
@@ -83,6 +85,15 @@ workflow Module02 {
       samples = GetSampleIdsFromVcf.out_array,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_sample_list
+  }
+
+  if (use_baf_samples) {
+    call GetBAFSamples {
+      input:
+        baf_metrics = baf_metrics,
+        linux_docker = linux_docker,
+        runtime_attr_override = runtime_attr_baf_samples
+    }
   }
 
   scatter (i in range(length(algorithms))) {
@@ -127,7 +138,7 @@ workflow Module02 {
             split_size = BAF_split_size,
             algorithm = algorithm,
             batch = batch,
-            samples = GetSampleIdsFromVcf.out_array,
+            samples = select_first([GetBAFSamples.out, GetSampleIdsFromVcf.out_array]),
             linux_docker = linux_docker,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_baftest = runtime_attr_baftest,
@@ -406,3 +417,42 @@ task AggregateCallers {
   }
 }
 
+task GetBAFSamples {
+  input {
+    File baf_metrics
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int default_disk_gb = 10 + size(baf_metrics)
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: default_disk_gb,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    Array[String] out = read_lines("samples.list")
+  }
+  command <<<
+
+    set -euo pipefail
+    zcat ~{baf_metrics} | cut -f4 | sort | uniq > samples.list
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+}
