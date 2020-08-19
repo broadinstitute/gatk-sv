@@ -36,7 +36,7 @@ workflow Module02 {
     Int PE_split_size
     Int SR_split_size
     Int common_cnv_size_cutoff
-    Boolean use_baf_samples
+    Boolean use_baf_samples = false
 
     File rmsk
     File segdups
