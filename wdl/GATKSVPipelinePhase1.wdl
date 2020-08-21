@@ -19,7 +19,7 @@ workflow GATKSVPipelinePhase1 {
     # Global files
     File ped_file
     File genome_file
-    File contigs          # .fai file of whitelisted contigs
+    File contigs          # .fai file of included contigs
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
@@ -111,7 +111,7 @@ workflow GATKSVPipelinePhase1 {
 
     # CNMops files
     File cnmops_chrom_file
-    File cnmops_blacklist
+    File cnmops_exclude_list
     File cnmops_allo_file
     Int? cnmops_large_min_size
 
@@ -163,12 +163,12 @@ workflow GATKSVPipelinePhase1 {
     Float pesr_frac
     String pesr_flags
     Int pesr_distance
-    File pesr_blacklist
+    File pesr_exclude_list
     String depth_flags
     Float depth_frac
 
-    File? depth_blacklist
-    Float? depth_blacklist_frac_max
+    File? depth_exclude_list
+    Float? depth_exclude_list_frac_max
 
     RuntimeAttr? runtime_attr_pesr_cluster
     RuntimeAttr? runtime_attr_pesr_concat
@@ -284,7 +284,7 @@ workflow GATKSVPipelinePhase1 {
       min_svsize=min_svsize,
       run_matrix_qc=run_matrix_qc,
       cnmops_chrom_file=cnmops_chrom_file,
-      cnmops_blacklist=cnmops_blacklist,
+      cnmops_exclude_list=cnmops_exclude_list,
       cnmops_allo_file=cnmops_allo_file,
       cnmops_large_min_size=cnmops_large_min_size,
       matrix_qc_distance=matrix_qc_distance,
@@ -336,12 +336,12 @@ workflow GATKSVPipelinePhase1 {
       pesr_frac=pesr_frac,
       pesr_flags=pesr_flags,
       pesr_distance=pesr_distance,
-      pesr_blacklist=pesr_blacklist,
+      pesr_exclude_list=pesr_exclude_list,
       depth_flags=depth_flags,
       depth_frac=depth_frac,
       contigs=contigs,
-      depth_blacklist=depth_blacklist,
-      depth_blacklist_frac_max=depth_blacklist_frac_max,
+      depth_exclude_list=depth_exclude_list,
+      depth_exclude_list_frac_max=depth_exclude_list_frac_max,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_pesr_cluster=runtime_attr_pesr_cluster,

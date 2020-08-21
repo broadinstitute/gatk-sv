@@ -40,7 +40,7 @@
   "GATKSVPipelineSingleSample.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
 
   "GATKSVPipelineSingleSample.allosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
-  "GATKSVPipelineSingleSample.cnmops_blacklist" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
+  "GATKSVPipelineSingleSample.cnmops_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
   "GATKSVPipelineSingleSample.autosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
   "GATKSVPipelineSingleSample.primary_contigs_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "GATKSVPipelineSingleSample.primary_contigs_fai" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
@@ -50,7 +50,7 @@
   "GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
   "GATKSVPipelineSingleSample.manta_region_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
   "GATKSVPipelineSingleSample.melt_standard_vcf_header": "gs://gatk-sv-resources/resources/melt_standard_vcf_header.txt",
-  "GATKSVPipelineSingleSample.pesr_blacklist" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "GATKSVPipelineSingleSample.pesr_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "GATKSVPipelineSingleSample.reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "GATKSVPipelineSingleSample.reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "GATKSVPipelineSingleSample.reference_index" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
@@ -58,13 +58,13 @@
   "GATKSVPipelineSingleSample.segdups": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
   "GATKSVPipelineSingleSample.cytobands": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
   "GATKSVPipelineSingleSample.mei_bed": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
-  "GATKSVPipelineSingleSample.pe_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "GATKSVPipelineSingleSample.pe_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "GATKSVPipelineSingleSample.qc_definitions": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/qc/single_sample.qc_definitions.tsv",
-  "GATKSVPipelineSingleSample.depth_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
+  "GATKSVPipelineSingleSample.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
 
   "GATKSVPipelineSingleSample.wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
 
-  "GATKSVPipelineSingleSample.wham_whitelist_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
+  "GATKSVPipelineSingleSample.wham_include_list_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
   "GATKSVPipelineSingleSample.preprocessed_intervals": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
 
   "GATKSVPipelineSingleSample.depth_flags" : "--merge-coordinates",

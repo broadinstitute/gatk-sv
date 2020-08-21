@@ -32,7 +32,7 @@ workflow Module00aBatch {
     Int? disk_space_gb_for_collect_counts
 
     # Delly inputs
-    File? delly_blacklist_intervals_file  # Required if run_delly True
+    File? delly_exclude_intervals_file  # Required if run_delly True
     Array[String]? delly_sv_types
 
     # Manta inputs
@@ -53,7 +53,7 @@ workflow Module00aBatch {
     Array[Int]? pf_reads_improper_pairs
 
     # Wham inputs
-    File wham_whitelist_bed_file
+    File wham_include_list_bed_file
 
     # Docker
     String sv_pipeline_docker
@@ -79,7 +79,7 @@ workflow Module00aBatch {
     RuntimeAttr? runtime_attr_melt
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_whitelist
+    RuntimeAttr? runtime_attr_wham_include_list
 
     File? NONE_FILE_
     String? NONE_STRING_
@@ -103,7 +103,7 @@ workflow Module00aBatch {
         preprocessed_intervals = preprocessed_intervals,
         mem_gb_for_collect_counts = mem_gb_for_collect_counts,
         disk_space_gb_for_collect_counts = disk_space_gb_for_collect_counts,
-        delly_blacklist_intervals_file = delly_blacklist_intervals_file,
+        delly_exclude_intervals_file = delly_exclude_intervals_file,
         delly_sv_types = delly_sv_types,
         manta_region_bed = manta_region_bed,
         manta_region_bed_index = manta_region_bed_index,
@@ -118,7 +118,7 @@ workflow Module00aBatch {
         pct_chimeras = pct_chimeras,
         total_reads = total_reads,
         pf_reads_improper_pairs = pf_reads_improper_pairs,
-        wham_whitelist_bed_file = wham_whitelist_bed_file,
+        wham_include_list_bed_file = wham_include_list_bed_file,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,
@@ -139,7 +139,7 @@ workflow Module00aBatch {
         runtime_attr_melt = runtime_attr_melt,
         runtime_attr_pesr = runtime_attr_pesr,
         runtime_attr_wham = runtime_attr_wham,
-        runtime_attr_wham_whitelist = runtime_attr_wham_whitelist
+        runtime_attr_wham_include_list = runtime_attr_wham_include_list
     }
   }
 

@@ -18,8 +18,8 @@ workflow ClusterDepth {
     String flags
     File dup_bed
     String batch
-    File? blacklist
-    Float? blacklist_frac_max
+    File? exclude_list
+    Float? exclude_list_frac_max
 
 
     String sv_base_mini_docker
@@ -40,8 +40,8 @@ workflow ClusterDepth {
         chrom = contig[0],
         bed = del_bed,
         frac = frac,
-        blacklist=blacklist,
-        blacklist_frac_max=blacklist_frac_max,
+        exclude_list=exclude_list,
+        exclude_list_frac_max=exclude_list_frac_max,
         flags = flags,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_bed_cluster
@@ -54,8 +54,8 @@ workflow ClusterDepth {
         chrom = contig[0],
         bed = dup_bed,
         frac = frac,
-        blacklist=blacklist,
-        blacklist_frac_max=blacklist_frac_max,
+        exclude_list=exclude_list,
+        exclude_list_frac_max=exclude_list_frac_max,
         flags = flags,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_bed_cluster
@@ -194,8 +194,8 @@ task BedCluster {
     String svtype
     String chrom
     File bed
-    File? blacklist
-    Float? blacklist_frac_max = 0.5
+    File? exclude_list
+    Float? exclude_list_frac_max = 0.5
     Float frac
     String flags
     String sv_pipeline_docker
@@ -224,12 +224,12 @@ task BedCluster {
       -p ~{batch}_depth_~{svtype}_~{chrom} \
       -f ~{frac} \
       ~{flags} \
-      > ~{batch}.~{svtype}.~{chrom}.preblacklist.bed
+      > ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed
 
-    ~{if defined(blacklist) then
-       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preblacklist.bed) <(bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preblacklist.bed -b ~{blacklist} | awk '$NF < ~{blacklist_frac_max}' | rev | cut -f5- | rev) > ~{batch}.~{svtype}.~{chrom}.bed"
+    ~{if defined(exclude_list) then
+       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed) <(bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed -b ~{exclude_list} | awk '$NF < ~{exclude_list_frac_max}' | rev | cut -f5- | rev) > ~{batch}.~{svtype}.~{chrom}.bed"
       else
-       "mv ~{batch}.~{svtype}.~{chrom}.preblacklist.bed ~{batch}.~{svtype}.~{chrom}.bed"}
+       "mv ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed ~{batch}.~{svtype}.~{chrom}.bed"}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

@@ -18,7 +18,7 @@ workflow ClusterPESR {
     String svtypes
     Int svsize
     String algorithm
-    File blacklist
+    File exclude_list
     File contigs
     Int dist
     String flags
@@ -40,7 +40,7 @@ workflow ClusterPESR {
         chrom = contig[0],
         dist = dist,
         frac = frac,
-        blacklist = blacklist,
+        exclude_list = exclude_list,
         svsize = svsize,
         svtypes = svtypes,
         flags = flags,
@@ -70,7 +70,7 @@ task VCFCluster {
     String chrom
     Int dist
     Float frac
-    File blacklist
+    File exclude_list
     Int svsize
     String svtypes
     String flags
@@ -95,14 +95,14 @@ task VCFCluster {
 
     set -euo pipefail
     for f in ~{sep=" "  vcfs}; do tabix -p vcf -f $f; done;
-    tabix -p bed ~{blacklist};
+    tabix -p bed ~{exclude_list};
 
     svtk vcfcluster ~{write_lines(vcfs)} stdout \
       -r ~{chrom} \
       -p ~{batch}_~{algorithm}_~{chrom} \
       -d ~{dist} \
       -f ~{frac} \
-      -x ~{blacklist} \
+      -x ~{exclude_list} \
       -z ~{svsize} \
       -t ~{svtypes} \
       ~{flags} \

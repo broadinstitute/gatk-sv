@@ -27,7 +27,7 @@ workflow GenotypePESRPart1 {
     Int n_per_RD_split      # number of variants per RdTest split
     Int n_per_PE_split
     File discfile
-    File pesr_blacklist
+    File pesr_exclude_list
     File splitfile
     Int n_per_SR_split
     String reference_build  #hg19 or hg38
@@ -92,7 +92,7 @@ workflow GenotypePESRPart1 {
       medianfile = medianfile,
       RF_cutoffs = rf_cutoffs,
       RD_genotypes = TrainRDGenotyping.genotypes,
-      blacklist = pesr_blacklist,
+      exclude_list = pesr_exclude_list,
       n_per_split = n_per_PE_split,
       discfile = discfile,
       samples = samples,

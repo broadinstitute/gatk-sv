@@ -24,10 +24,10 @@ workflow Module01 {
     Float pesr_frac
     String pesr_flags
     Int pesr_distance
-    File pesr_blacklist
+    File pesr_exclude_list
 
-    File? depth_blacklist
-    Float? depth_blacklist_frac_max
+    File? depth_exclude_list
+    Float? depth_exclude_list_frac_max
 
     String depth_flags
     Float depth_frac
@@ -54,7 +54,7 @@ workflow Module01 {
         flags = pesr_flags,
         batch = batch,
         dist = pesr_distance,
-        blacklist = pesr_blacklist,
+        exclude_list = pesr_exclude_list,
         contigs = contigs,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -74,7 +74,7 @@ workflow Module01 {
         flags = pesr_flags,
         batch = batch,
         dist = pesr_distance,
-        blacklist = pesr_blacklist,
+        exclude_list = pesr_exclude_list,
         contigs = contigs,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -94,7 +94,7 @@ workflow Module01 {
         flags = pesr_flags,
         batch = batch,
         dist = pesr_distance,
-        blacklist = pesr_blacklist,
+        exclude_list = pesr_exclude_list,
         contigs = contigs,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -114,7 +114,7 @@ workflow Module01 {
         flags = pesr_flags,
         batch = batch,
         dist = pesr_distance,
-        blacklist = pesr_blacklist,
+        exclude_list = pesr_exclude_list,
         contigs = contigs,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -130,8 +130,8 @@ workflow Module01 {
   	  batch = batch,
   	  contigs = contigs,
   	  frac = depth_frac,
-  	  blacklist = depth_blacklist,
-      blacklist_frac_max = depth_blacklist_frac_max,
+  	  exclude_list = depth_exclude_list,
+      exclude_list_frac_max = depth_exclude_list_frac_max,
   	  flags = depth_flags,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,

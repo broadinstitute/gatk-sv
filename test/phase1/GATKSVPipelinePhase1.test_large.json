@@ -11,7 +11,7 @@
   "GATKSVPipelinePhase1.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   
   "GATKSVPipelinePhase1.cnmops_allo_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
-  "GATKSVPipelinePhase1.cnmops_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
+  "GATKSVPipelinePhase1.cnmops_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
   "GATKSVPipelinePhase1.cnmops_chrom_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
   "GATKSVPipelinePhase1.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "GATKSVPipelinePhase1.genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
@@ -28,7 +28,7 @@
   "GATKSVPipelinePhase1.pesr_svsize": "0",
   "GATKSVPipelinePhase1.pesr_frac": "0.1",
   "GATKSVPipelinePhase1.pesr_flags": "--preserve-ids",
-  "GATKSVPipelinePhase1.pesr_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "GATKSVPipelinePhase1.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "GATKSVPipelinePhase1.pesr_distance": "300",
 
   "GATKSVPipelinePhase1.BAF_split_size": "10000",

@@ -9,7 +9,7 @@
 #   and split into bins of length specified by bin_length (default 1000; specify 0 to skip binning,
 #   e.g., for WES).  For WGS, the intervals should simply cover the chromosomes of interest.
 #
-# - Intervals can be blacklisted from coverage collection and all downstream steps by using the blacklist_intervals
+# - Intervals can be excluded from coverage collection and all downstream steps by using the exclude_intervals
 #   argument, which accepts formats compatible with the GATK -XL argument
 #   (see https://gatkforums.broadinstitute.org/gatk/discussion/11009/intervals-and-interval-lists).
 #   This may be useful for excluding centromeric regions, etc. from analysis.  Alternatively, these regions may

@@ -45,8 +45,8 @@ workflow CNVGermlineCohortWorkflow {
       #### optional arguments for FilterIntervals ####
       ################################################
       Boolean? filter_intervals
-      File? blacklist_intervals_for_filter_intervals_ploidy
-      File? blacklist_intervals_for_filter_intervals_cnv
+      File? exclude_intervals_for_filter_intervals_ploidy
+      File? exclude_intervals_for_filter_intervals_cnv
       Float? minimum_gc_content
       Float? maximum_gc_content
       Float? minimum_mappability
@@ -154,7 +154,7 @@ workflow CNVGermlineCohortWorkflow {
       call CNVTasks.FilterIntervals as FilterIntervalsForPloidy {
         input:
             intervals = preprocessed_intervals,
-            blacklist_intervals = blacklist_intervals_for_filter_intervals_ploidy,
+            exclude_intervals = exclude_intervals_for_filter_intervals_ploidy,
             annotated_intervals = AnnotateIntervals.annotated_intervals,
             read_count_files = counts,
             minimum_gc_content = minimum_gc_content,
@@ -175,7 +175,7 @@ workflow CNVGermlineCohortWorkflow {
       call CNVTasks.FilterIntervals as FilterIntervalsForCNV {
         input:
             intervals = preprocessed_intervals,
-            blacklist_intervals = blacklist_intervals_for_filter_intervals_cnv,
+            exclude_intervals = exclude_intervals_for_filter_intervals_cnv,
             annotated_intervals = AnnotateIntervals.annotated_intervals,
             read_count_files = counts,
             minimum_gc_content = minimum_gc_content,

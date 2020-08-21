@@ -65,7 +65,7 @@ task AnnotateIntervals {
 task FilterIntervals {
     input {
       File intervals
-      File? blacklist_intervals
+      File? exclude_intervals
       File? annotated_intervals
       Array[File] read_count_files
       Float? minimum_gc_content
@@ -111,7 +111,7 @@ task FilterIntervals {
 
         gatk --java-options "-Xmx~{command_mem_mb}m" FilterIntervals \
             -L ~{intervals} \
-            ~{"-XL " + blacklist_intervals} \
+            ~{"-XL " + exclude_intervals} \
             ~{"--annotated-intervals " + annotated_intervals} \
             --arguments_file read_count_files.args \
             --minimum-gc-content ~{default="0.1" minimum_gc_content} \

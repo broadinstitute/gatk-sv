@@ -34,7 +34,7 @@ workflow Delly {
     String sample_id
     File reference_fasta
     File? reference_index
-    File blacklist_intervals_file
+    File exclude_intervals_file
     Array[String]? sv_types
     Int? read_pairs
     String sv_base_mini_docker
@@ -49,7 +49,7 @@ workflow Delly {
     sample_id: "sample name. Outputs will be sample_name + 'manta.vcf.gz' and sample_name + 'manta.vcf.gz.tbi'"
     reference_fasta: ".fasta file with reference used to align bam or cram file"
     reference_index: "[optional] If omitted, the WDL will look for an index by appending .fai to the .fasta file"
-    blacklist_intervals_file: "text file with lines specifying genomic intervals where SVs should not be called.Each line in (tab-separated) format: 'contig   begin   end interval-type' or 'contig'"
+    exclude_intervals_file: "text file with lines specifying genomic intervals where SVs should not be called.Each line in (tab-separated) format: 'contig   begin   end interval-type' or 'contig'"
     sv_types: "[optional] array of event types for Delly to search for. Defaults to ['DEL', 'DUP', 'INV']."
     read_pairs: "[optional] Value of READ_PAIRS obtained from CollectInsertSizeMetrics, used for optimal estimate of VM memory needs."
   }
@@ -69,7 +69,7 @@ workflow Delly {
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
-        blacklist_intervals_file = blacklist_intervals_file,
+        exclude_intervals_file = exclude_intervals_file,
         event_type = event_type,
         read_pairs = read_pairs,
         delly_docker = delly_docker,
@@ -98,7 +98,7 @@ task RunDelly {
     String sample_id
     File reference_fasta
     File? reference_index
-    File blacklist_intervals_file
+    File exclude_intervals_file
     String event_type
     Int? read_pairs
     String delly_docker
@@ -116,8 +116,8 @@ task RunDelly {
   Float bam_or_cram_index_size = size(bam_or_cram_index_file, "GiB")
   Float ref_size = size(reference_fasta, "GiB")
   Float ref_index_size = size(ref_index, "GiB")
-  Float blacklist_size = size(blacklist_intervals_file, "GiB")
-  Int vm_disk_size = ceil(bam_or_cram_size + bam_or_cram_index_size + ref_size + ref_index_size + blacklist_size + disk_overhead)
+  Float exclude_list_size = size(exclude_intervals_file, "GiB")
+  Int vm_disk_size = ceil(bam_or_cram_size + bam_or_cram_index_size + ref_size + ref_index_size + exclude_list_size + disk_overhead)
   
   # ensure there's sufficient memory. These coefficients are obtained
   # via linear regression to test data, assuming uncertainty in memory
@@ -159,7 +159,7 @@ task RunDelly {
     delly call \
       -t ~{event_type} \
       -g "~{reference_fasta}" \
-      -x "~{blacklist_intervals_file}" \
+      -x "~{exclude_intervals_file}" \
       -o "$BCF" \
       -n \
       "~{bam_or_cram_file}"

@@ -40,7 +40,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_split_vcf_to_clean
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
-    RuntimeAttr? runtime_override_split_whitelist
+    RuntimeAttr? runtime_override_split_include_list
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
@@ -94,20 +94,20 @@ workflow CleanVcf {
       runtime_attr_override=runtime_override_clean_vcf_1b
   }
 
-  call MiniTasks.SplitUncompressed as SplitWhitelist {
+  call MiniTasks.SplitUncompressed as SplitIncludeList {
     input:
-      whole_file=CleanVcf1a.whitelist[0],
+      whole_file=CleanVcf1a.include_list[0],
       lines_per_shard=samples_per_step2_shard,
       shard_prefix="whiteblack.",
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_split_whitelist
+      runtime_attr_override=runtime_override_split_include_list
   }
 
-  scatter ( white in SplitWhitelist.shards ){
+  scatter ( included_interval in SplitIncludeList.shards ){
     call CleanVcf2{
       input:
         normal_revise_vcf=CleanVcf1b.normal,
-        whitelist=white,
+        include_list=included_interval,
         multi_cnvs=CleanVcf1b.multi,
         vcftools_idx=CleanVcf1b.vcftools_idx,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -251,7 +251,7 @@ task CleanVcf1a {
   >>>
 
   output {
-    File whitelist="whitelist.txt"
+    File include_list="whitelist.txt"
     File sex="sexchr.revise.txt"
     File intermediate_vcf="int.w_bothsides.vcf.gz"
     File intermediate_vcf_idx="int.w_bothsides.vcf.gz.tbi"
@@ -309,7 +309,7 @@ task CleanVcf1b {
 task CleanVcf2 {
   input {
     File normal_revise_vcf
-    File whitelist
+    File include_list
     File multi_cnvs
     File vcftools_idx
     String sv_pipeline_docker
@@ -318,7 +318,7 @@ task CleanVcf2 {
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
-  Float input_size = size([normal_revise_vcf, whitelist, multi_cnvs, vcftools_idx], "GB")
+  Float input_size = size([normal_revise_vcf, include_list, multi_cnvs, vcftools_idx], "GB")
   Float base_disk_gb = 10.0
   Float base_mem_gb = 4.0
   Float input_mem_scale = 3.0
@@ -347,7 +347,7 @@ task CleanVcf2 {
 
     /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part2.sh \
       ~{normal_revise_vcf} \
-      ~{whitelist} \
+      ~{include_list} \
       ~{multi_cnvs} \
       "output.txt"
   >>>

@@ -55,8 +55,8 @@ workflow Module05_06 {
     Int min_variants_per_shard
     File cytobands
     File mei_bed
-    File pe_blacklist
-    File depth_blacklist
+    File pe_exclude_list
+    File depth_exclude_list
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
     Int samples_per_clean_vcf_step2_shard
@@ -140,7 +140,7 @@ workflow Module05_06 {
     RuntimeAttr? runtime_override_split_vcf_to_clean
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
-    RuntimeAttr? runtime_override_split_whitelist
+    RuntimeAttr? runtime_override_split_include_list
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
@@ -221,7 +221,7 @@ workflow Module05_06 {
         dist=300,
         frac=0.1,
         sample_overlap=0.5,
-        blacklist=pe_blacklist,
+        exclude_list=pe_exclude_list,
         sv_size=50,
         sv_types=["DEL","DUP","INV","BND","INS"],
         contig=contig,
@@ -253,7 +253,7 @@ workflow Module05_06 {
         dist=500000,
         frac=0.5,
         sample_overlap=0.5,
-        blacklist=depth_blacklist,
+        exclude_list=depth_exclude_list,
         sv_size=5000,
         sv_types=["DEL","DUP"],
         contig=contig,
@@ -344,7 +344,7 @@ workflow Module05_06 {
         cytobands=cytobands,
         disc_files=disc_files,
         mei_bed=mei_bed,
-        pe_blacklist=pe_blacklist,
+        pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=true,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -379,7 +379,7 @@ workflow Module05_06 {
         cytobands=cytobands,
         disc_files=disc_files,
         mei_bed=mei_bed,
-        pe_blacklist=pe_blacklist,
+        pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=false,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -480,7 +480,7 @@ workflow Module05_06 {
         runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
         runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
         runtime_override_combine_step_1_sex_chr_revisions=runtime_override_combine_step_1_sex_chr_revisions,
-        runtime_override_split_whitelist=runtime_override_split_whitelist,
+        runtime_override_split_include_list=runtime_override_split_include_list,
         runtime_override_combine_clean_vcf_2=runtime_override_combine_clean_vcf_2,
         runtime_override_combine_revised_4=runtime_override_combine_revised_4,
         runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4

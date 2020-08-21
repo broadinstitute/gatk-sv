@@ -17,7 +17,7 @@ workflow PreprocessPESR {
     Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? wham_vcfs         # Wham VCF
-    File contigs          # .fai file of whitelisted contigs
+    File contigs          # .fai file of included contigs
     Int min_svsize        # Minimum SV length to include
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr
