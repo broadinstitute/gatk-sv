@@ -941,6 +941,13 @@ workflow GATKSVPipelineSingleSample {
         sv_pipeline_docker = sv_pipeline_docker
   }
 
+  call SingleSampleFiltering.VcfToBed as VcfToBed {
+    input:
+      vcf = Module07.output_vcf,
+      prefix = batch,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
     input:
       single_sample_vcf=Module07.output_vcf,
@@ -980,6 +987,8 @@ workflow GATKSVPipelineSingleSample {
   output {
     File final_vcf = FinalVCFCleanup.out
     File final_vcf_idx = FinalVCFCleanup.out_idx
+
+    File final_bed = VcfToBed.bed
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
