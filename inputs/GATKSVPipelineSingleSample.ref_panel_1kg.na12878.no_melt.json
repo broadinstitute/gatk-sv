@@ -92,6 +92,10 @@
   "GATKSVPipelineSingleSample.linc_rna_gtf" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.lincRNA.gtf.gz",
   "GATKSVPipelineSingleSample.promoter_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/promoter.bed",
   "GATKSVPipelineSingleSample.noncoding_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
+  "GATKSVPipelineSingleSample.external_af_ref_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gnomad_AF/gnomad_v2.1_sv.sites.GRCh38.bed.gz",
+  "GATKSVPipelineSingleSample.external_af_ref_bed_prefix" :       "gnomad_v2.1_sv",
+  "GATKSVPipelineSingleSample.external_af_population" :      ["ALL", "AFR", "AMR", "EAS", "EUR"],
+
   "GATKSVPipelineSingleSample.annotation_sv_per_shard" : "5000",
 
   "GATKSVPipelineSingleSample.cnmops_mem_gb_override_sample3": 24,
