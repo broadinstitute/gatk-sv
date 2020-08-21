@@ -238,22 +238,18 @@ task RdTestGenotype {
 
     set -o pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
-      --include-header \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{coverage_file} \
       -L merged.bed \
-      -O local_coverage.bed
+      -O local.RD.txt.gz
 
-    # GATK does not block compress
-    bgzip local_coverage.bed
-
-    tabix -p bed local_coverage.bed.gz
+    tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz \
       -m ~{median_file} \
       -f ~{ped_file} \
       -n ~{prefix} \

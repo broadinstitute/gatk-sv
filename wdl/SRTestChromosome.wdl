@@ -209,17 +209,15 @@ task SRTest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --skip-header \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{splitfile} \
       -L region.merged.bed \
-      -O SR.txt
-
-    # GATK does not block compress
-    bgzip SR.txt
+      -O SR.txt.gz
 
     tabix -b 2 -e 2 SR.txt.gz
-    svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} SR.txt.gz ~{prefix}.stats
+    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} SR.txt.gz ~{prefix}.stats
   
   >>>
   runtime {

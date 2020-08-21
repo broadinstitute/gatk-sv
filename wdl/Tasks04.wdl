@@ -337,8 +337,7 @@ task RDTestGenotype {
     bedtools merge -i region.sorted.bed > region.merged.bed
 
     # Ensure proper bed file extension
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
-      --include-header \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{coveragefile} \
       -L region.merged.bed \
@@ -423,7 +422,7 @@ task CountPE {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{discfile} \
       -L region.merged.bed \
@@ -493,7 +492,7 @@ task CountSR {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{splitfile} \
       -L region.merged.bed \

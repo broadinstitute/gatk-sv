@@ -36,6 +36,8 @@ workflow Module02 {
     Int PE_split_size
     Int SR_split_size
     Int common_cnv_size_cutoff
+
+    # Enable only if there are no BAF records for one or more samples
     Boolean use_baf_samples = false
 
     File rmsk
@@ -424,7 +426,7 @@ task GetBAFSamples {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int default_disk_gb = 10 + size(baf_metrics)
+  Int default_disk_gb = ceil(10 + size(baf_metrics, "GB"))
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,

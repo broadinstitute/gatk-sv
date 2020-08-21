@@ -175,22 +175,18 @@ task RDTest {
     chrom=$(cut -f1 ~{bed} | head -n1);
     set -o pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
-      --include-header \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{coveragefile} \
       -L ${chrom}:${start}-${end} \
-      -O local_coverage.bed
+      -O local.RD.txt.gz
 
-    # GATK does not block compress
-    bgzip local_coverage.bed
-
-    tabix -p bed local_coverage.bed.gz
+    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -n ~{prefix} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz\
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{whitelist} \

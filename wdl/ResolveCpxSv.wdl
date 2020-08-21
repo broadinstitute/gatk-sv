@@ -355,32 +355,33 @@ task ResolvePrep {
         ((++DISC_FILE_NUM))
         SLICE="disc"$DISC_FILE_NUM"shard"
 
-        java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+        java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+              --skip-header \
               --sequence-dictionary ~{ref_dict} \
               --evidence-file $GS_PATH_TO_DISC_FILE \
               -L regions.bed \
-              -O ${SLICE}.txt
+              -O ${SLICE}.PE.txt
 
-        cat ${SLICE}.txt \
+        cat ${SLICE}.PE.txt \
           | awk '{ if ($1==$4 && $3==$6) print }' \
           | bgzip -c \
-          > ${SLICE}.txt.gz
-        rm ${SLICE}.txt
+          > ${SLICE}.PE.txt.gz
+        rm ${SLICE}.PE.txt
       done < ~{write_lines(disc_files)}
     
       #Fourth, merge PE files and add one artificial pair corresponding to the chromosome of interest
       #This makes it so that svtk doesn't break downstream
       echo "Merging PE files"
       {
-        zcat disc*shard.txt.gz;
+        zcat disc*shard.PE.txt.gz;
         echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
         echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
       } \
         | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
         | bgzip -c \
-        > discfile.txt.gz
+        > discfile.PE.txt.gz
 
-      rm disc*shard.txt.gz
+      rm disc*shard.PE.txt.gz
     else
       echo "No regions to retrieve, making dummy-sample discfile"
       {
@@ -389,18 +390,18 @@ task ResolvePrep {
       } \
         | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
         | bgzip -c \
-        > discfile.txt.gz
+        > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.txt.gz
+    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {
     File subsetted_vcf = "input.vcf.gz"
     File noref_vcf = "noref.vcf.gz"
     File noref_vids = "noref.VIDs.list"
-    File merged_discfile = "discfile.txt.gz"
-    File merged_discfile_idx = "discfile.txt.gz.tbi"
+    File merged_discfile = "discfile.PE.txt.gz"
+    File merged_discfile_idx = "discfile.PE.txt.gz.tbi"
   }
 }
 

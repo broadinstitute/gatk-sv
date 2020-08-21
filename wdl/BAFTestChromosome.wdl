@@ -117,17 +117,15 @@ task BAFTest {
     chrom=$(cut -f1 ~{bed} | head -n1)
     set -o pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --skip-header \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{baf_metrics} \
       -L "${chrom}:${start}-${end}" \
-      -O local_baf.bed
+      -O local.BAF.txt.gz
 
-    # GATK does not block compress
-    bgzip local_baf.bed
-
-    tabix -b2 local_baf.bed.gz
-    svtk baf-test ~{bed} local_baf.bed.gz --batch batch.key > ~{prefix}.metrics
+    tabix -b2 local.BAF.txt.gz
+    svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
   
   >>>
   runtime {

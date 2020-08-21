@@ -8,10 +8,10 @@ FROM ${MINIBASE_IMAGE}
 ENV HOME=/root
 
 ####################################################################################################
-# GATK - only used for LocalizeSVEvidence
+# GATK needed for PrintSVEvidence
 ARG GATK_TRANSIENT_DEP="git git-lfs"
 ARG GATK_DEP="openjdk-8-jdk ${GATK_TRANSIENT_DEP}"
-ARG GATK_COMMIT="e7e761358fc06880729e9a9ed1826c787a6efc19"
+ARG GATK_COMMIT="7f7ad3cda878e3816d56e540cfa089331a344254"
 ENV GATK_JAR="/opt/gatk.jar"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
@@ -21,10 +21,11 @@ RUN apt-get -qqy update --fix-missing && \
     cd / && git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && git lfs install && \
     git checkout ${GATK_COMMIT} && ./gradlew localJar && \
-    mv build/libs/gatk.jar ${GATK_JAR} && \
+    mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR} && \
     apt-get -qqy purge ${GATK_TRANSIENT_DEP} && \
     apt-get -qqy clean && \
-    rm -rf /tmp/* \
+    rm -rf /gatk \
+           /tmp/* \
            /var/tmp/* \
            /var/cache/apt/* \
            /var/lib/apt/lists/* \

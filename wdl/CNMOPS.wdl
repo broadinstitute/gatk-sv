@@ -340,25 +340,24 @@ task CNSampleNormal {
 
     set -euo pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
-      --include-header \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{bincov_matrix} \
       -L ~{chr} \
-      -O bincov_~{chr}.bed
+      -O ~{chr}.RD.txt
 
     if [ ~{mode} == "normal" ]; then  
-      mv bincov_~{chr}.bed bincov_~{chr}_~{mode}.bed
+      mv ~{chr}.RD.txt ~{chr}.~{mode}.RD.txt
     else 
       awk -v sex="~{mode}" '$5==sex' ~{ped} | cut -f2 > ids.to.include
-      col=$(head -n 1 bincov_~{chr}.bed | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
+      col=$(head -n 1 ~{chr}.RD.txt | tr '\t' '\n'|cat -n| grep -wf ids.to.include | awk -v ORS="," '{print $1}' | sed 's/,$//g' | sed 's:\([0-9]\+\):$&:g')
       col_a="{print \$1,\$2,\$3,$col}"
-      awk -f <(echo "$col_a") bincov_~{chr}.bed | tr ' ' '\t' > bincov_~{chr}_~{mode}.bed
+      awk -f <(echo "$col_a") ~{chr}.RD.txt | tr ' ' '\t' > ~{chr}.~{mode}.RD.txt
     fi
 
     EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
     set +e
-    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{black} -x ~{black} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed &> cnmops.out
+    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{black} -x ~{black} -r ~{r} -o . -M ~{chr}.~{mode}.RD.txt &> cnmops.out
     RC=$?
     set -e
     if [ ! $RC -eq 0 ]; then

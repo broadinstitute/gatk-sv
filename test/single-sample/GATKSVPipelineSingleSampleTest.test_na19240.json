@@ -100,11 +100,11 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.GATKSVPipelineSingleSample.SingleSampleMetrics.baseline_cleaned_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.newmcnv.vcf.gz",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.GATKSVPipelineSingleSample.SingleSampleMetrics.baseline_final_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.filter_by_SM-GN4BI_gt.filter_by_ref_panel.reset_filters.final_cleanup.newmcnv.vcf.gz",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.GATKSVPipelineSingleSample.SingleSampleMetrics.baseline_genotyped_pesr_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.pesr.vcf.gz",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.GATKSVPipelineSingleSample.SingleSampleMetrics.baseline_genotyped_depth_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.depth.vcf.gz",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.GATKSVPipelineSingleSample.SingleSampleMetrics.baseline_non_genotyped_unique_depth_calls_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.unique_SM-GN4BI_depth_non_alt_gt.with_vargq.vcf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.baseline_cleaned_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.newmcnv.vcf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.baseline_final_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.filter_by_SM-GN4BI_gt.filter_by_ref_panel.reset_filters.final_cleanup.newmcnv.vcf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.baseline_genotyped_pesr_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.pesr.vcf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.baseline_genotyped_depth_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.depth.vcf.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.baseline_non_genotyped_unique_depth_calls_vcf": "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.unique_SM-GN4BI_depth_non_alt_gt.with_vargq.vcf.gz",
   "GATKSVPipelineSingleSampleTest.PlotMetrics.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
 
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.batch" : "test_na19240",

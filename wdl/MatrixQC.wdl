@@ -164,19 +164,17 @@ task PESRBAF_QC {
     set -euo pipefail
     fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{matrix_file} \
       -L regions.bed \
-      -O local_matrix.txt
+      -O local.RD.txt.gz
 
-    # GATK does not block compress
-    bgzip local_matrix.txt
-    tabix -s 1 -b 2 -e 2 local_matrix.txt.gz
+    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
-      local_matrix.txt.gz \
+      local.RD.txt.gz \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
@@ -238,19 +236,17 @@ task RD_QC {
     set -euo pipefail
     fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} LocalizeSVEvidence \
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{matrix_file} \
       -L regions.bed \
-      -O local_matrix.bed
+      -O local.RD.txt.gz
 
-    # GATK does not block compress
-    bgzip local_matrix.bed
-    tabix -p bed local_matrix.bed.gz
+    tabix -p bed local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
-      local_matrix.bed.gz \
+      local.RD.txt.gz \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
