@@ -73,14 +73,14 @@ def main():
     NEW_FILTERS = ['##FILTER=<ID=PCRPLUS_ENRICHED,Description="Site enriched for ' + 
                    'non-reference genotypes among PCR+ samples. Likely reflects ' + 
                    'technical batch effects. All PCR- samples have been assigned ' +
-                   'null GTs for these sites.>"',
+                   'null GTs for these sites.">',
                    '##FILTER=<ID=VARIABLE_ACROSS_BATCHES,Description="Site appears ' + 
                    'at variable frequencies across batches. Likely reflects technical ' + 
-                   'batch effects.>',
+                   'batch effects.">',
                    '##FILTER=<ID=UNSTABLE_AF_PCRMINUS,Description="Allele frequency ' + 
                    'for this variant in PCR- samples is sensitive to choice of GQ ' +
                    'filtering thresholds. All PCR- samples have been assigned null ' + 
-                   'GTs for these sites.>']
+                   'GTs for these sites.">']
 
     header = vcf.header
     for filt in NEW_FILTERS:
