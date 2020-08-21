@@ -22,6 +22,7 @@ RUN apt-get -qqy update --fix-missing && \
     cd gatk && git lfs install && \
     git checkout ${GATK_COMMIT} && ./gradlew localJar && \
     mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR} && \
+    cd / && \
     apt-get -qqy purge ${GATK_TRANSIENT_DEP} && \
     apt-get -qqy clean && \
     rm -rf /gatk \
