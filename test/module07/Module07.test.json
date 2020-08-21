@@ -14,5 +14,5 @@
   "Module07.prefix" :       "Talkowski_SV_PCR-free_WGS_144",
 
   "Module07.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module07.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782"
+  "Module07.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38"
 }

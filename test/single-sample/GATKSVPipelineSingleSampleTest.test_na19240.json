@@ -136,9 +136,9 @@
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_base_docker": "mwalker174/sv-base:mw-gatk-tabix-e3d3b0d",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-count-pesr-bnd-20a0f38",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.wham_docker": "gatksv/wham:8645aa",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
 

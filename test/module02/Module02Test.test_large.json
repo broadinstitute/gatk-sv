@@ -114,8 +114,8 @@
   "Module02Test.Module02Metrics.linux_docker" : "ubuntu:18.04",
   "Module02Test.Module02Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
-  "Module02Test.Module02.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
-  "Module02Test.Module02.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
+  "Module02Test.Module02.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38",
+  "Module02Test.Module02.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-count-pesr-bnd-20a0f38",
   "Module02Test.Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module02Test.Module02.sv_base_docker": "mwalker174/sv-base:mw-gatk-tabix-e3d3b0d",
   "Module02Test.Module02.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",

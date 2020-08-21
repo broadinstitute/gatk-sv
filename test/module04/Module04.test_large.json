@@ -1,7 +1,7 @@
 {
   "Module04.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module04.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
-  "Module04.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
+  "Module04.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38",
+  "Module04.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-count-pesr-bnd-20a0f38",
   "Module04.linux_docker" : "ubuntu:18.04",
 
   "Module04.n_RD_genotype_bins": "100000", 

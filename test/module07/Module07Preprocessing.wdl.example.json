@@ -7,6 +7,6 @@
   "Module07Preprocessing.promoter_window": 1000, 
 
   "Module07Preprocessing.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module07Preprocessing.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782"
+  "Module07Preprocessing.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38"
 }
 

@@ -25,7 +25,7 @@
   "Module01Test.Module01Metrics.baseline_melt_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.melt.vcf.gz",
 
   "Module01Test.Module01.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module01Test.Module01.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
+  "Module01Test.Module01.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38",
 
   "Module01Test.Module01.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module01Test.Module01.depth_flags": "--merge-coordinates",

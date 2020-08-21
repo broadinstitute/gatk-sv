@@ -1,6 +1,6 @@
 {
-  "Module02.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-gatk-tabix-3df7782",
-  "Module02.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-gatk-tabix-e3d3b0d",
+  "Module02.sv_pipeline_docker": "mwalker174/sv-pipeline:mw-count-pesr-bnd-20a0f38",
+  "Module02.sv_pipeline_rdtest_docker": "mwalker174/sv-pipeline-rdtest:mw-count-pesr-bnd-20a0f38",
   "Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module02.sv_base_docker": "mwalker174/sv-base:mw-gatk-tabix-e3d3b0d",
   "Module02.sv_pipeline_base_docker": "mwalker174/sv-pipeline-base:mw-gatk-tabix-e3d3b0d",
