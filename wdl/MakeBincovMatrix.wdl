@@ -77,8 +77,8 @@ task MakeBincovMatrix {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File merged_bincov = "~{batch}.bincov.bed.gz"
-    File merged_bincov_idx = "~{batch}.bincov.bed.gz.tbi"
+    File merged_bincov = "~{batch}.RD.txt.gz"
+    File merged_bincov_idx = "~{batch}.RD.txt.gz.tbi"
   }
   command <<<
 
@@ -131,19 +131,19 @@ task MakeBincovMatrix {
         | sed '/^CONTIG	START	END	COUNT$/d' \
         | sed '/^#/d' \
         | awk -v x="${shift}" -v b=$binsize \
-          'BEGIN{OFS="\t"}{$2=$2-x; if ($3-$2==b) print $0}' > fil.bincov.bed
-      if ! cut -f1-3 fil.bincov.bed | cmp locs; then
+          'BEGIN{OFS="\t"}{$2=$2-x; if ($3-$2==b) print $0}' > fil.RD.txt
+      if ! cut -f1-3 fil.RD.txt | cmp locs; then
         echo $fil has different intervals than ~{all_count_files[0]}
         exit 1
       fi
-      cut -f4- fil.bincov.bed > cargo/`printf "%08d" $fileNo`
+      cut -f4- fil.RD.txt > cargo/`printf "%08d" $fileNo`
       ((++fileNo))
     done
 
-    echo "#Chr	Start	End	~{sep='	' all_samples}" > ~{batch}.bincov.bed
-    paste locs cargo/* >> ~{batch}.bincov.bed
-    bgzip ~{batch}.bincov.bed
-    tabix ~{batch}.bincov.bed.gz
+    echo "#Chr	Start	End	~{sep='	' all_samples}" > ~{batch}.RD.txt
+    paste locs cargo/* >> ~{batch}.RD.txt
+    bgzip ~{batch}.RD.txt
+    tabix ~{batch}.RD.txt.gz
 
   >>>
   runtime {
