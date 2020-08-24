@@ -10,7 +10,30 @@ import time
 import pandas as pd
 import math
 import random
+import matplotlib.pyplot as plt
+import matplotlib.ticker
+import sys
 SEED = 42
+
+"""
+Summary: Scrapes workflow metadata to analyze resource acquisition (VMs, CPU, RAM, disk memory), for the purpose
+	of understanding resource peaks and timing jobs to avoid hitting quotas.
+
+Usage: 
+	python analyze_resource_acquisition workflow_metadata.json /path/to/output_basename
+
+Parameters:
+	workflow_metadata.json: path to Cromwell metadata file for workflow of interest
+	/path/to/output_basename: base output path, to which extensions will be appended for each output file, 
+		ie. /output_dir/basename will yield /output_dir/basename_plot.png, /output_dir/basename_table.tsv, etc
+
+Outputs:
+	- plot (png) of VMs, CPUs (total, preemptible, and nonpreemptible), RAM, and disk (HDD, SSD) acquisitioned over time 
+	- table of resource acquisition over time for each type of resource listed above
+	- text file containing peak resource acuqisition for each type of resource listed above
+	- [preemptible things]
+	- text file containing list of tasks that used call-caching
+"""
 
 def get_seconds_from_epoch(time_string):
 	return (dateutil.parser.parse(time_string) - datetime.datetime(1900,1,1,tzinfo=tzutc())).total_seconds()
@@ -178,40 +201,31 @@ def getCalls(m, alias=None):
 	# in a call
 	if alias and ('monitoringLog' in m):
 		#call_metadata.append((alias, start,end,shard_index, attempt, job_id, cpu, cached, callroot, memory, preemptible, hdd_size, ssd_size))
-		call_metadata.append((start, cpu, preemptible_cpu, nonpreemptible_cpu, memory, hdd_size, ssd_size))
-		call_metadata.append((end, -1*cpu, -1*preemptible_cpu, -1*nonpreemptible_cpu, -1*memory, -1*hdd_size, -1*ssd_size))
+		call_metadata.append((start, 1, cpu, preemptible_cpu, nonpreemptible_cpu, memory, hdd_size, ssd_size))
+		call_metadata.append((end, -1, -1*cpu, -1*preemptible_cpu, -1*nonpreemptible_cpu, -1*memory, -1*hdd_size, -1*ssd_size))
 
 	return call_metadata
 
 def get_data_table(metadata_file):
+	"""
+	Based on: 
+		https://github.com/broadinstitute/dsde-pipelines/blob/master/scripts/quota_usage.py
+		https://github.com/broadinstitute/gatk-sv/blob/master/scripts/cromwell/download_monitoring_logs.py
+	"""
 	metadata = json.load(open(metadata_file, 'r'))
-	#call_metadata = np.asarray(getCalls(metadata, metadata['workflowName']))
-	#colnames = ['alias','start','end','shard_index','attempt','job_id','cpu', 'cached','callroot', 'memory', 'preemptible', 'hdd_size', 'ssd_size']
-	colnames = ['timestamp','cpu_all', 'memory', 'preemptible', 'hdd_size', 'ssd_size']
-
-	call_metadata = getCalls(metadata, metadata['workflowName'])
-	print(len(call_metadata))
-	print(len(set(call_metadata)))
-	call_metadata = pd.DataFrame(call_metadata, columns=colnames)
-	print(call_metadata)
-
-	mintime = min(call_metadata['start'])
-	call_metadata['start'] -= mintime
-	call_metadata['end'] -= mintime
-
-	return call_metadata
-
-def get_data_table_cumulative(metadata_file):
-	metadata = json.load(open(metadata_file, 'r'))
-	colnames = ['timestamp','cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta','memory_delta', 'hdd_delta', 'ssd_delta']
+	colnames = ['timestamp', 'vm_delta', 'cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta', 'memory_delta', 'hdd_delta', 'ssd_delta']
 
 	call_metadata = getCalls(metadata, metadata['workflowName'])
 	call_metadata = pd.DataFrame(call_metadata, columns=colnames)
 	#call_metadata[['timestamp']] = call_metadata[['timestamp']].astype('datetime64')
 
 	call_metadata = call_metadata.sort_values(by='timestamp')
-	#print(call_metadata[['timestamp']])
-
+	call_metadata['timestamp'] -= call_metadata.timestamp.iloc[0] # make timestamps start from 0 by subtracting minimum (at index 0 after sorting)
+	# print(call_metadata[['timestamp']])
+	call_metadata['seconds'] = call_metadata['timestamp'].dt.total_seconds()
+	print(call_metadata.dtypes)
+	
+	call_metadata['vm'] = call_metadata.vm_delta.cumsum()
 	call_metadata['cpu_all'] = call_metadata.cpu_all_delta.cumsum()
 	call_metadata['cpu_preemptible'] = call_metadata.cpu_preemptible_delta.cumsum()
 	call_metadata['cpu_nonpreemptible'] = call_metadata.cpu_nonpreemptible_delta.cumsum()
@@ -221,51 +235,62 @@ def get_data_table_cumulative(metadata_file):
 
 	return call_metadata
 
-def make_time_bins(call_metadata, count_by):
-	total_elapsed_seconds = max(call_metadata['end'])
-	time_ranges = np.array(range(0,math.ceil(total_elapsed_seconds),count_by))
-	bins = len(time_ranges)
-	time_ranges = np.vstack((time_ranges, time_ranges + count_by)).T
-
-	return bins, time_ranges
-
-def get_binned_data(call_metadata):
-	#wip 
-	count_by = 5 # bin resolution, in seconds
-	bins, time_ranges = make_time_bins(call_metadata, count_by)
-	
-	cols_list = ["vms", "all_cpus", "preemptibles", "non-preemptibles","memory", "hdd", "ssd"]
-	cols = {x:i for i,x in enumerate(cols_list)}
-	data = np.zeros((bins, len(cols_list)))
-
-	cpus = np.zeros(bins)
-	for rownum in range(len(call_metadata)):
-		call = call_metadata.loc[rownum]
-		#print("alias: %s, shard_index: %s, attempt: %s, id: %s, start: %.2f, end: %.2f"% (call['alias'], call['shard_index'], call['attempt'],call['job_id'],call['start'], call['end']))
-		if call['cpu'] != 'na':
-			cpus[np.intersect1d(np.where(call['start'] <= time_ranges[:,1])[0], np.where(call['end'] > time_ranges[:,0])[0])] += call['cpu']
-	#print(cpus)
-
 def plot(df, title_name, output_name):
 	"""
 	Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/master/scripts/quota_usage.py
 	"""
-	ax = df[['timestamp','cpu_all','cpu_preemptible', 'cpu_nonpreemptible', 'ssd','hdd']].plot(x='timestamp', secondary_y=['ssd', 'hdd'], title=title_name, drawstyle="steps-post")
-	ax.set_xlabel("Time")
-	ax.set_ylabel("Cores")
-	ax.legend(loc='center')
-	ax.right_ax.set_ylabel("Disk (GiB)")
+	print("Writing " + output_name, file = sys.stderr)
+	colors = {
+		"vm": "#006FA6", #blue (dark blue, could use if change to turquoise/cyan: "#0000A6")
+		"cpu_all": "black",
+		"cpu_preemptible": "#10a197", #turquoise 
+		"cpu_nonpreemptible": "#A30059", #dark pink
+		"memory": "#FF4A46", #coral red
+		"hdd": "#72418F", #purple
+		"ssd": "#008941", #green
+		#  "#FF913F", # orange # "gray"
+	}
+	LABEL_SIZE = 17
+	TITLE_SIZE = 20
+	TICK_SIZE = 15
+
+	fig,ax = plt.subplots(4,1, figsize = (14,26), sharex = True)
+	ax[0].set_title(title_name + "Resource Acquisition Over Time", fontsize=TITLE_SIZE)
+
+	ax[0].plot(df['seconds'], df['vm'], color = colors["vm"])
+	ax[0].set_ylabel("VMs", fontsize = LABEL_SIZE)
+	plt.setp(ax[0].get_yticklabels(), fontsize = TICK_SIZE)
+
+	ax[1].plot(df['seconds'], df['cpu_all'], color = colors["cpu_all"], linewidth = 2, label = "All")
+	ax[1].plot(df['seconds'], df['cpu_preemptible'], color = colors["cpu_preemptible"], linestyle = "dashed", label = "Preemptible")
+	ax[1].plot(df['seconds'], df['cpu_nonpreemptible'], color = colors["cpu_nonpreemptible"], linestyle = "dashed", label = "Non-preemptible")
+	ax[1].set_ylabel("CPU Cores", fontsize = LABEL_SIZE)
+	plt.setp(ax[1].get_yticklabels(), fontsize = TICK_SIZE)
+	ax[1].legend(loc = "upper right", title = "CPU Types", fontsize = TICK_SIZE, title_fontsize = TICK_SIZE)
+
+	ax[2].plot(df['seconds'], df['memory'], color = colors["memory"])
+	ax[2].set_ylabel("RAM (GiB)", fontsize = LABEL_SIZE)
+	plt.setp(ax[2].get_yticklabels(), fontsize = TICK_SIZE)
+
+	ax[3].plot(df['seconds'], df['hdd'], color = colors["hdd"], label = "HDD")
+	ax[3].plot(df['seconds'], df['ssd'], color = colors["ssd"], label = "SSD")
+	ax[3].set_ylabel("Disk Memory (GiB)", fontsize = LABEL_SIZE)
+	plt.setp(ax[3].get_yticklabels(), fontsize = TICK_SIZE)
+	ax[3].legend(loc = "upper right", title = "Disk Types", fontsize = TICK_SIZE, title_fontsize = TICK_SIZE)
+
+	formatter = matplotlib.ticker.FuncFormatter(lambda x,pos: str(datetime.timedelta(seconds = x)))
+	ax[3].xaxis.set_major_formatter(formatter) 
+	plt.setp(ax[3].get_xticklabels(), rotation = 15, fontsize = TICK_SIZE)
+	ax[3].set_xlabel("Time", fontsize = LABEL_SIZE)
 	
-	h1, l1 = ax.get_legend_handles_labels()
-	h2, l2 = ax.right_ax.get_legend_handles_labels()
-	ax.legend(h1+h2, l1+l2, loc="upper center")
-	
-	ax.get_figure().savefig(output_name)
+	fig.savefig(output_name, bbox_inches='tight')
 
 def print_peak_usage(m):
+	print("Peak VMs: " + str(max(m['vm'])))
 	print("Peak CPUs (all): " + str(max(m['cpu_all'])))
 	print("Peak Preemptible CPUs: " + str(max(m['cpu_preemptible'])))
 	print("Peak Non-preemptible CPUs: " + str(max(m['cpu_nonpreemptible'])))
+	print("Peak RAM: " + "{:.2f}".format(max(m['memory'])) + " GiB")
 	print("Peak HDD: " + str(max(m['hdd'])) + " GiB")
 	print("Peak SSD: " + str(max(m['ssd'])) + " GiB")
 
@@ -274,21 +299,24 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("workflow_metadata", help="Workflow metadata JSON file")
 	parser.add_argument("output_base", help="Output directory + basename")
+	parser.add_argument("--plot_title", help="Workflow name for plot title: <name> Resource Acquisition Over Time", required=False, default = "")
 	args = parser.parse_args()
 	random.seed(SEED)
 
 	metadata_file = args.workflow_metadata
 	output_base = args.output_base
+	plt_title = args.plot_title
+	if plt_title != "":
+		plt_title += " "
 
-	call_metadata = get_data_table_cumulative(metadata_file)
+	call_metadata = get_data_table(metadata_file)
 	
-	png_file = output_base + ".png"
-	print("Writing " + png_file)
-	plot(call_metadata, metadata_file, png_file)
+	plot_file = output_base + ".plot.png"
+	plot(call_metadata, plt_title, plot_file)
 
-	txt_file = output_base + ".txt"
-	print("Writing " + txt_file)
-	call_metadata.to_csv(txt_file, sep='\t')
+	table_file = output_base + ".table.tsv"
+	print("Writing " + table_file)
+	call_metadata.to_csv(table_file, sep='\t', index = False)
 
 	print_peak_usage(call_metadata)
 
