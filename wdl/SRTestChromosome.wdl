@@ -214,10 +214,10 @@ task SRTest {
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{splitfile} \
       -L region.merged.bed \
-      -O SR.txt.gz
+      -O local.SR.txt.gz
 
-    tabix -b 2 -e 2 SR.txt.gz
-    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} SR.txt.gz ~{prefix}.stats
+    tabix -b 2 -e 2 local.SR.txt.gz
+    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} local.SR.txt.gz ~{prefix}.stats
   
   >>>
   runtime {

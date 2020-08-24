@@ -212,7 +212,7 @@ task PETest {
       -O local.PE.txt.gz
 
     tabix -b 2 -e 2 local.PE.txt.gz
-    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} PE.txt.gz ~{prefix}.stats
+    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} local.PE.txt.gz ~{prefix}.stats
   
   >>>
   runtime {

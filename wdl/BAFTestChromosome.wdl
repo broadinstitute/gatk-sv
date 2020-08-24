@@ -124,7 +124,7 @@ task BAFTest {
       -L "${chrom}:${start}-${end}" \
       -O local.BAF.txt.gz
 
-    tabix -b2 local.BAF.txt.gz
+    tabix -s1 -b2 -e2 local.BAF.txt.gz
     svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
   
   >>>
