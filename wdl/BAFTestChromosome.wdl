@@ -109,8 +109,11 @@ task BAFTest {
   command <<<
 
     set -euxo pipefail
+
+    zcat ~{baf_metrics} | cut -f4 | sort | uniq > samples.list
+
     echo -e "sample\tgroup\tbatch" > batch.key
-    awk -v batch=~{batch} -v OFS="\t" '{print $1, $1, batch}' ~{write_lines(samples)} >> batch.key
+    awk -v batch=~{batch} -v OFS="\t" '{print $1, $1, batch}' samples.list >> batch.key
     set +o pipefail
     start=$(cut -f2 ~{bed} | sort -k1,1n | head -n1)
     end=$(cut -f3 ~{bed} | sort -k1,1n | tail -n1)

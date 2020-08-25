@@ -211,7 +211,7 @@ task PETest {
       -L region.merged.bed \
       -O local.PE.txt.gz
 
-    tabix -b 2 -e 2 local.PE.txt.gz
+    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{whitelist} ~{vcf} local.PE.txt.gz ~{prefix}.stats
   
   >>>

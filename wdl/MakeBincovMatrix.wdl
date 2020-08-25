@@ -143,7 +143,7 @@ task MakeBincovMatrix {
     echo "#Chr	Start	End	~{sep='	' all_samples}" > ~{batch}.RD.txt
     paste locs cargo/* >> ~{batch}.RD.txt
     bgzip ~{batch}.RD.txt
-    tabix ~{batch}.RD.txt.gz
+    tabix -p bed ~{batch}.RD.txt.gz
 
   >>>
   runtime {

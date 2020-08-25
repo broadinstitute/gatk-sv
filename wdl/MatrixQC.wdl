@@ -168,13 +168,13 @@ task PESRBAF_QC {
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{matrix_file} \
       -L regions.bed \
-      -O local.RD.txt.gz
+      -O local.~{ev}.txt.gz
 
-    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
+    tabix -s 1 -b 2 -e 2 local.~{ev}.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
-      local.RD.txt.gz \
+      local.~{ev}.txt.gz \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list

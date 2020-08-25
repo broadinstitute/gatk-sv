@@ -332,24 +332,17 @@ task RDTestGenotype {
 
     set -euo pipefail
 
-    awk -v OFS="\t" -v window=500 '{if ($2-window>0){print $1,$2-window,$3+window}else{print $1,0,$3+window}}' ~{bed} > region.bed
-    sort -k1,1 -k2,2n region.bed > region.sorted.bed
-    bedtools merge -i region.sorted.bed > region.merged.bed
-
-    # Ensure proper bed file extension
     java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
       --sequence-dictionary ~{ref_dict} \
       --evidence-file ~{coveragefile} \
-      -L region.merged.bed \
-      -O local_coverage.bed
+      -L ~{bed} \
+      -O local.RD.txt.gz
 
-    # GATK does not block compress
-    bgzip local_coverage.bed
-    tabix -p bed local_coverage.bed.gz
+    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz \
       -m ~{medianfile} \
       -f ~{famfile} \
       -n ~{prefix} \
@@ -357,9 +350,9 @@ task RDTestGenotype {
       -i ~{n_bins} \
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \
-      -g TRUE;
+      -g TRUE
     if [ ~{generate_melted_genotypes} == "true" ]; then
-      /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed;
+      /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
       sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
     else
       echo "" | bgzip -c > rd.geno.cnv.bed.gz
@@ -431,7 +424,7 @@ task CountPE {
     # GATK does not block compress
     bgzip PE.txt
 
-    tabix -b 2 -e 2 PE.txt.gz
+    tabix -s1 -b2 -e2 PE.txt.gz
     svtk count-pe --index PE.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
@@ -501,7 +494,7 @@ task CountSR {
     # GATK does not block compress
     bgzip SR.txt
 
-    tabix -b 2 -e 2 SR.txt.gz
+    tabix -s1 -b2 -e2 SR.txt.gz
     svtk count-sr --index SR.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt
