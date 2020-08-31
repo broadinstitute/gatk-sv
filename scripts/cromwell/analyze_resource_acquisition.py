@@ -38,6 +38,8 @@ Outputs:
 """
 NUM_CACHED = 0
 CACHED = set()
+NUM_NONPREEMPTIBLE = 0
+NONPREEMBTIBLE_TASKS = dict()
 
 def get_disk_info(metadata):
 	"""
@@ -62,6 +64,9 @@ def get_disk_info(metadata):
 		return float(0),float(0)
 		
 def was_preemptible_vm(metadata):
+	"""
+	Source: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
+	"""
 	if "runtimeAttributes" in metadata and "preemptible" in metadata['runtimeAttributes']:
 		pe_count = int(metadata['runtimeAttributes']["preemptible"])
 		attempt = int(metadata['attempt'])
@@ -73,7 +78,7 @@ def was_preemptible_vm(metadata):
 
 def used_cached_results(metadata):
 	"""
-	Source: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
+	Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
 	"""
 	return "callCaching" in metadata and "hit" in metadata["callCaching"] and metadata["callCaching"]["hit"]
 
@@ -117,10 +122,16 @@ def calculate_start_end(call_info):
 	return start, end
 
 def was_preempted(call_info):
+	"""
+	Source: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
+	"""
 	# We treat Preempted and RetryableFailure the same.  The latter is a general case of the former
 	return call_info['executionStatus'] in ['Preempted', 'RetryableFailure']
 
 def get_mem_cpu(m):
+	"""
+	Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
+	"""
 	cpu = 'na'
 	memory = 'na'
 	if 'runtimeAttributes' in m:
@@ -143,47 +154,16 @@ def getCalls(m, alias=None):
 		return call_metadata
 
 	if 'labels' in m:
+		if alias is None:
+			alias = ""
+		elif alias[-1] != ".":
+			alias = alias + "."
 		if 'wdl-call-alias' in m['labels']:
-			alias = m['labels']['wdl-call-alias']
+			alias = alias + m['labels']['wdl-call-alias']
 		elif 'wdl-task-name' in m['labels']:
-			alias = m['labels']['wdl-task-name']
+			alias = alias + m['labels']['wdl-task-name']
 
-	shard_index = '-2'
-	if 'shardIndex' in m:
-		shard_index = m['shardIndex']
-
-	attempt = '0'
-	if 'attempt' in m:
-		attempt = m['attempt']
-
-	job_id = 'na'
-	if 'jobId' in m:
-		job_id = m['jobId'].split('/')[-1]
-
-	start, end = calculate_start_end(m)
-
-	cpu, memory = get_mem_cpu(m)
-
-	cached = used_cached_results(m)
-	if cached:
-		global CACHED
-		global NUM_CACHED
-		CACHED.add(alias)
-		NUM_CACHED += 1
-
-	callroot = 'na'
-	if 'callRoot' in m:
-		callroot = m['callRoot']
-
-	preemptible = was_preemptible_vm(m)
-	preemptible_cpu = 0
-	nonpreemptible_cpu = 0
-	if preemptible:
-		preemptible_cpu = cpu
-	else:
-		nonpreemptible_cpu = cpu
-
-	hdd_size, ssd_size = get_disk_info(m)
+	
 
 	call_metadata = []
 	if 'calls' in m:
@@ -191,7 +171,12 @@ def getCalls(m, alias=None):
 			# Skips scatters that don't contain calls
 			if '.' not in call:
 				continue
-			call_alias = call.split('.')[1]
+			# call_alias = call.split('.')[1]
+			if alias is None:
+				alias = ""
+			elif alias[-1] != ".":
+				alias = alias + "."
+			call_alias = alias + call
 			call_metadata.extend(getCalls(m['calls'][call], alias=call_alias))
 
 	if 'subWorkflowMetadata' in m:
@@ -199,8 +184,56 @@ def getCalls(m, alias=None):
 
 	# in a call
 	if alias and ('monitoringLog' in m):
+		shard_index = '-2'
+		if 'shardIndex' in m:
+			shard_index = m['shardIndex']
+
+		attempt = '0'
+		if 'attempt' in m:
+			attempt = m['attempt']
+
+		job_id = 'na'
+		if 'jobId' in m:
+			job_id = m['jobId'].split('/')[-1]
+
+		start, end = calculate_start_end(m)
+
+		cpu, memory = get_mem_cpu(m)
+
+		cached = used_cached_results(m)
+		
+
+		callroot = 'na'
+		if 'callRoot' in m:
+			callroot = m['callRoot']
+
+		preemptible = was_preemptible_vm(m)
+		preemptible_cpu = 0
+		nonpreemptible_cpu = 0
+		if preemptible:
+			preemptible_cpu = cpu
+		else:
+			nonpreemptible_cpu = cpu
+			
+
+		hdd_size, ssd_size = get_disk_info(m)
+		
 		call_metadata.append((start, 1, cpu, preemptible_cpu, nonpreemptible_cpu, memory, hdd_size, ssd_size))
 		call_metadata.append((end, -1, -1*cpu, -1*preemptible_cpu, -1*nonpreemptible_cpu, -1*memory, -1*hdd_size, -1*ssd_size))
+		if not preemptible:
+			global NUM_NONPREEMPTIBLE
+			global NONPREEMBTIBLE_TASKS
+			NUM_NONPREEMPTIBLE += 1
+			if alias in NONPREEMBTIBLE_TASKS:
+				NONPREEMBTIBLE_TASKS[alias] += 1
+			else:
+				NONPREEMBTIBLE_TASKS[alias] = 1
+
+		if cached:
+			global CACHED
+			global NUM_CACHED
+			CACHED.add(alias)
+			NUM_CACHED += 1
 
 	return call_metadata
 
@@ -333,7 +366,7 @@ def main():
 			print("Warning: %d task was call-cached, so this analysis may underestimate typical resource acquisition for this workflow. \nThe cached task was:" % NUM_CACHED)
 		else:
 			print("Warning: %d tasks were call-cached, so this analysis may underestimate typical resource acquisition for this workflow. \nCached tasks include (repeat names omitted):" % NUM_CACHED)
-		print(", ".join(list(CACHED)))
+		print("\n".join(list(CACHED)))
 	else:
 		print("No cached tasks")
 	
@@ -345,6 +378,12 @@ def main():
 
 	peak_file = output_base + sep + "peaks.txt"
 	write_peak_usage(call_metadata, peak_file)
+
+	global NUM_NONPREEMPTIBLE
+	print("Total non-preemptible VMs: %d" % NUM_NONPREEMPTIBLE)
+	if NUM_NONPREEMPTIBLE > 0:
+		print("Tasks running on non-preemptible VMs include (repeat names omitted):")
+		print("\n".join([x + ": " + str(NONPREEMBTIBLE_TASKS[x]) for x in NONPREEMBTIBLE_TASKS.keys()]))
 
 
 if __name__== "__main__":
