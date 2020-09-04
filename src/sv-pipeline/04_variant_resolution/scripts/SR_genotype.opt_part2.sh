@@ -194,12 +194,19 @@ fi
 
 
 ##add back variants with no SR support##
+if [ $(awk '{print $1}' sr.variant.quality.final.txt |fgrep -wvf - <(zcat $vcf|egrep -v "^#" |awk '{print $3}') |wc -l) -gt 0 ]
+then
+
 awk '{print $1}' sr.variant.quality.final.txt \
   |fgrep -wvf - <(zcat $vcf|egrep -v "^#" |awk '{print $3}') \
   |awk '{print $1}' \
   |sort -u \
   |awk '{print $1 "\t" 0}' \
   >sr.variant.quality.final.null.txt
+
+else
+echo "">sr.variant.quality.final.null.txt
+fi
 
 awk -v var=$normalization_var '{if ($2*var>999) print $1 "\t" 999;else print $1 "\t" $2*var}'  sr.variant.quality.final.txt \
   |cat - sr.variant.quality.final.null.txt \
