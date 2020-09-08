@@ -27,6 +27,7 @@ CPX_INFO = [
     '##ALT=<ID=INS,Description="Insertion">',
     '##ALT=<ID=UNR,Description="Unresolved breakend or complex SV">',
     '##INFO=<ID=SOURCE,Number=1,Type=String,Description="Source of inserted sequence.">',
+    '##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">',
     '##INFO=<ID=CPX_TYPE,Number=1,Type=String,Description="Class of complex variant.">',
     '##INFO=<ID=CPX_INTERVALS,Number=.,Type=String,Description="Genomic intervals constituting complex variant.">',
     '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">',
