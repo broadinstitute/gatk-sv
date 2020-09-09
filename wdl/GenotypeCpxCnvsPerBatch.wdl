@@ -246,10 +246,177 @@ task RdTestGenotype {
 
     tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
+    head -1 ~{median_file} | sed -e 's/\t/\n/g' > sample_list
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -c local.RD.txt.gz \
+      -m ~{median_file} \
+      -f ~{ped_file} \
+      -n ~{prefix} \
+      -w sample_list\
+      -i ~{n_bins} \
+      -r ~{gt_cutoffs} \
+      -y ~{bin_exclude} \
+      -g TRUE
+
+    if [ -f "~{prefix}.geno" ] && [ -f "~{prefix}.gq" ] ; then
+      /opt/sv-pipeline/04_variant_resolution/scripts/merge_RdTest_genotypes.py \
+        ~{prefix}.geno ~{prefix}.gq rd.geno.cnv.bed
+      sort -k1,1V -k2,2n rd.geno.cnv.bed | uniq | bgzip -c > rd.geno.cnv.bed.gz
+    else
+      # In case RdTest does not produce output because the input is empty
+      echo "" | bgzip -c > rd.geno.cnv.bed.gz
+    fi
+  >>>
+
+  output {
+    File melted_genotypes = "rd.geno.cnv.bed.gz"
+  }
+}
+
+
+task RdTestGenotype_Step1 {
+  input {
+    File bed
+    File coverage_file
+    File coverage_file_idx
+    File median_file
+    File ped_file
+    File samples_list
+    File bin_exclude
+    File gt_cutoffs
+    File ref_dict
+    Int n_bins
+    String prefix
+    String sv_pipeline_rdtest_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    coverage_file: {
+      localization_optional: true
+    }
+  }
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  # NOTE: doubled representation of "bed" below is NOT A TYPO
+  #  bincov information is remote-tabixed in, preventing accurate measurement of size, but the bincov
+  #  info is at lower resolution than the input bed file, so an upper estimate can be obtained by just
+  #  doubling the representation of "bed" in the input size
+  Float input_size = size([bed, bed, median_file, ped_file, samples_list, gt_cutoffs], "GiB")
+  Float compression_factor = 5.0
+  Float base_disk_gb = 5.0
+  Float base_mem_gb = 2.0
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + compression_factor * input_size,
+    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  runtime {
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_rdtest_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -eu
+
+    grep -v "^#" ~{bed} | sort -k1,1V -k2,2n | bedtools merge -i stdin -d 1000000 > merged.bed
+
+    set -o pipefail
+
+    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+      --sequence-dictionary ~{ref_dict} \
+      --evidence-file ~{coverage_file} \
+      -L merged.bed \
+      -O local.RD.txt.gz
+
+    tabix -p bed local.RD.txt.gz
+
+  >>>
+
+  output {
+    File local_rd = "local.RD.txt.gz"
+  }
+}
+
+
+task RdTestGenotype_Step2 {
+  input {
+    File bed
+    File coverage_file
+    File coverage_file_idx
+    File median_file
+    File ped_file
+    File samples_list
+    File bin_exclude
+    File gt_cutoffs
+    File ref_dict
+    File local_rd
+    Int n_bins
+    String prefix
+    String sv_pipeline_rdtest_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    coverage_file: {
+      localization_optional: true
+    }
+  }
+  Float input_size = size([bed, bed, median_file, ped_file, samples_list, gt_cutoffs], "GiB")
+  Float compression_factor = 5.0
+  Float base_disk_gb = 5.0
+  Float base_mem_gb = 2.0
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + compression_factor * input_size,
+    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  runtime {
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_rdtest_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -eu
+
+    grep -v "^#" ~{bed} | sort -k1,1V -k2,2n | bedtools merge -i stdin -d 1000000 > merged.bed
+
+    set -o pipefail
+
+    tabix -p bed ~{bin_exclude}
+
+    Rscript /opt/RdTest/RdTest.R \
+      -b ~{bed} \
+      -c ~{local_rd} \
       -m ~{median_file} \
       -f ~{ped_file} \
       -n ~{prefix} \
@@ -273,3 +440,4 @@ task RdTestGenotype {
     File melted_genotypes = "rd.geno.cnv.bed.gz"
   }
 }
+

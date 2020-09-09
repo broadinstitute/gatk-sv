@@ -550,6 +550,7 @@ workflow Module05_06 {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
   #Final outputs
