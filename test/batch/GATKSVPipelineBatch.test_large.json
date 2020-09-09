@@ -350,7 +350,7 @@
   "GATKSVPipelineBatch.sv_base_docker": "gatksv/sv-base:b3af2e3",
   "GATKSVPipelineBatch.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "GATKSVPipelineBatch.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "GATKSVPipelineBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_ctx_rep_eccc9be",
+  "GATKSVPipelineBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
   "GATKSVPipelineBatch.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
   "GATKSVPipelineBatch.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "GATKSVPipelineBatch.wham_docker": "gatksv/wham:8645aa",
