@@ -7,6 +7,6 @@
   "PrepareGencode.promoter_window": 1000, 
 
   "PrepareGencode.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "PrepareGencode.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_ctx_rep_eccc9be"
+  "PrepareGencode.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e"
 }
 

@@ -25,7 +25,7 @@
   "Module03Qc.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
 
   
-  "Module03Qc.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_ctx_rep_eccc9be",
+  "Module03Qc.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
   "Module03Qc.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module03Qc.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
 

@@ -372,6 +372,10 @@ workflow GATKSVPipelineSingleSample {
     File noncoding_bed
     Int annotation_sv_per_shard
 
+    File? external_af_ref_bed             # bed file with population AFs for annotation
+    String? external_af_ref_bed_prefix    # name of external AF bed file call set
+    Array[String]? external_af_population # populations to annotate external AFs (required if ref_bed set, use "ALL" for all)
+
     ############################################################
     ## Single sample filtering
     ############################################################
@@ -929,9 +933,19 @@ workflow GATKSVPipelineSingleSample {
         linc_rna_gtf = linc_rna_gtf,
         promoter_bed = promoter_bed,
         noncoding_bed = noncoding_bed,
+        ref_bed = external_af_ref_bed,
+        ref_prefix = external_af_ref_bed_prefix,
+        population = external_af_population,
         sv_per_shard = annotation_sv_per_shard,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker
+  }
+
+  call SingleSampleFiltering.VcfToBed as VcfToBed {
+    input:
+      vcf = Module07.output_vcf,
+      prefix = batch,
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
@@ -973,6 +987,8 @@ workflow GATKSVPipelineSingleSample {
   output {
     File final_vcf = FinalVCFCleanup.out
     File final_vcf_idx = FinalVCFCleanup.out_idx
+
+    File final_bed = VcfToBed.bed
 
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
