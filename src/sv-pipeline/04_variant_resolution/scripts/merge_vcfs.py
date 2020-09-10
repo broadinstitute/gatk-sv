@@ -17,7 +17,11 @@ import svtk.utils as svu
 
 def records_match(record, other):
     """Test if two records are same SV"""
-    return (record.pos == other.pos and
+    return (
+        # record.chrom == other.chrom and
+            # record.info['CHR2'] == other.info['CHR2'] and
+            # (('END2' not in record.info or 'END2' not in other.info) or record.info['END2'] == other.info['END2']) and
+            record.pos == other.pos and
             record.stop == other.stop and
             record.info['SVTYPE'] == other.info['SVTYPE'])
 
@@ -35,6 +39,9 @@ def dedup_records(records):
     curr_record = records[0]
     for record in records[1:]:
         if records_match(curr_record, record):
+            print("Match!: ", end="") # debugging
+            print(curr_record, end=", ")
+            print(record)
             continue
         else:
             yield curr_record
