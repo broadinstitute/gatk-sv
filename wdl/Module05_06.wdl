@@ -74,6 +74,7 @@ workflow Module05_06 {
     File? collins_2017_tarball
     File? werling_2018_tarball
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -119,6 +120,7 @@ workflow Module05_06 {
     RuntimeAttr? runtime_override_concat_resolved_per_shard
 
     # overrides for GenotypeComplexContig
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_vcf_to_genotype
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
     RuntimeAttr? runtime_override_get_cpx_cnv_intervals
@@ -443,9 +445,11 @@ workflow Module05_06 {
         contig=contig,
         ped_files=ped_files,
         ref_dict=ref_dict,
+        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
         runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
         runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,

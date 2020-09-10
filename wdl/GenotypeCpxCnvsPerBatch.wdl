@@ -10,6 +10,7 @@ version 1.0
 # Distributed under terms of the MIT License
 
 import "Tasks0506.wdl" as MiniTasks
+import "Utils.wdl" as Utils
 
 # Workflow to perform depth-based genotyping per batch
 # on predicted CPX CNVs from 04b
@@ -25,14 +26,15 @@ workflow GenotypeCpxCnvsPerBatch {
     String batch
     File median_file
     File ped_file
-    File samples_list
     File coverage_file
     File ref_dict
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_rdtest_docker
 
     # overrides for local tasks
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
 
@@ -41,13 +43,21 @@ workflow GenotypeCpxCnvsPerBatch {
   }
 
   File coverage_file_idx = coverage_file + ".tbi"
+
+  call Utils.GetSampleIdsFromMedianCoverageFile {
+    input:
+      median_file = median_file,
+      name = batch,
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_override_ids_from_median
+  }
   
   call SplitBedBySize {
     input:
       bed=cpx_bed,
       n_per_split_small=n_per_split_small,
       n_per_split_large=n_per_split_large,
-      samples_list=samples_list,
+      samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_split_bed_by_size
   }
@@ -61,7 +71,7 @@ workflow GenotypeCpxCnvsPerBatch {
         coverage_file_idx=coverage_file_idx,
         median_file=median_file,
         ped_file=ped_file,
-        samples_list=samples_list,
+        samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
         gt_cutoffs=rd_depth_sep_cutoff,
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
@@ -246,7 +256,6 @@ task RdTestGenotype {
 
     tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
-    head -1 ~{median_file} | sed -e 's/\t/\n/g' > sample_list
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -254,7 +263,7 @@ task RdTestGenotype {
       -m ~{median_file} \
       -f ~{ped_file} \
       -n ~{prefix} \
-      -w sample_list\
+      -w ~{samples_list} \
       -i ~{n_bins} \
       -r ~{gt_cutoffs} \
       -y ~{bin_exclude} \

@@ -224,6 +224,7 @@ workflow GATKSVPipelineBatch {
       batches=[batch],
       depth_gt_rd_sep_files=[select_first([Module04.trained_genotype_depth_depth_sepcutoff])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
+      linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,

@@ -878,6 +878,7 @@ workflow GATKSVPipelineSingleSample {
 
       random_seed=clean_vcf_random_seed,
 
+      linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
