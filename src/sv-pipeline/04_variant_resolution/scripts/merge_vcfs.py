@@ -17,12 +17,11 @@ import svtk.utils as svu
 
 def records_match(record, other):
     """Test if two records are same SV"""
-    return (
-        # record.chrom == other.chrom and
-            # record.info['CHR2'] == other.info['CHR2'] and
-            # (('END2' not in record.info or 'END2' not in other.info) or record.info['END2'] == other.info['END2']) and
+    return (record.chrom == other.chrom and
+            (('CHR2' not in record.info and 'CHR2' not in other.info) or ('CHR2' in record.info and 'CHR2' in other.info and record.info['CHR2'] == other.info['CHR2'])) and
             record.pos == other.pos and
             record.stop == other.stop and
+            (('END2' not in record.info and 'END2' not in other.info) or ('END2' in record.info and 'END2' in other.info and record.info['END2'] == other.info['END2'])) and
             record.info['SVTYPE'] == other.info['SVTYPE'])
 
 
