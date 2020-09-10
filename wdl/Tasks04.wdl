@@ -37,7 +37,7 @@ task SplitVariants {
       | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
     if [ ~{generate_bca} == "true" ]; then
       svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP") {print $1, $2RDTestGenotype, $3, $4, $6, $5}' \
+        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP") {print $1, $2, $3, $4, $6, $5}' \
         | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
     fi
 

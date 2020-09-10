@@ -169,32 +169,8 @@ task JoinContigFromRemoteVcfs {
   command <<<
     set -eu -o pipefail
 
-    ## This doesn't quite work (but almost!) as a replacement for tabix below
-    ##   1) Downstream scripts expect empty format fields to be present (as ".") but GATK removes them
-    ##   2) duplicate records are problematic for bcftools annotate
-    ##   3) fields should only be replaced when missing (depth-only calls)
-    #touch subsetted_vcfs.list
-    #paste ~{write_lines(batches)} ~{write_lines(vcfs)} | while read BATCH VCF_PATH; do
-      #java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} SelectVariants \
-      #  -V "${VCF_PATH}" \
-      #  -L "~{contig}" \
-      #  -O "tmp.vcf.gz"
-
-      # GATK removed empty FORMAT fields
-      #bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t[.\t]\n" tmp.vcf.gz | bgzip -c > ann.tab.gz
-      #tabix -s1 -b2 -e2 ann.tab.gz
-      #bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/PE_GT tmp.vcf.gz \
-      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/PE_GQ \
-      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/SR_GT \
-      #  | bcftools annotate -a ann.tab.gz -c CHROM,POS,REF,ALT,FORMAT/SR_GQ \
-      #  | sed "s/AN=[0-9]*;//g" \
-      #  | sed "s/AC=[0-9]*;//g" \
-      #  | bgzip -c \
-      #  > $BATCH.~{contig}.vcf.gz
-      #rm tmp.vcf.gz ann.tab.gz
-      #tabix $BATCH.~{contig}.vcf.gz
-      #echo "$BATCH.~{contig}.vcf.gz" >> subsetted_vcfs.list
-    #done
+    # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
+    # https://github.com/broadinstitute/gatk-sv/issues/52
 
     #Remote tabix all vcfs to chromosome of interest
     1>&2 echo "REMOTE TABIXING VCFs"
