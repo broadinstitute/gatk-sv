@@ -16,7 +16,7 @@ import svtk.utils as svu
 
 
 def records_match(record, other):
-    """Test if two records are same SV"""
+    """Test if two records are same SV: check chromosome, position, stop, SVTYPE, and (if they exist) CHR2/END2 for multi-chromosomal events"""
     return (record.chrom == other.chrom and
             (('CHR2' not in record.info and 'CHR2' not in other.info) or ('CHR2' in record.info and 'CHR2' in other.info and record.info['CHR2'] == other.info['CHR2'])) and
             record.pos == other.pos and
@@ -38,9 +38,6 @@ def dedup_records(records):
     curr_record = records[0]
     for record in records[1:]:
         if records_match(curr_record, record):
-            print("Match!: ", end="") # debugging
-            print(curr_record, end=", ")
-            print(record)
             continue
         else:
             yield curr_record
