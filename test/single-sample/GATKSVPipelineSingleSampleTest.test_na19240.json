@@ -119,7 +119,7 @@
 
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.contig_ploidy_model_tar" : "gs://gatk-sv-resources/test/gcnv_model_v2/ref_panel_v1b-contig-ploidy-model.tar.gz",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_ped_file" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/ped/ref_panel_v1b.ped",
-  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_panel_bincov_matrix": "gs://gatk-sv-resources/clinical/reference_panel_v1b/merged_evidence/ref_panel_v1b.bincov.bed.gz",
+  "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_panel_bincov_matrix": "gs://gatk-sv-resources/clinical/reference_panel_v1b/merged_evidence/ref_panel_v1b.RD.txt.gz",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_panel_del_bed" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/merged_evidence/ref_panel_v1b.DEL.bed.gz",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_panel_dup_bed" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/merged_evidence/ref_panel_v1b.DUP.bed.gz",
   "GATKSVPipelineSingleSampleTest.GATKSVPipelineSingleSample.ref_panel_vcf" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/calls/ref_panel_v1b.cleaned.vcf.gz",

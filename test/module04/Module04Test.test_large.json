@@ -137,7 +137,7 @@
   "Module04Test.Module04.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
 
   "Module04Test.Module04.discfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz",
-  "Module04Test.Module04.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz",
+  "Module04Test.Module04.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz",
   "Module04Test.Module04.splitfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.SR.txt.gz",
   "Module04Test.Module04.medianfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed",
   "Module04Test.Module04.cohort_depth_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz",

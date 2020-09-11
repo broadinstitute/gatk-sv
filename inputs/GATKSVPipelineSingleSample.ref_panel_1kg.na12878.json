@@ -13,7 +13,7 @@
 
   "GATKSVPipelineSingleSample.contig_ploidy_model_tar" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/gcnv/1KGP_2504-contig-ploidy-model.tar.gz",
   "GATKSVPipelineSingleSample.ref_ped_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/ped/1kg_ref_panel_v1.ped",
-  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/merged_evidence/ref_panel_1kg_v1.bincov.bed.gz",
+  "GATKSVPipelineSingleSample.ref_panel_bincov_matrix": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/merged_evidence/ref_panel_1kg_v1.RD.txt.gz",
   "GATKSVPipelineSingleSample.ref_panel_del_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/merged_evidence/ref_panel_1kg_v1.DEL.bed.gz",
   "GATKSVPipelineSingleSample.ref_panel_dup_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/merged_evidence/ref_panel_1kg_v1.DUP.bed.gz",
   "GATKSVPipelineSingleSample.ref_panel_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/calls/ref_panel_1kg_v1.cleaned.vcf.gz",

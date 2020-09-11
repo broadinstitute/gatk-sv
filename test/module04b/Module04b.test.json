@@ -16,8 +16,8 @@
   "Module04b.batch_depth_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz"],
   "Module04b.samples_lists": ["gs://gatk-sv-resources/test/module04b/large/inputs/samplelist.txt"],
   "Module04b.depth_vcfs": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart2/GenotypeDepthPart2/afcbb44e-d36a-44a1-b007-69b16d4f754a/call-ConcatGenotypedVcfs/test_large.depth.vcf.gz"],
-  "Module04b.coveragefiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"],
-  "Module04b.coveragefile_idxs": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"],
+  "Module04b.coveragefiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz"],
+  "Module04b.coveragefile_idxs": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz.tbi"],
   "Module04b.medianfiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed"],
   "Module04b.batches": ["test"]
 }

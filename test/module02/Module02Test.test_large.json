@@ -136,7 +136,7 @@
   "Module02Test.Module02.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
   "Module02Test.Module02.discfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz",
   "Module02Test.Module02.baf_metrics": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.BAF.txt.gz",
-  "Module02Test.Module02.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz",
+  "Module02Test.Module02.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz",
   "Module02Test.Module02.splitfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.SR.txt.gz",
   "Module02Test.Module02.medianfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed",
   "Module02Test.Module02.depth_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.depth.vcf.gz",

@@ -30,14 +30,14 @@ def is_gcs_url(str):
   return urlparse(str).scheme == GOOGLE_STORAGE
 
 # Checks if the object exists in GCS
-def check_gcs_url(source_uri, client):
+def check_gcs_url(source_uri, client, project_id):
   def _parse_uri(uri):
     parsed = urlparse(uri)
     bucket_name = parsed.netloc
     bucket_object = parsed.path[1:]
     return bucket_name, bucket_object
   source_bucket_name, source_blob_name = _parse_uri(source_uri)
-  source_bucket = client.bucket(source_bucket_name)
+  source_bucket = client.bucket(source_bucket_name, user_project=project_id)
   source_blob = source_bucket.blob(source_blob_name)
   try:
     if not source_blob.exists():
@@ -51,6 +51,7 @@ def check_gcs_url(source_uri, client):
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("inputs_json")
+  parser.add_argument("--project-id", required=False, help="Project ID to charge for requester pays buckets")
   args = parser.parse_args()
 
   with open(args.inputs_json, 'r') as f:
@@ -58,11 +59,11 @@ def main():
     inputs = json.load(f)
     for x in inputs:
       if isinstance(inputs[x], str) and is_gcs_url(inputs[x]):
-        check_gcs_url(inputs[x], client)
+        check_gcs_url(inputs[x], client, args.project_id)
       elif isinstance(inputs[x], list):
         for y in inputs[x]:
           if is_gcs_url(y):
-            check_gcs_url(y, client)
+            check_gcs_url(y, client, args.project_id)
   
 if __name__== "__main__":
   main()

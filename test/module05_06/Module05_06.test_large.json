@@ -56,7 +56,7 @@
     "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz"
   ],
   "Module05_06.bincov_files": [
-    "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"
+    "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz"
   ],
   "Module05_06.median_coverage_files": [
     "gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed"

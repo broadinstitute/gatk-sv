@@ -21,7 +21,7 @@
   "Module02.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
   "Module02.discfile": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.PE.txt.gz",
   "Module02.baf_metrics": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.BAF.txt.gz",
-  "Module02.coveragefile": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.bincov.bed.gz",
+  "Module02.coveragefile": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.RD.txt.gz",
   "Module02.splitfile": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.SR.txt.gz",
   "Module02.medianfile": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small_medianCov.transposed.bed",
   "Module02.depth_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.depth.vcf.gz",
