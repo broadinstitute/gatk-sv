@@ -102,15 +102,13 @@ def main():
     fnames = [l.strip() for l in args.vcflist.readlines()]
     vcfs = [pysam.VariantFile(f) for f in fnames]
 
-    # Copy base VCF
-    args.fout.write(str(vcfs[0].header))
-    n_samples = len(vcfs[0].header.samples)
+    # Copy base VCF header without samples
+    args.fout.write('\t'.join(str(vcfs[0].header).split('\t')[:9]) + '\n')
 
-    # Write out null records for dedupped variants
+    # Write out sites-only records for dedupped variants
     for record in merge_records(vcfs):
         base = '\t'.join(str(record).split('\t')[:8])
-        null_gts = '\t'.join(['0/0' for i in range(n_samples - 1)])
-        args.fout.write(base + '\tGT\t0/1\t' + null_gts + '\n')
+        args.fout.write(base + '\tGT\n')
 
     args.fout.close()
 
