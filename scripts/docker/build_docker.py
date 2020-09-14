@@ -72,10 +72,6 @@ class CMD_line_args_parser:
         docker_remote_args_group = parser.add_argument_group('Docker push',
                                                              'controlling behavior related pushing dockers to remote repos')
 
-        docker_remote_args_group.add_argument('--dockerhub-root',
-                                              type = str,
-                                              help = 'DockerHub root/user to push the images to')
-
         docker_remote_args_group.add_argument('--gcr-project',
                                               type = str,
                                               help = 'GCR billing project to push the images to')
@@ -92,6 +88,10 @@ class CMD_line_args_parser:
         parser.add_argument('--skip-base-image-build',
                             action = 'store_true',
                             help = 'skip rebuild of the target\'s base image(s). Assumes that the base image(s) already exist with same tag.')
+
+        parser.add_argument('--skip-cleanup',
+                            action = 'store_true',
+                            help = 'skip cleanup after successful and unsuccessful build attempts. This will speed up subsequent builds.')
 
         # parse and consistency check
         parsed_args = parser.parse_args(args_list)
@@ -242,7 +242,7 @@ class Project_Build:
     def __init__(self, project_arguments, launch_script_path):
 
         # Todo: we can also check auth to push to GCR
-        if (project_arguments.dockerhub_root is not None) or (project_arguments.gcr_project is not None):
+        if project_arguments.gcr_project is not None:
             os.system("docker login")
 
         self.project_arguments = project_arguments
@@ -364,8 +364,6 @@ class Project_Build:
             build_context = self.working_dir + "/dockerfiles/" + proj
 
             remote_docker_repos = []
-            if (self.project_arguments.dockerhub_root is not None):
-                remote_docker_repos.append(self.project_arguments.dockerhub_root)
             if (self.project_arguments.gcr_project is not None):
                 remote_docker_repos.append("us.gcr.io/" + self.project_arguments.gcr_project)
 
@@ -416,7 +414,8 @@ def parse_and_build(parsed_project_arguments, launch_script_path):
         raise Exception("Build Process Errored due to a docker build error!!!\n"
                         + str(d))
     finally:
-        my_build_project.cleanup(possible_tmp_dir_path)
+        if not my_build_project.project_arguments.skip_cleanup:
+            my_build_project.cleanup(possible_tmp_dir_path)
 
 ############################################################
 
