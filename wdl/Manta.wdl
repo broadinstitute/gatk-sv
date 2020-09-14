@@ -94,7 +94,8 @@ task RunManta {
   }
 
   Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
-  File bam_or_cram_index_file = select_first([bam_or_cram_index, if is_bam then bam_or_cram_file + ".bai" else bam_or_cram_file + ".crai"])
+  String index_ext = if is_bam then ".bai" else ".crai"
+  File bam_or_cram_index_file = select_first([bam_or_cram_index, bam_or_cram_file + index_ext])
   File ref_index = select_first([reference_index, reference_fasta + ".fai"])
   File bed_index = select_first([region_bed_index, region_bed + ".tbi"])
 
@@ -124,6 +125,8 @@ task RunManta {
   Float region_bed_index_size = size(region_bed_index, "GiB")
   Int vm_disk_size = ceil(bam_or_cram_size + bam_or_cram_index_size + ref_size + ref_index_size + region_bed_size + region_bed_index_size + disk_overhead)
 
+  String expected_index_name = basename(bam_or_cram_file) + index_ext
+
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu_use,
     mem_gb: mem_size_gb, 
@@ -146,6 +149,12 @@ task RunManta {
     # exists, manta will throw an error
     if [ -f ./runWorkflow.py ]; then
       rm ./runWorkflow.py
+    fi
+
+    if [ ! -z ~{select_first([bam_or_cram_index, ""])} ]; then
+      if [ ! -f `dirname ~{bam_or_cram_file}`/~{expected_index_name} ]; then
+        ln -s ~{bam_or_cram_index} `dirname ~{bam_or_cram_file}`/~{expected_index_name} || true
+      fi
     fi
 
     # prepare the analysis job
