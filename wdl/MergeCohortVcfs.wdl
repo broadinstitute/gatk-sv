@@ -96,7 +96,7 @@ task MergeDepthVcfs {
     mem_gb: 16, 
     disk_gb: 100,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
