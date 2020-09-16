@@ -1,8 +1,8 @@
 {
-  "Module04b.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module04b.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module04b.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module04b.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
+  "Module04b.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-rdtest:mw-gnomad-02-e4357dd",
+  "Module04b.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
+  "Module04b.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
+  "Module04b.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
   "Module04b.n_RdTest_bins": "100000",
   "Module04b.n_per_split": "5000",
 

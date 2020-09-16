@@ -39,11 +39,11 @@
   "Module05_06.max_shards_per_chrom": 100,
   "Module05_06.min_variants_per_shard": 30,
 
-  "Module05_06.linux_docker": "ubuntu:18.04",
-  "Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module05_06.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module05_06.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-qc:eph_03qc_variables-e597d85",
+  "Module05_06.linux_docker": "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
+  "Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
+  "Module05_06.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-rdtest:mw-gnomad-02-e4357dd",
+  "Module05_06.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-qc:mw-gnomad-02-e4357dd",
 
   "Module05_06.cohort_name": "test_large",
   "Module05_06.batches": [
