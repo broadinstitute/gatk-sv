@@ -16,7 +16,7 @@
 
   "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
   "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
-  "Module00cTest.Module00cMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module00cTest.Module00cMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00cTest.Module00cMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module00cTest.Module00cMetrics.baseline_merged_dels" : "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.DEL.bed.gz",
@@ -63,7 +63,7 @@
   "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
   "Module00cTest.Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-qc:mw-gnomad-02-e4357dd",
   "Module00cTest.Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/cnmops:mw-gnomad-02-e4357dd",
-  "Module00cTest.Module00c.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module00cTest.Module00c.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00cTest.Module00c.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.1",
   "Module00cTest.Module00c.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
 

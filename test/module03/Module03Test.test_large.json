@@ -110,7 +110,7 @@
   ],
   "Module03Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
   "Module03Test.Module03Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
-  "Module03Test.Module03Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module03Test.Module03Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module03Test.Module03Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module03Test.Module03Metrics.baseline_filtered_pesr_vcf" : "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz",
@@ -118,7 +118,7 @@
 
   "Module03Test.Module03.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
   "Module03Test.Module03.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
-  "Module03Test.Module03.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module03Test.Module03.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "Module03Test.Module03.outlier_cutoff_nIQR": "10000",
 

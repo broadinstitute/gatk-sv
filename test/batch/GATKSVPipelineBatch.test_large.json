@@ -345,7 +345,7 @@
   "GATKSVPipelineBatch.gcnv_gatk_docker" : "broadinstitute/gatk:4.1.8.1",
   "GATKSVPipelineBatch.gatk_docker_pesr_override" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.0",
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
-  "GATKSVPipelineBatch.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "GATKSVPipelineBatch.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "GATKSVPipelineBatch.manta_docker": "us.gcr.io/broad-dsde-methods/manta:8645aa",
   "GATKSVPipelineBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
   "GATKSVPipelineBatch.sv_base_docker": "us.gcr.io/broad-dsde-methods/sv-base:mw-gnomad-02-e4357dd",

@@ -109,15 +109,10 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-<<<<<<< HEAD
-  "Module05_06Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module05_06Test.Module05_06Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module05_06Test.Module05_06Metrics.linux_docker": "ubuntu:18.04",
-=======
   "Module05_06Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
   "Module05_06Test.Module05_06Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
-  "Module05_06Test.Module05_06Metrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
->>>>>>> 8d1e420... Move dockers to GCR; delete Metrics jsons
+  "Module05_06Test.Module05_06Metrics.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  
   "Module05_06Test.Module05_06Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module05_06Test.Module05_06Metrics.baseline_final_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.resolved_regenotyped.vcf.gz",
@@ -163,7 +158,7 @@
   "Module05_06Test.Module05_06.max_shards_per_chrom": 100,
   "Module05_06Test.Module05_06.min_variants_per_shard": 30,
 
-  "Module05_06Test.Module05_06.linux_docker": "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module05_06Test.Module05_06.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "Module05_06Test.Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
   "Module05_06Test.Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
   "Module05_06Test.Module05_06.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-rdtest:mw-gnomad-02-e4357dd",

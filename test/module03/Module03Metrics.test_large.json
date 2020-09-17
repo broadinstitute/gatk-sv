@@ -1,6 +1,6 @@
 {
   "Module03Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
-  "Module03Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module03Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module03Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module03Metrics.name" : "test_large",

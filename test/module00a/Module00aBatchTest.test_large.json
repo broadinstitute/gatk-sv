@@ -111,7 +111,7 @@
 
   "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
   "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline-base:mw-gnomad-02-e4357dd",
-  "Module00aBatchTest.Module00aBatchMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "Module00aBatchTest.Module00aBatchMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00aBatchTest.Module00aBatchMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "Module00aBatchTest.Module00aBatchMetrics.contig_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module00aBatchTest.Module00aBatchMetrics.baseline_manta_vcf": [

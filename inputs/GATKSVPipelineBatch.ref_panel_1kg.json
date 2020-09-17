@@ -774,7 +774,7 @@
   "GATKSVPipelineBatch.manta_docker": "us.gcr.io/broad-dsde-methods/manta:8645aa",
   "GATKSVPipelineBatch.wham_docker": "us.gcr.io/broad-dsde-methods/wham:8645aa",
   "GATKSVPipelineBatch.cnmops_docker": "us.gcr.io/broad-dsde-methods/cnmops:mw-gnomad-02-e4357dd",
-  "GATKSVPipelineBatch.linux_docker" : "marketplace.gcr.io/google/ubuntu1804:48c02d82c9c5",
+  "GATKSVPipelineBatch.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "GATKSVPipelineBatch.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.2.0",
   "GATKSVPipelineBatch.gatk_docker_pesr_override" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.0",
   "GATKSVPipelineBatch.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
