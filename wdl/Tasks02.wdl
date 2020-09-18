@@ -40,6 +40,10 @@ task SplitVCF {
     mkdir splits
     tabix ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
 
+    if [ ! -f splits/~{batch}.~{algorithm}.split.`printf '%0~{suffix_len}d' 0` ]; then
+      touch splits/~{batch}.~{algorithm}.split.`printf '%0~{suffix_len}d' 0`
+    fi
+
     #Add headers to each split
     mkdir headered
     for split in splits/~{batch}.~{algorithm}.split.*; do

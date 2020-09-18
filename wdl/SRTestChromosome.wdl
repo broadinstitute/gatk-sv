@@ -206,22 +206,28 @@ task SRTest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_1.txt.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_2.txt.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent SR_1.txt.gz SR_2.txt.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "SR-tabix retry:" $x
-    cmp --silent SR_1.txt.gz SR_2.txt.gz || exit 1
+    if [ -s region.merged.bed ]; then
+      # Temporary workaround for corrupted tabix downloads
+      x=0
+      while [ $x -lt ~{tabix_retries} ]
+      do
+        # Download twice
+        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_1.txt.gz
+        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{splitfile} | bgzip -c > SR_2.txt.gz
+        # Done if the downloads were identical, otherwise retry
+        cmp --silent SR_1.txt.gz SR_2.txt.gz && break
+        x=$(( $x + 1))
+      done
+      echo "SR-tabix retry:" $x
+      cmp --silent SR_1.txt.gz SR_2.txt.gz || exit 1
     
-    mv SR_1.txt.gz SR.txt.gz
-    tabix -b 2 -e 2 SR.txt.gz
+      mv SR_1.txt.gz SR.txt.gz
+      tabix -b 2 -e 2 SR.txt.gz
+    else
+      touch SR.txt
+      bgzip SR.txt
+      tabix -b 2 -e 2 SR.txt.gz
+    fi
 
     svtk sr-test -w 50 --log --index SR.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} SR.txt.gz ~{prefix}.stats
   
