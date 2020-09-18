@@ -31,7 +31,7 @@ workflow MergeCohortVcfs {
   call MergeDepthVcfs {
     input:
       vcfs = depth_vcfs,
-      cohort = cohort
+      cohort = cohort,
       prefix = cohort + ".all_batches.depth",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_merge_depth
@@ -89,7 +89,7 @@ task MergeVcfs {
 task MergeDepthVcfs {
   input {
     Array[File] vcfs
-    String cohort_name
+    String cohort
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -117,12 +117,12 @@ task MergeDepthVcfs {
 
     set -euo pipefail
     /opt/sv-pipeline/04_variant_resolution/scripts/merge_vcfs.py ~{write_lines(vcfs)} ~{prefix}.vcf
-    rm ~{sep=' ' vcfs}
     vcf-sort -c ~{prefix}.vcf | bgzip -c > ~{prefix}.vcf.gz
     while read vcf; do
         local_vcf=$(basename $vcf)
         svtk vcf2bed --no-header $vcf $local_vcf.bed   # for each depth vcf make bed, duplicated
     done < ~{write_lines(vcfs)}
+    rm ~{sep=' ' vcfs}
     cat *.bed |sort -k1,1V -k2,2n -k3,3n> ~{cohort}.cohort.sort.bed # concat raw depth vcf, duplicated
     svtk vcf2bed ~{prefix}.vcf.gz ~{prefix}.vcf.gz.bed   # vcf2bed merge_vcfs, non_duplicated
     fgrep DEL ~{prefix}.vcf.gz.bed> del.bed  # del non duplicated
