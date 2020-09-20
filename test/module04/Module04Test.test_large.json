@@ -121,7 +121,7 @@
   "Module04Test.Module04Metrics.Module04Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
 
   "Module04Test.Module04.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module04Test.Module04.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
+  "Module04Test.Module04.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
   "Module04Test.Module04.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "Module04Test.Module04.linux_docker" : "ubuntu:18.04",
 
