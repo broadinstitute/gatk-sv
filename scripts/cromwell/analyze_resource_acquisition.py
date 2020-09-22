@@ -21,7 +21,7 @@ Summary: Scrapes workflow metadata to analyze resource acquisition (VMs, CPU, RA
 	of understanding resource peaks and timing jobs to avoid hitting quotas.
 
 Usage: 
-	python analyze_resource_acquisition workflow_metadata.json /path/to/output_basename
+	python analyze_resource_acquisition workflow_metadata.json /path/to/output_basename [--plot_title WorkflowName]
 
 Parameters:
 	workflow_metadata.json: path to Cromwell metadata file for workflow of interest
