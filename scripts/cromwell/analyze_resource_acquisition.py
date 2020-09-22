@@ -122,13 +122,6 @@ def calculate_start_end(call_info):
 
 	return start, end
 
-def was_preempted(call_info):
-	"""
-	Source: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
-	"""
-	# We treat Preempted and RetryableFailure the same.  The latter is a general case of the former
-	return call_info['executionStatus'] in ['Preempted', 'RetryableFailure']
-
 def get_mem_cpu(m):
 	"""
 	Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
