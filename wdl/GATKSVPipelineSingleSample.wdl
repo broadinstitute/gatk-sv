@@ -11,7 +11,7 @@ import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
 import "Module04.wdl" as m04
 import "Module05_06.wdl" as m0506
-import "Module07.wdl" as m07
+import "Module08Annotation.wdl" as m08
 import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
@@ -948,7 +948,7 @@ workflow GATKSVPipelineSingleSample {
         sv_base_mini_docker=sv_base_mini_docker
     }
 
-  call m07.Module07 as Module07 {
+  call m08.Module08Annotation {
        input:
         vcf = ResetBothsidesSupportFilter.out,
         vcf_idx = ResetBothsidesSupportFilter.out_idx,
@@ -968,15 +968,15 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = Module07.output_vcf,
+      vcf = Module08Annotation.output_vcf,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
     input:
-      single_sample_vcf=Module07.output_vcf,
-      single_sample_vcf_idx=Module07.output_vcf_idx,
+      single_sample_vcf=Module08Annotation.output_vcf,
+      single_sample_vcf_idx=Module08Annotation.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
       sv_pipeline_docker=sv_pipeline_docker
@@ -1018,8 +1018,8 @@ workflow GATKSVPipelineSingleSample {
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
-    File pre_cleanup_vcf = Module07.output_vcf
-    File pre_cleanup_vcf_idx = Module07.output_vcf_idx
+    File pre_cleanup_vcf = Module08Annotation.output_vcf
+    File pre_cleanup_vcf_idx = Module08Annotation.output_vcf_idx
 
     File ploidy_matrix = select_first([Module00c.ploidy_matrix])
     File ploidy_plots = select_first([Module00c.ploidy_plots])
