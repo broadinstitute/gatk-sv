@@ -27,13 +27,13 @@ Parameters:
 	workflow_metadata.json: path to Cromwell metadata file for workflow of interest
 	/path/to/output_basename: base output path, to which extensions will be appended for each output file, 
 		ie. /output_dir/basename will yield /output_dir/basename.plot.png, /output_dir/basename.table.tsv, etc
-		or, /output_dir/ will yield plot.png, table.tsv, etc
+		or, /output_dir/ will yield plot.png, table.tsv, peaks.txt, etc
 
 Outputs:
 	- plot (png) of VMs, CPUs (total, preemptible, and nonpreemptible), RAM, and disk (HDD, SSD) acquisitioned over time 
 	- table of resource acquisition over time for each type of resource listed above
 	- text file of peak resource acquisition for each type of resource listed above
-	- (coming soon) [preemptible things]
+	- (prints to stdout) number of non-preemptible VMs used and the names of the tasks that used them
 	- (prints to stdout) warning of any tasks that used call-caching
 """
 NUM_CACHED = 0
@@ -92,6 +92,9 @@ def calculate_start_end(call_info):
 
 	if 'executionEvents' in call_info:
 		for x in call_info['executionEvents']:
+			# ignore incomplete executionEvents (could be due to server restart or similar)
+			if 'description' not in x:
+				continue
 			y = x['description']
 
 			if 'backend' in call_info and call_info['backend'] == 'PAPIv2':
@@ -117,8 +120,6 @@ def calculate_start_end(call_info):
 	if end is None:
 		end = dateutil.parser.parse(call_info['end'])
 
-	# start = get_seconds_from_epoch(start)
-	# end = get_seconds_from_epoch(end)
 	return start, end
 
 def was_preempted(call_info):
@@ -171,7 +172,6 @@ def getCalls(m, alias=None):
 			# Skips scatters that don't contain calls
 			if '.' not in call:
 				continue
-			# call_alias = call.split('.')[1]
 			if alias is None:
 				alias = ""
 			elif alias[-1] != ".":
@@ -217,7 +217,7 @@ def getCalls(m, alias=None):
 			
 
 		hdd_size, ssd_size = get_disk_info(m)
-		
+
 		call_metadata.append((start, 1, cpu, preemptible_cpu, nonpreemptible_cpu, memory, hdd_size, ssd_size))
 		call_metadata.append((end, -1, -1*cpu, -1*preemptible_cpu, -1*nonpreemptible_cpu, -1*memory, -1*hdd_size, -1*ssd_size))
 		if not preemptible:
@@ -255,9 +255,7 @@ def transform_call_metadata(call_metadata):
 	"""
 	call_metadata = call_metadata.sort_values(by='timestamp')
 	call_metadata['timestamp'] -= call_metadata.timestamp.iloc[0] # make timestamps start from 0 by subtracting minimum (at index 0 after sorting)
-	# print(call_metadata[['timestamp']])
 	call_metadata['seconds'] = call_metadata['timestamp'].dt.total_seconds() # get timedelta in seconds because plot labels won't format correctly otherwise
-	#print(call_metadata.dtypes)
 	
 	call_metadata['vm'] = call_metadata.vm_delta.cumsum()
 	call_metadata['cpu_all'] = call_metadata.cpu_all_delta.cumsum()
