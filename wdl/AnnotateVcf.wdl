@@ -132,11 +132,7 @@ task SubsetVcf {
     java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} SelectVariants \
       -V "~{vcf}" \
       -L "~{contig}" \
-      -O ~{prefix}.~{contig}.vcf
-
-    # GATK does not block compress
-    bgzip ~{prefix}.~{contig}.vcf
-    tabix -p vcf -f "~{prefix}.~{contig}.vcf.gz"
+      -O ~{prefix}.~{contig}.vcf.gz
   
   >>>
 

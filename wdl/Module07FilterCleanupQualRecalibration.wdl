@@ -134,8 +134,6 @@ task MergeMCNV{
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    #zcat ~{mcnv} |uniq | bgzip > mcnv.vcf.gz
-    #tabix mcnv.vcf.gz
     vcf-concat ~{vcf} ~{mcnv} | vcf-sort | bgzip > ~{prefix}.cleaned_filters_qual_recali.vcf.gz
     tabix ~{prefix}.cleaned_filters_qual_recali.vcf.gz
   >>>
@@ -194,7 +192,6 @@ task Cleanup {
       cp all.samples.list pcrminus.samples.list
     fi
     #Restrict famfiles
-    #while read ptn; do fgrep -w $ptn ~{famfile}; done < all.samples.list > revised.fam
     awk -F "\t" 'NR==FNR{c[$1]++;next};c[$2] > 0' all.samples.list ~{famfile}  > revised.pre
     awk 'NR==FNR{o[FNR]=$1; next} {t[$2]=$0} END{for(x=1; x<=FNR; x++){y=o[x]; print t[y]}}' all.samples.list revised.pre > revised.fam
     fgrep -wf pcrminus.samples.list revised.fam > revised.pcrminus.fam
@@ -221,12 +218,10 @@ task Cleanup {
       stdout \
     | bgzip -c \
     > "~{prefix}.~{contig}.cleaned_filters_qual_recalibrated.vcf.gz"
-    # tabix -p vcf -f "~{prefix}.cleaned_filters_qual_recalibrated.vcf.gz"
   >>>
 
   output {
     File out_vcf = "~{prefix}.~{contig}.cleaned_filters_qual_recalibrated.vcf.gz"
-    # File out_vcf_idx = "~{prefix}.cleaned_filters_qual_recalibrated.vcf.gz.tbi"
   }
 
   runtime {

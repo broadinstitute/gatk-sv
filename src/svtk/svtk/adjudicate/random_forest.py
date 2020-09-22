@@ -120,16 +120,15 @@ class RandomForest:
         cutoff_metrics['pass_cutoffs'] = True
         passing = cutoff_metrics['pass_cutoffs']
 
-        print("evidence: " +self.name)
         for feature in self.cutoff_features['indep']:
             metric = cutoff_metrics[feature]
             idx = np.searchsorted(self.testable.index, cutoff_metrics.index)
             if self.name=="PE_prob":
-                cutoff1 = learn_cutoff(metric, self.probs[idx])
-                cutoff2 = learn_cutoff_V2(metric, self.probs[idx])
+                cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
+                cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
                 cutoff = min([cutoff1,cutoff2])
             else:
-                cutoff = learn_cutoff(metric, self.probs[idx])
+                cutoff = learn_cutoff_dist(metric, self.probs[idx])
 
             cutoffs[feature] = cutoff
             passing = passing & (cutoff_metrics[feature] >= cutoff)
@@ -140,11 +139,11 @@ class RandomForest:
             # Subset probabilities to those in passing set
             idx = np.searchsorted(self.testable.index, passing.index)
             if self.name=="PE_prob":
-                cutoff1 = learn_cutoff(metric, self.probs[idx])
-                cutoff2 = learn_cutoff_V2(metric, self.probs[idx])
+                cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
+                cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
                 cutoffs[feature] = min([cutoff1,cutoff2])
             else:
-                cutoffs[feature] = learn_cutoff(metric, self.probs[idx])
+                cutoffs[feature] = learn_cutoff_dist(metric, self.probs[idx])
 
         self.cutoffs = pd.DataFrame.from_dict({'cutoff': cutoffs},
                                               orient='columns')\
@@ -168,7 +167,7 @@ class RandomForest:
 
         self.probs = self.testable.prob.values
 
-def learn_cutoff(metric, probs):
+def learn_cutoff_dist(metric, probs):
     preds = metric.values
 
     # Pass/fail if greater/less than 0.5
@@ -190,7 +189,7 @@ def learn_cutoff(metric, probs):
 
     return thresh[best_idx]
 
-def learn_cutoff_V2(metric, probs,fdr_cff=.05):
+def learn_cutoff_fdr(metric, probs,fdr_cff=.05):
     preds = metric.values
 
     # Pass/fail if greater/less than 0.5

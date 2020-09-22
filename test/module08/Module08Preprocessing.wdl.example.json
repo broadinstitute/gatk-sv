@@ -1,0 +1,12 @@
+{
+  "Module08Preprocessing.gencode_annotation_gtf":      "gs://broad-sv-dev-data/module_tests/07/inputs/prepare/gencode.v29.annotation.gtf.gz",
+  "Module08Preprocessing.gencode_pc_transcripts_fa":   "gs://broad-sv-dev-data/module_tests/07/inputs/prepare/gencode.v29.pc_transcripts.fa.gz",
+  "Module08Preprocessing.gencode_pc_translations_fa":  "gs://broad-sv-dev-data/module_tests/07/inputs/prepare/gencode.v29.pc_translations.fa.gz",
+  "Module08Preprocessing.gencode_transcript_source":   "gs://broad-sv-dev-data/module_tests/07/inputs/prepare/gencode.v29.metadata.Transcript_source",
+
+  "Module08Preprocessing.promoter_window": 1000,
+
+  "Module08Preprocessing.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
+  "Module08Preprocessing.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd"
+}
+

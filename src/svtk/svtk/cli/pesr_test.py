@@ -311,6 +311,7 @@ def count_sr(argv):
             if coord == 'start':
                 pos, strand, chrom = record.pos, record.info['STRANDS'][0], record.chrom
             else:
+                # TODO: With a properly formatted VCF, should be using END2 instead of END here
                 pos, strand, chrom = record.stop, record.info['STRANDS'][1], record.info['CHR2']
 
             counts = srtest.load_counts(chrom, pos, strand)

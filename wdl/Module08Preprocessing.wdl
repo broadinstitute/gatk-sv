@@ -4,7 +4,7 @@ import "PrepareGencode.wdl" as pg
 # import "PrepareNoncoding.wdl" as pn
 
 # Workflow for the preprocessing sub-module in Module07, its output will be used for the annotation sub-module
-workflow Module07Preprocessing {
+workflow Module08Preprocessing {
   input {
     
     ### args for PrepareGencode
