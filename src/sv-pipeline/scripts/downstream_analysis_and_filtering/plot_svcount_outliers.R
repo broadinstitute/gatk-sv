@@ -12,6 +12,8 @@ library(optparse)
 option_list <- list(
   make_option(c("-i","--input"), type="character", 
               help="stat table with count of SVs per sample"),
+  make_option(c("-s","--svcount"), type="character", 
+              help="stat table with count of overall SVs sites"),
   make_option(c("-m","--max"), type="integer",
               help="max number of IQR to plot")
  )
@@ -24,18 +26,20 @@ args <- parse_args(OptionParser(usage="%prog INFILE OUTDIR",
 
 opts <- args$options
 dat=read.table(opts$input, header = T)
+all_counts=read.table(opts$svcount)
+all_counts=all_counts[all_counts[,1]>0,]
 output_prefix = gsub('.txt','',opts$input)
 
 svtype=unique(dat$svtype)
 x_max= opts$max
 for(i in svtype){
+  pdf(paste(output_prefix,'.',i,'.pdf',sep=''))
 
   tmp = dat[dat$svtype==i,]
   quantil_list=quantile(tmp$count)
   iqr = IQR(tmp$count)
-  
-  pdf(paste(output_prefix,'.',i,'.pdf',sep=''))
-  par(fig=c(0,1,.4,1))
+
+  par(fig=c(0,1,.6,1))
   par(mar=c(2,4,2,4))
   plot(c(0,x_max), c(max(min(tmp$count), quantil_list[2]-x_max*iqr), min(max(tmp$count),quantil_list[4]+x_max*iqr) ), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = 'Count of SVs', las=2, xaxt='n', main=i)
   axis(1)
@@ -66,11 +70,18 @@ for(i in svtype){
     sample_counts[rec,2]=nrow(tmp2)
   }
   
-  par(fig=c(0,1,0,.4),new=T)
-  par(mar=c(4,4,2,4), new=T)
-  plot(c(0,x_max), c(min(sample_counts[,2]),max(sample_counts[,2])), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = '# samples kept', las=2, xaxt='n')
+  par(fig=c(0,1,.3,.6), new=T)
+  tmp = all_counts[all_counts[,4]==i,]
+  plot(c(0,x_max), c(min(tmp[,3]),max(tmp[,3])), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = '# SV Sites', las=2, xaxt='n')
   axis(1)
-  lines(sample_counts[,1],sample_counts[,2], pch=18, lwd=2, type='b', cex=2)
+  lines(tmp[,1],tmp[,3], pch=18, lwd=2, type='b', cex=2)
+  
+  par(fig=c(0,1,0,.3),new=T)
+  par(mar=c(4,4,2,4), new=T)
+  plot(c(0,x_max), c(min(tmp[,2]),max(tmp[,2])), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = '# Outlier Samples', las=2, xaxt='n')
+  lines(tmp[,1],tmp[,2], pch=18, lwd=2, type='b', cex=2)
+  axis(1)
+  lines(tmp[,1],tmp[,2], pch=18, lwd=2, type='b', cex=2)
   dev.off()
 }
 
