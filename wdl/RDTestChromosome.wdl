@@ -172,24 +172,31 @@ task RDTest {
   }
   command <<<
 
-    set -eu
-    start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) ))
-    end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) ))
-    chrom=$(cut -f1 ~{bed} | head -n1)
-    set -o pipefail
+    set -euo pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{coveragefile} \
-      -L "${chrom}:${start}-${end}" \
-      -O local.RD.txt.gz
+    if [ -s ~{bed} ]; then
+      set +o pipefail
+      start=$(( $(cut -f2 ~{bed} | sort -k1,1n | head -n1) ))
+      end=$(( $(cut -f3 ~{bed} | sort -k1,1n | tail -n1) ))
+      chrom=$(cut -f1 ~{bed} | head -n1)
+      set -o pipefail
+
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{coveragefile} \
+        -L "${chrom}:${start}-${end}" \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
 
     tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -n ~{prefix} \
-      -c local.RD.txt.gz\
+      -c local.RD.txt.gz \
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{include_list} \

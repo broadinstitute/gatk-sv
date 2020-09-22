@@ -228,12 +228,17 @@ task PETest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --skip-header \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{discfile} \
-      -L region.merged.bed \
-      -O local.PE.txt.gz
+    if [ -s region.merged.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --skip-header \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{discfile} \
+        -L region.merged.bed \
+        -O local.PE.txt.gz
+    else
+      touch local.PE.txt
+      bgzip local.PE.txt
+    fi
 
     tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats

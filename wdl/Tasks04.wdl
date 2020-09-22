@@ -332,11 +332,16 @@ task RDTestGenotype {
 
     set -euo pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{coveragefile} \
-      -L ~{bed} \
-      -O local.RD.txt.gz
+    if [ -s ~{bed} ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{coveragefile} \
+        -L ~{bed} \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
 
     tabix -p bed local.RD.txt.gz
 
@@ -415,17 +420,19 @@ task CountPE {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{discfile} \
-      -L region.merged.bed \
-      -O PE.txt
+    if [ -s region.merged.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{discfile} \
+        -L region.merged.bed \
+        -O local.PE.txt.gz
+    else
+      touch local.PE.txt
+      bgzip local.PE.txt
+    fi
 
-    # GATK does not block compress
-    bgzip PE.txt
-
-    tabix -s1 -b2 -e2 PE.txt.gz
-    svtk count-pe --index PE.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} PE.txt.gz ~{prefix}.pe_counts.txt
+    tabix -s1 -b2 -e2 local.PE.txt.gz
+    svtk count-pe -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
   >>>
@@ -485,17 +492,19 @@ task CountSR {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -i region.sorted.bed > region.merged.bed
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{splitfile} \
-      -L region.merged.bed \
-      -O SR.txt
+    if [ -s region.merged.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{splitfile} \
+        -L region.merged.bed \
+        -O local.SR.txt.gz
+    else
+      touch local.SR.txt
+      bgzip local.SR.txt
+    fi
 
-    # GATK does not block compress
-    bgzip SR.txt
-
-    tabix -s1 -b2 -e2 SR.txt.gz
-    svtk count-sr --index SR.txt.gz.tbi -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} SR.txt.gz ~{prefix}.sr_counts.txt
+    tabix -s1 -b2 -e2 local.SR.txt.gz
+    svtk count-sr -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt
 

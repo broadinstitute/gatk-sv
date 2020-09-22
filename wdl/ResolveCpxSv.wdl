@@ -355,12 +355,16 @@ task ResolvePrep {
         ((++DISC_FILE_NUM))
         SLICE="disc"$DISC_FILE_NUM"shard"
 
-        java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-              --skip-header \
-              --sequence-dictionary ~{ref_dict} \
-              --evidence-file $GS_PATH_TO_DISC_FILE \
-              -L regions.bed \
-              -O ${SLICE}.PE.txt
+        if [ -s regions.bed ]; then
+          java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+                --skip-header \
+                --sequence-dictionary ~{ref_dict} \
+                --evidence-file $GS_PATH_TO_DISC_FILE \
+                -L regions.bed \
+                -O ${SLICE}.PE.txt
+        else
+          touch ${SLICE}.PE.txt
+        fi
 
         cat ${SLICE}.PE.txt \
           | awk '{ if ($1==$4 && $3==$6) print }' \

@@ -113,22 +113,28 @@ task BAFTest {
   }
   command <<<
 
-    set -euxo pipefail
+    set -euo pipefail
 
     echo -e "sample\tgroup\tbatch" > batch.key
     awk -v batch=~{batch} -v OFS="\t" '{print $1, $1, batch}' ~{write_lines(samples)} >> batch.key
-    set +o pipefail
-    start=$(cut -f2 ~{bed} | sort -k1,1n | head -n1)
-    end=$(cut -f3 ~{bed} | sort -k1,1n | tail -n1)
-    chrom=$(cut -f1 ~{bed} | head -n1)
-    set -o pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --skip-header \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{baf_metrics} \
-      -L "${chrom}:${start}-${end}" \
-      -O local.BAF.txt.gz
+    if [ -s ~{bed} ]; then
+      set +o pipefail
+      start=$(cut -f2 ~{bed} | sort -k1,1n | head -n1)
+      end=$(cut -f3 ~{bed} | sort -k1,1n | tail -n1)
+      chrom=$(cut -f1 ~{bed} | head -n1)
+      set -o pipefail
+
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --skip-header \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{baf_metrics} \
+        -L "${chrom}:${start}-${end}" \
+        -O local.BAF.txt.gz
+    else
+      touch local.BAF.txt
+      bgzip local.BAF.txt
+    fi
 
     tabix -s1 -b2 -e2 local.BAF.txt.gz
     svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics

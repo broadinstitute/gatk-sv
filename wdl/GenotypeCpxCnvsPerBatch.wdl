@@ -248,11 +248,16 @@ task RdTestGenotype {
 
     set -o pipefail
 
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-      --sequence-dictionary ~{ref_dict} \
-      --evidence-file ~{coverage_file} \
-      -L merged.bed \
-      -O local.RD.txt.gz
+    if [ -s merged.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{coverage_file} \
+        -L merged.bed \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
 
     tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
