@@ -14,6 +14,8 @@ option_list <- list(
               help="stat table with count of SVs per sample"),
   make_option(c("-s","--svcount"), type="character", 
               help="stat table with count of overall SVs sites"),
+  make_option(c("-o","--outputpath"), type="character", 
+              help="output folder for all plots"),  
   make_option(c("-m","--max"), type="integer",
               help="max number of IQR to plot")
  )
@@ -33,7 +35,7 @@ output_prefix = gsub('.txt','',opts$input)
 svtype=unique(dat$svtype)
 x_max= opts$max
 for(i in svtype){
-  pdf(paste(output_prefix,'.',i,'.pdf',sep=''))
+  pdf(paste(outputpath,'/',output_prefix,'.',i,'.pdf',sep=''))
 
   tmp = dat[dat$svtype==i,]
   quantil_list=quantile(tmp$count)
