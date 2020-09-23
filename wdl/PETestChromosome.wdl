@@ -201,22 +201,28 @@ task PETest {
     sort -k1,1 -k2,2n region.bed > region.sorted.bed
     bedtools merge -d 16384 -i region.sorted.bed > region.merged.bed
 
-    # Temporary workaround for corrupted tabix downloads
-    x=0
-    while [ $x -lt ~{tabix_retries} ]
-    do
-      # Download twice
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_1.txt.gz
-      GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_2.txt.gz
-      # Done if the downloads were identical, otherwise retry
-      cmp --silent PE_1.txt.gz PE_2.txt.gz && break       
-      x=$(( $x + 1))
-    done
-    echo "PE-tabix retry:" $x
-    cmp --silent PE_1.txt.gz PE_2.txt.gz || exit 1
+    if [ -s region.merged.bed ]; then
+      # Temporary workaround for corrupted tabix downloads
+      x=0
+      while [ $x -lt ~{tabix_retries} ]
+      do
+        # Download twice
+        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_1.txt.gz
+        GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` tabix -R region.merged.bed ~{discfile} | bgzip -c > PE_2.txt.gz
+        # Done if the downloads were identical, otherwise retry
+        cmp --silent PE_1.txt.gz PE_2.txt.gz && break
+        x=$(( $x + 1))
+      done
+      echo "PE-tabix retry:" $x
+      cmp --silent PE_1.txt.gz PE_2.txt.gz || exit 1
     
-    mv PE_1.txt.gz PE.txt.gz
-    tabix -b 2 -e 2 PE.txt.gz
+      mv PE_1.txt.gz PE.txt.gz
+      tabix -b 2 -e 2 PE.txt.gz
+    else
+      touch PE.txt
+      bgzip PE.txt
+      tabix -b 2 -e 2 PE.txt.gz
+    fi
 
     svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} PE.txt.gz ~{prefix}.stats
   

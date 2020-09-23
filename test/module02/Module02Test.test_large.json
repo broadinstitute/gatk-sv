@@ -114,7 +114,7 @@
   "Module02Test.Module02Metrics.linux_docker" : "ubuntu:18.04",
   "Module02Test.Module02Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
-  "Module02Test.Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
+  "Module02Test.Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
   "Module02Test.Module02.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "Module02Test.Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module02Test.Module02.sv_base_docker": "gatksv/sv-base:b3af2e3",

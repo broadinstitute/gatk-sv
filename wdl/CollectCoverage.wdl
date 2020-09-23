@@ -51,6 +51,7 @@ task CollectCounts {
     gatk --java-options "-Xmx~{command_mem_mb}m" CollectReadCounts \
       -L ~{intervals} \
       --input ~{bam} \
+      --read-index ~{bam_idx} \
       --reference ~{ref_fasta} \
       --format TSV \
       --interval-merging-rule OVERLAPPING_ONLY \

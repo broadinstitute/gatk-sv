@@ -1,5 +1,5 @@
 {
-  "Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
+  "Module02.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
   "Module02.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "Module02.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module02.sv_base_docker": "gatksv/sv-base:b3af2e3",

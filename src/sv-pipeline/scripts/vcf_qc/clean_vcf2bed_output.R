@@ -77,7 +77,11 @@ if(is.null(nsamp)){
 dat$observations <- sapply(dat$samples,function(samples){
   length(unique(unlist(strsplit(as.character(samples),split=","))))
 })
-dat$carrierFreq <- dat$observations/nsamp
+if (nrow(dat) > 0) {
+  dat$carrierFreq <- dat$observations/nsamp
+} else {
+  dat$carrierFreq <- numeric()
+}
 if(any(dat$frequency > 1)){
   stop("Incorrect number of samples supplied; some carrier frequencies > 1")
 }

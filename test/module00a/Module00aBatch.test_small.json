@@ -18,7 +18,7 @@
 
   "Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
   "Module00aBatch.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00aBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_external_af_annotation_565a1e",
+  "Module00aBatch.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
   "Module00aBatch.manta_docker": "gatksv/manta:8645aa",
   "Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
   "Module00aBatch.wham_docker": "gatksv/wham:8645aa",

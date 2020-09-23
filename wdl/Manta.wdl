@@ -28,7 +28,7 @@ import "Structs.wdl"
 workflow Manta {
   input {
     File bam_or_cram_file
-    File? bam_or_cram_index
+    File bam_or_cram_index
     String sample_id
     File reference_fasta
     File? reference_index
@@ -81,7 +81,7 @@ workflow Manta {
 task RunManta {
   input {
     File bam_or_cram_file
-    File? bam_or_cram_index
+    File bam_or_cram_index
     String sample_id
     File reference_fasta
     File? reference_index
@@ -94,7 +94,8 @@ task RunManta {
   }
 
   Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
-  File bam_or_cram_index_file = select_first([bam_or_cram_index, if is_bam then bam_or_cram_file + ".bai" else bam_or_cram_file + ".crai"])
+  String bam_ext = if is_bam then ".bam" else ".cram"
+  String index_ext = if is_bam then ".bai" else ".crai"
   File ref_index = select_first([reference_index, reference_fasta + ".fai"])
   File bed_index = select_first([region_bed_index, region_bed + ".tbi"])
 
@@ -117,12 +118,14 @@ task RunManta {
   # ensure there's sufficient disk space
   Float disk_overhead = 10.0
   Float bam_or_cram_size = size(bam_or_cram_file, "GiB")
-  Float bam_or_cram_index_size = size(bam_or_cram_index_file, "GiB")
+  Float bam_or_cram_index_size = size(bam_or_cram_index, "GiB")
   Float ref_size = size(reference_fasta, "GiB")
   Float ref_index_size = size(ref_index, "GiB")
   Float region_bed_size = size(region_bed, "GiB")
   Float region_bed_index_size = size(region_bed_index, "GiB")
   Int vm_disk_size = ceil(bam_or_cram_size + bam_or_cram_index_size + ref_size + ref_index_size + region_bed_size + region_bed_index_size + disk_overhead)
+
+  String expected_index_name = basename(bam_or_cram_file) + index_ext
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu_use,
@@ -148,9 +151,13 @@ task RunManta {
       rm ./runWorkflow.py
     fi
 
+    ln -s ~{bam_or_cram_file} sample~{bam_ext}
+    ln -s ~{bam_or_cram_index} sample~{bam_ext}~{index_ext}
+
+
     # prepare the analysis job
     /usr/local/bin/manta/bin/configManta.py \
-      --bam ~{bam_or_cram_file} \
+      --bam sample~{bam_ext} \
       --referenceFasta ~{reference_fasta} \
       --runDir . \
       --callRegions ~{region_bed}

@@ -209,11 +209,11 @@ sort -Vk1,1 -k2,2n -k3,3n >> \
 ${QCTMP}/vcf2bed_cleaned.bed
 #Run Rscript to clean VCF stats
 ${BIN}/clean_vcf2bed_output.R \
--N ${nsamp} \
-${QCTMP}/vcf2bed_cleaned.bed \
-${QCTMP}/genotype_counts_per_SV.txt \
-${SVTYPES} \
-${QCTMP}/vcf2bed_cleaned.simple.bed
+  -N ${nsamp} \
+  ${QCTMP}/vcf2bed_cleaned.bed \
+  ${QCTMP}/genotype_counts_per_SV.txt \
+  ${SVTYPES} \
+  ${QCTMP}/vcf2bed_cleaned.simple.bed
 #Reformat cleaned VCF stats
 head -n1 ${QCTMP}/vcf2bed_cleaned.simple.bed | awk '{ print "#"$0 }' > \
 ${QCTMP}/vcf2bed_cleaned.simple.bed2
