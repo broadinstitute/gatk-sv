@@ -1,4 +1,8 @@
-# To obtaina list of likely mosaic variants that failed RF due to separation only 
+##########################
+## EXPERIMENTAL WORKFLOW
+##########################
+
+# To obtains list of likely mosaic variants that failed RF due to separation only
 
 version 1.0
 

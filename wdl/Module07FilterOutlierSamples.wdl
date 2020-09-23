@@ -1,3 +1,7 @@
+##########################
+## EXPERIMENTAL WORKFLOW
+##########################
+
 # Based on : https://portal.firecloud.org/#methods/Talkowski-SV/filter_svcount_outlier_samples/17/wdl
 
 version 1.0 

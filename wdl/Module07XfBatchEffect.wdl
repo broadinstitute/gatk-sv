@@ -1,11 +1,8 @@
-##########################################################################################
+##########################
+## EXPERIMENTAL WORKFLOW
+##########################
 
 ## Base script:   https://portal.firecloud.org/#workspaces/gnomad-v3-sv/1KGP_2504/method-configs/Talkowski-SV/check_batch_effects_CMC_copy
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 
 version 1.0
 
