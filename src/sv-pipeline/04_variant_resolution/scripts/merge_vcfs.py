@@ -117,12 +117,13 @@ def main():
     vcfs = [pysam.VariantFile(f) for f in fnames]
 
     # Copy base VCF header without samples
-    args.fout.write('\t'.join(str(vcfs[0].header).split('\t')[:9]) + '\n')
+    args.fout.write('\t'.join(str(vcfs[0].header).split('\t')[:11]) + '\n')
 
-    # Write out sites-only records for dedupped variants
+    # Write out sites-only records for dedupped variants + 2 dummy GTs 
+    # including one 0/1 so svtk bedcluster doesn't break & clusters only on variants not samples
     for record in merge_records(vcfs):
         base = '\t'.join(str(record).split('\t')[:8])
-        args.fout.write(base + '\tGT\n')
+        args.fout.write(base + '\tGT\t0/1\t0/0\n')
 
     args.fout.close()
 
