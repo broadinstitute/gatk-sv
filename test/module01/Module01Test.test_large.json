@@ -119,10 +119,10 @@
   "Module01Test.Module01Metrics.baseline_wham_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.wham.vcf.gz",
   "Module01Test.Module01Metrics.baseline_melt_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.melt.vcf.gz",
 
-  "Module01Test.Module01Metrics.Module01Metrics.depth_metrics.mem_gib" : 3.75,
-  "Module01Test.Module01Metrics.Module01Metrics.manta_metrics.mem_gib" : 3.75,
-  "Module01Test.Module01Metrics.Module01Metrics.melt_metrics.mem_gib" : 3.75,
-  "Module01Test.Module01Metrics.Module01Metrics.wham_metrics.mem_gib" : 3.75,
+  "Module01Test.Module01Metrics.depth_metrics.mem_gib" : 3.75,
+  "Module01Test.Module01Metrics.manta_metrics.mem_gib" : 3.75,
+  "Module01Test.Module01Metrics.melt_metrics.mem_gib" : 3.75,
+  "Module01Test.Module01Metrics.wham_metrics.mem_gib" : 3.75,
 
   "Module01Test.Module01.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
   "Module01Test.Module01.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
