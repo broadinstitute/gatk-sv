@@ -4,6 +4,10 @@ import "GATKSVPipelineSingleSample.wdl" as module
 import "TestUtils.wdl" as utils
 
 workflow GATKSVPipelineSingleSampleTest {
+  meta {
+    allowNestedInputs: true
+  }
+
   input {
     String test_name
     String case_sample

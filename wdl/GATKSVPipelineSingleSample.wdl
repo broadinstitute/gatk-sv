@@ -22,6 +22,10 @@ import "Structs.wdl"
 # Runs Modules 00abc, 01, 03.MergePesrVcfs, 04, 05/06
 
 workflow GATKSVPipelineSingleSample {
+  meta {
+    allowNestedInputs: true
+  }
+
   input {
     # Batch info
     String batch

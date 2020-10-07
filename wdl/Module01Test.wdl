@@ -5,6 +5,10 @@ import "Module01Metrics.wdl" as metrics
 import "TestUtils.wdl" as utils
 
 workflow Module01Test {
+  meta {
+    allowNestedInputs: true
+  }
+
   input {
     String test_name
     Array[String] samples

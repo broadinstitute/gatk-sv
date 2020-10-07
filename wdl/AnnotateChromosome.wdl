@@ -120,8 +120,8 @@ task AnnotateIntervals {
       ~{vcf} \
       ~{prefix}.~{intervals_set}.vcf
     
-    orig=$( zcat ~{vcf} | cut -f1 | grep -cv "^#" )
-    new=$( cut -f1 ~{prefix}.~{intervals_set}.vcf | grep -cv "^#" )
+    orig=$( zcat ~{vcf} | cut -f1 | grep -cv "^#" || true )
+    new=$( cut -f1 ~{prefix}.~{intervals_set}.vcf | grep -cv "^#" || true )
     
     if [ "$new" -ne "$orig" ]; then
       echo "ANNOTATED VCF DOES NOT HAVE THE SAME NUMBER OF RECORDS AS INPUT VCF ($new vs $orig)"
@@ -183,8 +183,8 @@ task MergeAnnotations {
     bgzip ~{prefix}.annotated.vcf
     tabix ~{prefix}.annotated.vcf.gz
     
-    orig=$( zcat ~{vcf} | cut -f1 | grep -cv "^#" )
-    new=$( zcat ~{prefix}.annotated.vcf.gz | cut -f1 | grep -cv "^#")
+    orig=$( zcat ~{vcf} | cut -f1 | grep -cv "^#" || true)
+    new=$( zcat ~{prefix}.annotated.vcf.gz | cut -f1 | grep -cv "^#" || true)
     if [ "$new" -ne "$orig" ]; then
       echo "ANNOTATED VCF DOES NOT HAVE THE SAME NUMBER OF RECORDS AS INPUT VCF ($new vs $orig)"
       exit 1
