@@ -18,7 +18,8 @@ workflow MergeCohortVcfs {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_merge_pesr
     RuntimeAttr? runtime_attr_merge_depth
-    RuntimeAttr? runtime_attr_cohort_sort_combined
+    RuntimeAttr? runtime_attr_cohort_sort
+    RuntimeAttr? runtime_attr_cohort_combined
     RuntimeAttr? runtime_attr_cluster_dups_combined
   }
 
@@ -39,17 +40,25 @@ workflow MergeCohortVcfs {
       runtime_attr_override = runtime_attr_merge_depth
   }
 
-  call MakeCohortSortCombinedBed {
+  call MakeCohortSortBed {
     input:
       vcfs = depth_vcfs,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_cohort_sort_combined
+      runtime_attr_override = runtime_attr_cohort_sort
+  }
+
+  call MakeCohortCombinedBed {
+    input:
+      cohort_sort = MakeCohortSortBed.cohort_sort,
+      cohort = cohort,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_cohort_combined
   }
 
   call MakeClusterDupsCombinedBed {
     input:
-      cohort_combined = MakeCohortSortCombinedBed.cohort_combined,
+      cohort_combined = MakeCohortCombinedBed.cohort_combined,
       cohort_cluster = MergeDepthVcfs.cluster,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -61,8 +70,8 @@ workflow MergeCohortVcfs {
   output {
     File cohort_pesr_vcf = MergePESRVcfs.merged_vcf
     File cohort_depth_vcf = MergeDepthVcfs.merged_vcf
-    File cohort_combined = MakeCohortSortCombinedBed.cohort_combined
-    File cohort_sort = MakeCohortSortCombinedBed.cohort_sort
+    File cohort_combined = MakeCohortCombinedBed.cohort_combined
+    File cohort_sort = MakeCohortSortBed.cohort_sort
     File lookup = MakeClusterDupsCombinedBed.lookup
     File cluster_combined = MakeClusterDupsCombinedBed.cluster_combined
   }
@@ -119,8 +128,8 @@ task MergeDepthVcfs {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 16, 
-    disk_gb: 100,
+    mem_gb: 3.75, 
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -134,15 +143,14 @@ task MergeDepthVcfs {
   command <<<
 
     set -euxo pipefail
-    TIMEFORMAT='real: %3lR | user: %3lU | sys: %3lS'
-    time /opt/sv-pipeline/04_variant_resolution/scripts/merge_vcfs.py ~{write_lines(vcfs)} ~{prefix}.vcf
-    time rm ~{sep=' ' vcfs}
-    time vcf-sort -c ~{prefix}.vcf | bgzip -c > ~{prefix}.vcf.gz
-    time svtk vcf2bed ~{prefix}.vcf.gz ~{prefix}.vcf.gz.bed   # vcf2bed merge_vcfs, non_duplicated
-    fgrep DEL ~{prefix}.vcf.gz.bed > del.bed  # del non duplicated
-    fgrep DUP ~{prefix}.vcf.gz.bed > dup.bed  # dup non duplicated
-    time svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
-    time svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
+    /opt/sv-pipeline/04_variant_resolution/scripts/merge_vcfs.py ~{write_lines(vcfs)} ~{prefix}.vcf
+    rm ~{sep=' ' vcfs}
+    vcf-sort -c ~{prefix}.vcf | bgzip -c > ~{prefix}.vcf.gz
+    svtk vcf2bed ~{prefix}.vcf.gz ~{prefix}.vcf.gz.bed   # vcf2bed merge_vcfs, non_duplicated
+    # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
+    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' ~{prefix}.vcf.gz.bed 
+    svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
+    svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
     cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.cluster.bed #combine clusterd non-duplicated
   >>>
   runtime {
@@ -156,7 +164,7 @@ task MergeDepthVcfs {
   }
 }
 
-task MakeCohortSortCombinedBed {
+task MakeCohortSortBed {
   input {
     Array[File] vcfs
     String cohort
@@ -166,8 +174,8 @@ task MakeCohortSortCombinedBed {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 16, 
-    disk_gb: 100,
+    mem_gb: 3.75, 
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -176,21 +184,55 @@ task MakeCohortSortCombinedBed {
 
   output {
     File cohort_sort = "~{cohort}.cohort.sort.bed"
-    File cohort_combined="~{cohort}.cohort.combined.bed"
   }
   command <<<
 
     set -euxo pipefail
-    TIMEFORMAT='real: %3lR | user: %3lU | sys: %3lS'
     while read vcf; do
         local_vcf=$(basename $vcf)
         svtk vcf2bed --no-header $vcf $local_vcf.bed   # for each depth vcf make bed, duplicated
     done < ~{write_lines(vcfs)}
     rm ~{sep=' ' vcfs}
     cat *.bed | sort -k1,1V -k2,2n -k3,3n > ~{cohort}.cohort.sort.bed # concat raw depth vcf, duplicated
-    time python3 <<CODE
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task MakeCohortCombinedBed {
+  input {
+    File cohort_sort
+    String cohort
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File cohort_combined="~{cohort}.cohort.combined.bed"
+  }
+  command <<<
+
+    set -euxo pipefail
+    python3 <<CODE
     varID={}
-    with open("~{cohort}.cohort.sort.bed",'r') as f: # From the depth cohort bed, a dictionary of all duplicate variants and their samples
+    with open("~{cohort_sort}",'r') as f: # From the depth cohort bed, a dictionary of all duplicate variants and their samples
         for line in f:
             dat=line.rstrip().split('\t')
             samples=dat[-1].split(",")
@@ -233,8 +275,8 @@ task MakeClusterDupsCombinedBed {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 16, 
-    disk_gb: 100,
+    mem_gb: 6, 
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -248,8 +290,7 @@ task MakeClusterDupsCombinedBed {
   command <<<
 
     set -euxo pipefail
-    TIMEFORMAT='real: %3lR | user: %3lU | sys: %3lS'
-    time python3 <<CODE
+    python3 <<CODE
     samp={}
     var={}
     with open("~{cohort_combined}","r") as f: # for EACH variant ID, a list of duplicate variants and samples

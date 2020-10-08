@@ -47,7 +47,8 @@ def dedup_records(records):
     curr_record = records[0]
     for record in records[1:]:
         if records_match(curr_record, record):
-            # keep more informative ALT field
+            # keep more informative ALT field, assumed to be the one with more colons
+            # ex: <INS:ME:ALU> kept over <INS>
             curr_alt = curr_record.alts[0]
             new_alt = record.alts[0]
             if (curr_alt.startswith('<') and curr_alt.endswith('>') and new_alt.startswith('<') and new_alt.endswith('>') and
