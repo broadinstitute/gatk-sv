@@ -167,6 +167,7 @@ task PETest {
     String prefix
     Int tabix_retries
     String sv_pipeline_docker
+    Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
   }
 
@@ -179,10 +180,15 @@ task PETest {
     }
   }
 
+  Int disk_gb = disk_gb_baseline + ceil(
+                                      size([vcf, medianfile, include_list], "GiB")
+                                      + 2 * size([discfile, discfile_idx], "GiB")
+                                   )
+
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -193,7 +199,7 @@ task PETest {
     File stats = "${prefix}.stats"
   }
   command <<<
- 
+
     set -euo pipefail
     svtk vcf2bed --split-bnd --no-header ~{vcf} test.bed
     awk -v OFS="\t" '{if ($2-~{window}>0){print $1,$2-~{window},$2+~{window}}else{print $1,0,$2+~{window}}}' test.bed  >> region.bed
@@ -215,7 +221,6 @@ task PETest {
       done
       echo "PE-tabix retry:" $x
       cmp --silent PE_1.txt.gz PE_2.txt.gz || exit 1
-    
       mv PE_1.txt.gz PE.txt.gz
       tabix -b 2 -e 2 PE.txt.gz
     else
@@ -225,7 +230,6 @@ task PETest {
     fi
 
     svtk pe-test -o ~{window} --index PE.txt.gz.tbi ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} PE.txt.gz ~{prefix}.stats
-  
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

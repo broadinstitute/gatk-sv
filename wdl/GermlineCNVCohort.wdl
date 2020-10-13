@@ -273,22 +273,21 @@ workflow CNVGermlineCohortWorkflow {
         }
     }
 
-    call CNVTasks.BundlePostprocessingInvariants {
-        input:
-            calls_tars = GermlineCNVCallerCohortMode.gcnv_calls_tar,
-            model_tars = gcnv_model_tars,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_bundle
-    }
+    Array[Array[File]] call_tars_sample_by_shard = transpose(GermlineCNVCallerCohortMode.gcnv_call_tars)
 
     scatter (sample_index in range(length(counts))) {
-        call CNVTasks.BundledPostprocessGermlineCNVCalls {
+        call CNVTasks.PostprocessGermlineCNVCalls {
             input:
-                invariants_tar = BundlePostprocessingInvariants.bundle_tar,
                 entity_id = count_entity_ids[sample_index],
+                gcnv_calls_tars = call_tars_sample_by_shard[sample_index],
+                gcnv_model_tars = GermlineCNVCallerCohortMode.gcnv_model_tar,
+                calling_configs = GermlineCNVCallerCohortMode.calling_config_json,
+                denoising_configs = GermlineCNVCallerCohortMode.denoising_config_json,
+                gcnvkernel_version = GermlineCNVCallerCohortMode.gcnvkernel_version_json,
+                sharded_interval_lists = GermlineCNVCallerCohortMode.sharded_interval_list,
+                contig_ploidy_calls_tar = DetermineGermlineContigPloidyCohortMode.contig_ploidy_calls_tar,
                 allosomal_contigs = allosomal_contigs,
                 ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
-                contig_ploidy_calls_tar = DetermineGermlineContigPloidyCohortMode.contig_ploidy_calls_tar,
                 sample_index = sample_index,
                 gatk4_jar_override = gatk4_jar_override,
                 gatk_docker = gatk_docker,
@@ -312,10 +311,11 @@ workflow CNVGermlineCohortWorkflow {
         Array[File] sample_contig_ploidy_calls_tars = ExplodePloidyCalls.sample_contig_ploidy_calls_tar
         File contig_ploidy_calls_tar = DetermineGermlineContigPloidyCohortMode.contig_ploidy_calls_tar
         Array[File] gcnv_model_tars = GermlineCNVCallerCohortMode.gcnv_model_tar
-        Array[File] gcnv_calls_tars = GermlineCNVCallerCohortMode.gcnv_calls_tar
+        Array[Array[File]] gcnv_calls_tars = call_tars_sample_by_shard
         Array[File] gcnv_tracking_tars = GermlineCNVCallerCohortMode.gcnv_tracking_tar
-        Array[File] genotyped_intervals_vcfs = BundledPostprocessGermlineCNVCalls.genotyped_intervals_vcf
-        Array[File] genotyped_segments_vcfs = BundledPostprocessGermlineCNVCalls.genotyped_segments_vcf
+        Array[File] genotyped_intervals_vcfs = PostprocessGermlineCNVCalls.genotyped_intervals_vcf
+        Array[File] genotyped_segments_vcfs = PostprocessGermlineCNVCalls.genotyped_segments_vcf
+        Array[File] denoised_copy_ratios = PostprocessGermlineCNVCalls.denoised_copy_ratios
     }
 }
 
@@ -541,9 +541,25 @@ task GermlineCNVCallerCohortMode {
             --caller-external-admixing-rate ~{default="1.00" caller_external_admixing_rate} \
             --disable-annealing ~{default="false" disable_annealing}
 
-        tar c -C ~{output_dir_}/~{cohort_entity_id}-tracking . | gzip -1 > case-gcnv-tracking-~{scatter_index}.tar.gz
-        tar c -C ~{output_dir_}/~{cohort_entity_id}-calls  . | gzip -1 > case-gcnv-calls-files-~{scatter_index}.tar.gz
-        tar c -C ~{output_dir_}/~{cohort_entity_id}-model  . | gzip -1 > case-gcnv-model-files-~{scatter_index}.tar.gz
+        tar c -C ~{output_dir_}/~{cohort_entity_id}-tracking . \
+            | gzip -1 \
+            > ~{cohort_entity_id}-gcnv-tracking-shard-~{scatter_index}.tar.gz
+        # these will be stored and used repeatedly, so compress them well
+        tar c -C ~{output_dir_}/~{cohort_entity_id}-model  . \
+            | gzip -9 \
+            > ~{cohort_entity_id}-gcnv-model-shard-~{scatter_index}.tar.gz
+
+        CURRENT_SAMPLE=0
+        NUM_SAMPLES=~{num_samples}
+        NUM_DIGITS=${#NUM_SAMPLES}
+        while [ $CURRENT_SAMPLE -lt $NUM_SAMPLES ]; do
+            CURRENT_SAMPLE_WITH_LEADING_ZEROS=$(printf "%0${NUM_DIGITS}d" $CURRENT_SAMPLE)
+            tar c -C ~{output_dir_}/~{cohort_entity_id}-calls/SAMPLE_$CURRENT_SAMPLE . \
+                | gzip -1 \
+                > ~{cohort_entity_id}-gcnv-calls-shard-~{scatter_index}-sample-$CURRENT_SAMPLE_WITH_LEADING_ZEROS.tar.gz
+
+            ((++CURRENT_SAMPLE))
+        done
     >>>
     runtime {
       cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -556,8 +572,12 @@ task GermlineCNVCallerCohortMode {
     }
 
     output {
-        File gcnv_calls_tar = "case-gcnv-calls-files-~{scatter_index}.tar.gz"
-        File gcnv_tracking_tar = "case-gcnv-tracking-~{scatter_index}.tar.gz"
-        File gcnv_model_tar = "case-gcnv-model-files-~{scatter_index}.tar.gz"
+        File gcnv_model_tar = "~{cohort_entity_id}-gcnv-model-shard-~{scatter_index}.tar.gz"
+        Array[File] gcnv_call_tars = glob("~{cohort_entity_id}-gcnv-calls-shard-~{scatter_index}-sample-*.tar.gz")
+        File gcnv_tracking_tar = "~{cohort_entity_id}-gcnv-tracking-shard-~{scatter_index}.tar.gz"
+        File calling_config_json = "~{output_dir_}/~{cohort_entity_id}-calls/calling_config.json"
+        File denoising_config_json = "~{output_dir_}/~{cohort_entity_id}-calls/denoising_config.json"
+        File gcnvkernel_version_json = "~{output_dir_}/~{cohort_entity_id}-calls/gcnvkernel_version.json"
+        File sharded_interval_list = "~{output_dir_}/~{cohort_entity_id}-calls/interval_list.tsv"
     }
 }

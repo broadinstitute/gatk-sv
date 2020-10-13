@@ -109,16 +109,16 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module05_06Test.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module05_06Test.Module05_06Metrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module05_06Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module05_06Test.Module05_06Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module05_06Test.Module05_06Metrics.linux_docker": "ubuntu:18.04",
   "Module05_06Test.Module05_06Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module05_06Test.Module05_06Metrics.baseline_final_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.resolved_regenotyped.vcf.gz",
   "Module05_06Test.Module05_06Metrics.baseline_cleaned_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.cleaned.vcf.gz",
 
-  "Module05_06Test.Module05_06Metrics.Module05_06Metrics.Final_VCF_Metrics.mem_gib" : "3.75",
-  "Module05_06Test.Module05_06Metrics.Module05_06Metrics.Cleaned_VCF_Metrics.mem_gib" : "3.75",
+  "Module05_06Test.Module05_06Metrics.Final_VCF_Metrics.mem_gib" : "3.75",
+  "Module05_06Test.Module05_06Metrics.Cleaned_VCF_Metrics.mem_gib" : "3.75",
 
   "Module05_06Test.Module05_06.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
   "Module05_06Test.Module05_06.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
@@ -159,8 +159,8 @@
   "Module05_06Test.Module05_06.max_shards_per_chrom": 100,
   "Module05_06Test.Module05_06.min_variants_per_shard": 30,
 
-  "Module05_06Test.Module05_06.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
-  "Module05_06Test.Module05_06.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
+  "Module05_06Test.Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
+  "Module05_06Test.Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
   "Module05_06Test.Module05_06.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
   "Module05_06Test.Module05_06.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
 

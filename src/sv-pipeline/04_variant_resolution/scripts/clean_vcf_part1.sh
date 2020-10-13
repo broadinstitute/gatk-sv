@@ -24,7 +24,7 @@ zcat $vcf \
   |tail -n -1 \
   |cut -f10- \
   |tr '\t' '\n' \
-  >whitelist.txt
+  > includelist.txt
 
 ##convert EV integer back into string##
 zcat $vcf \

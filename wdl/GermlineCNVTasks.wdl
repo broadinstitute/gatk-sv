@@ -242,7 +242,7 @@ task ExplodePloidyCalls {
       for (( i=0; i<~{num_samples}; i++ ))
       do
         sample_id=${sample_ids[$i]}
-        sample_no=`printf %03d $i`
+        sample_no=`printf %06d $i`
         tar -czf sample_${sample_no}.${sample_id}.contig_ploidy_calls.tar.gz -C calls/SAMPLE_${i} .
       done
     >>>
@@ -269,10 +269,16 @@ task BundlePostprocessingInvariants {
         RuntimeAttr? runtime_attr_override
     }
 
+    Int disk_gb_base = 10
+    Float files_size_gb = size(calls_tars, "GiB") + size(model_tars, "GiB")
+    # Usage factor takes into account that files sometimes sit on disk in both compressed and decompressed form
+    Float usage_factor = 10.0
+    Int disk_gb = disk_gb_base + ceil(usage_factor * files_size_gb)
+
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
-      mem_gb: 1.0,
-      disk_gb: 65,
+      mem_gb: 2.0,
+      disk_gb: disk_gb,
       boot_disk_gb: 10,
       preemptible_tries: 3,
       max_retries: 1
@@ -293,15 +299,21 @@ task BundlePostprocessingInvariants {
               awk '{print (NR-1)"\t"$0}' > file_pairs.sorted
         OIFS=$IFS
         IFS=$'\t'
+        NUM_PAIRS=$(($(wc -l < file_pairs.sorted)))
+        NUM_COMPLETED=0
         while read index calls_tar model_tar; do
+            printf "%s\t %d/%d pairs uncompressed\n" "$(date)" $NUM_COMPLETED $NUM_PAIRS
             mkdir -p out/CALLS_$index
             mkdir -p out/MODEL_$index
             tar xzf $calls_tar -C out/CALLS_$index
             tar xzf $model_tar -C out/MODEL_$index
             rm $calls_tar $model_tar
+            ((++NUM_COMPLETED))
         done < file_pairs.sorted
+        printf "%s\t %d/%d pairs uncompressed\n" "$(date)" $NUM_COMPLETED $NUM_PAIRS
         IFS=$OIFS
 
+        printf "Recompressing all pairs\n"
         tar c -C out . | gzip -1 > case-gcnv-postprocessing-invariants.tar.gz
         rm -Rf out
     >>>
@@ -333,10 +345,14 @@ task BundledPostprocessGermlineCNVCalls {
         RuntimeAttr? runtime_attr_override
     }
 
+    Int disk_gb_baseline = 10
+    Float disk_usage_factor = 10.0
+    Int disk_gb = disk_gb_baseline + ceil(disk_usage_factor * size([invariants_tar, contig_ploidy_calls_tar, gatk4_jar_override], "GiB"))
+
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 8.5,
-      disk_gb: 65,
+      disk_gb: disk_gb,
       boot_disk_gb: 10,
       preemptible_tries: 3,
       max_retries: 1
@@ -397,5 +413,112 @@ task BundledPostprocessGermlineCNVCalls {
     output {
         File genotyped_intervals_vcf = genotyped_intervals_vcf_filename
         File genotyped_segments_vcf = genotyped_segments_vcf_filename
+    }
+}
+
+
+task PostprocessGermlineCNVCalls {
+    input {
+        String entity_id
+        Array[File] gcnv_calls_tars
+        Array[File] gcnv_model_tars
+        Array[File] calling_configs
+        Array[File] denoising_configs
+        Array[File] gcnvkernel_version
+        Array[File] sharded_interval_lists
+        File contig_ploidy_calls_tar
+        Array[String]? allosomal_contigs
+        Int ref_copy_number_autosomal_contigs
+        Int sample_index
+        File? gatk4_jar_override
+        String gatk_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    Int disk_gb_baseline = 10
+    Float disk_usage_factor = 10.0
+    Int disk_gb = disk_gb_baseline + ceil(disk_usage_factor * (
+        size(gcnv_calls_tars, "GiB") + size(gcnv_model_tars, "GiB") + size(calling_configs, "GiB") +
+        size(denoising_configs, "GiB") + size(gcnvkernel_version, "GiB") +
+        size(sharded_interval_lists, "GiB") + size(contig_ploidy_calls_tar, "GiB")
+    ))
+
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: 8.5,
+      disk_gb: disk_gb,
+      boot_disk_gb: 10,
+      preemptible_tries: 3,
+      max_retries: 1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+    Int command_mem_mb = ceil(mem_gb * 1000 - 500)
+
+    String genotyped_intervals_vcf_filename = "genotyped-intervals-~{entity_id}.vcf.gz"
+    String genotyped_segments_vcf_filename = "genotyped-segments-~{entity_id}.vcf.gz"
+    String denoised_copy_ratios_filename ="denoised_copy_ratios-~{entity_id}.tsv"
+    Boolean allosomal_contigs_specified = defined(allosomal_contigs)
+
+    command <<<
+        set -euo pipefail
+
+        export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
+
+        # untar calls to CALLS_0, CALLS_1, etc directories and build the command line
+        # also copy over shard config and interval files
+        touch calls_and_model_args.txt
+        CALL_INDEX=0
+        paste ~{write_lines(gcnv_calls_tars)} ~{write_lines(calling_configs)} ~{write_lines(denoising_configs)} \
+              ~{write_lines(gcnvkernel_version)} ~{write_lines(sharded_interval_lists)} ~{write_lines(gcnv_model_tars)} \
+            | while read GCNV_CALLS_TAR CALLING_CONFIG DENOISING_CONFIG GCNVKERNEL_VERSION SHARDED_INTERVAL_LIST GCNV_MODEL_TAR; do
+                CALL_DIR="CALLS_$CALL_INDEX"
+                mkdir -p $CALL_DIR/SAMPLE_~{sample_index}
+                tar xzf $GCNV_CALLS_TAR -C $CALL_DIR/SAMPLE_~{sample_index}
+                ln -rs $CALLING_CONFIG $CALL_DIR
+                ln -rs $DENOISING_CONFIG $CALL_DIR
+                ln -rs $GCNVKERNEL_VERSION $CALL_DIR
+                ln -rs $SHARDED_INTERVAL_LIST $CALL_DIR
+                echo "--calls-shard-path $CALL_DIR" >> calls_and_model_args.txt
+
+                MODEL_DIR="MODEL_$CALL_INDEX"
+                mkdir $MODEL_DIR
+                tar xzf $GCNV_MODEL_TAR -C "$MODEL_DIR"
+                echo "--model-shard-path $MODEL_DIR" >> calls_and_model_args.txt
+                ((++CALL_INDEX))
+              done
+
+
+        mkdir -p contig-ploidy-calls
+        tar xzf ~{contig_ploidy_calls_tar} -C contig-ploidy-calls
+        rm ~{contig_ploidy_calls_tar}
+
+        allosomal_contigs_args="--allosomal-contig ~{sep=" --allosomal-contig " allosomal_contigs}"
+
+        time gatk --java-options "-Xmx~{command_mem_mb}m" PostprocessGermlineCNVCalls \
+            --arguments_file calls_and_model_args.txt \
+            ~{true="$allosomal_contigs_args" false="" allosomal_contigs_specified} \
+            --autosomal-ref-copy-number ~{ref_copy_number_autosomal_contigs} \
+            --contig-ploidy-calls contig-ploidy-calls \
+            --sample-index ~{sample_index} \
+            --output-genotyped-intervals ~{genotyped_intervals_vcf_filename} \
+            --output-genotyped-segments ~{genotyped_segments_vcf_filename} \
+            --output-denoised-copy-ratios ~{denoised_copy_ratios_filename}
+    >>>
+    runtime {
+      cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+      memory: mem_gb + " GiB"
+      disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+      bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+      docker: gatk_docker
+      preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+      maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+
+    output {
+        File genotyped_intervals_vcf = genotyped_intervals_vcf_filename
+        File genotyped_segments_vcf = genotyped_segments_vcf_filename
+        File denoised_copy_ratios = denoised_copy_ratios_filename
     }
 }

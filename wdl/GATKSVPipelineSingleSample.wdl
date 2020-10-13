@@ -22,6 +22,10 @@ import "Structs.wdl"
 # Runs Modules 00abc, 01, 03.MergePesrVcfs, 04, 05/06
 
 workflow GATKSVPipelineSingleSample {
+  meta {
+    allowNestedInputs: true
+  }
+
   input {
     # Batch info
     String batch
@@ -62,6 +66,7 @@ workflow GATKSVPipelineSingleSample {
     String linux_docker
     String cnmops_docker
     String gatk_docker
+    String? gcnv_gatk_docker
     String? gatk_docker_pesr_override
     String condense_counts_docker
     String genomes_in_the_cloud_docker
@@ -463,6 +468,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_base_docker=sv_base_docker,
       runtime_attr_qc=runtime_attr_qc,
       runtime_attr_qc_outlier=runtime_attr_qc_outlier,
       wgd_build_runtime_attr=wgd_build_runtime_attr,
@@ -493,6 +499,8 @@ workflow GATKSVPipelineSingleSample {
       primary_contigs_fai=primary_contigs_fai,
       counts=[select_first([Module00a.coverage_counts])],
       ref_panel_bincov_matrix=ref_panel_bincov_matrix,
+      bincov_matrix=Module00b.bincov_matrix,
+      bincov_matrix_index=Module00b.bincov_matrix_index,
       PE_files=[select_first([Module00a.pesr_disc])],
       cytoband=cytobands,
       mei_bed=mei_bed,
@@ -547,11 +555,13 @@ workflow GATKSVPipelineSingleSample {
       cnmops_large_min_size=cnmops_large_min_size,
       matrix_qc_distance=matrix_qc_distance,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker = gatk_docker,
+      gcnv_gatk_docker=gcnv_gatk_docker,
       condense_counts_docker = condense_counts_docker,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,

@@ -33,6 +33,7 @@ workflow GATKSVPipelinePhase1 {
     String linux_docker
     String cnmops_docker
     String gatk_docker
+    String? gcnv_gatk_docker
     String condense_counts_docker
 
     ############################################################
@@ -44,6 +45,8 @@ workflow GATKSVPipelinePhase1 {
     Array[File] PE_files
     Array[File] SR_files
     Array[File] counts
+    File? bincov_matrix
+    File? bincov_matrix_index
     File inclusion_bed
 
     # BAF generation if BAF_files unavailable
@@ -243,6 +246,8 @@ workflow GATKSVPipelinePhase1 {
       mei_bed = mei_bed,
       inclusion_bed = inclusion_bed,
       counts = counts,
+      bincov_matrix = bincov_matrix,
+      bincov_matrix_index = bincov_matrix_index,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,
       gatk4_jar_override = gatk4_jar_override,
@@ -289,11 +294,13 @@ workflow GATKSVPipelinePhase1 {
       cnmops_large_min_size=cnmops_large_min_size,
       matrix_qc_distance=matrix_qc_distance,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
+      gcnv_gatk_docker=gcnv_gatk_docker,
       condense_counts_docker=condense_counts_docker,
       runtime_attr_set_sample = runtime_attr_set_sample,
       runtime_attr_shard_baf = runtime_attr_shard_baf,

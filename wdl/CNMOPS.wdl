@@ -28,8 +28,8 @@ workflow CNMOPS {
     String prefix
     Int? min_size
     Boolean? stitch_and_clean_large_events = false
-    Float mem_gb_override_sample10 = 7.5
-    Float mem_gb_override_sample3 = 16
+    Float? mem_gb_override_sample10
+    Float? mem_gb_override_sample3
     String linux_docker
     String sv_pipeline_docker
     String cnmops_docker
@@ -312,10 +312,16 @@ task CNSampleNormal {
     }
   }
 
+  Float mem_gb_base = 2.0
+  Float mem_gb_scale = 4.0
+  Float mem_gb = mem_gb_base + mem_gb_scale * size(bincov_matrix, "GiB")
+  Int disk_gb_base = 10
+  Float disk_gb_scale = 2.0
+  Int disk_gb = disk_gb_base + ceil(size([exclude, ped, bincov_matrix_index], "GiB") + disk_gb_scale * size(bincov_matrix, "GiB"))
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 16,
-    disk_gb: 20,
+    mem_gb: mem_gb,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3, 
     max_retries : 1
@@ -340,9 +346,11 @@ task CNSampleNormal {
       awk -f <(echo "$col_a") bincov_~{chr}.bed | tr ' ' '\t' > bincov_~{chr}_~{mode}.bed
     fi
 
+    # redirect stdout and stderr to cnmops.out so that EMPTY_OUTPUT_ERROR can be detected, but use tee to also output them to
+    # terminal so that errors can be debugged
     EMPTY_OUTPUT_ERROR="No CNV regions in result object. Rerun cn.mops with different parameters!"
     set +e
-    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{exclude} -x ~{exclude} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed &> cnmops.out
+    bash /opt/WGD/bin/cnMOPS_workflow.sh -S ~{exclude} -x ~{exclude} -r ~{r} -o . -M bincov_~{chr}_~{mode}.bed 2>&1 | tee cnmops.out
     RC=$?
     set -e
     if [ ! $RC -eq 0 ]; then

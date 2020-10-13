@@ -109,8 +109,8 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module00cTest.Module00cMetrics.linux_docker" : "ubuntu:18.04",
   "Module00cTest.Module00cMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
@@ -439,12 +439,12 @@
     "gs://gatk-sv-resources/test/module00c/large/outputs/wham_std/std_104.wham.TCGA-W9-A837-10A-01D-A706-36.vcf.gz"
   ],
 
-  "Module00cTest.Module00c.sv_base_mini_docker": "gatksv/sv-base-mini:b3af2e3",
-  "Module00cTest.Module00c.sv_pipeline_docker": "cwhelan/sv-pipeline:cw_single_sample_fixes_edd44d",
+  "Module00cTest.Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
   "Module00cTest.Module00c.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
   "Module00cTest.Module00c.cnmops_docker": "gatksv/cnmops:b3af2e3",
   "Module00cTest.Module00c.linux_docker" : "ubuntu:18.04",
-  "Module00cTest.Module00c.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "Module00cTest.Module00c.gatk_docker" : "broadinstitute/gatk:4.1.8.1",
   "Module00cTest.Module00c.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "Module00cTest.Module00c.cytoband":"gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
   "Module00cTest.Module00c.mei_bed":"gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",

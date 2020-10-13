@@ -98,7 +98,7 @@ workflow CleanVcf {
     input:
       whole_file=CleanVcf1a.include_list[0],
       lines_per_shard=samples_per_step2_shard,
-      shard_prefix="whiteblack.",
+      shard_prefix="includeexclude.",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_include_list
   }
@@ -251,7 +251,7 @@ task CleanVcf1a {
   >>>
 
   output {
-    File include_list="whitelist.txt"
+    File include_list="includelist.txt"
     File sex="sexchr.revise.txt"
     File intermediate_vcf="int.w_bothsides.vcf.gz"
     File intermediate_vcf_idx="int.w_bothsides.vcf.gz.tbi"
