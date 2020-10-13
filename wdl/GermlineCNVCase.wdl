@@ -154,22 +154,21 @@ workflow CNVGermlineCaseWorkflow {
         }
     }
 
-    call CNVTasks.BundlePostprocessingInvariants {
-        input:
-            calls_tars = GermlineCNVCallerCaseMode.gcnv_calls_tar,
-            model_tars = gcnv_model_tars,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_bundle
-    }
+    Array[Array[File]] call_tars_sample_by_shard = transpose(GermlineCNVCallerCaseMode.gcnv_call_tars)
 
     scatter (sample_index in range(length(counts))) {
-        call CNVTasks.BundledPostprocessGermlineCNVCalls {
+        call CNVTasks.PostprocessGermlineCNVCalls {
             input:
-                invariants_tar = BundlePostprocessingInvariants.bundle_tar,
                 entity_id = count_entity_ids[sample_index],
+                gcnv_calls_tars = call_tars_sample_by_shard[sample_index],
+                gcnv_model_tars = gcnv_model_tars,
+                calling_configs = GermlineCNVCallerCaseMode.calling_config_json,
+                denoising_configs = GermlineCNVCallerCaseMode.denoising_config_json,
+                gcnvkernel_version = GermlineCNVCallerCaseMode.gcnvkernel_version_json,
+                sharded_interval_lists = GermlineCNVCallerCaseMode.sharded_interval_list,
+                contig_ploidy_calls_tar = DetermineGermlineContigPloidyCaseMode.contig_ploidy_calls_tar,
                 allosomal_contigs = allosomal_contigs,
                 ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
-                contig_ploidy_calls_tar = DetermineGermlineContigPloidyCaseMode.contig_ploidy_calls_tar,
                 sample_index = sample_index,
                 gatk4_jar_override = gatk4_jar_override,
                 gatk_docker = gatk_docker,
@@ -188,10 +187,11 @@ workflow CNVGermlineCaseWorkflow {
     output {
         File contig_ploidy_calls_tar = DetermineGermlineContigPloidyCaseMode.contig_ploidy_calls_tar
         Array[File] sample_contig_ploidy_calls_tars = ExplodePloidyCalls.sample_contig_ploidy_calls_tar
-        Array[File] gcnv_calls_tars = GermlineCNVCallerCaseMode.gcnv_calls_tar
+        Array[Array[File]] gcnv_calls_tars = GermlineCNVCallerCaseMode.gcnv_call_tars
         Array[File] gcnv_tracking_tars = GermlineCNVCallerCaseMode.gcnv_tracking_tar
-        Array[File] genotyped_intervals_vcf = BundledPostprocessGermlineCNVCalls.genotyped_intervals_vcf
-        Array[File] genotyped_segments_vcf = BundledPostprocessGermlineCNVCalls.genotyped_segments_vcf
+        Array[File] genotyped_intervals_vcf = PostprocessGermlineCNVCalls.genotyped_intervals_vcf
+        Array[File] genotyped_segments_vcf = PostprocessGermlineCNVCalls.genotyped_segments_vcf
+        Array[File] denoised_copy_ratios = PostprocessGermlineCNVCalls.denoised_copy_ratios
     }
 }
 
@@ -211,10 +211,16 @@ task DetermineGermlineContigPloidyCaseMode {
       RuntimeAttr? runtime_attr_override
     }
 
+    Int base_disk_space_gb = 10
+    Float unzip_factor = 10.0
+    Int disk_gb = base_disk_space_gb + ceil(unzip_factor * (
+        size(read_count_files, "GiB") + size(gatk4_jar_override, "GiB")
+    ))
+
     RuntimeAttr default_attr = object {
       cpu_cores: 4,
       mem_gb: 8.5,
-      disk_gb: 10,
+      disk_gb: disk_gb,
       boot_disk_gb: 10,
       preemptible_tries: 3,
       max_retries: 1
@@ -317,10 +323,17 @@ task GermlineCNVCallerCaseMode {
       RuntimeAttr? runtime_attr_override
     }
 
+    Int base_disk_space_gb = 10
+    Float unzip_factor = 10.0
+    Int disk_gb = base_disk_space_gb + ceil(unzip_factor * (
+        size(read_count_files, "GiB") + size(contig_ploidy_calls_tar, "GiB") +
+        size(gcnv_model_tar, "GiB") + size(gatk4_jar_override, "GiB")
+    ))
+
     RuntimeAttr default_attr = object {
       cpu_cores: 4,
       mem_gb: 10,
-      disk_gb: 10,
+      disk_gb: disk_gb,
       boot_disk_gb: 10,
       preemptible_tries: 3,
       max_retries: 1
@@ -349,49 +362,80 @@ task GermlineCNVCallerCaseMode {
         tar xzf ~{gcnv_model_tar} -C gcnv-model
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
-        sed 's/\.gz$//' $read_count_files_list | \
-            awk '{print "--input "$0}' > read_count_files.args
+        grep gz$ "$read_count_files_list" | xargs -l1 -P0 gunzip
+        sed 's/\.gz$//' "$read_count_files_list" \
+            | awk '{print "--input "$0}' \
+            > read_count_files.args
 
-        gatk --java-options "-Xmx~{command_mem_mb}m"  GermlineCNVCaller \
-            --run-mode CASE \
-            --arguments_file read_count_files.args \
-            --contig-ploidy-calls contig-ploidy-calls-dir \
-            --model gcnv-model \
-            --output ~{output_dir_} \
-            --output-prefix case \
-            --verbosity DEBUG \
-            --p-alt ~{default="1e-6" p_alt} \
-            --cnv-coherence-length ~{default="10000.0" cnv_coherence_length} \
-            --max-copy-number ~{default="5" max_copy_number} \
-            --mapping-error-rate ~{default="0.01" mapping_error_rate} \
-            --sample-psi-scale ~{default="0.0001" sample_psi_scale} \
-            --depth-correction-tau ~{default="10000.0" depth_correction_tau} \
-            --copy-number-posterior-expectation-mode ~{default="HYBRID" copy_number_posterior_expectation_mode} \
-            --active-class-padding-hybrid-mode ~{default="50000" active_class_padding_hybrid_mode} \
-            --learning-rate ~{default="0.05" learning_rate} \
-            --adamax-beta-1 ~{default="0.9" adamax_beta_1} \
-            --adamax-beta-2 ~{default="0.99" adamax_beta_2} \
-            --log-emission-samples-per-round ~{default="50" log_emission_samples_per_round} \
-            --log-emission-sampling-median-rel-error ~{default="0.005" log_emission_sampling_median_rel_error} \
-            --log-emission-sampling-rounds ~{default="10" log_emission_sampling_rounds} \
-            --max-advi-iter-first-epoch ~{default="5000" max_advi_iter_first_epoch} \
-            --max-advi-iter-subsequent-epochs ~{default="100" max_advi_iter_subsequent_epochs} \
-            --min-training-epochs ~{default="10" min_training_epochs} \
-            --max-training-epochs ~{default="100" max_training_epochs} \
-            --initial-temperature ~{default="2.0" initial_temperature} \
-            --num-thermal-advi-iters ~{default="2500" num_thermal_advi_iters} \
-            --convergence-snr-averaging-window ~{default="500" convergence_snr_averaging_window} \
-            --convergence-snr-trigger-threshold ~{default="0.1" convergence_snr_trigger_threshold} \
-            --convergence-snr-countdown-window ~{default="10" convergence_snr_countdown_window} \
-            --max-calling-iters ~{default="10" max_calling_iters} \
-            --caller-update-convergence-threshold ~{default="0.001" caller_update_convergence_threshold} \
-            --caller-internal-admixing-rate ~{default="0.75" caller_internal_admixing_rate} \
-            --caller-external-admixing-rate ~{default="1.00" caller_external_admixing_rate} \
-            --disable-annealing ~{default="false" disable_annealing}
+        function get_seeded_random() {
+            SEED="$1"
+            openssl enc -aes-256-ctr -pass pass:"$SEED" -nosalt </dev/zero 2>/dev/null
+        }
+
+        function run_gcnv_case() {
+            gatk --java-options "-Xmx~{command_mem_mb}m"  GermlineCNVCaller \
+                --run-mode CASE \
+                --arguments_file read_count_files.args \
+                --contig-ploidy-calls contig-ploidy-calls-dir \
+                --model gcnv-model \
+                --output ~{output_dir_} \
+                --output-prefix case \
+                --verbosity DEBUG \
+                --p-alt ~{default="1e-6" p_alt} \
+                --cnv-coherence-length ~{default="10000.0" cnv_coherence_length} \
+                --max-copy-number ~{default="5" max_copy_number} \
+                --mapping-error-rate ~{default="0.01" mapping_error_rate} \
+                --sample-psi-scale ~{default="0.0001" sample_psi_scale} \
+                --depth-correction-tau ~{default="10000.0" depth_correction_tau} \
+                --copy-number-posterior-expectation-mode ~{default="HYBRID" copy_number_posterior_expectation_mode} \
+                --active-class-padding-hybrid-mode ~{default="50000" active_class_padding_hybrid_mode} \
+                --learning-rate ~{default="0.05" learning_rate} \
+                --adamax-beta-1 ~{default="0.9" adamax_beta_1} \
+                --adamax-beta-2 ~{default="0.99" adamax_beta_2} \
+                --log-emission-samples-per-round ~{default="50" log_emission_samples_per_round} \
+                --log-emission-sampling-median-rel-error ~{default="0.005" log_emission_sampling_median_rel_error} \
+                --log-emission-sampling-rounds ~{default="10" log_emission_sampling_rounds} \
+                --max-advi-iter-first-epoch ~{default="5000" max_advi_iter_first_epoch} \
+                --max-advi-iter-subsequent-epochs ~{default="100" max_advi_iter_subsequent_epochs} \
+                --min-training-epochs ~{default="10" min_training_epochs} \
+                --max-training-epochs ~{default="100" max_training_epochs} \
+                --initial-temperature ~{default="2.0" initial_temperature} \
+                --num-thermal-advi-iters ~{default="2500" num_thermal_advi_iters} \
+                --convergence-snr-averaging-window ~{default="500" convergence_snr_averaging_window} \
+                --convergence-snr-trigger-threshold ~{default="0.1" convergence_snr_trigger_threshold} \
+                --convergence-snr-countdown-window ~{default="10" convergence_snr_countdown_window} \
+                --max-calling-iters ~{default="10" max_calling_iters} \
+                --caller-update-convergence-threshold ~{default="0.001" caller_update_convergence_threshold} \
+                --caller-internal-admixing-rate ~{default="0.75" caller_internal_admixing_rate} \
+                --caller-external-admixing-rate ~{default="1.00" caller_external_admixing_rate} \
+                --disable-annealing ~{default="false" disable_annealing}
+        }
+
+        {
+            # Try to run gcnv case mode. Rarely, a bad initial seed results in NaN errors...
+            run_gcnv_case
+        } || {
+            # shuffle input arguments in a deterministic manner, resulting in a new seed
+            shuf --random-source=<(get_seeded_random 42) --output=read_count_files.args read_count_files.args
+            # run gcnv case mode one more time
+            run_gcnv_case
+        }
 
         tar c -C ~{output_dir_}/case-tracking . | gzip -1 > case-gcnv-tracking-~{scatter_index}.tar.gz
-        tar c -C ~{output_dir_}/case-calls  . | gzip -1 > case-gcnv-calls-files-~{scatter_index}.tar.gz
+
+        # tar output calls, ensuring output files are numbered in the same order as original sample list
+        NUM_SAMPLES=~{num_samples}
+        NUM_DIGITS=${#NUM_SAMPLES}
+        CURRENT_SAMPLE=0
+        sed 's/\.gz$//' "$read_count_files_list" \
+            | while read READ_COUNT_FILE; do
+                SAMPLE_NAME=$(zgrep "^@RG" "$READ_COUNT_FILE" | cut -d: -f3)
+                SAMPLE_PATH=$(dirname $(grep -lR -m1 "^$SAMPLE_NAME$" "~{output_dir_}/case-calls"))
+                CURRENT_SAMPLE_WITH_LEADING_ZEROS=$(printf "%0${NUM_DIGITS}d" $CURRENT_SAMPLE)
+                tar czf case-gcnv-calls-shard-~{scatter_index}-sample-$CURRENT_SAMPLE_WITH_LEADING_ZEROS.tar.gz \
+                    -C "$SAMPLE_PATH" .
+                ((++CURRENT_SAMPLE))
+            done
     >>>
     runtime {
       cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -404,7 +448,11 @@ task GermlineCNVCallerCaseMode {
     }
 
     output {
-        File gcnv_calls_tar = "case-gcnv-calls-files-~{scatter_index}.tar.gz"
+        Array[File] gcnv_call_tars = glob("case-gcnv-calls-shard-~{scatter_index}-sample-*.tar.gz")
         File gcnv_tracking_tar = "case-gcnv-tracking-~{scatter_index}.tar.gz"
+        File calling_config_json = "~{output_dir_}/case-calls/calling_config.json"
+        File denoising_config_json = "~{output_dir_}/case-calls/denoising_config.json"
+        File gcnvkernel_version_json = "~{output_dir_}/case-calls/gcnvkernel_version.json"
+        File sharded_interval_list = "~{output_dir_}/case-calls/interval_list.tsv"
     }
 }

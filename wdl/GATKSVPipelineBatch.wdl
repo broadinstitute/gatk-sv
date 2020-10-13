@@ -69,6 +69,7 @@ workflow GATKSVPipelineBatch {
     String cnmops_docker
     String gatk_docker
     String? gatk_docker_pesr_override
+    String? gcnv_gatk_docker
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
@@ -143,7 +144,8 @@ workflow GATKSVPipelineBatch {
       run_ploidy = false,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      sv_base_mini_docker=sv_base_mini_docker
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_base_docker=sv_base_docker
   }
 
   call phase1.GATKSVPipelinePhase1 {
@@ -158,6 +160,8 @@ workflow GATKSVPipelineBatch {
       reference_dict=reference_dict,
       BAF_files=baf_files,
       counts=counts_files_,
+      bincov_matrix=Module00b.bincov_matrix,
+      bincov_matrix_index=Module00b.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
       delly_vcfs=delly_vcfs_,
@@ -180,6 +184,7 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
+      gcnv_gatk_docker=gcnv_gatk_docker,
       condense_counts_docker=condense_counts_docker
   }
 

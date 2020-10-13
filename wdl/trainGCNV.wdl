@@ -178,9 +178,10 @@ workflow TrainGCNV {
     File? cohort_contig_ploidy_model_tar = CNVGermlineCohortWorkflow.contig_ploidy_model_tar
     File? cohort_contig_ploidy_calls_tar = CNVGermlineCohortWorkflow.contig_ploidy_calls_tar
     Array[File]? cohort_gcnv_model_tars = CNVGermlineCohortWorkflow.gcnv_model_tars
-    Array[File]? cohort_gcnv_calls_tars = CNVGermlineCohortWorkflow.gcnv_calls_tars
+    Array[Array[File]]? cohort_gcnv_calls_tars = CNVGermlineCohortWorkflow.gcnv_calls_tars
     Array[File]? cohort_gcnv_tracking_tars = CNVGermlineCohortWorkflow.gcnv_tracking_tars
     Array[File]? cohort_genotyped_intervals_vcfs = CNVGermlineCohortWorkflow.genotyped_intervals_vcfs
     Array[File]? cohort_genotyped_segments_vcfs = CNVGermlineCohortWorkflow.genotyped_segments_vcfs
+    Array[File]? cohort_denoised_copy_ratios = CNVGermlineCohortWorkflow.denoised_copy_ratios
   }
 }

@@ -140,6 +140,7 @@ task RDTest {
     String flags
     Int tabix_retries
     String sv_pipeline_rdtest_docker
+    Int disk_gb_baseline = 10
     RuntimeAttr? runtime_attr_override
   }
 
@@ -149,10 +150,14 @@ task RDTest {
     }
   }
 
+  Int disk_gb = disk_gb_baseline + ceil(
+                                    size([bed, medianfile, ped_file, include_list], "GiB")
+                                    + 2 * size([coveragefile, coveragefile_idx], "GiB")
+                                 )
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: 10,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

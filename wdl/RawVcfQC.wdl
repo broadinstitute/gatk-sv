@@ -108,10 +108,12 @@ task PickOutliers {
     RuntimeAttr? runtime_attr_override
   }
 
+  Int disk_gb = ceil(50 + 2 * size(stat_files, "GiB"))
+
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 7.5,
-    disk_gb: 50,
+    disk_gb: disk_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -123,10 +125,11 @@ task PickOutliers {
     File high = "${caller}.QC.outlier.high"
   }
   command <<<
-
-    set -euo pipefail
-    cat ~{sep=" " stat_files} > ~{caller}.QC.stat
-    Rscript  /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calcu_num_SVs.pick_outlier.R -s ~{caller}.QC.stat -o ~{caller}.QC.outlier
+    set -eu -o pipefail
+    # concatenate all stat_files into one input file
+    xargs cat < ~{write_lines(stat_files)} > ~{caller}.QC.input
+    # pick outliers from input stats
+    /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calc_num_svs_pick_outlier.py ~{caller}.QC.input ~{caller}.QC.outlier -z
     
   >>>
   runtime {

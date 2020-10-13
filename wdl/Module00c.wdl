@@ -45,6 +45,8 @@ workflow Module00c {
     # PE/SR/BAF/bincov files
     Array[File] counts
     File? ref_panel_bincov_matrix
+    File? bincov_matrix
+    File? bincov_matrix_index
     Array[File?]? BAF_files         # Required for MatrixQC
     Array[File] PE_files
     Array[File]? ref_panel_PE_files
@@ -140,11 +142,13 @@ workflow Module00c {
 
     # Runtime parameters
     String sv_base_mini_docker
+    String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String condense_counts_docker
     String gatk_docker
+    String? gcnv_gatk_docker
     String cnmops_docker
 
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
@@ -190,21 +194,27 @@ workflow Module00c {
   Array[File] all_PE_files = flatten(select_all([PE_files, ref_panel_PE_files]))
   Array[File] all_SR_files = flatten(select_all([SR_files, ref_panel_SR_files]))
 
-  call mbm.MakeBincovMatrix as MakeBincovMatrix {
-    input:
-      samples = samples,
-      count_files = counts,
-      bincov_matrix = ref_panel_bincov_matrix,
-      bincov_matrix_samples = ref_panel_samples,
-      batch = batch,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = evidence_merging_bincov_runtime_attr
+  if(defined(ref_panel_bincov_matrix)
+     || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
+    call mbm.MakeBincovMatrix as MakeBincovMatrix {
+      input:
+        samples = samples,
+        count_files = counts,
+        bincov_matrix = ref_panel_bincov_matrix,
+        bincov_matrix_samples = ref_panel_samples,
+        batch = batch,
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_base_docker = sv_base_docker,
+        runtime_attr_override = evidence_merging_bincov_runtime_attr
+    }
   }
+  File merged_bincov_ = select_first([MakeBincovMatrix.merged_bincov, bincov_matrix])
+  File merged_bincov_idx_ = select_first([MakeBincovMatrix.merged_bincov_idx, bincov_matrix_index])
 
   if (run_ploidy) {
     call pe.Ploidy as Ploidy {
       input:
-        bincov_matrix = MakeBincovMatrix.merged_bincov,
+        bincov_matrix = merged_bincov_,
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
@@ -282,8 +292,8 @@ workflow Module00c {
       r2 = "10",
       batch = batch,
       samples = all_samples,
-      bincov_matrix = MakeBincovMatrix.merged_bincov,
-      bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx,
+      bincov_matrix = merged_bincov_,
+      bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
       exclude_list = cnmops_exclude_list,
@@ -307,8 +317,8 @@ workflow Module00c {
       r2 = "100",
       batch = batch,
       samples = all_samples,
-      bincov_matrix = MakeBincovMatrix.merged_bincov,
-      bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx,
+      bincov_matrix = merged_bincov_,
+      bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
       ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
       exclude_list = cnmops_exclude_list,
@@ -345,7 +355,7 @@ workflow Module00c {
       count_entity_ids = samples,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,
-      gatk_docker = gatk_docker,
+      gatk_docker = select_first([gcnv_gatk_docker, gatk_docker]),
       linux_docker = linux_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       gatk4_jar_override = gatk4_jar_override,
@@ -407,7 +417,7 @@ workflow Module00c {
   Float median_cov_mem_gb = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(all_samples) + 7.5
   call mc.MedianCov as MedianCov {
     input:
-      bincov_matrix = MakeBincovMatrix.merged_bincov,
+      bincov_matrix = merged_bincov_,
       cohort_id = batch,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr = median_cov_runtime_attr,
@@ -450,8 +460,8 @@ workflow Module00c {
         PE_idx = EvidenceMerging.merged_PE_idx,
         BAF_file = select_first([baf_out]),
         BAF_idx = select_first([baf_out_index]),
-        RD_file = MakeBincovMatrix.merged_bincov,
-        RD_idx = MakeBincovMatrix.merged_bincov_idx,
+        RD_file = merged_bincov_,
+        RD_idx = merged_bincov_idx_,
         SR_file = EvidenceMerging.merged_SR,
         SR_idx = EvidenceMerging.merged_SR_idx,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -467,8 +477,8 @@ workflow Module00c {
     File merged_SR_index = EvidenceMerging.merged_SR_idx
     File merged_PE = EvidenceMerging.merged_PE
     File merged_PE_index = EvidenceMerging.merged_PE_idx
-    File merged_bincov = MakeBincovMatrix.merged_bincov
-    File merged_bincov_index = MakeBincovMatrix.merged_bincov_idx
+    File merged_bincov = merged_bincov_
+    File merged_bincov_index = merged_bincov_idx_
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
