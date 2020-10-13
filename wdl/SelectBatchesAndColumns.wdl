@@ -4,7 +4,7 @@ task SelectBatchesAndColumns {
   input {
     File sample_sets_table_tsv
     Array[String]? batches_opt
-    String column
+    Array[String] columns
     String? linux_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -33,28 +33,36 @@ task SelectBatchesAndColumns {
 
   command <<<
     set -euo pipefail
-    1>&2 echo "Selecting columns from sample sets table"
+    1>&2 echo "Selecting data from sample sets table"
     FILE=~{sample_sets_table_tsv}
 
-    COLNAME=~{column}
-    1>&2 echo "COLUMN NAME=$COLNAME"
+    for COLNAME in '~{sep="' '" columns}'; do
+      1>&2 echo "COLUMN NAME=$COLNAME"
 
-    COLNUM=$(head -1 $FILE | awk -v RS='\t' -v field="$COLNAME" '$0~field{print NR; exit}')
-    1>&2 echo "COLUMN NUMBER=$COLNUM"
+      COLNUM=$(head -1 $FILE | awk -v RS='\t' -v field="$COLNAME" '$0~field{print NR; exit}')
+      if [ ! -z "$COLNUM"]
+      then
+        1>&2 echo "COLUMN NUMBER=$COLNUM"
 
-    # if batches specified, select rows containing given batches in 1st column then select specified column
-    # otherwise, select specified column from all rows
-    # delete quotes and brackets from any bracketed, comma-separated arrays and split by newlines
-    for BATCH in '~{sep="' '" batches}'; do
-      1>&2 echo "BATCH=$BATCH"
-      ~{if select_batches then "1>&2 echo 'Selecting batches from sample sets table'; awk -v FS='\t' -v bat=$BATCH '$1 == bat' $FILE" else "cat $FILE"} \
-        | cut -f $COLNUM | tr -d []'"' | tr , '\n' >> ~{column}_selected.tsv
+        # if batches specified, select rows containing given batches in 1st column then select specified column
+        # otherwise, select specified column from all rows
+        # delete quotes and brackets from any bracketed, comma-separated arrays and split by tabs
+        # each column should become one tab-separated row
+        for BATCH in '~{sep="' '" batches}'; do
+          1>&2 echo "BATCH=$BATCH"
+          ~{if select_batches then "awk -v FS='\t' -v bat=$BATCH '$1 == bat' $FILE" else "cat $FILE"} \
+            | cut -f $COLNUM | tr -d []'"' | tr , '\t' >> selected.tsv
+          echo '\n' >> selected.tsv 
+        done
+      else
+        echo '\n' >> selected.tsv # if column does not exist, insert empty line into file
+      fi
     done
     
   >>>
 
   output {
     # return transposed tsv such that each row is all the files for a given column of the sample set table
-    Array[File] column_as_row = transpose(read_tsv("~{column}_selected.tsv"))[0]
+    Array[Array[File]] columns_as_rows = read_tsv("selected.tsv")
   }
 }
