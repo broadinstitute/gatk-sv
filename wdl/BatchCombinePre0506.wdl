@@ -6,7 +6,7 @@ workflow BatchCombinePre0506 {
   input {
     File sample_sets_table_tsv
     Array[String]? batches
-    String? linux_docker
+    String? python_docker
     RuntimeAttr? runtime_override_batchcombine
   }
   Array[String] columns = ["trained_genotype_depth_depth_sepcutoff", "regenotyped_depth_vcfs", "merged_bincov", "merged_PE","median_cov", "ped_file_postOutlierExclusion", "genotyped_pesr_vcf", "sr_background_fail", "sr_bothside_pass", "cutoffs"]
@@ -16,7 +16,7 @@ workflow BatchCombinePre0506 {
       sample_sets_table_tsv = sample_sets_table_tsv,
       columns = columns,
       batches_opt = batches,
-      linux_docker = linux_docker,
+      python_docker = python_docker,
       runtime_attr_override = runtime_override_batchcombine
   }
 

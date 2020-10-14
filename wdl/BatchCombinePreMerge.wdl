@@ -6,7 +6,7 @@ workflow BatchCombinePreMerge {
   input {
     File sample_sets_table_tsv
     Array[String]? batches
-    String? linux_docker
+    String? python_docker
     RuntimeAttr? runtime_override_batchcombine
   }
   Array[String] columns = ["filtered_depth_vcf", "filtered_pesr_vcf"]
@@ -16,7 +16,7 @@ workflow BatchCombinePreMerge {
       sample_sets_table_tsv = sample_sets_table_tsv,
       columns = columns,
       batches_opt = batches,
-      linux_docker = linux_docker,
+      python_docker = python_docker,
       runtime_attr_override = runtime_override_batchcombine
   }
 
