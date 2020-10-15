@@ -109,8 +109,8 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
-  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module00aBatchTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module00aBatchTest.Module00aBatchMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module00aBatchTest.Module00aBatchMetrics.linux_docker" : "ubuntu:18.04",
   "Module00aBatchTest.Module00aBatchMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "Module00aBatchTest.Module00aBatchMetrics.contig_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
@@ -447,20 +447,21 @@
 
   "Module00aBatchTest.Module00aBatch.preprocessed_intervals": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
 
-  "Module00aBatchTest.Module00aBatch.delly_blacklist_intervals_file": "gs://gatk-sv-resources/resources/delly_human.hg38.excl.tsv",
+  "Module00aBatchTest.Module00aBatch.delly_exclude_intervals_file": "gs://gatk-sv-resources/resources/delly_human.hg38.excl.tsv",
   "Module00aBatchTest.Module00aBatch.manta_region_bed": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
   "Module00aBatchTest.Module00aBatch.melt_standard_vcf_header": "gs://gatk-sv-resources/resources/melt_standard_vcf_header.txt",
-  "Module00aBatchTest.Module00aBatch.wham_whitelist_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
+  "Module00aBatchTest.Module00aBatch.wham_include_list_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
   "Module00aBatchTest.Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
-  "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": {{ dockers.sv_base_mini_docker }},
-  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker }},
+  "Module00aBatchTest.Module00aBatch.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module00aBatchTest.Module00aBatch.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
   "Module00aBatchTest.Module00aBatch.delly_docker": "gatksv/delly:8645aa",
   "Module00aBatchTest.Module00aBatch.manta_docker": "gatksv/manta:8645aa",
   "Module00aBatchTest.Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
   "Module00aBatchTest.Module00aBatch.wham_docker": "gatksv/wham:8645aa",
   "Module00aBatchTest.Module00aBatch.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "Module00aBatchTest.Module00aBatch.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
+  "Module00aBatchTest.Module00aBatch.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
 
   "Module00aBatchTest.Module00aBatch.bam_or_cram_files": [
     "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/WGS_Validation/RP-1536/WGS/SM-BZNZQ/v1/PM12-11676_17DEV0001_SM-BZNZQ_v1.cram",

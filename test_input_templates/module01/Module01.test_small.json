@@ -1,6 +1,6 @@
 {
-  "Module01.sv_base_mini_docker": {{ dockers.sv_base_mini_docker }},
-  "Module01.sv_pipeline_docker": {{ dockers.sv_pipeline_docker }},
+  "Module01.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module01.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
 
   "Module01.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module01.depth_flags": "--merge-coordinates",
@@ -8,10 +8,10 @@
   "Module01.pesr_svsize": "0",
   "Module01.pesr_frac": "0.1",
   "Module01.pesr_flags": "--preserve-ids",
-  "Module01.pesr_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "Module01.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module01.pesr_distance": "300",
-  "Module01.depth_blacklist": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
-  "Module01.depth_blacklist_frac_max": "0.5",
+  "Module01.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
+  "Module01.depth_exclude_list_frac_max": "0.5",
 
   "Module01.batch": "test_small",
   "Module01.del_bed": "gs://gatk-sv-resources/test/module00c/small/outputs/test_small.DEL.bed.gz",
