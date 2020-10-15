@@ -105,7 +105,11 @@ task ShardVcf {
       ~{contig}.vcf.gz \
       ~{sv_per_shard} \
       "vcf.shard."
-  
+
+    # if there were no shards created just make an empty one
+    if [ ! -e vcf.shard.000000.vcf.gz ]; then
+      cp ~{contig}.vcf.gz vcf.shard.000000.vcf.gz
+    fi
   >>>
   
   #########################
