@@ -1,8 +1,8 @@
 {
   "Module00b.run_vcf_qc" : "true",
-  "Module00b.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module00b.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module00b.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
+  "Module00b.sv_base_mini_docker": {{ dockers.sv_base_mini_docker }},
+  "Module00b.sv_pipeline_docker": {{ dockers.sv_pipeline_docker }},
+  "Module00b.sv_pipeline_qc_docker": "gatksv/sv-pipeline-qc:b3af2e3",
   "Module00b.wgd_scoring_mask": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "Module00b.genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
 

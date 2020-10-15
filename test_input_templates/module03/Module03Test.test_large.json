@@ -109,19 +109,19 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module03Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module03Test.Module03Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
+  "Module03Test.PlotMetrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
+  "Module03Test.Module03Metrics.sv_pipeline_base_docker": "gatksv/sv-pipeline-base:b3af2e3",
   "Module03Test.Module03Metrics.linux_docker" : "ubuntu:18.04",
   "Module03Test.Module03Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module03Test.Module03Metrics.baseline_filtered_pesr_vcf" : "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz",
   "Module03Test.Module03Metrics.baseline_filtered_depth_vcf" : "gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz",
 
-  "Module03Test.Module03Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
-  "Module03Test.Module03Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
+  "Module03Test.Module03Metrics.Module03Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
+  "Module03Test.Module03Metrics.Module03Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
 
-  "Module03Test.Module03.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module03Test.Module03.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "Module03Test.Module03.sv_pipeline_docker": {{ dockers.sv_pipeline_docker }},
+  "Module03Test.Module03.sv_base_mini_docker": {{ dockers.sv_base_mini_docker }},
   "Module03Test.Module03.linux_docker" : "ubuntu:18.04",
 
   "Module03Test.Module03.outlier_cutoff_nIQR": "10000",

@@ -7,8 +7,8 @@
   "TrainGCNV.allosomal_contigs": ["chrX", "chrY"],
 
   "TrainGCNV.contig_ploidy_priors": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.contig_ploidy_priors_homo_sapiens.tsv",
-  "TrainGCNV.exclude_intervals_for_filter_intervals_ploidy": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
-  "TrainGCNV.exclude_intervals_for_filter_intervals_cnv": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
+  "TrainGCNV.blacklist_intervals_for_filter_intervals_ploidy": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
+  "TrainGCNV.blacklist_intervals_for_filter_intervals_cnv": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
   "TrainGCNV.num_intervals_per_scatter": "5000",
   "TrainGCNV.do_explicit_gc_correction": "true",
   "TrainGCNV.gcnv_enable_bias_factors": "false",
@@ -26,7 +26,7 @@
   "TrainGCNV.gcnv_depth_correction_tau": "10000",
   "TrainGCNV.gcnv_log_emission_sampling_median_rel_error": "0.001",
 
-  "TrainGCNV.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
+  "TrainGCNV.sv_base_mini_docker": {{ dockers.sv_base_mini_docker }},
   "TrainGCNV.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "TrainGCNV.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
   "TrainGCNV.linux_docker" : "ubuntu:18.04",
