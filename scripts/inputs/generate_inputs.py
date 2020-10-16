@@ -5,7 +5,7 @@ import sys
 import argparse, os, os.path
 import glob
 import json
-from jinja2 import Template
+import jinja2
 
 def main():
     parser = argparse.ArgumentParser(
@@ -24,7 +24,7 @@ def main():
 
     template_string = args.template.read()
 
-    print(Template(template_string).render(input_dict))
+    print(jinja2.Template(template_string).render(input_dict))
 
 if __name__ == "__main__":
     main()
