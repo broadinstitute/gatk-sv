@@ -14,28 +14,28 @@
     "SM-HXUD2"
   ],
 
-  "Module01Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module01Test.Module01Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module01Test.Module01Metrics.linux_docker" : "ubuntu:18.04",
-  "Module01Test.Module01Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+  "Module01Test.PlotMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01Test.Module01Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01Test.Module01Metrics.linux_docker" : {{ dockers.linux_docker | tojson }},
+  "Module01Test.Module01Metrics.contig_list" :   {{ resources_hg38.primary_contigs_list | tojson }},
 
   "Module01Test.Module01Metrics.baseline_depth_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.depth.vcf.gz",
   "Module01Test.Module01Metrics.baseline_manta_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.manta.vcf.gz",
   "Module01Test.Module01Metrics.baseline_wham_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.wham.vcf.gz",
   "Module01Test.Module01Metrics.baseline_melt_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.melt.vcf.gz",
 
-  "Module01Test.Module01.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module01Test.Module01.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
+  "Module01Test.Module01.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "Module01Test.Module01.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
 
-  "Module01Test.Module01.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+  "Module01Test.Module01.contigs":   {{ resources_hg38.primary_contigs_fai | tojson }},
   "Module01Test.Module01.depth_flags": "--merge-coordinates",
   "Module01Test.Module01.depth_frac": "0.8",
   "Module01Test.Module01.pesr_svsize": "0",
   "Module01Test.Module01.pesr_frac": "0.1",
   "Module01Test.Module01.pesr_flags": "--preserve-ids",
-  "Module01Test.Module01.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
+  "Module01Test.Module01.pesr_exclude_list": {{ resources_hg38.pesr_exclude_list | tojson }},
   "Module01Test.Module01.pesr_distance": "300",
-  "Module01Test.Module01.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
+  "Module01Test.Module01.depth_exclude_list": {{ resources_hg38.depth_exclude_list | tojson }},
   "Module01Test.Module01.depth_exclude_list_frac_max": "0.5",
 
   "Module01Test.Module01.batch": "test_small",

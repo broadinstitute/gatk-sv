@@ -1,5 +1,5 @@
 {
-  "Module03Qc.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+  "Module03Qc.contig_list":   {{ resources_hg38.primary_contigs_fai | tojson }},
 
   "Module03Qc.thousand_genomes_tarballs": [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
@@ -25,9 +25,9 @@
   "Module03Qc.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
 
   
-  "Module03Qc.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module03Qc.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module03Qc.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
+  "Module03Qc.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module03Qc.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "Module03Qc.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
   
   "Module03Qc.batch": "test_large",

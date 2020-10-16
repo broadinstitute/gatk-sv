@@ -1,7 +1,7 @@
 {
-  "Module01Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module01Metrics.linux_docker" : "ubuntu:18.04",
-  "Module01Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+  "Module01Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01Metrics.linux_docker" : {{ dockers.linux_docker | tojson }},
+  "Module01Metrics.contig_list" :   {{ resources_hg38.primary_contigs_list | tojson }},
 
   "Module01Metrics.name" : "test_large",
   "Module01Metrics.samples": [

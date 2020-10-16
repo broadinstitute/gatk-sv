@@ -1,7 +1,7 @@
 {
-  "TrainGCNV.reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-  "TrainGCNV.reference_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-  "TrainGCNV.reference_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+  "TrainGCNV.reference_fasta": {{ resources_hg38.reference_fasta | tojson }},
+  "TrainGCNV.reference_index": {{ resources_hg38.reference_index | tojson }},
+  "TrainGCNV.reference_dict": {{ resources_hg38.reference_dict | tojson }},
 
   "TrainGCNV.ref_copy_number_autosomal_contigs": "2",
   "TrainGCNV.allosomal_contigs": ["chrX", "chrY"],
@@ -26,10 +26,10 @@
   "TrainGCNV.gcnv_depth_correction_tau": "10000",
   "TrainGCNV.gcnv_log_emission_sampling_median_rel_error": "0.001",
 
-  "TrainGCNV.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "TrainGCNV.condense_counts_docker" : "gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
+  "TrainGCNV.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "TrainGCNV.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "TrainGCNV.gatk_docker" : "broadinstitute/gatk:4.1.8.1",
-  "TrainGCNV.linux_docker" : "ubuntu:18.04",
+  "TrainGCNV.linux_docker" : {{ dockers.linux_docker | tojson }},
 
   "TrainGCNV.gcnv_model_learning_rate" : 0.03,
   "TrainGCNV.gcnv_model_num_thermal_advi_iters" : 2500,

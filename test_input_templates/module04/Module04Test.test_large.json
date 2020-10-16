@@ -109,10 +109,10 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module04Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module04Test.Module04Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module04Test.Module04Metrics.linux_docker" : "ubuntu:18.04",
-  "Module04Test.Module04Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+  "Module04Test.PlotMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module04Test.Module04Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module04Test.Module04Metrics.linux_docker" : {{ dockers.linux_docker | tojson }},
+  "Module04Test.Module04Metrics.contig_list" :   {{ resources_hg38.primary_contigs_list | tojson }},
 
   "Module04Test.Module04Metrics.baseline_genotyped_pesr_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.pesr.vcf.gz",
   "Module04Test.Module04Metrics.baseline_genotyped_depth_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.depth.vcf.gz",
@@ -120,15 +120,15 @@
   "Module04Test.Module04Metrics.PESR_VCF_Metrics.mem_gib" : "3.75",
   "Module04Test.Module04Metrics.Depth_VCF_Metrics.mem_gib" : "1.5",
 
-  "Module04Test.Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module04Test.Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module04Test.Module04.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module04Test.Module04.linux_docker" : "ubuntu:18.04",
+  "Module04Test.Module04.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "Module04Test.Module04.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module04Test.Module04.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
+  "Module04Test.Module04.linux_docker" : {{ dockers.linux_docker | tojson }},
 
   "Module04Test.Module04.n_RD_genotype_bins": "100000", 
   "Module04Test.Module04.n_per_split": "5000", 
-  "Module04Test.Module04.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
-  "Module04Test.Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
+  "Module04Test.Module04.pesr_exclude_list": {{ resources_hg38.pesr_exclude_list | tojson }},
+  "Module04Test.Module04.seed_cutoffs": {{ resources_hg38.seed_cutoffs | tojson }},
   "Module04Test.Module04.reference_build": "hg38",
 
   "Module04Test.Module04.batch": "test_large",

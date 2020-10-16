@@ -1,10 +1,10 @@
 {
   "Module05_06.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
-  "Module05_06.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
-  "Module05_06.cytobands": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
-  "Module05_06.mei_bed": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
-  "Module05_06.pe_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
-  "Module05_06.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
+  "Module05_06.contig_list":   {{ resources_hg38.primary_contigs_fai | tojson }},
+  "Module05_06.cytobands": {{ resources_hg38.cytoband | tojson }},
+  "Module05_06.mei_bed": {{ resources_hg38.mei_bed | tojson }},
+  "Module05_06.pe_exclude_list": {{ resources_hg38.pesr_exclude_list | tojson }},
+  "Module05_06.depth_exclude_list": {{ resources_hg38.depth_exclude_list | tojson }},
   "Module05_06.empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
 
   "Module05_06.thousand_genomes_tarballs": [
@@ -38,10 +38,10 @@
   "Module05_06.max_shards_per_chrom": 100,
   "Module05_06.min_variants_per_shard": 30,
 
-  "Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline:tb_update_gcnv_version_88bfceb",
-  "Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module05_06.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module05_06.sv_pipeline_qc_docker": "epiercehoffman/sv-pipeline-qc:eph_03qc_variables-e597d85",
+  "Module05_06.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module05_06.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "Module05_06.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
+  "Module05_06.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
   "Module05_06.cohort_name": "test_large",
   "Module05_06.batches": [
