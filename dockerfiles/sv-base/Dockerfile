@@ -11,7 +11,7 @@ ENV HOME=/root
 # GATK needed for PrintSVEvidence
 ARG GATK_TRANSIENT_DEP="git git-lfs"
 ARG GATK_DEP="openjdk-8-jdk ${GATK_TRANSIENT_DEP}"
-ARG GATK_COMMIT="7f7ad3cda878e3816d56e540cfa089331a344254"
+ARG GATK_COMMIT="a33bf19dd3188af0af1bd17bce015eb20ba73227"
 ENV GATK_JAR="/opt/gatk.jar"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
