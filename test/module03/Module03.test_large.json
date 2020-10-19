@@ -1,6 +1,6 @@
 {
-  "Module03.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/sv-pipeline:mw-gnomad-02-e4357dd",
-  "Module03.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
+  "Module03.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
+  "Module03.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
   "Module03.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "Module03.outlier_cutoff_nIQR": "10000",

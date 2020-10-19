@@ -1,5 +1,5 @@
 {
   "PrepareNoncoding.noncoding_bed_list": "File",
-  "PrepareNoncoding.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd"
+  "PrepareNoncoding.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e"
 }
 

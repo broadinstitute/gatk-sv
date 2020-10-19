@@ -26,9 +26,9 @@
   "TrainGCNV.gcnv_depth_correction_tau": "10000",
   "TrainGCNV.gcnv_log_emission_sampling_median_rel_error": "0.001",
 
-  "TrainGCNV.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/sv-base-mini:mw-gnomad-02-e4357dd",
+  "TrainGCNV.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
   "TrainGCNV.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
-  "TrainGCNV.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.2.0",
+  "TrainGCNV.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.1",
   "TrainGCNV.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "TrainGCNV.gcnv_model_learning_rate" : 0.03,
