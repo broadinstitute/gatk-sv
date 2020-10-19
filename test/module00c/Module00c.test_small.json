@@ -1,5 +1,6 @@
 {
   "Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
+  "Module00c.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-cdd8b4e",
   "Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
   "Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-cdd8b4e",
   "Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-cdd8b4e",

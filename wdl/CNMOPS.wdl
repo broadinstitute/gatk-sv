@@ -113,7 +113,7 @@ workflow CNMOPS {
       ped = ped_file,
       mode = "2",
       r = r2,
-        ref_dict = ref_dict,
+      ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
       mem_gb_override = mem_gb_override_sample10,
@@ -128,7 +128,7 @@ workflow CNMOPS {
       ped = ped_file,
       mode = "2",
       r = r1,
-        ref_dict = ref_dict,
+      ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
       mem_gb_override = mem_gb_override_sample3,
@@ -336,8 +336,8 @@ task CNSampleNormal {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+  Float mem_gb_used = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb_used * 1000 * 0.8)
 
   output {
     File Gff = "calls/cnMOPS.cnMOPS.gff"
@@ -380,7 +380,7 @@ task CNSampleNormal {
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: mem_gb + " GiB"
+    memory: mem_gb_used + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: cnmops_docker
