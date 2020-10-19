@@ -23,7 +23,8 @@ workflow MergeCohortVcfs {
     RuntimeAttr? runtime_attr_cohort_sort
     RuntimeAttr? runtime_attr_cohort_combined
     RuntimeAttr? runtime_attr_cluster_dups_combined
-    RuntimeAttr? runtime_attr_concat_bed
+    RuntimeAttr? runtime_attr_concat_masterclusterdups
+    RuntimeAttr? runtime_attr_concat_clustercombined
   }
 
   Array[Array[String]] contigs = read_tsv(contig_list)
@@ -78,7 +79,7 @@ workflow MergeCohortVcfs {
       bed_shards = MakeClusterDupsCombinedBed.lookup,
       filename = cohort + ".master_cluster_dups.bed",
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_bed
+      runtime_attr_override = runtime_attr_concat_masterclusterdups
   }
 
   call ConcatBed as ConcatClusterCombinedBed {
@@ -86,7 +87,7 @@ workflow MergeCohortVcfs {
       bed_shards = MakeClusterDupsCombinedBed.cluster_combined,
       filename = cohort + ".cluster.combined.bed",
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_bed
+      runtime_attr_override = runtime_attr_concat_clustercombined
   }
 
   output {
