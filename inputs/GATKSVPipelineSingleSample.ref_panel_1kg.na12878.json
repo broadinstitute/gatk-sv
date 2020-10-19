@@ -24,8 +24,8 @@
 
   "GATKSVPipelineSingleSample.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-cdd8b4e",
   "GATKSVPipelineSingleSample.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
-  "GATKSVPipelineSingleSample.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.1",
-  "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.1",
+  "GATKSVPipelineSingleSample.gatk_docker": "us.gcr.io/broad-gatk/gatk:4.1.8.1",
+  "GATKSVPipelineSingleSample.gatk_docker_pesr_override" : "us.gcr.io/broad-gatk/gatk:4.1.8.1",
   "GATKSVPipelineSingleSample.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "GATKSVPipelineSingleSample.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "GATKSVPipelineSingleSample.manta_docker": "us.gcr.io/broad-dsde-methods/manta:8645aa",
