@@ -318,41 +318,39 @@ task MakeClusterDupsCombinedBed {
     awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.cluster.bed" } }' ~{cohort_cluster}
     python3 <<CODE
     import sys
-    samp={}
-    var={}
+    # dictionary of (samples, varIDs) for de-duplicated variant for EACH varID corresponding to that unique variant
+    varID_data = {} 
     with open("~{contig}.cohort.combined.bed","r") as f: # for EACH variant ID, a list of duplicate variants and samples
         for line in f:
-            dat=line.split('\t')        
-            for variant in dat[3].split(":")[0:-1]:
-                samp[variant]=dat[4].split(',')[0:-1]
-                var[variant]=dat[3].split(":")[0:-1]
-    print("Read ~{contig} cohort combined into dictionary", file = sys.stderr)
-    with open("~{contig}.master_cluster_dups.bed",'w') as g: # Using cluster.bed, for each 
+            dat=line.split('\t')
+            varIDs_list = dat[3].split(":")[0:-1]
+            samples_list = dat[4].split(',')[0:-1]
+            for varID in varIDs_list:
+                varID_data[varID] = (samples_list, varIDs_list)
+    with open("~{contig}.master_cluster_dups.bed",'w') as g: # Using cluster.bed, for each clustered variant get varIDs and samples of the component calls
         with open("~{contig}.cluster.bed","r") as f:
             for line in f:
                 samples=[]
                 variants=[]
                 dat=line.rstrip().split("\t")
-                for variant in dat[6][0:-1].split(','):
-                    samples=samples+samp[variant]
-                    samples=list(set(samples))
-                    variants=variants+var[variant]
-                    variants=list(set(variants))
+                for varID in dat[6][0:-1].split(','):
+                    samples.extend(varID_data[varID][0]) # samples are first in tuple
+                    samples = list(set(samples))
+                    variants.extend(varID_data[varID][1]) # variant IDs are 2nd in tuple
+                    variants = list(set(variants))
                 g.write(dat[0]+'\t'+dat[1]+'\t'+dat[2]+'\t'+dat[3]+'\t'+dat[4]+'\t'+dat[5]+'\t'+":".join(variants)+':\t'+str(len(samples))+'\n')
-    print("Wrote ~{contig} master cluster dups", file = sys.stderr)
     with open("~{contig}.cluster.combined.bed",'w') as g:
         with open("~{contig}.cluster.bed","r") as f:
             for line in f:
                 samples=[]
                 variants=[]
                 dat=line.rstrip().split("\t")
-                for variant in dat[6][0:-1].split(','):
-                    samples=samples+samp[variant]
-                    samples=list(set(samples))
-                    variants=variants+var[variant]
-                    variants=list(set(variants))
+                for varID in dat[6][0:-1].split(','):
+                    samples.extend(varID_data[varID][0]) # samples are first in tuple
+                    samples = list(set(samples))
+                    variants.extend(varID_data[varID][1]) # variant IDs are 2nd in tuple
+                    variants = list(set(variants))
                 g.write(dat[0]+'\t'+dat[1]+'\t'+dat[2]+'\t'+dat[3]+'\t'+dat[4]+'\t'+dat[5]+'\t'+":".join(variants)+':\t'+','.join(samples)+',\n')
-    print("Wrote ~{contig} cohort combined", file = sys.stderr)
     CODE
   >>>
   runtime {
