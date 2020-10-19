@@ -318,7 +318,6 @@ task MakeClusterDupsCombinedBed {
     awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.cohort.combined.bed" } }' ~{cohort_combined}
     awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.cluster.bed" } }' ~{cohort_cluster}
     python3 <<CODE
-    import sys
     # dictionary of (samples, varIDs) for de-duplicated variant for EACH varID corresponding to that unique variant
     varID_data = {} 
     with open("~{contig}.cohort.combined.bed","r") as f: # for EACH variant ID, a list of duplicate variants and samples
