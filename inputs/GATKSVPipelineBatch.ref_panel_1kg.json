@@ -323,7 +323,7 @@
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA21122/analysis/NA21122.final.cram",
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA21133/analysis/NA21133.final.cram"
   ],
-  "GATKSVPipelineBatch.bam_or_cram_files": [
+  "GATKSVPipelineBatch.gvcfs": [
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.gVCF.2019-02-06/Sample_HG00096/analysis/HG00096.haplotypeCalls.er.raw.g.vcf.gz",
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.gVCF.2019-02-06/Sample_HG00129/analysis/HG00129.haplotypeCalls.er.raw.g.vcf.gz",
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.gVCF.2019-02-06/Sample_HG00140/analysis/HG00140.haplotypeCalls.er.raw.g.vcf.gz",
