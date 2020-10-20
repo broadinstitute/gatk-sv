@@ -24,7 +24,7 @@ workflow FilterOutlierSamples {
     Array[String] samples
     Array[String] algorithms
     Int N_IQR_cutoff
-
+    File cutoff_table
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
@@ -38,13 +38,22 @@ workflow FilterOutlierSamples {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
-      call IdentifyOutliers {
-        input:
-          vcf = select_first([vcfs[i]]),
-          N_IQR_cutoff = N_IQR_cutoff,
-          outfile = "${algorithms[i]}_outliers.txt",
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_identify_outliers
+        call IdentifyOutliersV2 as IdentifyOutliers_v2{
+          input:
+            vcf = select_first([vcfs[i]]),
+            cutoff_table = cutoff_table,
+            outfile = "${algorithms[i]}_outliers.txt",
+            algorithm = algorithms[i],
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_identify_outliers
+        }
+        call IdentifyOutliers {
+          input:
+            vcf = select_first([vcfs[i]]),
+            N_IQR_cutoff = N_IQR_cutoff,
+            outfile = "${algorithms[i]}_outliers.txt",
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_identify_outliers
       }
     }
   }
@@ -52,7 +61,7 @@ workflow FilterOutlierSamples {
   # Merge list of outliers
   call CatOutliers {
     input:
-      outliers = select_all(IdentifyOutliers.outliers_list),
+      outliers = flatten([select_all(IdentifyOutliers.outliers_list),select_all(IdentifyOutliers_v2.outliers_list)]),
       batch = batch,
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_cat_outliers
@@ -124,6 +133,55 @@ task IdentifyOutliers {
       ~{N_IQR_cutoff} \
       ~{outfile}
   
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+}
+
+task IdentifyOutliersV2 {
+  input {
+    File vcf
+    File cutoff_table
+    String outfile
+    String algorithm
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File outliers_list = "${outfile}"
+  }
+  command <<<
+
+    set -euo pipefail
+    # Count sv per class per sample
+    svtk count-svtypes ~{vcf} svcounts.txt
+
+    # Return list of samples exceeding cutoff for at least one sv class
+    /opt/sv-pipeline/03_variant_filtering/scripts/get_outliers_from_svcounts.helper_V2.R \
+      svcounts.txt \
+      ~{cutoff_table} \
+      ~{outfile} \
+      ~{algorithm}
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
