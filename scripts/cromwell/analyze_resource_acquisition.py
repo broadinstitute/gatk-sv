@@ -21,7 +21,11 @@ Summary: Scrapes workflow metadata to analyze resource acquisition (VMs, CPU, RA
 	of understanding resource peaks and timing jobs to avoid hitting quotas.
 
 Usage: 
-	python analyze_resource_acquisition workflow_metadata.json /path/to/output_basename [--plot_title WorkflowName]
+	python analyze_resource_acquisition workflow_metadata.json /path/to/output_basename [optional flags]
+	Optional flags:
+	--plot_title WorkflowName (WorkflowName will be prepended to plot title)
+	--save_table (to save a TSV file of the table used to create the plot)
+	--override_warning (to run script on workflow that raised a warning)
 
 Parameters:
 	workflow_metadata.json: path to Cromwell metadata file for workflow of interest
@@ -31,10 +35,10 @@ Parameters:
 
 Outputs:
 	- plot (png) of VMs, CPUs (total, preemptible, and nonpreemptible), RAM, and disk (HDD, SSD) acquisitioned over time 
-	- table of resource acquisition over time for each type of resource listed above
-	- text file of peak resource acquisition for each type of resource listed above
-	- (prints to stdout) number of non-preemptible VMs used and the names of the tasks that used them
-	- (prints to stdout) warning of any tasks that used call-caching
+	- (optional, with --save_table flag) table of resource acquisition over time for each type of resource listed above
+	- peak resource acquisition for each type of resource listed above (text file)
+	- number of non-preemptible VMs used (prints to stdout) and the names of the tasks that used them (text file, if any)
+	- warning if any tasks used call-caching (prints to stderr), and their task names (text file, if any)
 """
 NUM_CACHED = 0
 CACHED = set()
@@ -148,14 +152,18 @@ def getCalls(m, alias=None):
 		return call_metadata
 
 	if 'labels' in m:
+		# In alias, track hierarchy of workflow/task up to current task nicely without repetition
 		if alias is None:
 			alias = ""
-		elif alias[-1] != ".":
-			alias = alias + "."
+		to_add = ""
 		if 'wdl-call-alias' in m['labels']:
-			alias = alias + m['labels']['wdl-call-alias']
+			to_add = m['labels']['wdl-call-alias']
 		elif 'wdl-task-name' in m['labels']:
-			alias = alias + m['labels']['wdl-task-name']
+			to_add = m['labels']['wdl-task-name']
+		if to_add != "" and not alias.endswith(to_add):
+			if alias != "" and alias[-1] != ".":
+				alias += "."
+			alias += to_add
 
 	
 
@@ -165,11 +173,18 @@ def getCalls(m, alias=None):
 			# Skips scatters that don't contain calls
 			if '.' not in call:
 				continue
+			# In call_alias, track hierarchy of workflow/task up to current call nicely without repetition
 			if alias is None:
 				alias = ""
-			elif alias[-1] != ".":
-				alias = alias + "."
-			call_alias = alias + call
+			call_split = call.split('.')
+			call_name = call
+			if alias.endswith(call_split[0]):
+				call_name = call_split[1]
+			call_alias = alias
+			if call_alias != "" and call_alias[-1] != ".":
+				call_alias += "."
+			call_alias += call_name
+			# recursively get metadata
 			call_metadata.extend(getCalls(m['calls'][call], alias=call_alias))
 
 	if 'subWorkflowMetadata' in m:
@@ -230,14 +245,25 @@ def getCalls(m, alias=None):
 
 	return call_metadata
 
-def get_call_metadata(metadata_file):
+def warn_if_workflow_released(metadata, override_warning):
+	for event in metadata['workflowProcessingEvents']:
+		if event['description'] == "Released":
+			print("Warning: Server was interrupted during workflow execution, which is likely to impact plot accuracy.", file=sys.stderr)
+			if override_warning:
+				print("Proceeding with caution.", file=sys.stderr)
+			else:
+				print("To proceed anyway, re-run the script with the --override_warning flag.", file=sys.stderr)
+				exit(1)
+
+def get_call_metadata(metadata_file, override_warning=False):
 	"""
 	Based on: https://github.com/broadinstitute/gatk-sv/blob/master/scripts/cromwell/download_monitoring_logs.py
 	"""
 	metadata = json.load(open(metadata_file, 'r'))
+	warn_if_workflow_released(metadata, override_warning)
 	colnames = ['timestamp', 'vm_delta', 'cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta', 'memory_delta', 'hdd_delta', 'ssd_delta']
 
-	call_metadata = getCalls(metadata, metadata['workflowName'])
+	call_metadata = getCalls(metadata)
 	call_metadata = pd.DataFrame(call_metadata, columns=colnames)
 
 	return call_metadata
@@ -329,61 +355,72 @@ def write_peak_usage(m, peak_file):
 		out.write("Peak HDD: " + str(max(m['hdd'])) + " GiB" + "\n")
 		out.write("Peak SSD: " + str(max(m['ssd'])) + " GiB" + "\n")
 
+def write_cached_warning(cached_file):
+	global CACHED
+	global NUM_CACHED
+	if NUM_CACHED > 0:
+		if NUM_CACHED == 1:
+			print("Warning: %d task was call-cached, so this analysis may underestimate typical resource acquisition for this workflow." % NUM_CACHED, file = sys.stderr)
+		else:
+			print("Warning: %d tasks were call-cached, so this analysis may underestimate typical resource acquisition for this workflow." % NUM_CACHED, file = sys.stderr)
+		print("See %s for names of cached tasks." % cached_file, file = sys.stderr)
+		with open(cached_file, 'w') as cached_out:
+			cached_out.write("%d cached task(s) (repeat names omitted):\n" % NUM_CACHED)
+			cached_out.write("\n".join(sorted(list(CACHED))) + "\n")
+	else:
+		print("No cached tasks", file = sys.stderr)
+
+def write_nonpreemptible_vms(vms_file):
+	global NUM_NONPREEMPTIBLE
+	global NONPREEMBTIBLE_TASKS
+	print("Total non-preemptible VMs: %d" % NUM_NONPREEMPTIBLE)
+	if NUM_NONPREEMPTIBLE > 0:
+		print("See %s for names of tasks running on non-preemptible VMs." % vms_file)
+		with open(vms_file, 'w') as vms_out:
+			vms_out.write(("Total non-preemptible VMs: %d\n" % NUM_NONPREEMPTIBLE))
+			vms_out.write("Tasks running on non-preemptible VMs include (repeat names omitted):\n")
+			vms_out.write("\n".join([x + ": " + str(NONPREEMBTIBLE_TASKS[x]) for x in sorted(list(NONPREEMBTIBLE_TASKS.keys()))]) + "\n")
+
 # Main function
 def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument("workflow_metadata", help="Workflow metadata JSON file")
 	parser.add_argument("output_base", help="Output directory + basename")
-	parser.add_argument("--plot_title", help="Workflow name for plot title: <name> Resource Acquisition Over Time", required=False, default = "")
+	parser.add_argument("--plot_title", help="Provide workflow name for plot title: <name> Resource Acquisition Over Time", required=False, default = "")
+	parser.add_argument("--override_warning", help="Execute script despite server interrupted warning, which may impact plot accuracy", \
+		required=False, default=False, action='store_true')
+	parser.add_argument("--save_table", help="Save TSV copy of resources over time table used to make plot", required=False, default=False, action='store_true')
 	args = parser.parse_args()
 	random.seed(SEED)
 
-	metadata_file = args.workflow_metadata
-	output_base = args.output_base
-	plt_title = args.plot_title
+	metadata_file, output_base, plt_title, override_warning, save_table = args.workflow_metadata, args.output_base, args.plot_title, args.override_warning, args.save_table
 	if plt_title != "":
 		plt_title += " "
 	sep = "."
 	if basename(output_base) == "":
 		sep = ""
 
-	call_metadata = get_call_metadata(metadata_file)
+	call_metadata = get_call_metadata(metadata_file, override_warning)
 	call_metadata = transform_call_metadata(call_metadata)
 
-	global CACHED
-	global NUM_CACHED
-	if NUM_CACHED > 0:
-		if NUM_CACHED == 1:
-			print("Warning: %d task was call-cached, so this analysis may underestimate typical resource acquisition for this workflow. \nThe cached task was:" % NUM_CACHED)
-		else:
-			print("Warning: %d tasks were call-cached, so this analysis may underestimate typical resource acquisition for this workflow. \nCached tasks include (repeat names omitted):" % NUM_CACHED)
-		print("\n".join(list(CACHED)))
-	else:
-		print("No cached tasks")
+	cached_file = output_base + sep + "cached.txt"
+	write_cached_warning(cached_file)
 	
 	plot_file = output_base + sep + "plot.png"
 	plot_resources_time(call_metadata, plt_title, plot_file)
 
-	table_file = output_base + sep + "table.tsv"
-	write_resources_time_table(call_metadata, table_file)
+	if save_table:
+		table_file = output_base + sep + "table.tsv"
+		write_resources_time_table(call_metadata, table_file)
 
 	peak_file = output_base + sep + "peaks.txt"
 	write_peak_usage(call_metadata, peak_file)
 
-	global NUM_NONPREEMPTIBLE
-	print("Total non-preemptible VMs: %d" % NUM_NONPREEMPTIBLE)
-	if NUM_NONPREEMPTIBLE > 0:
-		print("Tasks running on non-preemptible VMs include (repeat names omitted):")
-		print("\n".join([x + ": " + str(NONPREEMBTIBLE_TASKS[x]) for x in NONPREEMBTIBLE_TASKS.keys()]))
-
+	vms_file = output_base + sep + "vms_file.txt"
+	write_nonpreemptible_vms(vms_file)
 
 if __name__== "__main__":
 	main()
-
-
-
-
-
 
 
 
