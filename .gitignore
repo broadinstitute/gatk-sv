@@ -31,3 +31,4 @@ src/svtk/svtk/utils/s3bam.pyc
 src/svtk/svtk/utils/utils.pyc
 src/svtk/svtk/vcfcluster.pyc
 test/
+inputs/
