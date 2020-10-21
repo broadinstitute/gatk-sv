@@ -20,7 +20,6 @@ def main():
     input_files = glob.glob(args.input_directory + "/*.json")
     input_dict = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
 
-    print(input_dict)
 
     template_string = args.template.read()
 
