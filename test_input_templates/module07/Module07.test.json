@@ -2,13 +2,13 @@
   "Module07.vcf" :     "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/61a7ce7c-3b3c-4716-977a-ffb6e34464b6/minGQ_filter_workflow_v2/d841eeb6-90c3-4ff2-8b99-7a793c85cfea/call-combine_vcfs/Talkowski_SV_PCR-free_WGS_144.minGQ_filtered.vcf.gz",
   "Module07.vcf_idx" : "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/61a7ce7c-3b3c-4716-977a-ffb6e34464b6/minGQ_filter_workflow_v2/d841eeb6-90c3-4ff2-8b99-7a793c85cfea/call-combine_vcfs/Talkowski_SV_PCR-free_WGS_144.minGQ_filtered.vcf.gz.tbi",
 
-  "Module07.protein_coding_gtf" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.canonical_pc.gtf.gz",
-  "Module07.linc_rna_gtf" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gencode.lincRNA.gtf.gz",
-  "Module07.promoter_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/promoter.bed",
-  "Module07.noncoding_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
-  "Module07.ref_bed" :       "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gnomad_AF/gnomad_v2.1_sv.sites.GRCh38.bed.gz",
-  "Module07.ref_prefix" :       "gnomad_v2.1_sv",
-  "Module07.population" :      ["ALL", "AFR", "AMR", "EAS", "EUR"],
+  "Module07.protein_coding_gtf" : {{ resources_hg38.protein_coding_gtf | tojson }},
+  "Module07.linc_rna_gtf" :       {{ resources_hg38.linc_rna_gtf | tojson }},
+  "Module07.promoter_bed" :       {{ resources_hg38.promoter_bed | tojson }},
+  "Module07.noncoding_bed" :       {{ resources_hg38.noncoding_bed | tojson }},
+  "Module07.ref_bed" :       {{ resources_hg38.external_af_ref_bed | tojson }},
+  "Module07.ref_prefix" :       {{ resources_hg38.external_af_ref_bed_prefix | tojson }},
+  "Module07.population" :      {{ resources_hg38.external_af_population | tojson }},
 
 
   "Module07.contig_list" :  "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/chromosomes_nochrY.fai",

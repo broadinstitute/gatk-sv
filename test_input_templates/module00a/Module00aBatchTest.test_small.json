@@ -65,11 +65,11 @@
   "Module00aBatchTest.Module00aBatch.collect_coverage": "true",
   "Module00aBatchTest.Module00aBatch.collect_pesr": "true",
 
-  "Module00aBatchTest.Module00aBatch.preprocessed_intervals": { resources_hg38.preprocessed_intervals | tojson }},
+  "Module00aBatchTest.Module00aBatch.preprocessed_intervals": {{ resources_hg38.preprocessed_intervals | tojson }},
 
   "Module00aBatchTest.Module00aBatch.delly_exclude_intervals_file": "gs://gatk-sv-resources/resources/delly_human.hg38.excl.tsv",
   "Module00aBatchTest.Module00aBatch.manta_region_bed":   {{ resources_hg38.manta_region_bed | tojson }},
-  "Module00aBatchTest.Module00aBatch.melt_standard_vcf_header": "gs://gatk-sv-resources/resources/melt_standard_vcf_header.txt",
+  "Module00aBatchTest.Module00aBatch.melt_standard_vcf_header": {{ resources_hg38.melt_std_vcf_header | tojson }},
 
   "Module00aBatchTest.Module00aBatch.wham_include_list_bed_file":   {{ resources_hg38.wham_include_list_bed_file | tojson }},
 

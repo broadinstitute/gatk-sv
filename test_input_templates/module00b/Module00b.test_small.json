@@ -1,9 +1,10 @@
 {
   "Module00b.run_vcf_qc" : "true",
+  "Module00b.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "Module00b.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "Module00b.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "Module00b.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
-  "Module00b.wgd_scoring_mask": { resources_hg38.wgd_scoring_mask | tojson }},
+  "Module00b.wgd_scoring_mask": {{ resources_hg38.wgd_scoring_mask | tojson }},
   "Module00b.genome_file":   {{ resources_hg38.genome_file | tojson }},
 
   "Module00b.batch": "test_small",

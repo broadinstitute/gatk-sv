@@ -20,9 +20,9 @@
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.EUR.bed.gz",
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.OTH.bed.gz"
   ],
-  "Module03Qc.sanders_2015_tarball": "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
-  "Module03Qc.collins_2017_tarball": "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz",
-  "Module03Qc.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
+  "Module03Qc.sanders_2015_tarball": {{ resources_hg38.sanders_2015_tarball | tojson }},
+  "Module03Qc.collins_2017_tarball": {{ resources_hg38.collins_2017_tarball | tojson }},
+  "Module03Qc.werling_2018_tarball": {{ resources_hg38.werling_2018_tarball | tojson }},
 
   
   "Module03Qc.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},

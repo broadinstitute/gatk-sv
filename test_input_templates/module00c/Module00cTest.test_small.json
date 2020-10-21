@@ -14,6 +14,7 @@
     "SM-HXUD2"
   ],
 
+  "Module00cTest.Module00c.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "Module00cTest.PlotMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "Module00cTest.Module00cMetrics.linux_docker" : {{ dockers.linux_docker | tojson }},
@@ -79,7 +80,7 @@
   "Module00cTest.Module00c.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
   "Module00cTest.Module00c.run_matrix_qc": "true",
 
-  "Module00cTest.Module00c.unpadded_intervals_file" : { resources_hg38.unpadded_intervals_file | tojson }},
+  "Module00cTest.Module00c.unpadded_intervals_file" : {{ resources_hg38.unpadded_intervals_file | tojson }},
   "Module00cTest.Module00c.dbsnp_vcf" : {{ resources_hg38.dbsnp_vcf | tojson }},
   "Module00cTest.Module00c.ref_fasta": {{ resources_hg38.reference_fasta | tojson }},
   "Module00cTest.Module00c.ref_fasta_index": {{ resources_hg38.reference_index | tojson }},

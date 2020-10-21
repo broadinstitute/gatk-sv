@@ -1,11 +1,11 @@
 {
-  "Module05_06.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
+  "Module05_06.bin_exclude": {{ resources_hg38.bin_exclude | tojson }},
   "Module05_06.contig_list":   {{ resources_hg38.primary_contigs_fai | tojson }},
   "Module05_06.cytobands": {{ resources_hg38.cytoband | tojson }},
   "Module05_06.mei_bed": {{ resources_hg38.mei_bed | tojson }},
   "Module05_06.pe_exclude_list": {{ resources_hg38.pesr_exclude_list | tojson }},
   "Module05_06.depth_exclude_list": {{ resources_hg38.depth_exclude_list | tojson }},
-  "Module05_06.empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
+  "Module05_06.empty_file" : {{ resources_hg38.empty_file | tojson }},
 
   "Module05_06.thousand_genomes_tarballs": [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
@@ -26,9 +26,9 @@
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.EUR.bed.gz",
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.OTH.bed.gz"
   ],
-  "Module05_06.sanders_2015_tarball": "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
-  "Module05_06.collins_2017_tarball": "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz",
-  "Module05_06.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
+  "Module05_06.sanders_2015_tarball": {{ resources_hg38.sanders_2015_tarball | tojson }},
+  "Module05_06.collins_2017_tarball": {{ resources_hg38.collins_2017_tarball | tojson }},
+  "Module05_06.werling_2018_tarball": {{ resources_hg38.werling_2018_tarball | tojson }},
 
   "Module05_06.min_sr_background_fail_batches": 0.5,
   "Module05_06.max_shards_per_chrom_clean_vcf_step1": 200,

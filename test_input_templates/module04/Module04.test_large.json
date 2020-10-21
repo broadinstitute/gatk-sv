@@ -15,7 +15,7 @@
   "Module04.batch_depth_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz",
   "Module04.batch_pesr_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz",
   "Module04.famfile": "gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam",
-  "Module04.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
+  "Module04.bin_exclude": {{ resources_hg38.bin_exclude | tojson }},
   "Module04.cohort_combined_bed": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
   "Module04.cohort_sort": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
   "Module04.discfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz",
