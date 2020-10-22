@@ -74,7 +74,10 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     chr1_pos2 = chr1_pos1 + 1
     chr1_pos2_ref = get_ref_base(chr1, chr1_pos2, ref_fasta)
     chr2 = record.info['CHR2']
-    chr2_pos1 = record.stop
+    if 'END2' in record.info.keys():
+        chr2_pos1 = int(record.info['END2'])
+    else:
+        chr2_pos1 = record.stop
     chr2_pos1_ref = get_ref_base(chr2, chr2_pos1, ref_fasta)
     chr2_pos2 = chr2_pos1 + 1
     chr2_pos2_ref = get_ref_base(chr2, chr2_pos2, ref_fasta)
