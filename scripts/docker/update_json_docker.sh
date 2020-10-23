@@ -68,7 +68,7 @@ JSONS=$(printf "%s "  "${JSON_ARR[@]}")
 for name in "${DOCKER_NAME_ARR[@]}"; do
   docker_var=$(tr '-' '_' <<< "${name}")"_docker"
   docker_regex='\.'"${docker_var}"'"\s*:\s*".+\/.+:.+"'
-  cmd="perl -pi -e 's/${docker_regex}/.${docker_var}\": \"${DOCKER_ROOT}\/${name}:${DOCKER_TAG}\"/g' ${JSONS}"
+  cmd="perl -pi -e 's|${docker_regex}|.${docker_var}\": \"${DOCKER_ROOT}\/${name}:${DOCKER_TAG}\"|g' ${JSONS}"
   echo "${cmd}"
   eval "${cmd}"
 done
