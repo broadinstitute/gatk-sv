@@ -73,6 +73,12 @@ Example workflow inputs can be found in `/inputs`. All required resources are av
 
 The input values are provided only as an example and are not publicly accessible. In order to include MELT, these values must be provided by the user. MELT can be disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to `false`.
 
+#### Requester pays buckets
+**Important**: The following parameters must be set when certain input data is in requester pays (RP) buckets:
+
+* `GATKSVPipelineSingleSample.requester_pays_cram` and `GATKSVPipelineBatch.Module00aBatch.requester_pays_crams` - set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
+* `GATKSVPipelineBatch.GATKSVPipelinePhase1.gcs_project_for_requester_pays` - set to your Google Cloud Project ID if gVCFs are in an RP bucket, otherwise omit this parameter.
+
 #### Execution
 We recommend running the pipeline on a dedicated [Cromwell](https://github.com/broadinstitute/cromwell) server with a [cromshell](https://github.com/broadinstitute/cromshell) client. A batch run can be started with the following commands:
 

@@ -60,10 +60,12 @@ workflow Module00c {
     # BAF generation
     # Required for cohorts if BAF_files not provided
 
+
     # BAF Option #1, GVCFs
     Array[File]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
+    String? gvcf_gcs_project_for_requester_pays  # Required only if GVCFs are in a requester pays bucket
 
     # BAF Option #2, position-sharded VCFs
     Array[File]? snp_vcfs
@@ -246,6 +248,7 @@ workflow Module00c {
         ref_dict = ref_dict,
         inclusion_bed = inclusion_bed,
         batch = batch,
+        gcs_project_for_requester_pays = gvcf_gcs_project_for_requester_pays,
         gatk_docker = gatk_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,

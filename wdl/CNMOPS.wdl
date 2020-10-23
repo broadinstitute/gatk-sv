@@ -320,7 +320,7 @@ task CNSampleNormal {
     }
   }
 
-  Float mem_gb_base = 2.0
+  Float mem_gb_base = 4.0
   Float mem_gb_scale = 4.0
   Float mem_gb = mem_gb_base + mem_gb_scale * size(bincov_matrix, "GiB")
   Int disk_gb_base = 10

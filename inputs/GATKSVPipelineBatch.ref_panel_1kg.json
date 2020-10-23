@@ -7,6 +7,7 @@
   "GATKSVPipelineBatch.batch": "ref_panel_1kg_v1",
   "GATKSVPipelineBatch.ped_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/ped/1kg_ref_panel_v1.ped",
   "GATKSVPipelineBatch.Module00aBatch.requester_pays_crams": "true",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : "broad-dsde-methods",
   "GATKSVPipelineBatch.sample_ids": [
     "HG00096",
     "HG00129",
