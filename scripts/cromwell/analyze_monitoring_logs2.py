@@ -16,7 +16,7 @@ import sys
 #  and individually for each shard ("dynamic").
 #
 # Usage:
-#   python analyze_monitoring_logs.py /path/to/log_summary_table /path/to/output_base [optional parameters]
+#   python analyze_monitoring_logs2.py /path/to/log_summary_table /path/to/output_base [optional parameters]
 #
 # Required parameters:
 #   /path/to/logs : Path containing monitoring script log summary TSV from get_cromwell_resource_usage2.sh -u -r 
