@@ -25,7 +25,7 @@ Usage:
 	Optional flags:
 	--plot_title WorkflowName (WorkflowName will be prepended to plot title)
 	--save_table (to save a TSV file of the table used to create the plot)
-	--override_warning (to run script on workflow that raised a warning)
+	--override_warning (to attempt to run script on workflow that raised a warning)
 
 Parameters:
 	workflow_metadata.json: path to Cromwell metadata file for workflow of interest
@@ -36,12 +36,12 @@ Parameters:
 Outputs:
 	- plot (png) of VMs, CPUs (total, preemptible, and nonpreemptible), RAM, and disk (HDD, SSD) acquisitioned over time 
 	- (optional, with --save_table flag) table of resource acquisition over time for each type of resource listed above
-	- peak resource acquisition for each type of resource listed above (text file)
-	- number of non-preemptible VMs used (prints to stdout) and the names of the tasks that used them (text file, if any)
-	- warning if any tasks used call-caching (prints to stderr), and their task names (text file, if any)
+	- peak resource acquisition for each type of resource listed above (TSV file)
+	- number of non-preemptible VMs used (prints to stdout) and the names of the tasks that used them (TSV file, if any)
+	- number of tasks call-cached (prints to stdout), and their task names (TSV file, if any)
 """
 NUM_CACHED = 0
-CACHED = set()
+CACHED = dict()
 NUM_NONPREEMPTIBLE = 0
 NONPREEMBTIBLE_TASKS = dict()
 
@@ -240,8 +240,11 @@ def getCalls(m, alias=None):
 		if cached:
 			global CACHED
 			global NUM_CACHED
-			CACHED.add(alias)
 			NUM_CACHED += 1
+			if alias in CACHED:
+				CACHED[alias] += 1
+			else:
+				CACHED[alias] = 1
 
 	return call_metadata
 
@@ -368,40 +371,38 @@ def write_resources_time_table(call_metadata, table_file):
 def write_peak_usage(m, peak_file):
 	print("Writing " + peak_file, file = sys.stderr)
 	with open(peak_file, 'w') as out:
-		out.write("Peak VMs: " + str(max(m['vm'])) + "\n")
-		out.write("Peak CPUs (all): " + str(max(m['cpu_all'])) + "\n")
-		out.write("Peak Preemptible CPUs: " + str(max(m['cpu_preemptible'])) + "\n")
-		out.write("Peak Non-preemptible CPUs: " + str(max(m['cpu_nonpreemptible'])) + "\n")
-		out.write("Peak RAM: " + "{:.2f}".format(max(m['memory'])) + " GiB" + "\n")
-		out.write("Peak HDD: " + str(max(m['hdd'])) + " GiB" + "\n")
-		out.write("Peak SSD: " + str(max(m['ssd'])) + " GiB" + "\n")
+		out.write("peak_vms\t" + str(max(m['vm'])) + "\n")
+		out.write("peak_cpu_all\t" + str(max(m['cpu_all'])) + "\n")
+		out.write("peak_cpu_preemptible\t" + str(max(m['cpu_preemptible'])) + "\n")
+		out.write("peak_cpu_nonpreemptible\t" + str(max(m['cpu_nonpreemptible'])) + "\n")
+		out.write("peak_ram_gib\t" + "{:.2f}".format(max(m['memory'])) + "\n")
+		out.write("peak_disk_hdd_gib\t" + str(max(m['hdd'])) + "\n")
+		out.write("peak_disk_ssd_gib\t" + str(max(m['ssd'])) + "\n")
 
 def write_cached_warning(cached_file):
 	global CACHED
 	global NUM_CACHED
 	if NUM_CACHED > 0:
-		if NUM_CACHED == 1:
-			print("Warning: %d task was call-cached, so this analysis may underestimate typical resource acquisition for this workflow." % NUM_CACHED, file = sys.stderr)
-		else:
-			print("Warning: %d tasks were call-cached, so this analysis may underestimate typical resource acquisition for this workflow." % NUM_CACHED, file = sys.stderr)
-		print("See %s for names of cached tasks." % cached_file, file = sys.stderr)
+		print("%d cached tasks found, writing tasks to %s." % (NUM_CACHED, cached_file))
 		with open(cached_file, 'w') as cached_out:
-			cached_out.write("%d cached task(s) (repeat names omitted):\n" % NUM_CACHED)
-			cached_out.write("\n".join(sorted(list(CACHED))) + "\n")
+			cached_out.write("#task_name\tnum_cached\n")
+			cached_out.write("all_tasks\t%d\n" % NUM_CACHED)
+			cached_out.write("\n".join([x + '\t' + str(CACHED[x]) for x in sorted(list(CACHED.keys()))]) + "\n")
 	else:
-		print("No cached tasks", file = sys.stderr)
+		print("0 cached tasks found.")
 
 def write_nonpreemptible_vms(vms_file):
 	global NUM_NONPREEMPTIBLE
 	global NONPREEMBTIBLE_TASKS
-	print("Total non-preemptible VMs: %d" % NUM_NONPREEMPTIBLE)
 	if NUM_NONPREEMPTIBLE > 0:
-		print("See %s for names of tasks running on non-preemptible VMs." % vms_file)
+		print("%d non-preemptible VMs found, writing tasks to %s." % (NUM_NONPREEMPTIBLE, vms_file))
 		with open(vms_file, 'w') as vms_out:
-			vms_out.write(("Total non-preemptible VMs: %d\n" % NUM_NONPREEMPTIBLE))
-			vms_out.write("Tasks running on non-preemptible VMs include (repeat names omitted):\n")
-			vms_out.write("\n".join([x + ": " + str(NONPREEMBTIBLE_TASKS[x]) for x in sorted(list(NONPREEMBTIBLE_TASKS.keys()))]) + "\n")
-
+			vms_out.write("#task_name\tnum_nonpreemptible\n")
+			vms_out.write("all_tasks\t%d\n" % NUM_NONPREEMPTIBLE)
+			vms_out.write("\n".join([x + '\t' + str(NONPREEMBTIBLE_TASKS[x]) for x in sorted(list(NONPREEMBTIBLE_TASKS.keys()))]) + "\n")
+	else:
+		print("0 non-preemptible VMs found.")
+			
 def check_file_nonempty(f):
 	if not isfile(f): 
 		print("ERROR: Required metadata input file %s does not exist." % f, file=sys.stderr)
@@ -416,7 +417,7 @@ def main():
 	parser.add_argument("workflow_metadata", help="Workflow metadata JSON file")
 	parser.add_argument("output_base", help="Output directory + basename")
 	parser.add_argument("--plot_title", help="Provide workflow name for plot title: <name> Resource Acquisition Over Time", required=False, default = "")
-	parser.add_argument("--override_warning", help="Execute script despite server interrupted warning, which may impact plot accuracy", \
+	parser.add_argument("--override_warning", help="Execute script workflow warning (server interrupted, workflow failed, etc.), which may impact plot accuracy", \
 		required=False, default=False, action='store_true')
 	parser.add_argument("--save_table", help="Save TSV copy of resources over time table used to make plot", required=False, default=False, action='store_true')
 	args = parser.parse_args()
@@ -433,8 +434,11 @@ def main():
 	call_metadata = get_call_metadata(metadata_file, override_warning)
 	call_metadata = transform_call_metadata(call_metadata)
 
-	cached_file = output_base + sep + "cached.txt"
+	cached_file = output_base + sep + "cached.tsv"
 	write_cached_warning(cached_file)
+
+	vms_file = output_base + sep + "vms_file.tsv"
+	write_nonpreemptible_vms(vms_file)
 	
 	plot_file = output_base + sep + "plot.png"
 	plot_resources_time(call_metadata, plt_title, plot_file)
@@ -443,11 +447,9 @@ def main():
 		table_file = output_base + sep + "table.tsv"
 		write_resources_time_table(call_metadata, table_file)
 
-	peak_file = output_base + sep + "peaks.txt"
+	peak_file = output_base + sep + "peaks.tsv"
 	write_peak_usage(call_metadata, peak_file)
 
-	vms_file = output_base + sep + "vms_file.txt"
-	write_nonpreemptible_vms(vms_file)
 
 if __name__== "__main__":
 	main()
