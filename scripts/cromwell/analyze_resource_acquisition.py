@@ -13,7 +13,7 @@ import random
 import matplotlib.pyplot as plt
 import matplotlib.ticker
 import sys
-from os.path import basename
+from os.path import basename, isfile, getsize
 SEED = 42
 
 """
@@ -245,25 +245,46 @@ def getCalls(m, alias=None):
 
 	return call_metadata
 
-def warn_if_workflow_released(metadata, override_warning):
+def check_workflow_valid(metadata, metadata_file, override_warning):
+	# these errors cannot be overcome
+	if 'status' not in metadata:
+		print("ERROR: Incomplete metadata input file %s. File lacks workflow status field." % metadata_file, file=sys.stderr)
+		exit(1)
+	if metadata['status'] == "fail": # Unrecognized workflow ID failure - unable to download metadata
+		err_msg = "ERROR: Workflow metadata download failure."
+		if 'message' in metadata:
+			err_msg += " Message: " + metadata['message']
+		print(err_msg, file=sys.stderr)
+		exit(1)
+	# these errors may be able to be overcome for partial output
+	found_retryable_error = False
+	if metadata['status'] == "Failed":
+		print("Warning: Workflow failed.", file=sys.stderr)
+		found_retryable_error = True
 	for event in metadata['workflowProcessingEvents']:
 		if event['description'] == "Released":
 			print("Warning: Server was interrupted during workflow execution, which is likely to impact plot accuracy.", file=sys.stderr)
-			if override_warning:
-				print("Proceeding with caution.", file=sys.stderr)
-			else:
-				print("To proceed anyway, re-run the script with the --override_warning flag.", file=sys.stderr)
-				exit(1)
+			found_retryable_error = True
+			break
+	if found_retryable_error:
+		if override_warning:
+			print("Override_warning=TRUE. Proceeding with caution.", file=sys.stderr)
+		else:
+			print("To attempt to proceed anyway, re-run the script with the --override_warning flag.", file=sys.stderr)
+			exit(1)
 
 def get_call_metadata(metadata_file, override_warning=False):
 	"""
 	Based on: https://github.com/broadinstitute/gatk-sv/blob/master/scripts/cromwell/download_monitoring_logs.py
 	"""
 	metadata = json.load(open(metadata_file, 'r'))
-	warn_if_workflow_released(metadata, override_warning)
+	check_workflow_valid(metadata, metadata_file, override_warning)
 	colnames = ['timestamp', 'vm_delta', 'cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta', 'memory_delta', 'hdd_delta', 'ssd_delta']
 
 	call_metadata = getCalls(metadata)
+	if len(call_metadata) == 0:
+		print("ERROR: No calls in workflow metadata.", file=sys.stderr)
+		exit(1)
 	call_metadata = pd.DataFrame(call_metadata, columns=colnames)
 
 	return call_metadata
@@ -381,6 +402,14 @@ def write_nonpreemptible_vms(vms_file):
 			vms_out.write("Tasks running on non-preemptible VMs include (repeat names omitted):\n")
 			vms_out.write("\n".join([x + ": " + str(NONPREEMBTIBLE_TASKS[x]) for x in sorted(list(NONPREEMBTIBLE_TASKS.keys()))]) + "\n")
 
+def check_file_nonempty(f):
+	if not isfile(f): 
+		print("ERROR: Required metadata input file %s does not exist." % f, file=sys.stderr)
+		exit(1)
+	elif getsize(f) == 0:
+		print("ERROR: Required metadata input file %s is empty." % f, file=sys.stderr)
+		exit(1)
+
 # Main function
 def main():
 	parser = argparse.ArgumentParser()
@@ -400,6 +429,7 @@ def main():
 	if basename(output_base) == "":
 		sep = ""
 
+	check_file_nonempty(metadata_file)
 	call_metadata = get_call_metadata(metadata_file, override_warning)
 	call_metadata = transform_call_metadata(call_metadata)
 
