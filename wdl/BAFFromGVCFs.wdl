@@ -208,6 +208,7 @@ task GenotypeGVCFs {
      -D ~{dbsnp_vcf} \
      -G StandardAnnotation \
      --only-output-calls-starting-in-intervals \
+     --allow-old-rms-mapping-quality-annotation-data \
      -V gendb://$WORKSPACE \
      -L ~{interval}
   >>>
