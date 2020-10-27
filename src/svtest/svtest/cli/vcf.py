@@ -131,7 +131,7 @@ def get_metrics(ftest, fbase, contigs, variant_types, min_ro, padding, samples, 
     error_counts = count_errors(test_records, contigs, max_warnings)
 
     variant_type_counts = get_count_by_type(pass_records, variant_types)
-    size_counts = get_distributions_by_type(pass_records, variant_types, "SVLEN", SIZES)
+    size_counts = get_distributions_by_type(pass_records, variant_types, "SVLEN", SIZES, exclude_types=['BND'])
 
     metrics = add_error_count_metrics({}, error_counts, metric_prefix)
     if base_vcf is not None:
@@ -156,7 +156,8 @@ def get_metrics(ftest, fbase, contigs, variant_types, min_ro, padding, samples, 
     for type in variant_types:
         metrics[metric_prefix + VCF_METRIC_STR + type + "_count"] = unfiltered_variant_type_counts[type]
         metrics[metric_prefix + VCF_METRIC_STR + type + "_pass_count"] = variant_type_counts[type]
-        metrics = add_binned_metrics(size_counts, SIZES, type, metrics, metric_prefix, "pass_size")
+        if type != 'BND':
+            metrics = add_binned_metrics(size_counts, SIZES, type, metrics, metric_prefix, "pass_size")
         if genotyped:
             metrics = add_binned_metrics(allele_frequencies, AF_BINS, type, metrics, metric_prefix, "pass_af")
             if type in num_singletons:
@@ -346,7 +347,7 @@ def get_count_by_type(records, variant_types):
     return counts
 
 
-def get_distributions_by_type(records, variant_types, field, bins):
+def get_distributions_by_type(records, variant_types, field, bins, exclude_types=[]):
     num_bins = len(bins)
     counts = {}
     types_set = set(variant_types)
@@ -354,9 +355,10 @@ def get_distributions_by_type(records, variant_types, field, bins):
         counts[type] = [0]*(num_bins+1)
     for record in records:
         type = vu.get_sv_type(record, types_set)
-        val = vu.get_info_field(record, field)
-        idx = get_distribution_index(val, bins, num_bins)
-        counts[type][idx] += 1
+        if not type in exclude_types:
+            val = vu.get_info_field(record, field)
+            idx = get_distribution_index(val, bins, num_bins)
+            counts[type][idx] += 1
     return counts
 
 
