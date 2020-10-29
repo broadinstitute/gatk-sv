@@ -96,7 +96,7 @@ workflow Module00cMetrics {
       baf_file = merged_BAF,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      mem_gib = 15,
+      mem_gib = 30,
       disk_gb = 100
   }
   call tu.SRMetrics {

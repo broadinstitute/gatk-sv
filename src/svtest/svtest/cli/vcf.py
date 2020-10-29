@@ -71,6 +71,10 @@ def main(argv):
                         help='Write false positives to file')
     parser.add_argument('--fn-file', type=str, default=None,
                         help='Write false negatives to file')
+    parser.add_argument('--fp-pass-file', type=str, default=None,
+                        help='Write PASS false positives to file')
+    parser.add_argument('--fn-pass-file', type=str, default=None,
+                        help='Write PASS false negatives to file')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -83,8 +87,15 @@ def main(argv):
 
     contigs = iou.read_contig_list(args.contig_list)
     samples = iou.read_samples_list(args.sample_list)
-    metrics, fp_intervals, fn_intervals = get_metrics(args.test_vcf, args.baseline_vcf, contigs, types_list, args.min_reciprocal_overlap,
-                          args.padding, samples, args.metric_prefix, args.max_warnings)
+    metrics, fp_intervals, fn_intervals, fp_intervals_pass, fn_intervals_pass = get_metrics(args.test_vcf,
+                                                                                            args.baseline_vcf,
+                                                                                            contigs,
+                                                                                            types_list,
+                                                                                            args.min_reciprocal_overlap,
+                                                                                            args.padding,
+                                                                                            samples,
+                                                                                            args.metric_prefix,
+                                                                                            args.max_warnings)
 
     # Write metrics
     write_metrics(metrics)
@@ -92,6 +103,10 @@ def main(argv):
         write_intervals(args.fp_file, fp_intervals)
     if args.fn_file is not None and fn_intervals is not None:
         write_intervals(args.fn_file, fn_intervals)
+    if args.fp_pass_file is not None and fp_intervals_pass is not None:
+        write_intervals(args.fp_pass_file, fp_intervals_pass)
+    if args.fn_pass_file is not None and fn_intervals_pass is not None:
+        write_intervals(args.fn_pass_file, fn_intervals_pass)
 
 
 def write_metrics(metrics):
@@ -141,10 +156,15 @@ def get_metrics(ftest, fbase, contigs, variant_types, min_ro, padding, samples, 
             raise ValueError("One of the vcfs has the varGQ field but the other does not")
         if collect_evidence != check_if_evidence(base_vcf):
             raise ValueError("One of the vcfs has the EVIDENCE field but the other does not")
-        metrics, fp_intervals, fn_intervals = add_evaluation_metrics(metrics, pass_records, base_vcf, variant_types, contigs, padding, min_ro, metric_prefix)
+        base_records = list(base_vcf.fetch())
+        metrics, fp_intervals, fn_intervals = add_evaluation_metrics(metrics, test_records, base_records, variant_types, contigs, padding, min_ro, metric_prefix)
+        base_pass_records = [r for r in base_records if ("PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
+        metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(metrics, pass_records, base_pass_records, variant_types, contigs, padding, min_ro, metric_prefix, metric_suffix="_pass")
     else:
         fp_intervals = None
         fn_intervals = None
+        fp_intervals_pass = None
+        fn_intervals_pass = None
 
     if genotyped:
         allele_frequencies, num_singletons = get_allele_frequency_counts(pass_records, test_vcf.header, variant_types)
@@ -167,7 +187,7 @@ def get_metrics(ftest, fbase, contigs, variant_types, min_ro, padding, samples, 
         if collect_evidence:
             metrics = add_metrics_from_dict(evidence_counts, type, metrics, metric_prefix, "pass_evidence")
 
-    return metrics, fp_intervals, fn_intervals
+    return metrics, fp_intervals, fn_intervals, fp_intervals_pass, fn_intervals_pass
 
 
 def add_error_count_metrics(metrics, error_counts, metric_prefix):
@@ -176,8 +196,7 @@ def add_error_count_metrics(metrics, error_counts, metric_prefix):
     return metrics
 
 
-def add_evaluation_metrics(metrics, test_records, base_vcf, variant_types, contigs, padding, min_ro, metric_prefix):
-    base_records = list(base_vcf.fetch())
+def add_evaluation_metrics(metrics, test_records, base_records, variant_types, contigs, padding, min_ro, metric_prefix, metric_suffix=""):
     test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
     base_tree = iu.create_trees_from_records(base_records, variant_types, contigs, padding=padding)
 
@@ -202,9 +221,9 @@ def add_evaluation_metrics(metrics, test_records, base_vcf, variant_types, conti
     fp_base_by_type = sum_counts_over_contigs(fp_base)
 
     for type in variant_types:
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_tp"] = tp_test_by_type[type]
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_fp"] = fp_test_by_type[type]
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_fn"] = fp_base_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type + "_tp" + metric_suffix] = tp_test_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type + "_fp" + metric_suffix] = fp_test_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type + "_fn" + metric_suffix] = fp_base_by_type[type]
     return metrics, fp_intervals_test, fp_intervals_base
 
 
