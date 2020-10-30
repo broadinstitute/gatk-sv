@@ -1,10 +1,10 @@
 {
   "Module02.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module02.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
+  "Module02.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
   "Module02.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
   "Module02.sv_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base:tb_update_gcnv_version_88bfceb",
   "Module02.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module02.linux_docker" : "ubuntu:18.04",
+  "Module02.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
 
   "Module02.BAF_split_size": "10000",
   "Module02.RD_split_size": "10000",
