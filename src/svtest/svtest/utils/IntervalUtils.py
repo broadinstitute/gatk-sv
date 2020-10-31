@@ -7,6 +7,7 @@ Useful utilities for intervals and interval trees.
 from intervaltree import IntervalTree
 import svtest.utils.VCFUtils as vu
 
+
 # Creates dictionary of trees[sv_type][contig] from iterable records of VariantRecords
 def create_trees_from_records(records, variant_types, contigs, padding=0):
     trees = {}
@@ -18,9 +19,35 @@ def create_trees_from_records(records, variant_types, contigs, padding=0):
     for record in records:
         type = vu.get_sv_type(record, variant_types_set)
         contig = record.chrom
-        length = vu.get_record_length(record)
+        if type == 'INS' or type == 'BND':
+            length = 0
+        else:
+            length = vu.get_record_length(record)
         trees[type][contig].addi(record.start - padding, record.start + length + padding)
     return trees
+
+
+# Creates dictionary of trees[sv_type][contig] from iterable records of VariantRecords
+def create_trees_from_bed_records(records, variant_types, contigs, padding=0):
+    trees = {}
+    variant_types_set = set(variant_types)
+    for type in variant_types:
+        trees[type] = {}
+        for contig in contigs:
+            trees[type][contig] = IntervalTree()
+    for record in records:
+        type = record[3]
+        if type not in variant_types_set:
+            raise ValueError("Unexpected SVTYPE in bed file: %s" % type)
+        contig = record[0]
+        start = record[1]
+        if type == 'INS' or type == 'BND':
+            length = 0
+        else:
+            length = record[2] - record[1]
+        trees[type][contig].addi(start - padding, start + length + padding)
+    return trees
+
 
 # Creates dictionary of trees[contig] from gzipped bed file
 def create_trees_from_bed(f, contigs, padding):
