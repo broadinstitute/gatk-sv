@@ -1,0 +1,12 @@
+{
+  "GATKSVPreprocessSample.sample_id": {{ ref_sample.name | tojson }},
+  "GATKSVPreprocessSample.manta_vcf": {{ ref_sample.manta_vcf | tojson }},
+  "GATKSVPreprocessSample.wham_vcf": {{ ref_sample.wham_vcf | tojson }},
+  "GATKSVPreprocessSample.melt_vcf": {{ ref_sample.melt_vcf | tojson }},
+  "GATKSVPreprocessSample.gcnv_segments_vcf": {{ ref_sample.gcnv_segments_vcf | tojson }},
+  "GATKSVPreprocessSample.cnv_beds": {{ ref_sample.cnv_beds | tojson }},
+
+  "GATKSVPreprocessSample.ref_fasta_fai": {{ reference_resources.reference_index | tojson }},
+
+  "GATKSVPreprocessSample.sv_pipeline_base_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}

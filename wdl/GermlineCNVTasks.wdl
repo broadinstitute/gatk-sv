@@ -518,7 +518,9 @@ task PostprocessGermlineCNVCalls {
 
     output {
         File genotyped_intervals_vcf = genotyped_intervals_vcf_filename
+        File genotyped_intervals_vcf_index = genotyped_intervals_vcf_filename + ".tbi"
         File genotyped_segments_vcf = genotyped_segments_vcf_filename
+        File genotyped_segments_vcf_index = genotyped_segments_vcf_filename + ".tbi"
         File denoised_copy_ratios = denoised_copy_ratios_filename
     }
 }

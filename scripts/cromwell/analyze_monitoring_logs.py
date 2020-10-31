@@ -147,7 +147,7 @@ def get_data_field(name, data):
   return [x[name] for x in data]
 
 def calc_group(data):
-  task_names = data.task.unique()
+  task_names = data['task'].unique()
   group_data = {}
   for task in task_names:
     d = data.loc[data['task'] == task]

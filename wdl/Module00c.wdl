@@ -11,10 +11,12 @@ import "MakeBincovMatrix.wdl" as mbm
 import "MatrixQC.wdl" as mqc
 import "MedianCov.wdl" as mc
 import "PESRPreprocessing.wdl" as pp
+import "GATKSVPreprocessSample.wdl" as pps
 import "GermlineCNVCase.wdl" as gcnv
 import "PloidyEstimation.wdl" as pe
 import "TinyResolve.wdl" as tiny
 import "Utils.wdl" as util
+import "Tasks0506.wdl" as tasks0506
 
 # Batch-level workflow:
 #   - Merge sample evidence data into a single batch
@@ -143,6 +145,7 @@ workflow Module00c {
     String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
+    String sv_pipeline_base_docker
     String linux_docker
     String condense_counts_docker
     String gatk_docker
@@ -166,6 +169,8 @@ workflow Module00c {
     Float? cnmops_mem_gb_override_sample10
     Float? cnmops_mem_gb_override_sample3
 
+    RuntimeAttr? runtime_attr_combine_cmmops
+    RuntimeAttr? runtime_attr_preprocess_sample
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_merge_baf
@@ -187,6 +192,9 @@ workflow Module00c {
     RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
+
+    # DO NOT USE
+    File? NONE_FILE_
   }
 
   Array[String] all_samples = flatten(select_all([samples, ref_panel_samples]))
@@ -410,23 +418,46 @@ workflow Module00c {
       runtime_attr_explode = runtime_attr_explode
   }
 
-  call dpn.MergeDepth as MergeDepth {
+  call tasks0506.ConcatBeds as CombineCnmops {
     input:
-      samples = samples,
-      genotyped_segments_vcfs = gCNVCase.genotyped_segments_vcf,
-      contig_ploidy_calls = gCNVCase.sample_contig_ploidy_calls_tars,
-      gcnv_qs_cutoff = gcnv_qs_cutoff,
-      defragment_max_dist = defragment_max_dist,
-      std_cnmops_del = CNMOPS.Del,
-      std_cnmops_dup = CNMOPS.Dup,
-      large_cnmops_del = CNMOPSLarge.Del,
-      large_cnmops_dup = CNMOPSLarge.Dup,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_merge_sample = depth_merge_sample_runtime_attr,
-      runtime_attr_merge_set = depth_merge_set_runtime_attr
+      shard_bed_files=[CNMOPS.Del, CNMOPS.Dup, CNMOPSLarge.Del, CNMOPSLarge.Dup],
+      prefix=batch + ".cnmops",
+      index_output=true,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_combine_cmmops
   }
+
+  scatter (i in range(length(samples))) {
+    call pps.GATKSVPreprocessSample {
+      input:
+        sample_id=samples[i],
+        manta_vcf=if defined(manta_vcfs) then select_first([manta_vcfs])[i] else NONE_FILE_,
+        melt_vcf=if defined(melt_vcfs) then select_first([melt_vcfs])[i] else NONE_FILE_,
+        wham_vcf=if defined(wham_vcfs) then select_first([wham_vcfs])[i] else NONE_FILE_,
+        delly_vcf=if defined(delly_vcfs) then select_first([delly_vcfs])[i] else NONE_FILE_,
+        cnv_bed=CombineCnmops.merged_bed_file,
+        gcnv_segments_vcf=gCNVCase.genotyped_segments_vcf,
+        min_svsize=min_svsize,
+        gcnv_min_qs=gcnv_qs_cutoff,
+        ref_fasta_fai=primary_contigs_fai,
+        sv_pipeline_base_docker=sv_pipeline_base_docker,
+        runtime_attr_override=runtime_attr_preprocess_sample
+    }
+  }
+
+  if (length(samples) > 1) {
+    call MergeVcfs {
+      input:
+        vcfs = GATKSVPreprocessSample.out,
+        vcf_indexes = GATKSVPreprocessSample.out_index,
+        ref_dict=ref_dict,
+        batch=batch,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_merge_vcfs
+    }
+  }
+  File merged_vcf_ = select_first([MergeVcfs.out, GATKSVPreprocessSample.out[0]])
+  File merged_vcf_index_ = select_first([MergeVcfs.out_index, GATKSVPreprocessSample.out_index[0]])
 
   Float median_cov_mem_gb = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(all_samples) + 7.5
   call mc.MedianCov as MedianCov {
@@ -442,14 +473,12 @@ workflow Module00c {
     input:
       samples = samples,
       manta_vcfs = manta_vcfs,
-      delly_vcfs = delly_vcfs,
-      melt_vcfs = melt_vcfs,
-      wham_vcfs = wham_vcfs,
       contigs = primary_contigs_fai,
       min_svsize = min_svsize,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = preprocess_calls_runtime_attr
   }
+
   if (defined(manta_vcfs)) {
       call tiny.TinyResolve as TinyResolve {
         input:
@@ -462,6 +491,7 @@ workflow Module00c {
           runtime_attr = preprocess_calls_runtime_attr
       }
   }
+
   File? baf_out = if defined(EvidenceMerging.merged_BAF) then EvidenceMerging.merged_BAF else BAFFromGVCFs.out
   File? baf_out_index = if defined(EvidenceMerging.merged_BAF_idx) then EvidenceMerging.merged_BAF_idx else BAFFromGVCFs.out_index
   if (run_matrix_qc) {
@@ -498,27 +528,15 @@ workflow Module00c {
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
 
+    File standardized_merged_vcf = merged_vcf_
+    File standardized_merged_vcf_index = merged_vcf_index_
+
+    File standardized_sample_vcfs = GATKSVPreprocessSample.out
+    File standardized_sample_vcf_indexes = GATKSVPreprocessSample.out_index
+
     File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
 
-    File merged_dels = MergeDepth.del
-    File merged_dups = MergeDepth.dup
-
-    File cnmops_del = CNMOPS.Del
-    File cnmops_del_index = CNMOPS.Del_idx
-    File cnmops_dup = CNMOPS.Dup
-    File cnmops_dup_index = CNMOPS.Dup_idx
-
-    File cnmops_large_del = CNMOPSLarge.Del
-    File cnmops_large_del_index = CNMOPSLarge.Del_idx
-    File cnmops_large_dup = CNMOPSLarge.Dup
-    File cnmops_large_dup_index = CNMOPSLarge.Dup_idx
-
     File median_cov = MedianCov.medianCov
-
-    Array[File]? std_manta_vcf = PreprocessPESR.std_manta_vcf
-    Array[File]? std_delly_vcf = PreprocessPESR.std_delly_vcf
-    Array[File]? std_melt_vcf = PreprocessPESR.std_melt_vcf
-    Array[File]? std_wham_vcf = PreprocessPESR.std_wham_vcf
 
     File? PE_stats = MatrixQC.PE_stats
     File? RD_stats = MatrixQC.RD_stats
@@ -575,6 +593,71 @@ task AddCaseSampleToPed {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task MergeVcfs {
+  input {
+    Array[File] vcfs
+    Array[File] vcf_indexes
+    File ref_dict
+    String batch
+    String gatk_path = "/gatk/gatk"
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 7.5,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  output {
+    File out = "~{batch}.merged.vcf.gz"
+    File out_index = "~{batch}.merged.vcf.gz.tbi"
+  }
+  command <<<
+    set -euo pipefail
+
+    # Create arguments file
+    touch args.txt
+    while read line; do
+      echo "-V $line" >> args.txt
+    done < ~{write_lines(vcfs)}
+
+    ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" SVCluster \
+      --arguments_file args.txt \
+      --output ~{batch}.raw_merged.vcf.gz \
+      --algorithm SINGLE_LINKAGE \
+      --disable-sequence-dictionary-validation \
+      --sequence-dictionary ~{ref_dict} \
+      --depth-overlap-fraction 1 \
+      --mixed-overlap-fraction 1 \
+      --pesr-overlap-fraction 1 \
+      --depth-breakend-window 0 \
+      --mixed-breakend-window 0 \
+      --pesr-breakend-window 0 \
+      --depth-sample-overlap 0 \
+      --mixed-sample-overlap 0 \
+      --pesr-sample-overlap 0
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

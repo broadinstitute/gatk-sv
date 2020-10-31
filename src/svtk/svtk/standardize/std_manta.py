@@ -128,4 +128,9 @@ class MantaStandardizer(VCFStandardizer):
         std_rec.ref = 'N'
         std_rec.stop = stop
 
+        # Use END2 instead of END for mate position, to avoid END < POS spec violation
+        if svtype == 'BND':
+            std_rec.info['END2'] = std_rec.stop
+            std_rec.stop = std_rec.pos + 1
+
         return std_rec

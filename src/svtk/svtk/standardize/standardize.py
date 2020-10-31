@@ -140,6 +140,14 @@ class VCFStandardizer:
             Standardized records
         """
 
+        # Define END2 INFO field
+        self.std_vcf.header.add_meta('INFO', items=[
+            ('ID', 'END2'),
+            ('Number', 1),
+            ('Type', 'Integer'),
+            ('Description', 'End coordinate on CHR2')
+        ])
+
         # Add provided sample names to std header
         for sample in self.std_sample_names:
             self.std_vcf.header.add_sample(sample)

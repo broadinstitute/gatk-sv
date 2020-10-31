@@ -1,0 +1,17 @@
+{
+  "GATKSVGenotype.batch" : {{ ref_panel.batch_name | tojson }},
+  "GATKSVGenotype.vcf" : {{ ref_panel.joined_vcf | tojson }},
+  "GATKSVGenotype.sample_mean_depth_file" : {{ ref_panel.sample_mean_depth_file | tojson }},
+
+  "GATKSVGenotype.eps_pe" : {{ ref_panel.genotype_eps_pe | tojson }},
+  "GATKSVGenotype.eps_sr1" : {{ ref_panel.genotype_eps_sr1 | tojson }},
+  "GATKSVGenotype.eps_sr2" : {{ ref_panel.genotype_eps_sr2 | tojson }},
+
+  "GATKSVGenotype.records_per_shard" : "1000",
+  "GATKSVGenotype.discrete_samples" : "1000",
+
+  "GATKSVGenotype.genotyping_gatk_docker": {{ dockers.gatk_sv_v2_docker | tojson }},
+  "GATKSVGenotype.sharding_gatk_docker": {{ dockers.gatk_sv_v2_docker | tojson }},
+
+  "GATKSVGenotype.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }}
+}

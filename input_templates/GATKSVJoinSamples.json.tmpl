@@ -1,0 +1,32 @@
+{
+  "GATKSVJoinSamples.batch" : {{ ref_panel.batch_name | tojson }},
+  "GATKSVJoinSamples.samples" : {{ ref_panel.samples | tojson }},
+  "GATKSVJoinSamples.counts": {{ ref_panel.count_files | tojson }},
+  "GATKSVJoinSamples.sv_vcf" : {{ ref_panel.preprocessed_vcf | tojson }},
+  "GATKSVJoinSamples.sr_file" : {{ ref_panel.sr_file | tojson }},
+  "GATKSVJoinSamples.pe_file" : {{ ref_panel.pe_file | tojson }},
+  "GATKSVJoinSamples.sample_mean_depth_file" : {{ ref_panel.sample_mean_depth_file | tojson }},
+  "GATKSVJoinSamples.sample_median_count_file" : {{ ref_panel.sample_median_count_file | tojson }},
+  "GATKSVJoinSamples.ploidy_calls" : {{ ref_panel.contig_ploidy_calls | tojson }},
+
+  "GATKSVJoinSamples.inclusion_intervals_depth_only" :{{ reference_resources.inclusion_bed | tojson }},
+  "GATKSVJoinSamples.inclusion_intervals_non_depth_only" :{{ reference_resources.inclusion_bed | tojson }},
+  "GATKSVJoinSamples.exclusion_intervals_depth_only" :{{ reference_resources.exclusion_intervals_depth_only | tojson }},
+  "GATKSVJoinSamples.exclusion_intervals_non_depth_only" :{{ reference_resources.exclusion_intervals_non_depth_only | tojson }},
+
+  "GATKSVJoinSamples.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
+
+  "GATKSVJoinSamples.gatk_docker" : {{ dockers.gatk_sv_v2_docker | tojson }},
+
+  "GATKSVJoinSamples.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
+  "GATKSVJoinSamples.sv_base_docker" : {{ dockers.sv_base_docker | tojson }},
+  "GATKSVJoinSamples.sv_pipeline_base_docker" : {{ dockers.sv_pipeline_base_docker | tojson }},
+  "GATKSVJoinSamples.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }},
+  "GATKSVJoinSamples.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
+  "GATKSVJoinSamples.linux_docker" : {{ dockers.linux_docker | tojson }},
+
+  "GATKSVJoinSamples.ref_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "GATKSVJoinSamples.ref_fasta_fai": {{ reference_resources.reference_index | tojson }},
+  "GATKSVJoinSamples.ref_fasta_dict": {{ reference_resources.reference_dict | tojson }},
+  "GATKSVJoinSamples.genome_file": {{ reference_resources.genome_file | tojson }}
+}
