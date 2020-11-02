@@ -1,8 +1,8 @@
 {
   "Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
   "Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module04.sv_pipeline_rdtest_docker": "gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module04.linux_docker" : "ubuntu:18.04",
+  "Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
+  "Module04.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
 
   "Module04.n_RD_genotype_bins": "100000", 
   "Module04.n_per_split": "5000", 

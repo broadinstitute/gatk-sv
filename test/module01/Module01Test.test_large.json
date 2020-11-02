@@ -111,7 +111,7 @@
 
   "Module01Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
   "Module01Test.Module01Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module01Test.Module01Metrics.linux_docker" : "ubuntu:18.04",
+  "Module01Test.Module01Metrics.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
   "Module01Test.Module01Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module01Test.Module01Metrics.baseline_depth_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.depth.vcf.gz",

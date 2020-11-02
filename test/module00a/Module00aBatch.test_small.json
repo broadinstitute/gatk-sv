@@ -16,15 +16,15 @@
 
   "Module00aBatch.wham_include_list_bed_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
-  "Module00aBatch.samtools_cloud_docker": "gatksv/samtools-cloud:b3af2e3",
+  "Module00aBatch.samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatksv/samtools-cloud:b3af2e3",
   "Module00aBatch.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
   "Module00aBatch.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module00aBatch.manta_docker": "gatksv/manta:8645aa",
+  "Module00aBatch.manta_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/manta:8645aa",
   "Module00aBatch.melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:8645aa",
-  "Module00aBatch.wham_docker": "gatksv/wham:8645aa",
+  "Module00aBatch.wham_docker": "us.gcr.io/broad-dsde-methods/gatksv/wham:8645aa",
   "Module00aBatch.genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
-  "Module00aBatch.gatk_docker" : "broadinstitute/gatk:4.1.2.0",
-  "Module00aBatch.gatk_docker_pesr_override" : "broadinstitute/gatk:4.1.8.0",
+  "Module00aBatch.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatk:4.1.2.0",
+  "Module00aBatch.gatk_docker_pesr_override" : "us.gcr.io/broad-dsde-methods/gatk:4.1.8.0",
 
   "Module00aBatch.bam_or_cram_files": [
     "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BI/v1/NA19240_NA19240_1a_SM-GN4BI_v1.cram",
