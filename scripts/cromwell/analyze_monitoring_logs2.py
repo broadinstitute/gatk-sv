@@ -177,6 +177,8 @@ def do_simple_bar(data, xticks, path, bar_width=0.35, height=12, width=12,
 
 def create_graphs(data, out_file, semilog=False, num_samples=None):
   print("Writing %s" % out_file, file=sys.stderr)
+  data = data.loc[data.notna().all(axis=1)] # drop rows with any NA values before making plot
+  data.reset_index(drop=True, inplace=True)
   if num_samples is not None:
     data = data / num_samples
     ytitle = "Cost ($/sample)"
