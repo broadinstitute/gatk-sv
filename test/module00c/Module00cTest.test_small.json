@@ -14,8 +14,8 @@
     "SM-HXUD2"
   ],
 
-  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
-  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
+  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
   "Module00cTest.Module00cMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00cTest.Module00cMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
@@ -59,11 +59,11 @@
     "gs://gatk-sv-resources/test/module00c/small/outputs/wham_std/std_009.wham.SM-HXUD2.vcf.gz"
   ],
 
-  "Module00cTest.Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
-  "Module00cTest.Module00c.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-cdd8b4e",
-  "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
-  "Module00cTest.Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-cdd8b4e",
-  "Module00cTest.Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-cdd8b4e",
+  "Module00cTest.Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-6a66c96",
   "Module00cTest.Module00c.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00cTest.Module00c.gatk_docker": "us.gcr.io/broad-gatk/gatk:4.1.8.1",
   "Module00cTest.Module00c.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",

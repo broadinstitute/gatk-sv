@@ -14,16 +14,16 @@
     "SM-HXUD2"
   ],
 
-  "Module02Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
-  "Module02Test.Module02Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
+  "Module02Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module02Test.Module02Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
   "Module02Test.Module02Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module02Test.Module02Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
-  "Module02Test.Module02.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
-  "Module02Test.Module02.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-cdd8b4e",
-  "Module02Test.Module02.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
-  "Module02Test.Module02.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-cdd8b4e",
-  "Module02Test.Module02.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
+  "Module02Test.Module02.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module02Test.Module02.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
+  "Module02Test.Module02.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module02Test.Module02.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-6a66c96",
+  "Module02Test.Module02.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
   "Module02Test.Module02.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "Module02Test.Module02.BAF_split_size": "10000",

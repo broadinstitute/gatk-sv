@@ -14,8 +14,8 @@
     "SM-HXUD2"
   ],
 
-  "Module01Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
-  "Module01Test.Module01Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
+  "Module01Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module01Test.Module01Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
   "Module01Test.Module01Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module01Test.Module01Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
@@ -24,8 +24,8 @@
   "Module01Test.Module01Metrics.baseline_wham_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.wham.vcf.gz",
   "Module01Test.Module01Metrics.baseline_melt_vcf" : "gs://gatk-sv-resources/test/module01/small/output/test_small.melt.vcf.gz",
 
-  "Module01Test.Module01.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
-  "Module01Test.Module01.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
+  "Module01Test.Module01.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module01Test.Module01.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
 
   "Module01Test.Module01.contigs": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module01Test.Module01.depth_flags": "--merge-coordinates",

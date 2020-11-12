@@ -109,17 +109,17 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module04Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
-  "Module04Test.Module04Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-cdd8b4e",
+  "Module04Test.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module04Test.Module04Metrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
   "Module04Test.Module04Metrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module04Test.Module04Metrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module04Test.Module04Metrics.baseline_genotyped_pesr_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.pesr.vcf.gz",
   "Module04Test.Module04Metrics.baseline_genotyped_depth_vcf" : "gs://gatk-sv-resources/test/module04/large/output/test_large.depth.vcf.gz",
 
-  "Module04Test.Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-cdd8b4e",
-  "Module04Test.Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-cdd8b4e",
-  "Module04Test.Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-cdd8b4e",
+  "Module04Test.Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module04Test.Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module04Test.Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
   "Module04Test.Module04.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "Module04Test.Module04.n_RD_genotype_bins": "100000", 
