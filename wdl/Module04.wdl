@@ -22,7 +22,6 @@ workflow Module04 {
     File cohort_pesr_vcf
     File cohort_depth_vcf
     String batch
-    Int n_samples_cohort
 
     Int n_per_split
     File coveragefile       # batch coverage file
@@ -35,8 +34,9 @@ workflow Module04 {
     File? pesr_exclude_list    # Required unless skipping training
     File splitfile
     String? reference_build  #hg19 or hg38, Required unless skipping training
-    File? regeno_sample_counts_lookup
-    File? regeno_raw_combined_depth
+    File? regeno_sample_counts_lookup # required if doing regenotyping
+    File? regeno_raw_combined_depth # required if doing regenotyping
+    Int? n_samples_cohort # required if doing regenotyping
     File bin_exclude
     # If all specified, training will be skipped (for single sample pipeline)
     File? genotype_pesr_pesr_sepcutoff

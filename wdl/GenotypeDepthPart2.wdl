@@ -20,12 +20,12 @@ workflow GenotypeDepthPart2 {
     Int n_per_split
     Int n_RdTest_bins
     String batch
-    File? regeno_sample_counts_lookup
-    File? regeno_raw_combined_depth
+    File? regeno_sample_counts_lookup # required if doing regenotyping
+    File? regeno_raw_combined_depth # required if doing regenotyping
+    Int? n_samples_cohort # required if doing regenotyping
     File medianfile
     File famfile
     Array[String] samples
-    Int n_samples_cohort
 
     File coveragefile
 
@@ -154,7 +154,7 @@ workflow GenotypeDepthPart2 {
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_vcfs
   }
-  Boolean regenotype=defined(regeno_sample_counts_lookup) && defined(regeno_raw_combined_depth)
+  Boolean regenotype=defined(regeno_sample_counts_lookup) && defined(regeno_raw_combined_depth) && defined(n_samples_cohort)
   if (regenotype){
     call GetRegenotype{input:
       depth_genotyped_vcf=ConcatGenotypedVcfs.genotyped_vcf,
@@ -226,7 +226,7 @@ task GetRegenotype{
     File? regeno_sample_counts_lookup
     File? regeno_raw_combined_depth
     String Batch
-    Int n_samples_cohort
+    Int? n_samples_cohort
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
     }
