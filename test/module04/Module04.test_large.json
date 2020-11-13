@@ -9,6 +9,7 @@
   "Module04.pesr_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "Module04.reference_build": "hg38",
+  "Module04.n_samples_cohort": 105,
 
   "Module04.batch": "test_large",
   "Module04.rf_cutoffs": "gs://gatk-sv-resources/test/module03/large/output/test_large.cutoffs",
@@ -16,8 +17,8 @@
   "Module04.batch_pesr_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz",
   "Module04.famfile": "gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam",
   "Module04.bin_exclude": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
-  "Module04.cohort_combined_bed": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
-  "Module04.cohort_sort": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
+  "Module04.regeno_sample_counts_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
+  "Module04.regeno_raw_combined_depth": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
   "Module04.discfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz",
   "Module04.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz",
   "Module04.splitfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.SR.txt.gz",

@@ -20,11 +20,11 @@ workflow MergeCohortVcfs {
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_merge_pesr
     RuntimeAttr? runtime_attr_merge_depth
-    RuntimeAttr? runtime_attr_cohort_sort
-    RuntimeAttr? runtime_attr_cohort_combined
-    RuntimeAttr? runtime_attr_cluster_dups_combined
-    RuntimeAttr? runtime_attr_concat_masterclusterdups
-    RuntimeAttr? runtime_attr_concat_clustercombined
+    RuntimeAttr? runtime_attr_regeno_raw_combined_depth
+    RuntimeAttr? runtime_attr_regeno_merged_depth
+    RuntimeAttr? runtime_attr_sample_lookup
+    RuntimeAttr? runtime_attr_concat_samplecountlookup
+    RuntimeAttr? runtime_attr_concat_sampleidlookup
   }
 
   Array[Array[String]] contigs = read_tsv(contig_list)
@@ -46,57 +46,57 @@ workflow MergeCohortVcfs {
       runtime_attr_override = runtime_attr_merge_depth
   }
 
-  call MakeCohortSortBed {
+  call MakeRawCombinedBed {
     input:
       vcfs = depth_vcfs,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_cohort_sort
+      runtime_attr_override = runtime_attr_regeno_raw_combined_depth
   }
 
-  call MakeCohortCombinedBed {
+  call MakeMergedDepthBeds {
     input:
-      cohort_sort = MakeCohortSortBed.cohort_sort,
+      regeno_raw_combined_depth = MakeRawCombinedBed.regeno_raw_combined_depth,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_cohort_combined
+      runtime_attr_override = runtime_attr_regeno_merged_depth
   }
 
   scatter (contig in contigs) {
-    call MakeClusterDupsCombinedBed {
+    call MakeSampleLookupBeds {
       input:
-        cohort_combined = MakeCohortCombinedBed.cohort_combined,
-        cohort_cluster = MergeDepthVcfs.cluster,
+        regeno_merged_depth = MakeMergedDepthBeds.regeno_merged_depth,
+        regeno_merged_depth_clustered = MergeDepthVcfs.regeno_merged_depth_clustered,
         cohort = cohort,
         contig = contig[0],
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_cluster_dups_combined
+        runtime_attr_override = runtime_attr_sample_lookup
     }
   }
 
-  call ConcatBed as ConcatMasterClusterDupsBed {
+  call ConcatBed as ConcatSampleCountLookupBed {
     input: 
-      bed_shards = MakeClusterDupsCombinedBed.lookup,
-      filename = cohort + ".master_cluster_dups.bed",
+      bed_shards = MakeSampleLookupBeds.regeno_sample_counts_lookup,
+      filename = cohort + ".regeno.sample_counts_lookup.bed",
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_masterclusterdups
+      runtime_attr_override = runtime_attr_concat_samplecountlookup
   }
 
-  call ConcatBed as ConcatClusterCombinedBed {
+  call ConcatBed as ConcatSampleIdLookupBed {
     input: 
-      bed_shards = MakeClusterDupsCombinedBed.cluster_combined,
-      filename = cohort + ".cluster.combined.bed",
+      bed_shards = MakeSampleLookupBeds.regeno_sample_ids_lookup,
+      filename = cohort + ".regeno.sample_ids_lookup.bed",
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_clustercombined
+      runtime_attr_override = runtime_attr_concat_sampleidlookup
   }
 
   output {
     File cohort_pesr_vcf = MergePESRVcfs.merged_vcf
     File cohort_depth_vcf = MergeDepthVcfs.merged_vcf
-    File cohort_combined = MakeCohortCombinedBed.cohort_combined
-    File cohort_sort = MakeCohortSortBed.cohort_sort
-    File lookup = ConcatMasterClusterDupsBed.concat_bed
-    File cluster_combined = ConcatClusterCombinedBed.concat_bed
+    File regeno_merged_depth = MakeMergedDepthBeds.regeno_merged_depth
+    File regeno_raw_combined_depth = MakeRawCombinedBed.regeno_raw_combined_depth
+    File regeno_sample_counts_lookup = ConcatSampleCountLookupBed.concat_bed
+    File regeno_sample_ids_lookup = ConcatSampleIdLookupBed.concat_bed
   }
 }
 
@@ -161,7 +161,7 @@ task MergeDepthVcfs {
 
   output {
     File merged_vcf = "~{prefix}.vcf.gz"
-    File cluster="~{cohort}.cluster.bed"
+    File regeno_merged_depth_clustered = "~{cohort}.regeno.merged_depth_clustered.bed"
   }
   command <<<
 
@@ -174,7 +174,7 @@ task MergeDepthVcfs {
     awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' ~{prefix}.vcf.gz.bed 
     svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
     svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
-    cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.cluster.bed #combine clusterd non-duplicated
+    cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.regeno.merged_depth_clustered.bed #combine clusterd non-duplicated
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -187,7 +187,7 @@ task MergeDepthVcfs {
   }
 }
 
-task MakeCohortSortBed {
+task MakeRawCombinedBed {
   input {
     Array[File] vcfs
     String cohort
@@ -206,7 +206,7 @@ task MakeCohortSortBed {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File cohort_sort = "~{cohort}.cohort.sort.bed"
+    File regeno_raw_combined_depth = "~{cohort}.regeno.raw_combined_depth.bed"
   }
   command <<<
 
@@ -216,7 +216,7 @@ task MakeCohortSortBed {
         svtk vcf2bed --no-header $vcf $local_vcf.bed   # for each depth vcf make bed, duplicated
     done < ~{write_lines(vcfs)}
     rm ~{sep=' ' vcfs}
-    cat *.bed | sort -k1,1V -k2,2n -k3,3n > ~{cohort}.cohort.sort.bed # concat raw depth vcf, duplicated
+    cat *.bed | sort -k1,1V -k2,2n -k3,3n > ~{cohort}.regeno.raw_combined_depth.bed # concat raw depth vcf, duplicated
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -229,9 +229,9 @@ task MakeCohortSortBed {
   }
 }
 
-task MakeCohortCombinedBed {
+task MakeMergedDepthBeds {
   input {
-    File cohort_sort
+    File regeno_raw_combined_depth
     String cohort
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -248,14 +248,14 @@ task MakeCohortCombinedBed {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File cohort_combined="~{cohort}.cohort.combined.bed"
+    File regeno_merged_depth="~{cohort}.regeno.merged_depth.bed"
   }
   command <<<
 
     set -euxo pipefail
     python3 <<CODE
     varID={}
-    with open("~{cohort_sort}",'r') as f: # From the depth cohort bed, a dictionary of all duplicate variants and their samples
+    with open("~{regeno_raw_combined_depth}",'r') as f: # From the depth cohort bed, a dictionary of all duplicate variants and their samples
         for line in f:
             dat=line.rstrip().split('\t')
             samples=dat[-1].split(",")
@@ -266,7 +266,7 @@ task MakeCohortCombinedBed {
             else:
                 varID[ID]['sample']=varID[ID]['sample']+samples
                 varID[ID]['varids'].append(var)
-    with open("~{cohort}.cohort.combined.bed",'w') as f: # For each unique variant a line with variants and samples
+    with open("~{cohort}.regeno.merged_depth.bed",'w') as f: # For each unique variant a line with variants and samples
         for variant in varID.keys():
             CHROM=variant.split(":")[0]
             START=variant.split(':')[1].split("-")[0]
@@ -287,10 +287,10 @@ task MakeCohortCombinedBed {
   }
 }
 
-task MakeClusterDupsCombinedBed {
+task MakeSampleLookupBeds {
   input {
-    File cohort_combined
-    File cohort_cluster
+    File regeno_merged_depth
+    File regeno_merged_depth_clustered
     String cohort
     String contig
     String sv_pipeline_docker
@@ -308,27 +308,27 @@ task MakeClusterDupsCombinedBed {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File lookup = "~{contig}.master_cluster_dups.bed"
-    File cluster_combined="~{contig}.cluster.combined.bed"
+    File regeno_sample_counts_lookup = "~{contig}.regeno.sample_counts_lookup.bed"
+    File regeno_sample_ids_lookup = "~{contig}.regeno.sample_ids_lookup.bed"
   }
   command <<<
 
     set -euxo pipefail
     # select rows of BED files pertaining to contig - chrom is 1st column of each BED file
-    awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.cohort.combined.bed" } }' ~{cohort_combined}
-    awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.cluster.bed" } }' ~{cohort_cluster}
+    awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.regeno.merged_depth.bed" } }' ~{regeno_merged_depth}
+    awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.regeno.merged_depth_clustered.bed" } }' ~{regeno_merged_depth_clustered}
     python3 <<CODE
     # dictionary of (samples, varIDs) for de-duplicated variant for EACH varID corresponding to that unique variant
     varID_data = {} 
-    with open("~{contig}.cohort.combined.bed","r") as f: # for EACH variant ID, a list of duplicate variants and samples
+    with open("~{contig}.regeno.merged_depth.bed","r") as f: # for EACH variant ID, a list of duplicate variants and samples
         for line in f:
             dat=line.split('\t')
             varIDs_list = dat[3].split(":")[0:-1]
             samples_list = dat[4].split(',')[0:-1]
             for varID in varIDs_list:
                 varID_data[varID] = (samples_list, varIDs_list)
-    with open("~{contig}.master_cluster_dups.bed",'w') as g: # Using cluster.bed, for each clustered variant get varIDs and samples of the component calls
-        with open("~{contig}.cluster.bed","r") as f:
+    with open("~{contig}.regeno.sample_counts_lookup.bed",'w') as g: # Using clustered merged (de-dupped) depth calls, for each clustered variant get varIDs and samples of the component calls
+        with open("~{contig}.regeno.merged_depth_clustered.bed","r") as f:
             for line in f:
                 samples=[]
                 variants=[]
@@ -339,8 +339,8 @@ task MakeClusterDupsCombinedBed {
                     variants.extend(varID_data[varID][1]) # variant IDs are 2nd in tuple
                     variants = list(set(variants))
                 g.write(dat[0]+'\t'+dat[1]+'\t'+dat[2]+'\t'+dat[3]+'\t'+dat[4]+'\t'+dat[5]+'\t'+":".join(variants)+':\t'+str(len(samples))+'\n')
-    with open("~{contig}.cluster.combined.bed",'w') as g:
-        with open("~{contig}.cluster.bed","r") as f:
+    with open("~{contig}.regeno.sample_ids_lookup.bed",'w') as g:
+        with open("~{contig}.regeno.merged_depth_clustered.bed","r") as f:
             for line in f:
                 samples=[]
                 variants=[]

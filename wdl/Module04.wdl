@@ -22,6 +22,7 @@ workflow Module04 {
     File cohort_pesr_vcf
     File cohort_depth_vcf
     String batch
+    Int n_samples_cohort
 
     Int n_per_split
     File coveragefile       # batch coverage file
@@ -34,8 +35,8 @@ workflow Module04 {
     File? pesr_exclude_list    # Required unless skipping training
     File splitfile
     String? reference_build  #hg19 or hg38, Required unless skipping training
-    File? cohort_combined_bed
-    File? cohort_sort
+    File? regeno_sample_counts_lookup
+    File? regeno_raw_combined_depth
     File bin_exclude
     # If all specified, training will be skipped (for single sample pipeline)
     File? genotype_pesr_pesr_sepcutoff
@@ -238,8 +239,9 @@ workflow Module04 {
       coveragefile = coveragefile,
       n_per_split = n_per_split,
       famfile = famfile,
-      cohort_combined_bed=cohort_combined_bed,
-      cohort_sort=cohort_sort,
+      regeno_sample_counts_lookup=regeno_sample_counts_lookup,
+      regeno_raw_combined_depth=regeno_raw_combined_depth,
+      n_samples_cohort = n_samples_cohort,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,

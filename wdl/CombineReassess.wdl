@@ -6,7 +6,7 @@ workflow CombineReassess {
   input {
       File samplelist
       File regeno_file
-      File cohort_cluster
+      File regeno_sample_ids_lookup
       Array[File] vcfs 
       String sv_pipeline_base_docker
       String sv_pipeline_docker
@@ -24,7 +24,7 @@ workflow CombineReassess {
     input:
         nonempty_txt=Vcf2Bed.nonempty,
         regeno_file=regeno_file,
-        cohort_cluster=cohort_cluster,
+        regeno_sample_ids_lookup=regeno_sample_ids_lookup,
         samplelist=samplelist,
         sv_pipeline_base_docker=sv_pipeline_base_docker}
   output {
@@ -75,7 +75,7 @@ task MergeList{
         File samplelist
         File regeno_file
         Array[File] nonempty_txt
-        File cohort_cluster
+        File regeno_sample_ids_lookup
         String sv_pipeline_base_docker
         RuntimeAttr? runtime_attr_override
   }
@@ -91,7 +91,7 @@ task MergeList{
     command<<<
         set -e
         cut -f 4 ~{regeno_file} >regeno_variants.txt
-        fgrep -f regeno_variants.txt ~{cohort_cluster} > cohort.regeno_var.combined.bed
+        fgrep -f regeno_variants.txt ~{regeno_sample_ids_lookup} > cohort.regeno_var.combined.bed
         cat ~{sep=' ' nonempty_txt}|sort -k1,1V -k2,2n -k3,3n |bgzip -c > nonempty.bed.gz
         tabix nonempty.bed.gz
         # For each variant in regeno_file, take variants across all batches

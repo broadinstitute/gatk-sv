@@ -24,7 +24,7 @@ workflow Module04b{
         Int n_RdTest_bins
         Array[String] batches
         Array[File] samples_lists
-        File cluster_combined
+        File regeno_sample_ids_lookup
         File cohort_samplelist
         RuntimeAttr? runtime_attr_vcf2bed
         RuntimeAttr? runtime_attr_merge_list
@@ -62,7 +62,7 @@ workflow Module04b{
         input:
             samplelist=cohort_samplelist,
             regeno_file=MergeList.master_regeno,
-            cohort_cluster=cluster_combined,
+            regeno_sample_ids_lookup=regeno_sample_ids_lookup,
             vcfs=Genotype_2.genotyped_vcf,
             sv_pipeline_docker=sv_pipeline_docker,
             sv_pipeline_base_docker=sv_pipeline_base_docker,
