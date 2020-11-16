@@ -23,6 +23,8 @@ workflow GenotypeDepthPart2 {
     File? regeno_sample_counts_lookup # required if doing regenotyping
     File? regeno_raw_combined_depth # required if doing regenotyping
     Int? n_samples_cohort # required if doing regenotyping
+    Float regeno_max_allele_freq # default = 0.01 set in Module04.wdl
+    Int regeno_allele_count_threshold # default = 3 set in Module04.wdl
     File ref_dict
     File medianfile
     File famfile
@@ -162,9 +164,11 @@ workflow GenotypeDepthPart2 {
     call GetRegenotype{input:
       depth_genotyped_vcf=ConcatGenotypedVcfs.genotyped_vcf,
       Batch=batch,
-      regeno_sample_counts_lookup=regeno_sample_counts_lookup,
-      regeno_raw_combined_depth=regeno_raw_combined_depth,
-      n_samples_cohort = n_samples_cohort,
+      regeno_sample_counts_lookup = select_first([regeno_sample_counts_lookup]),
+      regeno_raw_combined_depth = select_first([regeno_raw_combined_depth]),
+      n_samples_cohort = select_first([n_samples_cohort]),
+      regeno_max_allele_freq = regeno_max_allele_freq, 
+      regeno_allele_count_threshold = regeno_allele_count_threshold, 
       sv_pipeline_docker=sv_pipeline_docker}
     call GetMedianSubset{input: 
       medians=RDTestGenotypeOver5kb.copy_states,
@@ -226,10 +230,12 @@ task IntegrateDepthGq {
 task GetRegenotype{
   input{
     File depth_genotyped_vcf
-    File? regeno_sample_counts_lookup
-    File? regeno_raw_combined_depth
+    File regeno_sample_counts_lookup
+    File regeno_raw_combined_depth
+    Int n_samples_cohort
+    Float regeno_max_allele_freq # default = 0.01 set in Module04.wdl
+    Int regeno_allele_count_threshold # default = 3 set in Module04.wdl
     String Batch
-    Int? n_samples_cohort
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
     }
@@ -245,9 +251,10 @@ task GetRegenotype{
   command<<<
     set -euxo pipefail
     n_samp=~{n_samples_cohort}
+    max_af=~{regeno_max_allele_freq}
+    min_count=~{regeno_allele_count_threshold}
     svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
     sample=$(fgrep -v "#" ~{Batch}.bed|awk '{if($6!="" )print $6}' |head -n1|cut -d"," -f1)||true
-    echo "test"
     fgrep "~{Batch}"_ ~{Batch}.bed|sort -k4,4> ~{Batch}.origin.depth.bed
     sort -k4,4 ~{regeno_raw_combined_depth} > sort.bed
     join ~{Batch}.origin.depth.bed sort.bed -1 4 -2 4 -o 1.1,1.2,1.3,1.4,1.5,1.6,2.6 > f3.txt
@@ -258,12 +265,11 @@ task GetRegenotype{
         echo "$line" |sed -r "s/$string2|,//g" |awk -v OFS="\t" '{if ($3-$2>10000 && $6!="" && $5!="CN0")print $1,$2,$3,$4,$5}' >> missing_RF.bed
     done<f3.txt
     sort -u missing_RF.bed > test.txt;mv test.txt missing_RF.bed
-    # VF<0.01 filter for missing sample variants
+    # VF<0.01 (or provided value) filter for missing sample variants, or AC<=3 (or provided value) if cohort is small
     while read chr start end variant type; do
      varid=$variant: #varid should be single variants
      num=$(fgrep -m1 $varid ~{regeno_sample_counts_lookup}|cut -f8)
-     thresh=$((num*100))
-     if ( ((thresh < n_samp)) || ((num <= 3)) );then
+     if python -c "exit(0 if (((float($num) / float($n_samp)) < float($max_af)) or (int($num) <= int($min_count))) else 1)"; then
         printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n">>~{Batch}.to_regeno.bed # modify this to suit intput for Rdtest
      fi
     done < missing_RF.bed

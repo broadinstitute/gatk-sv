@@ -37,6 +37,8 @@ workflow Module04 {
     File? regeno_sample_counts_lookup # required if doing regenotyping
     File? regeno_raw_combined_depth # required if doing regenotyping
     Int? n_samples_cohort # required if doing regenotyping
+    Float regeno_max_allele_freq = 0.01 
+    Int regeno_allele_count_threshold = 3 
     File bin_exclude
     File ref_dict
     # If all specified, training will be skipped (for single sample pipeline)
@@ -243,9 +245,11 @@ workflow Module04 {
       coveragefile = coveragefile,
       n_per_split = n_per_split,
       famfile = famfile,
-      regeno_sample_counts_lookup=regeno_sample_counts_lookup,
-      regeno_raw_combined_depth=regeno_raw_combined_depth,
+      regeno_sample_counts_lookup = regeno_sample_counts_lookup,
+      regeno_raw_combined_depth = regeno_raw_combined_depth,
       n_samples_cohort = n_samples_cohort,
+      regeno_max_allele_freq = regeno_max_allele_freq, 
+      regeno_allele_count_threshold = regeno_allele_count_threshold, 
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
