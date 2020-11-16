@@ -10,6 +10,7 @@ version 1.0
 # Distributed under terms of the MIT License
 
 import "Tasks0506.wdl" as MiniTasks
+import "Utils.wdl" as Utils
 
 # Workflow to perform depth-based genotyping per batch
 # on predicted CPX CNVs from 04b
@@ -25,13 +26,15 @@ workflow GenotypeCpxCnvsPerBatch {
     String batch
     File median_file
     File ped_file
-    File samples_list
     File coverage_file
+    File ref_dict
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_rdtest_docker
 
     # overrides for local tasks
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
 
@@ -40,13 +43,21 @@ workflow GenotypeCpxCnvsPerBatch {
   }
 
   File coverage_file_idx = coverage_file + ".tbi"
+
+  call Utils.GetSampleIdsFromMedianCoverageFile {
+    input:
+      median_file = median_file,
+      name = batch,
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_override_ids_from_median
+  }
   
   call SplitBedBySize {
     input:
       bed=cpx_bed,
       n_per_split_small=n_per_split_small,
       n_per_split_large=n_per_split_large,
-      samples_list=samples_list,
+      samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_split_bed_by_size
   }
@@ -60,10 +71,11 @@ workflow GenotypeCpxCnvsPerBatch {
         coverage_file_idx=coverage_file_idx,
         median_file=median_file,
         ped_file=ped_file,
-        samples_list=samples_list,
+        samples_list=GetSampleIdsFromMedianCoverageFile.out_file,
         gt_cutoffs=rd_depth_sep_cutoff,
         n_bins=n_rd_test_bins,
         prefix=basename(split_bed_file, ".bed"),
+        ref_dict = ref_dict,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_attr_override=runtime_override_rd_genotype
     }
@@ -183,6 +195,7 @@ task RdTestGenotype {
     File samples_list
     File bin_exclude
     File gt_cutoffs
+    File ref_dict
     Int n_bins
     String prefix
     String sv_pipeline_rdtest_docker
@@ -214,9 +227,13 @@ task RdTestGenotype {
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -227,31 +244,27 @@ task RdTestGenotype {
   command <<<
     set -eu
 
-    # replacing this line:
-    # /opt/RdTest/localize_bincov.sh ${bed} ${coveragefile} ${coveragefile_idx} ${svc_acct_key}
-    # from this url: https://github.com/talkowski-lab/RdTest/blob/master/localize_bincov.sh
-
     grep -v "^#" ~{bed} | sort -k1,1V -k2,2n | bedtools merge -i stdin -d 1000000 > merged.bed
 
     set -o pipefail
 
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+    if [ -s merged.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{coverage_file} \
+        -L merged.bed \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
 
-    bedtools merge -i merged.bed -d 1000000 \
-     | while read CONTIG START END; do
-        1>&2 echo "Fetching $CONTIG:$START-$END"
-        tabix -h ~{coverage_file} "$CONTIG:$START-$END"
-       done \
-     | sed '1s/Chr/chr/g; 1s/Start/start/g; 1s/End/end/g; 1n; n; d' \
-     | bgzip -c \
-     > local_coverage.bed.gz
-
-    tabix -p bed local_coverage.bed.gz
-    # done replacing localize_bincov.sh
+    tabix -p bed local.RD.txt.gz
+    tabix -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
-      -c local_coverage.bed.gz \
+      -c local.RD.txt.gz \
       -m ~{median_file} \
       -f ~{ped_file} \
       -n ~{prefix} \
@@ -275,3 +288,4 @@ task RdTestGenotype {
     File melted_genotypes = "rd.geno.cnv.bed.gz"
   }
 }
+

@@ -5,7 +5,6 @@
 # Distributed under terms of the MIT license.
 
 """
-
 """
 
 import sys
@@ -19,7 +18,7 @@ from sklearn.metrics import roc_curve
 def rf_classify(metrics, trainable, testable, features, labeler, cutoffs, name,
                 clean_cutoffs=False):
     """Wrapper to run random forest and assign probabilities"""
-    rf = RandomForest(trainable, testable, features, cutoffs, labeler,
+    rf = RandomForest(trainable, testable, features, cutoffs, labeler, name,
                       clean_cutoffs)
     rf.run()
     metrics.loc[rf.testable.index, name] = rf.probs
@@ -37,7 +36,7 @@ def rf_classify(metrics, trainable, testable, features, labeler, cutoffs, name,
 
 
 class RandomForest:
-    def __init__(self, trainable, testable, features, cutoffs, labeler,
+    def __init__(self, trainable, testable, features, cutoffs, labeler, name,
                  clean_cutoffs=False, max_train_size=100000):
         def has_null_features(df):
             return df[features].isnull().any(axis=1)
@@ -53,6 +52,7 @@ class RandomForest:
         self.labeler = labeler
         self.encoder = LabelEncoder().fit(['Fail', 'Pass'])
 
+        self.name = name
         self.clean_cutoffs = clean_cutoffs
         self.cutoff_features = cutoffs
         self.cutoffs = None
@@ -95,7 +95,7 @@ class RandomForest:
             raise Exception('No Fail variants included in training set')
 
     def learn_probs(self):
-        X_train = self.train[self.features].as_matrix()
+        X_train = self.train[self.features].values
 
         y_train = self.encoder.transform(self.train.label)
 
@@ -104,7 +104,7 @@ class RandomForest:
 
         self.rf.fit(X_train, y_train)
 
-        X = self.testable[self.features].as_matrix()
+        X = self.testable[self.features].values
         probs = self.rf.predict_proba(X)
 
         self.probs = probs[:, 1]
@@ -123,7 +123,12 @@ class RandomForest:
         for feature in self.cutoff_features['indep']:
             metric = cutoff_metrics[feature]
             idx = np.searchsorted(self.testable.index, cutoff_metrics.index)
-            cutoff = learn_cutoff(metric, self.probs[idx])
+            if self.name=="PE_prob":
+                cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
+                cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
+                cutoff = min([cutoff1,cutoff2])
+            else:
+                cutoff = learn_cutoff_dist(metric, self.probs[idx])
 
             cutoffs[feature] = cutoff
             passing = passing & (cutoff_metrics[feature] >= cutoff)
@@ -133,7 +138,12 @@ class RandomForest:
             metric = passing[feature]
             # Subset probabilities to those in passing set
             idx = np.searchsorted(self.testable.index, passing.index)
-            cutoffs[feature] = learn_cutoff(metric, self.probs[idx])
+            if self.name=="PE_prob":
+                cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
+                cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
+                cutoffs[feature] = min([cutoff1,cutoff2])
+            else:
+                cutoffs[feature] = learn_cutoff_dist(metric, self.probs[idx])
 
         self.cutoffs = pd.DataFrame.from_dict({'cutoff': cutoffs},
                                               orient='columns')\
@@ -155,10 +165,10 @@ class RandomForest:
 
         self.testable.loc[self.testable.passes_all_cutoffs & (self.testable.prob < 0.5), 'prob'] = 0.501
 
-        self.probs = self.testable.prob.as_matrix()
+        self.probs = self.testable.prob.values
 
-def learn_cutoff(metric, probs):
-    preds = metric.as_matrix()
+def learn_cutoff_dist(metric, probs):
+    preds = metric.values
 
     # Pass/fail if greater/less than 0.5
     classify = np.vectorize(lambda x: 1 if x >= 0.5 else 0)
@@ -173,6 +183,30 @@ def learn_cutoff(metric, probs):
     dist = np.sqrt((fpr - 0) ** 2 + (tpr - 1) ** 2)
     best_idx = np.argmin(dist)
 
+    # If cutoff set at no instances, scikit-learn sets thresh[0] to max(y_score) + 1
+    if best_idx == 0:
+        return thresh[best_idx] - 1
+
+    return thresh[best_idx]
+
+def learn_cutoff_fdr(metric, probs,fdr_cff=.05):
+    preds = metric.values
+
+    # Pass/fail if greater/less than 0.5
+    classify = np.vectorize(lambda x: 1 if x >= 0.5 else 0)
+    truth = classify(probs)
+
+    # If all variants which passed prior cutoffs also passed random forest,
+    # return minimum value instead of trying to compute cutoff
+    if 0 not in truth:
+        return preds.min()
+
+    fpr, tpr, thresh = roc_curve(truth, preds)
+ 
+    for i in range(len(fpr)):
+        if fpr[i]>fdr_cff:
+            break
+    best_idx = i
     # If cutoff set at no instances, scikit-learn sets thresh[0] to max(y_score) + 1
     if best_idx == 0:
         return thresh[best_idx] - 1

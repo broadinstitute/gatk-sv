@@ -10,7 +10,6 @@ version 1.0
 
 import "GenotypeCpxCnvsPerBatch.wdl" as RunDepthGenotypePerBatch
 import "Tasks0506.wdl" as MiniTasks
-import "Utils.wdl" as Utils
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered
 # across batches on predicted CPX CNVs from 04b
@@ -29,7 +28,9 @@ workflow GenotypeCpxCnvs {
     String prefix
     File merged_ped_file
     String contig
+    File ref_dict
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -42,6 +43,7 @@ workflow GenotypeCpxCnvs {
     RuntimeAttr? runtime_override_merge_melted_gts
 
     # overrides for RunDepthGenotypePerBatch
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_rd_genotype
@@ -59,13 +61,6 @@ workflow GenotypeCpxCnvs {
       runtime_attr_override=runtime_override_get_cpx_cnv_intervals
   }
 
-  call Utils.GetSampleIdsFromVcf {
-    input:
-      vcf = vcf,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_override_ids_from_vcf
-  }
-
   # Scatter over each batch (row) in gt_input_files and run depth genotyping
   scatter (i in range(length(batches))) {
     call RunDepthGenotypePerBatch.GenotypeCpxCnvsPerBatch as GenotypeBatch {
@@ -75,14 +70,16 @@ workflow GenotypeCpxCnvs {
         batch=batches[i],
         coverage_file=coverage_files[i],
         rd_depth_sep_cutoff=rd_depth_sep_cutoff_files[i],
-        samples_list=GetSampleIdsFromVcf.out_file,
         ped_file=ped_files[i],
         median_file=median_coverage_files[i],
         n_per_split_small=n_per_split_small,
         n_per_split_large=n_per_split_large,
         n_rd_test_bins=n_rd_test_bins,
+        ref_dict=ref_dict,
+        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
         runtime_override_rd_genotype=runtime_override_rd_genotype,
         runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes

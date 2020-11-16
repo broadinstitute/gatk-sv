@@ -56,7 +56,7 @@ workflow MakeBincovMatrix {
   call ZPaste {
     input:
       column_files = flatten([[SetBins.bin_locs], MakeBincovMatrixColumns.bincov_bed]),
-      matrix_file_name = "~{batch}.bincov.rd.txt.gz",
+      matrix_file_name = "~{batch}.RD.txt.gz",
       disk_overhead_gb = disk_overhead_gb,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_override
@@ -183,7 +183,7 @@ task MakeBincovMatrixColumns {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String bincov_file_name = "~{basename(count_file, '.tsv.gz')}.bincov.rd.txt.gz"
+  String bincov_file_name = "~{basename(count_file, '.tsv.gz')}.RD.txt.gz"
 
   output {
     File bincov_bed = bincov_file_name

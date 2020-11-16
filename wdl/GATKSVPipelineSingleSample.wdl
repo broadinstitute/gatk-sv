@@ -11,7 +11,7 @@ import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
 import "Module04.wdl" as m04
 import "Module05_06.wdl" as m0506
-import "Module07.wdl" as m07
+import "Module08Annotation.wdl" as m08
 import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
@@ -276,7 +276,6 @@ workflow GATKSVPipelineSingleSample {
 
     File rmsk
     File segdups
-    Int tabix_retries = 5
 
     Int? min_large_pesr_call_size_for_filtering
     Float? min_large_pesr_depth_overlap_fraction
@@ -388,6 +387,16 @@ workflow GATKSVPipelineSingleSample {
     Float? max_ref_panel_carrier_freq
 
     ############################################################
+    ## Single sample metrics
+    ############################################################
+
+    File? baseline_cleaned_vcf
+    File? baseline_final_vcf
+    File? baseline_genotyped_pesr_vcf
+    File? baseline_genotyped_depth_vcf
+    File? baseline_non_genotyped_unique_depth_calls_vcf
+
+    ############################################################
     ## QC
     ############################################################
 
@@ -497,6 +506,9 @@ workflow GATKSVPipelineSingleSample {
       ped_file=ref_ped_file,
       genome_file=genome_file,
       primary_contigs_fai=primary_contigs_fai,
+      ref_fasta=reference_fasta,
+      ref_fasta_index=reference_index,
+      ref_dict=reference_dict,
       counts=[select_first([Module00a.coverage_counts])],
       ref_panel_bincov_matrix=ref_panel_bincov_matrix,
       bincov_matrix=Module00b.bincov_matrix,
@@ -733,6 +745,7 @@ workflow GATKSVPipelineSingleSample {
       ped_file = combined_ped_file,
       vcf = FilterLargePESRCallsWithoutRawDepthSupport.out,
       autosome_contigs = autosome_file,
+      ref_dict=reference_dict,
       split_size = genotyping_n_per_split,
       algorithm = "PESR",
       allosome_contigs = allosome_file,
@@ -741,7 +754,6 @@ workflow GATKSVPipelineSingleSample {
       male_samples = SamplesList.male_samples,
       female_samples = SamplesList.female_samples,
       run_common = false,
-      tabix_retries = tabix_retries,
       sv_base_mini_docker = sv_base_mini_docker,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -783,6 +795,7 @@ workflow GATKSVPipelineSingleSample {
       discfile=Module00c.merged_PE,
       splitfile=Module00c.merged_SR,
       famfile=combined_ped_file,
+      ref_dict=reference_dict,
       n_RD_genotype_bins=n_RD_genotype_bins,
       genotype_pesr_pesr_sepcutoff=genotype_pesr_pesr_sepcutoff,
       genotype_pesr_depth_sepcutoff=genotype_pesr_depth_sepcutoff,
@@ -833,6 +846,7 @@ workflow GATKSVPipelineSingleSample {
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
       depth_vcfs=[Module04.genotyped_depth_vcf],
       contig_list=primary_contigs_fai,
+      ref_dict=reference_dict,
 
       max_shards_per_chrom=clean_vcf_max_shards_per_chrom,
       min_variants_per_shard=clean_vcf_min_variants_per_shard,
@@ -864,6 +878,7 @@ workflow GATKSVPipelineSingleSample {
 
       random_seed=clean_vcf_random_seed,
 
+      linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -933,7 +948,7 @@ workflow GATKSVPipelineSingleSample {
         sv_base_mini_docker=sv_base_mini_docker
     }
 
-  call m07.Module07 as Module07 {
+  call m08.Module08Annotation {
        input:
         vcf = ResetBothsidesSupportFilter.out,
         vcf_idx = ResetBothsidesSupportFilter.out_idx,
@@ -953,15 +968,15 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = Module07.output_vcf,
+      vcf = Module08Annotation.output_vcf,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
     input:
-      single_sample_vcf=Module07.output_vcf,
-      single_sample_vcf_idx=Module07.output_vcf_idx,
+      single_sample_vcf=Module08Annotation.output_vcf,
+      single_sample_vcf_idx=Module08Annotation.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
       sv_pipeline_docker=sv_pipeline_docker
@@ -1003,8 +1018,8 @@ workflow GATKSVPipelineSingleSample {
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
-    File pre_cleanup_vcf = Module07.output_vcf
-    File pre_cleanup_vcf_idx = Module07.output_vcf_idx
+    File pre_cleanup_vcf = Module08Annotation.output_vcf
+    File pre_cleanup_vcf_idx = Module08Annotation.output_vcf_idx
 
     File ploidy_matrix = select_first([Module00c.ploidy_matrix])
     File ploidy_plots = select_first([Module00c.ploidy_plots])

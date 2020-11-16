@@ -31,7 +31,9 @@ workflow ScatterCpxGenotyping {
     String prefix
     File merged_ped_file
     String contig
+    File ref_dict
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -42,6 +44,7 @@ workflow ScatterCpxGenotyping {
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
 
     # overrides for GenotypeCpx
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_get_cpx_cnv_intervals
     RuntimeAttr? runtime_override_parse_genotypes
     RuntimeAttr? runtime_override_merge_melted_gts
@@ -81,9 +84,12 @@ workflow ScatterCpxGenotyping {
         prefix=prefix,
         merged_ped_file=merged_ped_file,
         contig=contig,
+        ref_dict=ref_dict,
+        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
         runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
         runtime_override_parse_genotypes=runtime_override_parse_genotypes,

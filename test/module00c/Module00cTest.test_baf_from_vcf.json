@@ -109,9 +109,9 @@
     "TCGA-W9-A837-10A-01D-A706-36"
   ],
 
-  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module00cTest.Module00cMetrics.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
+  "Module00cTest.PlotMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00cMetrics.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00cMetrics.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "Module00cTest.Module00cMetrics.contig_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
 
   "Module00cTest.Module00cMetrics.baseline_merged_dels" : "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.DEL.bed.gz",
@@ -439,14 +439,15 @@
     "gs://gatk-sv-resources/test/module00c/large/outputs/wham_std/std_104.wham.TCGA-W9-A837-10A-01D-A706-36.vcf.gz"
   ],
 
-  "Module00cTest.Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module00cTest.Module00c.sv_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base:tb_update_gcnv_version_88bfceb",
-  "Module00cTest.Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-qc:eph_03qc_variables-e597d85",
-  "Module00cTest.Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatksv/cnmops:b3af2e3",
-  "Module00cTest.Module00c.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
-  "Module00cTest.Module00c.gatk_docker" : "us.gcr.io/broad-dsde-methods/gatksv/gatk:4.1.8.1",
-  "Module00cTest.Module00c.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatksv/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
+  "Module00cTest.Module00c.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-6a66c96",
+  "Module00cTest.Module00c.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
+  "Module00cTest.Module00c.gatk_docker": "us.gcr.io/broad-gatk/gatk:4.1.8.1",
+  "Module00cTest.Module00c.condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
+
   "Module00cTest.Module00c.cytoband":"gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
   "Module00cTest.Module00c.mei_bed":"gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
   "Module00cTest.Module00c.cnmops_allo_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
@@ -455,6 +456,9 @@
   "Module00cTest.Module00c.primary_contigs_fai": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "Module00cTest.Module00c.genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
   "Module00cTest.Module00c.inclusion_bed": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38_primary_contigs.bed",
+  "Module00cTest.Module00c.ref_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+  "Module00cTest.Module00c.ref_fasta_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+  "Module00cTest.Module00c.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "Module00cTest.Module00c.matrix_qc_distance": "1000000",
   "Module00cTest.Module00c.min_svsize": "50",
   "Module00cTest.Module00c.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",

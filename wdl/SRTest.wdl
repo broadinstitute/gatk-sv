@@ -27,7 +27,7 @@ workflow SRTest {
     File samples
     Boolean run_common
     Int? common_cnv_size_cutoff  # Required if run_common is true
-    Int tabix_retries
+    File ref_dict
 
     String sv_pipeline_docker
     String linux_docker
@@ -60,7 +60,7 @@ workflow SRTest {
         allosome = false,
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
-        tabix_retries = tabix_retries,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -89,7 +89,7 @@ workflow SRTest {
         allosome = true,
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
-        tabix_retries = tabix_retries,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,

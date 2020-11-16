@@ -11,7 +11,7 @@ ARG MNORMT_DEST="/tmp/mnormt.tar.gz"
 ARG DAAG_URL="https://cran.r-project.org/src/contrib/Archive/DAAG/DAAG_1.22.tar.gz"
 ARG DAAG_DEST="/tmp/DAAG.tar.gz"
 ARG SV_PIPELINE_BIOC_PKGS="\"multtest\""
-ARG SV_PIPELINE_R_PKGS="BSDA caret data.table fpc hash metap perm plyr pwr reshape ROCR zoo"
+ARG SV_PIPELINE_R_PKGS="BSDA caret fpc hash metap perm plyr pwr reshape ROCR zoo"
 ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
@@ -19,6 +19,7 @@ RUN apt-get -qqy update --fix-missing && \
                  make cmake automake \
                  libssh2-1-dev \
                  libssl-dev && \
+    /opt/install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/data.table/data.table_1.12.8.tar.gz" && \
     Rscript -e "install.packages(c('BiocManager', 'latticeExtra'), repos = 'https://cran.rstudio.com', quiet = TRUE)" && \
     Rscript -e "BiocManager::install(${SV_PIPELINE_BIOC_PKGS})" && \
     curl "${MNORMT_URL}" --output "${MNORMT_DEST}" && \

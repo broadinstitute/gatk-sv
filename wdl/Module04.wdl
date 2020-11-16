@@ -38,6 +38,7 @@ workflow Module04 {
     File? regeno_raw_combined_depth # required if doing regenotyping
     Int? n_samples_cohort # required if doing regenotyping
     File bin_exclude
+    File ref_dict
     # If all specified, training will be skipped (for single sample pipeline)
     File? genotype_pesr_pesr_sepcutoff
     File? genotype_pesr_depth_sepcutoff
@@ -144,6 +145,7 @@ workflow Module04 {
         splitfile = splitfile,
         n_per_RD_split = n_per_split,
         n_per_SR_split = n_per_split,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -181,6 +183,7 @@ workflow Module04 {
       n_per_split = n_per_split,
       famfile = famfile,
       splitfile = splitfile,
+      ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -214,6 +217,7 @@ workflow Module04 {
         reference_build = select_first([reference_build]),
         famfile = famfile,
         n_per_RD_split = n_per_split,
+        ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
@@ -242,6 +246,7 @@ workflow Module04 {
       regeno_sample_counts_lookup=regeno_sample_counts_lookup,
       regeno_raw_combined_depth=regeno_raw_combined_depth,
       n_samples_cohort = n_samples_cohort,
+      ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,

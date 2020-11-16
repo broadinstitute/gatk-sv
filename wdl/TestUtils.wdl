@@ -78,7 +78,7 @@ task VCFMetrics {
     String prefix
     File contig_list
     String sv_pipeline_base_docker
-    Float mem_gib = 1
+    Float mem_gib = 3.75
     Int disk_gb = 10
     Int preemptible_attempts = 3
   }

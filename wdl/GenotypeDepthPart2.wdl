@@ -23,6 +23,7 @@ workflow GenotypeDepthPart2 {
     File? regeno_sample_counts_lookup # required if doing regenotyping
     File? regeno_raw_combined_depth # required if doing regenotyping
     Int? n_samples_cohort # required if doing regenotyping
+    File ref_dict
     File medianfile
     File famfile
     Array[String] samples
@@ -74,6 +75,7 @@ workflow GenotypeDepthPart2 {
     n_bins = n_RdTest_bins,
     prefix = basename(gt5kb_bed),
     generate_melted_genotypes = true,
+    ref_dict = ref_dict,
     sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
     runtime_attr_override = runtime_attr_rdtest_genotype
     }
@@ -113,6 +115,7 @@ workflow GenotypeDepthPart2 {
     n_bins = n_RdTest_bins,
     prefix = basename(lt5kb_bed, ".bed"),
     generate_melted_genotypes = true,
+    ref_dict = ref_dict,
     sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
     runtime_attr_override = runtime_attr_rdtest_genotype
     }

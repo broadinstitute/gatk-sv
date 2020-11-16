@@ -57,6 +57,7 @@ workflow Module05_06 {
     File mei_bed
     File pe_exclude_list
     File depth_exclude_list
+    File ref_dict
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
     Int samples_per_clean_vcf_step2_shard
@@ -73,6 +74,7 @@ workflow Module05_06 {
     File? collins_2017_tarball
     File? werling_2018_tarball
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -118,6 +120,7 @@ workflow Module05_06 {
     RuntimeAttr? runtime_override_concat_resolved_per_shard
 
     # overrides for GenotypeComplexContig
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_vcf_to_genotype
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
     RuntimeAttr? runtime_override_get_cpx_cnv_intervals
@@ -347,6 +350,7 @@ workflow Module05_06 {
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=true,
+        ref_dict=ref_dict,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -382,6 +386,7 @@ workflow Module05_06 {
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
         inv_only=false,
+        ref_dict=ref_dict,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -439,9 +444,12 @@ workflow Module05_06 {
         prefix=cohort_name,
         contig=contig,
         ped_files=ped_files,
+        ref_dict=ref_dict,
+        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
         runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
         runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -547,6 +555,7 @@ workflow Module05_06 {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
   #Final outputs

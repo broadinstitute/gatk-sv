@@ -23,6 +23,7 @@ workflow TrainPEGenotyping {
     File RD_genotypes
     File RD_melted_genotypes
     File exclude_list
+    File ref_dict
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -59,6 +60,7 @@ workflow TrainPEGenotyping {
         discfile = discfile,
         medianfile = medianfile,
         samples = samples,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_pe
     }

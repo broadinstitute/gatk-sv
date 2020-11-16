@@ -26,7 +26,7 @@ workflow RDTest {
     File male_samples
     File female_samples
     File samples
-    Int tabix_retries
+    File ref_dict
 
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -56,7 +56,7 @@ workflow RDTest {
         male_samples = male_samples,
         female_samples = female_samples,
         allosome = false,
-        tabix_retries = tabix_retries,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         linux_docker = linux_docker,
@@ -83,7 +83,7 @@ workflow RDTest {
         male_samples = male_samples,
         female_samples = female_samples,
         allosome = true,
-        tabix_retries = tabix_retries,
+        ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         linux_docker = linux_docker,

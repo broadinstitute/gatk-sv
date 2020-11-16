@@ -36,7 +36,7 @@ task SplitVCF {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf};
+    tabix -p vcf ~{vcf}
     mkdir splits
     tabix ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
 
@@ -64,7 +64,7 @@ task SplitVCF {
   }
 }
 
-task SplitCommonVCF {
+task GetCommonVCF {
   input{
       File vcf
       Int cnv_size_cutoff

@@ -1,8 +1,8 @@
 {
-  "Module04b.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module04b.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-base:tb_update_gcnv_version_88bfceb",
-  "Module04b.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module04b.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
+  "Module04b.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
+  "Module04b.sv_pipeline_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:mw-gnomad-02-6a66c96",
+  "Module04b.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module04b.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
   "Module04b.n_RdTest_bins": "100000",
   "Module04b.n_per_split": "5000",
 
@@ -16,8 +16,8 @@
   "Module04b.batch_depth_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz"],
   "Module04b.samples_lists": ["gs://gatk-sv-resources/test/module04b/large/inputs/samplelist.txt"],
   "Module04b.depth_vcfs": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart2/GenotypeDepthPart2/afcbb44e-d36a-44a1-b007-69b16d4f754a/call-ConcatGenotypedVcfs/test_large.depth.vcf.gz"],
-  "Module04b.coveragefiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"],
-  "Module04b.coveragefile_idxs": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"],
+  "Module04b.coveragefiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz"],
+  "Module04b.coveragefile_idxs": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz.tbi"],
   "Module04b.medianfiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed"],
   "Module04b.batches": ["test"]
 }

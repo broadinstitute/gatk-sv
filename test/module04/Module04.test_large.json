@@ -1,8 +1,8 @@
 {
-  "Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module04.linux_docker" : "us.gcr.io/broad-dsde-methods/gatksv/ubuntu:18.04",
+  "Module04.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module04.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module04.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
+  "Module04.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
 
   "Module04.n_RD_genotype_bins": "100000", 
   "Module04.n_per_split": "5000", 
@@ -10,6 +10,7 @@
   "Module04.seed_cutoffs": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "Module04.reference_build": "hg38",
   "Module04.n_samples_cohort": 105,
+  "Module04.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module04.batch": "test_large",
   "Module04.rf_cutoffs": "gs://gatk-sv-resources/test/module03/large/output/test_large.cutoffs",
@@ -20,7 +21,7 @@
   "Module04.regeno_sample_counts_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
   "Module04.regeno_raw_combined_depth": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
   "Module04.discfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz",
-  "Module04.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz",
+  "Module04.coveragefile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz",
   "Module04.splitfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.SR.txt.gz",
   "Module04.medianfile": "gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed",
   "Module04.cohort_depth_vcf": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/all_batches.depth.vcf.gz",

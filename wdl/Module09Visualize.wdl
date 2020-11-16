@@ -1,4 +1,9 @@
+##########################
+## EXPERIMENTAL WORKFLOW
+##########################
+
 # Base script https://portal.firecloud.org/#methods/Talkowsk-SV/Coverage_plot/10/wdl
+
 version 1.0
 
 import "Structs.wdl"
@@ -32,6 +37,7 @@ workflow SV_Visualize{
         String sv_base_mini_docker
         String sv_pipeline_rdtest_docker
         String igv_docker
+        String figure_combine_docker
         RuntimeAttr? runtime_attr_override
         RuntimeAttr? runtime_attr_concatinate
         RuntimeAttr? runtime_attr_rdtest
@@ -50,7 +56,7 @@ workflow SV_Visualize{
             flags = flags,
             runtime_attr_rdtest=runtime_attr_rdtest
         }
-    call igv_trio.IGV_all_samples as igv_plots {
+    call igv_trio.IGVAllTrios as igv_plots {
         input:
             pb_list = pb_list,
             fa_list = fa_list,
@@ -79,7 +85,7 @@ workflow SV_Visualize{
             prefix = prefix,
             varfile = varfile,
             ped_file = ped_file,
-            igv_docker = igv_docker,
+            figure_combine_docker = figure_combine_docker,
             runtime_attr_concatinate = runtime_attr_concatinate
     }
     output{
@@ -94,7 +100,7 @@ task concatinate_plots{
         String prefix
         File varfile
         File ped_file
-        String igv_docker
+        String figure_combine_docker
         RuntimeAttr? runtime_attr_concatinate
     }
 
@@ -114,12 +120,14 @@ task concatinate_plots{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: igv_docker
+        docker: figure_combine_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
+        set -eu -o pipefail    
+
         tar -zxf ~{rd_plots}
         tar -zxf ~{igv_plots}
         mkdir ~{prefix}.igv_rdtest_plots
