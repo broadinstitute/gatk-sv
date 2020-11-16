@@ -24,6 +24,7 @@ workflow ResolveComplexSv {
     Array[File] rf_cutoff_files
     File pe_exclude_list
     Boolean inv_only
+    File ref_dict
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -72,13 +73,14 @@ workflow ResolveComplexSv {
     #Scatter over shards and resolve variants per shard
     scatter ( VID_list in ShardVcfCpx.VID_lists ) {
 
-        #Prep files for svtk resolve using remote tabixing-enabled pysam
+      #Prep files for svtk resolve using bucket streaming
       call ResolvePrep {
         input:
           vcf=vcf,
           VIDs_list=VID_list,
           chrom=contig,
           disc_files=disc_files,
+          ref_dict=ref_dict,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_prep
       }
@@ -242,6 +244,7 @@ task ResolvePrep {
   input {
     File vcf
     File VIDs_list
+    File ref_dict
     String chrom
     Array[File] disc_files
     String sv_pipeline_docker
@@ -254,7 +257,7 @@ task ResolvePrep {
     }
   }
 
-  # sections of disc_files are remote-tabixed in, but the every operation in this task is record-by-record except
+  # sections of disc_files are straemed, but the every operation in this task is record-by-record except
   # bedtools merge, which should only need to keep a few records in memory at a time.
   # assuming memory overhead is fixed
   # assuming disk overhead is input size (accounting for compression) + sum(size of disc_files)
@@ -274,9 +277,13 @@ task ResolvePrep {
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -329,9 +336,9 @@ task ResolvePrep {
       > noref.vcf.gz
     rm -f header.vcf
 
-    #Third, use remote tabix to pull down the discfile chunks within ±2kb of all
+    #Third, use GATK to pull down the discfile chunks within ±2kb of all
     # INVERSION breakpoints, and bgzip / tabix
-    echo "Forming regions.tabix.bed"
+    echo "Forming regions.bed"
     { grep -Ev "^#" input.bed || true; } \
       | (fgrep INV || printf "") \
       | awk -v OFS="\t" -v buffer=2000 \
@@ -339,55 +346,66 @@ task ResolvePrep {
       | awk -v OFS="\t" '{ if ($2<1) $2=1; print $1, $2, $3 }' \
       | sort -Vk1,1 -k2,2n -k3,3n \
       | bedtools merge -i - \
-      > regions_to_tabix.bed
+      > regions.bed
 
-    if [ -s regions_to_tabix.bed ]; then
+    if [ -s regions.bed ]; then
       echo "Localizing all discfile shards..."
-      export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
       DISC_FILE_NUM=0
       while read GS_PATH_TO_DISC_FILE; do
         ((++DISC_FILE_NUM))
         SLICE="disc"$DISC_FILE_NUM"shard"
 
-        tabix -R regions_to_tabix.bed "$GS_PATH_TO_DISC_FILE" \
+        if [ -s regions.bed ]; then
+          java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+                --skip-header \
+                --sequence-dictionary ~{ref_dict} \
+                --evidence-file $GS_PATH_TO_DISC_FILE \
+                -L regions.bed \
+                -O ${SLICE}.PE.txt
+        else
+          touch ${SLICE}.PE.txt
+        fi
+
+        cat ${SLICE}.PE.txt \
           | awk '{ if ($1==$4 && $3==$6) print }' \
           | bgzip -c \
-          > $SLICE.txt.gz
+          > ${SLICE}.PE.txt.gz
+        rm ${SLICE}.PE.txt
       done < ~{write_lines(disc_files)}
     
       #Fourth, merge PE files and add one artificial pair corresponding to the chromosome of interest
       #This makes it so that svtk doesn't break downstream
       echo "Merging PE files"
       {
-        zcat disc*shard.txt.gz;
+        zcat disc*shard.PE.txt.gz;
         echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
         echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
       } \
         | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
         | bgzip -c \
-        > discfile.txt.gz
+        > discfile.PE.txt.gz
 
-      rm disc*shard.txt.gz
+      rm disc*shard.PE.txt.gz
     else
-      echo "No regions to tabix, making dummy-sample discfile"
+      echo "No regions to retrieve, making dummy-sample discfile"
       {
         echo -e "~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
         echo -e "chr~{chrom}\t1\t+\t~{chrom}\t2\t+\tDUMMY_SAMPLE_IGNORE";
       } \
         | sort -Vk1,1 -k2,2n -k5,5n -k7,7 \
         | bgzip -c \
-        > discfile.txt.gz
+        > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.txt.gz
+    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {
     File subsetted_vcf = "input.vcf.gz"
     File noref_vcf = "noref.vcf.gz"
     File noref_vids = "noref.VIDs.list"
-    File merged_discfile = "discfile.txt.gz"
-    File merged_discfile_idx = "discfile.txt.gz.tbi"
+    File merged_discfile = "discfile.PE.txt.gz"
+    File merged_discfile_idx = "discfile.PE.txt.gz.tbi"
   }
 }
 

@@ -6,6 +6,7 @@
   "Module05_06.pe_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "Module05_06.depth_exclude_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/depth_blacklist.bed.gz",
   "Module05_06.empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
+  "Module05_06.ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
 
   "Module05_06.thousand_genomes_tarballs": [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
@@ -38,10 +39,11 @@
   "Module05_06.max_shards_per_chrom": 100,
   "Module05_06.min_variants_per_shard": 30,
 
-  "Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_ctx_fixes_d1e9818",
-  "Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:tb_update_gcnv_version_88bfceb",
-  "Module05_06.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-rdtest:b3af2e3",
-  "Module05_06.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatksv/sv-pipeline-qc:eph_03qc_variables-e597d85",
+  "Module05_06.linux_docker": "marketplace.gcr.io/google/ubuntu1804",
+  "Module05_06.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
+  "Module05_06.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
+  "Module05_06.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
+  "Module05_06.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-6a66c96",
 
   "Module05_06.cohort_name": "test_large",
   "Module05_06.batches": [
@@ -54,7 +56,7 @@
     "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.PE.txt.gz"
   ],
   "Module05_06.bincov_files": [
-    "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.bincov.bed.gz"
+    "gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz"
   ],
   "Module05_06.median_coverage_files": [
     "gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed"

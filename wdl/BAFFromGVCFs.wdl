@@ -23,6 +23,7 @@ workflow BAFFromGVCFs {
     File ref_dict
     File inclusion_bed
     String batch
+    String? gcs_project_for_requester_pays
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -63,6 +64,7 @@ workflow BAFFromGVCFs {
         batch_size = 50,
         docker = gatk_docker,
         gatk_path = "/gatk/gatk",
+        gcs_project_for_requester_pays = gcs_project_for_requester_pays,
         preemptible = 3
     }
     call GenotypeGVCFs {
@@ -180,9 +182,7 @@ task GenotypeGVCFs {
   input {
     File workspace_tar
     String interval
-
     String output_vcf_filename
-
     String gatk_path
 
     File ref_fasta
@@ -208,7 +208,7 @@ task GenotypeGVCFs {
      -D ~{dbsnp_vcf} \
      -G StandardAnnotation \
      --only-output-calls-starting-in-intervals \
-     --use-new-qual-calculator \
+     --allow-old-rms-mapping-quality-annotation-data \
      -V gendb://$WORKSPACE \
      -L ~{interval}
   >>>
@@ -236,6 +236,7 @@ task ImportGVCFs {
     String workspace_dir_name
 
     String gatk_path
+    String? gcs_project_for_requester_pays
     String docker
     Int disk_size
     Int preemptible
@@ -281,7 +282,8 @@ task ImportGVCFs {
     -L ~{interval} \
     --sample-name-map inputs.list \
     --reader-threads 5 \
-    -ip 500
+    -ip 500 \
+     ~{"--gcs-project-for-requester-pays " + gcs_project_for_requester_pays}
 
     tar -cf ~{workspace_dir_name}.tar ~{workspace_dir_name}
 

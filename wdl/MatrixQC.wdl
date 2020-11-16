@@ -32,6 +32,7 @@ workflow MatrixQC {
     File PE_file
     File BAF_idx
     File genome_file
+    File ref_dict
     File RD_file
     File RD_idx
     File PE_idx
@@ -48,6 +49,7 @@ workflow MatrixQC {
       matrix_file = BAF_file,
       matrix_index = BAF_idx,
       genome_file = genome_file,
+      ref_dict = ref_dict,
       prefix = "${batch}.BAF",
       ev = "BAF",
       batch = batch,
@@ -61,6 +63,7 @@ workflow MatrixQC {
       matrix_file = RD_file,
       matrix_index = RD_idx,
       genome_file = genome_file,
+      ref_dict = ref_dict,
       prefix = "${batch}.RD",
       ev = "RD",
       batch = batch,
@@ -74,6 +77,7 @@ workflow MatrixQC {
       matrix_file = PE_file,
       matrix_index = PE_idx,
       genome_file = genome_file,
+      ref_dict = ref_dict,
       prefix = "${batch}.PE",
       ev = "PE",
       batch = batch,
@@ -87,6 +91,7 @@ workflow MatrixQC {
       matrix_file = SR_file,
       matrix_index = SR_idx,
       genome_file = genome_file,
+      ref_dict = ref_dict,
       prefix = "${batch}.SR",
       ev = "SR",
       batch = batch,
@@ -120,6 +125,7 @@ task PESRBAF_QC {
     File matrix_file
     File matrix_index
     File genome_file
+    File ref_dict
     String prefix
     Int distance
     String batch
@@ -147,19 +153,33 @@ task PESRBAF_QC {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "~{batch}.~{ev}.QC_matrix.txt"
   }
   command <<<
 
     set -euo pipefail
-    fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed;
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \
-      tabix -R regions.bed ~{matrix_file} | bgzip -c -f > local_matrix.txt.gz
-    tabix -s 1 -b 2 -e 2 -f local_matrix.txt.gz;
+    fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed
+
+    if [ -s regions.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{matrix_file} \
+        -L regions.bed \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
+
+    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
+
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
-      local_matrix.txt.gz \
+      local.RD.txt.gz \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
@@ -168,7 +188,7 @@ task PESRBAF_QC {
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
@@ -182,6 +202,7 @@ task RD_QC {
     File matrix_file
     File matrix_index
     File genome_file
+    File ref_dict
     String prefix
     String ev
     String batch
@@ -209,6 +230,9 @@ task RD_QC {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   output {
     File stats = "~{batch}.~{ev}.QC_matrix.txt"
   }
@@ -216,12 +240,23 @@ task RD_QC {
 
     set -euo pipefail
     fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \
-      tabix -h -R regions.bed ~{matrix_file} | bgzip -c -f > local_matrix.bed.gz
-    tabix -p bed local_matrix.bed.gz;
+
+    if [ -s regions.bed ]; then
+      java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
+        --sequence-dictionary ~{ref_dict} \
+        --evidence-file ~{matrix_file} \
+        -L regions.bed \
+        -O local.RD.txt.gz
+    else
+      touch local.RD.txt
+      bgzip local.RD.txt
+    fi
+
+    tabix -p bed local.RD.txt.gz
+
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
-      local_matrix.bed.gz \
+      local.RD.txt.gz \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
@@ -230,7 +265,7 @@ task RD_QC {
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker

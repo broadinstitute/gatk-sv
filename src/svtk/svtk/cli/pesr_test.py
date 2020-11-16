@@ -309,11 +309,12 @@ def count_sr(argv):
     for record in vcf:
         for coord in 'start end'.split():
             if coord == 'start':
-                pos, strand = record.pos, record.info['STRANDS'][0]
+                pos, strand, chrom = record.pos, record.info['STRANDS'][0], record.chrom
             else:
-                pos, strand = record.stop, record.info['STRANDS'][1]
+                # TODO: With a properly formatted VCF, should be using END2 instead of END here
+                pos, strand, chrom = record.stop, record.info['STRANDS'][1], record.info['CHR2']
 
-            counts = srtest.load_counts(record.chrom, pos, strand)
+            counts = srtest.load_counts(chrom, pos, strand)
             counts = srtest.normalize_counts(counts)
             counts = counts['sample count'.split()]
             counts = counts.set_index('sample')
@@ -322,6 +323,6 @@ def count_sr(argv):
             counts['name'] = record.id
             counts['coord'] = coord
 
-            for row in counts[header].as_matrix():
+            for row in counts[header].values:
                 fout.write('\t'.join([str(x) for x in row]) + '\n')
             #  counts[header].to_csv(fout, header=False, index=False, sep='\t', na_rep='NA')

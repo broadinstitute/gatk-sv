@@ -4,8 +4,8 @@ import "AnnotateVcf.wdl" as ann
 import "PruneAndAddVafs.wdl" as pav
 import "AnnotateExternalAF.wdl" as eaf
 
-workflow Module07 {
-  
+workflow Module08Annotation {
+
   input {
     String vcf
     File   vcf_idx

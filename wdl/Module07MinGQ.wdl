@@ -1,10 +1,8 @@
-##########################################################################################
+##########################
+## EXPERIMENTAL WORKFLOW
+##########################
 
 ## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/minGQ_filter_procedure_v2_Harold_temp_copy/18
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
 
 version 1.0
 
@@ -15,7 +13,7 @@ import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
 
 
-workflow Module07 {
+workflow MinGQ {
   input{
     String sv_base_mini_docker
     String sv_pipeline_docker

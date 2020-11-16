@@ -51,7 +51,7 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_concat_shards
   }
   
-  #Remote tabix each vcf & join into a single vcf
+  #Stream each vcf & join into a single vcf
   call JoinContigFromRemoteVcfs as JoinVcfs {
     input:
       vcfs=vcfs,
@@ -117,7 +117,7 @@ workflow VcfClusterSingleChrom {
 }
 
 
-# Task to remote tabix a single chromosome for all VCFs, then merge row-wise
+# Task to stream a single chromosome for all VCFs, then merge row-wise
 task JoinContigFromRemoteVcfs {
   input {
     Array[File] vcfs
@@ -152,8 +152,12 @@ task JoinContigFromRemoteVcfs {
     boot_disk_gb: 10
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    memory: mem_gb + " GiB"
     disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
@@ -164,10 +168,13 @@ task JoinContigFromRemoteVcfs {
   
   command <<<
     set -eu -o pipefail
-    
+
+    # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
+    # https://github.com/broadinstitute/gatk-sv/issues/52
+
     #Remote tabix all vcfs to chromosome of interest
     1>&2 echo "REMOTE TABIXING VCFs"
-    
+
     # needed for tabix to operate on remote files
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
@@ -242,7 +249,7 @@ task JoinContigFromRemoteVcfs {
       | sed -e 's/ID=EV,Number=.,Type=String/ID=EV,Number=1,Type=Integer/g' \
       | bgzip -c > ~{prefix}.unclustered.vcf.gz
 
-    tabix -f -p vcf "~{prefix}.unclustered.vcf.gz"
+    tabix -p vcf "~{prefix}.unclustered.vcf.gz"
   >>>
 
   output {

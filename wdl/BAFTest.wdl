@@ -21,7 +21,7 @@ workflow BAFTest {
     String algorithm
     Int split_size
     File autosome_contigs
-    Int tabix_retries
+    File ref_dict
 
     String linux_docker
     String sv_pipeline_docker
@@ -43,7 +43,7 @@ workflow BAFTest {
         vcf = vcf,
         split_size = split_size,
         chrom = autosome[0],
-        tabix_retries = tabix_retries,
+        ref_dict = ref_dict,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_baftest = runtime_attr_baftest,
