@@ -34,8 +34,6 @@ workflow Module04 {
     File? pesr_exclude_list    # Required unless skipping training
     File splitfile
     String? reference_build  #hg19 or hg38, Required unless skipping training
-    File? cohort_combined_bed
-    File? cohort_sort
     File bin_exclude
     File ref_dict
     # If all specified, training will be skipped (for single sample pipeline)
@@ -45,7 +43,6 @@ workflow Module04 {
     File? genotype_depth_depth_sepcutoff
     File? SR_metrics
     File? PE_metrics
-
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -242,8 +239,6 @@ workflow Module04 {
       coveragefile = coveragefile,
       n_per_split = n_per_split,
       famfile = famfile,
-      cohort_combined_bed=cohort_combined_bed,
-      cohort_sort=cohort_sort,
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -254,7 +249,7 @@ workflow Module04 {
       runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_concat_vcfs = runtime_attr_concat_vcfs
-    }
+  }
   output {
     File sr_bothside_pass = GenotypePESRPart2.bothside_pass
     File sr_background_fail = GenotypePESRPart2.background_fail
@@ -271,7 +266,7 @@ workflow Module04 {
     File genotyped_depth_vcf_index = GenotypeDepthPart2.genotyped_vcf_index
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
-    File? regeno_depth = GenotypeDepthPart2.regeno_list
+    Array[File] regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
   }
 }
 
