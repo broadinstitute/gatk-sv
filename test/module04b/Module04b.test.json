@@ -6,13 +6,17 @@
   "Module04b.n_RdTest_bins": "100000",
   "Module04b.n_per_split": "5000",
 
-  "Module04b.cohort_samplelist": "gs://gatk-sv-resources/test/module04b/large/inputs/samplelist.txt",
   "Module04b.regeno_sample_ids_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cluster.combined.bed",
+  "Module04b.regeno_sample_counts_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
+  "Module04b.regeno_raw_combined_depth": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
+  "Module04b.regeno_coverage_medians": [
+    "gs://broad-dsde-methods-eph/Module04StressTest/Module04/6d90e729-0cd1-4752-94b3-e0ad128c6dc4/call-GenotypeDepthPart2/GenotypeDepthPart2/2b962a21-897e-49ac-8055-118ba459f7e4/call-RDTestGenotypeOver5kb/shard-0/cacheCopy/gt5kb.aaaaaa.bed.median_geno",
+    "gs://broad-dsde-methods-eph/Module04StressTest/Module04/6d90e729-0cd1-4752-94b3-e0ad128c6dc4/call-GenotypeDepthPart2/GenotypeDepthPart2/2b962a21-897e-49ac-8055-118ba459f7e4/call-RDTestGenotypeOver5kb/shard-1/cacheCopy/gt5kb.aaaaab.bed.median_geno"
+  ],
   "Module04b.cohort_depth_vcf": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/all_batches.depth.vcf.gz",
 
   "Module04b.RD_depth_sepcutoffs": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart1/GenotypeDepthPart1/dd257617-3e1f-47b5-b17b-2144c1931986/call-TrainRDGenotyping/TrainRDGenotyping/8b8ea223-1bc1-4e7b-a07c-ca2b47e8e699/call-UpdateCutoff/depth_sepcutoff.txt"],
   "Module04b.famfiles": ["gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam"],
-  "Module04b.regeno_beds": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart2/GenotypeDepthPart2/afcbb44e-d36a-44a1-b007-69b16d4f754a/call-MedianIntersect/median_missing_sorted.bed"],
   "Module04b.batch_depth_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz"],
   "Module04b.samples_lists": ["gs://gatk-sv-resources/test/module04b/large/inputs/samplelist.txt"],
   "Module04b.depth_vcfs": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart2/GenotypeDepthPart2/afcbb44e-d36a-44a1-b007-69b16d4f754a/call-ConcatGenotypedVcfs/test_large.depth.vcf.gz"],
