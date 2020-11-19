@@ -47,7 +47,6 @@ workflow Module04b{
     input:
       cohort_depth_vcf = cohort_depth_vcf,
       cohort = cohort,
-      prefix = cohort + ".all_batches.depth",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cluster_merged_depth_beds
   }
@@ -190,7 +189,6 @@ task ClusterMergedDepthBeds {
   input {
     File cohort_depth_vcf
     String cohort
-    String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -209,9 +207,9 @@ task ClusterMergedDepthBeds {
     File regeno_merged_depth_clustered = "~{cohort}.regeno.merged_depth_clustered.bed"
   }
   command <<<
-    svtk vcf2bed ~{cohort_depth_vcf} ~{prefix}.vcf.gz.bed   # vcf2bed merge_vcfs, non_duplicated
+    svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed   # vcf2bed merge_vcfs, non_duplicated
     # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
-    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' ~{prefix}.vcf.gz.bed 
+    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.bed 
     svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
     svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
     cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.regeno.merged_depth_clustered.bed #combine clusterd non-duplicated
