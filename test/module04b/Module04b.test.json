@@ -6,9 +6,8 @@
   "Module04b.n_RdTest_bins": "100000",
   "Module04b.n_per_split": "5000",
 
-  "Module04b.regeno_sample_ids_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cluster.combined.bed",
-  "Module04b.regeno_sample_counts_lookup": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
-  "Module04b.regeno_raw_combined_depth": "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cohort.sort.bed",
+  "Module04b.cohort": "test",
+  "Module04b.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
   "Module04b.regeno_coverage_medians": [
     "gs://broad-dsde-methods-eph/Module04StressTest/Module04/6d90e729-0cd1-4752-94b3-e0ad128c6dc4/call-GenotypeDepthPart2/GenotypeDepthPart2/2b962a21-897e-49ac-8055-118ba459f7e4/call-RDTestGenotypeOver5kb/shard-0/cacheCopy/gt5kb.aaaaaa.bed.median_geno",
     "gs://broad-dsde-methods-eph/Module04StressTest/Module04/6d90e729-0cd1-4752-94b3-e0ad128c6dc4/call-GenotypeDepthPart2/GenotypeDepthPart2/2b962a21-897e-49ac-8055-118ba459f7e4/call-RDTestGenotypeOver5kb/shard-1/cacheCopy/gt5kb.aaaaab.bed.median_geno"
