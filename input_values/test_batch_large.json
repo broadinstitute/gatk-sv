@@ -217,6 +217,7 @@
   "base_metrics_module00a" : "gs://gatk-sv-resources/test/module00a/large/module00a.test_large.metrics.tsv",
   "base_metrics_module00c" : "gs://gatk-sv-resources/test/module00c/large/module00c.test_large.metrics.tsv",
   "base_metrics_module01" : "gs://gatk-sv-resources/test/module01/large/module01.test_large.metrics.tsv",
+  "base_metrics_module02" : "gs://gatk-sv-resources/test/module02/large/module02.test_large.metrics.tsv",
   "base_metrics_module03" : "gs://gatk-sv-resources/test/module03/large/module03.test_large.metrics.tsv",
   "base_metrics_module04" : "gs://gatk-sv-resources/test/module04/large/module04.test_large.metrics.tsv",
   "baseline_cleaned_vcf" : "gs://gatk-sv-resources/test/module0506/large/output/test_large.cleaned.vcf.gz",
