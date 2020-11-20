@@ -1,18 +1,7 @@
 {
-  "Module02Test.test_name" : "test_small",
-  "Module02Test.base_metrics" : "gs://gatk-sv-resources/test/module02/small/module02.test_small.metrics.tsv",
-  "Module02Test.samples": [
-    "SM-GN4BI",
-    "SM-GN4BK",
-    "SM-GZQJX",
-    "SM-GZQKA",
-    "SM-GZQKM",
-    "SM-GZQKY",
-    "SM-GZQLB",
-    "SM-GZQLN",
-    "SM-GZQMC",
-    "SM-HXUD2"
-  ],
+  "Module02Test.test_name" : {{ test_batch.batch_name | tojson }},
+  "Module02Test.base_metrics" : {{ test_batch.base_metrics_module02 | tojson }},
+  "Module02Test.samples": {{ test_batch.samples | tojson }},
 
   "Module02Test.PlotMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "Module02Test.Module02Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
@@ -37,16 +26,15 @@
   "Module02Test.Module02.segdups": {{ reference_resources.segdups | tojson }},
   "Module02Test.Module02.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
-  "Module02Test.Module02.batch": "test_small",
+  "Module02Test.Module02.batch": {{ test_batch.batch_name | tojson }},
   "Module02Test.Module02.ped_file": {{ test_batch.ped_file | tojson }},
   "Module02Test.Module02.discfile": {{ test_batch.merged_disc_file | tojson }},
   "Module02Test.Module02.baf_metrics": {{ test_batch.merged_baf_file | tojson }},
-  "Module02Test.Module02.coveragefile":{{ test_batch.merged_coverage_file | tojson }},
+  "Module02Test.Module02.coveragefile": {{ test_batch.merged_coverage_file | tojson }},
   "Module02Test.Module02.splitfile": {{ test_batch.merged_split_file | tojson }},
   "Module02Test.Module02.medianfile": {{ test_batch.medianfile | tojson }},
   "Module02Test.Module02.depth_vcf" : {{ test_batch.merged_depth_vcf | tojson }},
   "Module02Test.Module02.manta_vcf" : {{ test_batch.merged_manta_vcf | tojson }},
   "Module02Test.Module02.wham_vcf" : {{ test_batch.merged_wham_vcf | tojson }},
   "Module02Test.Module02.melt_vcf" : {{ test_batch.merged_melt_vcf | tojson }}
-
 }
