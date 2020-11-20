@@ -1,6 +1,6 @@
 {
-  "MergeCohortVcfs.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
-  "MergeCohortVcfs.pesr_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz"],
-  "MergeCohortVcfs.depth_vcfs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz"],
-  "MergeCohortVcfs.cohort": "test_large"
+  "MergeCohortVcfs.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "MergeCohortVcfs.pesr_vcfs": [{{ test_batch.filtered_pesr_vcf | tojson }}],
+  "MergeCohortVcfs.depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
+  "MergeCohortVcfs.cohort": {{ test_batch.batch_name | tojson }}
 }

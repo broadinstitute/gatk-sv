@@ -107,6 +107,7 @@
     "gs://broad-sv-dev-data/TCGA_blood_normals/TCGA-SS-A7HO-10A-01D-A703-36.cram",
     "gs://broad-sv-dev-data/TCGA_blood_normals/TCGA-W9-A837-10A-01D-A706-36.cram"
   ],
+  "batch_name" : "ref_panel_v1b",
   "bincov_matrix" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/merged_evidence/ref_panel_v1b.bincov.bed.gz",
   "contig_ploidy_model_tar" : "gs://gatk-sv-resources/test/gcnv_model_v2/ref_panel_v1b-contig-ploidy-model.tar.gz",
   "counts" : [
@@ -804,6 +805,7 @@
     "gs://gatk-sv-resources/clinical/reference_panel_v1b/pesr/TCGA-W9-A837-10A-01D-A706-36.split.txt.gz"
   ],
   "qc_definitions" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/qc/clinical.qc_definitions.tsv",
+  "requester_pays_crams" : "false",
   "samples" : [
     "SM-BZNZQ",
     "SM-BZNZR",

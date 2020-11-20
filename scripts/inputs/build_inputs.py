@@ -46,6 +46,12 @@ def to_json_custom(value, *args, **kwargs):
     else:
         return json.dumps(value, *args, **kwargs)
 
+def make_target_subdir(split_path):
+    for i in [i+1 for i in range(0,len(split_path))]:
+        target_subdir = os.sep.join(split_path[0:i])
+        if not os.path.isdir(target_subdir):
+            os.mkdir(target_subdir)
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -63,10 +69,13 @@ def main():
 
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
+    raw_input_bundles['empty'] = {}
 
     default_aliases = { 'dockers' : 'dockers',
                         'ref_panel' : 'ref_panel_v1b',
-                        'reference_resources' : 'resources_hg38' }
+                        'reference_resources' : 'resources_hg38',
+                        'test_batch' : 'empty',
+                        'test_single_sample' : 'empty' }
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}
@@ -83,8 +92,6 @@ def main():
         split_path = subdir.split(os.sep)
         split_path[0] = target_directory
         target_subdir = os.sep.join(split_path)
-        if not os.path.isdir(target_subdir):
-            os.mkdir(target_subdir)
         for file in fileList:
             undefined_names.clear()
 
@@ -101,8 +108,9 @@ def main():
 
             processed_content = env.get_template(file).render(input_dict)
             if len(undefined_names) > 0:
-                print("skipping file " + template_file_path + " due to missing values " + str(undefined_names))
+                print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
             else:
+                make_target_subdir(split_path)
                 target_file = open(target_file_path, "w")
                 target_file.write(processed_content)
                 target_file.close()

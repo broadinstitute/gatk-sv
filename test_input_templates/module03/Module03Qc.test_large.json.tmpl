@@ -1,38 +1,22 @@
 {
-  "Module03Qc.contig_list": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
+  "Module03Qc.contig_list": {{ reference_resources.primary_contigs_fai | tojson }},
 
-  "Module03Qc.thousand_genomes_tarballs": [
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.ALL.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AMR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EAS.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EUR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.SAS.bed.gz"
-  ],
-  "Module03Qc.hgsv_tarballs": [
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.AFR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.ALL.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.AMR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson/HGSV_Chaisson.SV.hg19_liftover.EAS.bed.gz"
-  ],
-  "Module03Qc.asc_tarballs": [
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.ALL.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.EUR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.OTH.bed.gz"
-  ],
-  "Module03Qc.sanders_2015_tarball": "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
-  "Module03Qc.collins_2017_tarball": "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz",
-  "Module03Qc.werling_2018_tarball": "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz",
+  "Module03Qc.thousand_genomes_tarballs": {{ reference_resources.thousand_genomes_tarballs | tojson }},
+  "Module03Qc.hgsv_tarballs": {{ reference_resources.hgsv_tarballs | tojson }},
+  "Module03Qc.asc_tarballs": {{ reference_resources.asc_tarballs | tojson }},
+  "Module03Qc.sanders_2015_tarball": {{ reference_resources.sanders_2015_tarball | tojson }},
+  "Module03Qc.collins_2017_tarball": {{ reference_resources.collins_2017_tarball | tojson }},
+  "Module03Qc.werling_2018_tarball": {{ reference_resources.werling_2018_tarball | tojson }},
 
-  "Module03Qc.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
-  "Module03Qc.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
-  "Module03Qc.sv_pipeline_qc_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-qc:mw-gnomad-02-6a66c96",
+  "Module03Qc.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module03Qc.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module03Qc.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
   
-  "Module03Qc.batch": "test_large",
+  "Module03Qc.batch": {{ test_batch.batch_name | tojson }},
   
-  "Module03Qc.ped_file": "gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam",
-  "Module03Qc.depth_vcf_noOutliers": "gs://gatk-sv-resources/test/module03/large/output/test_large.depth.outliers_removed.vcf.gz",
-  "Module03Qc.merged_pesr_vcf": "gs://gatk-sv-resources/test/module03/large/output/test_large.filtered_pesr_merged.vcf.gz"
+  "Module03Qc.ped_file": {{ test_batch.filtered_ped_file | tojson }},
+  "Module03Qc.depth_vcf_noOutliers": {{ test_batch.filtered_depth_vcf | tojson }},
+  "Module03Qc.merged_pesr_vcf": {{ test_batch.filtered_pesr_vcf | tojson }}
 }
 
 

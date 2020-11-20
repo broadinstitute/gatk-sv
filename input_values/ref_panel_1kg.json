@@ -158,6 +158,7 @@
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA21122/analysis/NA21122.final.cram",
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA21133/analysis/NA21133.final.cram"
   ],
+  "batch_name" : "ref_panel_1kg",
   "bincov_matrix" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/merged_evidence/ref_panel_1kg_v1.bincov.bed.gz",
   "contig_ploidy_model_tar" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/gcnv/1KGP_2504-contig-ploidy-model.tar.gz",
   "cutoffs" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/cutoffs/ref_panel_1kg_v1.cutoffs",
@@ -930,6 +931,8 @@
     "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/pesr/NA21122.split.txt.gz",
     "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/pesr/NA21133.split.txt.gz"
   ],
+  "qc_definitions" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/qc/single_sample.qc_definitions.tsv",
+  "requester_pays_crams" : "true",
   "samples":  [
     "HG00096",
     "HG00129",

@@ -1,15 +1,15 @@
 {
   "MosaicManualCheck.rare_cutoff":2,
   "MosaicManualCheck.outlier": "gs://gatk-sv-resources/resources/outlier.txt",
-  "MosaicManualCheck.famfile": "gs://gatk-sv-resources/test/module03/large/output/test_large.outlier_samples_removed.fam",
-  "MosaicManualCheck.sv_pipeline_rdtest_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
-  "MosaicManualCheck.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
-  "MosaicManualCheck.agg_metrics": ["gs://gatk-sv-resources/test/module02/large/output/test_large.metrics"],
+  "MosaicManualCheck.famfile": {{ test_batch.filtered_ped_file | tojson }},
+  "MosaicManualCheck.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
+  "MosaicManualCheck.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "MosaicManualCheck.agg_metrics": [{{ test_batch.evidence_metrics | tojson }}],
   "MosaicManualCheck.per_batch_clustered_pesr_vcf_list": ["gs://gatk-sv-resources/test/mosaic/pesr_list.txt"],
-  "MosaicManualCheck.clustered_depth_vcfs": ["gs://gatk-sv-resources/test/module01/large/output/test_large.depth.vcf.gz"],
-  "MosaicManualCheck.RF_cutoffs": ["gs://gatk-sv-resources/test/module03/large/output/test_large.cutoffs"],
-  "MosaicManualCheck.coveragefile_idxs": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz.tbi"],
-  "MosaicManualCheck.coveragefiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large.RD.txt.gz"],
-  "MosaicManualCheck.medianfiles": ["gs://gatk-sv-resources/test/module00c/large/outputs/test_large_medianCov.transposed.bed"]
+  "MosaicManualCheck.clustered_depth_vcfs": [{{ test_batch.merged_depth_vcf | tojson }}],
+  "MosaicManualCheck.RF_cutoffs": [{{ test_batch.cutoffs | tojson }}],
+  "MosaicManualCheck.coveragefile_idxs": [{{ test_batch.merged_coverage_file_idx| tojson }}],
+  "MosaicManualCheck.coveragefiles": [{{ test_batch.merged_coverage_file | tojson }}],
+  "MosaicManualCheck.medianfiles": [{{ test_batch.medianfile | tojson }}]
 }
 

@@ -1,0 +1,13 @@
+{
+  "name" : "test_na19240",
+
+  "bam_or_cram_file" : "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BI/v1/NA19240_NA19240_1a_SM-GN4BI_v1.cram",
+  "bam_or_cram_index" : "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BI/v1/NA19240_NA19240_1a_SM-GN4BI_v1.cram.crai",
+  "baseline_final_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.filter_by_SM-GN4BI_gt.filter_by_ref_panel.reset_filters.final_cleanup.newmcnv.vcf.gz",
+  "baseline_cleaned_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.newmcnv.vcf.gz",
+  "baseline_genotyped_depth_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.depth.vcf.gz",
+  "baseline_genotyped_pesr_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.pesr.vcf.gz",
+  "baseline_non_genotyped_unique_depth_calls_vcf" : "gs://gatk-sv-resources/test/clinical/na19240/output/test_na19240.cleaned.filter_depth_lt_5000.unique_SM-GN4BI_depth_non_alt_gt.with_vargq.vcf.gz",
+  "base_metrics" : "gs://gatk-sv-resources/test/clinical/na19240/clinical.test_na19240.metrics.tsv",
+  "sample_id" : "SM-GN4BI"
+}

@@ -1,16 +1,16 @@
 {
-  "Module03.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:mw-gnomad-02-6a66c96",
-  "Module03.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
-  "Module03.linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
+  "Module03.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module03.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module03.linux_docker" : {{ dockers.linux_docker | tojson }},
 
   "Module03.outlier_cutoff_nIQR": "10000",
 
-  "Module03.batch": "test_large",
-  "Module03.ped_file": "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
-  "Module03.depth_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.depth.vcf.gz",
-  "Module03.manta_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.manta.vcf.gz",
-  "Module03.wham_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.wham.vcf.gz",
-  "Module03.melt_vcf" : "gs://gatk-sv-resources/test/module01/large/output/test_large.melt.vcf.gz",
-  "Module03.evidence_metrics": "gs://gatk-sv-resources/test/module02/large/output/test_large.metrics",
-  "Module03.evidence_metrics_common": "gs://gatk-sv-resources/test/module02/large/output/test_large.common.metrics"
+  "Module03.batch": {{ test_batch.batch_name | tojson }},
+  "Module03.ped_file": {{ test_batch.ped_file | tojson }},
+  "Module03.depth_vcf" : {{ test_batch.merged_depth_vcf | tojson }},
+  "Module03.manta_vcf" : {{ test_batch.merged_manta_vcf | tojson }},
+  "Module03.wham_vcf" : {{ test_batch.merged_wham_vcf | tojson }},
+  "Module03.melt_vcf" : {{ test_batch.merged_melt_vcf | tojson }},
+  "Module03.evidence_metrics": {{ test_batch.evidence_metrics | tojson }},
+  "Module03.evidence_metrics_common": {{ test_batch.evidence_metrics_common | tojson }}
 }
