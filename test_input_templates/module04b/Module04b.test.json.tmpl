@@ -15,11 +15,9 @@
 
   "Module04b.RD_depth_sepcutoffs": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart1/GenotypeDepthPart1/dd257617-3e1f-47b5-b17b-2144c1931986/call-TrainRDGenotyping/TrainRDGenotyping/8b8ea223-1bc1-4e7b-a07c-ca2b47e8e699/call-UpdateCutoff/depth_sepcutoff.txt"],
 
-  "Module04b.cluster_combined": {{ test_batch.cluster_combined_bed | tojson }},
   "Module04b.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
 
   "Module04b.famfiles": [{{ test_batch.filtered_ped_file | tojson }}],
-  "Module04b.regeno_beds": ["gs://talkowskicromwellresults/M04/Module04/89617399-fcaa-4aef-9759-7f3d04f328d3/call-GenotypeDepthPart2/GenotypeDepthPart2/afcbb44e-d36a-44a1-b007-69b16d4f754a/call-MedianIntersect/median_missing_sorted.bed"],
   "Module04b.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
   "Module04b.samples_lists": [{{ test_batch.cohort_samplelist | tojson }}],
 
