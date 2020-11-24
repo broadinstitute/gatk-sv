@@ -30,7 +30,6 @@ from jinja2 import Environment, FileSystemLoader, Undefined
 #   ref_panel -> ref_panel_v1b
 #   reference_resources -> resources_hg38
 #   test_batch -> empty
-#   test_single_sample -> empty
 #
 # Where the empty resource bundle is just an empty map.
 #
@@ -95,13 +94,13 @@ def main():
     input_directory = args.input_values_directory
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
-    raw_input_bundles['empty'] = {}
+    raw_input_bundles['test_batch_empty'] = {}
+    raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
 
     default_aliases = { 'dockers' : 'dockers',
                         'ref_panel' : 'ref_panel_v1b',
                         'reference_resources' : 'resources_hg38',
-                        'test_batch' : 'empty',
-                        'test_single_sample' : 'empty' }
+                        'test_batch' : 'test_batch_empty' }
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}
