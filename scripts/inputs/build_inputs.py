@@ -5,7 +5,7 @@ import sys
 import argparse, os, os.path
 import glob
 import json
-from jinja2 import Environment, Template, FileSystemLoader, meta, Undefined
+from jinja2 import Environment, FileSystemLoader, Undefined
 
 # This script generates input files (for example JSON inputs to be passed to cromwell, but also
 # potentially tsv files for Terra import) based on the input templates in the repository and the
@@ -73,7 +73,8 @@ def to_json_custom(value, *args, **kwargs):
     else:
         return json.dumps(value, *args, **kwargs)
 
-def make_target_subdir(split_path):
+def make_target_subdir(dir_path):
+    split_path = dir_path.split(os.sep)
     for i in [i+1 for i in range(0,len(split_path))]:
         target_subdir = os.sep.join(split_path[0:i])
         if not os.path.isdir(target_subdir):
@@ -84,6 +85,7 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
+    parser.add_argument("input_values_directory")
     parser.add_argument("template_directory")
     parser.add_argument("output_directory")
     parser.add_argument('-a', '--aliases', type=json.loads, default={})
@@ -92,7 +94,20 @@ def main():
     template_dir = args.template_directory
     target_directory = args.output_directory
 
-    input_directory = 'input_values'
+    template_dir_split = template_dir.split(os.sep)
+    template_root = template_dir_split[len(template_dir_split)-1]
+    template_base = os.sep.join(template_dir_split[0:len(template_dir_split)-1])
+    print("template base: " + template_base)
+    print("template root: " + template_root)
+
+
+    target_dir_split = target_directory.split(os.sep)
+    target_root = target_dir_split[len(target_dir_split)-1]
+    target_base = os.sep.join(target_dir_split[0:len(target_dir_split)-1])
+    print("target base: " + target_base)
+    print("target root: " + target_root)
+
+    input_directory = args.input_values_directory
 
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
@@ -116,9 +131,16 @@ def main():
         input_dict[alias] = raw_input_bundles[user_aliases[alias]]
 
     for subdir, subdirList, fileList in os.walk(template_dir):
-        split_path = subdir.split(os.sep)
-        split_path[0] = target_directory
-        target_subdir = os.sep.join(split_path)
+        print("subdir: " + subdir)
+        stripped_subdir = subdir[(len(template_base) + len(os.sep)):]
+        stripped_subdir = stripped_subdir[(len(template_root) + len(os.sep)):]
+        print("stripped_subdir: " + stripped_subdir)
+        print("biglist: " + str([target_base, target_root, stripped_subdir]))
+        if len(stripped_subdir) > 0:
+            target_subdir = os.sep.join([target_base, target_root, stripped_subdir])
+        else:
+            target_subdir = os.sep.join([target_base, target_root])
+        print("target subdir: " + target_subdir)
         for file in fileList:
             undefined_names.clear()
 
@@ -137,7 +159,7 @@ def main():
             if len(undefined_names) > 0:
                 print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
             else:
-                make_target_subdir(split_path)
+                make_target_subdir(target_subdir)
                 target_file = open(target_file_path, "w")
                 target_file.write(processed_content)
                 target_file.close()
