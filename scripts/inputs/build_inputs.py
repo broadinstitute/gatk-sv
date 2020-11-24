@@ -97,15 +97,11 @@ def main():
     template_dir_split = template_dir.split(os.sep)
     template_root = template_dir_split[len(template_dir_split)-1]
     template_base = os.sep.join(template_dir_split[0:len(template_dir_split)-1])
-    print("template base: " + template_base)
-    print("template root: " + template_root)
 
 
     target_dir_split = target_directory.split(os.sep)
     target_root = target_dir_split[len(target_dir_split)-1]
     target_base = os.sep.join(target_dir_split[0:len(target_dir_split)-1])
-    print("target base: " + target_base)
-    print("target root: " + target_root)
 
     input_directory = args.input_values_directory
 
@@ -131,16 +127,12 @@ def main():
         input_dict[alias] = raw_input_bundles[user_aliases[alias]]
 
     for subdir, subdirList, fileList in os.walk(template_dir):
-        print("subdir: " + subdir)
         stripped_subdir = subdir[(len(template_base) + len(os.sep)):]
         stripped_subdir = stripped_subdir[(len(template_root) + len(os.sep)):]
-        print("stripped_subdir: " + stripped_subdir)
-        print("biglist: " + str([target_base, target_root, stripped_subdir]))
         if len(stripped_subdir) > 0:
             target_subdir = os.sep.join([target_base, target_root, stripped_subdir])
         else:
             target_subdir = os.sep.join([target_base, target_root])
-        print("target subdir: " + target_subdir)
         for file in fileList:
             undefined_names.clear()
 
