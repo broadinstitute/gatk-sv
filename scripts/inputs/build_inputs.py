@@ -85,26 +85,14 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("input_values_directory")
-    parser.add_argument("template_directory")
-    parser.add_argument("output_directory")
-    parser.add_argument('-a', '--aliases', type=json.loads, default={})
+    parser.add_argument("input_values_directory", help="Directory containing input value map JSON files")
+    parser.add_argument("template_path", help = "Path to template directory or file (directories will be processed recursively)")
+    parser.add_argument("output_directory", help = "Directory to create output files in")
+    parser.add_argument('-a', '--aliases', type=json.loads, default={}, help="Aliases for input value bundles")
     args = parser.parse_args()
 
-    template_dir = args.template_directory
-    target_directory = args.output_directory
-
-    template_dir_split = template_dir.split(os.sep)
-    template_root = template_dir_split[len(template_dir_split)-1]
-    template_base = os.sep.join(template_dir_split[0:len(template_dir_split)-1])
-
-
-    target_dir_split = target_directory.split(os.sep)
-    target_root = target_dir_split[len(target_dir_split)-1]
-    target_base = os.sep.join(target_dir_split[0:len(target_dir_split)-1])
-
+    # prepare input values and bundle aliases
     input_directory = args.input_values_directory
-
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
     raw_input_bundles['empty'] = {}
@@ -122,10 +110,26 @@ def main():
 
     user_aliases = args.aliases
     print("Using user aliases: " + str(user_aliases))
-
     for alias in user_aliases:
         input_dict[alias] = raw_input_bundles[user_aliases[alias]]
 
+
+    template_path = args.template_path
+    target_directory = args.output_directory
+
+    if os.path.isdir(template_path):
+        process_directory(input_dict, template_path, target_directory)
+    else:
+        process_file(input_dict, os.path.dirname(template_path), os.path.basename(template_path), target_directory)
+
+
+def process_directory(input_dict, template_dir, target_directory):
+    template_dir_split = template_dir.split(os.sep)
+    template_root = template_dir_split[len(template_dir_split) - 1]
+    template_base = os.sep.join(template_dir_split[0:len(template_dir_split) - 1])
+    target_dir_split = target_directory.split(os.sep)
+    target_root = target_dir_split[len(target_dir_split) - 1]
+    target_base = os.sep.join(target_dir_split[0:len(target_dir_split) - 1])
     for subdir, subdirList, fileList in os.walk(template_dir):
         stripped_subdir = subdir[(len(template_base) + len(os.sep)):]
         stripped_subdir = stripped_subdir[(len(template_root) + len(os.sep)):]
@@ -135,26 +139,30 @@ def main():
             target_subdir = os.sep.join([target_base, target_root])
         for file in fileList:
             undefined_names.clear()
+            process_file(input_dict, subdir, file, target_subdir)
 
-            # only process files that end with .tmpl
-            if not file.endswith(".tmpl"):
-                continue
-            target_file = file.rsplit('.', 1)[0]
-            env = Environment(loader=FileSystemLoader(subdir), undefined=TrackMissingValuesUndefined)
-            env.policies['json.dumps_function'] = to_json_custom
 
-            template_file_path = os.sep.join([subdir, file])
-            target_file_path = os.sep.join([target_subdir, target_file])
-            print(template_file_path + " -> " + target_file_path)
+def process_file(input_dict, template_subdir, template_file, target_subdir):
+    template_file_path = os.sep.join([template_subdir, template_file])
 
-            processed_content = env.get_template(file).render(input_dict)
-            if len(undefined_names) > 0:
-                print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
-            else:
-                make_target_subdir(target_subdir)
-                target_file = open(target_file_path, "w")
-                target_file.write(processed_content)
-                target_file.close()
+    # only process files that end with .tmpl
+    if not template_file.endswith(".tmpl"):
+        print("WARNING: skipping file " + template_file_path + "because it does not have .tmpl extension")
+        return
+
+    target_file = template_file.rsplit('.', 1)[0]
+    target_file_path = os.sep.join([target_subdir, target_file])
+    env = Environment(loader=FileSystemLoader(template_subdir), undefined=TrackMissingValuesUndefined)
+    env.policies['json.dumps_function'] = to_json_custom
+    print(template_file_path + " -> " + target_file_path)
+    processed_content = env.get_template(template_file).render(input_dict)
+    if len(undefined_names) > 0:
+        print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
+    else:
+        make_target_subdir(target_subdir)
+        target_file = open(target_file_path, "w")
+        target_file.write(processed_content)
+        target_file.close()
 
 
 if __name__ == "__main__":
