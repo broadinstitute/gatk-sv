@@ -74,7 +74,10 @@ def load_data(log_file, overhead_mins):
   # modify formats
   data['Hours'] = pd.to_timedelta(data['Hours']).dt.total_seconds() / 3600.0  # convert ElapsedTime to hours (float)
   data['Hours'] += overhead_mins / 60.0
-  data['Task'] = data['Task'].str.replace('/shard', '.shard', regex=False).str.rsplit('/', n=1).str[-1]  # keep last task name and shard number, if present
+  # keep last (most specific) task name, attempt number, and shard number, if present
+  data['Task'] = data['Task'].str.replace('/shard', '.shard', regex=False) \
+                             .str.replace('/attempt', '.attempt', regex=False) \
+                             .str.rsplit('/', n=1).str[-1]
 
   return data
 
@@ -104,7 +107,7 @@ def estimate_costs_per_task(data):
 
 
 def estimate_costs_per_group(data):
-  data['TaskGroup'] = data['Task'].str.split('.').str[0]  # remove shard number if present
+  data['TaskGroup'] = data['Task'].str.split('.').str[0]  # remove shard number, attempt number if present
   groups = data['TaskGroup'].unique()
   data_grouped = pd.DataFrame(columns=['Task', 'Hours', 'AvgCPU', 'MaxCPU', 'PctCPU', 'AvgMem', 'MaxMem', 'PctMem',
                               'AvgDisk', 'MaxDisk', 'PctDisk', 'TotCPUHour', 'PeakCPUHour', 'TotMemHour', 'PeakMemHour',
