@@ -10,7 +10,7 @@ import "Module02.wdl" as m02
 import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
 import "Module04.wdl" as m04
-import "Module05_06.wdl" as m0506
+import "Module0506.wdl" as m0506
 import "Module08Annotation.wdl" as m08
 import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
@@ -341,7 +341,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_concat_vcfs
 
     ############################################################
-    ## Module 05_06
+    ## Module 0506
     ############################################################
 
     Float clean_vcf_min_sr_background_fail_batches
@@ -859,7 +859,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call m0506.Module05_06 as Module0506 {
+  call m0506.Module0506 as Module0506 {
     input:
       raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
       raw_sr_background_fail_files=[Module04.sr_background_fail],
@@ -870,6 +870,7 @@ workflow GATKSVPipelineSingleSample {
       contig_list=primary_contigs_fai,
       ref_dict=reference_dict,
 
+      merge_complex_genotype_vcfs = true,
       max_shards_per_chrom=clean_vcf_max_shards_per_chrom,
       min_variants_per_shard=clean_vcf_min_variants_per_shard,
       cytobands=cytobands,
@@ -930,7 +931,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls as GetUniqueNonGenotypedDepthCalls {
     input:
-      vcf_gz=Module0506.vcf_cpx,
+      vcf_gz=select_first([Module0506.complex_genotype_vcf]),
       sample_id=sample_id,
       ref_panel_dels=ref_panel_del_bed,
       ref_panel_dups=ref_panel_dup_bed,

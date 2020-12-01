@@ -4,7 +4,7 @@ import "Module00aBatch.wdl" as m00a
 import "Module00b.wdl" as m00b
 import "GATKSVPipelinePhase1.wdl" as phase1
 import "Module04.wdl" as m04
-import "Module05_06.wdl" as m0506
+import "Module0506.wdl" as m0506
 import "GATKSVPipelineBatchMetrics.wdl" as BatchMetrics
 import "Utils.wdl" as utils
 import "Structs.wdl"
@@ -47,6 +47,11 @@ workflow GATKSVPipelineBatch {
     # From multi-sample VCFs (sharded by position)
     Array[File]? snp_vcfs
     File? snp_vcf_header # Required only if VCFs are unheadered
+
+    # Merge contig vcfs at each stage of Module 0506 for QC
+    Boolean module0506_merge_cluster_vcfs = false
+    Boolean module0506_merge_complex_resolve_vcfs = false
+    Boolean module0506_merge_complex_genotype_vcfs = false
 
     # Global files
     File ped_file
@@ -211,8 +216,11 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker
   }
 
-  call m0506.Module05_06 as Module0506 {
+  call m0506.Module0506 as Module0506 {
     input:
+      merge_cluster_vcfs = module0506_merge_cluster_vcfs,
+      merge_complex_resolve_vcfs = module0506_merge_complex_resolve_vcfs,
+      merge_complex_genotype_vcfs = module0506_merge_complex_genotype_vcfs,
       raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
       raw_sr_background_fail_files=[Module04.sr_background_fail],
       ped_files=[GATKSVPipelinePhase1.ped_file_postOutlierExclusion],
@@ -289,8 +297,10 @@ workflow GATKSVPipelineBatch {
       sr_bothside_pass = Module04.sr_bothside_pass,
       sr_background_fail = Module04.sr_background_fail,
 
-      final_vcf = Module0506.vcf_cpx,
-      cleaned_vcf = Module0506.vcf
+      module0506_cluster_vcf = Module0506.cluster_vcf,
+      module0506_complex_resolve_vcf = Module0506.complex_resolve_vcf,
+      module0506_complex_genotype_vcf = Module0506.complex_genotype_vcf,
+      module0506_cleaned_vcf = Module0506.vcf
   }
 
   call utils.RunQC as BatchQC {
