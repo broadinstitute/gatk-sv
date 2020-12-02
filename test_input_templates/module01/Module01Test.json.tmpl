@@ -1,0 +1,36 @@
+{
+  "Module01Test.test_name" : {{ test_batch.batch_name | tojson }},
+  "Module01Test.base_metrics" : {{ test_batch.base_metrics_module01 | tojson }},
+  "Module01Test.samples": {{ test_batch.samples | tojson }},
+
+  "Module01Test.PlotMetrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01Test.Module01Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01Test.Module01Metrics.linux_docker" : {{ dockers.linux_docker | tojson }},
+  "Module01Test.Module01Metrics.contig_list" : {{ reference_resources.primary_contigs_list | tojson }},
+
+  "Module01Test.Module01Metrics.baseline_depth_vcf" : {{ test_batch.baseline_merged_depth_vcf | tojson }},
+  "Module01Test.Module01Metrics.baseline_manta_vcf" : {{ test_batch.baseline_merged_manta_vcf | tojson }},
+  "Module01Test.Module01Metrics.baseline_wham_vcf" : {{ test_batch.baseline_merged_wham_vcf | tojson }},
+  "Module01Test.Module01Metrics.baseline_melt_vcf" : {{ test_batch.baseline_merged_melt_vcf | tojson }},
+
+  "Module01Test.Module01.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module01Test.Module01.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+
+  "Module01Test.Module01.contigs": {{ reference_resources.primary_contigs_fai | tojson }},
+  "Module01Test.Module01.depth_flags": "--merge-coordinates",
+  "Module01Test.Module01.depth_frac": "0.8",
+  "Module01Test.Module01.pesr_svsize": "0",
+  "Module01Test.Module01.pesr_frac": "0.1",
+  "Module01Test.Module01.pesr_flags": "--preserve-ids",
+  "Module01Test.Module01.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "Module01Test.Module01.pesr_distance": "300",
+  "Module01Test.Module01.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
+  "Module01Test.Module01.depth_exclude_list_frac_max": "0.5",
+
+  "Module01Test.Module01.batch": {{ test_batch.batch_name | tojson }},
+  "Module01Test.Module01.del_bed": {{ test_batch.del_bed| tojson }},
+  "Module01Test.Module01.dup_bed": {{ test_batch.dup_bed | tojson }},
+  "Module01Test.Module01.wham_vcfs": {{ test_batch.std_wham_vcfs | tojson }},
+  "Module01Test.Module01.manta_vcfs": {{ test_batch.std_manta_vcfs | tojson }},
+  "Module01Test.Module01.melt_vcfs": {{ test_batch.std_melt_vcfs | tojson }}
+}

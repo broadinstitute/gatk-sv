@@ -1,0 +1,32 @@
+{
+  "Module00aBatch.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "Module00aBatch.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "Module00aBatch.reference_index": {{ reference_resources.reference_index | tojson }},
+  "Module00aBatch.reference_dict": {{ reference_resources.reference_dict | tojson }},
+  "Module00aBatch.reference_version": {{ reference_resources.reference_version | tojson }},
+
+  "Module00aBatch.collect_coverage": "true",
+  "Module00aBatch.collect_pesr": "true",
+
+  "Module00aBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
+
+  "Module00aBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
+  "Module00aBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "Module00aBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
+
+  "Module00aBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
+
+  "Module00aBatch.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
+  "Module00aBatch.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module00aBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module00aBatch.delly_docker": {{ dockers.delly_docker | tojson }},
+  "Module00aBatch.manta_docker": {{ dockers.manta_docker | tojson }},
+  "Module00aBatch.melt_docker" : {{ dockers.melt_docker | tojson }},
+  "Module00aBatch.wham_docker": {{ dockers.wham_docker | tojson }},
+  "Module00aBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
+  "Module00aBatch.gatk_docker": {{ dockers.gatk_docker | tojson }},
+  "Module00aBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
+
+  "Module00aBatch.bam_or_cram_files": {{ test_batch.bam_or_cram_files | tojson }},
+  "Module00aBatch.sample_ids": {{ test_batch.samples | tojson }}
+}

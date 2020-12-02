@@ -1,0 +1,22 @@
+{
+  "Module01.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module01.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+
+  "Module01.contigs": {{ reference_resources.primary_contigs_fai | tojson }},
+  "Module01.depth_flags": "--merge-coordinates",
+  "Module01.depth_frac": "0.8",
+  "Module01.pesr_svsize": "0",
+  "Module01.pesr_frac": "0.1",
+  "Module01.pesr_flags": "--preserve-ids",
+  "Module01.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "Module01.pesr_distance": "300",
+  "Module01.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
+  "Module01.depth_exclude_list_frac_max": "0.5",
+
+  "Module01.batch": {{ test_batch.batch_name | tojson }},
+  "Module01.del_bed": {{ test_batch.del_bed| tojson }},
+  "Module01.dup_bed": {{ test_batch.dup_bed | tojson }},
+  "Module01.wham_vcfs": {{ test_batch.std_wham_vcfs | tojson }},
+  "Module01.manta_vcfs": {{ test_batch.std_manta_vcfs | tojson }},
+  "Module01.melt_vcfs": {{ test_batch.std_melt_vcfs | tojson }}
+}

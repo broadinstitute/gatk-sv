@@ -1,0 +1,26 @@
+{
+  "Module04.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "Module04.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "Module04.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
+  "Module04.linux_docker" : {{ dockers.linux_docker | tojson }},
+
+  "Module04.n_RD_genotype_bins": "100000", 
+  "Module04.n_per_split": "5000", 
+  "Module04.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "Module04.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
+  "Module04.reference_build": "hg38",
+  "Module04.ref_dict": {{ reference_resources.reference_dict | tojson }},
+
+  "Module04.batch": {{ test_batch.batch_name | tojson }},
+  "Module04.rf_cutoffs": {{ test_batch.cutoffs | tojson }},
+  "Module04.batch_depth_vcf": {{ test_batch.filtered_depth_vcf | tojson }},
+  "Module04.batch_pesr_vcf": {{ test_batch.filtered_pesr_vcf | tojson }},
+  "Module04.famfile": {{ test_batch.filtered_ped_file | tojson }},
+  "Module04.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
+  "Module04.discfile": {{ test_batch.merged_disc_file | tojson }},
+  "Module04.coveragefile": {{ test_batch.merged_coverage_file | tojson }},
+  "Module04.splitfile": {{ test_batch.merged_split_file | tojson }},
+  "Module04.medianfile": {{ test_batch.medianfile | tojson }},
+  "Module04.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
+  "Module04.cohort_pesr_vcf": {{ test_batch.cohort_pesr_vcf | tojson }}
+}

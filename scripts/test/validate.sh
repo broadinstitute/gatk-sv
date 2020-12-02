@@ -15,7 +15,7 @@ set -e
 function usage() {
   printf "Usage: \n \
     %s -d <REPO_BASE_DIR> -j <WOMTOOL_JAR> \n \
-    <REPO_BASE_DIR> \t path to gatk-sv-v1 base directory \n \
+    <REPO_BASE_DIR> \t path to gatk-sv base directory \n \
     <WOMTOOL_JAR> \t path to womtool jar (downloaded from https://github.com/broadinstitute/cromwell/releases) \n" "$1"
 }
 
@@ -53,13 +53,15 @@ fi
 # For each WDL, test all jsons with matching name
 #################################################
 shopt -s nullglob
+shopt -s extglob
+
 WDLS=(wdl/*.wdl)
 
 COUNTER=0
 for wdl in "${WDLS[@]}"
 do
   name=$(basename $wdl .wdl)
-  JSONS=(${BASE_DIR}/test/*/${name}.*.json ${BASE_DIR}/inputs/${name}.*.json)
+  JSONS=(${BASE_DIR}/test_inputs_small/*/${name}*(.*).json ${BASE_DIR}/test_inputs_large/*/${name}*(.*).json ${BASE_DIR}/test_inputs_single_sample/*/${name}*(.*).json ${BASE_DIR}/inputs/${name}*(.*).json)
   for json in "${JSONS[@]}"
   do
     cmd="java -jar ${WOMTOOL_JAR} validate ${wdl} -i ${json}"
