@@ -16,6 +16,7 @@ import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
+import "TestUtils.wdl" as tu
 import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode
@@ -964,7 +965,32 @@ workflow GATKSVPipelineSingleSample {
         filter_to_reset="BOTHSIDES_SUPPORT",
         info_header_line='##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Sites with split read support at both breakpoints">',
         sv_base_mini_docker=sv_base_mini_docker
-    }
+  }
+
+  call SingleSampleMetrics.SingleSampleMetrics as SampleFilterMetrics {
+    input:
+      name = batch,
+      ref_samples = ref_samples,
+      case_sample = sample_id,
+      wgd_scores = Module00b.WGD_scores,
+      sample_counts = select_first([Module00a.coverage_counts]),
+      contig_list = primary_contigs_list,
+      linux_docker = linux_docker,
+      sv_pipeline_base_docker = sv_pipeline_base_docker
+  }
+
+  call utils.RunQC as SampleFilterQC {
+      input:
+        name=batch,
+        qc_metrics=SampleFilterMetrics.out,
+        qc_definitions = qc_definitions,
+        sv_pipeline_base_docker=sv_pipeline_base_docker
+  }
+
+  call SingleSampleFiltering.SampleQC {
+      input:
+
+  }
 
   call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
     input:
