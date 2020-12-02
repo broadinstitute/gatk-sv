@@ -125,12 +125,17 @@ getFamDat <- function(dat,proband,father=NA,mother=NA,biallelic=T,nocall.placeho
                    sort=F,by="VID",all=T,suffixes=c(".pro",".mo"))
   }
   #Only retain sites where all three samples are not null genotype (no-call, ./., nocall.placeholder)
-  exclude <- which(sapply(vlist[,c(2,4,6)],
+  exclude <- sapply(vlist[,c(2,4,6)],
                           function(vals){
-    any(as.numeric(vals)==nocall.placeholder)
-  }))
-  if(length(exclude) > 0){
-    vlist <- vlist[-exclude,]
+    which(as.numeric(vals)==nocall.placeholder)
+  })
+
+  exclude_out = c()
+  for(exclude_x in exclude){  exclude_out=c(exclude_out,exclude_x) }
+  exclude_out=unique(exclude_out)
+
+  if(length(exclude_out) > 0){
+    vlist <- vlist[-exclude_out,]
   }
   #Convert remaining NA allele counts to 0s
   vlist[,c(2,4,6)] <- apply(vlist[,c(2,4,6)],2,function(vals){
@@ -1034,7 +1039,7 @@ wrapperInheritancePlots <- function(fam.dat.list,fam.type,count="variants"){
   dev.off()
 }
 #Wrapper for de novo rate lineplots
-wrapperDeNovoRateLines <- function(fam.dat.list,fam.type,count="variants"){
+wrapperDeNovoRateLines <- function(fam.dat.list,fam.type,count="variants",gq=F){
   #Set title prefix
   if(count=="variants"){
     title.prefix <- "SV Site "
@@ -1061,14 +1066,15 @@ wrapperDeNovoRateLines <- function(fam.dat.list,fam.type,count="variants"){
   dev.off()
   
   #DNR by Proband GQ
-  GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count=count)
-  pdf(paste(OUTDIR,"/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",fam.type,"s.",count,".by_proband_GQ.pdf",sep=""),
-      height=4,width=5)
-  plotDNRvsGQ(DNRs=GQ.dat$DNRs,bins=GQ.dat$bins,k=4,nfams=length(fam.dat.list),
-              title=paste(title.prefix,"De Novo Rate by Min. Proband GQ",sep=""),
-              count=count,fam.type=fam.type,legend=T,xlab="Min. Proband GQ")
-  dev.off()
-  
+  if(gq) {
+    GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count=count)
+    pdf(paste(OUTDIR,"/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",fam.type,"s.",count,".by_proband_GQ.pdf",sep=""),
+        height=4,width=5)
+    plotDNRvsGQ(DNRs=GQ.dat$DNRs,bins=GQ.dat$bins,k=4,nfams=length(fam.dat.list),
+                title=paste(title.prefix,"De Novo Rate by Min. Proband GQ",sep=""),
+                count=count,fam.type=fam.type,legend=T,xlab="Min. Proband GQ")
+    dev.off()
+  }
 }
 #Wrapper for de novo rate heatmaps
 wrapperDeNovoRateHeats <- function(fam.dat.list,fam.type,count="variants"){
@@ -1105,7 +1111,7 @@ wrapperDeNovoRateHeats <- function(fam.dat.list,fam.type,count="variants"){
   })
 }
 #Wrapper for master summary panel
-masterInhWrapper <- function(fam.dat.list,fam.type){
+masterInhWrapper <- function(fam.dat.list,fam.type, gq=T){
   #Set title suffix
   if(fam.type=="trio"){
     title.suffix <- paste("(Trios; n=",
@@ -1124,11 +1130,19 @@ masterInhWrapper <- function(fam.dat.list,fam.type){
   }
   
   #Prepare plot area
+  width <- ifelse(gq, 12, 10)
   pdf(paste(OUTDIR,"/main_plots/VCF_QC.SV_",fam.type,"_inheritance.pdf",sep=""),
-      height=5,width=12)
-  layout(matrix(c(1,2,3,4,5,
-                  6,7,8,9,10),
-                byrow=T,nrow=2))
+      height=5,width=width)
+  if(gq) {
+    layout(matrix(c(1,2,3,4,5,
+                    6,7,8,9,10),
+                  byrow=T,nrow=2))
+  } else {
+    layout(matrix(c(1,2,3,4,
+                    5,6,7,8),
+                  byrow=T,nrow=2))
+  }
+  
   
   #Set global cex.lab
   cex.lab <- 0.75
@@ -1151,11 +1165,13 @@ masterInhWrapper <- function(fam.dat.list,fam.type){
                 title=paste("Site De Novo Rate by Freq.",sep=""),
                 count="variants",fam.type=fam.type,legend=F,cex.lab=cex.lab)
   #DNR vs min proband GQ
-  GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count="variants")
-  plotDNRvsGQ(DNRs=GQ.dat.v$DNRs,bins=GQ.dat.v$bins,k=4,nfams=length(fam.dat.list),
+  if(gq) {
+    GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count="variants")
+    plotDNRvsGQ(DNRs=GQ.dat.v$DNRs,bins=GQ.dat.v$bins,k=4,nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by GQ",sep=""),
                 count="variants",fam.type=fam.type,legend=F,cex.lab=cex.lab,
-              xlab="Min. Proband GQ")
+                xlab="Min. Proband GQ")
+  }
   #DNR heatmap (size vs freq.)
   DNR.dat.v <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list,count="variants",
                                     max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
@@ -1185,11 +1201,13 @@ masterInhWrapper <- function(fam.dat.list,fam.type){
                 title=paste("Allele De Novo Rate by Freq.",sep=""),
                 count="alleles",fam.type=fam.type,legend=F,cex.lab=cex.lab)
   #DNR vs min proband GQ
-  GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count="alleles")
-  plotDNRvsGQ(DNRs=GQ.dat.a$DNRs,bins=GQ.dat.a$bins,k=4,nfams=length(fam.dat.list),
+  if(gq){
+    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=40,count="alleles")
+    plotDNRvsGQ(DNRs=GQ.dat.a$DNRs,bins=GQ.dat.a$bins,k=4,nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by GQ",sep=""),
                 count="alleles",fam.type=fam.type,legend=F,cex.lab=cex.lab,
-              xlabel="Min. Proband GQ")
+                xlabel="Min. Proband GQ")
+  }
   #DNR heatmap (size vs freq.)
   DNR.dat.a <- deNovoRateBySizeFreq(trio.dat.list=fam.dat.list,count="alleles",
                                     max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
@@ -1326,13 +1344,16 @@ if(nrow(trios)>0){
   #Read data
   trio.dat <- apply(trios[,2:4],1,function(IDs){
     IDs <- as.character(IDs)
-    return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],
-                     mother=IDs[3],biallelic=!multiallelics))
+    print(IDs)
+    return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],mother=IDs[3],biallelic=!multiallelics))
   })
   names(trio.dat) <- trios[,1]
   
+  # if there are no GQ values in any of the trios, do not make GQ plots
+  gq <- any(unlist(lapply(trio.dat, function(trio){ sum(!is.na(trio$pro.GQ)) > 0 })))
+  
   #Master wrapper
-  masterInhWrapper(fam.dat.list=trio.dat,fam.type="trio")
+  masterInhWrapper(fam.dat.list=trio.dat,fam.type="trio", gq=gq)
   #Standard inheritance panels
   sapply(c("variants","alleles"),function(count){
     wrapperInheritancePlots(fam.dat.list=trio.dat,
@@ -1343,7 +1364,8 @@ if(nrow(trios)>0){
   sapply(c("variants","alleles"),function(count){
     wrapperDeNovoRateLines(fam.dat.list=trio.dat,
                            fam.type="trio",
-                           count=count)  
+                           count=count,
+                           gq=gq)  
   })
   #De novo rate heatmaps
   sapply(c("variants","alleles"),function(count){
@@ -1353,34 +1375,4 @@ if(nrow(trios)>0){
   })
 }
 
-# ###Performs duo analyses, if any duos exist
-# if(nrow(duos)>0){
-#   #Read data
-#   duo.dat <- apply(duos[,2:4],1,function(IDs){
-#     IDs <- as.character(IDs)
-#     return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],
-#                      mother=IDs[3],biallelic=!multiallelics))
-#   })
-#   names(duo.dat) <- duos[,1]
-#   
-#   #Master wrapper
-#   masterInhWrapper(fam.dat.list=duo.dat,fam.type="duo")
-#   #Standard inheritance panels
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperInheritancePlots(fam.dat.list=duo.dat,
-#                             fam.type="duo",
-#                             count=count)  
-#   })
-#   #De novo rate panels
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperDeNovoRateLines(fam.dat.list=duo.dat,
-#                            fam.type="duo",
-#                            count=count)  
-#   })
-#   #De novo rate heatmaps
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperDeNovoRateHeats(fam.dat.list=duo.dat,
-#                            fam.type="duo",
-#                            count=count)  
-#   })
-# }
+
