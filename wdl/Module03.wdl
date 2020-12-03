@@ -24,7 +24,7 @@ workflow Module03 {
     File evidence_metrics_common
 
     Int outlier_cutoff_nIQR
-    File cutoff_table
+    File outlier_cutoff_table
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -91,7 +91,7 @@ workflow Module03 {
     input:
       batch = batch,
       algorithms = algorithms,
-      cutoff_table = cutoff_table,
+      outlier_cutoff_table = outlier_cutoff_table,
       N_IQR_cutoff = outlier_cutoff_nIQR,
       vcfs = FilterAnnotateVcf.annotated_vcf,
       samples = GetSampleIdsFromVcf.out_array,

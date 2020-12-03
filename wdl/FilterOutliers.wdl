@@ -24,7 +24,7 @@ workflow FilterOutlierSamples {
     Array[String] samples
     Array[String] algorithms
     Int N_IQR_cutoff
-    File cutoff_table
+    File outlier_cutoff_table
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
@@ -38,16 +38,16 @@ workflow FilterOutlierSamples {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
-        call IdentifyOutliersV2 as IdentifyOutliers_v2{
+        call IdentifyOutliersByCutoffTable {
           input:
             vcf = select_first([vcfs[i]]),
-            cutoff_table = cutoff_table,
+            outlier_cutoff_table = outlier_cutoff_table,
             outfile = "${algorithms[i]}_outliers.txt",
             algorithm = algorithms[i],
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_identify_outliers
         }
-        call IdentifyOutliers {
+        call IdentifyOutliersByIQR {
           input:
             vcf = select_first([vcfs[i]]),
             N_IQR_cutoff = N_IQR_cutoff,
@@ -61,7 +61,7 @@ workflow FilterOutlierSamples {
   # Merge list of outliers
   call CatOutliers {
     input:
-      outliers = flatten([select_all(IdentifyOutliers.outliers_list),select_all(IdentifyOutliers_v2.outliers_list)]),
+      outliers = flatten([select_all(IdentifyOutliersByIQR.outliers_list),select_all(IdentifyOutliersByCutoffTable.outliers_list)]),
       batch = batch,
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_cat_outliers
@@ -99,7 +99,7 @@ workflow FilterOutlierSamples {
   }
 }
 
-task IdentifyOutliers {
+task IdentifyOutliersByIQR {
   input {
     File vcf
     Int N_IQR_cutoff
@@ -146,10 +146,10 @@ task IdentifyOutliers {
 
 }
 
-task IdentifyOutliersV2 {
+task IdentifyOutliersByCutoffTable {
   input {
     File vcf
-    File cutoff_table
+    File outlier_cutoff_table
     String outfile
     String algorithm
     String sv_pipeline_docker
@@ -178,7 +178,7 @@ task IdentifyOutliersV2 {
     # Return list of samples exceeding cutoff for at least one sv class
     /opt/sv-pipeline/03_variant_filtering/scripts/get_outliers_from_svcounts.helper_V2.R \
       svcounts.txt \
-      ~{cutoff_table} \
+      ~{outlier_cutoff_table} \
       ~{outfile} \
       ~{algorithm}
 
