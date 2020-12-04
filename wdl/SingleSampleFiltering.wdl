@@ -666,9 +666,29 @@ task SampleQC {
   }
 
   command <<<
-    cat
+    set -euo pipefail
 
-    svtk vcf2bed ~{vcf} ~{prefix}.bed -i ALL --include-filters
+    wgdPF=`cat ~{sample_filtering_qc_file} | awk '$1 == "wgd_score_sample" {print $5}'`
+    if [ $wgdPF -eq "FAIL" ]
+    then
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER ${vcf} \
+        | sed 's/ID=SAMPLE_WGD_OUTLIER,Description=".*"/ID=SAMPLE_WGD_OUTLIER,Description="Case sample is an outlier for WGD dosage score compared to reference panel"/' \
+        > wgd_filtered.vcf.gz
+    else
+      cp ~{vcf} wgd_filtered.vcf.gz
+    fi
+
+    coveragePF=`cat ~{sample_filtering_qc_file} | awk '$1 == "rd_mean_sample" {print $5}'`
+    if [ $coveragePF -eq "FAIL" ]
+    then
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_COVERAGE_OUTLIER wgd_filtered.vcf.gz \
+        | sed 's/ID=SAMPLE_COVERAGE_OUTLIER,Description=".*"/ID=SAMPLE_COVERAGE_OUTLIER,Description="Case sample is an outlier for coverage compared to reference panel"/' \
+      > ~{outfile}
+    else
+    cp wgd_filtered.vcf.gz ~{outfile}
+    fi
+
+    tabix ~{outfile}
 
   >>>
   runtime {
@@ -676,7 +696,7 @@ task SampleQC {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

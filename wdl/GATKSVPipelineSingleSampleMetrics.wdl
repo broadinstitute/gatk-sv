@@ -34,7 +34,7 @@ workflow SingleSampleMetrics {
   if (defined(sample_sr)) {
     call tu.SRMetrics {
       input:
-        sr_file = sample_sr,
+        sr_file = select_first([sample_sr]),
         samples = [case_sample],
         sv_pipeline_base_docker = sv_pipeline_base_docker
     }
@@ -43,7 +43,7 @@ workflow SingleSampleMetrics {
   if (defined(sample_pe)) {
     call tu.PEMetrics {
       input:
-        pe_file = sample_pe,
+        pe_file = select_first([sample_pe]),
         samples = [case_sample],
         sv_pipeline_base_docker = sv_pipeline_base_docker
     }
@@ -52,7 +52,7 @@ workflow SingleSampleMetrics {
   if (defined(sample_counts)) {
     call tu.CountsMetrics {
       input:
-        counts_file = sample_counts,
+        counts_file = select_first([sample_counts]),
         sample_id = case_sample,
         sv_pipeline_base_docker = sv_pipeline_base_docker
     }
@@ -61,7 +61,7 @@ workflow SingleSampleMetrics {
   if (defined(cleaned_vcf)) {
     call tu.VCFMetrics as Cleaned_VCF_Metrics {
       input:
-        vcf = cleaned_vcf,
+        vcf = select_first([cleaned_vcf]),
         baseline_vcf = baseline_cleaned_vcf,
         samples = samples,
         prefix = "cleaned",
@@ -74,7 +74,7 @@ workflow SingleSampleMetrics {
   if (defined(final_vcf)) {
     call tu.VCFMetrics as Final_VCF_Metrics {
       input:
-        vcf = final_vcf,
+        vcf = select_first([final_vcf]),
         baseline_vcf = baseline_final_vcf,
         samples = samples,
         prefix = "final",
@@ -87,7 +87,7 @@ workflow SingleSampleMetrics {
   if (defined(genotyped_pesr_vcf)) {
     call tu.VCFMetrics as Genotyped_PESR_VCF_Metrics {
       input:
-        vcf = genotyped_pesr_vcf,
+        vcf = select_first([genotyped_pesr_vcf]),
         baseline_vcf = baseline_genotyped_pesr_vcf,
         samples = samples,
         prefix = "genotyped_pesr",
@@ -100,7 +100,7 @@ workflow SingleSampleMetrics {
   if (defined(genotyped_depth_vcf)) {
     call tu.VCFMetrics as Genotyped_Depth_VCF_Metrics {
       input:
-        vcf = genotyped_depth_vcf,
+        vcf = select_first([genotyped_depth_vcf]),
         baseline_vcf = baseline_genotyped_depth_vcf,
         samples = samples,
         prefix = "genotyped_depth",
@@ -113,7 +113,7 @@ workflow SingleSampleMetrics {
   if (defined(non_genotyped_unique_depth_calls_vcf)) {
     call tu.VCFMetrics as NonGenotypedUniqueDepthCallsVCFMetrics {
       input:
-        vcf = non_genotyped_unique_depth_calls_vcf,
+        vcf = select_first([non_genotyped_unique_depth_calls_vcf]),
         baseline_vcf = baseline_non_genotyped_unique_depth_calls_vcf,
         samples = samples,
         prefix = "non_genotyped_uniq_depth",
@@ -126,7 +126,7 @@ workflow SingleSampleMetrics {
   if (defined(wgd_scores)) {
     call SingleSampleWGDMetrics {
       input:
-        wgd_scores = wgd_scores,
+        wgd_scores = select_first([wgd_scores]),
         linux_docker = linux_docker
     }
   }

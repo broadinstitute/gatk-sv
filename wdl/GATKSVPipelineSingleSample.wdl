@@ -979,19 +979,6 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  call utils.RunQC as SampleFilterQC {
-      input:
-        name=batch,
-        qc_metrics=SampleFilterMetrics.out,
-        qc_definitions = qc_definitions,
-        sv_pipeline_base_docker=sv_pipeline_base_docker
-  }
-
-  call SingleSampleFiltering.SampleQC {
-      input:
-
-  }
-
   call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
     input:
       single_sample_vcf=ResetBothsidesSupportFilter.out,
@@ -1001,10 +988,25 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call m08.Module08Annotation {
+  call utils.RunQC as SampleFilterQC {
+    input:
+      name=batch,
+      metrics=SampleFilterMetrics.metrics_file,
+      qc_definitions = qc_definitions,
+      sv_pipeline_base_docker=sv_pipeline_base_docker
+  }
+
+  call SingleSampleFiltering.SampleQC as FilterSample {
+    input:
+      vcf=ResetPESRTGTOverdispersionFilter.out,
+      sample_filtering_qc_file=SampleFilterQC.out,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+  }
+
+call m08.Module08Annotation {
        input:
-        vcf = ResetPESRTGTOverdispersionFilter.out,
-        vcf_idx = ResetPESRTGTOverdispersionFilter.out_idx,
+        vcf = FilterSample.out,
+        vcf_idx = FilterSample.out_idx,
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
