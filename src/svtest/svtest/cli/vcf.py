@@ -178,6 +178,9 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
         test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
         base_tree = iu.create_trees_from_bed_records(base_records, variant_types, contigs, padding=padding)
         base_pass_tree = None
+    else:
+        base_tree = None
+        base_pass_tree = None
 
     if base_tree is not None:
         metrics, fp_intervals, fn_intervals = add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro, metric_prefix)
