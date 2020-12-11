@@ -137,7 +137,7 @@ workflow Module04b{
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_merge_list
   }
-  
+
   if (MergeList.num_regeno > 0) {
     scatter (i in range(length(batches))) {
       call g2.Regenotype as Genotype_2 {
@@ -184,7 +184,7 @@ workflow Module04b{
     }
   }
   output{
-    Array[File] regenotyped_depth_vcfs = if (MergeList.num_regeno > 0) then ConcatRegenotypedVcfs.genotyped_vcf else depth_vcfs
+    Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
   }
 }
 
