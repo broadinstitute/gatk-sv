@@ -24,7 +24,7 @@ workflow Module04b{
     Array[File] samples_lists
     String cohort             # Cohort name or project prefix for all cohort-level outputs
     File contig_list
-    Array[File] regeno_coverage_medians
+    Array[File] regeno_coverage_medians # one file per batch
     Float regeno_max_allele_freq = 0.01 
     Int regeno_allele_count_threshold = 3 
 
@@ -117,7 +117,7 @@ workflow Module04b{
     }
     call GetMedianSubset {
       input: 
-        medians = regeno_coverage_medians,
+        medians = regeno_coverage_medians[i],
         batch = batches[i],
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_get_median_subset
@@ -137,51 +137,54 @@ workflow Module04b{
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_merge_list
   }
-  scatter (i in range(length(batches))) {
-    call g2.Regenotype as Genotype_2 {
-      input:
-        depth_vcf=depth_vcfs[i],
-        regeno_bed= MergeList.master_regeno,
-        cohort_depth_vcf=cohort_depth_vcf,
-        batch_depth_vcf=batch_depth_vcfs[i],
-        coveragefile=coveragefiles[i],
-        coveragefile_idx=coveragefile_idxs[i],
-        medianfile=medianfiles[i],
-        famfile=famfiles[i],
-        RD_depth_sepcutoff=RD_depth_sepcutoffs[i],
-        n_per_split=n_per_split,
-        n_RdTest_bins=n_RdTest_bins,
-        batch=batches[i],
-        samples_list=samples_lists[i],
-        sv_pipeline_docker=sv_pipeline_docker,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+  
+  if (MergeList.num_regeno > 0) {
+    scatter (i in range(length(batches))) {
+      call g2.Regenotype as Genotype_2 {
+        input:
+          depth_vcf=depth_vcfs[i],
+          regeno_bed= MergeList.master_regeno,
+          cohort_depth_vcf=cohort_depth_vcf,
+          batch_depth_vcf=batch_depth_vcfs[i],
+          coveragefile=coveragefiles[i],
+          coveragefile_idx=coveragefile_idxs[i],
+          medianfile=medianfiles[i],
+          famfile=famfiles[i],
+          RD_depth_sepcutoff=RD_depth_sepcutoffs[i],
+          n_per_split=n_per_split,
+          n_RdTest_bins=n_RdTest_bins,
+          batch=batches[i],
+          samples_list=samples_lists[i],
+          sv_pipeline_docker=sv_pipeline_docker,
+          sv_base_mini_docker=sv_base_mini_docker,
+          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+      }
     }
-  }
 
-  call creassess.CombineReassess as CombineReassess {
-    input:
-      samplelist = GetAndCountCohortSampleList.cohort_samplelist,
-      regeno_file = MergeList.master_regeno,
-      regeno_sample_ids_lookup = ConcatSampleIdLookupBed.concat_bed,
-      vcfs = Genotype_2.genotyped_vcf,
-      sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_vcf2bed = runtime_attr_vcf2bed
-  }
-    
-  scatter (i in range(length(Genotype_2.genotyped_vcf))) {
-    call ConcatRegenotypedVcfs{
+    call creassess.CombineReassess as CombineReassess {
       input:
-        depth_vcf=depth_vcfs[i],
-        batch = batches[i],
-        regeno_vcf = Genotype_2.genotyped_vcf[i],
-        regeno_variants = CombineReassess.regeno_variants,
-        sv_pipeline_docker = sv_pipeline_docker
+        samplelist = GetAndCountCohortSampleList.cohort_samplelist,
+        regeno_file = MergeList.master_regeno,
+        regeno_sample_ids_lookup = ConcatSampleIdLookupBed.concat_bed,
+        vcfs = Genotype_2.genotyped_vcf,
+        sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_vcf2bed = runtime_attr_vcf2bed
+    }
+      
+    scatter (i in range(length(Genotype_2.genotyped_vcf))) {
+      call ConcatRegenotypedVcfs{
+        input:
+          depth_vcf=depth_vcfs[i],
+          batch = batches[i],
+          regeno_vcf = Genotype_2.genotyped_vcf[i],
+          regeno_variants = CombineReassess.regeno_variants,
+          sv_pipeline_docker = sv_pipeline_docker
+      }
     }
   }
   output{
-    Array[File] regenotyped_depth_vcfs = ConcatRegenotypedVcfs.genotyped_vcf
+    Array[File] regenotyped_depth_vcfs = if (MergeList.num_regeno > 0) then ConcatRegenotypedVcfs.genotyped_vcf else depth_vcfs
   }
 }
 
@@ -541,7 +544,7 @@ task GetRegenotype{
 task GetMedianSubset{
   input {
     String batch
-    Array[File] medians
+    File medians # this task runs per batch, so there is just one medians file
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -555,8 +558,7 @@ task GetMedianSubset{
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command {
-    cat ~{sep=' ' medians} |fgrep -v "start"> medians.txt
-    R -e 'd<-read.table("medians.txt",header=T,check.names=F);result<-d[((apply(as.matrix(d[,5:length(d)]),FUN=median,1)<0.97 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)>0.85)|(apply(as.matrix(d[,5:length(d)]),FUN=median,1)>1.03 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)<1.65)),1:4];write.table(result,file="~{batch}_to_regeno.bed",sep="\t",quote=F,row.names=F,col.names=F)'
+    R -e 'd<-read.table("~{medians}",header=T,check.names=F);result<-d[((apply(as.matrix(d[,5:length(d)]),FUN=median,1)<0.97 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)>0.85)|(apply(as.matrix(d[,5:length(d)]),FUN=median,1)>1.03 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)<1.65)),1:4];write.table(result,file="~{batch}_to_regeno.bed",sep="\t",quote=F,row.names=F,col.names=F)'
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -569,7 +571,6 @@ task GetMedianSubset{
   }
   output {
     File regeno_median = "~{batch}_to_regeno.bed"
-    File median="medians.txt"
   }
 }
 
@@ -627,10 +628,12 @@ task MergeList {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
-    cat ~{sep=' ' regeno_beds} |sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
+    cat ~{sep=' ' regeno_beds} | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
+    grep -c '[^[:space:]]' ~{prefix}.bed > regeno_num_lines.txt # count non-empty lines in regeno bed file to determine if empty or not
   }
   output {
     File master_regeno="~{prefix}.bed"
+    Int num_regeno = read_int("regeno_num_lines.txt")
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

@@ -266,7 +266,7 @@ workflow Module04 {
     File genotyped_depth_vcf_index = GenotypeDepthPart2.genotyped_vcf_index
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
-    Array[File] regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
+    File regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
   }
 }
 
