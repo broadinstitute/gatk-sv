@@ -38,11 +38,14 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_melt = true
     Boolean use_wham = true
 
-    # Used in lieu of running tool
+    # If Module00a outputs already prepared
     File? case_delly_vcf
     File? case_manta_vcf
     File? case_melt_vcf
     File? case_wham_vcf
+    File? case_counts_file
+    File? case_pe_file
+    File? case_sr_file
 
     # Global files
     File ref_ped_file
@@ -82,7 +85,9 @@ workflow GATKSVPipelineSingleSample {
     ## Module 00a
     ############################################################
 
-    File bam_or_cram_file
+    # Required if any 00a outputs need to be generated (vcfs, counts, pe/sr files)
+    # (When "If Module00a outputs already prepared" section above is used)
+    File? bam_or_cram_file
     File? bam_or_cram_index
 
     # Use only for crams in requester pays buckets
@@ -419,51 +424,64 @@ workflow GATKSVPipelineSingleSample {
   String? melt_docker_ = if (!defined(case_melt_vcf) && use_melt) then melt_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(case_wham_vcf) && use_wham) then wham_docker else NONE_STRING_
 
-  call m00a.Module00a as Module00a {
-    input:
-      bam_or_cram_file=bam_or_cram_file,
-      bam_or_cram_index=bam_or_cram_index,
-      requester_pays_crams=requester_pays_cram,
-      sample_id=sample_id,
-      primary_contigs_list=primary_contigs_list,
-      reference_fasta=reference_fasta,
-      reference_index=reference_index,
-      reference_dict=reference_dict,
-      reference_version=reference_version,
-      preprocessed_intervals=preprocessed_intervals,
-      manta_region_bed=manta_region_bed,
-      manta_region_bed_index=manta_region_bed_index,
-      manta_jobs_per_cpu=manta_jobs_per_cpu,
-      manta_mem_gb_per_job=manta_mem_gb_per_job,
-      melt_standard_vcf_header=melt_standard_vcf_header,
-      melt_metrics_intervals=melt_metrics_intervals,
-      insert_size=insert_size_input,
-      read_length=read_length_input,
-      coverage=coverage_input,
-      metrics_intervals=metrics_intervals,
-      pf_reads_improper_pairs=pf_reads_improper_pairs_input,
-      pct_chimeras=pct_chimeras_input,
-      total_reads=total_reads_input,
-      wham_include_list_bed_file=wham_include_list_bed_file,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
-      delly_docker=delly_docker_,
-      manta_docker=manta_docker_,
-      melt_docker=melt_docker_,
-      wham_docker=wham_docker_,
-      gatk_docker=gatk_docker,
-      gatk_docker_pesr_override = gatk_docker_pesr_override,
-      genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
-      samtools_cloud_docker=samtools_cloud_docker,
-      runtime_attr_cram_to_bam=runtime_attr_cram_to_bam,
-      runtime_attr_manta=runtime_attr_manta,
-      runtime_attr_melt_coverage=runtime_attr_melt_coverage,
-      runtime_attr_melt_metrics=runtime_attr_melt_metrics,
-      runtime_attr_melt=runtime_attr_melt,
-      runtime_attr_pesr=runtime_attr_pesr,
-      runtime_attr_wham=runtime_attr_wham,
-      runtime_attr_wham_include_list=runtime_attr_wham_include_list,
+  Boolean collect_coverage = !defined(case_counts_file)
+  Boolean collect_pesr = !defined(case_pe_file) || !defined(case_sr_file)
+
+  Boolean run_00a = defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
+
+  if (run_00a) {
+    call m00a.Module00a as Module00a {
+      input:
+        bam_or_cram_file=select_first([bam_or_cram_file]),
+        bam_or_cram_index=bam_or_cram_index,
+        requester_pays_crams=requester_pays_cram,
+        sample_id=sample_id,
+        collect_coverage = collect_coverage,
+        collect_pesr = collect_pesr,
+        primary_contigs_list=primary_contigs_list,
+        reference_fasta=reference_fasta,
+        reference_index=reference_index,
+        reference_dict=reference_dict,
+        reference_version=reference_version,
+        preprocessed_intervals=preprocessed_intervals,
+        manta_region_bed=manta_region_bed,
+        manta_region_bed_index=manta_region_bed_index,
+        manta_jobs_per_cpu=manta_jobs_per_cpu,
+        manta_mem_gb_per_job=manta_mem_gb_per_job,
+        melt_standard_vcf_header=melt_standard_vcf_header,
+        melt_metrics_intervals=melt_metrics_intervals,
+        insert_size=insert_size_input,
+        read_length=read_length_input,
+        coverage=coverage_input,
+        metrics_intervals=metrics_intervals,
+        pf_reads_improper_pairs=pf_reads_improper_pairs_input,
+        pct_chimeras=pct_chimeras_input,
+        total_reads=total_reads_input,
+        wham_include_list_bed_file=wham_include_list_bed_file,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        delly_docker=delly_docker_,
+        manta_docker=manta_docker_,
+        melt_docker=melt_docker_,
+        wham_docker=wham_docker_,
+        gatk_docker=gatk_docker,
+        gatk_docker_pesr_override = gatk_docker_pesr_override,
+        genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
+        samtools_cloud_docker=samtools_cloud_docker,
+        runtime_attr_cram_to_bam=runtime_attr_cram_to_bam,
+        runtime_attr_manta=runtime_attr_manta,
+        runtime_attr_melt_coverage=runtime_attr_melt_coverage,
+        runtime_attr_melt_metrics=runtime_attr_melt_metrics,
+        runtime_attr_melt=runtime_attr_melt,
+        runtime_attr_pesr=runtime_attr_pesr,
+        runtime_attr_wham=runtime_attr_wham,
+        runtime_attr_wham_include_list=runtime_attr_wham_include_list,
+    }
   }
+
+  File case_counts_file_ = select_first([case_counts_file, Module00a.coverage_counts])
+  File case_pe_file_ = select_first([case_pe_file, Module00a.pesr_disc])
+  File case_sr_file_ = select_first([case_sr_file, Module00a.pesr_split])
 
   call m00b.Module00b as Module00b {
     input:
@@ -471,7 +489,7 @@ workflow GATKSVPipelineSingleSample {
       samples=[sample_id],
       run_vcf_qc=run_vcf_qc,
       genome_file=genome_file,
-      counts=[select_first([Module00a.coverage_counts])],
+      counts=[case_counts_file_],
       run_ploidy = false,
       wgd_scoring_mask=wgd_scoring_mask,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -509,15 +527,15 @@ workflow GATKSVPipelineSingleSample {
       ref_fasta=reference_fasta,
       ref_fasta_index=reference_index,
       ref_dict=reference_dict,
-      counts=[select_first([Module00a.coverage_counts])],
+      counts=[case_counts_file_],
       ref_panel_bincov_matrix=ref_panel_bincov_matrix,
       bincov_matrix=Module00b.bincov_matrix,
       bincov_matrix_index=Module00b.bincov_matrix_index,
-      PE_files=[select_first([Module00a.pesr_disc])],
+      PE_files=[case_pe_file_],
       cytoband=cytobands,
       mei_bed=mei_bed,
       ref_panel_PE_files=ref_pesr_disc_files,
-      SR_files=[select_first([Module00a.pesr_split])],
+      SR_files=[case_sr_file_],
       ref_panel_SR_files=ref_pesr_split_files,
       inclusion_bed=inclusion_bed,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
@@ -988,9 +1006,9 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = Module00b.WGD_scores,
-      sample_pe = select_first([Module00a.pesr_disc]),
-      sample_sr = select_first([Module00a.pesr_split]),
-      sample_counts = select_first([Module00a.coverage_counts]),
+      sample_pe = case_pe_file_,
+      sample_sr = case_sr_file_,
+      sample_counts = case_counts_file_,
       cleaned_vcf = Module0506.vcf,
       final_vcf = FinalVCFCleanup.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
