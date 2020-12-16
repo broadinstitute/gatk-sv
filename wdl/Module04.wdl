@@ -92,6 +92,7 @@ workflow Module04 {
     # Depth part 2
     RuntimeAttr? runtime_attr_integrate_depth_gq
     RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_merge_regeno_cov_med
 
   }
 
@@ -248,7 +249,8 @@ workflow Module04 {
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
       runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
-      runtime_attr_concat_vcfs = runtime_attr_concat_vcfs
+      runtime_attr_concat_vcfs = runtime_attr_concat_vcfs,
+      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
   }
   output {
     File sr_bothside_pass = GenotypePESRPart2.bothside_pass

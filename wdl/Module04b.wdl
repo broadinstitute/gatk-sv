@@ -185,6 +185,7 @@ workflow Module04b{
   }
   output{
     Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
+    File number_regenotyped_file = MergeList.num_regeno_file
   }
 }
 
@@ -634,6 +635,7 @@ task MergeList {
   output {
     File master_regeno="~{prefix}.bed"
     Int num_regeno = read_int("regeno_num_lines.txt")
+    File num_regeno_file = "regeno_num_lines.txt"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
