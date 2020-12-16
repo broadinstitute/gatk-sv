@@ -1,5 +1,6 @@
 version 1.0
 
+import "BreakpointOverlapFilterWorkflow.wdl" as BreakpointOverlapFilter
 import "ResolveCpxSv.wdl" as ResolveComplexContig
 import "Tasks0506.wdl" as MiniTasks
 
@@ -14,7 +15,6 @@ workflow Module0506ComplexResolve {
     Array[File] cluster_background_fail_lists
 
     Array[File] disc_files
-    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
 
     File contig_list
@@ -30,9 +30,17 @@ workflow Module0506ComplexResolve {
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_update_sr_list
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
     RuntimeAttr? runtime_override_rename_variants
+
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1a
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_1b
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_2
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_3
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_4
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_5
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_6
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter_7
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_subset_inversions
@@ -57,8 +65,9 @@ workflow Module0506ComplexResolve {
     call MiniTasks.FilterVcf as SubsetInversions {
       input:
         vcf=cluster_vcfs[i],
+        vcf_index=cluster_vcfs[i] + ".tbi",
         outfile_prefix="~{cohort_name}.~{contig}.inversions_only",
-        records_filter="fgrep SVTYPE=INV",
+        records_filter='INFO/SVTYPE="INV"',
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_inversions
     }
@@ -73,7 +82,6 @@ workflow Module0506ComplexResolve {
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
-        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
@@ -90,27 +98,34 @@ workflow Module0506ComplexResolve {
     }
 
     #Run same-bp overlap filter on full vcf
-    call BreakpointOverlapFilter {
+    call BreakpointOverlapFilter.BreakpointOverlapFilterWorkflow {
       input:
         vcf=cluster_vcfs[i],
         prefix="~{cohort_name}.~{contig}",
         bothside_pass=cluster_bothside_pass_lists[i],
         background_fail=cluster_background_fail_lists[i],
+        sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_breakpoint_overlap_filter
+        runtime_attr_override_1a=runtime_override_breakpoint_overlap_filter_1a,
+        runtime_attr_override_1b=runtime_override_breakpoint_overlap_filter_1b,
+        runtime_attr_override_2=runtime_override_breakpoint_overlap_filter_2,
+        runtime_attr_override_3=runtime_override_breakpoint_overlap_filter_3,
+        runtime_attr_override_4=runtime_override_breakpoint_overlap_filter_4,
+        runtime_attr_override_5=runtime_override_breakpoint_overlap_filter_5,
+        runtime_attr_override_6=runtime_override_breakpoint_overlap_filter_6,
+        runtime_attr_override_7=runtime_override_breakpoint_overlap_filter_7
     }
 
     #Resolve all-variants VCF after same-bp overlap filter
     call ResolveComplexContig.ResolveComplexSv as ResolveCpxAll {
       input:
-        vcf=BreakpointOverlapFilter.bp_filtered_vcf,
+        vcf=BreakpointOverlapFilterWorkflow.out_vcf,
         prefix="~{cohort_name}.all_variants",
         contig=contig,
         max_shards_per_chrom=max_shards_per_chrom,
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
-        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
@@ -190,61 +205,6 @@ workflow Module0506ComplexResolve {
   }
 }
 
-#Run Harrison's overlapping breakpoint filter prior to complex resolution
-task BreakpointOverlapFilter {
-  input {
-    File vcf
-    String prefix
-    File bothside_pass
-    File background_fail
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  String temp_output_file = "non_redundant.vcf.gz"
-  String output_file = prefix + "." + temp_output_file
-
-  Float input_size = size([vcf, bothside_pass, background_fail], "GiB")
-  Float base_mem_gb = 2.0
-  Float base_disk_gb = 5.0
-  RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb,
-                                  disk_gb: ceil(base_disk_gb + input_size * 3.0),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -eu -o pipefail
-
-    /opt/sv-pipeline/04_variant_resolution/scripts/overlapbpchange.sh \
-    ~{vcf} \
-    ~{background_fail} \
-    ~{bothside_pass}
-
-    mv "~{temp_output_file}" "~{output_file}"
-    tabix -p vcf -f "~{output_file}"
-  >>>
-
-  output {
-    File bp_filtered_vcf = output_file
-    File bp_filtered_vcf_idx = output_file + ".tbi"
-  }
-}
-
-
 #Merge inversion-only and all-variant cpx-resolved outputs
 task IntegrateResolvedVcfs {
   input {
@@ -256,13 +216,11 @@ task IntegrateResolvedVcfs {
   }
 
   Float input_size = size([inv_res_vcf, all_res_vcf], "GiB")
-  Float base_mem_gb = 2.0
-  Float base_disk_gb = 5.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb,
-                                  disk_gb: ceil(base_disk_gb + input_size * 3.0),
+                                  mem_gb: 2.0,
+                                  disk_gb: ceil(10 + input_size * 10),
                                   cpu_cores: 1,
-                                  preemptible_tries: 3,
+                                  preemptible_tries: 1,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -278,14 +236,46 @@ task IntegrateResolvedVcfs {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
 
-    /opt/sv-pipeline/04_variant_resolution/scripts/Complex_Inversion_Integration.sh \
-    ~{inv_res_vcf} \
-    ~{all_res_vcf} \
-    ~{prefix}.integrated_resolved.vcf.gz
+    ##make bed of the inversion resolved vcf##
+    zcat ~{inv_res_vcf} \
+      |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
+      |svtk vcf2bed stdin inv.resolve.bed -i MEMBERS
 
-    tabix -p vcf -f "~{prefix}.integrated_resolved.vcf.gz"
+    ##make beds of the fully resolved vcf##
+    zcat ~{all_res_vcf} \
+      |awk '{if ($8~"UNRESOLVED" || $1~"#") print}' \
+      |svtk vcf2bed stdin all.unresolved.inv.bed -i MEMBERS
+
+    zcat ~{all_res_vcf} \
+      |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
+      |svtk vcf2bed stdin all.resolved.inv.bed -i MEMBERS
+
+    ##get unresolved variants from full vcf that are resolved in inversion resolved vcf###
+    zcat ~{inv_res_vcf} \
+      | fgrep -v "#" \
+      |awk '{if ($8!~"UNRESOLVED") print}' \
+      |fgrep -wvf <(awk '{if ($NF!="MEMBERS") print $NF}' all.resolved.inv.bed  \
+      |tr ',' '\n') \
+      >add.vcf.lines.txt || true
+
+    ##get unresolved variants id from full vcf to strip since they are resolved in inversion resolved vcf###
+    ##inversions that cluster were other variants (rare) are kept as unresolved though they will also be part of a resolved variant in add.vcf.lines.txt##
+    awk '{if ($NF!="MEMBERS") print $NF}' inv.resolve.bed \
+      |tr ',' '\n'\
+      |fgrep -wf - all.unresolved.inv.bed \
+      |awk '{if ($NF!~",")print $4}' \
+      >remove.unresolved.vcf.ids.txt || true
+
+    mkdir temp
+    zcat ~{all_res_vcf} \
+      |fgrep -wvf remove.unresolved.vcf.ids.txt \
+      |cat - add.vcf.lines.txt \
+      |bcftools sort - -O z -T temp \
+      > ~{prefix}.integrated_resolved.vcf.gz
+
+    tabix ~{prefix}.integrated_resolved.vcf.gz
   >>>
 
   output {

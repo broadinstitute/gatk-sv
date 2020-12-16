@@ -14,13 +14,13 @@ workflow Module0506Clean {
 
     File contig_list
     File allosome_fai
-    Int max_shards_per_chrom
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
     Int samples_per_clean_vcf_step2_shard
 
     File? outlier_samples_list
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -34,7 +34,6 @@ workflow Module0506Clean {
     RuntimeAttr? runtime_override_clean_vcf_3
     RuntimeAttr? runtime_override_clean_vcf_4
     RuntimeAttr? runtime_override_clean_vcf_5
-    RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -64,6 +63,7 @@ workflow Module0506Clean {
         min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
         samples_per_step2_shard=samples_per_clean_vcf_step2_shard,
         outlier_samples_list=outlier_samples_list,
+        linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
@@ -72,7 +72,6 @@ workflow Module0506Clean {
         runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
         runtime_override_clean_vcf_4=runtime_override_clean_vcf_4,
         runtime_override_clean_vcf_5=runtime_override_clean_vcf_5,
-        runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
         runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
         runtime_override_final_cleanup=runtime_override_final_cleanup,
         runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,

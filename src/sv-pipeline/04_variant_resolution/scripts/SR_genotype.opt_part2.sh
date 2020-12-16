@@ -47,7 +47,7 @@ if [ $(cat two.sided.pass.txt|wc -l) -gt 0 ]
 then
 zcat ${SR_sum} \
   | awk '{print $0 "\t" $1"@"$2}' \
-  | fgrep -wf two.sided.pass.txt \
+  | { fgrep -wf two.sided.pass.txt || [[ $? == 1 ]]; } \
   | cut -f1-3 \
   | awk -v var=$sr_count -v var1=$median_hom -v var2=$sd_het '{if ($3<var) print $1,$2,$3,0;else if ($3<=var1-var2) print $1,$2,$3,1; else print $1,$2,$3,int($3/(var1/2)+0.5)}'  \
   |tr ' ' '\t' \
@@ -56,7 +56,7 @@ fi
 
 zcat ${SR_sum} \
   | awk '{print $0 "\t" $1"@"$2}' \
-  | fgrep -wvf two.sided.pass.txt \
+  | { fgrep -wvf two.sided.pass.txt || [[ $? == 1 ]]; } \
   | cut -f1-3 \
   | awk '{print $1,$2,$3,0}' \
   |tr ' ' '\t' \
@@ -112,11 +112,11 @@ if [ $(cat both.pass.txt single.pass.txt \
   |fgrep -wf <(cat recover.txt recover.bothsides.txt|awk '{print $1}'|sort -u)|wc -l) -gt 0 ]
 then
  cat both.pass.txt single.pass.txt \
-  |fgrep -wvf - int.bed \
+  |{ fgrep -wvf - int.bed || [[ $? == 1 ]]; } \
   |awk '{print $4}' \
   |sort -u \
-  |fgrep -wf pass.srtest.txt \
-  |fgrep -wf <(cat recover.txt recover.bothsides.txt|awk '{print $1}'|sort -u) \
+  |{ fgrep -wf pass.srtest.txt || [[ $? == 1 ]]; } \
+  |{ fgrep -wf <(cat recover.txt recover.bothsides.txt|awk '{print $1}'|sort -u) || [[ $? == 1 ]]; } \
    >background.variant.fail.txt
 else 
  echo "">background.variant.fail.txt 
@@ -198,7 +198,7 @@ if [ $(awk '{print $1}' sr.variant.quality.final.txt |fgrep -wvf - <(zcat $vcf|e
 then
 
 awk '{print $1}' sr.variant.quality.final.txt \
-  |fgrep -wvf - <(zcat $vcf|egrep -v "^#" |awk '{print $3}') \
+  |{ fgrep -wvf - <(zcat $vcf|egrep -v "^#" |awk '{print $3}') || [[ $? == 1 ]]; } \
   |awk '{print $1}' \
   |sort -u \
   |awk '{print $1 "\t" 0}' \

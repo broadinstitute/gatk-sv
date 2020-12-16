@@ -2,6 +2,10 @@ version 1.0
 
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
+import "CleanVcf1.wdl" as c1
+import "CleanVcf1b.wdl" as c1b
+import "CleanVcf5.wdl" as c5
+import "DropRedundantCNVs.wdl" as drc
 
 workflow CleanVcf {
   input {
@@ -17,6 +21,7 @@ workflow CleanVcf {
     Int samples_per_step2_shard
     File? outlier_samples_list
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -27,7 +32,6 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_clean_vcf_3
     RuntimeAttr? runtime_override_clean_vcf_4
     RuntimeAttr? runtime_override_clean_vcf_5
-    RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
 
@@ -54,12 +58,13 @@ workflow CleanVcf {
   }
 
   scatter ( vcf_shard in SplitVcfToClean.vcf_shards ) {
-    call CleanVcf1a {
+    call c1.CleanVcf1 as CleanVcf1a {
       input:
         vcf=vcf_shard,
         background_list=background_list,
         ped_file=ped_file,
         sv_pipeline_docker=sv_pipeline_docker,
+        linux_docker=linux_docker,
         bothsides_pass_list=bothsides_pass_list,
         allosome_fai=allosome_fai,
         runtime_attr_override=runtime_override_clean_vcf_1a
@@ -83,7 +88,7 @@ workflow CleanVcf {
       runtime_attr_override=runtime_override_combine_step_1_sex_chr_revisions
   }
 
-  call CleanVcf1b {
+  call c1b.CleanVcf1b {
     input:
       intermediate_vcf=CombineStep1Vcfs.concat_vcf,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -151,7 +156,7 @@ workflow CleanVcf {
       runtime_attr_override=runtime_override_combine_multi_ids_4
   }
 
-  call CleanVcf5 {
+  call c5.CleanVcf5 {
     input:
       revise_vcf_lines=CombineRevised4.outfile,
       normal_revise_vcf=CleanVcf1b.normal,
@@ -163,17 +168,16 @@ workflow CleanVcf {
       runtime_attr_override=runtime_override_clean_vcf_5
   }
 
-  call DropRedundantCnvs {
+  call drc.DropRedundantCNVs {
     input:
       vcf=CleanVcf5.polished,
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_drop_redundant_cnvs
+      sv_pipeline_docker=sv_pipeline_docker
   }
 
   call StitchFragmentedCnvs {
     input:
-      vcf=DropRedundantCnvs.cleaned_vcf_shard,
+      vcf=DropRedundantCNVs.cleaned_vcf_shard,
       contig=contig,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -209,16 +213,10 @@ task CleanVcf1a {
     RuntimeAttr? runtime_attr_override
   }
 
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
   Float shard_size = size([vcf, background_list, ped_file], "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + shard_size * input_mem_scale,
-    disk_gb: ceil(base_disk_gb + shard_size * input_disk_scale),
+    mem_gb: 2.0 + shard_size * 12.0,
+    disk_gb: ceil(10 + shard_size * 40),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -389,12 +387,14 @@ task CleanVcf3{
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
     
     /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.sh ~{rd_cn_revise}
 
     # Ensure there is at least one shard
-    touch shards/out.0_0.txt
+    if [ -z "$(ls -A shards/)" ]; then
+      touch shards/out.0_0.txt
+    fi
   >>>
 
   output {
@@ -411,21 +411,15 @@ task CleanVcf4 {
     RuntimeAttr? runtime_attr_override
   }
 
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
   Float input_size = size([rd_cn_revise, normal_revise_vcf], "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
-    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
+                                  mem_gb: 2.0 + input_size * 3.0,
+                                  disk_gb: 50,
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
@@ -438,9 +432,94 @@ task CleanVcf4 {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euo pipefail
+    python3 <<CODE
+    import pysam
+    import os
 
-    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part4.sh ~{rd_cn_revise} ~{normal_revise_vcf}
+    # Inputs
+    REGENO_FILE="~{rd_cn_revise}"
+    VCF_FILE="~{normal_revise_vcf}"
+
+    # Build map of variants to regenotype
+    with open(REGENO_FILE) as f:
+      vid_sample_cn_map = {}
+      for line in f:
+        tokens = line.strip().split('\t')
+        vid = tokens[0]
+        if vid not in vid_sample_cn_map:
+          vid_sample_cn_map[vid] = []
+        vid_sample_cn_map[vid].append(tuple(tokens[1:]))
+
+    # Traverse VCF and replace genotypes
+    with open("revise.vcf.lines.txt", "w") as f:
+      vcf = pysam.VariantFile(VCF_FILE)
+      num_vcf_records = 0
+      for record in vcf:
+        num_vcf_records += 1
+        if record.id not in vid_sample_cn_map:
+          continue
+        for entry in vid_sample_cn_map[record.id]:
+          s = record.samples[entry[0]]
+          s['GT'] = (0, 1)
+          s['RD_CN'] = int(entry[1])
+        f.write(str(record))
+      vcf.close()
+
+    # Get batch size
+    regeno_file_name_tokens = os.path.basename(REGENO_FILE).split('.')[1].split('_')
+    batch_num = max(int(regeno_file_name_tokens[0]), 1)
+    total_batch = max(int(regeno_file_name_tokens[1]), 1)
+    segments = num_vcf_records / float(total_batch)
+    print("{} {} {}".format(batch_num, total_batch, segments))
+
+    vcf = pysam.VariantFile(VCF_FILE)
+    # Max sample count with PE or SR GT over 3
+    max_vf = max(len(vcf.header.samples) * 0.01, 2)
+    record_start = (batch_num - 1) * segments
+    record_end = batch_num * segments
+    record_idx = 0
+    print("{} {} {}".format(max_vf, record_start, record_end))
+    multi_geno_ids = set([])
+    for record in vcf:
+      record_idx += 1
+      if record_idx < record_start:
+        continue
+      elif record_idx > record_end:
+        break
+      num_gt_over_2 = 0
+      for sid in record.samples:
+        s = record.samples[sid]
+        # Pick best GT
+        if s['PE_GT'] is None:
+          continue
+        elif s['SR_GT'] is None:
+          gt = s['PE_GT']
+        elif s['PE_GT'] > 0 and s['SR_GT'] == 0:
+          gt = s['PE_GT']
+        elif s['PE_GT'] == 0:
+          gt = s['SR_GT']
+        elif s['PE_GQ'] >= s['SR_GQ']:
+          gt = s['PE_GT']
+        else:
+          gt = s['SR_GT']
+        if gt > 2:
+          num_gt_over_2 += 1
+          if record.id == "gnomad-sv-v3-TEST-SMALL.chr22_BND_chr22_173":
+            print("{} {}".format(sid, num_gt_over_2))
+            print("{} {} {} {}".format(s['PE_GT'], s['PE_GQ'], s['SR_GT'], s['SR_GQ']))
+      if num_gt_over_2 > max_vf:
+        multi_geno_ids.add(record.id)
+    vcf.close()
+
+    multi_geno_ids = sorted(list(multi_geno_ids))
+    with open("multi.geno.ids.txt", "w") as f:
+      for vid in multi_geno_ids:
+        f.write(vid + "\n")
+    CODE
+
+    bgzip revise.vcf.lines.txt
+    gzip multi.geno.ids.txt
   >>>
 
   output {

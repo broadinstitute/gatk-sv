@@ -15,7 +15,6 @@ workflow ResolveComplexSv {
     File cytobands
     File mei_bed
     Array[File] disc_files
-    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
     File pe_exclude_list
     Boolean inv_only
@@ -38,6 +37,9 @@ workflow ResolveComplexSv {
   File vcf_idx = vcf + ".tbi"
   File pe_exclude_list_idx = pe_exclude_list + ".tbi"
   File cytobands_idx = cytobands + ".tbi"
+  scatter (i in range(length(disc_files))) {
+    File disc_files_idx = disc_files[i]
+  }
 
   # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
 
@@ -75,7 +77,7 @@ workflow ResolveComplexSv {
           VIDs_list=VID_list,
           chrom=contig,
           disc_files=disc_files,
-          disc_files_index=disc_files_index,
+          disc_files_index=disc_files_idx,
           ref_dict=ref_dict,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_prep
@@ -265,7 +267,7 @@ task ResolvePrep {
   #   big and disk is cheap)
   Float compressed_input_size = size(vcf, "GiB")
   Float uncompressed_input_size = size([VIDs_list], "GiB")
-  Float compression_factor = 5.0
+  Float compression_factor = 30.0
   Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
@@ -292,7 +294,7 @@ task ResolvePrep {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
     
     # First, subset VCF to variants of interest
     # -uncompress vcf
@@ -438,14 +440,11 @@ task SvtkResolve {
      merged_discfile, merged_discfile_idx],
     "GiB"
   )
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 3.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3 + input_size * 10,
+    disk_gb: ceil(10 + input_size * 12),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -530,12 +529,9 @@ task RestoreUnresolvedCnv {
   # straightforward filtering via grep and python script (line-by-line processing)
   #   -> means essentially no memory or disk overhead
   Float input_size = size([resolved_vcf, unresolved_vcf], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10 + input_size * 20),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,

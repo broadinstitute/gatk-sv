@@ -13,6 +13,7 @@ usage: svtk [-h] <subcommand> [options]
     standardize    Convert SV calls to a standardized format.
     rdtest2vcf     Convert an RdTest-formatted bed to a standardized VCF.
     vcf2bed        Convert a standardized VCF to an RdTest-formatted bed.
+    resolveshard   Cluster variants to shard for "resolve"
 
 [ Algorithm integration ]
     vcfcluster     Cluster SV calls from a list of VCFs. (Generally PE/SR.)

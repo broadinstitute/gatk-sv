@@ -36,9 +36,14 @@ workflow Module0506Cluster {
     RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_concat
+    RuntimeAttr? runtime_override_sort_pesr_depth_merged_vcf
+    RuntimeAttr? runtime_override_concat_pesr_depth
 
     # overrides for VcfClusterContig
+    RuntimeAttr? runtime_override_localize_vcfs
     RuntimeAttr? runtime_override_join_vcfs
+    RuntimeAttr? runtime_override_fix_multiallelic
+    RuntimeAttr? runtime_override_fix_ev_tags
     RuntimeAttr? runtime_override_subset_bothside_pass
     RuntimeAttr? runtime_override_subset_background_fail
     RuntimeAttr? runtime_override_subset_sv_type
@@ -54,7 +59,7 @@ workflow Module0506Cluster {
   call MiniTasks.CatUncompressedFiles as CleanBothsidePass {
     input:
       shards=raw_sr_bothside_pass_files,
-      filter_command="sort | uniq -c | awk -v OFS='\\t' '{print $1/~{num_pass_lines}, $2}'",
+      filter_command="sort -m | uniq -c | awk -v OFS='\\t' '{print $1/~{num_pass_lines}, $2}'",
       outfile_name="cohort_sr_genotyping_bothside_pass_list.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_clean_bothside_pass
@@ -65,7 +70,7 @@ workflow Module0506Cluster {
   call MiniTasks.CatUncompressedFiles as CleanBackgroundFail {
     input:
       shards=raw_sr_background_fail_files,
-      filter_command="sort | uniq -c | awk -v OFS='\\t' '{if($1 >= ~{min_background_fail_first_col}) print $2}'",
+      filter_command="sort -m | uniq -c | awk -v OFS='\\t' '{if($1 >= ~{min_background_fail_first_col}) print $2}'",
       outfile_name="cohort_sr_genotyping_background_fail_list.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_clean_background_fail
@@ -83,7 +88,7 @@ workflow Module0506Cluster {
       input:
         vcfs=pesr_vcfs,
         batches=batches,
-        prefix="AllBatches_pesr",
+        prefix="~{cohort_name}.pesr",
         dist=300,
         frac=0.1,
         sample_overlap=0.5,
@@ -99,7 +104,10 @@ workflow Module0506Cluster {
         empty_file=empty_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_override_join_vcfs=runtime_override_join_vcfs,
+        runtime_override_localize_vcfs = runtime_override_localize_vcfs,
+        runtime_override_join_vcfs = runtime_override_join_vcfs,
+        runtime_override_fix_multiallelic = runtime_override_fix_multiallelic,
+        runtime_override_fix_ev_tags = runtime_override_fix_ev_tags,
         runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
         runtime_override_subset_background_fail=runtime_override_subset_background_fail,
         runtime_override_subset_sv_type=runtime_override_subset_sv_type,
@@ -115,7 +123,7 @@ workflow Module0506Cluster {
       input:
         vcfs=depth_vcfs,
         batches=batches,
-        prefix="AllBatches_depth",
+        prefix="~{cohort_name}.depth",
         dist=500000,
         frac=0.5,
         sample_overlap=0.5,
@@ -131,7 +139,10 @@ workflow Module0506Cluster {
         empty_file=empty_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_override_join_vcfs=runtime_override_join_vcfs,
+        runtime_override_localize_vcfs = runtime_override_localize_vcfs,
+        runtime_override_join_vcfs = runtime_override_join_vcfs,
+        runtime_override_fix_multiallelic = runtime_override_fix_multiallelic,
+        runtime_override_fix_ev_tags = runtime_override_fix_ev_tags,
         runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
         runtime_override_subset_background_fail=runtime_override_subset_background_fail,
         runtime_override_subset_sv_type=runtime_override_subset_sv_type,
@@ -161,19 +172,36 @@ workflow Module0506Cluster {
     }
 
     #Merge PESR & RD VCFs
+    call MiniTasks.ConcatVcfs as ConcatPesrDepth {
+      input:
+        vcfs=[ClusterPesr.clustered_vcf, ClusterDepth.clustered_vcf],
+        vcfs_idx=[ClusterPesr.clustered_vcf_idx, ClusterDepth.clustered_vcf_idx],
+        merge_sort=true,
+        outfile_prefix="all_batches.pesr_depth.~{contig}.unmerged",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_concat_pesr_depth
+    }
     call MergePesrDepth {
       input:
-        pesr_vcf=ClusterPesr.clustered_vcf,
-        depth_vcf=ClusterDepth.clustered_vcf,
+        vcf=ConcatPesrDepth.concat_vcf,
+        vcf_index=ConcatPesrDepth.concat_vcf_idx,
         contig=contig,
+        prefix="all_batches.pesr_depth.~{contig}.unsorted",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_merge_pesr_depth
+    }
+    call MiniTasks.SortVcf as SortMergePesrDepth {
+      input:
+        vcf = MergePesrDepth.merged_vcf,
+        outfile_prefix = "all_batches.pesr_depth.~{contig}",
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_override_sort_pesr_depth_merged_vcf
     }
 
     #Update SR background fail & bothside pass files (2)
     call MiniTasks.UpdateSrList as UpdateBackgroundFailSecond {
       input:
-        vcf=MergePesrDepth.merged_vcf,
+        vcf=SortMergePesrDepth.out,
         original_list=UpdateBackgroundFailFirst.updated_list,
         outfile="sr_background_fail.~{contig}.updated2.txt",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -181,7 +209,7 @@ workflow Module0506Cluster {
     }
     call MiniTasks.UpdateSrList as UpdateBothsidePassSecond {
       input:
-        vcf=MergePesrDepth.merged_vcf,
+        vcf=SortMergePesrDepth.out,
         original_list=UpdateBothsidePassFirst.updated_list,
         outfile="sr_bothside_pass.~{contig}.updated2.txt",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -193,8 +221,8 @@ workflow Module0506Cluster {
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
       input:
-        vcfs=MergePesrDepth.merged_vcf,
-        vcfs_idx=MergePesrDepth.merged_vcf_idx,
+        vcfs=SortMergePesrDepth.out,
+        vcfs_idx=SortMergePesrDepth.out_index,
         merge_sort=true,
         outfile_prefix="~{cohort_name}.0506_clustered",
         sv_base_mini_docker=sv_base_mini_docker,
@@ -204,8 +232,8 @@ workflow Module0506Cluster {
 
   #Final outputs
   output {
-    Array[File] vcfs = MergePesrDepth.merged_vcf
-    Array[File] vcf_indexes = MergePesrDepth.merged_vcf_idx
+    Array[File] vcfs = SortMergePesrDepth.out
+    Array[File] vcf_indexes = SortMergePesrDepth.out_index
     Array[File] cluster_bothside_pass_lists = UpdateBothsidePassSecond.updated_list
     Array[File] cluster_background_fail_lists = UpdateBackgroundFailSecond.updated_list
     File? merged_vcf = ConcatVcfs.concat_vcf
@@ -217,26 +245,24 @@ workflow Module0506Cluster {
 #Merge PESR + RD VCFs
 task MergePesrDepth {
   input {
-    File pesr_vcf
-    File depth_vcf
+    File vcf
+    File vcf_index
+    String prefix
     String contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_file = "all_batches.pesr_depth.~{contig}.vcf.gz"
+  String output_file = prefix + ".vcf.gz"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([pesr_vcf, depth_vcf], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb + compression_factor * input_size,
-                                  disk_gb: ceil(base_disk_gb + input_size * (2.0 + 3.0 * compression_factor)),
+                                  mem_gb: 2.0 + 0.3 * input_size,
+                                  disk_gb: ceil(10.0 + 0.5 * input_size),
                                   cpu_cores: 1,
-                                  preemptible_tries: 3,
+                                  preemptible_tries: 0,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -252,19 +278,14 @@ task MergePesrDepth {
   }
 
   command <<<
-    set -eu -o pipefail
-
-    /opt/sv-pipeline/04_variant_resolution/scripts/PESR_RD_merge_wrapper.sh \
-    ~{pesr_vcf} \
-    ~{depth_vcf} \
-    ~{contig} \
-    ~{output_file}
-
-    tabix -p vcf -f ~{output_file}
+    set -euo pipefail
+    /opt/sv-pipeline/04_variant_resolution/scripts/merge_pesr_depth.py \
+      --prefix pesr_depth_merged_~{contig} \
+      ~{vcf} \
+      ~{output_file}
   >>>
 
   output {
     File merged_vcf = output_file
-    File merged_vcf_idx = output_file + ".tbi"
   }
 }

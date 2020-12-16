@@ -17,7 +17,7 @@ median_hom=$(awk '{if($1=="median_hom") print $2}' $metric_file)
 sd_het=$(awk '{if($1=="sd_het") print $2}' $metric_file)
 
 zcat ${PE_counts} \
-  | fgrep -v name \
+  | { fgrep -v name || [[ $? == 1 ]]; } \
   |awk -v var=$pe_count -v var1=$median_hom -v var2=$sd_het '{if ($3<var) print $1,$2,$3,0;else if ($3<=var1-var2) print $1,$2,$3,1; else print $1,$2,$3,int($3/(var1/2)+0.5)}'  | gzip \
   > pe.geno.final.txt.gz
 
@@ -78,7 +78,7 @@ fi
 
 ##add back variants with no PE support##
 awk '{print $1}' pe.variant.quality.final.txt \
-  |fgrep -wvf - <(zcat pe.geno.final.txt.gz) \
+  |{ fgrep -wvf - <(zcat pe.geno.final.txt.gz) || [[ $? == 1 ]]; }  \
   |awk '{print $1}' \
   |sort -u \
   |awk '{print $1 "\t" 0}' \

@@ -26,9 +26,8 @@ task ZcatCompressedFiles {
   Float input_size = size(shards, "GB")
   Float compression_factor = 5.0
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + if do_filter then compression_factor * input_size else 0.0,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * if do_filter then 2.0 + compression_factor else 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -37,8 +36,8 @@ task ZcatCompressedFiles {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -86,10 +85,9 @@ task CatUncompressedFiles {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(shards, "GB")
-  Float base_mem_gb = 2.0
   Float base_disk_gb = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + (if do_filter then input_size else 0.0),
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * (if do_filter then 3.0 else 2.0)),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -98,8 +96,8 @@ task CatUncompressedFiles {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -122,6 +120,54 @@ task CatUncompressedFiles {
   }
 }
 
+task SortVcf {
+  input {
+    File vcf
+    String? outfile_prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String outfile_name = outfile_prefix + ".vcf.gz"
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 +  size(vcf, "GB") * 20),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  Float runtime_mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+
+  command <<<
+    set -euo pipefail
+    mkdir temp
+    bcftools sort \
+        --temp-dir temp \
+        --output-type z \
+        --output-file ~{outfile_name} \
+        ~{vcf}
+    tabix ~{outfile_name}
+  >>>
+
+  output {
+    File out = outfile_name
+    File out_index = outfile_name + ".tbi"
+  }
+  runtime {
+    memory: runtime_mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+}
+
 # Combine multiple sorted VCFs
 task ConcatVcfs {
   input {
@@ -140,10 +186,9 @@ task ConcatVcfs {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcfs, "GB")
   Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
+    mem_gb: 2.0 + length(vcfs) * 0.05,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -152,8 +197,8 @@ task ConcatVcfs {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -167,8 +212,8 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix -p vcf -f "~{outfile_name}"
+    bcftools concat --no-version -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    tabix "~{outfile_name}"
   >>>
 
   output {
@@ -197,7 +242,7 @@ task ConcatBeds {
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -206,8 +251,8 @@ task ConcatBeds {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -216,7 +261,7 @@ task ConcatBeds {
   }
 
   command <<<
-    set -eu
+    set -eux
 
     # note head -n1 stops reading early and sends SIGPIPE to zcat,
     # so setting pipefail here would result in early termination
@@ -235,7 +280,7 @@ task ConcatBeds {
       > ~{output_file}
 
     if ~{call_tabix}; then
-      tabix -f -p bed ~{output_file}
+      tabix -p bed ~{output_file}
     else
       touch ~{output_file}.tbi
     fi
@@ -264,9 +309,8 @@ task FilesToTarredFolder {
   # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
   Float input_size = size(in_files, "GB")
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -275,8 +319,8 @@ task FilesToTarredFolder {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -316,9 +360,8 @@ task PasteFiles {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(input_files, "GB")
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -327,8 +370,8 @@ task PasteFiles {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -348,12 +391,12 @@ task PasteFiles {
   }
 }
 
-# Select a subset of vcf records by passing a bash filter command
-# records_filter must be a bash command accepting vcf records passed via
-# pipe, and outputing the desired records to stdout
+# Select a subset of vcf records by passing a filter command
+# records_filter must be a bcftools expression
 task FilterVcf {
   input {
     File vcf
+    File vcf_index
     String outfile_prefix
     String records_filter
     Boolean? index_output
@@ -362,17 +405,12 @@ task FilterVcf {
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  Boolean call_tabix = select_first([index_output, true])
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(vcf, "GB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0 * (1 + compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -380,8 +418,8 @@ task FilterVcf {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -390,39 +428,9 @@ task FilterVcf {
   }
 
   command <<<
-    set -eu -o pipefail
-
-    # uncompress vcf
-    zcat ~{vcf} > uncompressed.vcf
-
-    # Extract vcf header:
-    #  search for first line not starting with '#', stop immediately,
-    #  take everything up to that point, then remove last line.
-    ONLY_HEADER=false
-    grep -B9999999999 -m1 -Ev "^#" uncompressed.vcf | sed '$ d' > header.vcf \
-      || ONLY_HEADER=true
-
-    if $ONLY_HEADER; then
-      # no records were found, so filter is trivial, just use original vcf
-      mv ~{vcf} ~{outfile_name}
-    else
-      N_HEADER=$(wc -l < header.vcf)
-
-      # Put filter inside subshell so that there is no pipefail if there are no matches
-      # NOTE: this is dangerous in the event that the filter is buggy
-      tail -n+$((N_HEADER+1)) uncompressed.vcf \
-        | { ~{records_filter} || true; }\
-        | cat header.vcf - \
-        | vcf-sort \
-        | bgzip -c \
-        > "~{outfile_name}"
-    fi
-
-    if ~{call_tabix}; then
-      tabix -p vcf -f "~{outfile_name}"
-    else
-      touch "~{outfile_name}.tbi"
-    fi
+    set -eu
+    bcftools view --no-version --no-update -i '~{records_filter}' -O z -o ~{outfile_name} ~{vcf}
+    tabix ~{outfile_name}
   >>>
 
   output {
@@ -445,13 +453,9 @@ task SubsetVariantList {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float vid_list_size = size(vid_list, "GB")
   Float vcf_size = size(vcf, "GB")
-  Float compression_factor = 5.0
-  Float cut_factor = 2.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor / cut_factor * vcf_size,
-    disk_gb: ceil(base_disk_gb + vid_list_size * 2.0 + vcf_size * (1 + compression_factor / cut_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + vcf_size + vid_list_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -459,8 +463,8 @@ task SubsetVariantList {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -470,7 +474,6 @@ task SubsetVariantList {
 
   command <<<
     set -eu -o pipefail
-
     #Get list of variant IDs present in VCF
     zcat ~{vcf} | (grep -vE "^#" || printf "") | cut -f3 > valid_vids.list
     #Restrict input variant ID list to valid VIDs
@@ -503,11 +506,9 @@ task SplitUncompressed {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(whole_file, "GB")
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -515,8 +516,8 @@ task SplitUncompressed {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -581,12 +582,9 @@ task SplitVcf {
   # Note that the header is multiplied by the number of shards, but it's so small as to be a rounding error unless
   # thousands of shards are produced (and even then, small compared to base_disk_gb)
   Float input_size = size(vcf, "GB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * compression_factor * 2.0),
+    mem_gb: 2.0,
+    disk_gb: ceil(10 + input_size * 30),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -594,8 +592,8 @@ task SplitVcf {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -688,20 +686,20 @@ task UpdateSrList {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size([vcf, original_list], "GiB")
   Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
+  Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb + compression_factor * input_size,
-                                  disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
-                                  cpu_cores: 1,
-                                  preemptible_tries: 3,
-                                  max_retries: 1,
-                                  boot_disk_gb: 10
-                                }
+    mem_gb: 3.75,
+    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -710,12 +708,20 @@ task UpdateSrList {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
 
-    /opt/sv-pipeline/04_variant_resolution/scripts/trackpesr_ID.sh \
-    ~{vcf} \
-    ~{original_list} \
-    ~{outfile}
+    ##append new ids to original list##
+    svtk vcf2bed ~{vcf} int.bed -i MEMBERS
+
+    ##remove header and match id one per line##
+    awk '{if (NR>1) print $4 "\t" $NF}' int.bed \
+      | awk -F'[,\t]' '{for(i=2; i<=NF; ++i) print $i "\t" $1 }' \
+      | sort -k1,1\
+      > newidlist.txt
+
+    join -j 1 -t $'\t' <(awk '{print $NF "\t" $0}' ~{original_list} | sort -k1,1) newidlist.txt \
+      | cut -f2-  \
+      > ~{outfile}
   >>>
 
   output {

@@ -9,6 +9,7 @@ import "ShardedCluster.wdl" as ShardedCluster
 workflow ClusterSingleChrom {
   input {
     File vcf
+    File vcf_index
     String contig
     String prefix
     Int max_shards
@@ -45,8 +46,9 @@ workflow ClusterSingleChrom {
     call MiniTasks.FilterVcf as SubsetSvType {
       input:
         vcf=vcf,
-        records_filter='fgrep "SVTYPE=~{sv_type}"',
-        outfile_prefix=contig_prefix,
+        vcf_index=vcf_index,
+        records_filter='INFO/SVTYPE="~{sv_type}"',
+        outfile_prefix=contig_prefix + ".~{sv_type}",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_sv_type
     }
@@ -59,7 +61,7 @@ workflow ClusterSingleChrom {
         frac=frac,
         max_shards=max_shards,
         min_per_shard=min_per_shard,
-        prefix=contig_prefix + "." + sv_type,
+        prefix=prefix,
         contig=contig,
         sv_type=sv_type,
         sample_overlap=sample_overlap,
@@ -110,12 +112,9 @@ task ConcatAndRenameVcfs {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcfs, "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 2.0 + 5.0 * input_size,
+    disk_gb: ceil(10.0 + 40.0 * input_size),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,

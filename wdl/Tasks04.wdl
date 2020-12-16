@@ -127,20 +127,20 @@ task AddGenotypes {
   }
   command <<<
 
-    set -euo pipefail
+    set -euxo pipefail
 
     # in some cases a vargq cannot be computed and is returned as '.'. Remove these from the final vcf.
     gzip -cd ~{varGQ} | awk '$5 == "." {print $1}' > bad.vargq.list
-    gzip -cd ~{vcf} | grep -wvf bad.vargq.list | bgzip -c > clean.vcf.gz
-    gzip -cd ~{genotypes} | grep -wvf bad.vargq.list | bgzip -c > clean.genotypes.txt.gz
-    gzip -cd ~{varGQ} | grep -wvf bad.vargq.list | bgzip -c > clean.vargq.txt.gz
+    gzip -cd ~{vcf} | { grep -wvf bad.vargq.list || [[ $? == 1 ]]; } | bgzip > clean.vcf.gz
+    gzip -cd ~{genotypes} | { grep -wvf bad.vargq.list || [[ $? == 1 ]]; } | bgzip > clean.genotypes.txt.gz
+    gzip -cd ~{varGQ} | { grep -wvf bad.vargq.list || [[ $? == 1 ]]; } | bgzip > clean.vargq.txt.gz
 
     /opt/sv-pipeline/04_variant_resolution/scripts/add_genotypes.py \
       clean.vcf.gz \
       clean.genotypes.txt.gz \
       clean.vargq.txt.gz \
       ~{prefix}.genotyped.vcf;
-    vcf-sort -c ~{prefix}.genotyped.vcf | bgzip -c > ~{prefix}.genotyped.vcf.gz
+    vcf-sort -c ~{prefix}.genotyped.vcf | bgzip > ~{prefix}.genotyped.vcf.gz
 
   >>>
   runtime {
@@ -179,9 +179,9 @@ task MakeSubsetVcf {
   }
   command <<<
 
-    set -euo pipefail
-    zcat ~{vcf} | fgrep -e "#" > ~{prefix}.vcf;
-    zcat ~{vcf} | fgrep -w -f <(cut -f4 ~{bed}) >> ~{prefix}.vcf;
+    set -euxo pipefail
+    zcat ~{vcf} | fgrep -e "#" > ~{prefix}.vcf
+    zcat ~{vcf} | { fgrep -w -f <(cut -f4 ~{bed}) || true; } >> ~{prefix}.vcf
     bgzip ~{prefix}.vcf
 
   >>>
