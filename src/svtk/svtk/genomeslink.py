@@ -131,7 +131,7 @@ class GSNode(object):
 
 
 class GenomeSLINK(object):
-    def __init__(self, nodes, dist, size=1, blacklist=None):
+    def __init__(self, nodes, dist, size=1, blacklist=None, single_end=False):
         """
         Graph-based single-linkage clustering of genomic coordinates.
 
@@ -147,12 +147,15 @@ class GenomeSLINK(object):
         blacklist : pysam.TabixFile, optional
             Regions to exclude from clustering. Any node with a coordinate
             inside an excluding region is omitted. (NOTE: not overlap-based.)
+        single_end : bool, optional
+            Require only one end to be within min dist.
         """
 
         self.nodes = nodes
         self.dist = dist
         self.size = size
         self.blacklist = blacklist
+        self.single_end = single_end
 
     def is_clusterable_with(self, first, second):
         """
@@ -165,9 +168,15 @@ class GenomeSLINK(object):
         """
         Test if candidates meet cluster distance requirement on chrB, posB
         """
-        return (first.chrB == second.chrB and
-                abs(first.posA - second.posA) < self.dist and
-                abs(first.posB - second.posB) < self.dist)
+        if first.chrB == second.chrB:
+            if self.single_end:
+                return abs(first.posA - second.posA) < self.dist or \
+                        abs(first.posB - second.posB) < self.dist
+            else:
+                return abs(first.posA - second.posA) < self.dist and \
+                        abs(first.posB - second.posB) < self.dist
+        else:
+            return False
 
     def filter_nodes(self):
         """

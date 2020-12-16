@@ -2,10 +2,10 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "CleanVcf1.wdl" as c1
 import "CleanVcf1b.wdl" as c1b
 import "CleanVcf5.wdl" as c5
 import "DropRedundantCNVs.wdl" as drc
+import "HailMerge.wdl" as HailMerge
 
 workflow CleanVcfChromosome {
   input {
@@ -19,99 +19,145 @@ workflow CleanVcfChromosome {
     File bothsides_pass_list
     Int min_records_per_shard_step1
     Int samples_per_step2_shard
+    Int clean_vcf1b_records_per_shard
+    Int clean_vcf5_records_per_shard
+    Int? clean_vcf5_threads_per_task
     File? outlier_samples_list
+    Int? max_samples_per_shard_step3
+
+    String chr_x
+    String chr_y
+
+    File hail_script
+    String project
 
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_1b
     RuntimeAttr? runtime_override_clean_vcf_2
     RuntimeAttr? runtime_override_clean_vcf_3
     RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5
+    RuntimeAttr? runtime_override_clean_vcf_5_scatter
+    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
+    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
+    RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
 
+    # Clean vcf 1b
+    RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
+    RuntimeAttr? runtime_attr_override_sort_bed_1b
+    RuntimeAttr? runtime_attr_override_intersect_bed_1b
+    RuntimeAttr? runtime_attr_override_build_dict_1b
+    RuntimeAttr? runtime_attr_override_scatter_1b
+    RuntimeAttr? runtime_attr_override_filter_vcf_1b
+    RuntimeAttr? runtime_override_concat_vcfs_1b
+    RuntimeAttr? runtime_override_cat_multi_cnvs_1b
+
+    RuntimeAttr? runtime_override_preconcat_step1
+    RuntimeAttr? runtime_override_hail_merge_step1
+    RuntimeAttr? runtime_override_fix_header_step1
+
+    RuntimeAttr? runtime_override_preconcat_drc
+    RuntimeAttr? runtime_override_hail_merge_drc
+    RuntimeAttr? runtime_override_fix_header_drc
+
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_split_vcf_to_clean
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
     RuntimeAttr? runtime_override_split_include_list
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
+    RuntimeAttr? runtime_override_drop_redundant_cnvs
+
   }
 
   call MiniTasks.SplitVcf as SplitVcfToClean {
     input:
       vcf=vcf,
       contig=contig,
-      prefix="~{prefix}.~{contig}.shard_",
+      prefix="~{prefix}.shard_",
       n_shards=max_shards_per_chrom_step1,
       min_vars_per_shard=min_records_per_shard_step1,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_split_vcf_to_clean
   }
 
-  scatter ( vcf_shard in SplitVcfToClean.vcf_shards ) {
-    call c1.CleanVcf1 as CleanVcf1a {
+  scatter ( i in range(length(SplitVcfToClean.vcf_shards)) ) {
+    call CleanVcf1a {
       input:
-        vcf=vcf_shard,
-        background_list=background_list,
-        ped_file=ped_file,
-        sv_pipeline_docker=sv_pipeline_docker,
-        linux_docker=linux_docker,
+        vcf=SplitVcfToClean.vcf_shards[i],
+        prefix="~{prefix}.clean_vcf_1.shard_~{i}",
+        background_fail_list=background_list,
         bothsides_pass_list=bothsides_pass_list,
+        ped_file=ped_file,
         allosome_fai=allosome_fai,
+        chr_x=chr_x,
+        chr_y=chr_y,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_clean_vcf_1a
     }
   }
 
-  call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
+  call HailMerge.HailMerge as CombineStep1Vcfs {
     input:
       vcfs=CleanVcf1a.intermediate_vcf,
-      vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
-      naive=true,
-      generate_index=false,
-      outfile_prefix=prefix + ".cleanVCF_step1.intermediate_vcf.merged",
+      prefix="~{prefix}.combine_step_1_vcfs",
+      hail_script=hail_script,
+      project=project,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_combine_step_1_vcfs
+      runtime_override_preconcat=runtime_override_preconcat_step1,
+      runtime_override_hail_merge=runtime_override_hail_merge_step1,
+      runtime_override_fix_header=runtime_override_fix_header_step1
   }
 
   call MiniTasks.CatUncompressedFiles as CombineStep1SexChrRevisions {
     input:
       shards=CleanVcf1a.sex,
-      outfile_name=prefix + ".cleanVCF_step1.sexchr_revise.merged.txt",
+      outfile_name="~{prefix}.combine_step_1_sex_chr_revisions.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_combine_step_1_sex_chr_revisions
   }
 
   call c1b.CleanVcf1b {
     input:
-      intermediate_vcf=CombineStep1Vcfs.concat_vcf,
+      intermediate_vcf=CombineStep1Vcfs.merged_vcf,
+      prefix="~{prefix}.clean_vcf_1b",
+      records_per_shard=clean_vcf1b_records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_clean_vcf_1b
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override_subset_large_cnvs=runtime_attr_override_subset_large_cnvs_1b,
+      runtime_attr_override_sort_bed=runtime_attr_override_sort_bed_1b,
+      runtime_attr_override_intersect_bed=runtime_attr_override_intersect_bed_1b,
+      runtime_attr_override_build_dict=runtime_attr_override_build_dict_1b,
+      runtime_attr_override_scatter=runtime_attr_override_scatter_1b,
+      runtime_attr_override_filter_vcf=runtime_attr_override_filter_vcf_1b,
+      runtime_override_concat_vcfs=runtime_override_concat_vcfs_1b,
+      runtime_override_cat_multi_cnvs=runtime_override_cat_multi_cnvs_1b
   }
 
   call MiniTasks.SplitUncompressed as SplitIncludeList {
     input:
       whole_file=CleanVcf1a.include_list[0],
       lines_per_shard=samples_per_step2_shard,
-      shard_prefix="includeexclude.",
+      shard_prefix="~{prefix}.split_include_list.",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_include_list
   }
 
-  scatter ( included_interval in SplitIncludeList.shards ){
-    call CleanVcf2{
+  scatter ( i in range(length(SplitIncludeList.shards)) ){
+    call CleanVcf2 {
       input:
         normal_revise_vcf=CleanVcf1b.normal,
-        include_list=included_interval,
+        prefix="~{prefix}.clean_vcf_2.shard_~{i}",
+        include_list=SplitIncludeList.shards[i],
         multi_cnvs=CleanVcf1b.multi,
-        vcftools_idx=CleanVcf1b.vcftools_idx,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_clean_vcf_2
       }
@@ -120,6 +166,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.CatUncompressedFiles as CombineCleanVcf2 {
     input:
       shards=CleanVcf2.out,
+      outfile_name="~{prefix}.combine_clean_vcf_2.txt",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_combine_clean_vcf_2
   }
@@ -127,15 +174,17 @@ workflow CleanVcfChromosome {
   call CleanVcf3 {
     input:
       rd_cn_revise=CombineCleanVcf2.outfile,
+      max_samples_shard = max_samples_per_shard_step3,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_clean_vcf_3
   }
 
-  scatter ( rd_cn_revise in CleanVcf3.shards ){
+  scatter ( i in range(length(CleanVcf3.shards)) ){
     call CleanVcf4 {
       input:
-        rd_cn_revise=rd_cn_revise,
+        rd_cn_revise=CleanVcf3.shards[i],
         normal_revise_vcf=CleanVcf1b.normal,
+        prefix="~{prefix}.clean_vcf_4.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_clean_vcf_4
     }
@@ -144,7 +193,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.CatUncompressedFiles as CombineRevised4 {
     input:
       shards=CleanVcf4.out,
-      outfile_name="revise.vcf.lines.txt.gz",
+      outfile_name="~{prefix}.combine_revised_4.txt.gz",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_combine_revised_4
   }
@@ -152,7 +201,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.CatUncompressedFiles as CombineMultiIds4 {
     input:
       shards=CleanVcf4.multi_ids,
-      outfile_name="multi.geno.ids.txt.gz",
+      outfile_name="~{prefix}.combine_multi_ids_4.txt.gz",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_combine_multi_ids_4
   }
@@ -165,22 +214,43 @@ workflow CleanVcfChromosome {
       sex_chr_revise=CombineStep1SexChrRevisions.outfile,
       multi_ids=CombineMultiIds4.outfile,
       outlier_samples_list=outlier_samples_list,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_clean_vcf_5
+      contig=contig,
+      prefix="~{prefix}.clean_vcf_5",
+      records_per_shard=clean_vcf5_records_per_shard,
+      threads_per_task=clean_vcf5_threads_per_task,
+      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
+      runtime_attr_override_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
+      runtime_attr_override_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
+      runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
   }
 
-  call drc.DropRedundantCNVs {
+  call DropRedundantCnvs {
     input:
       vcf=CleanVcf5.polished,
+      prefix="~{prefix}.drop_redundant_cnvs",
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_updates_docker,
+      runtime_attr_override=runtime_override_drop_redundant_cnvs
+  }
+
+  call HailMerge.HailMerge as SortDropRedundantCnvs {
+    input:
+      vcfs=[DropRedundantCnvs.out],
+      prefix="~{prefix}.drop_redundant_cnvs.sorted",
+      hail_script=hail_script,
+      project=project,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_override_preconcat=runtime_override_preconcat_drc,
+      runtime_override_hail_merge=runtime_override_hail_merge_drc,
+      runtime_override_fix_header=runtime_override_fix_header_drc
   }
 
   call StitchFragmentedCnvs {
     input:
-      vcf=DropRedundantCNVs.cleaned_vcf_shard,
-      contig=contig,
-      prefix=prefix,
+      vcf=SortDropRedundantCnvs.merged_vcf,
+      prefix="~{prefix}.stitch_fragmented_cnvs",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
   }
@@ -189,7 +259,7 @@ workflow CleanVcfChromosome {
     input:
       vcf=StitchFragmentedCnvs.stitched_vcf_shard,
       contig=contig,
-      prefix=prefix,
+      prefix="~{prefix}.final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_final_cleanup
 
@@ -202,25 +272,89 @@ workflow CleanVcfChromosome {
 }
 
 
+task CleanVcf1a {
+  input {
+    File vcf
+    String prefix
+    File background_fail_list
+    File bothsides_pass_list
+    File ped_file
+    File allosome_fai
+    String chr_x
+    String chr_y
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size([vcf, background_fail_list, bothsides_pass_list], "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + input_size * 2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    touch ~{prefix}.includelist.txt
+    touch ~{prefix}.sexchr.revise.txt
+
+    # outputs
+    # includelist.txt: the names of all the samples in the input vcf
+    # sexchr.revise.txt: the names of the events where genotypes got tweaked on allosomes
+    # stdout: a revised vcf
+    java -jar $CLEAN_VCF_PART_1_JAR \
+      ~{vcf} \
+      ~{ped_file} \
+      ~{chr_x} \
+      ~{chr_y} \
+      ~{background_fail_list} \
+      ~{bothsides_pass_list} \
+      ~{prefix}.includelist.txt \
+      ~{prefix}.sexchr.revise.txt \
+      | bgzip \
+      > ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File include_list="~{prefix}.includelist.txt"
+    File sex="~{prefix}.sexchr.revise.txt"
+    File intermediate_vcf="~{prefix}.vcf.gz"
+    File intermediate_vcf_idx="~{prefix}.vcf.gz.tbi"
+  }
+}
+
 task CleanVcf2 {
   input {
     File normal_revise_vcf
+    String prefix
     File include_list
     File multi_cnvs
-    File vcftools_idx
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
-  Float input_size = size([normal_revise_vcf, include_list, multi_cnvs, vcftools_idx], "GB")
+  Float input_size = size([normal_revise_vcf, include_list, multi_cnvs], "GB")
   Float base_disk_gb = 10.0
-  Float base_mem_gb = 4.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
+  Float input_disk_scale = 3.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -241,36 +375,34 @@ task CleanVcf2 {
   command <<<
     set -eu -o pipefail
 
+    bcftools index ~{normal_revise_vcf}
     /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part2.sh \
       ~{normal_revise_vcf} \
       ~{include_list} \
       ~{multi_cnvs} \
-      "output.txt"
+      "~{prefix}.txt"
   >>>
 
   output {
-    File out="output.txt"
+    File out="~{prefix}.txt"
   }
 }
 
 
-task CleanVcf3{
+task CleanVcf3 {
   input {
     File rd_cn_revise
+    Int? max_samples_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-
+  Int max_samples_shard_ = select_first([max_samples_shard, 7000])
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
   Float input_size = size(rd_cn_revise, "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
-    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -289,13 +421,9 @@ task CleanVcf3{
 
   command <<<
     set -euo pipefail
-    
-    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.sh ~{rd_cn_revise}
-
+    python /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.py ~{rd_cn_revise} -s ~{max_samples_shard_}
     # Ensure there is at least one shard
-    if [ -z "$(ls -A shards/)" ]; then
-      touch shards/out.0_0.txt
-    fi
+    touch shards/out.0_0.txt
   >>>
 
   output {
@@ -308,13 +436,14 @@ task CleanVcf4 {
   input {
     File rd_cn_revise
     File normal_revise_vcf
+    String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   Float input_size = size([rd_cn_revise, normal_revise_vcf], "GB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0 + input_size * 3.0,
+                                  mem_gb: 2.0,
                                   disk_gb: 50,
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
@@ -353,7 +482,7 @@ task CleanVcf4 {
         vid_sample_cn_map[vid].append(tuple(tokens[1:]))
 
     # Traverse VCF and replace genotypes
-    with open("revise.vcf.lines.txt", "w") as f:
+    with open("~{prefix}.revise_vcf_lines.txt", "w") as f:
       vcf = pysam.VariantFile(VCF_FILE)
       num_vcf_records = 0
       for record in vcf:
@@ -406,53 +535,46 @@ task CleanVcf4 {
           gt = s['SR_GT']
         if gt > 2:
           num_gt_over_2 += 1
-          if record.id == "gnomad-sv-v3-TEST-SMALL.chr22_BND_chr22_173":
-            print("{} {}".format(sid, num_gt_over_2))
-            print("{} {} {} {}".format(s['PE_GT'], s['PE_GQ'], s['SR_GT'], s['SR_GQ']))
       if num_gt_over_2 > max_vf:
         multi_geno_ids.add(record.id)
     vcf.close()
 
     multi_geno_ids = sorted(list(multi_geno_ids))
-    with open("multi.geno.ids.txt", "w") as f:
+    with open("~{prefix}.multi_geno_ids.txt", "w") as f:
       for vid in multi_geno_ids:
         f.write(vid + "\n")
     CODE
 
-    bgzip revise.vcf.lines.txt
-    gzip multi.geno.ids.txt
+    bgzip ~{prefix}.revise_vcf_lines.txt
+    gzip ~{prefix}.multi_geno_ids.txt
   >>>
 
   output {
-    File out="revise.vcf.lines.txt.gz"
-    File multi_ids="multi.geno.ids.txt.gz"
+    File out="~{prefix}.revise_vcf_lines.txt.gz"
+    File multi_ids="~{prefix}.multi_geno_ids.txt.gz"
   }
 }
 
 
-# Stitch fragmented RD-only calls found in 100% of the same samples
-task StitchFragmentedCnvs {
+# Remove CNVs that are redundant with CPX events or other CNVs
+task DropRedundantCnvs {
   input {
     File vcf
-    String contig
     String prefix
+    String contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  String stitched_vcf_name = contig + ".shard.fragmented_CNVs_stitched.vcf.gz"
 
-  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-  # generally assume working memory is ~3 * inputs
-  Float input_size = size(vcf, "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
+  Float input_size = size(vcf, "GiB")
+  # disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
+  # in tests on large VCFs, memory usage is ~1.0 * input VCF size
+  # the biggest disk usage is at the end of the task, with input + output VCF on disk
+  Int cpu_cores = 2 # speed up compression / decompression of VCFs
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
-    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-    cpu_cores: 1,
+    mem_gb: 3.75 + input_size * 1.5,
+    disk_gb: ceil(100.0 + input_size * 2.0),
+    cpu_cores: cpu_cores,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
@@ -469,19 +591,64 @@ task StitchFragmentedCnvs {
   }
 
   command <<<
-    set -eu -o pipefail
-    
-    /opt/sv-pipeline/04_variant_resolution/scripts/stitch_fragmented_CNVs.sh \
-      ~{vcf} \
-      "tmp_~{stitched_vcf_name}"
-    
-    /opt/sv-pipeline/04_variant_resolution/scripts/stitch_fragmented_CNVs.sh \
-      "tmp_~{stitched_vcf_name}" \
-      "~{stitched_vcf_name}"
+    set -euo pipefail
+    /opt/sv-pipeline/04_variant_resolution/scripts/resolve_cpx_cnv_redundancies.py \
+      ~{vcf} ~{prefix}.vcf.gz --temp-dir ./tmp
   >>>
 
   output {
-    File stitched_vcf_shard = stitched_vcf_name
+    File out = "~{prefix}.vcf.gz"
+  }
+}
+
+
+# Stitch fragmented RD-only calls found in 100% of the same samples
+task StitchFragmentedCnvs {
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10.0 + input_size * 2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  runtime {
+    memory: "~{mem_gb} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    echo "First pass..."
+    java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 ~{vcf} \
+      | bgzip \
+      > tmp.vcf.gz
+    rm ~{vcf}
+    echo "Second pass..."
+    java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
+      | bgzip \
+      > ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File stitched_vcf_shard = "~{prefix}.vcf.gz"
   }
 }
 
@@ -495,8 +662,6 @@ task FinalCleanup {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  String cleaned_shard_name = prefix + "." + contig + ".final_cleanup.vcf.gz"
 
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
@@ -535,12 +700,12 @@ task FinalCleanup {
       | /opt/sv-pipeline/04_variant_resolution/scripts/sanitize_filter_field.py stdin stdout \
       | fgrep -v "##INFO=<ID=MEMBERS,Number=.,Type=String," \
       | bgzip -c \
-      > "~{cleaned_shard_name}"
-    tabix ~{cleaned_shard_name}
+      > ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
   >>>
 
   output {
-    File final_cleaned_shard = cleaned_shard_name
-    File final_cleaned_shard_idx = cleaned_shard_name + ".tbi"
+    File final_cleaned_shard = "~{prefix}.vcf.gz"
+    File final_cleaned_shard_idx = "~{prefix}.vcf.gz.tbi"
   }
 }

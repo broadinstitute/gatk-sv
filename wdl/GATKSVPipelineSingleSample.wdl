@@ -373,6 +373,7 @@ workflow GATKSVPipelineSingleSample {
     Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
     Int clean_vcf_min_records_per_shard_clean_vcf_step1
     Int clean_vcf_samples_per_clean_vcf_step2_shard
+    Int clean_vcf5_records_per_shard
 
     Int? clean_vcf_random_seed
 
@@ -928,6 +929,7 @@ workflow GATKSVPipelineSingleSample {
       max_shards_per_chrom_clean_vcf_step1=clean_vcf_max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=clean_vcf_min_records_per_shard_clean_vcf_step1,
       samples_per_clean_vcf_step2_shard=clean_vcf_samples_per_clean_vcf_step2_shard,
+      clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
 
       random_seed=clean_vcf_random_seed,
 

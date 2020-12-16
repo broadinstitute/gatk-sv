@@ -1,23 +1,9 @@
 #cython: language_level=3
-from pysam.libcalignedsegment cimport AlignedSegment
-from pysam.libcalignmentfile cimport AlignmentFile
 
 cdef inline int int_max(int a, int b): return a if a >= b else b
 cdef inline int int_min(int a, int b): return a if a <= b else b
 cdef inline float float_max(float a, float b): return a if a >= b else b
 cdef inline float float_min(float a, float b): return a if a <= b else b
-
-cpdef bint is_excluded(AlignedSegment read):
-    cdef bint exclude = (read.is_unmapped or
-                         read.mate_is_unmapped or
-                         read.is_secondary or
-                         read.is_duplicate or
-                         read.is_supplementary)
-    return exclude
-
-cpdef bint is_soft_clipped(AlignedSegment read):
-    return (((read.cigartuples[0][0] == 4) & (read.cigartuples[-1][0] == 0)) |
-            ((read.cigartuples[-1][0] == 4) & (read.cigartuples[0][0] == 0)))
 
 cpdef float reciprocal_overlap(int startA, int endA, int startB, int endB):
     """Calculate fraction of reciprocal overlap between two intervals"""

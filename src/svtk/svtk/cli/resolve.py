@@ -12,6 +12,8 @@ import subprocess
 import numpy as np
 import string
 from collections import deque
+from operator import attrgetter
+import itertools
 import pysam
 import pybedtools as pbt
 import svtk.utils as svu
@@ -91,25 +93,16 @@ def remove_CPX_from_INV(resolve_CPX, resolve_INV):
     return out
 
 
+def multisort(xs, specs):
+    for key, reverse in reversed(specs):
+        xs.sort(key=attrgetter(key), reverse=reverse)
+    return xs
+
+
 def cluster_INV(independent_INV):
-    inv_hash = {}
-    for i in independent_INV:
-        if i.chrom not in inv_hash.keys():
-            inv_hash[i.chrom] = {}
-        if i.pos not in inv_hash[i.chrom].keys():
-            inv_hash[i.chrom][i.pos] = {}
-        if i.stop not in inv_hash[i.chrom][i.pos].keys():
-            inv_hash[i.chrom][i.pos][i.stop] = i
-    list_INV = {}
-    for i in inv_hash.keys():
-        list_INV[i] = []
-        for j in sorted(inv_hash[i].keys()):
-            for k in sorted(inv_hash[i][j].keys()):
-                list_INV[i].append(inv_hash[i][j][k])
-    out = []
-    for i in list_INV.keys():
-        out += _cluster_INV_list(list_INV[i])
-    return out
+    list_INV = [multisort(list(group), (('pos', False), ('stop', False)))
+                for chrom, group in itertools.groupby(independent_INV, attrgetter('chrom'))]
+    return [x for group in list_INV for x in _cluster_INV_list(group)]
 
 
 def _cluster_INV_list(independent_INV):
@@ -316,13 +309,12 @@ def cluster_cleanup(clusters_v2):
     return [clusters_v2[i] for i in cluster_pos]
 
 
-def resolve_complex_sv_v2(resolve_CPX, resolve_INV, resolve_CNV, cytobands, disc_pairs,
+def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
                           mei_bed, variant_prefix='CPX_', min_rescan_support=4,
                           pe_blacklist=None, quiet=False, SR_only_cutoff=1000,
                           random_resolved_id_length=10):
-    independent_INV = remove_CPX_from_INV(resolve_CPX, resolve_INV)
-    linked_INV = cluster_INV(independent_INV)
-    clusters_v2 = link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000)
+    linked_INV = cluster_INV(resolve_INV)
+    clusters_v2 = link_cpx_V2(linked_INV, cpx_dist=2000)
     clusters_v2 = cluster_cleanup(clusters_v2)
 
     np.random.seed(0)  # arbitrary fixed seed for reproducibility
@@ -518,9 +510,7 @@ def main(argv):
 
     # RLC: As of Sept 19, 2018, only considering inversion single-enders in second-pass
     # due to too many errors in second-pass linking and variant reporting
-    resolve_CPX = []
-    resolve_CNV = []
-    cpx_records_v2 = resolve_complex_sv_v2(resolve_CPX, resolve_INV, resolve_CNV,
+    cpx_records_v2 = resolve_complex_sv_v2(resolve_INV,
                                            cytobands, disc_pairs, mei_bed, args.prefix,
                                            args.min_rescan_pe_support, blacklist, args.quiet)
 

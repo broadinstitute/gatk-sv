@@ -23,6 +23,9 @@ workflow ResolveComplexVariants {
     File pe_exclude_list
     File ref_dict
 
+    File hail_script
+    String project
+
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -47,6 +50,10 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
     RuntimeAttr? runtime_override_concat_resolved_per_shard
     RuntimeAttr? runtime_override_merge_resolve_inner
+    RuntimeAttr? runtime_override_pull_vcf_shard
+    RuntimeAttr? runtime_override_preconcat
+    RuntimeAttr? runtime_override_hail_merge
+    RuntimeAttr? runtime_override_fix_header
 
     RuntimeAttr? runtime_override_get_se_cutoff_inv
     RuntimeAttr? runtime_override_shard_vcf_cpx_inv
@@ -56,6 +63,10 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard_inv
     RuntimeAttr? runtime_override_concat_resolved_per_shard_inv
     RuntimeAttr? runtime_override_merge_resolve_inner_inv
+    RuntimeAttr? runtime_override_pull_vcf_shard_inv
+    RuntimeAttr? runtime_override_preconcat_inv
+    RuntimeAttr? runtime_override_hail_merge_inv
+    RuntimeAttr? runtime_override_fix_header_inv
   }
 
   #Scatter per chromosome
@@ -87,10 +98,11 @@ workflow ResolveComplexVariants {
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
-        inv_only=true,
         ref_dict=ref_dict,
         precluster_distance=50000000,
         precluster_overlap_frac=0.1,
+        hail_script=hail_script,
+        project=project,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
@@ -100,7 +112,11 @@ workflow ResolveComplexVariants {
         runtime_override_resolve_cpx_per_shard=runtime_override_resolve_cpx_per_shard_inv,
         runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard_inv,
         runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard_inv,
-        runtime_override_merge_resolve_inner=runtime_override_merge_resolve_inner_inv
+        runtime_override_merge_resolve_inner=runtime_override_merge_resolve_inner_inv,
+        runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_inv,
+        runtime_override_preconcat=runtime_override_preconcat_inv,
+        runtime_override_hail_merge=runtime_override_hail_merge_inv,
+        runtime_override_fix_header=runtime_override_fix_header_inv
     }
 
     #Run same-bp overlap filter on full vcf
@@ -127,10 +143,11 @@ workflow ResolveComplexVariants {
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
-        inv_only=false,
         ref_dict=ref_dict,
-        precluster_distance=1000,
-        precluster_overlap_frac=0,
+        precluster_distance=2000,
+        precluster_overlap_frac=0.000000001,
+        hail_script=hail_script,
+        project=project,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -141,6 +158,10 @@ workflow ResolveComplexVariants {
         runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard,
         runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
         runtime_override_merge_resolve_inner=runtime_override_merge_resolve_inner,
+        runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
+        runtime_override_preconcat=runtime_override_preconcat,
+        runtime_override_hail_merge=runtime_override_hail_merge,
+        runtime_override_fix_header=runtime_override_fix_header
     }
 
     #Integrate inv-only and all-variants resolved VCFs
@@ -158,6 +179,8 @@ workflow ResolveComplexVariants {
       input:
         vcf=IntegrateResolvedVcfs.integrated_vcf,
         prefix="~{cohort_name}.~{contig}.renamed",
+        chrom=contig,
+        vid_prefix=cohort_name,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_rename_variants
     }
@@ -167,7 +190,7 @@ workflow ResolveComplexVariants {
       input:
         vcf=RenameVariants.renamed_vcf,
         original_list=cluster_bothside_pass_lists[i],
-        outfile="sr_bothside_pass.~{contig}.updated3.txt",
+        outfile="~{cohort_name}.~{contig}.sr_bothside_pass.updated3.txt",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list_pass
     }
@@ -177,7 +200,7 @@ workflow ResolveComplexVariants {
       input:
         vcf=RenameVariants.renamed_vcf,
         original_list=cluster_background_fail_lists[i],
-        outfile="sr_background_fail.~{contig}.updated3.txt",
+        outfile="~{cohort_name}.~{contig}.sr_background_fail.updated3.txt",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list_fail
     }
@@ -202,6 +225,8 @@ workflow ResolveComplexVariants {
     Array[File] complex_resolve_vcf_indexes = RenameVariants.renamed_vcf_index
     Array[File] complex_resolve_bothside_pass_lists = UpdateBothsidePass.updated_list
     Array[File] complex_resolve_background_fail_lists = UpdateBackgroundFail.updated_list
+    Array[File] breakpoint_overlap_dropped_record_vcfs = BreakpointOverlap.dropped_record_vcf
+    Array[File] breakpoint_overlap_dropped_record_vcf_indexes = BreakpointOverlap.dropped_record_vcf_index
     File? merged_vcf = ConcatVcfs.concat_vcf
     File? merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
@@ -219,10 +244,10 @@ task IntegrateResolvedVcfs {
 
   Float input_size = size([inv_res_vcf, all_res_vcf], "GiB")
   RuntimeAttr runtime_default = object {
-                                  mem_gb: 2.0,
-                                  disk_gb: ceil(10 + input_size * 10),
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10 + input_size * 20),
                                   cpu_cores: 1,
-                                  preemptible_tries: 1,
+                                  preemptible_tries: 3,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -256,23 +281,23 @@ task IntegrateResolvedVcfs {
 
     ##get unresolved variants from full vcf that are resolved in inversion resolved vcf###
     zcat ~{inv_res_vcf} \
-      | fgrep -v "#" \
+      |fgrep -v "#" \
       |awk '{if ($8!~"UNRESOLVED") print}' \
-      |fgrep -wvf <(awk '{if ($NF!="MEMBERS") print $NF}' all.resolved.inv.bed  \
-      |tr ',' '\n') \
-      >add.vcf.lines.txt || true
+      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if (!($3 in inFileA)) print }' \
+        <(awk '{if ($NF!="MEMBERS") print $NF}' all.resolved.inv.bed | tr ',' '\n') - \
+      >add.vcf.lines.txt
 
     ##get unresolved variants id from full vcf to strip since they are resolved in inversion resolved vcf###
     ##inversions that cluster were other variants (rare) are kept as unresolved though they will also be part of a resolved variant in add.vcf.lines.txt##
     awk '{if ($NF!="MEMBERS") print $NF}' inv.resolve.bed \
       |tr ',' '\n'\
-      |fgrep -wf - all.unresolved.inv.bed \
+      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$4]; next} {if ($4 in inFileA) print }' all.resolved.inv.bed - \
       |awk '{if ($NF!~",")print $4}' \
-      >remove.unresolved.vcf.ids.txt || true
+      >remove.unresolved.vcf.ids.txt
 
     mkdir temp
     zcat ~{all_res_vcf} \
-      |fgrep -wvf remove.unresolved.vcf.ids.txt \
+      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if (!($3 in inFileA)) print }' remove.unresolved.vcf.ids.txt - \
       |cat - add.vcf.lines.txt \
       |bcftools sort - -O z -T temp \
       > ~{prefix}.vcf.gz
@@ -326,24 +351,28 @@ task BreakpointOverlap {
       ~{vcf} \
       ~{bothside_pass_list} \
       ~{background_fail_list} \
+      ~{prefix}.dropped_records.vcf.gz \
       | bgzip \
       > ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
+    tabix ~{prefix}.dropped_records.vcf.gz
   >>>
 
   output {
     File out = "~{prefix}.vcf.gz"
     File out_index = "~{prefix}.vcf.gz.tbi"
+    File dropped_record_vcf = "~{prefix}.dropped_records.vcf.gz"
+    File dropped_record_vcf_index = "~{prefix}.dropped_records.vcf.gz.tbi"
   }
 }
-
-
 
 # Rename variants in VCF
 task RenameVariants {
   input {
     File vcf
+    String vid_prefix
     String prefix
+    String chrom
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -372,7 +401,7 @@ task RenameVariants {
 
   command <<<
     set -euo pipefail
-    /opt/sv-pipeline/04_variant_resolution/scripts/rename.py --prefix ~{prefix} ~{vcf} - \
+    /opt/sv-pipeline/04_variant_resolution/scripts/rename.py --chrom ~{chrom} --prefix ~{vid_prefix} ~{vcf} - \
       | bgzip \
       > ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz

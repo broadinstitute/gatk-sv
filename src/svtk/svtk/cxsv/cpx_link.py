@@ -11,14 +11,16 @@ from collections import deque
 import numpy as np
 import scipy.sparse as sps
 import natsort
-import pysam
 import svtk.utils as svu
 
 
-def samples_overlap_records(recA, recB, upper_thresh=0.5, lower_thresh=0.5):
-    samplesA = set(svu.get_called_samples(recA))
-    samplesB = set(svu.get_called_samples(recB))
-    return samples_overlap(samplesA, samplesB, upper_thresh=upper_thresh, lower_thresh=lower_thresh)
+def samples_overlap_records(recA, recB, called_samples_dict, upper_thresh=0.5, lower_thresh=0.5):
+    if recA.id not in called_samples_dict:
+        called_samples_dict[recA.id] = set(svu.get_called_samples(recA))
+    if recB.id not in called_samples_dict:
+        called_samples_dict[recB.id] = set(svu.get_called_samples(recB))
+    return samples_overlap(called_samples_dict[recA.id], called_samples_dict[recB.id],
+                           upper_thresh=upper_thresh, lower_thresh=lower_thresh)
 
 
 def samples_overlap(samplesA, samplesB, upper_thresh=0.5, lower_thresh=0.5):
@@ -81,7 +83,7 @@ def extract_breakpoints(vcf, bkpt_idxs):
     return bkpts
 
 
-def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
+def link_cpx(vcf, bkpt_window=300):
     """
     Parameters
     ----------
@@ -94,18 +96,11 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
     # Identify breakpoints which overlap within specified window
     overlap = bt.window(bt, w=bkpt_window).saveas()
 
-    # Exclude self-hits
-    #  overlap = overlap.filter(lambda b: b.fields[3] != b.fields[9]).saveas()
-
     # Exclude intersections where two DELs or two DUPs cluster together
-    # cnvtypes = 'DEL DUP'.split()
     overlap = overlap.filter(lambda b: not (
         b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
     overlap = overlap.filter(lambda b: not (
         b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
-
-    # # Exclude intersections with annotated mobile elements (rather than BNDs)
-    # overlap = overlap.filter(lambda b: b.fields[4] is not re.match(re.compile('INS\:ME\:*'), b.fields[4])).saveas()
 
     # Get linked variant IDs
     links = [(b[3], b[9]) for b in overlap.intervals]
@@ -138,14 +133,6 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
     for i, c_label in enumerate(comp_list):
         clusters[c_label].append(bkpts[i])
 
-    # # Remove clusters of only CNV - leftover from shared sample filtering
-    # def _ok_cluster(cluster):
-    #     ok = any([record.info['SVTYPE'] not in cnvtypes for record in cluster])
-    #     return ok
-
-    # clusters = [c for c in clusters if _ok_cluster(c)]
-    #  clusters = [c for c in clusters if len(c) > 1]
-
     return clusters
 
 
@@ -157,87 +144,28 @@ def unify_list(list):
     return out
 
 
-def CNV_readin_from_resolved_vcf(resolved_name, inv_intervals):
-    resolved_f = pysam.VariantFile(resolved_name, 'r')
-    # rec_a = 0
-    out = []
-    for i in resolved_f:
-        for j in inv_intervals:
-            if i.chrom == j[0]:
-                if (i.pos - j[1]) * (i.pos - j[2]) < 0 or (i.stop - j[1]) * (i.stop - j[2]) < 0:
-                    if i.info['SVTYPE'] in ['DEL', 'DUP']:
-                        out.append(i)
-    resolved_f.close()
-    return out
-
-
-def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
-    linked_INV_V2 = []
+def link_cpx_V2(linked_INV, cpx_dist=2000):
+    overlapping_inv = []
+    called_samples_dict = {}
     for group in linked_INV:
         if len(group) > 1:
-            for i in group:
-                for j in group:
-                    if ro_calu(i, j) > 0 and samples_overlap_records(i, j):
-                        linked_INV_V2.append([i, j])
+            for i, j in itertools.combinations(group, 2):
+                if records_overlap(i, j) and samples_overlap_records(i, j, called_samples_dict):
+                    overlapping_inv.append([i, j])
         else:
-            linked_INV_V2.append([group[0]])
-    inv_intervals = []
-    for i in linked_INV_V2:
-        if len(i) > 1:
-            tmp = [i[0].chrom]
-            for j in i:
-                tmp += [j.pos, j.stop]
-            inv_intervals.append(
-                [tmp[0], min(unify_list(tmp[1:])), max(unify_list(tmp[1:]))])
-        else:
-            inv_intervals.append([i[0].chrom, i[0].pos, i[0].stop])
-    inv_intervals = sorted(unify_list(inv_intervals))
-    # out_rec = unify_list(CNV_readin_from_resolved_vcf(resolved_name,inv_intervals) + CNV_readin_from_resolved_vcf(unresolved_name,inv_intervals))
-    out_rec = resolve_CNV
+            overlapping_inv.append(group)
     cluster = []
-    for i in linked_INV_V2:
-        if len(i) > 1:
-            if abs(i[1].pos - i[0].pos) > cpx_dist and abs(i[1].stop - i[0].stop) > cpx_dist:
-                if 'STRANDS' in i[0].info.keys() and 'STRANDS' in i[1].info.keys():
-                    if sorted(unify_list([i[0].info['STRANDS'], i[1].info['STRANDS']])) == ['++', '--']:
-                        if i[0].pos < i[1].pos < i[0].stop < i[1].stop or i[1].pos < i[0].pos < i[1].stop < i[0].stop:
-                            cpx_intervals = [[i[0].chrom, sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[0], sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[1]], [
-                                i[0].chrom, sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[2], sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[3]]]
-                            CNV_close = [j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[0]) > .5 and abs(
-                                j.pos - cpx_intervals[0][1]) < cpx_dist and abs(j.stop - cpx_intervals[0][2]) < cpx_dist]
-                            CNV_close += [j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[1]) > .5 and abs(
-                                j.pos - cpx_intervals[1][1]) < cpx_dist and abs(j.stop - cpx_intervals[1][2]) < cpx_dist]
-                            cluster.append(CNV_close + i)
+    for inv in overlapping_inv:
+        if len(inv) > 1:
+            if abs(inv[1].pos - inv[0].pos) > cpx_dist and abs(inv[1].stop - inv[0].stop) > cpx_dist:
+                if 'STRANDS' in inv[0].info.keys() and 'STRANDS' in inv[1].info.keys():
+                    if inv[0].info['STRANDS'] != inv[1].info['STRANDS']:
+                        if inv[0].pos < inv[1].pos < inv[0].stop < inv[1].stop \
+                                or inv[1].pos < inv[0].pos < inv[1].stop < inv[0].stop:
+                            cluster.append(inv)
         else:
-            cluster.append(i)
+            cluster.append(inv)
     return cluster
-
-
-def link_inv(vcf, bkpt_window=300, cpx_dist=2000):
-    bt = svu.vcf2bedtool(vcf.filename, annotate_ins=False)
-    overlap = bt.window(bt, w=bkpt_window).saveas()
-    overlap = overlap.filter(lambda b: not (
-        b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
-    overlap = overlap.filter(lambda b: not (
-        b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
-    links = [(b[3], b[9]) for b in overlap.intervals]
-    linked_IDs = natsort.natsorted(set(itertools.chain.from_iterable(links)))
-    linked_IDs = np.array(linked_IDs)
-    bkpt_idxs = {ID: i for i, ID in enumerate(linked_IDs)}
-    indexed_links = np.array([(bkpt_idxs[a], bkpt_idxs[b]) for a, b in links])
-    n_bkpts = len(linked_IDs)
-    bkpts = extract_breakpoints(vcf, bkpt_idxs)
-    # Exclude wildly disparate overlaps
-    G = sps.eye(n_bkpts, dtype=np.uint16, format='lil')
-    for i, j in indexed_links:
-        if (ro_calu(bkpts[i], bkpts[j]) > 0 and samples_overlap_records(bkpts[i], bkpts[j])):
-            G[i, j] = 1
-    # Generate lists of clustered breakpoints
-    n_comp, comp_list = sps.csgraph.connected_components(G)
-    clusters = [deque() for x in range(n_comp)]
-    for i, c_label in enumerate(comp_list):
-        clusters[c_label].append(bkpts[i])
-    return clusters
 
 
 def close_enough(r1, r2, cpx_dist=2000):
@@ -246,29 +174,5 @@ def close_enough(r1, r2, cpx_dist=2000):
     return distA < cpx_dist or distB < cpx_dist
 
 
-def ro_calu(r1, r2):
-    out = 0
-    if not r1.chrom == r2.chrom:
-        out = 0
-    elif r1.pos > r2.stop or r1.stop < r2.pos:
-        out = 0
-    else:
-        maxval = max([r1.stop - r1.pos, r2.stop - r2.pos])
-        if maxval > 0:
-            out = (sorted([r1.pos, r2.pos, r1.stop, r2.stop])[
-                   2] - sorted([r1.pos, r2.pos, r1.stop, r2.stop])[1]) / maxval
-        else:
-            out = 0
-    return out
-
-
-def ro_calu_interval(r1, r2):
-    out = 0
-    if not r1[0] == r2[0]:
-        out = 0
-    elif r1[1] > r2[2] or r1[2] < r2[1]:
-        out = 0
-    else:
-        out = (sorted(r1[1:] + r2[1:])[2] - sorted(r1[1:] +
-                                                   r2[1:])[1]) / max([r1[2] - r1[1], r2[2] - r2[1]])
-    return out
+def records_overlap(r1, r2):
+    return r1.chrom == r2.chrom and not (r1.pos > r2.stop or r1.stop < r2.pos)

@@ -4,6 +4,7 @@ version 1.0
 
 import "GenotypeCpxCnvs.wdl" as GenotypeCpx
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "HailMerge.wdl" as HailMerge
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered 
 # across batches on predicted CPX CNVs
@@ -11,8 +12,7 @@ workflow ScatterCpxGenotyping {
   input {
     File bin_exclude
     File vcf
-    Int n_master_vcf_shards
-    Int n_master_min_vars_per_vcf_shard
+    Int records_per_shard
     Array[String] batches
     Array[File] coverage_files
     Array[File] rd_depth_sep_cutoff_files
@@ -26,8 +26,12 @@ workflow ScatterCpxGenotyping {
     String contig
     File ref_dict
 
+    File hail_script
+    String project
+
     String linux_docker
     String sv_base_mini_docker
+    String sv_pipeline_updates_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
 
@@ -35,6 +39,10 @@ workflow ScatterCpxGenotyping {
     RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_split_vcf_to_genotype
     RuntimeAttr? runtime_override_concat_cpx_cnv_vcfs
+
+    RuntimeAttr? runtime_override_preconcat
+    RuntimeAttr? runtime_override_hail_merge
+    RuntimeAttr? runtime_override_fix_header
 
     # overrides for GenotypeCpx
     RuntimeAttr? runtime_override_ids_from_median
@@ -49,18 +57,17 @@ workflow ScatterCpxGenotyping {
   String contig_prefix = prefix + "." + contig
 
   # Shard VCF into even slices
-  call MiniTasks.SplitVcf as SplitVcfToGenotype {
+  call MiniTasks.ScatterVcf as SplitVcfToGenotype {
     input:
       vcf=vcf,
-      prefix=contig_prefix + ".shard_",
-      n_shards=n_master_vcf_shards,
-      min_vars_per_shard=n_master_min_vars_per_vcf_shard,
-      sv_base_mini_docker=sv_base_mini_docker,
+      prefix=contig_prefix,
+      records_per_shard=records_per_shard,
+      sv_pipeline_docker=sv_pipeline_updates_docker,
       runtime_attr_override=runtime_override_split_vcf_to_genotype
   }
 
   # Scatter genotyping over shards
-  scatter ( shard in SplitVcfToGenotype.vcf_shards ) {
+  scatter ( shard in SplitVcfToGenotype.shards ) {
     # Run genotyping
     call GenotypeCpx.GenotypeCpxCnvs as GenotypeShard {
       input:
@@ -92,20 +99,21 @@ workflow ScatterCpxGenotyping {
     }
   }
 
-  # Merge VCF shards
-  call MiniTasks.ConcatVcfs as ConcatCpxCnvVcfs {
+  call HailMerge.HailMerge as ConcatCpxCnvVcfs {
     input:
       vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
-      vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
-      allow_overlaps=true,
-      outfile_prefix=contig_prefix + ".regenotyped",
+      prefix="~{prefix}.regenotyped",
+      hail_script=hail_script,
+      project=project,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs
+      runtime_override_preconcat=runtime_override_preconcat,
+      runtime_override_hail_merge=runtime_override_hail_merge,
+      runtime_override_fix_header=runtime_override_fix_header
   }
 
   # Output merged VCF
   output {
-    File cpx_depth_gt_resolved_vcf = ConcatCpxCnvVcfs.concat_vcf
-    File cpx_depth_gt_resolved_vcf_idx = ConcatCpxCnvVcfs.concat_vcf_idx
+    File cpx_depth_gt_resolved_vcf = ConcatCpxCnvVcfs.merged_vcf
+    File cpx_depth_gt_resolved_vcf_idx = ConcatCpxCnvVcfs.merged_vcf_index
   }
  }

@@ -10,7 +10,10 @@ import "ClusterSingleChromosome.wdl" as VcfClusterTasks
 workflow VcfClusterSingleChrom {
   input {
     Array[File] vcfs
+    Int num_samples
     String prefix
+    String evidence_type
+    String cohort_name
     Int dist
     Float frac
     Float sample_overlap
@@ -24,6 +27,9 @@ workflow VcfClusterSingleChrom {
     File bothside_pass
     File background_fail
     File empty_file
+
+    File hail_script
+    String project
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -39,6 +45,8 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_subset_background_fail
 
     # overrides for VcfClusterTasks
+    RuntimeAttr? runtime_override_shard_clusters
+    RuntimeAttr? runtime_override_shard_vids
     RuntimeAttr? runtime_override_subset_sv_type
     RuntimeAttr? runtime_override_shard_vcf_precluster
     RuntimeAttr? runtime_override_pull_vcf_shard
@@ -47,6 +55,12 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_concat_vcf_cluster
     RuntimeAttr? runtime_override_concat_svtypes
     RuntimeAttr? runtime_override_concat_sharded_cluster
+    RuntimeAttr? runtime_override_make_sites_only
+    RuntimeAttr? runtime_override_sort_merged_vcf
+
+    RuntimeAttr? runtime_override_preconcat_sharded_cluster
+    RuntimeAttr? runtime_override_hail_merge_sharded_cluster
+    RuntimeAttr? runtime_override_fix_header_sharded_cluster
   }
 
   scatter (i in range(length(vcfs))) {
@@ -102,11 +116,14 @@ workflow VcfClusterSingleChrom {
   }
 
   #Run vcfcluster per chromosome
-  call VcfClusterTasks.ClusterSingleChrom as ClusterSingleChrom {
+  call VcfClusterTasks.ClusterSingleChrom {
     input:
       vcf=ConcatVcfs.concat_vcf,
       vcf_index=ConcatVcfs.concat_vcf_idx,
+      num_samples=num_samples,
       contig=contig,
+      cohort_name=cohort_name,
+      evidence_type=evidence_type,
       prefix=prefix,
       dist=dist,
       frac=frac,
@@ -114,30 +131,41 @@ workflow VcfClusterSingleChrom {
       exclude_list=exclude_list,
       sv_size=sv_size,
       sv_types=sv_types,
+      empty_file=empty_file,
+      hail_script=hail_script,
+      project=project,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_override_subset_sv_type=runtime_override_subset_sv_type,
-      runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
+      runtime_override_shard_clusters=runtime_override_shard_clusters,
+      runtime_override_shard_vids=runtime_override_shard_vids,
       runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
       runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
       runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
       runtime_override_concat_svtypes=runtime_override_concat_svtypes,
-      runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster
+      runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster,
+      runtime_override_make_sites_only=runtime_override_make_sites_only,
+      runtime_override_sort_merged_vcf=runtime_override_sort_merged_vcf,
+      runtime_override_preconcat_sharded_cluster=runtime_override_preconcat_sharded_cluster,
+      runtime_override_hail_merge_sharded_cluster=runtime_override_hail_merge_sharded_cluster,
+      runtime_override_fix_header_sharded_cluster=runtime_override_fix_header_sharded_cluster
   }
 
   if(subset_sr_lists) {
     #Subset bothside_pass & background_fail to chromosome of interest
-    call MiniTasks.SubsetVariantList as SubsetBothsidePass {
+    call SubsetVariantList as SubsetBothsidePass {
       input:
         vid_list=bothside_pass,
+        vid_col=2,
         vcf=ConcatVcfs.concat_vcf,
         outfile_name="~{prefix}.pass.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_bothside_pass
     }
-    call MiniTasks.SubsetVariantList as SubsetBackgroundFail {
+    call SubsetVariantList as SubsetBackgroundFail {
       input:
         vid_list=background_fail,
+        vid_col=1,
         vcf=ConcatVcfs.concat_vcf,
         outfile_name="~{prefix}.fail.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
@@ -146,8 +174,8 @@ workflow VcfClusterSingleChrom {
   }
 
   output {
-    File clustered_vcf = ClusterSingleChrom.clustered_vcf
-    File clustered_vcf_idx = ClusterSingleChrom.clustered_vcf_idx
+    Array[File] clustered_vcfs = ClusterSingleChrom.clustered_vcfs
+    Array[File] clustered_vcf_indexes = ClusterSingleChrom.clustered_vcf_indexes
     File filtered_bothside_pass = select_first([SubsetBothsidePass.filtered_vid_list, empty_file])
     File filtered_background_fail = select_first([SubsetBackgroundFail.filtered_vid_list, empty_file])
   }
@@ -391,5 +419,49 @@ task FixEvidenceTags {
   output {
     File out = "~{prefix}.~{contig}.unclustered.vcf.gz"
     File out_index = "~{prefix}.~{contig}.unclustered.vcf.gz.tbi"
+  }
+}
+
+# Find intersection of Variant IDs from vid_list with those present in vcf, return as filtered_vid_list
+task SubsetVariantList {
+  input {
+    File vid_list
+    Int vid_col
+    File vcf
+    String outfile_name
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vid_list, "GB") * 2.0 + size(vcf, "GB")),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    zgrep -v "^#" ~{vcf} | cut -f3 > valid_vids.list
+    awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if ($~{vid_col} in inFileA) print }' valid_vids.list ~{vid_list} \
+      > ~{outfile_name}
+  >>>
+
+  output {
+    File filtered_vid_list = outfile_name
   }
 }

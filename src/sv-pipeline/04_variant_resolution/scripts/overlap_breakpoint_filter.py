@@ -12,7 +12,11 @@ import svtk.utils as svu
 VCF_PATH = sys.argv[1]
 BOTHSIDE_PASS_PATH = sys.argv[2]
 BACKGROUND_FAIL_PATH = sys.argv[3]
-
+DROPPED_RECORD_OUTPUT_VCF_PATH = sys.argv[4]
+if len(sys.argv) >= 6:
+    DEBUG_OUTPUT_PATH = sys.argv[5]
+else:
+    DEBUG_OUTPUT_PATH = None
 
 # Sorts list xs by specified attributes
 def multisort(xs, specs):
@@ -25,7 +29,10 @@ def multisort(xs, specs):
 class RecordData:
     def __init__(self, record):
         self.id = record.id
-        ev = set(record.info['EVIDENCE'])
+        if 'EVIDENCE' in record.info:
+            ev = set(record.info['EVIDENCE'])
+        else:
+            ev = set()
         if 'PE' in ev and 'SR' in ev and 'RD' in ev:
             self.level_of_support = 1
         elif 'PE' in ev and 'RD' in ev:
@@ -55,9 +62,12 @@ class RecordData:
         self.freq = len(self.called_samples)
         self.length = record.info['SVLEN']
         self.gt_50bp = self.length >= 50
+        self.is_mei = 'melt' in record.info['ALGORITHMS']
 
-    def __repr__(self):
-        return repr((self.level_of_support, -self.both_end_support, self.sr_fail, self.is_bnd, -self.vargq, -self.freq, self.gt_50bp, self.length, self.id))
+    def __str__(self):
+        return ",".join(str(x) for x in
+                        (self.is_bnd, self.level_of_support, self.is_mei, self.both_end_support,
+                         self.sr_fail, self.vargq, self.freq, self.gt_50bp, self.length, self.id))
 
 
 vcf = pysam.VariantFile(VCF_PATH)
@@ -117,10 +127,11 @@ del bnds_to_data
 
 # This is how we sort record pairs to determine which one gets filtered
 sort_spec = [
+    ('is_bnd', False),
     ('level_of_support', False),
+    ('is_mei', True),
     ('both_end_support', True),
     ('sr_fail', False),
-    ('is_bnd', False),
     ('vargq', True),
     ('freq', True),
     ('gt_50bp', False),
@@ -129,7 +140,10 @@ sort_spec = [
 ]
 
 # Iterate through record pairs and generate list of record ids to filter out
-ids_to_remove = set([])
+ids_to_remove_dict = dict()
+if DEBUG_OUTPUT_PATH is not None:
+    debug = open(DEBUG_OUTPUT_PATH, 'w')
+    debug.write("#record_kept\trecord_dropped\n")
 for data_list in pairwise_record_data:
     # Check for 50% sample overlap
     sample_intersection = set(data_list[0].called_samples).intersection(data_list[1].called_samples)
@@ -138,13 +152,29 @@ for data_list in pairwise_record_data:
         continue
     # Determine which to filter
     sorted_data_list = multisort(list(data_list), sort_spec)
-    ids_to_remove.add(sorted_data_list[1].id)
+    ids_to_remove_dict[sorted_data_list[1].id] = sorted_data_list[0].id
+    if DEBUG_OUTPUT_PATH is not None:
+        debug.write("\t".join(str(x) for x in sorted_data_list) + "\n")
+if DEBUG_OUTPUT_PATH is not None:
+    debug.close()
 
 # Perform filtering
-sys.stderr.write("Filtering {} records\n".format(len(ids_to_remove)))
+sys.stderr.write("Filtering {} records\n".format(len(ids_to_remove_dict)))
 vcf = pysam.VariantFile(VCF_PATH)
-sys.stdout.write(str(vcf.header))
+header = vcf.header
+sys.stdout.write(str(header))
+
+# Create
+header.add_line(
+    '##INFO=<ID=BPID,Number=.,Type=String,'
+    'Description="ID of retained variant from breakpoint overlap filtering">')
+dropped_record_vcf = pysam.VariantFile(DROPPED_RECORD_OUTPUT_VCF_PATH, 'w', header=header)
+
 for record in vcf:
-    if record.id not in ids_to_remove:
+    if record.id in ids_to_remove_dict:
+        record.info['BPID'] = ids_to_remove_dict[record.id]
+        dropped_record_vcf.write(record)
+    else:
         sys.stdout.write(str(record))
 vcf.close()
+dropped_record_vcf.close()

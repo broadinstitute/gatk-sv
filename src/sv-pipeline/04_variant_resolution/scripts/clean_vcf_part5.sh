@@ -3,6 +3,8 @@
 # clean_VCF_part5.sh
 #
 
+# Deprecated in favor of CleanVcf5.wdl
+
 set -euo pipefail
 
 ##gzipped combined bed file##

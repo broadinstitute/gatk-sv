@@ -8,10 +8,10 @@ import pysam
 import svtk.utils as svu
 
 
-def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
+def merge_pesr_depth(vcf, fout, prefix, frac, sample_overlap, min_depth_only_size):
 
-    sample_overlap_cache = {}
-    sample_id_to_index_dict = {s: i for i, s in enumerate(vcf.header.samples)}
+    def _get_shard_path(base_path, index):
+        return "{}.shard_{}.vcf.gz".format(base_path, index)
 
     # Given one pesr record and one depth record, merge depth attributes into the pesr record
     def _merge_pair(record_a, record_b):
@@ -89,6 +89,8 @@ def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
         sample_overlap_cache.clear()
 
     def _sample_overlap(record_a, record_b):
+        if sample_overlap == 0:
+            return True
         _cache_sample_overlap(record_a)
         _cache_sample_overlap(record_b)
         return svu.samples_overlap(sample_overlap_cache[record_a.id], sample_overlap_cache[record_b.id],
@@ -106,6 +108,11 @@ def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
                 vcf.reset()
                 return record
 
+    sample_overlap_cache = {}
+    sample_id_to_index_dict = {s: i for i, s in enumerate(vcf.header.samples)}
+    cnv_types = ['DEL', 'DUP']
+    min_svlen = min_depth_only_size * frac
+
     base_record = _get_base_record(vcf)
     if base_record is None:
         raise ValueError("No PESR records were found")
@@ -118,8 +125,18 @@ def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
     count = 0
     for record in vcf.fetch():
 
+        if count > 0 and count % 1000 == 0:
+            sys.stderr.write("Traversed {} records; {} active records; {} record sample sets cached\n"
+                             .format(count, len(active_records), len(sample_overlap_cache)))
+        count += 1
+
         # Seed MEMBERS info with original VID
         record.info['MEMBERS'] = (record.id,)
+
+        if record.info['SVTYPE'] not in cnv_types \
+                or record.info['SVLEN'] < min_svlen:
+            _write_record(record, False)
+            continue
 
         # Write all-ref sites as "salvaged"
         samples = _cache_sample_overlap(record)
@@ -150,9 +167,6 @@ def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
                         clustered_depth_ids.add(ar.id)
         active_records.append(record)
         active_records = [r for r in active_records if r.id not in finalized_record_ids]
-        if count % 1000 == 0:
-            sys.stderr.write("{}: {}\n".format(count, len(sample_overlap_cache)))
-        count += 1
 
     _flush_active_records()
 
@@ -191,19 +205,23 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('vcf', help='Combined but unmerged VCF of PE/SR calls')
-    parser.add_argument('fout', help='Output VCF (unsorted!), can be "-" or "stdout"')
+    parser.add_argument('fout', help='Output VCF (unsorted!)')
+    parser.add_argument('--interval-overlap', help='Interval reciprocal overlap fraction',
+                        type=float, default=0.5)
+    parser.add_argument('--sample-overlap', help='Sample overlap fraction',
+                        type=float, default=0.5)
+    parser.add_argument('--min-depth-only-size', help='Smallest depth only call SVLEN',
+                        type=int, default=5000)
     parser.add_argument('--prefix', default='pesr_rd_merged')
     args = parser.parse_args()
 
     vcf = pysam.VariantFile(args.vcf)
     check_header(vcf)
-
-    if args.fout in '- stdout'.split():
-        fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
-    else:
-        fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
-
-    merge_pesr_depth(vcf, fout, args.prefix)
+    fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
+    merge_pesr_depth(vcf, fout=fout, prefix=args.prefix,
+                     frac=args.interval_overlap,
+                     sample_overlap=args.sample_overlap,
+                     min_depth_only_size=args.min_depth_only_size)
     fout.close()
 
 

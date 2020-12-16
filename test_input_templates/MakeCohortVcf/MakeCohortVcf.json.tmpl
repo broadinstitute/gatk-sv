@@ -20,8 +20,9 @@
   "MakeCohortVcf.max_shards_per_chrom_clean_vcf_step1": 200,
   "MakeCohortVcf.min_records_per_shard_clean_vcf_step1": 5000,
   "MakeCohortVcf.samples_per_clean_vcf_step2_shard": 100,
+  "MakeCohortVcf.clean_vcf5_records_per_shard": 5000,
   "MakeCohortVcf.random_seed": 0,
-  "MakeCohortVcf.max_shard_size_resolve": 500,
+  "MakeCohortVcf.min_variants_per_shard": 30,
 
   "MakeCohortVcf.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
   "MakeCohortVcf.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},

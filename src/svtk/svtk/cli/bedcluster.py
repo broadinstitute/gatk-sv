@@ -58,15 +58,11 @@ def bedcluster(bed, frac=0.8, intersection=None):
     -------
     clusters : list of deque of pybedtools.Interval
     """
-
-    # Get list of unique variant IDs and initialize sparse graph
-    variant_IDs = [interval.fields[3] for interval in bed.intervals]
-    G = sparse.eye(len(variant_IDs), dtype=np.uint16, format='lil')
-
-    # Map variant IDs to graph indices
-    variant_indexes = {}
-    for i, variant in enumerate(variant_IDs):
-        variant_indexes[variant.strip()] = i
+    # Get list of unique variant IDs and map to indices on sparse graph
+    variant_indices = {variant_id: index for index, variant_id in enumerate(
+        {interval.name for interval in bed.intervals})
+    }
+    G = sparse.eye(len(variant_indices), dtype=np.uint16, format='lil')
 
     # Self-intersect the bed
     if intersection is None:
@@ -81,19 +77,18 @@ def bedcluster(bed, frac=0.8, intersection=None):
 
         # Link the two calls from the current line
         if c2.chrom != '.' and c1.svtype == c2.svtype:
-            idx1 = variant_indexes[c1.name]
-            idx2 = variant_indexes[c2.name]
+            idx1 = variant_indices[c1.name]
+            idx2 = variant_indices[c2.name]
             G[idx1, idx2] = 1
 
     # Cluster graph
     n_comp, cluster_labels = csgraph.connected_components(G, connection='weak')
 
-    # Build deques of clustered Intervals
-    clusters = [deque() for i in range(n_comp)]
-    for idx, interval in enumerate(bed.intervals):
-        label = cluster_labels[idx]
+    # Build lists of clustered Intervals
+    clusters = [[] for _ in range(n_comp)]
+    for interval in bed.intervals:
+        label = cluster_labels[variant_indices[interval.name]]
         clusters[label].append(interval)
-
     return clusters
 
 

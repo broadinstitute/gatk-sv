@@ -23,7 +23,7 @@ zcat $int_vcf_gz\
 zcat $int_vcf_gz \
   |awk '{if ($5~"DEL" || $5~"DUP" || $1~"#") print}' \
   |svtk vcf2bed stdin stdout \
-  |awk -F"\t" '{if ($6=="") print $6="blanksample";print $0}' OFS='\t' \
+  |awk -F"\t" '{if ($6=="") $6="blanksample";print $0}' OFS='\t' \
   |gzip>int.bed.gz
 
 ##list of potenital overlaps with a normal copy state variant (>5kb variants require depth but nested events could be missed; i.e a duplication with a nest deletion will have a normal copy state for the deletion)##
@@ -97,6 +97,7 @@ cat overlap.test.txt \
   |join -1 2 -2 1 - <(zcat RD_CN.normalcheck.FORMAT.gz) \
   |awk '{if ($3=="DUP" && $4==2 && $6==3) print $2 "\t" 1; else if ($3=="DEL" && $4==2 && $6==1)  print $2 "\t" 3 }' \
   |tr '@' '\t'\
+  |sort -u \
   >geno.normal.revise.txt
 
 ##Update genotypes##
@@ -110,7 +111,7 @@ do
  
  echo $variant
  #note no longer change depth from id.txt (column 2)##
- { fgrep $variant geno.normal.revise.txt || true; }|awk '{print $2 "\t" $3}'>id.txt
+ { fgrep -w $variant geno.normal.revise.txt || true; }|awk '{print $2 "\t" $3}'>id.txt
  zcat subset.vcf.gz |{ fgrep -w $variant || true; }>line.txt
  
  cat line.txt  \
@@ -122,6 +123,7 @@ do
    |cut -f3-|tr '\t' ':' \
    |tr '\n' '\t' \
    |awk '{print $0}' \
+   |awk '{ sub(/[ \t]+$/, ""); print }' \
    >>normal.revise.vcf.lines.txt
 
 done< <(awk '{print $1}' geno.normal.revise.txt|sort -u)

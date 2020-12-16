@@ -115,7 +115,11 @@ def main(argv):
                         help='Do not merge clustered records. Adds CLUSTER info fields.')
     parser.add_argument('--merge-only', action='store_true',
                         default=False,
-                        help='When run on a vcf generated with --skip-merge, only merges records with identical CLUSTER fields.')
+                        help='When run on a vcf generated with --skip-merge, only merges records '
+                             'with identical CLUSTER fields.')
+    parser.add_argument('--single-end', action='store_true',
+                        default=False,
+                        help='Require only one end to be within the minimum distance.')
     #  parser.add_argument('--cluster-bed', type=argparse.FileType('w'),
     #                      help='Bed of constituent calls in each cluster')
 
@@ -145,7 +149,8 @@ def main(argv):
                      sample_overlap=args.sample_overlap,
                      preserve_header=args.preserve_header,
                      do_cluster=do_cluster,
-                     do_merge=do_merge)
+                     do_merge=do_merge,
+                     single_end=args.single_end)
 
     # Open new file
     if args.fout in '- stdout'.split():
