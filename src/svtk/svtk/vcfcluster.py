@@ -20,6 +20,7 @@ import pkg_resources
 from pysam import VariantFile
 from svtk.svfile import SVFile, SVRecordCluster, SVRecord
 from svtk.genomeslink import GenomeSLINK
+from svtk.utils import samples_overlap
 
 
 class VCFCluster(GenomeSLINK):
@@ -28,7 +29,9 @@ class VCFCluster(GenomeSLINK):
                  match_strands=True, match_svtypes=True, preserve_ids=False,
                  region=None, blacklist=None, svtypes=None,
                  preserve_genotypes=False, sample_overlap=0.0,
-                 preserve_header=False):
+                 preserve_header=False,
+                 do_cluster=True,
+                 do_merge=True):
         """
         Clustering of VCF records.
 
@@ -72,6 +75,9 @@ class VCFCluster(GenomeSLINK):
             Minimum fraction of samples to overlap to cluster variants
         """
 
+        if (not do_cluster) and (not do_merge):
+            raise ValueError('Cannot disable both clustering and merging')
+
         # Wrap VCFs as SVFiles
         self.vcfs = vcfs
         svfiles = [SVFile(vcf) for vcf in vcfs]
@@ -102,6 +108,9 @@ class VCFCluster(GenomeSLINK):
         self.preserve_genotypes = preserve_genotypes
         self.sample_overlap = sample_overlap
         self.preserve_header = preserve_header
+        self.do_cluster = do_cluster
+        self.do_merge = do_merge
+        self.cluster_index = 0
 
         # Build VCF header for new record construction
         self.samples = sorted(samples)
@@ -109,6 +118,49 @@ class VCFCluster(GenomeSLINK):
         self.header = self.make_vcf_header()
 
         super().__init__(nodes, dist, 1, blacklist)
+
+
+    def clusters_with(self, first, second):
+        """
+        Check if two SV cluster with each other.
+
+        Default behavior is to check whether coordinates are within a specified
+        window. Here the following additional criteria are required:
+        1) SV types match
+        2) SV regions share a minimum reciprocal overlap
+           * Not applicable to translocations
+           * Insertion "regions" are calculated as the insertion site plus the
+             predicted length of the insertion.
+        3) Strands of each breakpoint match (optional)
+        """
+
+        # If svtypes don't match, skip remaining calculations for efficiency
+        if self.match_svtypes and first.svtype != second.svtype:
+            return False
+
+        # If both records have an INS subclass specified, require it to match
+        # Otherwise, permit clustering if one or both don't have subclass
+        if self.match_svtypes and first.svtype == 'INS':
+            if first.record.alts[0] != second.record.alts[0]:
+                if first.record.alts[0] != '<INS>' and first.record.alts[0] != '<INS>':
+                    return False
+
+        # If strands are required to match and don't, skip remaining calcs
+        if self.match_svtypes and self.match_strands:
+            if first.record.info['STRANDS'] != second.record.info['STRANDS']:
+                return False
+
+        clusters = (super().clusters_with(first, second) and
+                    first.overlaps(second, self.frac))
+
+        # Only compute sample overlap if a minimum sample overlap is required
+        # and if records are eligible to cluster
+        if clusters and self.sample_overlap > 0:
+            samplesA = first.get_called_samples_set()
+            samplesB = second.get_called_samples_set()
+            clusters = clusters and samples_overlap(samplesA, samplesB, self.sample_overlap, self.sample_overlap)
+
+        return clusters
 
     def filter_nodes(self):
         """
@@ -134,21 +186,44 @@ class VCFCluster(GenomeSLINK):
                 continue
             yield node
 
-    def cluster(self, merge=True):
+    def cluster_by_cluster_id(self):
+        """
+        Identifies clusters of records with identical IDs. It is assumed node cluster records are contiguous.
+
+        Yields: record lists, each containing a cluster
+        """
+        current_id = -1
+        current_cluster = []
+        for node in self.filter_nodes():
+            node_id = node.record.info['CLUSTER']
+            if node_id == current_id:
+                current_cluster.append(node)
+            else:
+                if len(current_cluster) > 0:
+                    yield current_cluster
+                current_cluster = [node]
+                current_id = node_id
+        if len(current_cluster) > 0:
+            yield current_cluster
+
+    def cluster(self):
         """
         Yields
         ------
-        record : SVRecord
+        record : list(SVRecord)
         """
-        clusters = super().cluster(frac=self.frac,
-                                   match_strands=self.match_strands,
-                                   match_svtypes=self.match_svtypes,
-                                   sample_overlap=self.sample_overlap)
+        if self.do_cluster:
+            clusters = super().cluster(frac=self.frac,
+                                       match_strands=self.match_strands,
+                                       match_svtypes=self.match_svtypes,
+                                       sample_overlap=self.sample_overlap)
+        else:
+            clusters = self.cluster_by_cluster_id()
 
         for records in clusters:
             cluster = SVRecordCluster(records)
 
-            if merge:
+            if self.do_merge:
                 record = self.header.new_record()
                 record = cluster.merge_record_data(record)
                 record = cluster.merge_record_formats(record, self.sources,
@@ -160,9 +235,13 @@ class VCFCluster(GenomeSLINK):
 
                 if SVRecord(record).is_in(self.blacklist):
                     continue
-                yield record
+                yield [record]
             else:
-                yield cluster
+                record_list = [r.record for r in cluster.records]
+                for r in record_list:
+                    r.info['CLUSTER'] = self.cluster_index
+                self.cluster_index += 1
+                yield record_list
 
     def make_vcf_header(self):
         """
@@ -182,6 +261,10 @@ class VCFCluster(GenomeSLINK):
             if self.preserve_ids and 'MEMBERS' not in header.info.keys():
                 info = ('##INFO=<ID=MEMBERS,Number=.,Type=String,'
                         'Description="IDs of cluster\'s constituent records.">')
+                header.add_line(info)
+
+            if (not self.do_merge) and 'CLUSTER' not in header.info.keys():
+                info = ('##INFO=<ID=CLUSTER,Number=1,Type=Integer,Description="Cluster ID">')
                 header.add_line(info)
 
             return header
@@ -227,6 +310,10 @@ class VCFCluster(GenomeSLINK):
         if self.preserve_ids and 'MEMBERS' not in header.info.keys():
             info = ('##INFO=<ID=MEMBERS,Number=.,Type=String,'
                     'Description="IDs of cluster\'s constituent records.">')
+            header.add_line(info)
+
+        if (not self.do_merge) and 'CLUSTER' not in header.info.keys():
+            info = ('##INFO=<ID=CLUSTER,Number=1,Type=Integer,Description="Cluster ID">')
             header.add_line(info)
 
         # Add source

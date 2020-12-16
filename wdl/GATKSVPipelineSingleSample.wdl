@@ -360,8 +360,6 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     Float clean_vcf_min_sr_background_fail_batches
-    Int clean_vcf_max_shards_per_chrom
-    Int clean_vcf_min_variants_per_shard
 
     File cytobands
 
@@ -369,7 +367,8 @@ workflow GATKSVPipelineSingleSample {
     File pe_exclude_list
     File depth_exclude_list
     File empty_file
-    
+
+    Int max_shard_size_resolve
     Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
     Int clean_vcf_min_records_per_shard_clean_vcf_step1
     Int clean_vcf_samples_per_clean_vcf_step2_shard
@@ -889,8 +888,6 @@ workflow GATKSVPipelineSingleSample {
       ref_dict=reference_dict,
 
       merge_complex_genotype_vcfs = true,
-      max_shards_per_chrom=clean_vcf_max_shards_per_chrom,
-      min_variants_per_shard=clean_vcf_min_variants_per_shard,
       cytobands=cytobands,
 
       bin_exclude=bin_exclude,
@@ -914,6 +911,7 @@ workflow GATKSVPipelineSingleSample {
       depth_gt_rd_sep_files=[genotype_depth_depth_sepcutoff],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
+      max_shard_size_resolve=max_shard_size_resolve,
       max_shards_per_chrom_clean_vcf_step1=clean_vcf_max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=clean_vcf_min_records_per_shard_clean_vcf_step1,
       samples_per_clean_vcf_step2_shard=clean_vcf_samples_per_clean_vcf_step2_shard,

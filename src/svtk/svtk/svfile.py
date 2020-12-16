@@ -10,7 +10,7 @@ Wrap the pysam API to permit clustering of standardized SV VCF records.
 
 import numpy as np
 from collections import defaultdict
-from .utils import recip, make_bnd_alt, update_best_genotypes, samples_overlap, get_called_samples
+from .utils import recip, make_bnd_alt, update_best_genotypes, get_called_samples
 from .genomeslink import GSNode
 
 
@@ -105,6 +105,7 @@ class SVRecord(GSNode):
 
         self.record = record
         self.sources = record.info['ALGORITHMS']
+        self.called_samples = None
 
         chrA = record.chrom
         posA = record.pos
@@ -114,49 +115,11 @@ class SVRecord(GSNode):
 
         super().__init__(chrA, posA, chrB, posB, name)
 
-    def clusters_with(self, other, dist, frac=0.0, match_strands=False,
-                      match_svtypes=True, sample_overlap=0.0):
-        """
-        Check if two SV cluster with each other.
-
-        Default behavior is to check whether coordinates are within a specified
-        window. Here the following additional criteria are required:
-        1) SV types match
-        2) SV regions share a minimum reciprocal overlap
-           * Not applicable to translocations
-           * Insertion "regions" are calculated as the insertion site plus the
-             predicted length of the insertion.
-        3) Strands of each breakpoint match (optional)
-        """
-
-        # If svtypes don't match, skip remaining calculations for efficiency
-        if match_svtypes and self.svtype != other.svtype:
-            return False
-
-        # If both records have an INS subclass specified, require it to match
-        # Otherwise, permit clustering if one or both don't have subclass
-        if match_svtypes and self.svtype == 'INS':
-            if self.record.alts[0] != other.record.alts[0]:
-                if self.record.alts[0] != '<INS>' and self.record.alts[0] != '<INS>':
-                    return False
-
-        # If strands are required to match and don't, skip remaining calcs
-        if match_svtypes and match_strands:
-            if self.record.info['STRANDS'] != other.record.info['STRANDS']:
-                return False
-
-        clusters = (super().clusters_with(other, dist) and
-                    self.overlaps(other, frac))
-
-        # Only compute sample overlap if a minimum sample overlap is required
-        # and if records are eligible to cluster
-        if clusters and sample_overlap > 0:
-            samplesA = get_called_samples(self.record)
-            samplesB = get_called_samples(other.record)
-            clusters = clusters and samples_overlap(
-                samplesA, samplesB, sample_overlap, sample_overlap)
-
-        return clusters
+    def get_called_samples_set(self):
+        if self.called_samples is not None:
+            return self.called_samples
+        self.called_samples = set(get_called_samples(self.record))
+        return self.called_samples
 
     def overlaps(self, other, frac=0.0):
         """
@@ -305,6 +268,10 @@ class SVRecordCluster:
 
         # List of aggregate sources
         new_record.info['ALGORITHMS'] = self.sources()
+
+        # If merging, all will have same CLUSTER ID
+        if 'CLUSTER' in base_record.record.info:
+            new_record.info['CLUSTER'] = base_record.record.info['CLUSTER']
 
         return new_record
 

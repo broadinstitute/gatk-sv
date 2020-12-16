@@ -386,8 +386,10 @@ def samples_overlap(samplesA, samplesB, upper_thresh=0.5, lower_thresh=0.5):
         samplesB = get_called_samples(samplesB)
 
     # Get lists of called samples for each record
-    samplesA = set(samplesA)
-    samplesB = set(samplesB)
+    if samplesA is not set:
+        samplesA = set(samplesA)
+    if samplesB is not set:
+        samplesB = set(samplesB)
 
     # Compute fraction of each record's samples which are shared
     if len(samplesA) > 0 and len(samplesB) > 0:

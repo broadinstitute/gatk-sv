@@ -670,8 +670,9 @@ class ComplexSV:
 
     def make_record(self):
         self.vcf_record = self.records[0].copy()
-        svu.update_best_genotypes(
-            self.vcf_record, self.records, preserve_multiallelic=False)
+        if len(self.records) > 1:
+            svu.update_best_genotypes(
+                self.vcf_record, self.records, preserve_multiallelic=False)
 
 
 def ok_tloc_strands(tloc1, tloc2):

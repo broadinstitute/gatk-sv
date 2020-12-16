@@ -17,7 +17,13 @@ import pysam
 import svtk.utils as svu
 
 
-def samples_overlap(recA, recB, upper_thresh=0.5, lower_thresh=0.5):
+def samples_overlap_records(recA, recB, upper_thresh=0.5, lower_thresh=0.5):
+    samplesA = set(svu.get_called_samples(recA))
+    samplesB = set(svu.get_called_samples(recB))
+    return samples_overlap(samplesA, samplesB, upper_thresh=upper_thresh, lower_thresh=lower_thresh)
+
+
+def samples_overlap(samplesA, samplesB, upper_thresh=0.5, lower_thresh=0.5):
     """
     Report if the samples called in two VCF records overlap sufficiently.
     The fraction of each record's samples which are shared with the other
@@ -39,9 +45,6 @@ def samples_overlap(recA, recB, upper_thresh=0.5, lower_thresh=0.5):
     samples_overlap : bool
         Samples shared between records meet required thresholds.
     """
-    # Get lists of called samples for each record
-    samplesA = set(svu.get_called_samples(recA))
-    samplesB = set(svu.get_called_samples(recB))
     # Compute fraction of each record's samples which are shared
     if len(samplesA) > 0 and len(samplesB) > 0:
         shared = samplesA & samplesB
@@ -119,11 +122,15 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
     n_bkpts = len(linked_IDs)
     bkpts = extract_breakpoints(vcf, bkpt_idxs)
 
+    # Build called sample index
+    # Get lists of called samples for each record
+    sample_sets_dict = {idx: set(svu.get_called_samples(bkpts[idx])) for idx in set(indexed_links.flatten().tolist())}
+
     # Exclude wildly disparate overlaps
     # Build sparse graph from links
     G = sps.eye(n_bkpts, dtype=np.uint16, format='lil')
     for i, j in indexed_links:
-        if (samples_overlap(bkpts[i], bkpts[j]) and
+        if (samples_overlap(sample_sets_dict[i], sample_sets_dict[j]) and
                 close_enough(bkpts[i], bkpts[j])):
             G[i, j] = 1
 
@@ -172,7 +179,7 @@ def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
         if len(group) > 1:
             for i in group:
                 for j in group:
-                    if (samples_overlap(i, j) and ro_calu(i, j) > 0):
+                    if (ro_calu(i,j) > 0 and samples_overlap_records(i, j)):
                         linked_INV_V2.append([i, j])
         else:
             linked_INV_V2.append([group[0]])
@@ -225,7 +232,7 @@ def link_inv(vcf, bkpt_window=300, cpx_dist=2000):
     # Exclude wildly disparate overlaps
     G = sps.eye(n_bkpts, dtype=np.uint16, format='lil')
     for i, j in indexed_links:
-        if (samples_overlap(bkpts[i], bkpts[j]) and ro_calu(bkpts[i], bkpts[j]) > 0):
+        if (ro_calu(bkpts[i], bkpts[j]) > 0 and samples_overlap_records(bkpts[i], bkpts[j])):
             G[i, j] = 1
     # Generate lists of clustered breakpoints
     n_comp, comp_list = sps.csgraph.connected_components(G)
