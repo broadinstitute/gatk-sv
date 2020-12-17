@@ -29,8 +29,11 @@ workflow GenotypePESRPart2 {
     Array[String] samples
 
     File coveragefile
+    File? coveragefile_index
     File discfile
+    File? discfile_index
     File splitfile
+    File? splitfile_index
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -74,6 +77,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         discfile = discfile,
+        discfile_index = discfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
@@ -93,6 +97,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         splitfile = splitfile,
+        splitfile_index = splitfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
@@ -116,6 +121,7 @@ workflow GenotypePESRPart2 {
         bin_exclude_idx=bin_exclude_idx,
         bed = lt5kb_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,
@@ -165,6 +171,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         discfile = discfile,
+        discfile_index = discfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
@@ -184,6 +191,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         splitfile = splitfile,
+        splitfile_index = splitfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
@@ -207,6 +215,7 @@ workflow GenotypePESRPart2 {
         bin_exclude_idx=bin_exclude_idx,
         bed = gt5kb_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,
@@ -256,6 +265,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfBca.subset_vcf,
         discfile = discfile,
+        discfile_index = discfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
@@ -275,6 +285,7 @@ workflow GenotypePESRPart2 {
       input:
         vcf = MakeSubsetVcfBca.subset_vcf,
         splitfile = splitfile,
+        splitfile_index = splitfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,

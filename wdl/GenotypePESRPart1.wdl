@@ -17,20 +17,23 @@ workflow GenotypePESRPart1 {
     File bin_exclude
     File batch_vcf
     String batch
-    File coveragefile     # batch coverage file
-    File medianfile         # batch median file
-    File famfile            # batch famfile
-    File rf_cutoffs         # Random forest cutoffs
+    File coveragefile        # batch coverage file
+    File? coveragefile_index # batch coverage index file
+    File medianfile          # batch median file
+    File famfile             # batch famfile
+    File rf_cutoffs          # Random forest cutoffs
     File seed_cutoffs
-    Array[String] samples   # List of samples in batch
-    Int n_RD_genotype_bins  # number of RdTest bins
-    Int n_per_RD_split      # number of variants per RdTest split
+    Array[String] samples    # List of samples in batch
+    Int n_RD_genotype_bins   # number of RdTest bins
+    Int n_per_RD_split       # number of variants per RdTest split
     Int n_per_PE_split
     File discfile
+    File? discfile_index
     File pesr_exclude_list
     File splitfile
+    File? splitfile_index
     Int n_per_SR_split
-    String reference_build  #hg19 or hg38
+    String reference_build   #hg19 or hg38
     File ref_dict
 
     String sv_base_mini_docker
@@ -68,6 +71,7 @@ workflow GenotypePESRPart1 {
       n_bins = n_RD_genotype_bins,
       vcf = batch_vcf,
       coveragefile = coveragefile,
+      coveragefile_index = coveragefile_index,
       famfile = famfile,
       n_per_split = n_per_RD_split,
       prefix = "~{batch}.pesr",
@@ -97,6 +101,7 @@ workflow GenotypePESRPart1 {
       exclude_list = pesr_exclude_list,
       n_per_split = n_per_PE_split,
       discfile = discfile,
+      discfile_index = discfile_index,
       samples = samples,
       batch_ID = batch,
       ref_dict = ref_dict,
@@ -113,6 +118,7 @@ workflow GenotypePESRPart1 {
   call sr_train.TrainSRGenotyping as TrainSRGenotyping {
     input:
       splitfile = splitfile,
+      splitfile_index = splitfile_index,
       RD_melted_genotypes = TrainRDGenotyping.melted_genotypes,
       batch_vcf = batch_vcf,
       medianfile = medianfile,

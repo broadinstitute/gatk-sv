@@ -26,6 +26,7 @@ workflow GenotypeDepthPart2 {
     Array[String] samples
 
     File coveragefile
+    File? coveragefile_index
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -65,6 +66,7 @@ workflow GenotypeDepthPart2 {
         bin_exclude_idx=bin_exclude_idx,
         bed = gt5kb_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,
@@ -105,6 +107,7 @@ workflow GenotypeDepthPart2 {
         bin_exclude_idx=bin_exclude_idx,
         bed = lt5kb_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,

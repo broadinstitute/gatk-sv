@@ -14,17 +14,18 @@ import "Tasks04.wdl" as tasks04
 workflow TrainRDGenotyping {
   input {
     File bin_exclude
-    File vcf                # VCF to genotype
-    File coveragefile       # batch coverage file
-    File medianfile         # batch median file
-    File famfile            # batch famfile
-    File rf_cutoffs         # Random forest cutoffs
+    File vcf                 # VCF to genotype
+    File coveragefile        # batch coverage file
+    File? coveragefile_index # batch coverage file
+    File medianfile          # batch median file
+    File famfile             # batch famfile
+    File rf_cutoffs          # Random forest cutoffs
     File seed_cutoffs
-    Array[String] samples   # List of samples in batch
-    String prefix           # prefix use in output files
-    Int n_bins              # number of RdTest bins
-    Int n_per_split         # number of variants per RdTest split
-    String reference_build  #hg19 or hg38
+    Array[String] samples    # List of samples in batch
+    String prefix            # prefix use in output files
+    Int n_bins               # number of RdTest bins
+    Int n_per_split          # number of variants per RdTest split
+    String reference_build   #hg19 or hg38
     File ref_dict
 
     String sv_base_mini_docker
@@ -55,6 +56,7 @@ workflow TrainRDGenotyping {
       bin_exclude_idx=bin_exclude_idx,
       bed = MakeTrainingBed.bed,
       coveragefile = coveragefile,
+      coveragefile_index = coveragefile_index,
       medianfile = medianfile,
       famfile = famfile,
       samples = samples,
@@ -101,6 +103,7 @@ workflow TrainRDGenotyping {
         bin_exclude_idx=bin_exclude_idx,
         bed = pesr_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,
@@ -121,6 +124,7 @@ workflow TrainRDGenotyping {
         bin_exclude_idx=bin_exclude_idx,
         bed = gt5kb_bed,
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         medianfile = medianfile,
         famfile = famfile,
         samples = samples,

@@ -15,6 +15,7 @@ workflow TrainSRGenotyping {
   input {
     File batch_vcf
     File splitfile
+    File? splitfile_index
     Int n_per_split
     File medianfile
     Array[String] samples
@@ -49,6 +50,7 @@ workflow TrainSRGenotyping {
       input:
         vcf = vcf,
         splitfile = splitfile,
+        splitfile_index = splitfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,

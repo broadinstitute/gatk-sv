@@ -15,15 +15,16 @@ workflow GenotypeDepthPart1 {
     File bin_exclude
     File batch_vcf
     String batch
-    File coveragefile     # batch coverage file
-    File medianfile         # batch median file
-    File famfile            # batch famfile
-    File rf_cutoffs         # Random forest cutoffs
+    File coveragefile        # batch coverage file
+    File? coveragefile_index # batch coverage index file
+    File medianfile          # batch median file
+    File famfile             # batch famfile
+    File rf_cutoffs          # Random forest cutoffs
     File seed_cutoffs
-    Array[String] samples   # List of samples in batch
-    Int n_RD_genotype_bins  # number of RdTest bins
-    Int n_per_RD_split      # number of variants per RdTest split
-    String reference_build  #hg19 or hg38
+    Array[String] samples    # List of samples in batch
+    Int n_RD_genotype_bins   # number of RdTest bins
+    Int n_per_RD_split       # number of variants per RdTest split
+    String reference_build   #hg19 or hg38
     File ref_dict
 
     String sv_base_mini_docker
@@ -45,6 +46,7 @@ workflow GenotypeDepthPart1 {
       seed_cutoffs = seed_cutoffs,
       medianfile = medianfile,
       coveragefile = coveragefile,
+      coveragefile_index = coveragefile_index,
       prefix = "~{batch}.depth",
       n_bins = n_RD_genotype_bins,
       reference_build = reference_build,

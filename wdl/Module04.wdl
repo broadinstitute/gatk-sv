@@ -24,15 +24,18 @@ workflow Module04 {
     String batch
 
     Int n_per_split
-    File coveragefile       # batch coverage file
-    File medianfile         # post-exclusion batch median file
-    File famfile            # post-exclusion batch famfile
+    File coveragefile        # batch coverage file
+    File? coveragefile_index # batch coverage index file
+    File medianfile          # post-exclusion batch median file
+    File famfile             # post-exclusion batch famfile
     File? rf_cutoffs         # Random forest cutoffs; required unless skipping training
-    File? seed_cutoffs      # Required unless skipping training
-    Int n_RD_genotype_bins  # number of RdTest bins
+    File? seed_cutoffs       # Required unless skipping training
+    Int n_RD_genotype_bins   # number of RdTest bins
     File discfile
-    File? pesr_exclude_list    # Required unless skipping training
+    File? discfile_index
+    File? pesr_exclude_list  # Required unless skipping training
     File splitfile
+    File? splitfile_index
     String? reference_build  #hg19 or hg38, Required unless skipping training
     File bin_exclude
     File ref_dict
@@ -128,6 +131,7 @@ workflow Module04 {
         samples = GetSampleIdsFromVcf.out_array,
         pesr_exclude_list = select_first([pesr_exclude_list]),
         discfile = discfile,
+        discfile_index = discfile_index,
         n_RD_genotype_bins = n_RD_genotype_bins,
         batch_vcf = batch_pesr_vcf,
         seed_cutoffs = select_first([seed_cutoffs]),
@@ -135,10 +139,12 @@ workflow Module04 {
         batch = batch,
         rf_cutoffs = select_first([rf_cutoffs]),
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
         n_per_PE_split = n_per_split,
         famfile = famfile,
         splitfile = splitfile,
+        splitfile_index = splitfile_index,
         n_per_RD_split = n_per_split,
         n_per_SR_split = n_per_split,
         ref_dict = ref_dict,
@@ -167,6 +173,7 @@ workflow Module04 {
       bin_exclude=bin_exclude,
       samples = GetSampleIdsFromVcf.out_array,
       discfile = discfile,
+      discfile_index = discfile_index,
       PE_metrics = select_first([PE_metrics, GenotypePESRPart1.PE_metrics]),
       n_RdTest_bins = n_RD_genotype_bins,
       medianfile = medianfile,
@@ -175,10 +182,12 @@ workflow Module04 {
       RD_depth_sepcutoff = select_first([genotype_pesr_depth_sepcutoff, GenotypePESRPart1.RD_depth_sepcutoff]),
       RD_pesr_sepcutoff = select_first([genotype_pesr_pesr_sepcutoff, GenotypePESRPart1.RD_pesr_sepcutoff]),
       coveragefile = coveragefile,
+      coveragefile_index = coveragefile_index,
       SR_metrics = select_first([SR_metrics, GenotypePESRPart1.SR_metrics]),
       n_per_split = n_per_split,
       famfile = famfile,
       splitfile = splitfile,
+      splitfile_index = splitfile_index,
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -210,6 +219,7 @@ workflow Module04 {
         batch = batch,
         rf_cutoffs = select_first([rf_cutoffs]),
         coveragefile = coveragefile,
+        coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
         famfile = famfile,
         n_per_RD_split = n_per_split,
@@ -237,6 +247,7 @@ workflow Module04 {
       RD_depth_sepcutoff = select_first([genotype_depth_depth_sepcutoff, GenotypeDepthPart1.RD_depth_sepcutoff]),
       RD_pesr_sepcutoff = select_first([genotype_depth_pesr_sepcutoff, GenotypeDepthPart1.RD_pesr_sepcutoff]),
       coveragefile = coveragefile,
+      coveragefile_index = coveragefile_index,
       n_per_split = n_per_split,
       famfile = famfile,
       ref_dict = ref_dict,
