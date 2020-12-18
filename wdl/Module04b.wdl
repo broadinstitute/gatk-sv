@@ -630,7 +630,10 @@ task MergeList {
 
   command {
     cat ~{sep=' ' regeno_beds} | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
-    grep -c '[^[:space:]]' ~{prefix}.bed > regeno_num_lines.txt # count non-empty lines in regeno bed file to determine if empty or not
+    # count non-empty lines in regeno bed file to determine if empty or not --> proceed with regenotyping or stop here?
+    # the OR clause is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines (but don't ignore real error codes > 1)
+    NUM_REGENO=$(grep -c '[^[:space:]]' ~{prefix}.bed || [[ $? == 1 ]] ) 
+    echo $NUM_REGENO > regeno_num_lines.txt
   }
   output {
     File master_regeno="~{prefix}.bed"
