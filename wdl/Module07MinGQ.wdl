@@ -15,7 +15,7 @@ import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
 
 
-workflow MinGQ {
+workflow Module07MinGQ {
   input{
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -58,15 +58,23 @@ workflow MinGQ {
 
   Array[Array[String]] contigs = read_tsv(contiglist)
 
+  # Get svtype of MEI
+  call ReviseSVtypeMEI{
+    input:
+      vcf = vcf,
+      vcf_idx = vcf_idx,
+      sv_base_mini_docker = sv_base_mini_docker,
+      prefix = prefix
+  }
 
   # Get list of PCRMINUS samples
   call GetSampleLists {
     input:
-      vcf=vcf,
-      vcf_idx=vcf_idx,
-      pcrplus_samples_list=pcrplus_samples_list,
-      prefix=prefix,
-      sv_base_mini_docker=sv_base_mini_docker
+      vcf = ReviseSVtypeMEI.updated_vcf,
+      vcf_idx = ReviseSVtypeMEI.updated_vcf_idx,
+      pcrplus_samples_list = pcrplus_samples_list,
+      prefix = prefix,
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
   # Shard VCF per-chromosome and add AF annotation
@@ -74,8 +82,8 @@ workflow MinGQ {
     #Split VCF into PCR+ and PCR-
     call calcAF.CalcAF as getAFs {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
+        vcf=ReviseSVtypeMEI.updated_vcf,
+        vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
         contig=contig[0],
         sv_per_shard=1000,
         prefix=prefix,
@@ -92,8 +100,8 @@ workflow MinGQ {
       # Annotate PCR-specific AFs
       call calcAF.CalcAF as getAFs_byPCR {
         input:
-          vcf=vcf,
-          vcf_idx=vcf_idx,
+          vcf=ReviseSVtypeMEI.updated_vcf,
+          vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
           contig=contig[0],
           sv_per_shard=1000,
           prefix=prefix,
@@ -254,6 +262,53 @@ workflow MinGQ {
     File filtered_vcf = CombineVcfs.concat_vcf
     File filtered_vcf_idx = CombineVcfs.concat_vcf_idx
     File? AF_table_preMinGQ_PCRMINUS = cat_AF_table_PCRMINUS.merged_file
+    File? filter_lookup_table = build_tree_PCRMINUS.filter_lookup_table
+  }
+}
+
+# revise svtype of MEIs to SVTYPE=MEI
+task ReviseSVtypeMEI{
+  input{
+    File vcf
+    File vcf_idx
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75, 
+    disk_gb: 100,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  
+  command <<<
+    zcat ~{vcf} | grep '#' > ~{prefix}.vcf
+    zcat ~{vcf} | grep -v '#' | grep "INS:ME" | sed -e "s/SVTYPE=INS/SVTYPE=MEI/" >> ~{prefix}.vcf
+    zcat ~{vcf} | grep -v '#' | grep -v "INS:ME"  >> ~{prefix}.vcf
+    mkdir tmp
+    vcf-sort -t tmp/ ~{prefix}.vcf | bgzip > ~{prefix}.vcf.gz
+    tabix -p vcf ~{prefix}.vcf.gz
+  >>>
+
+  output{
+    File updated_vcf = "~{prefix}.vcf.gz"
+    File updated_vcf_idx = "~{prefix}.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -268,7 +323,8 @@ task GetSampleLists {
     String prefix
     RuntimeAttr? runtime_attr_override
   }
-   RuntimeAttr default_attr = object {
+
+  RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
     disk_gb: 50,
