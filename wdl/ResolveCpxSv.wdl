@@ -21,6 +21,7 @@ workflow ResolveComplexSv {
     File cytobands
     File mei_bed
     Array[File] disc_files
+    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
     File pe_exclude_list
     Boolean inv_only
@@ -80,6 +81,7 @@ workflow ResolveComplexSv {
           VIDs_list=VID_list,
           chrom=contig,
           disc_files=disc_files,
+          disc_files_index=disc_files_index,
           ref_dict=ref_dict,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_prep
@@ -247,12 +249,16 @@ task ResolvePrep {
     File ref_dict
     String chrom
     Array[File] disc_files
+    Array[File]? disc_files_index
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   parameter_meta {
     disc_files: {
+      localization_optional: true
+    }
+    disc_files_index: {
       localization_optional: true
     }
   }

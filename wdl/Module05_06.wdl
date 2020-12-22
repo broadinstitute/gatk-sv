@@ -41,6 +41,7 @@ workflow Module05_06 {
     Array[File] pesr_vcfs
     Array[File] depth_vcfs
     Array[File] disc_files
+    Array[File]? disc_files_index
     Array[File] bincov_files
 
     Array[File] raw_sr_bothside_pass_files
@@ -346,6 +347,7 @@ workflow Module05_06 {
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
+        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
@@ -382,6 +384,7 @@ workflow Module05_06 {
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
+        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
