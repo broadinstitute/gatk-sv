@@ -1344,7 +1344,6 @@ if(nrow(trios)>0){
   #Read data
   trio.dat <- apply(trios[,2:4],1,function(IDs){
     IDs <- as.character(IDs)
-    print(IDs)
     return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],mother=IDs[3],biallelic=!multiallelics))
   })
   names(trio.dat) <- trios[,1]
