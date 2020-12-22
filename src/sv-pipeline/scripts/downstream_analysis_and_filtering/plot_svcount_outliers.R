@@ -37,13 +37,13 @@ x_max= opts$max
 for(i in svtype){
   pdf(paste(opts$outputpath,'/',output_prefix,'.',i,'.pdf',sep=''))
 
-  tmp = dat[dat$svtype==i,]
-  quantil_list=quantile(tmp$count)
-  iqr = IQR(tmp$count)
+  svtype_counts = dat[dat$svtype==i,]
+  quantil_list=quantile(svtype_counts$count)
+  iqr = IQR(svtype_counts$count)
 
   par(fig=c(0,1,.6,1))
   par(mar=c(2,4,2,4))
-  plot(c(0,x_max), c(max(min(tmp$count), quantil_list[2]-x_max*iqr), min(max(tmp$count),quantil_list[4]+x_max*iqr) ), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = 'Count of SVs', las=2, xaxt='n', main=i)
+  plot(c(0,x_max), c(max(min(svtype_counts$count), quantil_list[2]-x_max*iqr), min(max(svtype_counts$count),quantil_list[4]+x_max*iqr) ), frame.plot = F, type = 'n', xlab = 'n * IQR', ylab = 'Count of SVs', las=2, xaxt='n', main=i)
   axis(1)
   
   abline(h=quantil_list[3], col='grey', lty=1,lwd=2)
@@ -56,7 +56,7 @@ for(i in svtype){
   rec=0
   for(j in c(1:x_max)){
     cff = c(quantil_list[2]-j*iqr, quantil_list[4]+j*iqr)
-    counts_outside_cutoffs=tmp[tmp$count<cff[2] & tmp$count>cff[1],]
+    counts_outside_cutoffs=svtype_counts[svtype_counts$count<cff[2] & svtype_counts$count>cff[1],]
     
     vals=counts_outside_cutoffs$count
     dens <- density(vals, na.rm=T)
