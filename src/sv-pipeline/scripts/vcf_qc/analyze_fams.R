@@ -125,12 +125,17 @@ getFamDat <- function(dat,proband,father=NA,mother=NA,biallelic=T,nocall.placeho
                    sort=F,by="VID",all=T,suffixes=c(".pro",".mo"))
   }
   #Only retain sites where all three samples are not null genotype (no-call, ./., nocall.placeholder)
-  exclude <- which(sapply(vlist[,c(2,4,6)],
+  exclude <- sapply(vlist[,c(2,4,6)],
                           function(vals){
-    any(as.numeric(vals)==nocall.placeholder)
-  }))
-  if(length(exclude) > 0){
-    vlist <- vlist[-exclude,]
+    which(as.numeric(vals)==nocall.placeholder)
+  })
+
+  exclude_out = c()
+  for(exclude_x in exclude){  exclude_out=c(exclude_out,exclude_x) }
+  exclude_out=unique(exclude_out)
+
+  if(length(exclude_out) > 0){
+    vlist <- vlist[-exclude_out,]
   }
   #Convert remaining NA allele counts to 0s
   vlist[,c(2,4,6)] <- apply(vlist[,c(2,4,6)],2,function(vals){
@@ -1339,8 +1344,7 @@ if(nrow(trios)>0){
   #Read data
   trio.dat <- apply(trios[,2:4],1,function(IDs){
     IDs <- as.character(IDs)
-    return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],
-                     mother=IDs[3],biallelic=!multiallelics))
+    return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],mother=IDs[3],biallelic=!multiallelics))
   })
   names(trio.dat) <- trios[,1]
   
@@ -1370,34 +1374,4 @@ if(nrow(trios)>0){
   })
 }
 
-# ###Performs duo analyses, if any duos exist
-# if(nrow(duos)>0){
-#   #Read data
-#   duo.dat <- apply(duos[,2:4],1,function(IDs){
-#     IDs <- as.character(IDs)
-#     return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],
-#                      mother=IDs[3],biallelic=!multiallelics))
-#   })
-#   names(duo.dat) <- duos[,1]
-#   
-#   #Master wrapper
-#   masterInhWrapper(fam.dat.list=duo.dat,fam.type="duo")
-#   #Standard inheritance panels
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperInheritancePlots(fam.dat.list=duo.dat,
-#                             fam.type="duo",
-#                             count=count)  
-#   })
-#   #De novo rate panels
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperDeNovoRateLines(fam.dat.list=duo.dat,
-#                            fam.type="duo",
-#                            count=count)  
-#   })
-#   #De novo rate heatmaps
-#   sapply(c("variants","alleles"),function(count){
-#     wrapperDeNovoRateHeats(fam.dat.list=duo.dat,
-#                            fam.type="duo",
-#                            count=count)  
-#   })
-# }
+

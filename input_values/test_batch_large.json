@@ -1727,6 +1727,7 @@
     "gs://gatk-sv-resources/test/module00a/large/outputs/pesr_disc/TCGA-SS-A7HO-10A-01D-A703-36.disc.txt.gz",
     "gs://gatk-sv-resources/test/module00a/large/outputs/pesr_disc/TCGA-W9-A837-10A-01D-A706-36.disc.txt.gz"
   ],
+  "outlier_cutoff_table" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
   "ped_file" : "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
   "qc_definitions" : "gs://gatk-sv-resources/test/batch/batch_sv.test_large.qc_definitions.tsv",
   "raw_sr_bothside_pass_files" : "gs://gatk-sv-resources/test/module04/large/output/test_large.genotype_SR_part2_bothside_pass.txt",

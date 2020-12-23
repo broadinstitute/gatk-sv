@@ -457,6 +457,7 @@
     "gs://gatk-sv-resources/test/module00a/large/outputs/pesr_disc/SM-GZQMC.disc.txt.gz",
     "gs://gatk-sv-resources/test/module00a/large/outputs/pesr_disc/SM-HXUD2.disc.txt.gz"
   ],
+  "outlier_cutoff_table" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
   "ped_file" : "gs://gatk-sv-resources/test/resources/ref_panel_v1.ped",
   "samples": [
     "SM-GN4BI",

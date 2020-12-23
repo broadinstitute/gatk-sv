@@ -609,6 +609,7 @@
     "gs://fc-da43a147-98a4-4f53-a622-833382946d80/dd07c524-a737-4a37-a791-b92a99603d1e/HaplotypeCallerGvcf_GATK4/2b2e3866-70e5-4d97-9182-a4c47106252f/call-MergeGVCFs/TCGA-W9-A837-10A-01D-A706-36.g.vcf.gz"
   ],
   "PE_metrics" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/genotyping/pe_metric_file.txt",
+  "outlier_cutoff_table" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
   "ped_file" : "gs://gatk-sv-resources/clinical/reference_panel_v1b/ped/ref_panel_v1b.ped",
   "pesr_disc_files" : [
     "gs://gatk-sv-resources/clinical/reference_panel_v1b/pesr/SM-BZNZQ.disc.txt.gz",

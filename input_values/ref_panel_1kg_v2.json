@@ -771,6 +771,7 @@
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.gVCF.2019-02-06/Sample_NA21122/analysis/NA21122.haplotypeCalls.er.raw.g.vcf.gz",
     "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.gVCF.2019-02-06/Sample_NA21133/analysis/NA21133.haplotypeCalls.er.raw.g.vcf.gz"
   ],
+  "outlier_cutoff_table" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
   "ped_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/ped/1kg_ref_panel_v1.ped",
   "PE_metrics" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/pe_metric_file.txt",
   "pesr_disc_files" : [

@@ -22,7 +22,9 @@ workflow Module03 {
     File ped_file
     File evidence_metrics
     File evidence_metrics_common
+
     Int outlier_cutoff_nIQR
+    File outlier_cutoff_table
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -87,14 +89,15 @@ workflow Module03 {
 
   call filter_outliers.FilterOutlierSamples as FilterOutlierSamples {
     input:
-      vcfs = FilterAnnotateVcf.annotated_vcf,
-      N_IQR_cutoff = outlier_cutoff_nIQR,
       batch = batch,
-      samples = GetSampleIdsFromVcf.out_array,
       algorithms = algorithms,
+      outlier_cutoff_table = outlier_cutoff_table,
+      N_IQR_cutoff = outlier_cutoff_nIQR,
+      vcfs = FilterAnnotateVcf.annotated_vcf,
+      samples = GetSampleIdsFromVcf.out_array,
+      linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,
-      linux_docker = linux_docker,
       runtime_attr_identify_outliers = runtime_attr_identify_outliers,
       runtime_attr_exclude_outliers= runtime_attr_exclude_outliers,
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
