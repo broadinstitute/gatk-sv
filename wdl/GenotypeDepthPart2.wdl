@@ -234,7 +234,7 @@ task MergeRegenoCoverageMedians {
     File regeno_coverage_medians = "~{batch}.regeno.coverage_medians_merged.bed"
   }
   command <<<
-    cat ~{sep=' ' regeno_coverage_medians_array} | fgrep -v "start" > ~{batch}.regeno.coverage_medians_merged.bed
+    cat ~{sep=' ' regeno_coverage_medians_array} | fgrep -v $'chr\tstart\tend\tcnvID' > ~{batch}.regeno.coverage_medians_merged.bed
   >>>
 
   runtime {
