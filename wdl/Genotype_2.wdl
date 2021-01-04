@@ -1,7 +1,7 @@
 version 1.0
 import "Tasks04.wdl" as task04
 
-workflow Regenotype{
+workflow Regenotype {
   input{
       File depth_vcf
       File regeno_bed
@@ -28,20 +28,20 @@ workflow Regenotype{
       prefix="~{batch}.depth",
       sv_pipeline_docker=sv_pipeline_docker
   }
-  call GetRegenotype{
+  call GetRegenotype {
     input:
       Batch=batch,
       master_regeno=regeno_bed,
       depth_genotyped_vcf=depth_vcf,
       sv_pipeline_docker=sv_pipeline_docker
-      }
-  call SplitBeds as SplitBeds_regeno{
+  }
+  call SplitBeds as SplitBeds_regeno {
     input: 
       bed=GetRegenotype.regeno_bed,
       n_per_split=n_per_split,
       sv_pipeline_docker=sv_pipeline_docker
-    }
-  scatter (regeno in SplitBeds_regeno.regeno_beds){
+  }
+  scatter (regeno in SplitBeds_regeno.regeno_beds) {
     call task04.MakeSubsetVcf as make_subset_vcf_regeno {
       input:
         vcf=AddBatchSamplesDepth.updated_vcf,
@@ -77,7 +77,7 @@ workflow Regenotype{
         prefix=basename(regeno, ".bed")
     }
   }
-  call ConcatReGenotypedVcfs as ConcatRegenotypedVcfs{
+  call ConcatReGenotypedVcfs as ConcatRegenotypedVcfs {
     input:
     batch=batch,
     depth_vcf=depth_vcf,
@@ -92,12 +92,12 @@ workflow Regenotype{
   }
 }
 task SplitBeds {
-  input{
+  input {
     File bed
     Int n_per_split
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
-    }
+  }
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
@@ -107,11 +107,11 @@ task SplitBeds {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   command <<<
     set -euo pipefail
     cat ~{bed} \
       | split -l ~{n_per_split} -a 6 - regeno.
-
   >>>
 
   output {
@@ -205,13 +205,13 @@ task RdTestGenotypeRegeno {
 
 
 task GetRegenotype{
-    input{
-        File depth_genotyped_vcf
-        File master_regeno
-        String Batch
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
+  input {
+    File depth_genotyped_vcf
+    File master_regeno
+    String Batch
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
@@ -221,17 +221,17 @@ task GetRegenotype{
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-    command<<<
-        set -e
-        svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
-        sample=$(fgrep -v "#" ~{Batch}.bed|awk '{if($6!="" )print $6}' |head -n1|cut -d"," -f1) # a sample in batch is needed for regenotyping
-        while read chr start end variant s type; do
-            printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n">>~{Batch}.to_regeno.bed # modify this to suit intput for Rdtest
-        done < ~{master_regeno}
-    >>>
-    output{
-        File regeno_bed="~{Batch}.to_regeno.bed"
-    }
+  command <<<
+    set -e
+    svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
+    sample=$(fgrep -v "#" ~{Batch}.bed | awk '{if($6!="" )print $6}' | head -n1 | cut -d"," -f1) # a sample in batch is needed for regenotyping
+    while read chr start end variant s type; do
+      printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n" >> ~{Batch}.to_regeno.bed # modify this to suit input for Rdtest
+    done < ~{master_regeno}
+  >>>
+  output {
+    File regeno_bed="~{Batch}.to_regeno.bed"
+  }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"

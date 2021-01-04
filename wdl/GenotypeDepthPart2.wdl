@@ -36,6 +36,7 @@ workflow GenotypeDepthPart2 {
     RuntimeAttr? runtime_attr_integrate_depth_gq
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_merge_regeno_cov_med
   }
 
   File bin_exclude_idx = bin_exclude + ".tbi"
@@ -144,6 +145,14 @@ workflow GenotypeDepthPart2 {
     }
   }
 
+  call MergeRegenoCoverageMedians {
+    input:
+      regeno_coverage_medians_array = RDTestGenotypeOver5kb.copy_states,
+      batch = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_merge_regeno_cov_med
+  }
+
   call tasks04.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
     input:
       lt5kb_vcfs = AddGenotypesUnder5kb.genotyped_vcf,
@@ -157,7 +166,7 @@ workflow GenotypeDepthPart2 {
   output {
     File genotyped_vcf = ConcatGenotypedVcfs.genotyped_vcf
     File genotyped_vcf_index = ConcatGenotypedVcfs.genotyped_vcf_index
-    Array[File] regeno_coverage_medians = RDTestGenotypeOver5kb.copy_states
+    File regeno_coverage_medians = MergeRegenoCoverageMedians.regeno_coverage_medians
   }
 }
 
@@ -198,6 +207,42 @@ task IntegrateDepthGq {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task MergeRegenoCoverageMedians {
+  input {
+    Array[File] regeno_coverage_medians_array
+    String batch
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File regeno_coverage_medians = "~{batch}.regeno.coverage_medians_merged.bed"
+  }
+  command <<<
+    cat ~{sep=' ' regeno_coverage_medians_array} | fgrep -v $'chr\tstart\tend\tcnvID' > ~{batch}.regeno.coverage_medians_merged.bed
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

@@ -1732,6 +1732,7 @@
   "qc_definitions" : "gs://gatk-sv-resources/test/batch/batch_sv.test_large.qc_definitions.tsv",
   "raw_sr_bothside_pass_files" : "gs://gatk-sv-resources/test/module04/large/output/test_large.genotype_SR_part2_bothside_pass.txt",
   "raw_sr_background_fail_files" : "gs://gatk-sv-resources/test/module04/large/output/test_large.genotype_SR_part2_background_fail.txt",
+  "regeno_coverage_medians": ["gs://gatk-sv-resources/test/module04b/input/test_large.regeno.coverage_medians_merged.bed"],
   "samples" : [
     "SM-BZNZQ",
     "SM-BZNZR",
