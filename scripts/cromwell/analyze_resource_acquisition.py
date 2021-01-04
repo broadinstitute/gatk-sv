@@ -5,10 +5,8 @@ import argparse
 import dateutil.parser
 import datetime
 import pandas as pd
-import random
 import matplotlib.pyplot as plt
 import matplotlib.ticker
-import sys
 from os.path import basename, isfile, getsize
 import logging
 
@@ -41,7 +39,7 @@ Outputs:
 NUM_CACHED = 0
 CACHED = dict()
 NUM_NONPREEMPTIBLE = 0
-NONPREEMBTIBLE_TASKS = dict()
+NONPREEMPTIBLE_TASKS = dict()
 
 
 def get_disk_info(metadata):
@@ -50,16 +48,16 @@ def get_disk_info(metadata):
   Modified to return (hdd_size, ssd_size)
   """
   if "runtimeAttributes" in metadata and "disks" in metadata['runtimeAttributes']:
-    bootDiskSizeGb = 0.0
+    boot_disk_gb = 0.0
     if "bootDiskSizeGb" in metadata['runtimeAttributes']:
-      bootDiskSizeGb = float(metadata['runtimeAttributes']['bootDiskSizeGb'])
+      boot_disk_gb = float(metadata['runtimeAttributes']['bootDiskSizeGb'])
     # Note - am lumping boot disk in with requested disk.  Assuming boot disk is same type as requested.
     # i.e. is it possible that boot disk is HDD when requested is SDD.
     (name, disk_size, disk_type) = metadata['runtimeAttributes']["disks"].split()
     if disk_type == "HDD":
-      return float(disk_size), float(0)
+      return float(disk_size) + boot_disk_gb, float(0)
     elif disk_type == "SSD":
-      return float(0), float(disk_size)
+      return float(0), float(disk_size) + boot_disk_gb
     else:
       return float(0), float(0)
   else:
@@ -88,10 +86,16 @@ def used_cached_results(metadata):
   return "callCaching" in metadata and "hit" in metadata["callCaching"] and metadata["callCaching"]["hit"]
 
 
-def calculate_start_end(call_info):
+def calculate_start_end(call_info, override_warning=False, alias=None):
   """
   Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
   """
+  job_id = call_info['jobId'].split('/')[-1]
+  if alias is None or alias == "":
+    alias = job_id
+  else:
+    alias += "." + job_id
+
   # get start (start time of VM start) & end time (end time of 'ok') according to metadata
   start = None
   end = None
@@ -120,11 +124,17 @@ def calculate_start_end(call_info):
   if start is None:
     start = dateutil.parser.parse(call_info['start'])
 
-  # if we are preempted or if cromwell used previously cached results, we don't get an endtime from JES right now.
+  # if we are preempted or if cromwell used previously cached results, we don't get an endTime from JES right now.
   # if cromwell was restarted, the start time from JES might not have been written to the metadata.
   # in either case, use the Cromwell end time which is later but not wrong
   if end is None:
-    end = dateutil.parser.parse(call_info['end'])
+    if 'end' in call_info:
+      end = dateutil.parser.parse(call_info['end'])
+    elif override_warning:
+      logging.warning("End time not found, omitting job {}".format(call_info['jobId']))
+      end = start
+    else:
+      raise RuntimeError(("End time not found for job {} (may be running or have been aborted). Run again with --override-warning to continue anyway and omit the job.".format(alias)))
 
   return start, end
 
@@ -179,12 +189,12 @@ def get_call_alias(alias, call):
 
 def update_nonpreemptible_counters(alias):
   global NUM_NONPREEMPTIBLE
-  global NONPREEMBTIBLE_TASKS
+  global NONPREEMPTIBLE_TASKS
   NUM_NONPREEMPTIBLE += 1
-  if alias in NONPREEMBTIBLE_TASKS:
-    NONPREEMBTIBLE_TASKS[alias] += 1
+  if alias in NONPREEMPTIBLE_TASKS:
+    NONPREEMPTIBLE_TASKS[alias] += 1
   else:
-    NONPREEMBTIBLE_TASKS[alias] = 1
+    NONPREEMPTIBLE_TASKS[alias] = 1
 
 
 def update_cached_counters(alias):
@@ -197,7 +207,7 @@ def update_cached_counters(alias):
     CACHED[alias] = 1
 
 
-def getCalls(m, alias=None):
+def get_calls(m, override_warning=False, alias=None):
   """
   Modified from download_monitoring_logs.py script by Mark Walker
   https://github.com/broadinstitute/gatk-sv/blob/master/scripts/cromwell/download_monitoring_logs.py
@@ -205,7 +215,7 @@ def getCalls(m, alias=None):
   if isinstance(m, list):
     call_metadata = []
     for m_shard in m:
-      call_metadata.extend(getCalls(m_shard, alias=alias))
+      call_metadata.extend(get_calls(m_shard, override_warning, alias=alias))
     return call_metadata
 
   if 'labels' in m:
@@ -219,34 +229,18 @@ def getCalls(m, alias=None):
         continue
       call_alias = get_call_alias(alias, call)
       # recursively get metadata
-      call_metadata.extend(getCalls(m['calls'][call], alias=call_alias))
+      call_metadata.extend(get_calls(m['calls'][call], override_warning, alias=call_alias))
 
   if 'subWorkflowMetadata' in m:
-    call_metadata.extend(getCalls(m['subWorkflowMetadata'], alias=alias))
+    call_metadata.extend(get_calls(m['subWorkflowMetadata'], override_warning, alias=alias))
 
   # in a call
-  if alias and ('monitoringLog' in m):
-    shard_index = '-2'
-    if 'shardIndex' in m:
-      shard_index = m['shardIndex']
-
-    attempt = '0'
-    if 'attempt' in m:
-      attempt = m['attempt']
-
-    job_id = 'na'
-    if 'jobId' in m:
-      job_id = m['jobId'].split('/')[-1]
-
-    start, end = calculate_start_end(m)
+  if alias and ('stderr' in m):
+    start, end = calculate_start_end(m, override_warning, alias)
 
     cpu, memory = get_mem_cpu(m)
 
     cached = used_cached_results(m)
-
-    callroot = 'na'
-    if 'callRoot' in m:
-      callroot = m['callRoot']
 
     preemptible = was_preemptible_vm(m)
     preemptible_cpu = 0
@@ -259,7 +253,8 @@ def getCalls(m, alias=None):
     hdd_size, ssd_size = get_disk_info(m)
 
     call_metadata.append((start, 1, cpu, preemptible_cpu, nonpreemptible_cpu, memory, hdd_size, ssd_size))
-    call_metadata.append((end, -1, -1 * cpu, -1 * preemptible_cpu, -1 * nonpreemptible_cpu, -1 * memory, -1 * hdd_size, -1 * ssd_size))
+    call_metadata.append((end, -1, -1 * cpu, -1 * preemptible_cpu, -1 * nonpreemptible_cpu, -1 * memory, -1 * hdd_size,
+                          -1 * ssd_size))
     if not preemptible:
       update_nonpreemptible_counters(alias)
 
@@ -293,7 +288,8 @@ def check_workflow_valid(metadata, metadata_file, override_warning):
     if override_warning:
       logging.info("Override_warning=TRUE. Proceeding with caution.")
     else:
-      raise RuntimeError("One or more retryable errors encountered (see logging info for warnings). To attempt to proceed anyway, re-run the script with the --override-warning flag.")
+      raise RuntimeError(("One or more retryable errors encountered (see logging info for warnings). "
+                          "To attempt to proceed anyway, re-run the script with the --override-warning flag."))
 
 
 def get_call_metadata(metadata_file, override_warning=False):
@@ -302,9 +298,10 @@ def get_call_metadata(metadata_file, override_warning=False):
   """
   metadata = json.load(open(metadata_file, 'r'))
   check_workflow_valid(metadata, metadata_file, override_warning)
-  colnames = ['timestamp', 'vm_delta', 'cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta', 'memory_delta', 'hdd_delta', 'ssd_delta']
+  colnames = ['timestamp', 'vm_delta', 'cpu_all_delta', 'cpu_preemptible_delta', 'cpu_nonpreemptible_delta',
+              'memory_delta', 'hdd_delta', 'ssd_delta']
 
-  call_metadata = getCalls(metadata)
+  call_metadata = get_calls(metadata, override_warning)
   if len(call_metadata) == 0:
     raise RuntimeError("No calls in workflow metadata.")
   call_metadata = pd.DataFrame(call_metadata, columns=colnames)
@@ -317,8 +314,10 @@ def transform_call_metadata(call_metadata):
   Based on: https://github.com/broadinstitute/dsde-pipelines/blob/master/scripts/quota_usage.py
   """
   call_metadata = call_metadata.sort_values(by='timestamp')
-  call_metadata['timestamp_zero'] = call_metadata['timestamp'] - call_metadata.timestamp.iloc[0]  # make timestamps start from 0 by subtracting minimum (at index 0 after sorting)
-  call_metadata['seconds'] = call_metadata['timestamp_zero'].dt.total_seconds()  # get timedelta in seconds because plot labels won't format correctly otherwise
+  # make timestamps start from 0 by subtracting minimum (at index 0 after sorting)
+  call_metadata['timestamp_zero'] = call_metadata['timestamp'] - call_metadata.timestamp.iloc[0]
+  # get timedelta in seconds because plot labels won't format correctly otherwise
+  call_metadata['seconds'] = call_metadata['timestamp_zero'].dt.total_seconds()
 
   call_metadata['vm'] = call_metadata.vm_delta.cumsum()
   call_metadata['cpu_all'] = call_metadata.cpu_all_delta.cumsum()
@@ -408,7 +407,7 @@ def write_cached_warning(cached_file):
   global CACHED
   global NUM_CACHED
   if NUM_CACHED > 0:
-    logging.info("%d cached tasks found, writing tasks to %s." % (NUM_CACHED, cached_file))
+    logging.info("%d cached task(s) found, writing tasks to %s." % (NUM_CACHED, cached_file))
     with open(cached_file, 'w') as cached_out:
       cached_out.write("#task_name\tnum_cached\n")
       cached_out.write("all_tasks\t%d\n" % NUM_CACHED)
@@ -419,13 +418,13 @@ def write_cached_warning(cached_file):
 
 def write_nonpreemptible_vms(vms_file):
   global NUM_NONPREEMPTIBLE
-  global NONPREEMBTIBLE_TASKS
+  global NONPREEMPTIBLE_TASKS
   if NUM_NONPREEMPTIBLE > 0:
-    logging.info("%d non-preemptible VMs found, writing tasks to %s." % (NUM_NONPREEMPTIBLE, vms_file))
+    logging.info("%d non-preemptible VM(s) found, writing tasks to %s." % (NUM_NONPREEMPTIBLE, vms_file))
     with open(vms_file, 'w') as vms_out:
       vms_out.write("#task_name\tnum_nonpreemptible\n")
       vms_out.write("all_tasks\t%d\n" % NUM_NONPREEMPTIBLE)
-      vms_out.write("\n".join([x + '\t' + str(NONPREEMBTIBLE_TASKS[x]) for x in sorted(list(NONPREEMBTIBLE_TASKS.keys()))]) + "\n")
+      vms_out.write("\n".join([x + '\t' + str(NONPREEMPTIBLE_TASKS[x]) for x in sorted(list(NONPREEMPTIBLE_TASKS.keys()))]) + '\n')
   else:
     logging.info("0 non-preemptible VMs found.")
 
@@ -442,11 +441,18 @@ def main():
   parser = argparse.ArgumentParser()
   parser.add_argument("workflow_metadata", help="Workflow metadata JSON file")
   parser.add_argument("output_base", help="Output directory + basename")
-  parser.add_argument("--plot-title", help="Provide workflow name for plot title: <name> Resource Acquisition Over Time", required=False, default="")
-  parser.add_argument("--override-warning", help="Execute script workflow warning (server interrupted, workflow failed, etc.), which may impact plot accuracy",
+  parser.add_argument("--plot-title",
+                      help="Provide workflow name for plot title: <name> Resource Acquisition Over Time",
+                      required=False, default="")
+  parser.add_argument("--override-warning",
+                      help="Execute script despite workflow warning (server interrupted, workflow failed, etc.), \
+                        which may impact plot accuracy",
                       required=False, default=False, action='store_true')
-  parser.add_argument("--save-table", help="Save TSV copy of resources over time table used to make plot", required=False, default=False, action='store_true')
-  parser.add_argument("--log-level", help="Specify level of logging information, ie. info, warning, error (not case-sensitive)", required=False, default="INFO")
+  parser.add_argument("--save-table", help="Save TSV copy of resources over time table used to make plot",
+                      required=False, default=False, action='store_true')
+  parser.add_argument("--log-level",
+                      help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
+                      required=False, default="INFO")
   args = parser.parse_args()
 
   # get args as variables
