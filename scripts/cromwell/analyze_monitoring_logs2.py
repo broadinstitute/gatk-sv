@@ -1,20 +1,18 @@
 #!/bin/python
 
 import pandas as pd
-import glob
 import argparse
 import numpy as np
-from datetime import datetime
 import matplotlib.pyplot as plt
 from os.path import basename, isfile, getsize
-import sys
 import logging
 
 # Synopsis:
-#  Generates summary statistics on Cromwell monitoring log summary table generated using get_cromwell_resource_usage2.sh -u -r.
-#  Cost estimates assume all machines are preemptible and have a fixed bootup time. Resource
-#  usage and costs are for requesting optimal resource (equal to the max observed) uniformly across all shards ("static")
-#  and individually for each shard ("dynamic").
+#  Generates summary statistics on Cromwell monitoring log summary table generated using the following command:
+#       get_cromwell_resource_usage2.sh -u -r meta.json > table.tsv
+#  Cost estimates assume all machines are preemptible and have a fixed boot time. Resource
+#  costs are estimated for requesting optimal resources (equal to the max observed) uniformly across all shards
+#  ("static") and individually for each shard ("dynamic").
 #
 # Usage:
 #   python analyze_monitoring_logs2.py /path/to/log_summary_table /path/to/output_base [optional parameters]
@@ -45,7 +43,8 @@ DEFAULT_OVERHEAD_MIN = 5.
 
 def check_table_columns(columns):
   column_set = set(columns)
-  required_input_columns = ['ElapsedTime', 'nCPU', 'CPU', 'TotMem', 'Mem', 'MemPct', 'TotDisk', 'Disk', 'DiskPct', 'task']
+  required_input_columns = ['ElapsedTime', 'nCPU', 'CPU', 'TotMem', 'Mem', 'MemPct', 'TotDisk', 'Disk',
+                            'DiskPct', 'task']
   missing_cols = []
   missing = False
   for col in required_input_columns:
@@ -57,7 +56,8 @@ def check_table_columns(columns):
 
 
 def load_data(log_file, overhead_mins):
-  # columns in input: ['ElapsedTime', 'nCPU', 'CPU', 'TotMem', 'Mem', 'MemPct', 'TotDisk', 'Disk', 'DiskPct', 'IORead', 'IOWrite', 'task']
+  # columns in input:
+  # ['ElapsedTime', 'nCPU', 'CPU', 'TotMem', 'Mem', 'MemPct', 'TotDisk', 'Disk', 'DiskPct', 'IORead', 'IOWrite', 'task']
   data = pd.read_table(log_file, usecols=lambda x: x not in ('IORead', 'IOWrite'))
   check_table_columns(data.columns)
   # rename some columns for consistency, clarity
@@ -83,7 +83,8 @@ def load_data(log_file, overhead_mins):
 
 
 def estimate_costs_per_task(data):
-  # columns after load_data(): ['Hours', 'nCPU', 'MaxCPU', 'PctCPU', 'TotMem', 'MaxMem', 'PctMem', 'TotDisk', 'MaxDisk', 'PctDisk', 'Task']
+  # columns after load_data():
+  # ['Hours', 'nCPU', 'MaxCPU', 'PctCPU', 'TotMem', 'MaxMem', 'PctMem', 'TotDisk', 'MaxDisk', 'PctDisk', 'Task']
   # compute resource-hours : actual and with optimal settings based on maximum usage
   data['TotCPUHour'] = data['nCPU'] * data['Hours']
   data['MaxCPUHour'] = data['MaxCPU'] * data['Hours']
@@ -253,7 +254,9 @@ def main():
   parser.add_argument("--overhead", help="Localization overhead in minutes")
   parser.add_argument("--semilog", help="Plot semilog y", action="store_true")
   parser.add_argument("--plot-norm", help="Specify number of samples to normalize plots to per sample")
-  parser.add_argument("--log-level", help="Specify level of logging information, ie. info, warning, error (not case-sensitive)", required=False, default="INFO")
+  parser.add_argument("--log-level",
+                      help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
+                      required=False, default="INFO")
   args = parser.parse_args()
 
   if not args.overhead:
