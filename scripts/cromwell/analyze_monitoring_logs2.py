@@ -9,7 +9,7 @@ import logging
 
 # Synopsis:
 #  Generates summary statistics on Cromwell monitoring log summary table generated using the following command:
-#       get_cromwell_resource_usage2.sh -u -r meta.json > table.tsv
+#       get_cromwell_resource_usage2.sh -u -r workflow_id > table.tsv
 #  Cost estimates assume all machines are preemptible and have a fixed boot time. Resource
 #  costs are estimated for requesting optimal resources (equal to the max observed) uniformly across all shards
 #  ("static") and individually for each shard ("dynamic").
