@@ -104,8 +104,6 @@ else
     )
 fi
 1>&2 echo "WORKFLOW_DIR=$WORKFLOW_DIR"
-#1>&2 echo "RAW_OUTPUT=$RAW_OUTPUT"
-#1>&2 echo "SHOW_UNITS=$SHOW_UNITS"
 
 
 function get_monitor_logs() {
@@ -207,10 +205,12 @@ function get_task_peak_resource_usage() {
                 NEED_HEADER=2
             }
             NEED_HEADER == 0 {
-                PEAK_VALUE[1] = $1
-                for(i=2; i<=NF; ++i) {
-                    if($i > PEAK_VALUE[i]) {
-                        PEAK_VALUE[i] = $i
+                split($0, WORDS, /\t/)
+                PEAK_VALUE[1] = WORDS[1]
+                for(i=2; i<=length(WORDS); ++i) {
+                    WORD=WORDS[i]
+                    if(length(WORD) > 0 && WORD > PEAK_VALUE[i]) {
+                        PEAK_VALUE[i] = WORD
                     }
                 }
             }
@@ -303,20 +303,20 @@ function get_task_description() {
 export -f get_task_description
 
 function get_task_columns() {
-    LOG_NUMBER=$1
-    LOG_FILE="$2"
-    TOP_DIR="$3"
-    DESCRIPTION=$(get_task_description "$LOG_FILE" "$TOP_DIR")
+    LOG_FILE="$1"
+    TOP_DIR="$2"
     RESOURCE_USAGE=$(get_task_peak_resource_usage "$LOG_FILE")
-    if [[ $LOG_NUMBER == 1 ]]; then
+    if [[ -n "$RESOURCE_USAGE" ]]; then
+        DESCRIPTION=$(get_task_description "$LOG_FILE" "$TOP_DIR")
+    
         # due to OSX having an ancient version of bash, this produces syntax errors:
         # paste <(echo "$RESOURCE_USAGE" | head -n2) <(echo "task")
         printf "%s\ttask\n" "$(echo "$RESOURCE_USAGE" | head -n1)"
         if $SHOW_UNITS; then
           echo "$RESOURCE_USAGE" | tail -n2 | head -n1
         fi
+        printf "%s\t%s\n" "$(echo "$RESOURCE_USAGE" | tail -n1)" "$DESCRIPTION"
     fi
-    printf "%s\t%s\n" "$(echo "$RESOURCE_USAGE" | tail -n1)" "$DESCRIPTION"
 }
 export -f get_task_columns
 
@@ -336,15 +336,27 @@ function get_workflow_peak_resource_usage() {
             BAR=""
         else
             # being redirected, show progress via bar to stderr
-            BAR="--bar"
+            #BAR="--bar"
+            # NOTE: keeping above line for now to see if I can find a way
+            # to make it work, but it looks like --bar may be incompatible
+            # with filtering out potentially empty results from logs that
+            # were truncated before the header line
+            BAR=""
         fi
-        echo "$LOGS" | nl -s $'\t' | parallel ${BAR} --env TOP_DIR -k --colsep $'\t' "get_task_columns {1} {2} $TOP_DIR"
+        
+        echo "$LOGS" \
+            | parallel ${BAR} --env TOP_DIR -k --colsep $'\t' "get_task_columns {1} $TOP_DIR"
     else
         1>&2 echo "Consider installing 'parallel', it will give significant speed-up"
-        echo "$LOGS" | nl -s $'\t' | while read -r LOG_NUMBER WORKFLOW_LOG; do
-            get_task_columns $LOG_NUMBER "$WORKFLOW_LOG" "$TOP_DIR"
+        echo "$LOGS" | while read -r WORKFLOW_LOG; do
+            get_task_columns "$WORKFLOW_LOG" "$TOP_DIR"
         done
-    fi
+    fi \
+        | if $SHOW_UNITS; then
+            awk 'FNR < 3 || FNR%3 == 0 { print $0 }'
+          else
+            awk 'FNR < 2 || FNR%2 == 0 { print $0 }'
+          fi
 }
 
 if $RAW_OUTPUT; then
