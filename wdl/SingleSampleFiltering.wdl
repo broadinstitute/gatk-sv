@@ -421,7 +421,7 @@ task ResetFilter {
   echo '~{info_header_line}' > header.txt
 
   bcftools filter -i 'FILTER ~ "~{filter_to_reset}"' ~{single_sample_vcf} | bgzip -c > sites.vcf.gz
-  tabix hsrb.vcf.gz
+  tabix sites.vcf.gz
 
   bcftools annotate \
     -k \
