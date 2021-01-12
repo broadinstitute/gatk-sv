@@ -79,7 +79,7 @@
   "GATKSVPipelineSingleSample.pesr_flags" : "--preserve-ids",
   "GATKSVPipelineSingleSample.pesr_frac" : 0.1,
   "GATKSVPipelineSingleSample.pesr_svsize" : 0,
-  "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : 2,
+  "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : {{ reference_resources.copy_number_autosomal_contigs | tojson }},
   "GATKSVPipelineSingleSample.clean_vcf_min_sr_background_fail_batches": 0.5,
   "GATKSVPipelineSingleSample.clean_vcf_max_shards_per_chrom" : 100,
   "GATKSVPipelineSingleSample.clean_vcf_min_variants_per_shard" : 30,
