@@ -146,7 +146,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
 
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
-        print("WARNING: skipping file " + template_file_path + "because it does not have .tmpl extension")
+        print("WARNING: skipping file " + template_file_path + " because it does not have .tmpl extension")
         return
 
     target_file = template_file.rsplit('.', 1)[0]
