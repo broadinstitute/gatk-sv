@@ -971,7 +971,7 @@ workflow GATKSVPipelineSingleSample {
       single_sample_vcf=ResetBothsidesSupportFilter.out,
       single_sample_vcf_idx=ResetBothsidesSupportFilter.out_idx,
       filter_to_reset="PESR_GT_OVERDISPERSION",
-      info_header_line='##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Sites with a high count of samples with PESR genotype estimates greater than two">',
+      info_header_line='##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="Sites with a high count of samples with PESR genotype estimates greater than two">',
       sv_base_mini_docker=sv_base_mini_docker
   }
 
