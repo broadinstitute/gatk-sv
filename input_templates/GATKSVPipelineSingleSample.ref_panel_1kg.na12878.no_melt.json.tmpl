@@ -1,8 +1,8 @@
 {
-  "GATKSVPipelineSingleSample.sample_id" : "NA12878",
-  "GATKSVPipelineSingleSample.batch" : "test_na12878",
-  "GATKSVPipelineSingleSample.bam_or_cram_file" : "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA12878/analysis/NA12878.final.cram",
-  "GATKSVPipelineSingleSample.requester_pays_cram": "true",
+  "GATKSVPipelineSingleSample.sample_id" : {{ test_batch.sample_id | tojson }},
+  "GATKSVPipelineSingleSample.batch" : {{ test_batch.name | tojson }},
+  "GATKSVPipelineSingleSample.bam_or_cram_file" : {{ test_batch.bam_or_cram_file | tojson }},
+  "GATKSVPipelineSingleSample.requester_pays_cram": {{ test_batch.requester_pays_cram | tojson }},
 
   "GATKSVPipelineSingleSample.use_melt": "false",
 
