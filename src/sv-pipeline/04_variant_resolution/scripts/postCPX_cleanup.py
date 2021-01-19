@@ -24,7 +24,7 @@ INS_ALT_INFO = [
 
 # info keys we need to make sure we have
 INFO_KEYS = {
-    'END2' : '##INFO=<ID=END2,Type=Integer,Number=1,Description="Position of breakpoint on CHR2">',
+    'END2' : '##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">',
     'CHR2' : '##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END2 coordinate">',
     'UNRESOLVED' : '##INFO=<ID=UNRESOLVED,Number=0,Type=Flag,Description="Variant is unresolved.">',
     'UNRESOLVED_TYPE' : '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">'
