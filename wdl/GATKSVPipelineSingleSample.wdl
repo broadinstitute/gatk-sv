@@ -966,10 +966,19 @@ workflow GATKSVPipelineSingleSample {
         sv_base_mini_docker=sv_base_mini_docker
     }
 
+  call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
+    input:
+      single_sample_vcf=ResetBothsidesSupportFilter.out,
+      single_sample_vcf_idx=ResetBothsidesSupportFilter.out_idx,
+      filter_to_reset="PESR_GT_OVERDISPERSION",
+      info_header_line='##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="Sites with a high count of samples with PESR genotype estimates greater than two">',
+      sv_base_mini_docker=sv_base_mini_docker
+  }
+
   call m08.Module08Annotation {
        input:
-        vcf = ResetBothsidesSupportFilter.out,
-        vcf_idx = ResetBothsidesSupportFilter.out_idx,
+        vcf = ResetPESRTGTOverdispersionFilter.out,
+        vcf_idx = ResetPESRTGTOverdispersionFilter.out_idx,
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
