@@ -40,6 +40,3 @@ scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_t
 
 scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs_single_sample \
   -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_v1b" }'
-
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/terra_workspace_templates ${BASE_DIR}/terra_workspace \
-  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg"}'
