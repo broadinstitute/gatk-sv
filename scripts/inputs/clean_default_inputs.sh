@@ -34,3 +34,4 @@ rm -r ${BASE_DIR}/inputs
 rm -r ${BASE_DIR}/test_inputs_small
 rm -r ${BASE_DIR}/test_inputs_large
 rm -r ${BASE_DIR}/test_inputs_single_sample
+rm -r ${BASE_DIR}/terra_workspace
