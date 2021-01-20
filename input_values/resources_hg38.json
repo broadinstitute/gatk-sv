@@ -49,7 +49,6 @@
   "segdups" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
   "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "sanders_2015_tarball" : "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
-  "single_sample_qc_definitions" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/qc/single_sample.qc_definitions.tsv",
   "thousand_genomes_tarballs" : [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.ALL.bed.gz",
