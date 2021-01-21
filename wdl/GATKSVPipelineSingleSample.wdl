@@ -1003,7 +1003,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_base_docker=sv_pipeline_base_docker,
   }
 
-call m08.Module08Annotation {
+  call m08.Module08Annotation {
        input:
         vcf = FilterSample.out,
         vcf_idx = FilterSample.out_idx,
