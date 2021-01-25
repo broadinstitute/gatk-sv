@@ -289,6 +289,7 @@ task RDTestGenotype {
     File bin_exclude
     File bin_exclude_idx
     File coveragefile
+    File? coveragefile_index
     File medianfile
     File famfile
     File ref_dict
@@ -303,6 +304,9 @@ task RDTestGenotype {
 
   parameter_meta {
     coveragefile: {
+      localization_optional: true
+    }
+    coveragefile_index: {
       localization_optional: true
     }
   }
@@ -375,11 +379,11 @@ task RDTestGenotype {
   }
 }
 
-
 task CountPE {
   input {
     File vcf
     File discfile
+    File? discfile_index
     File medianfile
     File ref_dict
     Array[String] samples
@@ -389,6 +393,9 @@ task CountPE {
 
   parameter_meta {
     discfile: {
+      localization_optional: true
+    }
+    discfile_index: {
       localization_optional: true
     }
   }
@@ -451,6 +458,7 @@ task CountSR {
   input {
     File vcf
     File splitfile
+    File? splitfile_index
     File medianfile
     File ref_dict
     Array[String] samples
@@ -460,6 +468,9 @@ task CountSR {
 
   parameter_meta {
     splitfile: {
+      localization_optional: true
+    }
+    splitfile_index: {
       localization_optional: true
     }
   }

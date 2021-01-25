@@ -810,8 +810,11 @@ workflow GATKSVPipelineSingleSample {
       n_per_split=genotyping_n_per_split,
       medianfile=Module00c.median_cov,
       coveragefile=Module00c.merged_bincov,
+      coveragefile_index=Module00c.merged_bincov_index,
       discfile=Module00c.merged_PE,
+      discfile_index=Module00c.merged_PE_index,
       splitfile=Module00c.merged_SR,
+      splitfile_index=Module00c.merged_SR_index,
       famfile=combined_ped_file,
       ref_dict=reference_dict,
       n_RD_genotype_bins=n_RD_genotype_bins,
@@ -873,6 +876,7 @@ workflow GATKSVPipelineSingleSample {
       bin_exclude=bin_exclude,
 
       disc_files=[Module00c.merged_PE],
+      disc_files_index=[Module00c.merged_PE_index],
       bincov_files=[Module00c.merged_bincov],
 
       mei_bed=mei_bed,

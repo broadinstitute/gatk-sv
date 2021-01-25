@@ -16,6 +16,7 @@ workflow TrainPEGenotyping {
     File batch_vcf    # variants from just the batch in question
     Array[String] samples
     File discfile
+    File? discfile_index
     File medianfile
     Int n_per_split
     String batch_ID
@@ -58,6 +59,7 @@ workflow TrainPEGenotyping {
       input:
         vcf = vcf,
         discfile = discfile,
+        discfile_index = discfile_index,
         medianfile = medianfile,
         samples = samples,
         ref_dict = ref_dict,
