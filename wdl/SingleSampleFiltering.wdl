@@ -671,8 +671,9 @@ task SampleQC {
     wgdPF=`cat ~{sample_filtering_qc_file} | awk '$1 == "wgd_score_sample" {print $5}'`
     if [ $wgdPF = "FAIL" ]
     then
-      bcftools filter -O z -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER ~{vcf} \
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER ~{vcf} \
         | sed 's/ID=SAMPLE_WGD_OUTLIER,Description=".*"/ID=SAMPLE_WGD_OUTLIER,Description="Case sample is an outlier for WGD dosage score compared to reference panel"/' \
+        | bgzip -c \
         > wgd_filtered.vcf.gz
     else
       cp ~{vcf} wgd_filtered.vcf.gz
@@ -681,8 +682,9 @@ task SampleQC {
     coveragePF=`cat ~{sample_filtering_qc_file} | awk '$1 == "rd_mean_sample" {print $5}'`
     if [ $coveragePF = "FAIL" ]
     then
-      bcftools filter -O z -e 'SVTYPE!="BND"' -m + -s SAMPLE_COVERAGE_OUTLIER wgd_filtered.vcf.gz \
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_COVERAGE_OUTLIER wgd_filtered.vcf.gz \
         | sed 's/ID=SAMPLE_COVERAGE_OUTLIER,Description=".*"/ID=SAMPLE_COVERAGE_OUTLIER,Description="Case sample is an outlier for coverage compared to reference panel"/' \
+        | bgzip -c \
       > ~{outfile}
     else
       cp wgd_filtered.vcf.gz ~{outfile}
