@@ -973,7 +973,7 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = Module00b.WGD_scores,
-      sample_counts = select_first([Module00a.coverage_counts]),
+      sample_counts = case_counts_file_,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
