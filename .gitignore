@@ -30,5 +30,5 @@ src/svtk/svtk/utils/helpers.cpython-37m-darwin.so
 src/svtk/svtk/utils/s3bam.pyc
 src/svtk/svtk/utils/utils.pyc
 src/svtk/svtk/vcfcluster.pyc
-test/
-inputs/
+/test_inputs
+/inputs/

@@ -30,9 +30,13 @@ if [[ ! -d "$BASE_DIR" ]]; then
    exit 1
 fi
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/input_templates ${BASE_DIR}/inputs -a '{"ref_panel" : "ref_panel_1kg_v2"}'
+scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/input_templates ${BASE_DIR}/inputs \
+  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg_v2"}'
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs_small -a '{"test_batch" : "test_batch_small"}'
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs_large -a '{"test_batch" : "test_batch_large"}'
+scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/small \
+  -a '{"test_batch" : "test_batch_small"}'
+scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/large \
+  -a '{"test_batch" : "test_batch_large"}'
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs_single_sample -a '{ "test_batch" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_v1b" }'
+scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/single_sample \
+  -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_v1b" }'

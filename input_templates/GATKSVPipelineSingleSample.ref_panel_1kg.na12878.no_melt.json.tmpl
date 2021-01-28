@@ -1,8 +1,8 @@
 {
-  "GATKSVPipelineSingleSample.sample_id" : "NA12878",
-  "GATKSVPipelineSingleSample.batch" : "test_na12878",
-  "GATKSVPipelineSingleSample.bam_or_cram_file" : "gs://fc-56ac46ea-efc4-4683-b6d5-6d95bed41c5e/CCDG_13607/Project_CCDG_13607_B01_GRM_WGS.cram.2019-02-06/Sample_NA12878/analysis/NA12878.final.cram",
-  "GATKSVPipelineSingleSample.requester_pays_cram": "true",
+  "GATKSVPipelineSingleSample.sample_id" : {{ single_sample.sample_id | tojson }},
+  "GATKSVPipelineSingleSample.batch" : {{ single_sample.name | tojson }},
+  "GATKSVPipelineSingleSample.bam_or_cram_file" : {{ single_sample.bam_or_cram_file | tojson }},
+  "GATKSVPipelineSingleSample.requester_pays_cram": {{ single_sample.requester_pays_cram | tojson }},
 
   "GATKSVPipelineSingleSample.use_melt": "false",
 
@@ -79,7 +79,7 @@
   "GATKSVPipelineSingleSample.pesr_flags" : "--preserve-ids",
   "GATKSVPipelineSingleSample.pesr_frac" : 0.1,
   "GATKSVPipelineSingleSample.pesr_svsize" : 0,
-  "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : 2,
+  "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : {{ reference_resources.copy_number_autosomal_contigs | tojson }},
   "GATKSVPipelineSingleSample.clean_vcf_min_sr_background_fail_batches": 0.5,
   "GATKSVPipelineSingleSample.clean_vcf_max_shards_per_chrom" : 100,
   "GATKSVPipelineSingleSample.clean_vcf_min_variants_per_shard" : 30,

@@ -96,11 +96,14 @@ def main():
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
     raw_input_bundles['test_batch_empty'] = {}
     raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
+    raw_input_bundles['single_sample_none'] = {}
+    raw_input_bundles['single_sample_none']['name'] = 'single_sample'
 
     default_aliases = { 'dockers' : 'dockers',
                         'ref_panel' : 'ref_panel_v1b',
                         'reference_resources' : 'resources_hg38',
-                        'test_batch' : 'test_batch_empty' }
+                        'test_batch' : 'test_batch_empty',
+                        'single_sample' : 'single_sample_none'}
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}
@@ -146,7 +149,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
 
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
-        print("WARNING: skipping file " + template_file_path + "because it does not have .tmpl extension")
+        print("WARNING: skipping file " + template_file_path + " because it does not have .tmpl extension")
         return
 
     target_file = template_file.rsplit('.', 1)[0]
