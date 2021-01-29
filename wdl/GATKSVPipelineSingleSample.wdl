@@ -16,6 +16,7 @@ import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
+import "TestUtils.wdl" as tu
 import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode
@@ -968,7 +969,19 @@ workflow GATKSVPipelineSingleSample {
         filter_to_reset="BOTHSIDES_SUPPORT",
         info_header_line='##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Sites with split read support at both breakpoints">',
         sv_base_mini_docker=sv_base_mini_docker
-    }
+  }
+
+  call SingleSampleMetrics.SingleSampleMetrics as SampleFilterMetrics {
+    input:
+      name = batch,
+      ref_samples = ref_samples,
+      case_sample = sample_id,
+      wgd_scores = Module00b.WGD_scores,
+      sample_counts = case_counts_file_,
+      contig_list = primary_contigs_list,
+      linux_docker = linux_docker,
+      sv_pipeline_base_docker = sv_pipeline_base_docker
+  }
 
   call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
     input:
@@ -979,10 +992,25 @@ workflow GATKSVPipelineSingleSample {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
+  call utils.RunQC as SampleFilterQC {
+    input:
+      name=batch,
+      metrics=SampleFilterMetrics.metrics_file,
+      qc_definitions = qc_definitions,
+      sv_pipeline_base_docker=sv_pipeline_base_docker
+  }
+
+  call SingleSampleFiltering.SampleQC as FilterSample {
+    input:
+      vcf=ResetPESRTGTOverdispersionFilter.out,
+      sample_filtering_qc_file=SampleFilterQC.out,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+  }
+
   call m08.Module08Annotation {
        input:
-        vcf = ResetPESRTGTOverdispersionFilter.out,
-        vcf_idx = ResetPESRTGTOverdispersionFilter.out_idx,
+        vcf = FilterSample.out,
+        vcf_idx = FilterSample.out_idx,
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,

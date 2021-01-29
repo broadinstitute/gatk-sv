@@ -639,3 +639,70 @@ task VcfToBed {
   }
 }
 
+task SampleQC {
+  input {
+    File vcf
+    File sample_filtering_qc_file
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  String filebase = basename(vcf, ".vcf.gz")
+  String outfile = "~{filebase}.sample_qc.vcf.gz"
+
+  output {
+    File out = "~{outfile}"
+    File out_idx = "~{outfile}.tbi"
+  }
+
+  command <<<
+    set -euo pipefail
+
+    wgdPF=`cat ~{sample_filtering_qc_file} | awk '$1 == "wgd_score_sample" {print $5}'`
+    if [ $wgdPF = "FAIL" ]
+    then
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_WGD_OUTLIER ~{vcf} \
+        | sed 's/ID=SAMPLE_WGD_OUTLIER,Description=".*"/ID=SAMPLE_WGD_OUTLIER,Description="Case sample is an outlier for WGD dosage score compared to reference panel"/' \
+        | bgzip -c \
+        > wgd_filtered.vcf.gz
+    else
+      cp ~{vcf} wgd_filtered.vcf.gz
+    fi
+
+    coveragePF=`cat ~{sample_filtering_qc_file} | awk '$1 == "rd_mean_sample" {print $5}'`
+    if [ $coveragePF = "FAIL" ]
+    then
+      bcftools filter -e 'SVTYPE!="BND"' -m + -s SAMPLE_COVERAGE_OUTLIER wgd_filtered.vcf.gz \
+        | sed 's/ID=SAMPLE_COVERAGE_OUTLIER,Description=".*"/ID=SAMPLE_COVERAGE_OUTLIER,Description="Case sample is an outlier for coverage compared to reference panel"/' \
+        | bgzip -c \
+      > ~{outfile}
+    else
+      cp wgd_filtered.vcf.gz ~{outfile}
+    fi
+
+    tabix ~{outfile}
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+}
+
+
