@@ -13,7 +13,7 @@
   "sv_base_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:mw-gnomad-02-6a66c96",
   "sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:mw-gnomad-02-6a66c96",
   "sv_pipeline_base_docker" : "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline-base:cw-pesrgtfilter-5bb73a",
-  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw-end2header-69e9e19",
+  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:rlc-vcf-qc-mei-2fd09c8",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-xz-fixes-7cbffee",
   "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
   "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa"

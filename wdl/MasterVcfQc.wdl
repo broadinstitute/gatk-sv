@@ -17,7 +17,7 @@ import "PerSampleExternalBenchmark.wdl" as PerSampleExternalBenchmark
 import "Tasks0506.wdl" as MiniTasks
 
 # Master workflow to perform comprehensive quality control (QC) on
-# an SV VCF output by the Talkowski lab SV pipeline
+# an SV VCF output by GATK-SV
 workflow MasterVcfQc {
   input {
     File vcf

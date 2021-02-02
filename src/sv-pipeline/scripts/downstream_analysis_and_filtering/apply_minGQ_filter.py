@@ -357,6 +357,9 @@ def main():
     parser.add_argument('--dropEmpties', default=False, action='store_true',
                         help='After GT reassignments, drop any SV with no remaining ' + 
                         ' non-ref samples (default: keep all SV).')
+    parser.add_argument('--simplify-INS-SVTYPEs', default=False, action='store_true',
+                        help='Resets the SVTYPE of all INS variants, including MEIs, ' + 
+                        'to be SVTYPE=INS (default: keep original SVTYPEs).')    
     parser.add_argument('--maxNCR', help='Max no-call rate among all ' + 
                         'samples before adding a flag to the record\'s FILTER field' + 
                         ' (default: 0.005)', 
@@ -414,7 +417,11 @@ def main():
             for key in 'AN AC AF N_BI_GENOS N_HOMREF N_HET N_HOMALT FREQ_HOMREF FREQ_HET FREQ_HOMALT'.split(' '):
                 if key in record.info.keys():
                     record.info.pop(key)
-        
+
+        # Standardize SVTYPE for all INS variants, if optioned
+        if args.simplify_INS_SVTYPEs and 'INS' in record.info['SVTYPE']:
+            record.info['SVTYPE'] = 'INS'
+
         if args.dropEmpties:
             samps = svu.get_called_samples(record, include_null=False)
             if len(samps) > 0:

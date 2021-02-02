@@ -792,6 +792,7 @@ task ApplyMinGQFilter {
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/apply_minGQ_filter.py \
       --minGQ "~{global_minGQ}" \
       --maxNCR "~{maxNCR}" \
+      --simplify-INS-SVTYPEs \
       --cleanAFinfo \
       --prefix "~{PCR_status}" \
       "~{vcf}" \
