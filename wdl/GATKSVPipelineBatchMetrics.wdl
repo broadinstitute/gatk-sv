@@ -6,7 +6,7 @@ import "Module01Metrics.wdl" as m01
 import "Module02Metrics.wdl" as m02
 import "Module03Metrics.wdl" as m03
 import "Module04Metrics.wdl" as m04
-import "Module05_06Metrics.wdl" as m0506
+import "Module0506Metrics.wdl" as m0506
 import "TestUtils.wdl" as utils
 
 workflow BatchMetrics {
@@ -103,11 +103,15 @@ workflow BatchMetrics {
     File? baseline_genotyped_depth_vcf
 
     # 0506
-    File final_vcf
-    File cleaned_vcf
+    File? module0506_cluster_vcf
+    File? module0506_complex_resolve_vcf
+    File? module0506_complex_genotype_vcf
+    File module0506_cleaned_vcf
 
-    File? baseline_final_vcf
-    File? baseline_cleaned_vcf
+    File? baseline_module0506_cluster_vcf
+    File? baseline_module0506_complex_resolve_vcf
+    File? baseline_module0506_complex_genotype_vcf
+    File? baseline_module0506_cleaned_vcf
   }
 
   Array[String] samples_post_filter = read_lines(samples_post_filtering_file)
@@ -225,14 +229,18 @@ workflow BatchMetrics {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  call m0506.Module05_06Metrics {
+  call m0506.Module0506Metrics {
     input:
       name = name,
       samples = samples_post_filter,
-      final_vcf = final_vcf,
-      cleaned_vcf = cleaned_vcf,
-      baseline_final_vcf = baseline_final_vcf,
-      baseline_cleaned_vcf = baseline_cleaned_vcf,
+      cluster_vcf = module0506_cluster_vcf,
+      complex_resolve_vcf = module0506_complex_resolve_vcf,
+      complex_genotype_vcf = module0506_complex_genotype_vcf,
+      cleaned_vcf = module0506_cleaned_vcf,
+      baseline_cluster_vcf = baseline_module0506_cluster_vcf,
+      baseline_complex_resolve_vcf = baseline_module0506_complex_resolve_vcf,
+      baseline_complex_genotype_vcf = baseline_module0506_complex_genotype_vcf,
+      baseline_cleaned_vcf = baseline_module0506_cleaned_vcf,
       contig_list = contig_list,
       linux_docker = linux_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
@@ -241,7 +249,7 @@ workflow BatchMetrics {
   call utils.CatMetrics as CatBatchMetrics {
     input:
       prefix = "batch_sv." + name,
-      metric_files = [Module00aBatchMetrics.metrics_file, Module00cMetrics.metrics_file, Module01Metrics.metrics_file, Module02Metrics.metrics_file, Module03Metrics.metrics_file, Module04Metrics.metrics_file, Module05_06Metrics.metrics_file],
+      metric_files = [Module00aBatchMetrics.metrics_file, Module00cMetrics.metrics_file, Module01Metrics.metrics_file, Module02Metrics.metrics_file, Module03Metrics.metrics_file, Module04Metrics.metrics_file, Module0506Metrics.metrics_file],
       linux_docker = linux_docker
   }
 

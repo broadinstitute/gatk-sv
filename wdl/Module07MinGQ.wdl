@@ -9,7 +9,6 @@
 version 1.0
 
 import "MinGQRocOpt.wdl" as roc_opt_sub
-# import "../05_06_master_vcf_qc" as QC
 import "CalcAF.wdl" as calcAF
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
