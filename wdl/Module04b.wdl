@@ -569,18 +569,12 @@ task GetMedianSubset{
         fields = line.strip().split('\t')
         # first 4 fields are variant info (chr, start, end, varID)
         var_info = fields[0:4]
-        # next len-4 fields are sample coverage medians for each sample in the batch
-        try:
-          coverage_medians = [float(x) for x in fields[4:]]
-        except ValueError as e:
-          if str(e) == "could not convert string to float: '.'":
-            # if missing data, print variant ID and chrom:start-end in case follow-up desired
-            print("Empty coverage data for variant %s at %s:%s-%s" % (var_info[3], var_info[0], var_info[1], var_info[2]))
-            # then skip
-            continue
-          else:
-            raise ValueError(str(e)) # other types of ValueErrors should be treated as errors
-        med = median(coverage_medians)
+        if any([x == '.' for x in fields[4:]]):
+          # skip variants with empty coverage data
+          continue
+        # else:
+        # last len-4 fields are sample coverage medians for each sample in the batch
+        med = median([float(x) for x in fields[4:]])
         if (0.85 < med < 0.97) or (1.03 < med < 1.65):
           outp.write('\t'.join(var_info) + "\n")
     CODE
