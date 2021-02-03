@@ -211,6 +211,7 @@ task ClusterMergedDepthBeds {
     File regeno_merged_depth_clustered = "~{cohort}.regeno.merged_depth_clustered.bed"
   }
   command <<<
+    set -euo pipefail
     svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed   # vcf2bed merge_vcfs, non_duplicated
     # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
     awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.bed 
@@ -558,9 +559,32 @@ task GetMedianSubset{
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command {
-    R -e 'd<-read.table("~{medians}",header=T,check.names=F);result<-d[((apply(as.matrix(d[,5:length(d)]),FUN=median,1)<0.97 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)>0.85)|(apply(as.matrix(d[,5:length(d)]),FUN=median,1)>1.03 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)<1.65)),1:4];write.table(result,file="~{batch}_to_regeno.bed",sep="\t",quote=F,row.names=F,col.names=F)'
-  }
+  command <<<
+    set -euo pipefail
+    python3 <<CODE
+
+    from statistics import median
+    with open("~{medians}", 'r') as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+      for line in inp:
+        fields = line.strip().split('\t')
+        # first 4 fields are variant info (chr, start, end, varID)
+        var_info = fields[0:4]
+        # next len-4 fields are sample coverage medians for each sample in the batch
+        try:
+          coverage_medians = [float(x) for x in fields[4:]]
+        except ValueError as e:
+          if str(e) == "could not convert string to float: '.'":
+            # if missing data, print variant ID and chrom:start-end in case follow-up desired
+            print("Empty coverage data for variant %s at %s:%s-%s" % (var_info[3], var_info[0], var_info[1], var_info[2]))
+            # then skip
+            continue
+          else:
+            raise ValueError(str(e)) # other types of ValueErrors should be treated as errors
+        med = median(coverage_medians)
+        if (0.85 < med < 0.97) or (1.03 < med < 1.65):
+          outp.write('\t'.join(var_info) + "\n")
+    CODE
+  >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
@@ -629,6 +653,7 @@ task MergeList {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
+    set -euo pipefail
     cat ~{sep=' ' regeno_beds} | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
     # count non-empty lines in regeno bed file to determine if empty or not --> proceed with regenotyping or stop here?
     # the OR clause is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines (but don't ignore real error codes > 1)
