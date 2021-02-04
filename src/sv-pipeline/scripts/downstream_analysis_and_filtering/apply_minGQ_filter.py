@@ -419,8 +419,9 @@ def main():
                     record.info.pop(key)
 
         # Standardize SVTYPE for all INS variants, if optioned
-        if args.simplify_INS_SVTYPEs and 'INS' in record.info['SVTYPE']:
-            record.info['SVTYPE'] = 'INS'
+        if any([keyword in record.info['SVTYPE'].split(':') for keyword in 'INS MEI'.split()]):
+            if args.simplify_INS_SVTYPEs:
+                record.info['SVTYPE'] = 'INS'
 
         if args.dropEmpties:
             samps = svu.get_called_samples(record, include_null=False)
