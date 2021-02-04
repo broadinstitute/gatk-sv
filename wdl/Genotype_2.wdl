@@ -99,7 +99,7 @@ workflow Regenotype {
       depth_vcf=depth_vcf,
       regeno_vcfs=AddGenotypesRegeno.genotyped_vcf,
       bed=regeno_bed,
-      runtime_attr_override = runtime_attr_concat_regenotyped_vcfs_g2
+      runtime_attr_override = runtime_attr_concat_regenotyped_vcfs_g2,
       sv_base_mini_docker=sv_base_mini_docker
   }
   output {
