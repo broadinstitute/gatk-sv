@@ -2,30 +2,40 @@ version 1.0
 import "Tasks04.wdl" as task04
 
 workflow Regenotype {
-  input{
-      File depth_vcf
-      File regeno_bed
-      File cohort_depth_vcf
-      File batch_depth_vcf
-      File coveragefile
-      File coveragefile_idx
-      File medianfile
-      File famfile
-      File RD_depth_sepcutoff
-      Int n_per_split
-      Int n_RdTest_bins
-      String batch
-      File samples_list
-      String sv_base_mini_docker
-      String sv_pipeline_docker
-      String sv_pipeline_rdtest_docker
-      Array[String] samples = read_lines(samples_list)
+  input {
+    File depth_vcf
+    File regeno_bed
+    File cohort_depth_vcf
+    File batch_depth_vcf
+    File coveragefile
+    File coveragefile_idx
+    File medianfile
+    File famfile
+    File RD_depth_sepcutoff
+    Int n_per_split
+    Int n_RdTest_bins
+    String batch
+    File samples_list
+    String sv_base_mini_docker
+    String sv_pipeline_docker
+    String sv_pipeline_rdtest_docker
+    Array[String] samples = read_lines(samples_list)
+
+    RuntimeAttr? runtime_attr_add_batch_samples
+    RuntimeAttr? runtime_attr_get_regeno_g2
+    RuntimeAttr? runtime_attr_split_beds
+    RuntimeAttr? runtime_attr_make_subset_vcf
+    RuntimeAttr? runtime_attr_rd_test_gt_regeno
+    RuntimeAttr? runtime_attr_integrate_depth_gq
+    RuntimeAttr? runtime_attr_add_genotypes
+    RuntimeAttr? runtime_attr_concat_regenotyped_vcfs_g2
   }
   call task04.AddBatchSamples as AddBatchSamplesDepth {
     input:
       batch_vcf=batch_depth_vcf,
       cohort_vcf=cohort_depth_vcf,
       prefix="~{batch}.depth",
+      runtime_attr_override = runtime_attr_add_batch_samples,
       sv_pipeline_docker=sv_pipeline_docker
   }
   call GetRegenotype {
@@ -33,12 +43,14 @@ workflow Regenotype {
       Batch=batch,
       master_regeno=regeno_bed,
       depth_genotyped_vcf=depth_vcf,
+      runtime_attr_override = runtime_attr_get_regeno_g2,
       sv_pipeline_docker=sv_pipeline_docker
   }
   call SplitBeds as SplitBeds_regeno {
     input: 
       bed=GetRegenotype.regeno_bed,
       n_per_split=n_per_split,
+      runtime_attr_override = runtime_attr_split_beds,
       sv_pipeline_docker=sv_pipeline_docker
   }
   scatter (regeno in SplitBeds_regeno.regeno_beds) {
@@ -46,11 +58,11 @@ workflow Regenotype {
       input:
         vcf=AddBatchSamplesDepth.updated_vcf,
         bed=regeno,
+        runtime_attr_override = runtime_attr_make_subset_vcf,
         sv_base_mini_docker=sv_base_mini_docker
     }
     call RdTestGenotypeRegeno {
       input:
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         bed=regeno,
         coveragefile=coveragefile,
         generate_melted_genotypes = true,
@@ -59,13 +71,16 @@ workflow Regenotype {
         samples=samples,
         gt_cutoffs=RD_depth_sepcutoff,
         n_bins=n_RdTest_bins,
-        prefix=basename(regeno, ".bed")
+        prefix=basename(regeno, ".bed"),
+        runtime_attr_override = runtime_attr_rd_test_gt_regeno,
+        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
     }
     call task04.IntegrateDepthGq as IntegrateGQRegeno {
       input:
         vcf=make_subset_vcf_regeno.subset_vcf,
         RD_melted_genotypes=RdTestGenotypeRegeno.melted_genotypes,
         RD_vargq=RdTestGenotypeRegeno.varGQ,
+        runtime_attr_override = runtime_attr_integrate_depth_gq,
         sv_pipeline_docker=sv_pipeline_docker
     }
     call task04.AddGenotypes as AddGenotypesRegeno {
@@ -73,17 +88,19 @@ workflow Regenotype {
         vcf=make_subset_vcf_regeno.subset_vcf,
         genotypes=IntegrateGQRegeno.genotypes,
         varGQ=IntegrateGQRegeno.varGQ,
-        sv_pipeline_docker=sv_pipeline_docker,
-        prefix=basename(regeno, ".bed")
+        prefix=basename(regeno, ".bed"),
+        runtime_attr_override = runtime_attr_add_genotypes,
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
   call ConcatReGenotypedVcfs as ConcatRegenotypedVcfs {
     input:
-    batch=batch,
-    depth_vcf=depth_vcf,
-    regeno_vcfs=AddGenotypesRegeno.genotyped_vcf,
-    sv_base_mini_docker=sv_base_mini_docker,
-    bed=regeno_bed
+      batch=batch,
+      depth_vcf=depth_vcf,
+      regeno_vcfs=AddGenotypesRegeno.genotyped_vcf,
+      bed=regeno_bed,
+      runtime_attr_override = runtime_attr_concat_regenotyped_vcfs_g2
+      sv_base_mini_docker=sv_base_mini_docker
   }
   output {
     File genotyped_vcf = ConcatRegenotypedVcfs.genotyped_vcf

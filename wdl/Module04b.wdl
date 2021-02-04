@@ -2,10 +2,9 @@ version 1.0
 
 import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
-import "Genotype_3.wdl" as g3
 
-workflow Module04b{
-  input{
+workflow Module04b {
+  input {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -35,12 +34,26 @@ workflow Module04b{
     RuntimeAttr? runtime_attr_concat_samplecountlookup
     RuntimeAttr? runtime_attr_concat_sampleidlookup
 
-    RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list
     RuntimeAttr? runtime_attr_get_count_cohort_samplelist
     RuntimeAttr? runtime_attr_get_regeno
     RuntimeAttr? runtime_attr_get_median_subset
     RuntimeAttr? runtime_attr_median_intersect
+    RuntimeAttr? runtime_attr_concat_regenotyped_vcfs
+
+    # Genotype_2
+    RuntimeAttr? runtime_attr_add_batch_samples
+    RuntimeAttr? runtime_attr_get_regeno_g2
+    RuntimeAttr? runtime_attr_split_beds
+    RuntimeAttr? runtime_attr_make_subset_vcf
+    RuntimeAttr? runtime_attr_rd_test_gt_regeno
+    RuntimeAttr? runtime_attr_integrate_depth_gq
+    RuntimeAttr? runtime_attr_add_genotypes
+    RuntimeAttr? runtime_attr_concat_regenotyped_vcfs_g2
+
+    #CombineReassess
+    RuntimeAttr? runtime_attr_vcf2bed
+    RuntimeAttr? runtime_attr_merge_list_creassess 
   }
 
   call ClusterMergedDepthBeds {
@@ -157,7 +170,15 @@ workflow Module04b{
           samples_list=samples_lists[i],
           sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+          runtime_attr_add_batch_samples = runtime_attr_add_batch_samples,
+          runtime_attr_get_regeno_g2 = runtime_attr_get_regeno_g2,
+          runtime_attr_split_beds = runtime_attr_split_beds,
+          runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
+          runtime_attr_rd_test_gt_regeno = runtime_attr_rd_test_gt_regeno,
+          runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
+          runtime_attr_add_genotypes = runtime_attr_add_genotypes,
+          runtime_attr_concat_regenotyped_vcfs_g2 = runtime_attr_concat_regenotyped_vcfs_g2
       }
     }
 
@@ -169,6 +190,7 @@ workflow Module04b{
         vcfs = Genotype_2.genotyped_vcf,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
         runtime_attr_vcf2bed = runtime_attr_vcf2bed
     }
       
@@ -179,11 +201,12 @@ workflow Module04b{
           batch = batches[i],
           regeno_vcf = Genotype_2.genotyped_vcf[i],
           regeno_variants = CombineReassess.regeno_variants,
+          runtime_attr_override = runtime_attr_concat_regenotyped_vcfs,
           sv_pipeline_docker = sv_pipeline_docker
       }
     }
   }
-  output{
+  output {
     Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
     File number_regenotyped_file = MergeList.num_regeno_file
   }
