@@ -1,0 +1,97 @@
+#!/bin/python
+
+import argparse
+from os.path import isfile, getsize
+import logging
+import subprocess
+import json
+
+
+def check_file_nonempty(f):
+  if not isfile(f):
+    raise RuntimeError("Required input file %s does not exist." % f)
+  elif getsize(f) == 0:
+    raise RuntimeError("Required input file %s is empty." % f)
+
+
+def make_batch_dir_dict(workflows, bucket):
+  batch_dirs = {}
+  if bucket[-1] != '/':
+    bucket += "/"
+  with open(workflows, 'r') as inp:
+    for line in inp:
+      (batch, ids) = line.strip().split('\t')
+      ids_list = ids.split(',')
+      batch_dirs[batch] = [bucket + "*/" + workflow_id + "/**" for workflow_id in ids_list]
+  return batch_dirs
+
+
+def find_output_file(batch, paths, filename):
+  for path in paths:
+    path_search = path + filename
+    command = "gsutil ls " + path_search
+    cmd_obj = subprocess.run(command, shell=True, capture_output=True, text=True)
+    # return code is 0 if found, 1 if not
+    rc = cmd_obj.returncode
+    if rc == 0:
+      file = cmd_obj.stdout.strip()  # will not be empty string because return code would be 1
+      return file
+    elif rc == 1:
+      continue  # object not found, try next path
+    else:  # do want to warn of other error besides not found
+      logging.warning("Command gsutil ls " + path_search + " exited with code " + str(cmd_obj.returncode))
+  # if get to this point, have not found file in any of the possible workflow directories for the batch
+  logging.warning(f"{batch} output file {filename} not found in provided directories. Outputting empty string")
+  return ""
+
+
+def get_output_files(batch_dirs, files_dict, output_file):
+  batches = sorted(batch_dirs.keys())
+  output_names = sorted(files_dict.keys())
+  num_outputs = len(output_names)
+  logging.info("Writing %s" % output_file)
+  with open(output_file, 'w') as out:
+    out.write("batch\t" + "\t".join(output_names) + "\n")
+    for batch in batches:
+      logging.info("Searching for outputs for %s" % batch)
+      paths = batch_dirs[batch]
+      batch_line = [""] * (num_outputs + 1)
+      batch_line[0] = batch
+      for i, output_name in enumerate(output_names):
+        batch_line[i + 1] = find_output_file(batch, paths, files_dict[output_name])
+      out.write("\t".join(batch_line) + "\n")
+  logging.info("Done!")
+
+
+# Main function
+def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-w", "--workflows", required=True, help="TSV file (no header) with batch (or sample) names and \
+                                                                workflow IDs")
+  parser.add_argument("-f", "--filenames", required=True, help="JSON file with output names and filename suffixes \
+                                                                (assumes ONE file per output, not an array)")  # TODO
+  parser.add_argument("-o", "--output_file", required=True, help="Output file path")
+  parser.add_argument("-b", "--bucket", required=True, help="Google bucket path to search for files")
+  parser.add_argument("-l", "--log-level",
+                      help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
+                      required=False, default="INFO")
+  args = parser.parse_args()
+
+  log_level = args.log_level
+  numeric_level = getattr(logging, log_level.upper(), None)
+  if not isinstance(numeric_level, int):
+    raise ValueError('Invalid log level: %s' % log_level)
+  logging.basicConfig(level=numeric_level, format='%(levelname)s: %(message)s')
+
+  workflows, filenames, output_file, bucket = args.workflows, args.filenames, args.output_file, args.bucket
+  check_file_nonempty(workflows)
+  check_file_nonempty(filenames)
+
+  batch_dirs = make_batch_dir_dict(workflows, bucket)
+  files_dict = json.load(open(filenames, 'r'))
+  
+  get_output_files(batch_dirs, files_dict, output_file)
+
+
+if __name__ == "__main__":
+  main()
