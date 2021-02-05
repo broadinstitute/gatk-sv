@@ -7,6 +7,28 @@ import subprocess
 import json
 
 
+"""
+Summary: find GCS paths for specified outputs for multiple batches without downloading metadata
+
+Usage:
+  python get_output_paths.py -w workflows.tsv -f filenames.json -o output.tsv -b gs://bucket/ [-l LEVEL]
+
+Parameters:
+  Required:
+  -w,--workflows: TSV file (no header) with batch (or sample) names and workflow IDs (comma-separated if multiple)
+  -f,--filenames: JSON file with output names and filename suffixes (assumes ONE file per output, not an array, string, or int)
+  -o,--output_file: Output file path (TSV)
+  -b,--bucket: Google bucket path to search for files (common to all workflows)
+  Optional:
+  -l,--log-level LEVEL (specify level of logging information to print, ie. INFO, WARNING, ERROR - not case-sensitive)
+
+Outputs:
+  - TSV file with columns for batch and each output variable, a row for each batch, containing GCS output paths
+
+Author: Emma Pierce-Hoffman (epierceh@broadinstitute.org)
+"""
+
+
 def check_file_nonempty(f):
   if not isfile(f):
     raise RuntimeError("Required input file %s does not exist." % f)
