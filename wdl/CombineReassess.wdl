@@ -13,8 +13,8 @@ workflow CombineReassess {
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list_creassess
   }
-  scatter(vcf in vcfs){
-    call Vcf2Bed{
+  scatter(vcf in vcfs) {
+    call Vcf2Bed {
       input:
         vcf = vcf,
         regeno_file = regeno_file,
@@ -22,7 +22,7 @@ workflow CombineReassess {
         runtime_attr_override = runtime_attr_vcf2bed
     }
   }
-  call MergeList{
+  call MergeList {
     input:
       nonempty_txt = Vcf2Bed.nonempty,
       regeno_file = regeno_file,
@@ -33,10 +33,12 @@ workflow CombineReassess {
   }
   output {
     File regeno_variants = MergeList.regeno_var
+    File num_regeno_filtered_file = MergeList.num_regeno_filtered_file
+    Int num_regeno_filtered = MergeList.num_regeno_filtered
   }
 }
 
-task Vcf2Bed{
+task Vcf2Bed {
   input {
     File vcf
     File regeno_file
@@ -74,7 +76,7 @@ task Vcf2Bed{
   }
 }
 
-task MergeList{
+task MergeList {
   input {
     File samplelist
     File regeno_file
@@ -93,7 +95,7 @@ task MergeList{
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
-    set -e
+    set -euo pipefail
     cut -f 4 ~{regeno_file} >regeno_variants.txt
     fgrep -f regeno_variants.txt ~{regeno_sample_ids_lookup} > cohort.regeno_var.combined.bed
     cat ~{sep=' ' nonempty_txt}|sort -k1,1V -k2,2n -k3,3n |bgzip -c > nonempty.bed.gz
@@ -145,13 +147,20 @@ task MergeList{
                 g.write(dat[0]+"\t"+",".join(regeno)+'\t'+",".join(expected)+'\t'+overlap_over_regeno+'\t'+overlap_over_expected+"\n")
     CODE
     awk '{if($4>0.7 && $5>0.7)print $1}' reassess_nonzero_overlap.txt > regeno_var_filtered.txt
-    fgrep -w -f regeno_var_filtered.txt ~{regeno_file}> regeno.filtered.bed
+    # the OR clause below is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines 
+    # (but don't ignore real error codes > 1)
+    fgrep -w -f regeno_var_filtered.txt ~{regeno_file}> regeno.filtered.bed || [[ $? == 1 ]]
+    # count number of regeno variants (non-empty lines in file) after filtering
+    NUM_REGENO_FILTERED=$(grep -c '[^[:space:]]' regeno_var_filtered.txt || [[ $? == 1 ]] )
+    echo $NUM_REGENO_FILTERED > regeno_filtered_num_lines.txt
   >>>
   output {
     File reassess_nonzero="reassess_nonzero_overlap.txt"
     File regeno_filtered="regeno.filtered.bed"
     File regeno_var="regeno_var_filtered.txt"
     File nonempty_bed="nonempty.bed.gz"
+    Int num_regeno_filtered = read_int("regeno_filtered_num_lines.txt")
+    File num_regeno_filtered_file = "regeno_filtered_num_lines.txt"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

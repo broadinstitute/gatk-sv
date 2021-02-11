@@ -193,22 +193,25 @@ workflow Module04b {
         runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
         runtime_attr_vcf2bed = runtime_attr_vcf2bed
     }
-      
-    scatter (i in range(length(Genotype_2.genotyped_vcf))) {
-      call ConcatRegenotypedVcfs{
-        input:
-          depth_vcf=depth_vcfs[i],
-          batch = batches[i],
-          regeno_vcf = Genotype_2.genotyped_vcf[i],
-          regeno_variants = CombineReassess.regeno_variants,
-          runtime_attr_override = runtime_attr_concat_regenotyped_vcfs,
-          sv_pipeline_docker = sv_pipeline_docker
+    
+    if (CombineReassess.num_regeno_filtered > 0) {
+      scatter (i in range(length(Genotype_2.genotyped_vcf))) {
+        call ConcatRegenotypedVcfs {
+          input:
+            depth_vcf=depth_vcfs[i],
+            batch = batches[i],
+            regeno_vcf = Genotype_2.genotyped_vcf[i],
+            regeno_variants = CombineReassess.regeno_variants,
+            runtime_attr_override = runtime_attr_concat_regenotyped_vcfs,
+            sv_pipeline_docker = sv_pipeline_docker
+        }
       }
     }
   }
   output {
     Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
     File number_regenotyped_file = MergeList.num_regeno_file
+    File number_regenotyped_filtered_file = select_first([CombineReassess.num_regeno_filtered_file, MergeList.num_regeno_file])
   }
 }
 
