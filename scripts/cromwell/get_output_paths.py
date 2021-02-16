@@ -38,6 +38,7 @@ def check_file_nonempty(f):
 
 def make_batch_dir_dict(workflows, bucket):
   batch_dirs = {}
+  batches = [] # to hold batches in order given in input
   if bucket[-1] != '/':
     bucket += "/"
   with open(workflows, 'r') as inp:
@@ -45,7 +46,8 @@ def make_batch_dir_dict(workflows, bucket):
       (batch, ids) = line.strip().split('\t')
       ids_list = ids.split(',')
       batch_dirs[batch] = [bucket + "*/" + workflow_id + "/**" for workflow_id in ids_list]
-  return batch_dirs
+      batches.append(batch)
+  return batches, batch_dirs
 
 
 def find_output_file(batch, paths, filename):
@@ -67,10 +69,7 @@ def find_output_file(batch, paths, filename):
   return ""
 
 
-def get_output_files(batch_dirs, files_dict, output_file):
-  batches = sorted(batch_dirs.keys())
-  output_names = sorted(files_dict.keys())
-  num_outputs = len(output_names)
+def get_output_files(batches, batch_dirs, files_dict, output_names, num_outputs, output_file):
   logging.info("Writing %s" % output_file)
   with open(output_file, 'w') as out:
     out.write("batch\t" + "\t".join(output_names) + "\n")
@@ -109,10 +108,12 @@ def main():
   check_file_nonempty(workflows)
   check_file_nonempty(filenames)
 
-  batch_dirs = make_batch_dir_dict(workflows, bucket)
+  batches, batch_dirs = make_batch_dir_dict(workflows, bucket)
   files_dict = json.load(open(filenames, 'r'))
-  
-  get_output_files(batch_dirs, files_dict, output_file)
+  output_names = sorted(files_dict.keys())
+  num_outputs = len(output_names)
+
+  get_output_files(batches, batch_dirs, files_dict, output_names, num_outputs, output_file)
 
 
 if __name__ == "__main__":
