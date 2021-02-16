@@ -46,11 +46,11 @@ def write_files(workflow_metadata, output_dir):
     m_copy = {}
     m_copy['inputs'] = m['inputs']
     m_copy['outputs'] = m['outputs']
-    for key in m_copy['inputs'].keys():
+    for key in list(m_copy['inputs']):
       if m_copy['inputs'][key]:
         m_copy['inputs'][task + '.' + key] = m_copy['inputs'][key]
       del m_copy['inputs'][key]
-    for key in m_copy['outputs'].keys():
+    for key in list(m_copy['outputs']):
       if not m_copy['outputs'][key]:
         del m_copy['outputs'][key]
 
