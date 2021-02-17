@@ -381,16 +381,16 @@ Note: Trio families are required to build the minGQ filtering model in this step
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.1perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.5perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt```
 
-* BatchEffect - remove variants that show significantly higher than expected differences between different batches
-* FilterOutlierSamples -remove outlier samples with extremely high or low number of SVs
-* FilterCleanupQualRecalibration - modify filter columns for easier interpretation
+* BatchEffect - remove variants that show significant discrepancies in allele frequencies across batches
+* FilterOutlierSamples - remove outlier samples with unusually high or low number of SVs
+* FilterCleanupQualRecalibration - sanitize filter columns and recalibrate variant QUAL scores for easier interpretation
 
 ## <a name="module08">Module 08</a> (in development)
 Add annotations, such as the inferred function and allele frequencies of variants, to final vcf.
 
 Annotations methods include:
 * Functional annotation - annotate SVs with inferred function on protein coding regions, regulatory regions such as UTR and Promoters and other non coding elements;
-* Allele Frequency annotation - annotate SVs with their allele frequencies across all samples, and samples of specific gender, as well as specific sub-populations.
+* Allele Frequency annotation - annotate SVs with their allele frequencies across all samples, and samples of specific sex, as well as specific sub-populations.
 * Allele Frequency annotation with external callset - annotate SVs with the allele frequencies of their overlapping SVs in another callset, eg. gnomad SV callset.
 
 ## <a name="module09">Module 09</a> (in development)

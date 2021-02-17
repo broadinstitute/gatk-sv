@@ -522,29 +522,29 @@ task CollectTrioSVdat {
             | bgzip -c > $famID.vcf.gz
             #Get list of CNVs in proband that are ≥5kb have ≥50% coverage in either parent
             svtk vcf2bed -i SVTYPE --no-header $famID.vcf.gz stdout \
-            | awk -v OFS="\t" '{ if ($NF ~ /DEL|DUP|MCNV/) print $1, $2, $3, $4, $NF, $6 }' \
+            | awk -v OFS="\t" '{ if ($NF ~ /DEL|DUP|CNV/) print $1, $2, $3, $4, $NF, $6 }' \
             > $famID.CNVs.bed
             fgrep -w $pro $famID.CNVs.bed \
-            | awk -v OFS="\t" '{ if ($3-$2>=5000 && $5!="MCNV") print $1, $2, $3, $4, $5 }' \
+            | awk -v OFS="\t" '{ if ($3-$2>=5000 && $5!="CNV") print $1, $2, $3, $4, $5 }' \
             > $pro.CNVs.gt5kb.bed
             fgrep -w $fa $famID.CNVs.bed > $fa.CNVs.bed
             fgrep -w $mo $famID.CNVs.bed > $mo.CNVs.bed
             #Deletions
             awk -v OFS="\t" '{ if ($NF=="DEL") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DEL|MCNV/) print $0 }' $fa.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $fa.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $1, $2, $3, $4, $5, $6, $NF }' \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DEL|MCNV/) print $0 }' $mo.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             > $famID.RD_genotype_update.txt
             #Duplications
             awk -v OFS="\t" '{ if ($NF=="DUP") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DUP|MCNV/) print $0 }' $fa.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $fa.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $1, $2, $3, $4, $5, $6, $NF }' \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DUP|MCNV/) print $0 }' $mo.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             >> $famID.RD_genotype_update.txt
             #Get variant stats
@@ -807,6 +807,11 @@ task ApplyMinGQFilter {
     | fgrep -v "##INFO=<ID=FREQ_HOMREF," \
     | fgrep -v "##INFO=<ID=FREQ_HET," \
     | fgrep -v "##INFO=<ID=FREQ_HOMALT," \
+    | fgrep -v "##INFO=<ID=CN_NUMBER," \
+    | fgrep -v "##INFO=<ID=CN_COUNT," \
+    | fgrep -v "##INFO=<ID=CN_FREQ," \
+    | fgrep -v "##INFO=<ID=CN_NONREF_COUNT," \
+    | fgrep -v "##INFO=<ID=CN_NONREF_FREQ," \
     | bgzip -c \
     > "~{prefix}.minGQ_filtered.vcf.gz"
   >>>

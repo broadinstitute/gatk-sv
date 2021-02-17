@@ -64,6 +64,7 @@ workflow XfBatchEffect {
     call GetFreqTable {
       input:
         vcf=getAFs.output_vcf,
+        sample_pop_assignments=sample_pop_assignments,
         prefix=batch,
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -255,6 +256,7 @@ task GetBatchSamplesList {
 task GetFreqTable {
   input{
     File vcf
+    File sample_pop_assignments
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -280,7 +282,7 @@ task GetFreqTable {
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
             | sed 's/\t/\n/g' \
             | awk -v OFS="\t" '{ print $1, NR }' \
-            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN' \
+            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
             | fgrep -v "OTH" \
             | cut -f2 \
             | paste -s -d\, || true )
@@ -291,14 +293,19 @@ task GetFreqTable {
     #Clean frequencies
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
       "~{prefix}.frequencies.preclean.txt.gz" \
+      "~{sample_pop_assignments}" \
       "~{prefix}.frequencies.txt"
     ### Create table of freqs, irrespective of ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
             | sed 's/\t/\n/g' \
-            | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN") print NR }' \
+            | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
             | paste -s -d\, || true )
-    cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
+    cut -f"$idxs" "~{prefix}.vcf2bed.bed" > minfreq.subset.bed
+    svtype_idx=$( sed -n '1p' minfreq.subset.bed \
+                  | sed 's/\t/\n/g' \
+                  | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
+    awk -v OFS="\t" -v sidx="$svtype_idx" '{ if ($sidx=="CNV" || $sidx=="MCNV") print $1, $2, $3, $6, $7; else print $1, $2, $3, $4, $5 }' minfreq.subset.bed \
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.allPops.txt.gz"

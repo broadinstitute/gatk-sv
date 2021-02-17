@@ -191,7 +191,7 @@ task CombineShardedVcfs {
 
   command {
     set -euo pipefail
-    vcf-concat -f ~{write_lines(vcfs)}\
+    vcf-concat -f ~{write_lines(vcfs)} \
     | vcf-sort \
     > merged.vcf
     if [ ~{default="TRUE" drop_empty_records} == "TRUE" ]; then

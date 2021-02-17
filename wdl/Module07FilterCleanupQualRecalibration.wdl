@@ -25,18 +25,11 @@ workflow FilterCleanupQualRecalibration {
   }
   Array[Array[String]] contigs = read_tsv(contiglist)
 
-  call RemoveMCNVs{
-    input:
-      vcf = vcf,
-      vcf_idx = vcf_idx,
-      sv_pipeline_docker=sv_pipeline_docker
-  }
-
   scatter ( contig in contigs ) {
     call Cleanup {
       input:
-        vcf=RemoveMCNVs.no_mcnv_vcf,
-        vcf_idx=RemoveMCNVs.no_mcnv_idx,
+        vcf=vcf,
+        vcf_idx=vcf_idx,
         contig=contig[0],
         pcrplus_samples_list=pcrplus_samples_list,
         famfile=famfile,
@@ -55,108 +48,12 @@ workflow FilterCleanupQualRecalibration {
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
 
-  call MiniTasks.ConcatVcfs as MergeMCNV {
-    input:
-      vcfs= [ConcatVcfs.concat_vcf, RemoveMCNVs.mcnv_vcf],
-      vcfs_idx = [ConcatVcfs.concat_vcf_idx,RemoveMCNVs.mcnv_idx],
-      merge_sort = true,
-      outfile_prefix = "~{prefix}.cleaned_filters_qual_recali",
-      sv_base_mini_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_ConcatVcfs
-      }
-
-    output {
-      File cleaned_vcf = MergeMCNV.concat_vcf
-      File cleaned_vcf_idx = MergeMCNV.concat_vcf_idx
-    }
-}
-
-#remove mCNV from the vcf, which will be added back to the output:
-
-task RemoveMCNVs{
-  input{
-    File vcf
-    File vcf_idx
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<<
-    set -euo pipefail
-    zcat ~{vcf} | awk '{if ($7!="MULTIALLELIC") print}' | bgzip > no_MCNV.vcf.gz
-    tabix no_MCNV.vcf.gz
-    zcat ~{vcf} | grep '#' > MCNV.vcf
-    zcat ~{vcf} | awk '{if ($7=="MULTIALLELIC") print}' >> MCNV.vcf
-    bgzip MCNV.vcf
-    tabix MCNV.vcf.gz
-  >>>
-
-  output{
-    File mcnv_vcf = "MCNV.vcf.gz"
-    File mcnv_idx = "MCNV.vcf.gz.tbi"
-    File no_mcnv_vcf = "no_MCNV.vcf.gz"
-    File no_mcnv_idx = "no_MCNV.vcf.gz.tbi"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  output {
+    File cleaned_vcf = ConcatVcfs.concat_vcf
+    File cleaned_vcf_idx =ConcatVcfs.concat_vcf_idx
   }
 }
 
-task MergeMCNV{
-  input{
-    File vcf
-    File vcf_idx
-    File mcnv
-    File mcnv_idx
-    String prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<<
-    set -euo pipefail
-    vcf-concat ~{vcf} ~{mcnv} | vcf-sort | bgzip > ~{prefix}.cleaned_filters_qual_recali.vcf.gz
-    tabix ~{prefix}.cleaned_filters_qual_recali.vcf.gz
-  >>>
-
-  output{
-    File with_mcnv_vcf = "~{prefix}.cleaned_filters_qual_recali.vcf.gz"
-    File with_mcnv_idx = "~{prefix}.cleaned_filters_qual_recali.vcf.gz.tbi"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
 
 # Applies filters & cleanup to VCF for a single chromosome
 task Cleanup {

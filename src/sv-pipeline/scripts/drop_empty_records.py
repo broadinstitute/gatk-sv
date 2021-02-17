@@ -14,6 +14,18 @@ import sys
 import pysam
 
 
+def _is_biallelic(record):
+    """
+    Check if record is biallelic
+    """
+    if 'MULTIALLELIC' not in record.filter \
+    and len(record.alleles) <= 2 \
+    and record.info['SVTYPE'] not in 'CNV MCNV'.split():
+        return True
+    else:
+        return False
+
+
 def drop_nonref_gts(vcf, fout):
     NULL_GT = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
     samples = [s for s in vcf.header.samples]
@@ -25,9 +37,14 @@ def drop_nonref_gts(vcf, fout):
 
     for record in vcf.fetch():
         for s in samples:
-            if record.samples[s]['GT'] not in NULL_GT:
-                fout.write(record)
-                break
+            if _is_biallelic(record):
+                if record.samples[s]['GT'] not in NULL_GT:
+                    fout.write(record)
+                    break
+            else:
+                if record.samples[s]['CN'] != 2:
+                    fout.write(record)
+                    break
 
 
 def main():

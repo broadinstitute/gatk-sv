@@ -414,7 +414,12 @@ def main():
                                highNCR_filter=filter_text)
 
         if args.cleanAFinfo:
+            # Clean biallelic AF annotation
             for key in 'AN AC AF N_BI_GENOS N_HOMREF N_HET N_HOMALT FREQ_HOMREF FREQ_HET FREQ_HOMALT'.split(' '):
+                if key in record.info.keys():
+                    record.info.pop(key)
+            # Clean CN frequency annotation
+            for key in 'CN_NUMBER CN_COUNT CN_FREQ CN_NONREF_COUNT CN_NONREF_FREQ'.split():
                 if key in record.info.keys():
                     record.info.pop(key)
 

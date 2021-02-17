@@ -11,35 +11,23 @@
 
 ###Set global parameters
 options(stringsAsFactors=F,scipen=1000)
-svtypes <- c("DEL","DUP","INS","INV","CPX","BND")
-allpops <- c("AFR","ASN","EUR","HSP")
 
 
 ###################
 ###HELPER FUNCTIONS
 ###################
-#Collapse multiallelic ACs
-clean.ACs <- function(ACs){
-  ACs.to.clean <- grep(",",ACs,fixed=T)
-  cleaned.ACs <- as.vector(as.numeric(sapply(ACs[ACs.to.clean],function(s){
-    return(sum(as.numeric(unlist(strsplit(s,split=",")))[-2]))
-  })))
-  ACs[ACs.to.clean] <- cleaned.ACs
-  return(as.numeric(ACs))
-}
 #Import a single table of freq data
 import.freq.table <- function(path,pops){
   #Read data
   dat <- read.table(path,header=T,comment.char="",sep="\t")
   colnames(dat)[1:3] <- c("VID","SVLEN","SVTYPE")
-  #Clean multiallelic ACs
-  dat[,grep("_AC",colnames(dat),fixed=T)] <- apply(dat[,grep("_AC",colnames(dat),fixed=T)],2,clean.ACs)
+  #Convert multiallelic CN_NONREF_COUNT and CN_NUMBER to AC and AN, and drop CN_ columns
+  mcnv.idxs <- which(dat$SVTYPE %in% c("CNV", "MCNV"))
+  dat[mcnv.idxs, grep("_AC",colnames(dat),fixed=T)] <- dat[mcnv.idxs, grep("_CN_NONREF_COUNT",colnames(dat),fixed=T)]
+  dat[mcnv.idxs, grep("_AN",colnames(dat),fixed=T)] <- dat[mcnv.idxs, grep("_CN_NUMBER",colnames(dat),fixed=T)]
+  dat <- dat[, -union(grep("_CN_NONREF_COUNT", colnames(dat), fixed=T), grep("_CN_NUMBER", colnames(dat), fixed=T))]
   #Convert all ANs to numerics
   dat[,grep("_AN",colnames(dat),fixed=T)] <- apply(dat[,grep("_AN",colnames(dat),fixed=T)],2,as.numeric)
-  #Double counts for MCNVs (since first allele for all MCNVs is nulled out)
-  MCNV.idx <- grep("_MCNV_",dat[,1],fixed=T)
-  dat[MCNV.idx,grep("_AC",colnames(dat),fixed=T)] <- 2*dat[MCNV.idx,grep("_AC",colnames(dat),fixed=T)]
-  dat[MCNV.idx,grep("_AN",colnames(dat),fixed=T)] <- 2*dat[MCNV.idx,grep("_AN",colnames(dat),fixed=T)]
   #Adjust calls on sex chromosomes
   for(pop in pops){
     x.idx <- unique(c(grep("_X_",dat[,1],fixed=T),
@@ -69,13 +57,12 @@ import.freq.table <- function(path,pops){
 ###Read command-line arguments
 args <- commandArgs(trailingOnly=T)
 INFILE <- as.character(args[1])
-OUTFILE <- as.character(args[2])
-
-# #Dev parameters (local)
-# INFILE <- "~/scratch/gnomAD_v2_SV_PCRPLUS_Q1_batch_1.frequencies.preclean.txt.gz"
+POPFILE <- as.character(args[2])
+OUTFILE <- as.character(args[3])
 
 
 ###Process input data
+allpops <- sort(unique(as.character(read.table(POPFILE, sep="\t")[, 2])))
 dat <- import.freq.table(path=INFILE,pops=allpops)
 
 
