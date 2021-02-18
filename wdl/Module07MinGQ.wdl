@@ -391,7 +391,7 @@ task SplitPcrVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    if [ ! -z "~{pcrplus_samples_list}" ];then
+    if [ ! -z "~{pcrplus_samples_list}" ] && [ $( cat "~{pcrplus_samples_list}" | wc -l ) -gt 0 ]; then
       #Get index of PCR+ samples
       PCRPLUS_idxs=$( zcat ~{vcf} | sed -n '1,500p' | fgrep "#" | fgrep -v "##" \
                       | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print NR, $1 }' \
@@ -401,16 +401,16 @@ task SplitPcrVcf {
       | cut -f1-9,"$PCRPLUS_idxs" \
       | bgzip -c \
       > "~{prefix}.PCRPLUS.vcf.gz"
-      tabix -f "~{prefix}.PCRPLUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRPLUS.vcf.gz"
       #Get PCR- VCF
       zcat ~{vcf} \
       | cut --complement -f"$PCRPLUS_idxs" \
       | bgzip -c \
       > "~{prefix}.PCRMINUS.vcf.gz"
-      tabix -f "~{prefix}.PCRMINUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
     else
       cp ~{vcf} ~{prefix}.PCRMINUS.vcf.gz
-      tabix -f "~{prefix}.PCRMINUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
       touch ~{prefix}.PCRPLUS.vcf.gz
       touch ~{prefix}.PCRPLUS.vcf.gz.tbi
     fi
