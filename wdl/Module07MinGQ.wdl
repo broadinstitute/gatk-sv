@@ -95,39 +95,41 @@ workflow Module07MinGQ {
         pcrplus_samples_list=pcrplus_samples_list,
         sv_base_mini_docker=sv_base_mini_docker
     }
-    if (MingqTraining){
-      # Annotate PCR-specific AFs
-      call calcAF.CalcAF as getAFs_byPCR {
-        input:
-          vcf=ReviseSVtypeMEI.updated_vcf,
-          vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
-          contig=contig[0],
-          sv_per_shard=1000,
-          prefix=prefix,
-          sample_pop_assignments=GetSampleLists.sample_PCR_labels,
-          sv_pipeline_docker=sv_pipeline_docker
-      }
-      # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
-      call GetAfTables {
-        input:
-          vcf=getAFs_byPCR.vcf_wAFs,
-          pcrplus_samples_list=pcrplus_samples_list,
-          vcf_idx=getAFs_byPCR.vcf_wAFs_idx,
-          prefix="~{prefix}.~{contig[0]}",
-          sv_pipeline_docker=sv_pipeline_docker
-      }
+
+    # Dev note Feb 18 2021: the output from cat_AF_table_PCRMINUS is a required 
+    # input to Module07XfBatchEffect.wdl, so the subsequent three tasks always 
+    # need to be generated (even if passing a precomputed minGQ cutoff table)
+
+    # Annotate PCR-specific AFs
+    call calcAF.CalcAF as getAFs_byPCR {
+      input:
+        vcf=ReviseSVtypeMEI.updated_vcf,
+        vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
+        contig=contig[0],
+        sv_per_shard=1000,
+        prefix=prefix,
+        sample_pop_assignments=GetSampleLists.sample_PCR_labels,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+    # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
+    call GetAfTables {
+      input:
+        vcf=getAFs_byPCR.vcf_wAFs,
+        pcrplus_samples_list=pcrplus_samples_list,
+        vcf_idx=getAFs_byPCR.vcf_wAFs_idx,
+        prefix="~{prefix}.~{contig[0]}",
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
+  call CombineRocOptResults as cat_AF_table_PCRMINUS {
+    input:
+      shards=GetAfTables.PCRMINUS_AF_table,
+      outfile="~{prefix}.PCRMINUS.AF_preMinGQ.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+  }
+
+
   if (MingqTraining){
-    call CombineRocOptResults as cat_AF_table_PCRMINUS {
-      input:
-        shards=select_all(GetAfTables.PCRMINUS_AF_table),
-        outfile="~{prefix}.PCRMINUS.AF_preMinGQ.txt",
-        sv_base_mini_docker=sv_base_mini_docker,
-    }
-
-
-
     ###PCRMINUS
     call SplitFamfile as SplitFamfile_PCRMINUS {
       input:
@@ -455,14 +457,40 @@ task GetAfTables {
 
   command <<<
     set -euo pipefail
-    if ~{defined(pcrplus_samples_list)}; then
-      for PCR in PCRPLUS PCRMINUS; do
-        svtk vcf2bed --no-header --no-samples -i "$PCR"_AC -i "$PCR"_AN ~{vcf} "$PCR".bed
-        awk -v OFS="\t" '{ print $4, $6, $7 }' "$PCR".bed > ~{prefix}."$PCR".AF_preMinGQ.txt
-      done
+    #Run vcf2bed
+    svtk vcf2bed --info ALL --no-samples ~{vcf} "~{prefix}.vcf2bed.bed"
+    #Cut to necessary columns
+    idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
+            | sed 's/\t/\n/g' \
+            | awk -v OFS="\t" '{ print $1, NR }' \
+            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
+            | fgrep -v "OTH" \
+            | cut -f2 \
+            | paste -s -d\, || true )
+    cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
+    | sed 's/^name/\#VID/g' \
+    | gzip -c \
+    > "~{prefix}.frequencies.preclean.txt.gz"
+    if [ ! -z "~{pcrplus_samples_list}" ]; then
+      echo -e "dummy\tPCRMINUS\ndummy2\tPCRPLUS" > dummy.tsv
     else
-      svtk vcf2bed --no-header --no-samples -i PCRMINUS_AC -i PCRMINUS_AN ~{vcf} PCRMINUS.bed
-      awk -v OFS="\t" '{ print $4, $6, $7 }' PCRMINUS.bed > ~{prefix}.PCRMINUS.AF_preMinGQ.txt
+      echo -e "dummy\tPCRMINUS" > dummy.tsv
+    fi
+    #Clean frequencies
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
+      "~{prefix}.frequencies.preclean.txt.gz" \
+      dummy.tsv \
+      "~{prefix}.frequencies.txt"
+    for PCR in $( cut -f2 dummy.tsv | sort | uniq ); do
+      AC_idx=$( zcat "~{prefix}.frequencies.txt.gz" | sed -n '1p' | sed 's/\t/\n/g' | awk -v PCR="$PCR" '{ if ($1==PCR"_AC") print NR }' )
+      AN_idx=$( zcat "~{prefix}.frequencies.txt.gz" | sed -n '1p' | sed 's/\t/\n/g' | awk -v PCR="$PCR" '{ if ($1==PCR"_AN") print NR }' )
+      zcat "~{prefix}.frequencies.txt.gz" \
+      | sed '1d' \
+      | awk -v FS="\t" -v OFS="\t" -v AC="$AC_idx" -v AN="$AN_idx" \
+        '{ print $1, $(AC), $(AN) }' \
+      > ~{prefix}."$PCR".AF_preMinGQ.txt
+    done
+    if [ ! -z ~{prefix}.PCRPLUS.AF_preMinGQ.txt ]; then
       touch ~{prefix}.PCRPLUS.AF_preMinGQ.txt
     fi
   >>>
