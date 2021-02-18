@@ -138,12 +138,13 @@ def calc_allele_freq(record, samples, prefix = None):
     #Compute CN_NUMBER, CN_NONREF_COUNT, CN_NONREF_FREQ, and CN_COUNT/CN_FREQ for each copy state
     else:
 
-        # Get all sample CNs
-        CNs = [s['CN'] for s in record.samples.values() if s.name in samples]
+        # Get all sample CNs and remove Nones
+        CNs_wNones = [s['CN'] for s in record.samples.values() if s.name in samples]
+        CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
         # Count number of samples per CN and total CNs observed
         CN_counts = dict(Counter(CNs))
-        nonnull_CNs = sum([int(v) for k, v in CN_counts.items() if k not in '. NA'.split()])
+        nonnull_CNs = len(CNs)
 
         # Get max observed CN and enumerate counts/frequencies per CN as list starting from CN=0
         max_CN = max([int(k) for k, v in CN_counts.items()])
