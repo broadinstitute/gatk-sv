@@ -75,6 +75,7 @@ workflow GATKSVPipelineSingleSample {
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
+    String cloud_sdk_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
     String? delly_docker
@@ -469,6 +470,7 @@ workflow GATKSVPipelineSingleSample {
         gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
+        cloud_sdk_docker = cloud_sdk_docker,
         runtime_attr_cram_to_bam=runtime_attr_cram_to_bam,
         runtime_attr_manta=runtime_attr_manta,
         runtime_attr_melt_coverage=runtime_attr_melt_coverage,
