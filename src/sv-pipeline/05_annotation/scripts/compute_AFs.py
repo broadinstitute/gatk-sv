@@ -15,6 +15,10 @@ import pysam
 import numpy as np
 from svtk import utils as svu
 from collections import Counter
+import pybedtools as pbt
+
+
+default_sex_chroms = 'X Y chrX chrY'.split()
 
 
 def create_pop_dict(popfile):
@@ -42,27 +46,109 @@ def _is_biallelic(record):
         return False
 
 
-def gather_allele_freqs(record, all_samples, males, females, pop_dict, pops, no_combos = False):
+def in_par(record, parbt):
+    """
+    Check if variant overlaps pseudoautosomal region
+    """
+
+    svbt_str = '\t'.join([record.chrom, str(record.start), str(record.stop)]) + '\n'
+    svbt = pbt.BedTool(svbt_str, from_string=True)
+    if len(svbt.intersect(parbt)) > 0:
+        return True
+    else:
+        return False
+
+
+def update_sex_freqs(record, pop=None):
+    """
+    Recompute allele frequencies for variants on sex chromosomes outside of PARs
+    """
+
+    if pop is not None:
+        m_prefix = '_'.join([pop, 'MALE'])
+        f_prefix = '_'.join([pop, 'FEMALE'])
+    else:
+        m_prefix = 'MALE'
+        f_prefix = 'FEMALE'
+
+    m_an = record.info.get(m_prefix + '_AN', 0)
+    m_ac = sum(record.info.get(m_prefix + '_AC', 0))
+    m_af = sum(record.info.get(m_prefix + '_AF', 0))
+
+    f_an = record.info.get(f_prefix + '_AN', 0)
+    f_ac = sum(record.info.get(f_prefix + '_AC', 0))
+    f_af = sum(record.info.get(f_prefix + '_AF', 0))
+
+    adj_an = m_an + f_an
+    adj_ac = m_ac + f_ac
+    if adj_an > 0:
+        adj_af = adj_ac / adj_an
+    else:
+        adj_af = 0
+
+    if pop is None:
+        record.info['AN'] = adj_an
+        record.info['AC'] = (adj_ac, )
+        record.info['AF'] = (adj_af, )
+    else:
+        record.info[pop + '_AN'] = adj_an
+        record.info[pop + '_AC'] = (adj_ac, )
+        record.info[pop + '_AF'] = (adj_af, )
+
+    return record
+
+
+def gather_allele_freqs(record, all_samples, males, females, parbt, pop_dict, pops, 
+                        no_combos = False, sex_chroms = default_sex_chroms):
     """
     Wrapper to compute allele frequencies for all sex & population pairings
     """
 
-    #Get allele frequencies
+    #Add PAR annotation to record (if optioned)
+    if record.chrom in sex_chroms and parbt is not None:
+        if in_par(record, parbt):
+            rec_in_par = True
+            record.info['PAR'] = True
+        else:
+            rec_in_par = False
+    else:
+        rec_in_par = False
+
+    #Get allele frequencies for all populations
     calc_allele_freq(record, all_samples)
     if len(males) > 0:
-        calc_allele_freq(record, males, prefix = 'MALE')
+        if record.chrom in sex_chroms and not rec_in_par:
+            calc_allele_freq(record, males, prefix = 'MALE', hemi=True)
+        else:
+            calc_allele_freq(record, males, prefix = 'MALE')
     if len(females) > 0:
         calc_allele_freq(record, females, prefix = 'FEMALE')
+
+    #Adjust global allele frequencies on sex chromosomes, if famfile provided
+    if record.chrom in sex_chroms and not rec_in_par \
+    and _is_biallelic(record) and len(males) + len(females) > 0:
+        update_sex_freqs(record)
+
+    #Get allele frequencies per population
     if len(pops) > 0:
         for pop in pops:
             pop_samps = [s for s in all_samples if pop_dict.get(s, None) == pop]
             calc_allele_freq(record, pop_samps, prefix = pop)
             if len(males) > 0 and not no_combos:
-                calc_allele_freq(record, [s for s in pop_samps if s in males], 
-                                 prefix = pop + '_MALE')
+                if record.chrom in sex_chroms and not rec_in_par:
+                    calc_allele_freq(record, [s for s in pop_samps if s in males], 
+                                     prefix = pop + '_MALE', hemi=True)
+                else:
+                    calc_allele_freq(record, [s for s in pop_samps if s in males], 
+                                     prefix = pop + '_MALE')
             if len(females) > 0 and not no_combos:
                 calc_allele_freq(record, [s for s in pop_samps if s in females], 
                                  prefix = pop + '_FEMALE')
+
+            #Adjust per-pop allele frequencies on sex chromosomes, if famfile provided
+            if record.chrom in sex_chroms and not rec_in_par \
+            and _is_biallelic(record) and len(males) + len(females) > 0:
+                update_sex_freqs(record, pop=pop)
 
         #Get POPMAX AF biallelic sites only
         if _is_biallelic(record):
@@ -73,7 +159,7 @@ def gather_allele_freqs(record, all_samples, males, females, pop_dict, pops, no_
     return record
 
 
-def calc_allele_freq(record, samples, prefix = None):
+def calc_allele_freq(record, samples, prefix = None, hemi = False):
     """
     Computes allele frequencies for a single record based on a list of samples
     """
@@ -102,6 +188,10 @@ def calc_allele_freq(record, samples, prefix = None):
             if len([allele for allele in GT if allele != 0 and allele != '.' and allele is not None]) == 2:
                 nhomalt += 1
 
+        #Adjust hemizygous allele number, if optioned
+        if hemi:
+            AN = AN / 2
+
         #Calculate allele frequency
         if AN > 0:
             AF = AC / AN
@@ -124,9 +214,17 @@ def calc_allele_freq(record, samples, prefix = None):
             freq_homref = 0
             freq_het = 0
             freq_homalt = 0
+        if hemi:
+            nhemialt = nhet + nhomalt
+            freq_hemialt = freq_het + freq_homalt
 
         #Add N_BI_GENOS, N_HOMREF, N_HET, N_HOMALT, FREQ_HOMREF, FREQ_HET, and FREQ_HOMALT to INFO field
         record.info[(prefix + '_' if prefix else '') + 'N_BI_GENOS'] = n_bi_genos
+        if hemi:
+            record.info[(prefix + '_' if prefix else '') + 'N_HEMIREF'] = nhomref
+            record.info[(prefix + '_' if prefix else '') + 'N_HEMIALT'] = nhemialt
+            record.info[(prefix + '_' if prefix else '') + 'FREQ_HEMIREF'] = freq_homref
+            record.info[(prefix + '_' if prefix else '') + 'FREQ_HEMIALT'] = freq_hemialt
         record.info[(prefix + '_' if prefix else '') + 'N_HOMREF'] = nhomref
         record.info[(prefix + '_' if prefix else '') + 'N_HET'] = nhet
         record.info[(prefix + '_' if prefix else '') + 'N_HOMALT'] = nhomalt
@@ -142,22 +240,25 @@ def calc_allele_freq(record, samples, prefix = None):
         CNs_wNones = [s['CN'] for s in record.samples.values() if s.name in samples]
         CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
-        # Count number of samples per CN and total CNs observed
-        CN_counts = dict(Counter(CNs))
-        nonnull_CNs = len(CNs)
+        if len(CNs) == 0:
+            nonnull_CNs, CN_dist, CN_freqs, nonref_CN_count, nonref_CN_freq = [0] * 5
+        else:
+            # Count number of samples per CN and total CNs observed
+            CN_counts = dict(Counter(CNs))
+            nonnull_CNs = len(CNs)
 
-        # Get max observed CN and enumerate counts/frequencies per CN as list starting from CN=0
-        max_CN = max([int(k) for k, v in CN_counts.items()])
-        CN_dist = [int(CN_counts.get(k, 0)) for k in range(max_CN+1)]
-        CN_freqs = [round(v / nonnull_CNs, 6) for v in CN_dist]
+            # Get max observed CN and enumerate counts/frequencies per CN as list starting from CN=0
+            max_CN = max([int(k) for k, v in CN_counts.items()])
+            CN_dist = [int(CN_counts.get(k, 0)) for k in range(max_CN+1)]
+            CN_freqs = [round(v / nonnull_CNs, 6) for v in CN_dist]
 
-        # Get total non-reference CN counts and freq
-        # Note: assumes reference is diploid (this will not be true for sex chromosomes,
-        # but can be clarified when passing --FAMFILE and annotating per sex, 
-        # and is a more internally consistent solution than passing a BED file with 
-        # PAR regions etc. specifying assumed ploidy genome-wide)
-        nonref_CN_count = sum([int(CN_counts.get(k, 0)) for k in range(max_CN+1) if k != 2])
-        nonref_CN_freq = round(nonref_CN_count / nonnull_CNs, 6)
+            # Get total non-reference CN counts and freq
+            if hemi:
+                ref_CN = 1
+            else:
+                ref_CN = 2
+            nonref_CN_count = sum([int(CN_counts.get(k, 0)) for k in range(max_CN+1) if k != ref_CN])
+            nonref_CN_freq = round(nonref_CN_count / nonnull_CNs, 6)
 
         #Add values to INFO field
         record.info[(prefix + '_' if prefix else '') + 'CN_NUMBER'] = nonnull_CNs
@@ -181,6 +282,8 @@ def main():
                         default = None)
     parser.add_argument('--no-combos', help='Do not compute combinations of populations ' +
                         'and sexes.', action = 'store_true', default = False)
+    parser.add_argument('--par', help='BED file of pseudoautosomal regions (used ' +
+                        'for sex-specific AFs).', default = None)
     parser.add_argument('fout', help='Output vcf. Also accepts "stdout" and "-".')
     args = parser.parse_args()
 
@@ -199,11 +302,15 @@ def main():
         males = [line.split('\t')[1] for line in famfile if line.split('\t')[4] == '1']
         females = [line.split('\t')[1] for line in famfile if line.split('\t')[4] == '2']
         sexes = 'MALE FEMALE'.split()
+        if args.par is not None:
+            parbt = pbt.BedTool(args.par)
+        else:
+            parbt = None
     else:
         males = []
         females = []
         sexes = []
-
+        parbt = None
 
     #Get dictionary of populations
     if args.popfile is not None:
@@ -250,6 +357,13 @@ def main():
             INFO_ADD.append('##INFO=<ID=%s_CN_FREQ,Number=.,Type=Float,Description="Frequency of %s individuals observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=%s_CN_NONREF_COUNT,Number=1,Type=Integer,Description="Sum of all %s individuals with non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
             INFO_ADD.append('##INFO=<ID=%s_CN_NONREF_FREQ,Number=1,Type=Float,Description="Total frequency of all %s individuals across all non-reference copy states (multiallelic CNVs only).">' % (sex, sex))
+            if sex == 'MALE':
+                INFO_ADD.append('##INFO=<ID=%s_N_HEMIREF,Number=1,Type=Integer,Description="Number of %s individuals with hemizygous reference genotypes (biallelic sites only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=%s_N_HEMIALT,Number=1,Type=Integer,Description="Number of %s individuals with hemizygous alternate genotypes (biallelic sites only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=%s_FREQ_HEMIREF,Number=1,Type=Float,Description="%s hemizygous reference genotype frequency (biallelic sites only).">' % (sex, sex))
+                INFO_ADD.append('##INFO=<ID=%s_FREQ_HEMIALT,Number=1,Type=Float,Description="%s hemizygous alternate genotype frequency (biallelic sites only).">' % (sex, sex))
+                if parbt is not None:
+                    INFO_ADD.append('##INFO=<ID=PAR,Number=0,Type=Flag,Description="Variant overlaps pseudoautosomal region.">')
     if len(pops) > 0:
         INFO_ADD.append('##INFO=<ID=POPMAX_AF,Number=1,Type=Float,Description="Maximum allele frequency across any population (biallelic sites only).">')
         for pop in pops:
@@ -285,6 +399,12 @@ def main():
                     INFO_ADD.append('##INFO=<ID=%s_CN_FREQ,Number=.,Type=Float,Description="Frequency of %s individuals observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=%s_CN_NONREF_COUNT,Number=1,Type=Integer,Description="Sum of all %s individuals with non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
                     INFO_ADD.append('##INFO=<ID=%s_CN_NONREF_FREQ,Number=1,Type=Float,Description="Total frequency of all %s individuals across all non-reference copy states (multiallelic CNVs only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                    if sex == 'MALE':
+                        INFO_ADD.append('##INFO=<ID=%s_N_HEMIREF,Number=1,Type=Integer,Description="Number of %s individuals with hemizygous reference genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=%s_N_HEMIALT,Number=1,Type=Integer,Description="Number of %s individuals with hemizygous alternate genotypes (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))
+                        INFO_ADD.append('##INFO=<ID=%s_FREQ_HEMIREF,Number=1,Type=Float,Description="%s hemizygous reference genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))                        
+                        INFO_ADD.append('##INFO=<ID=%s_FREQ_HEMIALT,Number=1,Type=Float,Description="%s hemizygous alternate genotype frequency (biallelic sites only).">' % ('_'.join((pop, sex)), ' '.join((pop, sex))))                        
+
     for line in INFO_ADD:
         vcf.header.add_line(line)
     
@@ -296,7 +416,7 @@ def main():
 
     #Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
-        newrec = gather_allele_freqs(r, all_samples, males, females, pop_dict, pops, args.no_combos)
+        newrec = gather_allele_freqs(r, all_samples, males, females, parbt, pop_dict, pops, args.no_combos)
         fout.write(newrec)
 
     fout.close()

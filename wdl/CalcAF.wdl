@@ -143,7 +143,7 @@ task ComputeShardAFs {
     if [ ~{default="SKIP" famfile} != "SKIP" ]; then
       optionals="$( echo "$optionals" ) -f ~{famfile}"
     fi
-    if [ ${default="SKIP" par_bed} != "SKIP" ]; then
+    if [ ~{default="SKIP" par_bed} != "SKIP" ]; then
       optionals="$( echo "$optionals" ) --par ~{par_bed}"
     fi
     echo -e "OPTIONALS INTERPRETED AS: $optionals"
