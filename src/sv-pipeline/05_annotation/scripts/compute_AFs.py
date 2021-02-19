@@ -51,7 +51,9 @@ def in_par(record, parbt):
     Check if variant overlaps pseudoautosomal region
     """
 
-    svbt_str = '\t'.join([record.chrom, str(record.start), str(record.stop)]) + '\n'
+    # Sort start & end to handle edge cases and ensure end > start for pbt functionality
+    sstart, send = [str(x) for x in sorted([record.start, record.stop])]
+    svbt_str = '\t'.join([record.chrom, sstart, send]) + '\n'
     svbt = pbt.BedTool(svbt_str, from_string=True)
     if len(svbt.intersect(parbt)) > 0:
         return True
