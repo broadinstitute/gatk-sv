@@ -241,7 +241,9 @@ def calc_allele_freq(record, samples, prefix = None, hemi = False):
         CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
         if len(CNs) == 0:
-            nonnull_CNs, CN_dist, CN_freqs, nonref_CN_count, nonref_CN_freq = [0] * 5
+            nonnull_CNs, nonref_CN_count, nonref_CN_freq = [0] * 3
+            CN_dist = (0, )
+            CN_freqs = (0, )
         else:
             # Count number of samples per CN and total CNs observed
             CN_counts = dict(Counter(CNs))
