@@ -348,12 +348,14 @@ task MergeFreqTables {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
+
     #Get list of batch IDs and batch table paths
     while read batch; do
       echo "$batch"
-      find ./ -name "$batch.frequencies*txt.gz"
+      find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
     done < ~{batches_list} | paste - - \
     > input.list
+
     #Make sure all input files have the same number of lines
     while read batch file; do
       zcat "$file" | wc -l
@@ -363,6 +365,7 @@ task MergeFreqTables {
       echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
       exit 0
     fi
+
     #Prep files for paste joining
     echo "PREPPING FILES FOR MERGING"
     while read batch file; do
@@ -387,6 +390,7 @@ task MergeFreqTables {
         | cut -f4-
       done > "$batch.prepped.txt" 
     done < input.list
+
     #Join files with simple paste
     paste \
       header.txt \
