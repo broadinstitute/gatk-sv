@@ -190,9 +190,11 @@ def calc_allele_freq(record, samples, prefix = None, hemi = False):
             if len([allele for allele in GT if allele != 0 and allele != '.' and allele is not None]) == 2:
                 nhomalt += 1
 
-        #Adjust hemizygous allele number, if optioned
+        #Adjust hemizygous allele number and allele count, if optioned
         if hemi:
             AN = AN / 2
+            # For hemizygous sites, AC must be the sum of all non-reference *genotypes*, not alleles
+            AC = nhet + nhomalt
 
         #Calculate allele frequency
         if AN > 0:
