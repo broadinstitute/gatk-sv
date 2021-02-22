@@ -41,10 +41,12 @@ compare.batches <- function(dat, batch1, batch2, allpops, min.AN=30){
     }
   }else{
     b2.consolidated.dat <- do.call("cbind", lapply(allpops,function(pop){
-      ACs <- apply(dat[,setdiff(grep(paste(pop,"AC",sep="_"),colnames(dat),fixed=T),
-                                grep(batch1,colnames(dat),fixed=T))],1,sum,na.rm=T)
-      ANs <- apply(dat[,setdiff(grep(paste(pop,"AN",sep="_"),colnames(dat),fixed=T),
-                                grep(batch1,colnames(dat),fixed=T))],1,sum,na.rm=T)
+      ACs <- apply(as.data.frame(dat[,setdiff(grep(paste(pop,"AC",sep="_"),colnames(dat),fixed=T),
+                                grep(batch1,colnames(dat),fixed=T))]),
+                   1, sum, na.rm=T)
+      ANs <- apply(as.data.frame(dat[,setdiff(grep(paste(pop,"AN",sep="_"),colnames(dat),fixed=T),
+                                grep(batch1,colnames(dat),fixed=T))]),
+                   1, sum, na.rm=T)
       dtmp <- data.frame(ANs,ACs)
       colnames(dtmp) <- c(paste(pop,"_AN.ALL_OTHERS",sep=""),
                           paste(pop,"_AC.ALL_OTHERS",sep=""))
@@ -53,8 +55,7 @@ compare.batches <- function(dat, batch1, batch2, allpops, min.AN=30){
     b2.dat <- cbind(dat[,1:3],b2.consolidated.dat)
     if(length(grep("_AC",colnames(b2.dat),fixed=T))>1){
       b2.maxAC <- apply(b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)],1,max)
-    }
-    else{
+    }else{
       b2.maxAC <- b2.dat[,grep("_AC",colnames(b2.dat),fixed=T)]
     }
   }
@@ -126,9 +127,9 @@ batch2 <- as.character(args[3])
 OUTFILE <- as.character(args[4])
 
 # #Dev parameters:
-# infile <- "~/scratch/minGQ_test/freq_table_shard_00001.txt.gz"
+# infile <- "~/scratch/minGQ_test/freq_table_shard_00010.txt.gz"
 # batch1 <- "synthbatch1"
-# batch2 <- "synthbatch2"
+# batch2 <- "ALL_OTHERS"
 # OUTFILE <- "~/scratch/test_batchFx.tsv"
 
 ###Process data & write output
