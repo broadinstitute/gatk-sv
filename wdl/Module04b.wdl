@@ -2,10 +2,9 @@ version 1.0
 
 import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
-import "Genotype_3.wdl" as g3
 
-workflow Module04b{
-  input{
+workflow Module04b {
+  input {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -35,12 +34,26 @@ workflow Module04b{
     RuntimeAttr? runtime_attr_concat_samplecountlookup
     RuntimeAttr? runtime_attr_concat_sampleidlookup
 
-    RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list
     RuntimeAttr? runtime_attr_get_count_cohort_samplelist
     RuntimeAttr? runtime_attr_get_regeno
     RuntimeAttr? runtime_attr_get_median_subset
     RuntimeAttr? runtime_attr_median_intersect
+    RuntimeAttr? runtime_attr_concat_regenotyped_vcfs
+
+    # Genotype_2
+    RuntimeAttr? runtime_attr_add_batch_samples
+    RuntimeAttr? runtime_attr_get_regeno_g2
+    RuntimeAttr? runtime_attr_split_beds
+    RuntimeAttr? runtime_attr_make_subset_vcf
+    RuntimeAttr? runtime_attr_rd_test_gt_regeno
+    RuntimeAttr? runtime_attr_integrate_depth_gq
+    RuntimeAttr? runtime_attr_add_genotypes
+    RuntimeAttr? runtime_attr_concat_regenotyped_vcfs_g2
+
+    #CombineReassess
+    RuntimeAttr? runtime_attr_vcf2bed
+    RuntimeAttr? runtime_attr_merge_list_creassess 
   }
 
   call ClusterMergedDepthBeds {
@@ -157,7 +170,15 @@ workflow Module04b{
           samples_list=samples_lists[i],
           sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+          runtime_attr_add_batch_samples = runtime_attr_add_batch_samples,
+          runtime_attr_get_regeno_g2 = runtime_attr_get_regeno_g2,
+          runtime_attr_split_beds = runtime_attr_split_beds,
+          runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
+          runtime_attr_rd_test_gt_regeno = runtime_attr_rd_test_gt_regeno,
+          runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
+          runtime_attr_add_genotypes = runtime_attr_add_genotypes,
+          runtime_attr_concat_regenotyped_vcfs_g2 = runtime_attr_concat_regenotyped_vcfs_g2
       }
     }
 
@@ -169,23 +190,28 @@ workflow Module04b{
         vcfs = Genotype_2.genotyped_vcf,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
         runtime_attr_vcf2bed = runtime_attr_vcf2bed
     }
-      
-    scatter (i in range(length(Genotype_2.genotyped_vcf))) {
-      call ConcatRegenotypedVcfs{
-        input:
-          depth_vcf=depth_vcfs[i],
-          batch = batches[i],
-          regeno_vcf = Genotype_2.genotyped_vcf[i],
-          regeno_variants = CombineReassess.regeno_variants,
-          sv_pipeline_docker = sv_pipeline_docker
+    
+    if (CombineReassess.num_regeno_filtered > 0) {
+      scatter (i in range(length(Genotype_2.genotyped_vcf))) {
+        call ConcatRegenotypedVcfs {
+          input:
+            depth_vcf=depth_vcfs[i],
+            batch = batches[i],
+            regeno_vcf = Genotype_2.genotyped_vcf[i],
+            regeno_variants = CombineReassess.regeno_variants,
+            runtime_attr_override = runtime_attr_concat_regenotyped_vcfs,
+            sv_pipeline_docker = sv_pipeline_docker
+        }
       }
     }
   }
-  output{
+  output {
     Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
     File number_regenotyped_file = MergeList.num_regeno_file
+    File number_regenotyped_filtered_file = select_first([CombineReassess.num_regeno_filtered_file, MergeList.num_regeno_file])
   }
 }
 
@@ -211,6 +237,7 @@ task ClusterMergedDepthBeds {
     File regeno_merged_depth_clustered = "~{cohort}.regeno.merged_depth_clustered.bed"
   }
   command <<<
+    set -euo pipefail
     svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed   # vcf2bed merge_vcfs, non_duplicated
     # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
     awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.bed 
@@ -558,9 +585,26 @@ task GetMedianSubset{
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command {
-    R -e 'd<-read.table("~{medians}",header=T,check.names=F);result<-d[((apply(as.matrix(d[,5:length(d)]),FUN=median,1)<0.97 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)>0.85)|(apply(as.matrix(d[,5:length(d)]),FUN=median,1)>1.03 & apply(as.matrix(d[,5:length(d)]),FUN=median,1)<1.65)),1:4];write.table(result,file="~{batch}_to_regeno.bed",sep="\t",quote=F,row.names=F,col.names=F)'
-  }
+  command <<<
+    set -euo pipefail
+    python3 <<CODE
+
+    from statistics import median
+    with open("~{medians}", 'r') as inp, open("~{batch}_to_regeno.bed", 'w') as outp:
+      for line in inp:
+        fields = line.strip().split('\t')
+        # first 4 fields are variant info (chr, start, end, varID)
+        var_info = fields[0:4]
+        if any([x == '.' for x in fields[4:]]):
+          # skip variants with empty coverage data
+          continue
+        # else:
+        # last len-4 fields are sample coverage medians for each sample in the batch
+        med = median([float(x) for x in fields[4:]])
+        if (0.85 < med < 0.97) or (1.03 < med < 1.65):
+          outp.write('\t'.join(var_info) + "\n")
+    CODE
+  >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
@@ -629,6 +673,7 @@ task MergeList {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command {
+    set -euo pipefail
     cat ~{sep=' ' regeno_beds} | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
     # count non-empty lines in regeno bed file to determine if empty or not --> proceed with regenotyping or stop here?
     # the OR clause is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines (but don't ignore real error codes > 1)
