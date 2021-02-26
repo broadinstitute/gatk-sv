@@ -24,7 +24,7 @@ workflow FilterOutlierSamples {
     Array[String] samples
     Array[String] algorithms
     Int N_IQR_cutoff
-    File outlier_cutoff_table
+    File? outlier_cutoff_table
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
@@ -38,22 +38,24 @@ workflow FilterOutlierSamples {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
+      if (defined(outlier_cutoff_table)) {
         call IdentifyOutliersByCutoffTable {
           input:
             vcf = select_first([vcfs[i]]),
-            outlier_cutoff_table = outlier_cutoff_table,
+            outlier_cutoff_table = select_first([outlier_cutoff_table]),
             outfile = "${algorithms[i]}_outliers.txt",
             algorithm = algorithms[i],
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_identify_outliers
         }
-        call IdentifyOutliersByIQR {
-          input:
-            vcf = select_first([vcfs[i]]),
-            N_IQR_cutoff = N_IQR_cutoff,
-            outfile = "${algorithms[i]}_outliers.txt",
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_identify_outliers
+      }
+      call IdentifyOutliersByIQR {
+        input:
+          vcf = select_first([vcfs[i]]),
+          N_IQR_cutoff = N_IQR_cutoff,
+          outfile = "${algorithms[i]}_outliers.txt",
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_identify_outliers
       }
     }
   }
