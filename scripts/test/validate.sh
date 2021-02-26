@@ -61,7 +61,7 @@ COUNTER=0
 for wdl in "${WDLS[@]}"
 do
   name=$(basename $wdl .wdl)
-  JSONS=(${BASE_DIR}/test_inputs_small/*/${name}*(.*).json ${BASE_DIR}/test_inputs_large/*/${name}*(.*).json ${BASE_DIR}/test_inputs_single_sample/*/${name}*(.*).json ${BASE_DIR}/inputs/${name}*(.*).json)
+  JSONS=(${BASE_DIR}/test_inputs/small/*/${name}*(.*).json ${BASE_DIR}/test_inputs/large/*/${name}*(.*).json ${BASE_DIR}/test_inputs/single_sample/*/${name}*(.*).json ${BASE_DIR}/inputs/${name}*(.*).json)
   for json in "${JSONS[@]}"
   do
     cmd="java -jar ${WOMTOOL_JAR} validate ${wdl} -i ${json}"
