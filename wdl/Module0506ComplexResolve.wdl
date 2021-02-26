@@ -14,6 +14,7 @@ workflow Module0506ComplexResolve {
     Array[File] cluster_background_fail_lists
 
     Array[File] disc_files
+    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
 
     File contig_list
@@ -73,6 +74,7 @@ workflow Module0506ComplexResolve {
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
+        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,
@@ -109,6 +111,7 @@ workflow Module0506ComplexResolve {
         min_variants_per_shard=100,
         cytobands=cytobands,
         disc_files=disc_files,
+        disc_files_index=disc_files_index,
         mei_bed=mei_bed,
         pe_exclude_list=pe_exclude_list,
         rf_cutoff_files=rf_cutoff_files,

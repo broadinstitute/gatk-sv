@@ -20,6 +20,7 @@ workflow Module0506 {
     Array[File] pesr_vcfs
     Array[File] depth_vcfs
     Array[File] disc_files
+    Array[File]? disc_files_index
     Array[File] bincov_files
 
     Array[File] raw_sr_bothside_pass_files
@@ -203,6 +204,7 @@ workflow Module0506 {
       cluster_bothside_pass_lists=Module0506Cluster.cluster_bothside_pass_lists,
       cluster_background_fail_lists=Module0506Cluster.cluster_background_fail_lists,
       disc_files=disc_files,
+      disc_files_index=disc_files_index,
       rf_cutoff_files=rf_cutoff_files,
       contig_list=contig_list,
       max_shards_per_chrom=max_shards_per_chrom,
