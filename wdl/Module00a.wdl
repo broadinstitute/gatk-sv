@@ -358,7 +358,7 @@ task DeleteIntermediateFiles {
   input {
     Array[File] intermediates
     Array[File]? dummy # Pass in outputs that must be complete before cleanup
-    String cloud_sdk_docker
+    String cloud_sdk_docker # Cloud provider SDK docker image. For GCP use "google/cloud-sdk" and for AWS use "amazon/aws-cli"
   }
   parameter_meta {
     intermediates: {
