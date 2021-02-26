@@ -878,7 +878,6 @@ workflow GATKSVPipelineSingleSample {
       bin_exclude=bin_exclude,
 
       disc_files=[Module00c.merged_PE],
-      disc_files_index=[Module00c.merged_PE_index],
       bincov_files=[Module00c.merged_bincov],
 
       mei_bed=mei_bed,
