@@ -230,7 +230,7 @@ task GetBatchSamplesList {
     > "~{batch}.samples.list" || true
     # Get list of samples not in batch
     fgrep -wv ~{batch} ~{sample_batch_assignments} | cut -f1 \
-    cat - ~{probands_list} | sort -Vk1,1 | uniq \
+    | cat - ~{probands_list} | sort -Vk1,1 | uniq \
     | fgrep -wf - all_samples.list \
     > "~{batch}.exclude_samples.list" || true
   >>>
@@ -290,7 +290,7 @@ task GetFreqTable {
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.preclean.txt.gz"
-    #Clean frequencies
+    #Clean frequencies (note that this script automatically gzips the output file taken as the last argument)
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
       "~{prefix}.frequencies.preclean.txt.gz" \
       "~{sample_pop_assignments}" \
