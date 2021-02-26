@@ -24,7 +24,7 @@ workflow Module03 {
     File evidence_metrics_common
 
     Int outlier_cutoff_nIQR
-    File outlier_cutoff_table
+    File? outlier_cutoff_table
 
     String sv_pipeline_docker
     String sv_base_mini_docker
