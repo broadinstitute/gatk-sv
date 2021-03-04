@@ -12,6 +12,7 @@ ENV HOME=/root
 #### Basic image utilities
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
+RUN apt-get update && apt-get install -y r-base
 
 RUN apt-get update --fix-missing && \
     apt-get upgrade -y && \
@@ -21,8 +22,9 @@ RUN apt-get update --fix-missing && \
     openjdk-8-jdk \
     xvfb \
     zip \
-    python-pip \
+    python3-pip \
     curl \
+    git \
     samtools \
     tabix \
     vcftools \
@@ -36,18 +38,21 @@ RUN apt-get update --fix-missing && \
 ARG CLOUD_SDK_VERSION=272.0.0
 ENV CLOUD_SDK_VERSION=$CLOUD_SDK_VERSION
 
+
 ARG INSTALL_COMPONENTS
 RUN apt-get update -qqy && apt-get install -qqy \
         curl \
         gcc \
-        python-dev \
-        python-setuptools \
+        python3-dev \
+        python3-setuptools \
         apt-transport-https \
         lsb-release \
         openssh-client \
         git \
         gnupg \
-    && pip install -U crcmod && \
+    && pip3 install -U crcmod && \
+    pip3 install numpy && \
+    pip3 install image  && \
     export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
     echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
@@ -56,6 +61,7 @@ RUN apt-get update -qqy && apt-get install -qqy \
     gcloud config set component_manager/disable_update_check true && \
     gcloud config set metrics/environment github_docker_image && \
     gcloud --version
+
 
 RUN wget http://data.broadinstitute.org/igv/projects/downloads/2.4/IGV_2.4.14.zip && \
     unzip IGV_2.4.14.zip
