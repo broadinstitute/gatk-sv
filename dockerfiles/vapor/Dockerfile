@@ -5,7 +5,7 @@
 FROM ubuntu:18.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SAMTOOLS_VERSION=1.9
+ARG SAMTOOLS_VERSION=1.11
 ARG BCFTOOLS_VERSION=1.9
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
