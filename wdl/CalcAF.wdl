@@ -21,6 +21,7 @@ workflow CalcAF {
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
+    File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
     String sv_pipeline_docker
     String? drop_empty_records
   }
@@ -46,7 +47,8 @@ workflow CalcAF {
         prefix="~{prefix}.~{contig}",
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
-        par_bed=par_bed
+        par_bed=par_bed,
+        allosomes_list=allosomes_list
       }
   	}
 
@@ -122,6 +124,7 @@ task ComputeShardAFs {
     File? sample_pop_assignments
     File? famfile
     File? par_bed
+    File? allosomes_list
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -145,6 +148,9 @@ task ComputeShardAFs {
     fi
     if [ ~{default="SKIP" par_bed} != "SKIP" ]; then
       optionals="$( echo "$optionals" ) --par ~{par_bed}"
+    fi
+    if [ ~{default="SKIP" allosomes_list} != "SKIP" ]; then
+      optionals="$( echo "$optionals" ) --allosomes-list ~{allosomes_list}"
     fi
     echo -e "OPTIONALS INTERPRETED AS: $optionals"
     echo -e "NOW RUNNING: /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py $( echo "$optionals" ) ~{vcf} stdout"

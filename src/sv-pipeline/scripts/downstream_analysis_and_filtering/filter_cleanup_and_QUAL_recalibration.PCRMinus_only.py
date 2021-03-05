@@ -14,6 +14,7 @@ import sys
 import pysam
 import csv
 from numpy import median
+from svtk.utils import is_biallelic
 
 
 #Define global variables
@@ -40,18 +41,6 @@ def import_callrates(table_in):
                 callrates[vid] = float(callrate)
 
     return callrates
-
-
-def _is_biallelic(record):
-    """
-    Check if record is biallelic
-    """
-    if 'MULTIALLELIC' not in record.filter \
-    and len(record.alleles) <= 2 \
-    and record.info['SVTYPE'] not in 'CNV MCNV'.split():
-        return True
-    else:
-        return False
 
 
 # def get_call_rate(record, samples):
@@ -128,13 +117,13 @@ def cleanup_vcf(vcf, fout, callrates, min_callrate_global=0.85,
                     record.filter.add('LOW_CALL_RATE')
 
         #Recalibrate QUAL score for biallelic variants
-        if _is_biallelic(record):
+        if is_biallelic(record):
             newQUAL = recal_qual_score(record)
             if newQUAL is not None:
                 record.qual = newQUAL
 
         #Only check for non-empty GTs for biallelic variants
-        if _is_biallelic(record):
+        if is_biallelic(record):
             for s in record.samples:
                 if record.samples[s]['GT'] not in NULL_and_REF_GTs:
                     fout.write(record)

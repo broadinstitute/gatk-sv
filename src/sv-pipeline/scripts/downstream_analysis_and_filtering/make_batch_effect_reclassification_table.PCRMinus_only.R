@@ -36,7 +36,12 @@ import.freqs <- function(freq.table.in){
 
 #Process failure lists for a single comparison type
 import.fails <- function(minus.in,prefix){
-  a <- tryCatch(read.table(minus.in,header=F,sep="\t"), error=function(e){return(as.data.frame(matrix(ncol=2)))})
+  # Check file size and return an empty dataframe if no records are marked as batch effects
+  if(file.info(minus.in)$size == 0){
+    a <- as.data.frame(matrix(ncol=2))
+  }else{
+    a <- read.table(minus.in,header=F,sep="\t")
+  }
   colnames(a) <- c("VID",paste("fails",prefix,sep="_"))
   a <- a[which(a$VID!="NA" & !is.na(a$VID)), ]
   #m <- read.table(minus.in,header=F,sep="\t")

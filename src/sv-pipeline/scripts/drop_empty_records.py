@@ -12,19 +12,7 @@ Alternative to VCFTools, which rounds GQ to a max of 99
 import argparse
 import sys
 import pysam
-
-
-def _is_biallelic(record):
-    """
-    Check if record is biallelic
-    """
-    if 'MULTIALLELIC' not in record.filter \
-    and len(record.alleles) <= 2 \
-    and record.info['SVTYPE'] not in 'CNV MCNV'.split():
-        return True
-    else:
-        return False
-
+from svtk.utils import is_biallelic
 
 def drop_nonref_gts(vcf, fout):
     NULL_GT = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
@@ -37,7 +25,7 @@ def drop_nonref_gts(vcf, fout):
 
     for record in vcf.fetch():
         for s in samples:
-            if _is_biallelic(record):
+            if is_biallelic(record):
                 if record.samples[s]['GT'] not in NULL_GT:
                     fout.write(record)
                     break

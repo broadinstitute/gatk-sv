@@ -35,17 +35,19 @@ import.freq.table <- function(path, pops){
     y.idx <- unique(c(grep("_Y_",dat[,1],fixed=T),
                       grep("_chrY_",dat[,1],fixed=T)))
     if(length(c(x.idx, y.idx)) > 0){
+      male_ac_colname <- paste(pop,"MALE","AC",sep="_")
+      male_an_colname <- paste(pop,"MALE","AN",sep="_")
+      female_ac_colname <- paste(pop,"FEMALE","AC",sep="_")
+      female_an_colname <- paste(pop,"FEMALE","AN",sep="_")
       if(4 == length(intersect(colnames(dat),
-                               c(paste(pop,"MALE","AC",sep="_"),
-                                 paste(pop,"MALE","AN",sep="_"),
-                                 paste(pop,"FEMALE","AC",sep="_"),
-                                 paste(pop,"FEMALE","AN",sep="_"))))){
+                               c(male_ac_colname, male_an_colname,
+                                 female_ac_colname, female_an_colname)))){
         master.AC.idx <- which(colnames(dat)==paste(pop,"AC",sep="_"))
         master.AN.idx <- which(colnames(dat)==paste(pop,"AN",sep="_"))
-        male.AC.idx <- which(colnames(dat)==paste(pop,"MALE","AC",sep="_"))
-        male.AN.idx <- which(colnames(dat)==paste(pop,"MALE","AN",sep="_"))
-        female.AC.idx <- which(colnames(dat)==paste(pop,"FEMALE","AC",sep="_"))
-        female.AN.idx <- which(colnames(dat)==paste(pop,"FEMALE","AN",sep="_"))
+        male.AC.idx <- which(colnames(dat)==male_ac_colname)
+        male.AN.idx <- which(colnames(dat)==male_an_colname)
+        female.AC.idx <- which(colnames(dat)==female_ac_colname)
+        female.AN.idx <- which(colnames(dat)==female_an_colname)
         #For variants on chrX, overwrite master counts with female-specific counts
         dat[x.idx,master.AC.idx] <- dat[x.idx,female.AC.idx]
         dat[x.idx,master.AN.idx] <- dat[x.idx,female.AN.idx]
