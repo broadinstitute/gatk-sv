@@ -86,7 +86,7 @@ def update_sex_freqs(record, pop=None):
 
 
 def gather_allele_freqs(record, all_samples, males, females, parbt, pop_dict, pops, 
-                        no_combos = False, sex_chroms=sex_chroms):
+                        sex_chroms, no_combos = False):
     """
     Wrapper to compute allele frequencies for all sex & population pairings
     """
@@ -417,7 +417,8 @@ def main():
 
     #Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
-        newrec = gather_allele_freqs(r, all_samples, males, females, parbt, pop_dict, pops, args.no_combos)
+        newrec = gather_allele_freqs(r, all_samples, males, females, parbt, pop_dict, 
+                                     pops, sex_chroms, args.no_combos)
         fout.write(newrec)
 
     fout.close()
