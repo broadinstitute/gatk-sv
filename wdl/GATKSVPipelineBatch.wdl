@@ -82,6 +82,7 @@ workflow GATKSVPipelineBatch {
     String? manta_docker
     String? melt_docker
     String? wham_docker
+    String cloud_sdk_docker
 
     # Do not use
     Array[File]? NONE_ARRAY_
@@ -119,7 +120,8 @@ workflow GATKSVPipelineBatch {
         gatk_docker=gatk_docker,
         gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
-        samtools_cloud_docker=samtools_cloud_docker
+        samtools_cloud_docker=samtools_cloud_docker,
+        cloud_sdk_docker = cloud_sdk_docker
     }
   }
 

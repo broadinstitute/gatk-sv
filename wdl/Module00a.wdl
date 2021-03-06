@@ -83,6 +83,7 @@ workflow Module00a {
     String gatk_docker
     String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
+    String cloud_sdk_docker
 
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_merge_vcfs
@@ -252,7 +253,8 @@ workflow Module00a {
       call DeleteIntermediateFiles {
         input:
           intermediates = select_all([CramToBam.bam_file, MELT.filtered_bam]),
-          dummy = ctb_dummy
+          dummy = ctb_dummy,
+          cloud_sdk_docker = cloud_sdk_docker
       }
     }
   }
@@ -356,6 +358,7 @@ task DeleteIntermediateFiles {
   input {
     Array[File] intermediates
     Array[File]? dummy # Pass in outputs that must be complete before cleanup
+    String cloud_sdk_docker # Cloud provider SDK docker image. For GCP use "google/cloud-sdk" and for AWS use "amazon/aws-cli"
   }
   parameter_meta {
     intermediates: {
@@ -366,11 +369,17 @@ task DeleteIntermediateFiles {
     }
   }
 
-  command {
-    gsutil rm -I < ~{write_lines(intermediates)}
-  }
+  command <<<
+    {
+      gsutil rm -I < ~{write_lines(intermediates)}
+    } || {
+      while read line; do
+        aws s3 rm $line
+      done < ${write_lines(intermediates)}
+    }
+  >>>
   runtime {
-    docker: "google/cloud-sdk"
+    docker: cloud_sdk_docker
     memory: "1 GB"
     cpu: "1"
     disks: "local-disk 10 HDD"

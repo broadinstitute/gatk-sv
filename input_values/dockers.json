@@ -16,5 +16,6 @@
   "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:rlc-mei-mingq-fix-2-a591fdb",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-xz-fixes-7cbffee",
   "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
-  "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa"
+  "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa",
+  "cloud_sdk_docker" : "google/cloud-sdk"
 }
