@@ -143,10 +143,10 @@ onevsall.cutoff <- as.integer(args[6])
 freq.dat <- import.freqs(freq.table.in)
 
 
-pairwise.fails <- import.fails(pairwise.minus.in,prefix="pairwise")
-pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff),]
-onevsall.fails <- import.fails(onevsall.minus.in,prefix="onevsall")
-onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff),]
+pairwise.fails <- import.fails(pairwise.in, prefix="pairwise")
+pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff), ]
+onevsall.fails <- import.fails(onevsall.in, prefix="onevsall")
+onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff), ]
 
 
 ###Combine data
