@@ -12,7 +12,7 @@ Alternative to VCFTools, which rounds GQ to a max of 99
 import argparse
 import sys
 import pysam
-
+from svtk.utils import is_biallelic
 
 def drop_nonref_gts(vcf, fout):
     NULL_GT = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
@@ -25,9 +25,14 @@ def drop_nonref_gts(vcf, fout):
 
     for record in vcf.fetch():
         for s in samples:
-            if record.samples[s]['GT'] not in NULL_GT:
-                fout.write(record)
-                break
+            if is_biallelic(record):
+                if record.samples[s]['GT'] not in NULL_GT:
+                    fout.write(record)
+                    break
+            else:
+                if record.samples[s]['CN'] != 2:
+                    fout.write(record)
+                    break
 
 
 def main():

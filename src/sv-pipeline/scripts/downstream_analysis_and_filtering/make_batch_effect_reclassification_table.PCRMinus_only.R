@@ -11,7 +11,6 @@
 
 ###Set global parameters
 options(stringsAsFactors=F,scipen=1000)
-allpops <- c("AFR","ASN","EUR","HSP")
 
 
 ###################
@@ -34,12 +33,19 @@ import.freqs <- function(freq.table.in){
   out <- data.frame("VID"=dat$VID,"PCRPLUS_AF"=plus.AFs,"PCRMINUS_AF"=minus.AFs)  
   return(out)
 }
+
 #Process failure lists for a single comparison type
-import.fails <- function(all.in,minus.in,prefix){
-  a <- read.table(all.in,header=F,sep="\t")
+import.fails <- function(minus.in,prefix){
+  # Check file size and return an empty dataframe if no records are marked as batch effects
+  if(file.info(minus.in)$size == 0){
+    a <- as.data.frame(matrix(ncol=2))
+  }else{
+    a <- read.table(minus.in,header=F,sep="\t")
+  }
   colnames(a) <- c("VID",paste("fails",prefix,sep="_"))
+  a <- a[which(a$VID!="NA" & !is.na(a$VID)), ]
   #m <- read.table(minus.in,header=F,sep="\t")
-  m = a
+  m <- a
   colnames(m) <- c("VID",paste("fails",prefix,"minus",sep="_"))
   merged <- merge(a,m,by="VID",sort=F,all=T)
   minus.idx <- which(colnames(merged)==paste("fails",prefix,"minus",sep="_"))
@@ -50,6 +56,7 @@ import.fails <- function(all.in,minus.in,prefix){
   colnames(merged)[ncol(merged)] <- paste("frac_plus_fails",prefix,sep="_")
   return(merged)
 }
+
 #Categorize failing sites
 categorize.failures <- function(dat,pairwise.cutoff,onevsall.cutoff){
   dat$max_plus_frac <- apply(data.frame(dat$frac_plus_fails_pairwise,
@@ -122,36 +129,34 @@ onevsall.in <- as.character(args[3])
 OUTFILE <- as.character(args[4])
 pairwise.cutoff <- as.integer(args[5])
 onevsall.cutoff <- as.integer(args[6])
+
 # #Dev parameters:
 # freq.table.in <- "~/scratch/gnomAD_v2_SV_MASTER.merged_AF_table.txt.gz"
-# pairwise.in <- "~/scratch/gnomAD_v2_SV_MASTER.pairwise.all.failures.txt"
-# pairwise.minus.in <- "~/scratch/gnomAD_v2_SV_MASTER.pairwise.PCRMINUS_to_PCRMINUS.failures.txt"
-# onevsall.in <- "~/scratch/gnomAD_v2_SV_MASTER.one_vs_all.all.failures.txt"
-# onevsall.minus.in <- "~/scratch/gnomAD_v2_SV_MASTER.one_vs_all.PCRMINUS_to_PCRMINUS.failures.txt"
+# pairwise.minus.in <- "~/scratch/minGQ_test/mod07_mcnv_test.pairwise_comparisons.all.failures.txt"
+# onevsall.minus.in <- "~/scratch/minGQ_test/mod07_mcnv_test.one_vs_all_comparisons.all.failures.txt"
 # OUTFILE <- "~/scratch/batch_effects.reclassification_table.txt"
-
-
-###Set cutoffs
-#pairwise.cutoff <- 12
-#onevsall.cutoff <- 2
+# pairwise.cutoff <- 12
+# onevsall.cutoff <- 2
 
 
 ###Read data
 freq.dat <- import.freqs(freq.table.in)
 
 
-pairwise.fails <- import.fails(pairwise.in,pairwise.minus.in,prefix="pairwise")
-pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff),]
-onevsall.fails <- import.fails(onevsall.in,onevsall.minus.in,prefix="onevsall")
-onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff),]
+pairwise.fails <- import.fails(pairwise.in, prefix="pairwise")
+pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff), ]
+onevsall.fails <- import.fails(onevsall.in, prefix="onevsall")
+onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff), ]
 
 
 ###Combine data
 merged <- merge(pairwise.fails,onevsall.fails,all=T,sort=F,by="VID")
-merged[,-1] <- apply(merged[,-1],2,function(vals){
-  vals[which(is.na(vals))] <- 0
-  return(vals)
-})
+if(nrow(merged) > 0){
+  merged[,-1] <- apply(merged[,-1],2,function(vals){
+    vals[which(is.na(vals))] <- 0
+    return(vals)
+  })
+}
 merged <- merge(merged,freq.dat,by="VID",sort=F,all=F)
 
 

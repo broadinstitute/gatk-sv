@@ -41,6 +41,18 @@ def is_smaller_chrom(chrA, chrB):
         return chrA.isdigit()
 
 
+def is_biallelic(record):
+    """
+    Check if record is biallelic
+    """
+    if 'MULTIALLELIC' not in record.filter \
+    and len(record.alleles) <= 2 \
+    and record.info['SVTYPE'] not in 'CNV MCNV'.split():
+        return True
+    else:
+        return False
+
+
 def recip(startA, endA, startB, endB, frac):
     """
     Test if two intervals share a specified reciprocal overlap.

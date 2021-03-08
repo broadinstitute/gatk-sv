@@ -14,6 +14,7 @@ import sys
 import pysam
 import csv
 from numpy import median
+from svtk.utils import is_biallelic
 
 
 #Define global variables
@@ -115,16 +116,20 @@ def cleanup_vcf(vcf, fout, callrates, min_callrate_global=0.85,
                 if callrate < min_callrate_global:
                     record.filter.add('LOW_CALL_RATE')
 
-        #Recalibrate QUAL score
-        newQUAL = recal_qual_score(record)
-        if newQUAL is not None:
-            record.qual = newQUAL
+        #Recalibrate QUAL score for biallelic variants
+        if is_biallelic(record):
+            newQUAL = recal_qual_score(record)
+            if newQUAL is not None:
+                record.qual = newQUAL
 
-        #Only write out non-empty variants to output file
-        for s in record.samples:
-            if record.samples[s]['GT'] not in NULL_and_REF_GTs:
-                fout.write(record)
-                break
+        #Only check for non-empty GTs for biallelic variants
+        if is_biallelic(record):
+            for s in record.samples:
+                if record.samples[s]['GT'] not in NULL_and_REF_GTs:
+                    fout.write(record)
+                    break
+        else:
+            fout.write(record)
 
 
 def main():
