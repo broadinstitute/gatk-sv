@@ -5,7 +5,7 @@
 FROM ubuntu:18.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-ARG SAMTOOLS_VERSION=1.11
+ARG SAMTOOLS_VERSION=1.9
 ARG BCFTOOLS_VERSION=1.9
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
@@ -44,10 +44,7 @@ RUN apt-get -qqy update --fix-missing && \
 ############### stage 1: other commonly used bioinformatics utilities 
 FROM ubuntu:18.04
 
-# Set environment variables.
 ENV HOME=/root
-ENV R_HOME=/usr
-
 
 # Define default command.
 CMD ["bash"]
@@ -79,36 +76,40 @@ RUN apt-get -qqy update --fix-missing && \
     bcftools --help
 
 
-# GATK needed for PrintReads
-ARG GATK_TRANSIENT_DEP="git git-lfs"
-ARG GATK_DEP="openjdk-8-jdk ${GATK_TRANSIENT_DEP}"
-ARG GATK_COMMIT="a33bf19dd3188af0af1bd17bce015eb20ba73227"
-ENV GATK_JAR="/opt/gatk.jar"
+# install GCloud SDK
+ARG CLOUD_SDK_VERSION=239.0.0
+ARG GCLOUD_SDK_EXTRA_COMPONENTS
+ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools "
+ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
-                 ${GATK_DEP} && \
-    cd / && git clone https://github.com/broadinstitute/gatk.git && \
-    cd gatk && git lfs install && \
-    git checkout ${GATK_COMMIT} && ./gradlew localJar && \
-    mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR} && \
-    cd / && \
-    apt-get -qqy purge ${GATK_TRANSIENT_DEP} && \
+                 ${GCLOUD_SDK_DEPENDENCIES} && \
+    pip install -q -U --no-cache-dir \
+                crcmod \
+                wheel && \
+    export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
+    echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+    apt-get -qqy update && \
+    apt-get -qqy install --no-install-recommends \
+                 google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \
+                 $GCLOUD_SDK_EXTRA_COMPONENTS && \
+    gcloud config set core/disable_usage_reporting true && \
+    gcloud config set component_manager/disable_update_check true && \
+    gcloud config set metrics/environment github_docker_image && \
+    apt-get -qqy purge ${GCLOUD_SDK_TRANSIENT_DEP} && \
     apt-get -qqy clean && \
-    rm -rf /gatk \
-           /tmp/* \
+    rm -rf /tmp/* \
            /var/tmp/* \
            /var/cache/apt/* \
            /var/lib/apt/lists/* \
            /usr/share/man/?? \
-           /usr/share/man/??_* && \
-    java -jar ${GATK_JAR}
+           /usr/share/man/??_*
 
-# Define default command.
-CMD ["bash"]
 
-#### Basic image utilities
+
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
