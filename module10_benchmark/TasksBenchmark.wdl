@@ -761,9 +761,9 @@ task SplitBed{
 
   command <<<
     if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | awk '{if ($1==~{contig}) print}'  > ~{contig}.bed
+      zcat ~{bed_file} | awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
     else
-      awk '{if ($1==~{contig}) print}' ~{bed_file} > ~{contig}.bed
+      awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
     fi
   >>>
 
