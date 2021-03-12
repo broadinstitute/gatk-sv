@@ -169,6 +169,7 @@ task RunVaPoRWithCram{
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
   output {
+    File local_bam = "~{contig}.bam"
     File vapor = "~{prefix}.~{contig}.vapor.gz"
     File vapor_plot = "~{prefix}.~{contig}.tar.gz"
   }

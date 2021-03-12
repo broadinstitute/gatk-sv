@@ -21,7 +21,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
-import "VaPoRBed.wdl" as vapor_bed
+import "VaPoRBedPerContig.wdl" as vapor_bed
 import "VaPoRVcf.wdl" as vapor_vcf
 workflow VaPoR{
     input{
@@ -76,6 +76,7 @@ workflow VaPoR{
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
+                contigs = contigs,
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
@@ -90,7 +91,7 @@ workflow VaPoR{
             File? vcf_out = VaPoR_vcf.bed
             File? bed_out = VaPoR_bed.bed
             Array[File]? vcf_plots = VaPoR_vcf.plots
-            File? bed_plots = VaPoR_bed.plots
+            Array[File]? bed_plots = VaPoR_bed.plots
     }
 }
 
