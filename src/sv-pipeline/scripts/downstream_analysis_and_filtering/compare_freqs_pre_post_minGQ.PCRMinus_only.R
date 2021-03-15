@@ -149,11 +149,11 @@ OUTDIR <- as.character(args[3])
 prefix <- as.character(args[4])
 
 # #DEV:
-# pre.freqs.PCRPLUS.in <- "~/scratch/gnomAD_v2_SV_MASTER.PCRPLUS.AF_preMinGQ.txt"
-# pre.freqs.PCRMINUS.in <- "~/scratch/gnomAD_v2_SV_MASTER.PCRMINUS.AF_preMinGQ.txt"
-# freq.table.in <- "~/scratch/gnomAD_v2_SV_MASTER.merged_AF_table.txt.gz"
-# OUTDIR <- "~/scratch"
-# prefix <- "gnomAD_v2_SV_MASTER.test."
+# # pre.freqs.PCRPLUS.in <- "~/scratch/gnomAD_v2_SV_MASTER.PCRPLUS.AF_preMinGQ.txt"
+# pre.freqs.PCRMINUS.in <- "~/scratch/minGQ_test/PD_1perc_fdr.PCRMINUS.AF_preMinGQ.txt"
+# freq.table.in <- "~/scratch/minGQ_test/mod07_mcnv_test.merged_AF_table.txt.gz"
+# OUTDIR <- "~/scratch/minGQ_test/"
+# prefix <- "mod07_mcnv_test"
 
 # Read frequency data
 pre.dat <- load.preMinGQ.freqs.PCRMINUS_only(pre.freqs.PCRMINUS.in)

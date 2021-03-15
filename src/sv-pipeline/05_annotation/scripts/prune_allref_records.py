@@ -11,6 +11,7 @@ Drop records with zero non-reference alleles in AF-annotated VCF
 import argparse
 import sys
 import pysam
+from svtk.utils import is_biallelic
 
 
 NULL_GTs = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
@@ -18,12 +19,11 @@ NULL_GTs = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
 
 def prune_allrefs(vcf, fout):
     for record in vcf.fetch():
-        if 'MULTIALLELIC' in record.filter.keys():
-            nonref = sum(record.info['AC'][:2] + record.info['AC'][3:])
-            if nonref > 0:
+        if is_biallelic(record):
+            if record.info['AC'][0] > 0:
                 fout.write(record)
         else:
-            if record.info['AC'][0] > 0:
+            if record.info['CN_NONREF_FREQ'] > 0:
                 fout.write(record)
 
 

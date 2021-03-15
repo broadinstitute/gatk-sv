@@ -64,6 +64,7 @@ workflow XfBatchEffect {
     call GetFreqTable {
       input:
         vcf=getAFs.output_vcf,
+        sample_pop_assignments=sample_pop_assignments,
         prefix=batch,
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -229,7 +230,7 @@ task GetBatchSamplesList {
     > "~{batch}.samples.list" || true
     # Get list of samples not in batch
     fgrep -wv ~{batch} ~{sample_batch_assignments} | cut -f1 \
-    cat - ~{probands_list} | sort -Vk1,1 | uniq \
+    | cat - ~{probands_list} | sort -Vk1,1 | uniq \
     | fgrep -wf - all_samples.list \
     > "~{batch}.exclude_samples.list" || true
   >>>
@@ -255,6 +256,7 @@ task GetBatchSamplesList {
 task GetFreqTable {
   input{
     File vcf
+    File sample_pop_assignments
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -280,7 +282,7 @@ task GetFreqTable {
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
             | sed 's/\t/\n/g' \
             | awk -v OFS="\t" '{ print $1, NR }' \
-            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN' \
+            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
             | fgrep -v "OTH" \
             | cut -f2 \
             | paste -s -d\, || true )
@@ -288,17 +290,22 @@ task GetFreqTable {
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.preclean.txt.gz"
-    #Clean frequencies
+    #Clean frequencies (note that this script automatically gzips the output file taken as the last argument)
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
       "~{prefix}.frequencies.preclean.txt.gz" \
+      "~{sample_pop_assignments}" \
       "~{prefix}.frequencies.txt"
     ### Create table of freqs, irrespective of ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
             | sed 's/\t/\n/g' \
-            | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN") print NR }' \
+            | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
             | paste -s -d\, || true )
-    cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
+    cut -f"$idxs" "~{prefix}.vcf2bed.bed" > minfreq.subset.bed
+    svtype_idx=$( sed -n '1p' minfreq.subset.bed \
+                  | sed 's/\t/\n/g' \
+                  | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
+    awk -v OFS="\t" -v sidx="$svtype_idx" '{ if ($sidx=="CNV" || $sidx=="MCNV") print $1, $2, $3, $6, $7; else print $1, $2, $3, $4, $5 }' minfreq.subset.bed \
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.allPops.txt.gz"
@@ -341,12 +348,14 @@ task MergeFreqTables {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
+
     #Get list of batch IDs and batch table paths
     while read batch; do
       echo "$batch"
-      find ./ -name "$batch.frequencies*txt.gz"
+      find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
     done < ~{batches_list} | paste - - \
     > input.list
+
     #Make sure all input files have the same number of lines
     while read batch file; do
       zcat "$file" | wc -l
@@ -356,6 +365,7 @@ task MergeFreqTables {
       echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
       exit 0
     fi
+
     #Prep files for paste joining
     echo "PREPPING FILES FOR MERGING"
     while read batch file; do
@@ -380,6 +390,7 @@ task MergeFreqTables {
         | cut -f4-
       done > "$batch.prepped.txt" 
     done < input.list
+
     #Join files with simple paste
     paste \
       header.txt \
