@@ -79,6 +79,7 @@ workflow VaPoRVcf{
   call mini_tasks.ConcatVaPoR as ConcatVaPoR{
     input:
       shard_bed_files=RunVaPoR.vapor,
+      shard_plots = RunVaPoR.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
@@ -86,7 +87,8 @@ workflow VaPoRVcf{
 
   output{
       File bed = ConcatVaPoR.merged_bed_file
-      Array[File] plots = RunVaPoR.vapor_plot
+      File plots = ConcatVaPoR.merged_bed_plot
+      #Array[File] plots = RunVaPoR.vapor_plot
     }
   }
 

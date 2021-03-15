@@ -90,8 +90,8 @@ workflow VaPoR{
     output{
             File? vcf_out = VaPoR_vcf.bed
             File? bed_out = VaPoR_bed.bed
-            Array[File]? vcf_plots = VaPoR_vcf.plots
-            Array[File]? bed_plots = VaPoR_bed.plots
+            File? vcf_plots = VaPoR_vcf.plots
+            File? bed_plots = VaPoR_bed.plots
     }
 }
 

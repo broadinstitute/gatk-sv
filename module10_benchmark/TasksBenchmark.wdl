@@ -62,7 +62,7 @@ task ZcatCompressedFiles {
   output {
     File outfile=outfile_name
   }
-}
+  }
 
 # concatenate uncompressed files
 # -replaces "combine" task in some workflows
@@ -120,7 +120,7 @@ task CatUncompressedFiles {
   output {
     File outfile=output_file_name
   }
-}
+  }
 
 # Combine multiple sorted VCFs
 task ConcatVcfs {
@@ -175,7 +175,7 @@ task ConcatVcfs {
     File concat_vcf = outfile_name
     File concat_vcf_idx = outfile_name + ".tbi"
   }
-}
+  }
 
 # Merge shards after VCF stats collection
 task ConcatBeds {
@@ -243,12 +243,13 @@ task ConcatBeds {
     File merged_bed_file = output_file
     File merged_bed_idx = output_file + ".tbi"
   }
-}
+  }
 
 # Merge shards after VaPoR
 task ConcatVaPoR {
   input {
     Array[File] shard_bed_files
+    Array[File] shard_plots
     String prefix
     Boolean? index_output
     String sv_base_mini_docker
@@ -293,9 +294,8 @@ task ConcatVaPoR {
     set -o pipefail
 
     while read SPLIT; do
-      zcat $SPLIT
+      zcat $SPLIT | tail -n+2
     done < ~{write_lines(shard_bed_files)} \
-      | tail -n+2 \
       | sort -Vk1,1 -k2,2n -k3,3n \
       | bgzip -c \
       > ~{output_file}
@@ -305,13 +305,20 @@ task ConcatVaPoR {
     else
       touch ~{output_file}.tbi
     fi
+
+    mkdir ~{prefix}.plots
+    while read SPLIT; do
+      tar zxvf $SPLIT -C ~{prefix}.plots/
+    done < ~{write_lines(shard_plots)}
+
+    tar -czf ~{prefix}.plots.tar.gz ~{prefix}.plots/
   >>>
 
   output {
     File merged_bed_file = output_file
-    File merged_bed_idx = output_file + ".tbi"
+    File merged_bed_plot = "~{prefix}.plots.tar.gz"
   }
-}
+  }
 
 
 # Task to merge VID lists across shards
@@ -365,7 +372,7 @@ task FilesToTarredFolder {
   output {
     File tarball = outfile_name
   }
-}
+  }
 
 
 #Create input file for per-batch genotyping of predicted CPX CNV intervals
@@ -412,7 +419,7 @@ task PasteFiles {
   output {
     File outfile = outfile_name
   }
-}
+  }
 
 # Select a subset of vcf records by passing a bash filter command
 # records_filter must be a bash command accepting vcf records passed via
@@ -495,7 +502,7 @@ task FilterVcf {
     File filtered_vcf = outfile_name
     File filtered_vcf_idx = outfile_name + ".tbi"
   }
-}
+  }
 
 # Find intersection of Variant IDs from vid_list with those present in vcf, return as filtered_vid_list
 task SubsetVariantList {
@@ -546,7 +553,7 @@ task SubsetVariantList {
   output {
     File filtered_vid_list = outfile_name
   }
-}
+  }
 
 
 # evenly split text file into even chunks
@@ -623,7 +630,7 @@ task SplitUncompressed {
   output {
      Array[File] shards=glob("~{shard_prefix}*")
   }
-}
+  }
 
 
 #localize a specific contig of a bam/cram file
@@ -678,7 +685,7 @@ task LocalizeCram{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-}
+  }
 
 task LocalizeCramRequestPay{
   input{
@@ -733,7 +740,7 @@ task LocalizeCramRequestPay{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-}
+  }
 
 #extract specific contig from vcf
 task SplitBed{
@@ -777,7 +784,7 @@ task SplitBed{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
-}
+  }
 task SplitVcf{
   input{
     String contig
@@ -824,7 +831,7 @@ task SplitVcf{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-}
+  }
 
 task vcf2bed{
   input{
@@ -877,7 +884,7 @@ task vcf2bed{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-}
+  }
 
 
 
