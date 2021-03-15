@@ -32,8 +32,8 @@ Notes:
   2) SET1 must have at least the following five columns, in order:
      chr, start, end, SV ID, SV type
   3) The last column of SET1 must contain allele frequency
-  4) SET2 must have exactly six columns as follows, in order:
-     chr, start, end, SV type, SV size, allele frequency
+  4) SET2 must have seven columns as follows, in order:
+     chr, start, end, ID, SV type, SV size, allele frequency
 EOF
 }
 
