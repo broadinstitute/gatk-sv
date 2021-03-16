@@ -65,11 +65,13 @@ def get_disk_info(metadata):
     return float(0), float(0)
 
 
-def was_preemptible_vm(metadata):
+def was_preemptible_vm(metadata, was_cached):
   """
-  Source: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
+  Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
   """
-  if "runtimeAttributes" in metadata and "preemptible" in metadata['runtimeAttributes']:
+  if was_cached:
+    return True # if call cached, not any type of VM, but don't inflate nonpreemptible count
+  elif "runtimeAttributes" in metadata and "preemptible" in metadata['runtimeAttributes']:
     pe_count = int(metadata['runtimeAttributes']["preemptible"])
     attempt = int(metadata['attempt'])
 
@@ -90,11 +92,12 @@ def calculate_start_end(call_info, override_warning=False, alias=None):
   """
   Modified from: https://github.com/broadinstitute/dsde-pipelines/blob/develop/scripts/calculate_cost.py
   """
-  job_id = call_info['jobId'].split('/')[-1]
-  if alias is None or alias == "":
-    alias = job_id
-  else:
-    alias += "." + job_id
+  if 'jobId' in call_info:
+    job_id = call_info['jobId'].split('/')[-1]
+    if alias is None or alias == "":
+      alias = job_id
+    else:
+      alias += "." + job_id
 
   # get start (start time of VM start) & end time (end time of 'ok') according to metadata
   start = None
@@ -131,10 +134,11 @@ def calculate_start_end(call_info, override_warning=False, alias=None):
     if 'end' in call_info:
       end = dateutil.parser.parse(call_info['end'])
     elif override_warning:
-      logging.warning("End time not found, omitting job {}".format(call_info['jobId']))
+      logging.warning("End time not found, omitting job {}".format(alias))
       end = start
     else:
-      raise RuntimeError(("End time not found for job {} (may be running or have been aborted). Run again with --override-warning to continue anyway and omit the job.".format(alias)))
+      raise RuntimeError((f"End time not found for job {alias} (may be running or have been aborted)."
+                          " Run again with --override-warning to continue anyway and omit the job."))
 
   return start, end
 
@@ -242,7 +246,7 @@ def get_calls(m, override_warning=False, alias=None):
 
     cached = used_cached_results(m)
 
-    preemptible = was_preemptible_vm(m)
+    preemptible = was_preemptible_vm(m, cached)
     preemptible_cpu = 0
     nonpreemptible_cpu = 0
     if preemptible:
@@ -407,7 +411,7 @@ def write_cached_warning(cached_file):
   global CACHED
   global NUM_CACHED
   if NUM_CACHED > 0:
-    logging.info("%d cached task(s) found, writing tasks to %s." % (NUM_CACHED, cached_file))
+    logging.info("%d cached task(s) found, writing task(s) to %s." % (NUM_CACHED, cached_file))
     with open(cached_file, 'w') as cached_out:
       cached_out.write("#task_name\tnum_cached\n")
       cached_out.write("all_tasks\t%d\n" % NUM_CACHED)
@@ -420,7 +424,7 @@ def write_nonpreemptible_vms(vms_file):
   global NUM_NONPREEMPTIBLE
   global NONPREEMPTIBLE_TASKS
   if NUM_NONPREEMPTIBLE > 0:
-    logging.info("%d non-preemptible VM(s) found, writing tasks to %s." % (NUM_NONPREEMPTIBLE, vms_file))
+    logging.info("%d non-preemptible VM(s) found, writing task(s) to %s." % (NUM_NONPREEMPTIBLE, vms_file))
     with open(vms_file, 'w') as vms_out:
       vms_out.write("#task_name\tnum_nonpreemptible\n")
       vms_out.write("all_tasks\t%d\n" % NUM_NONPREEMPTIBLE)
