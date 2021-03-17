@@ -26,6 +26,8 @@ workflow Module04b {
     Array[File] regeno_coverage_medians # one file per batch
     Float regeno_max_allele_freq = 0.01 
     Int regeno_allele_count_threshold = 3 
+    Int min_var_per_sample_outlier_threshold = 3
+    Float regeno_sample_overlap = 0.7
 
     RuntimeAttr? runtime_attr_cluster_merged_depth_beds
     RuntimeAttr? runtime_attr_regeno_raw_combined_depth
@@ -188,6 +190,8 @@ workflow Module04b {
         regeno_file = MergeList.master_regeno,
         regeno_sample_ids_lookup = ConcatSampleIdLookupBed.concat_bed,
         vcfs = Genotype_2.genotyped_vcf,
+        min_var_per_sample_outlier_threshold = min_var_per_sample_outlier_threshold,
+        regeno_sample_overlap = regeno_sample_overlap,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
