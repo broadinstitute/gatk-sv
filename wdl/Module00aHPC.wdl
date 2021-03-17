@@ -4,27 +4,38 @@ version 1.0
 # Written only for BAM inputs to generate counts, PE/SR, manta, melt, and wham outputs
 
 workflow Module00aHPC {
-  input {}
+  input {
+    Array[File] bam_files
+    Array[File] bam_indexes
+    Array[String] sample_ids
+  }
 
-  call Run00a
+  scatter(i in range(length(bam_files))) {
+    call Run00a {
+      input:
+        bam_file = bam_files[i],
+        bam_index = bam_indexes[i],
+        sample_id = sample_ids[i]
+    }
+  }
 
   output {
-    File coverage_counts = Run00a.coverage_counts
+    Array[File] coverage_counts = Run00a.coverage_counts
 
-    File manta_vcf = Run00a.manta_vcf
-    File manta_index = Run00a.manta_index
+    Array[File] manta_vcf = Run00a.manta_vcf
+    Array[File] manta_index = Run00a.manta_index
 
-    File melt_vcf = Run00a.melt_vcf
-    File melt_index = Run00a.melt_index
-    File wgs_metrics_file = Run00a.wgs_metrics_file
+    Array[File] melt_vcf = Run00a.melt_vcf
+    Array[File] melt_index = Run00a.melt_index
+    Array[File] wgs_metrics_file = Run00a.wgs_metrics_file
 
-    File pesr_disc = Run00a.pesr_disc
-    File pesr_disc_index = Run00a.pesr_disc_index
-    File pesr_split = Run00a.pesr_split
-    File pesr_split_index = Run00a.pesr_split_index
+    Array[File] pesr_disc = Run00a.pesr_disc
+    Array[File] pesr_disc_index = Run00a.pesr_disc_index
+    Array[File] pesr_split = Run00a.pesr_split
+    Array[File] pesr_split_index = Run00a.pesr_split_index
 
-    File wham_vcf = Run00a.wham_vcf
-    File wham_index = Run00a.wham_index
+    Array[File] wham_vcf = Run00a.wham_vcf
+    Array[File] wham_index = Run00a.wham_index
   }
 }
 
@@ -355,7 +366,6 @@ task Run00a {
 
     # print some info that may be useful for debugging
     df -h
-    cat /sys/fs/cgroup/memory/memory.stat
     echo "whamg $(./whamg 2>&1 >/dev/null | grep Version)"
 
     # ensure that index files are present in appropriate locations
