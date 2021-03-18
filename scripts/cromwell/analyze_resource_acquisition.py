@@ -98,6 +98,8 @@ def calculate_start_end(call_info, override_warning=False, alias=None):
       alias = job_id
     else:
       alias += "." + job_id
+  elif alias is None or alias == "":
+    alias = "NA"
 
   # get start (start time of VM start) & end time (end time of 'ok') according to metadata
   start = None
