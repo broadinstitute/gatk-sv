@@ -223,7 +223,9 @@ task SplitVcf{
     
     command <<<
         svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} tmp.bed
-        cut -f1-4,7-8 tmp.bed > ~{prefix}.bed
+        head -1 tmp.bed > tmp.sorted.bed
+        awk 'NR > 1' < tmp.bed | sort -k1,1V -k2,2n -k3,3n >> tmp.sorted.bed
+        cut -f1-4,7-8 tmp.sorted.bed > ~{prefix}.bed
         head -1 ~{prefix}.bed > header
         cat header <(awk '{if ($5=="DEL") print}' ~{prefix}.bed )> ~{prefix}.DEL.bed
         cat header <(awk '{if ($5=="DUP") print}' ~{prefix}.bed )> ~{prefix}.DUP.bed
