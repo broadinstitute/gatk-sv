@@ -197,7 +197,7 @@ def format_multifile_line(batch, output_names, batch_outputs):
   for name in output_names:
     file_list = batch_outputs[name]
     if file_list == "":
-      continue
+      batch_line += "\t"
     elif len(file_list) == 1:
       batch_line += "\t" + file_list[0]
     else:
