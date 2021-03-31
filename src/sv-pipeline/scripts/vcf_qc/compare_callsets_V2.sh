@@ -29,11 +29,15 @@ Optional arguments:
 
 Notes:
   1) SET1/SET2 are expected to be BED3+ formatted files
-  2) SET1 must have at least the following five columns, in order:
-     chr, start, end, SV ID, SV type
-  3) The last column of SET1 must contain allele frequency
-  4) SET2 must have seven columns as follows, in order:
-     chr, start, end, ID, SV type, SV size, allele frequency
+  2) SET1 must have at least the first five of these columns, in order:
+     chr, start, end, VID, SVTYPE, ..., AF
+     The last column must contain allele frequency.
+     There must be a tab-separated header line naming the columns. Example:
+     #chrom	start	end	name	SVTYPE	SVLEN	AF
+  3) SET2 must have seven columns as follows, in order:
+     chr, start, end, VID, svtype, svlen, AF
+     There must be a tab-separated header line describing the columns and the fourth column must be called "VID". Example:
+     #chr	start	end	VID	svtype	svlen	AF	samples
 EOF
 }
 
