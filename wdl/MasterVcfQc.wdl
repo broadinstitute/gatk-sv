@@ -31,7 +31,6 @@ workflow MasterVcfQc {
     File? sanders_2015_tarball
     File? collins_2017_tarball
     File? werling_2018_tarball
-    Array[File]? custom_comparison_sets
     Array[String] contigs
     Int? random_seed
     File? vcf_idx
@@ -184,17 +183,6 @@ workflow MasterVcfQc {
       plot_qc_per_sample_werling_tarball=WerlingPerSamplePlot.perSample_plots_tarball,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_sanitize_outputs
-  }
-  if (defined(custom_comparison_sets)) {
-    scatter (custom_comparison_set in select_first([custom_comparison_sets])) {
-      call VcfExternalBenchmark_to_Rdtest {
-        input:
-          vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-          comparator=custom_comparison_set,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_attr_override=runtime_override_custom_external
-      }
-    }
   }
 
   # Collect external benchmarking vs 1000G
@@ -954,78 +942,3 @@ task SanitizeOutputs {
   }
 }
 
-# Task to collect external benchmarking data
-task VcfExternalBenchmark_to_Rdtest {
-  input {
-    File vcf_stats
-    File comparator
-    String sv_pipeline_qc_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  # NOTE: in this case, double input size because it will be compared to a data set stored in
-  #       the docker. Other than having space for the at-rest compressed data, this is like
-  #       processing another data set of comparable size to the input
-  Float input_size = 2 * size(vcf_stats, "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
-  RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -eu -o pipefail    
-    # Run benchmarking script
-    /opt/sv-pipeline/scripts/vcf_qc/compare_callsets_V2.sh \
-      -O ~{vcf_stats}.SENS.bed
-      ~{vcf_stats} \
-      ~{comparator} 
-    /opt/sv-pipeline/scripts/vcf_qc/compare_callsets_V2.sh \
-      -O ~{vcf_stats}.SPEC.bed
-      ~{comparator} \
-      ~{vcf_stats} 
-    awk '{if ($8=="NO_OVR" && $9=="NO_OVR" && $3-$2>5000) print}' \
-    ~{vcf_stats}.SENS.bed \
-    | awk '{if ($5=="DEL" || $5=="DEL_ALU" || $5=="DEL_HERV" || $5=="DEL_LINE1" || $5=="DEL_SVA" || $5=="DUP") print}' \
-    > ~{vcf_stats}.missed.large_cnv.bed
-    awk '{if ($8=="NO_OVR" && $9=="NO_OVR" && $3-$2>5000) print}' \
-    ~{vcf_stats}.SPEC.bed \
-    | awk '{if ($5=="DEL" || $5=="DEL_ALU" || $5=="DEL_HERV" || $5=="DEL_LINE1" || $5=="DEL_SVA" || $5=="DUP") print}' \
-    > ~{vcf_stats}.newUniq.large_cnv.bed
-    Rscript generate_rdtest_bed.R \
-    -r ~{vcf_stats}.missed.large_cnv.bed \
-    -b  ~{comparator} \
-    -o ~{vcf_stats}.missed.large_cnv.rdtest.bed 
-    Rscript generate_rdtest_bed.R \
-    -r ~{vcf_stats}.newUniq.large_cnv.bed \
-    -b ~{vcf_stats} \
-    -o ~{vcf_stats}.newUniq.large_cnv.rdtest.bed 
-    # Prep outputs
-  >>>
-
-  output {
-    File sens = "~{vcf_stats}.SENS.bed"
-    File spec = "~{vcf_stats}.SPEC.bed"
-    File rdtest_missed = "~{vcf_stats}.missed.large_cnv.rdtest.bed"
-    File rdtest_newunique = "~{vcf_stats}.newUniq.large_cnv.rdtest.bed "
-    
-  }
-}
