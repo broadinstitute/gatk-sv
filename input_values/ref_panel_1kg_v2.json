@@ -1090,7 +1090,7 @@
     "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/NA21122.split.txt.gz",
     "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/NA21133.split.txt.gz"
   ],
-  "qc_definitions" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv",
+  "qc_definitions" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.v2.tsv",
   "requester_pays_crams" : "true",
   "samples":  [
     "HG00096",
