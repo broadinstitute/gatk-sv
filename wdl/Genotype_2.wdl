@@ -290,7 +290,7 @@ task ConcatReGenotypedVcfs {
       | vcf-sort -c \
       | bgzip -c > ~{batch}.regeno.vcf.gz
     cut -f 4 ~{bed} |awk '{print $0"\t"}'> varlist.txt
-    zcat ~{depth_vcf} |fgrep -f varlist.txt -v |bgzip -c > no_variant.vcf.gz
+    zcat ~{depth_vcf} |fgrep -wf varlist.txt -v |bgzip -c > no_variant.vcf.gz
     vcf-concat ~{batch}.regeno.vcf.gz no_variant.vcf.gz \
       | vcf-sort -c \
       | bgzip -c > ~{batch}.depth.regeno.vcf.gz
