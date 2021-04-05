@@ -54,6 +54,7 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
+    File? dbsnp_vcf_index
     File? gvcf_gcs_project_for_requester_pays
 
     # BAF Option #2, position-sharded VCFs
@@ -239,6 +240,7 @@ workflow GATKSVPipelinePhase1 {
       gvcfs = gvcfs,
       unpadded_intervals_file = unpadded_intervals_file,
       dbsnp_vcf = dbsnp_vcf,
+      dbsnp_vcf_index = dbsnp_vcf_index,
       gvcf_gcs_project_for_requester_pays = gvcf_gcs_project_for_requester_pays,
       ref_fasta = reference_fasta,
       ref_fasta_index = reference_index,
