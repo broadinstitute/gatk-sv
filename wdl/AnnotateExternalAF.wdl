@@ -222,8 +222,12 @@ task SplitVcf{
     String prefix = basename(vcf, ".vcf.gz")
     
     command <<<
-        svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} tmp.bed
-        cut -f1-4,7-8 tmp.bed > ~{prefix}.bed
+        svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} - |
+            cut -f1-4,7-8 > tmp.bed
+        head -1 tmp.bed > ~{prefix}.bed
+        awk 'NR > 1' < tmp.bed \
+            | sort -k1,1V -k2,2n -k3,3n >> ~{prefix}.bed
+        rm tmp.bed
         head -1 ~{prefix}.bed > header
         cat header <(awk '{if ($5=="DEL") print}' ~{prefix}.bed )> ~{prefix}.DEL.bed
         cat header <(awk '{if ($5=="DUP") print}' ~{prefix}.bed )> ~{prefix}.DUP.bed

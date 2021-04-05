@@ -72,13 +72,6 @@ def to_json_custom(value, *args, **kwargs):
     else:
         return json.dumps(value, *args, **kwargs)
 
-def make_target_subdir(dir_path):
-    split_path = dir_path.split(os.sep)
-    for i in [i+1 for i in range(0,len(split_path))]:
-        target_subdir = os.sep.join(split_path[0:i])
-        if not os.path.isdir(target_subdir):
-            os.mkdir(target_subdir)
-
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -161,7 +154,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     if len(undefined_names) > 0:
         print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
     else:
-        make_target_subdir(target_subdir)
+        os.makedirs(target_subdir, exist_ok=True)
         target_file = open(target_file_path, "w")
         target_file.write(processed_content)
         target_file.close()

@@ -27,7 +27,6 @@ workflow Module03Qc {
     File? collins_2017_tarball
     File? werling_2018_tarball
 
-    Array[File]? custom_comparison_sets
     File contig_list
     Int? random_seed
 
@@ -94,7 +93,6 @@ workflow Module03Qc {
           sanders_2015_tarball=sanders_2015_tarball,
           collins_2017_tarball=collins_2017_tarball,
           werling_2018_tarball=werling_2018_tarball,
-          custom_comparison_sets=custom_comparison_sets,
           contigs=contigs,
           random_seed=random_seed,
           sv_base_mini_docker=sv_base_mini_docker,

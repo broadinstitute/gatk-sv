@@ -8,6 +8,8 @@ workflow CombineReassess {
     File regeno_file
     File regeno_sample_ids_lookup
     Array[File] vcfs 
+    Int min_var_per_sample_outlier_threshold
+    Float regeno_sample_overlap
     String sv_pipeline_base_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_vcf2bed
@@ -28,6 +30,8 @@ workflow CombineReassess {
       regeno_file = regeno_file,
       regeno_sample_ids_lookup = regeno_sample_ids_lookup,
       samplelist = samplelist,
+      min_var_per_sample_outlier_threshold = min_var_per_sample_outlier_threshold,
+      regeno_sample_overlap = regeno_sample_overlap,
       runtime_attr_override = runtime_attr_merge_list_creassess,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
@@ -82,6 +86,8 @@ task MergeList {
     File regeno_file
     Array[File] nonempty_txt
     File regeno_sample_ids_lookup
+    Int min_var_per_sample_outlier_threshold
+    Float regeno_sample_overlap
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -130,7 +136,9 @@ task MergeList {
             count(line)
     counts=np.array([int(dct[x]) for x in dct.keys()])
     def reject_outliers(data, m=3):
-        return data[abs(data - np.mean(data)) > m * np.std(data)]
+        deviation_threshold = m * np.std(data)
+        data_mean = np.mean(data)
+        return data[np.logical_and(abs(data - data_mean) > deviation_threshold, data > ~{min_var_per_sample_outlier_threshold})]
     outliers=reject_outliers(counts)
     outlier_samples=set([x for x in dct.keys() if dct[x] in outliers])
     with open("reassess_nonzero_overlap.txt",'w') as g, open("reassesss_by_var.txt",'r') as f:
@@ -146,7 +154,7 @@ task MergeList {
                 overlap_over_expected=str(len(regeno_in_expected)/len(expected))
                 g.write(dat[0]+"\t"+",".join(regeno)+'\t'+",".join(expected)+'\t'+overlap_over_regeno+'\t'+overlap_over_expected+"\n")
     CODE
-    awk '{if($4>0.7 && $5>0.7)print $1}' reassess_nonzero_overlap.txt > regeno_var_filtered.txt
+    awk '{if($4>~{regeno_sample_overlap} && $5>~{regeno_sample_overlap})print $1}' reassess_nonzero_overlap.txt > regeno_var_filtered.txt
     # the OR clause below is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines 
     # (but don't ignore real error codes > 1)
     fgrep -w -f regeno_var_filtered.txt ~{regeno_file}> regeno.filtered.bed || [[ $? == 1 ]]
