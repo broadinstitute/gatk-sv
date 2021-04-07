@@ -8,9 +8,12 @@
 # Distributed under terms of the MIT license.
 
 ##requires >= vcftools/0.1.15 ##
+##requires >= bcftools/1.9 ##
 
 set -euxo pipefail
 
+# use BCFTOOLS 1.9, installed in /usr/local/bin/bcftools in our docker
+BCFTOOLS=/usr/local/bin/bcftools
 
 ##gzipped vcf##
 vcf=$1
@@ -27,7 +30,7 @@ zcat $vcf \
   > includelist.txt
 
 ##convert EV integer back into string##
-bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t[%EV\t]\n" $vcf > ev.tab
+${BCFTOOLS} query -f "%CHROM\t%POS\t%REF\t%ALT\t[%EV\t]\n" $vcf > ev.tab
 cut -f1-4 ev.tab > ev.sites.tab
 cut -f5- ev.tab \
   | sed -e 's/7/RD,PE,SR/g' -e 's/6/PE,SR/g' -e 's/5/RD,SR/g' -e 's/3/RD,PE/g' -e 's/2/PE/g' -e 's/4/SR/g' -e 's/1/RD/g' \
@@ -37,10 +40,10 @@ tabix -s1 -b2 -e2 ev.replaced.tab.gz
 
 echo '##FORMAT=<ID=EV,Number=1,Type=String,Description="Classes of evidence supporting final genotype">' > ev_header.txt
 tabix $vcf
-bcftools annotate -x FORMAT/EV $vcf | bgzip -c > no_ev.vcf.gz
+${BCFTOOLS} annotate -x FORMAT/EV $vcf | bgzip -c > no_ev.vcf.gz
 rm $vcf $vcf.tbi
 
-bcftools annotate \
+${BCFTOOLS} annotate \
   -a ev.replaced.tab.gz \
   -c CHROM,POS,REF,ALT,FORMAT/EV \
   -h ev_header.txt \
@@ -137,14 +140,14 @@ awk '{if ($5==2) print $2}' $famfile \
  fi
 
 
-bcftools index cleaninfo.vcf.gz 
+${BCFTOOLS} index cleaninfo.vcf.gz
 
 ##Pull out male and females sex chr##
-bcftools view cleaninfo.vcf.gz -S male.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>male.vcf.gz
-bcftools view cleaninfo.vcf.gz -S female.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>female.vcf.gz
+${BCFTOOLS} view cleaninfo.vcf.gz -S male.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>male.vcf.gz
+${BCFTOOLS} view cleaninfo.vcf.gz -S female.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>female.vcf.gz
 
-bcftools index male.vcf.gz
-bcftools index female.vcf.gz
+${BCFTOOLS} index male.vcf.gz
+${BCFTOOLS} index female.vcf.gz
 
 zcat male.vcf.gz\
    |awk -F'\t' '{if ($5~"DEL" && $1!~"#") print $0 "\t" "ENDOFLINE"}' \
@@ -182,7 +185,7 @@ zcat male.vcf.gz\
     cp male.vcf.gz cleanmale.vcf.gz
   fi
 
- bcftools index cleanmale.vcf.gz 
+ ${BCFTOOLS} index cleanmale.vcf.gz
 
   ##Modify female only for chrY###
   if [ $(zcat cleaninfo.vcf.gz |awk '{if ($1~"Y" && $1!~"#") print}'|wc -l) -gt 0 ]
@@ -206,11 +209,11 @@ zcat male.vcf.gz\
     |bgzip \
     >cleanfemale.vcf.gz 
 
-    bcftools index cleanfemale.vcf.gz 
+    ${BCFTOOLS} index cleanfemale.vcf.gz
 
   else 
    cp female.vcf.gz cleanfemale.vcf.gz
-   bcftools index cleanfemale.vcf.gz
+   ${BCFTOOLS} index cleanfemale.vcf.gz
   fi
 
 
@@ -220,8 +223,8 @@ zcat male.vcf.gz\
   if [ $(awk '{if ($5!=2 && $5!=1) print $2}' $famfile|wc -l) -gt 0 ]
   then    
     awk '{if ($5!=2 && $5!=1) print $2}' $famfile>other.txt
-    bcftools view cleaninfo.vcf.gz -S other.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>other.vcf.gz
-    bcftools index other.vcf.gz
+    ${BCFTOOLS} view cleaninfo.vcf.gz -S other.txt -r chrX:1-1000000000,chrY:1-1000000000,X:1-1000000000,Y:1-1000000000 --no-update|bgzip>other.vcf.gz
+    ${BCFTOOLS} index other.vcf.gz
 
    zcat other.vcf.gz\
     |awk -F'\t' '{if ($1!~"#") print $0 "\t" "ENDOFLINE"}' \
@@ -241,7 +244,7 @@ zcat male.vcf.gz\
     |bgzip \
     >cleanother.vcf.gz 
 
-  bcftools index cleanother.vcf.gz 
+  ${BCFTOOLS} index cleanother.vcf.gz
   
    cat <(zcat cleanmale.vcf.gz|egrep "##") \
     <(paste <(zcat cleanmale.vcf.gz|egrep -v "##") <(zcat cleanfemale.vcf.gz|cut -f10-|egrep -v "##") <(zcat cleanother.vcf.gz|cut -f10-|egrep -v "##") ) \
