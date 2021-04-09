@@ -12,6 +12,7 @@ import "MinGQRocOpt.wdl" as roc_opt_sub
 import "CalcAF.wdl" as calcAF
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
+import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 
 workflow Module07MinGQ {
@@ -33,6 +34,8 @@ workflow Module07MinGQ {
     String optimize_includeEV
     String optimize_excludeEV
     Int optimize_maxSVperTrio
+    Int max_shards_per_chrom_step1
+    Int min_records_per_shard_step1
     Float roc_max_fdr_PCRMINUS
     Float roc_max_fdr_PCRPLUS
     Int roc_min_gq
@@ -55,18 +58,24 @@ workflow Module07MinGQ {
     RuntimeAttr? runtime_attr_GatherTrioData
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
     RuntimeAttr? runtime_attr_MergePcrVCFs
+    RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
 
   # Get svtype of MEI
-  call ReviseSVtypeMEI {
+  call ReviseSVtype.ReviseSVtypeINStoMEI as ReviseSVtypeMEI{
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
       sv_base_mini_docker = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       prefix = prefix,
-      runtime_attr_override = runtime_attr_ReviseSVtypeMEI
+      contiglist = contiglist,
+      max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
+      min_records_per_shard_step1 = min_records_per_shard_step1,
+      runtime_attr_ReviseSVtypeMEI = runtime_attr_ReviseSVtypeMEI,
+      runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean
   }
 
   # Get list of PCRMINUS samples
