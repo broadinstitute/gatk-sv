@@ -30,27 +30,8 @@ zcat $vcf \
   > includelist.txt
 
 ##convert EV integer back into string##
-${BCFTOOLS} query -f "%CHROM\t%POS\t%REF\t%ALT\t[%EV\t]\n" $vcf > ev.tab
-cut -f1-4 ev.tab > ev.sites.tab
-cut -f5- ev.tab \
-  | sed -e 's/7/RD,PE,SR/g' -e 's/6/PE,SR/g' -e 's/5/RD,SR/g' -e 's/3/RD,PE/g' -e 's/2/PE/g' -e 's/4/SR/g' -e 's/1/RD/g' \
-  > ev.replaced.list
-paste ev.sites.tab ev.replaced.list | bgzip -c > ev.replaced.tab.gz
-tabix -s1 -b2 -e2 ev.replaced.tab.gz
-
-echo '##FORMAT=<ID=EV,Number=1,Type=String,Description="Classes of evidence supporting final genotype">' > ev_header.txt
-tabix $vcf
-${BCFTOOLS} annotate -x FORMAT/EV $vcf | bgzip -c > no_ev.vcf.gz
-rm $vcf $vcf.tbi
-
-${BCFTOOLS} annotate \
-  -a ev.replaced.tab.gz \
-  -c CHROM,POS,REF,ALT,FORMAT/EV \
-  -h ev_header.txt \
-  no_ev.vcf.gz \
-  | bgzip -c > EV.update.vcf.gz
-
-rm ev.tab no_ev.vcf.gz ev.replaced.tab.gz ev.replaced.tab.gz.tbi ev.replaced.list
+/opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py ${vcf} - | bgzip -c > EV.update.vcf.gz
+rm $vcf
 
 ##convert all alt to svtype and alt to N##
 svtk vcf2bed EV.update.vcf.gz stdout -i SVTYPE  \
