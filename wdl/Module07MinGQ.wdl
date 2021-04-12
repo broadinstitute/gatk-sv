@@ -15,6 +15,7 @@ import "Tasks0506.wdl" as MiniTasks
 import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 
+
 workflow Module07MinGQ {
   input{
     String sv_base_mini_docker
@@ -34,8 +35,6 @@ workflow Module07MinGQ {
     String optimize_includeEV
     String optimize_excludeEV
     Int optimize_maxSVperTrio
-    Int max_shards_per_chrom_step1
-    Int min_records_per_shard_step1
     Float roc_max_fdr_PCRMINUS
     Float roc_max_fdr_PCRPLUS
     Int roc_min_gq
@@ -56,9 +55,6 @@ workflow Module07MinGQ {
     # overrides for local tasks
     RuntimeAttr? runtime_attr_CombineVcfs
     RuntimeAttr? runtime_attr_GatherTrioData
-    RuntimeAttr? runtime_attr_ReviseSVtypeMEI
-    RuntimeAttr? runtime_attr_MergePcrVCFs
-    RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
@@ -150,7 +146,7 @@ workflow Module07MinGQ {
         famfile=trios_famfile,
         fams_per_shard=1,
         prefix="~{prefix}.PCRMINUS",
-        sv_base_mini_docker=sv_pipeline_docker
+        sv_base_mini_docker=sv_base_mini_docker
     }
     scatter ( fam in SplitFamfile_PCRMINUS.famfile_shards ) {
       call CollectTrioSVdat as CollectTrioSVdat_PCRMINUS {
@@ -258,8 +254,7 @@ workflow Module07MinGQ {
       input:
         PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf[i],
         prefix=prefix,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_MergePcrVCFs
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
   call MiniTasks.ConcatVcfs as CombineVcfs {
@@ -561,31 +556,6 @@ task SplitFamfile {
     done < ~{famfile} \
     > "~{prefix}.cleaned_trios.fam"
     split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
-
-    cp "~{prefix}.cleaned_trios.fam" "test.cleaned_trios.fam"
-    
-    python3 <<CODE
-    import random
-    fin=open("test.cleaned_trios.fam")
-    fam={}
-    for line in fin:
-      pin=line.strip().split()
-      if not pin[0] in fam.keys():
-        fam[pin[0]]=[]
-      fam[pin[0]].append(pin)
-    fin.close()
-    if len(fam.keys())>1000:
-      kept_fam = random.sample(fam.keys(), 1000)
-    else:
-      kept_fam = fam.keys()
-    fo=open("selected.cleaned_trios.fam",'w')
-    for i in kept_fam:
-      for j in fam[i]:
-        print('\t'.join(j),file=fo)
-    fo.close()
-    CODE
-
-    mv "selected.cleaned_trios.fam" "~{prefix}.cleaned_trios.fam"
   >>>
 
   output {
@@ -991,14 +961,12 @@ task MergePcrVCFs {
         <( cat <( echo -e "FILTER" ) merged_filters.txt ) \
         <( zgrep -ve '^##' "~{PCRPLUS_vcf}" | cut -f8- ) \
         <( zgrep -ve '^##' "~{PCRMINUS_vcf}"  | cut -f10- ) \
-        >> "~{prefix}.minGQ_filtered.vcf"
-      bgzip -f "~{prefix}.minGQ_filtered.vcf"
-
-      #/opt/sv-pipeline/scripts/drop_empty_records.py \
-      #  "~{prefix}.minGQ_filtered.vcf" \
-      #  "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      >> "~{prefix}.minGQ_filtered.vcf"
+      /opt/sv-pipeline/scripts/drop_empty_records.py \
+        "~{prefix}.minGQ_filtered.vcf" \
+        "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
-      #bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
     else
       #Sanitize FILTER columns
       zcat "~{PCRMINUS_vcf}" | cut -f7 | grep -ve '^#' | sed '1d' > PCRMINUS_filters.txt
@@ -1009,18 +977,17 @@ task MergePcrVCFs {
         <( zcat "~{PCRMINUS_vcf}" | grep -ve '^##' | cut -f1-6 ) \
         <( cat <( echo -e "FILTER" ) PCRMINUS_filters.txt ) \
         <( zcat "~{PCRMINUS_vcf}" | grep -ve '^##' | cut -f8- ) \
-        >> "~{prefix}.minGQ_filtered.vcf"
-      bgzip -f "~{prefix}.minGQ_filtered.vcf"
-      #/opt/sv-pipeline/scripts/drop_empty_records.py \
-      #  "~{prefix}.minGQ_filtered.vcf" \
-      #  "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      >> "~{prefix}.minGQ_filtered.vcf"
+      /opt/sv-pipeline/scripts/drop_empty_records.py \
+        "~{prefix}.minGQ_filtered.vcf" \
+        "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
-      #bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
     fi
   >>>
 
   output {
-    File merged_vcf = "~{prefix}.minGQ_filtered.vcf.gz"
+    File merged_vcf = "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
   }
 
   runtime {
