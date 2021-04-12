@@ -15,6 +15,7 @@ import "Tasks0506.wdl" as MiniTasks
 import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 
+
 workflow Module07MinGQ {
   input{
     String sv_base_mini_docker
@@ -34,8 +35,6 @@ workflow Module07MinGQ {
     String optimize_includeEV
     String optimize_excludeEV
     Int optimize_maxSVperTrio
-    Int max_shards_per_chrom_step1
-    Int min_records_per_shard_step1
     Float roc_max_fdr_PCRMINUS
     Float roc_max_fdr_PCRPLUS
     Int roc_min_gq
@@ -56,9 +55,6 @@ workflow Module07MinGQ {
     # overrides for local tasks
     RuntimeAttr? runtime_attr_CombineVcfs
     RuntimeAttr? runtime_attr_GatherTrioData
-    RuntimeAttr? runtime_attr_ReviseSVtypeMEI
-    RuntimeAttr? runtime_attr_MergePcrVCFs
-    RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
@@ -107,39 +103,41 @@ workflow Module07MinGQ {
         pcrplus_samples_list=pcrplus_samples_list,
         sv_base_mini_docker=sv_base_mini_docker
     }
-    if (MingqTraining){
-      # Annotate PCR-specific AFs
-      call calcAF.CalcAF as getAFs_byPCR {
-        input:
-          vcf=ReviseSVtypeMEI.updated_vcf,
-          vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
-          contig=contig[0],
-          sv_per_shard=1000,
-          prefix=prefix,
-          sample_pop_assignments=GetSampleLists.sample_PCR_labels,
-          sv_pipeline_docker=sv_pipeline_docker
-      }
-      # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
-      call GetAfTables {
-        input:
-          vcf=getAFs_byPCR.vcf_wAFs,
-          pcrplus_samples_list=pcrplus_samples_list,
-          vcf_idx=getAFs_byPCR.vcf_wAFs_idx,
-          prefix="~{prefix}.~{contig[0]}",
-          sv_pipeline_docker=sv_pipeline_docker
-      }
+
+    # Dev note Feb 18 2021: the output from cat_AF_table_PCRMINUS is a required 
+    # input to Module07XfBatchEffect.wdl, so the subsequent three tasks always 
+    # need to be generated (even if passing a precomputed minGQ cutoff table)
+
+    # Annotate PCR-specific AFs
+    call calcAF.CalcAF as getAFs_byPCR {
+      input:
+        vcf=ReviseSVtypeMEI.updated_vcf,
+        vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
+        contig=contig[0],
+        sv_per_shard=1000,
+        prefix=prefix,
+        sample_pop_assignments=GetSampleLists.sample_PCR_labels,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+    # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
+    call GetAfTables {
+      input:
+        vcf=getAFs_byPCR.vcf_wAFs,
+        pcrplus_samples_list=pcrplus_samples_list,
+        vcf_idx=getAFs_byPCR.vcf_wAFs_idx,
+        prefix="~{prefix}.~{contig[0]}",
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
+  call CombineRocOptResults as cat_AF_table_PCRMINUS {
+    input:
+      shards=GetAfTables.PCRMINUS_AF_table,
+      outfile="~{prefix}.PCRMINUS.AF_preMinGQ.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+  }
+
+
   if (MingqTraining){
-    call CombineRocOptResults as cat_AF_table_PCRMINUS {
-      input:
-        shards=select_all(GetAfTables.PCRMINUS_AF_table),
-        outfile="~{prefix}.PCRMINUS.AF_preMinGQ.txt",
-        sv_base_mini_docker=sv_base_mini_docker,
-    }
-
-
-
     ###PCRMINUS
     call SplitFamfile as SplitFamfile_PCRMINUS {
       input:
@@ -148,7 +146,7 @@ workflow Module07MinGQ {
         famfile=trios_famfile,
         fams_per_shard=1,
         prefix="~{prefix}.PCRMINUS",
-        sv_base_mini_docker=sv_pipeline_docker
+        sv_base_mini_docker=sv_base_mini_docker
     }
     scatter ( fam in SplitFamfile_PCRMINUS.famfile_shards ) {
       call CollectTrioSVdat as CollectTrioSVdat_PCRMINUS {
@@ -256,8 +254,7 @@ workflow Module07MinGQ {
       input:
         PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf[i],
         prefix=prefix,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_MergePcrVCFs
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
   call MiniTasks.ConcatVcfs as CombineVcfs {
@@ -402,7 +399,7 @@ task SplitPcrVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    if [ ! -z "~{pcrplus_samples_list}" ];then
+    if [ ! -z "~{pcrplus_samples_list}" ] && [ $( cat "~{pcrplus_samples_list}" | wc -l ) -gt 0 ]; then
       #Get index of PCR+ samples
       PCRPLUS_idxs=$( zcat ~{vcf} | sed -n '1,500p' | fgrep "#" | fgrep -v "##" \
                       | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print NR, $1 }' \
@@ -412,16 +409,16 @@ task SplitPcrVcf {
       | cut -f1-9,"$PCRPLUS_idxs" \
       | bgzip -c \
       > "~{prefix}.PCRPLUS.vcf.gz"
-      tabix -f "~{prefix}.PCRPLUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRPLUS.vcf.gz"
       #Get PCR- VCF
       zcat ~{vcf} \
       | cut --complement -f"$PCRPLUS_idxs" \
       | bgzip -c \
       > "~{prefix}.PCRMINUS.vcf.gz"
-      tabix -f "~{prefix}.PCRMINUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
     else
       cp ~{vcf} ~{prefix}.PCRMINUS.vcf.gz
-      tabix -f "~{prefix}.PCRMINUS.vcf.gz"
+      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
       touch ~{prefix}.PCRPLUS.vcf.gz
       touch ~{prefix}.PCRPLUS.vcf.gz.tbi
     fi
@@ -468,14 +465,40 @@ task GetAfTables {
 
   command <<<
     set -euo pipefail
-    if ~{defined(pcrplus_samples_list)}; then
-      for PCR in PCRPLUS PCRMINUS; do
-        svtk vcf2bed --no-header --no-samples -i "$PCR"_AC -i "$PCR"_AN ~{vcf} "$PCR".bed
-        awk -v OFS="\t" '{ print $4, $6, $7 }' "$PCR".bed > ~{prefix}."$PCR".AF_preMinGQ.txt
-      done
+    #Run vcf2bed
+    svtk vcf2bed --info ALL --no-samples ~{vcf} "~{prefix}.vcf2bed.bed"
+    #Cut to necessary columns
+    idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
+            | sed 's/\t/\n/g' \
+            | awk -v OFS="\t" '{ print $1, NR }' \
+            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
+            | fgrep -v "OTH" \
+            | cut -f2 \
+            | paste -s -d\, || true )
+    cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
+    | sed 's/^name/\#VID/g' \
+    | gzip -c \
+    > "~{prefix}.frequencies.preclean.txt.gz"
+    if [ ! -z "~{pcrplus_samples_list}" ]; then
+      echo -e "dummy\tPCRMINUS\ndummy2\tPCRPLUS" > dummy.tsv
     else
-      svtk vcf2bed --no-header --no-samples -i PCRMINUS_AC -i PCRMINUS_AN ~{vcf} PCRMINUS.bed
-      awk -v OFS="\t" '{ print $4, $6, $7 }' PCRMINUS.bed > ~{prefix}.PCRMINUS.AF_preMinGQ.txt
+      echo -e "dummy\tPCRMINUS" > dummy.tsv
+    fi
+    #Clean frequencies
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
+      "~{prefix}.frequencies.preclean.txt.gz" \
+      dummy.tsv \
+      "~{prefix}.frequencies.txt"
+    for PCR in $( cut -f2 dummy.tsv | sort | uniq ); do
+      AC_idx=$( zcat "~{prefix}.frequencies.txt.gz" | sed -n '1p' | sed 's/\t/\n/g' | awk -v PCR="$PCR" '{ if ($1==PCR"_AC") print NR }' )
+      AN_idx=$( zcat "~{prefix}.frequencies.txt.gz" | sed -n '1p' | sed 's/\t/\n/g' | awk -v PCR="$PCR" '{ if ($1==PCR"_AN") print NR }' )
+      zcat "~{prefix}.frequencies.txt.gz" \
+      | sed '1d' \
+      | awk -v FS="\t" -v OFS="\t" -v AC="$AC_idx" -v AN="$AN_idx" \
+        '{ print $1, $(AC), $(AN) }' \
+      > ~{prefix}."$PCR".AF_preMinGQ.txt
+    done
+    if [ ! -z ~{prefix}.PCRPLUS.AF_preMinGQ.txt ]; then
       touch ~{prefix}.PCRPLUS.AF_preMinGQ.txt
     fi
   >>>
@@ -533,31 +556,6 @@ task SplitFamfile {
     done < ~{famfile} \
     > "~{prefix}.cleaned_trios.fam"
     split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
-
-    cp "~{prefix}.cleaned_trios.fam" "test.cleaned_trios.fam"
-    
-    python3 <<CODE
-    import random
-    fin=open("test.cleaned_trios.fam")
-    fam={}
-    for line in fin:
-      pin=line.strip().split()
-      if not pin[0] in fam.keys():
-        fam[pin[0]]=[]
-      fam[pin[0]].append(pin)
-    fin.close()
-    if len(fam.keys())>1000:
-      kept_fam = random.sample(fam.keys(), 1000)
-    else:
-      kept_fam = fam.keys()
-    fo=open("selected.cleaned_trios.fam",'w')
-    for i in kept_fam:
-      for j in fam[i]:
-        print('\t'.join(j),file=fo)
-    fo.close()
-    CODE
-
-    mv "selected.cleaned_trios.fam" "~{prefix}.cleaned_trios.fam"
   >>>
 
   output {
@@ -616,29 +614,29 @@ task CollectTrioSVdat {
             | bgzip -c > $famID.vcf.gz
             #Get list of CNVs in proband that are ≥5kb have ≥50% coverage in either parent
             svtk vcf2bed -i SVTYPE --no-header $famID.vcf.gz stdout \
-            | awk -v OFS="\t" '{ if ($NF ~ /DEL|DUP|MCNV/) print $1, $2, $3, $4, $NF, $6 }' \
+            | awk -v OFS="\t" '{ if ($NF ~ /DEL|DUP|CNV/) print $1, $2, $3, $4, $NF, $6 }' \
             > $famID.CNVs.bed
             fgrep -w $pro $famID.CNVs.bed \
-            | awk -v OFS="\t" '{ if ($3-$2>=5000 && $5!="MCNV") print $1, $2, $3, $4, $5 }' \
+            | awk -v OFS="\t" '{ if ($3-$2>=5000 && $5!="CNV") print $1, $2, $3, $4, $5 }' \
             > $pro.CNVs.gt5kb.bed
             fgrep -w $fa $famID.CNVs.bed > $fa.CNVs.bed
             fgrep -w $mo $famID.CNVs.bed > $mo.CNVs.bed
             #Deletions
             awk -v OFS="\t" '{ if ($NF=="DEL") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DEL|MCNV/) print $0 }' $fa.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $fa.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $1, $2, $3, $4, $5, $6, $NF }' \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DEL|MCNV/) print $0 }' $mo.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             > $famID.RD_genotype_update.txt
             #Duplications
             awk -v OFS="\t" '{ if ($NF=="DUP") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DUP|MCNV/) print $0 }' $fa.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $fa.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $1, $2, $3, $4, $5, $6, $NF }' \
             | bedtools coverage -a - \
-              -b <( awk '{ if ($5 ~ /DUP|MCNV/) print $0 }' $mo.CNVs.bed ) \
+              -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             >> $famID.RD_genotype_update.txt
             #Get variant stats
@@ -901,6 +899,11 @@ task ApplyMinGQFilter {
     | fgrep -v "##INFO=<ID=FREQ_HOMREF," \
     | fgrep -v "##INFO=<ID=FREQ_HET," \
     | fgrep -v "##INFO=<ID=FREQ_HOMALT," \
+    | fgrep -v "##INFO=<ID=CN_NUMBER," \
+    | fgrep -v "##INFO=<ID=CN_COUNT," \
+    | fgrep -v "##INFO=<ID=CN_FREQ," \
+    | fgrep -v "##INFO=<ID=CN_NONREF_COUNT," \
+    | fgrep -v "##INFO=<ID=CN_NONREF_FREQ," \
     | bgzip -c \
     > "~{prefix}.minGQ_filtered.vcf.gz"
   >>>
@@ -958,14 +961,12 @@ task MergePcrVCFs {
         <( cat <( echo -e "FILTER" ) merged_filters.txt ) \
         <( zgrep -ve '^##' "~{PCRPLUS_vcf}" | cut -f8- ) \
         <( zgrep -ve '^##' "~{PCRMINUS_vcf}"  | cut -f10- ) \
-        >> "~{prefix}.minGQ_filtered.vcf"
-      bgzip -f "~{prefix}.minGQ_filtered.vcf"
-
-      #/opt/sv-pipeline/scripts/drop_empty_records.py \
-      #  "~{prefix}.minGQ_filtered.vcf" \
-      #  "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      >> "~{prefix}.minGQ_filtered.vcf"
+      /opt/sv-pipeline/scripts/drop_empty_records.py \
+        "~{prefix}.minGQ_filtered.vcf" \
+        "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
-      #bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
     else
       #Sanitize FILTER columns
       zcat "~{PCRMINUS_vcf}" | cut -f7 | grep -ve '^#' | sed '1d' > PCRMINUS_filters.txt
@@ -976,18 +977,17 @@ task MergePcrVCFs {
         <( zcat "~{PCRMINUS_vcf}" | grep -ve '^##' | cut -f1-6 ) \
         <( cat <( echo -e "FILTER" ) PCRMINUS_filters.txt ) \
         <( zcat "~{PCRMINUS_vcf}" | grep -ve '^##' | cut -f8- ) \
-        >> "~{prefix}.minGQ_filtered.vcf"
-      bgzip -f "~{prefix}.minGQ_filtered.vcf"
-      #/opt/sv-pipeline/scripts/drop_empty_records.py \
-      #  "~{prefix}.minGQ_filtered.vcf" \
-      #  "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      >> "~{prefix}.minGQ_filtered.vcf"
+      /opt/sv-pipeline/scripts/drop_empty_records.py \
+        "~{prefix}.minGQ_filtered.vcf" \
+        "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
-      #bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
     fi
   >>>
 
   output {
-    File merged_vcf = "~{prefix}.minGQ_filtered.vcf.gz"
+    File merged_vcf = "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
   }
 
   runtime {
