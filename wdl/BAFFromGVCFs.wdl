@@ -18,6 +18,7 @@ workflow BAFFromGVCFs {
     Array[String] samples
     File unpadded_intervals_file
     File dbsnp_vcf
+    File? dbsnp_vcf_index
     File ref_fasta
     File ref_fasta_index
     File ref_dict
@@ -39,6 +40,8 @@ workflow BAFFromGVCFs {
   Int possible_merge_count = floor(num_of_original_intervals / num_gvcfs / 2.5)
   Int merge_count = if possible_merge_count > 1 then possible_merge_count else 1
 
+  File dbsnp_vcf_index_ = if defined(dbsnp_vcf_index) then select_first([dbsnp_vcf_index]) else dbsnp_vcf + ".idx"
+
   scatter (gvcf in gvcfs) {
     File gvcf_indexes = gvcf + ".tbi"
   }
@@ -52,6 +55,8 @@ workflow BAFFromGVCFs {
 
   Array[String] unpadded_intervals = read_lines(DynamicallyCombineIntervals.output_intervals)
 
+  Int disk_size_gb = 10 + ceil((size(gvcfs, "GB") + size(gvcf_indexes, "GB")) * 1.5)
+
   scatter (idx in range(length(unpadded_intervals))) {
     call ImportGVCFs {
       input:
@@ -60,7 +65,7 @@ workflow BAFFromGVCFs {
         input_gvcfs_indices = gvcf_indexes,
         interval = unpadded_intervals[idx],
         workspace_dir_name = "genomicsdb",
-        disk_size = 200,
+        disk_size = disk_size_gb,
         batch_size = 50,
         docker = gatk_docker,
         gatk_path = "/gatk/gatk",
@@ -76,6 +81,7 @@ workflow BAFFromGVCFs {
         ref_fasta_index = ref_fasta_index,
         ref_dict = ref_dict,
         dbsnp_vcf = dbsnp_vcf,
+        dbsnp_vcf_index = dbsnp_vcf_index_,
         disk_size = 200,
         docker = gatk_docker,
         gatk_path = "/gatk/gatk",
@@ -188,11 +194,21 @@ task GenotypeGVCFs {
     File ref_fasta
     File ref_fasta_index
     File ref_dict
+    File dbsnp_vcf
+    File? dbsnp_vcf_index
 
-    String dbsnp_vcf
     String docker
     Int disk_size
     Int preemptible
+  }
+
+  parameter_meta {
+    dbsnp_vcf: {
+      localization_optional: true
+    }
+    dbsnp_vcf_index: {
+      localization_optional: true
+    }
   }
 
   command <<<
