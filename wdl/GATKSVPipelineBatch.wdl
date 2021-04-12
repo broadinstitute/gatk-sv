@@ -4,6 +4,7 @@ import "Module00aBatch.wdl" as m00a
 import "Module00b.wdl" as m00b
 import "GATKSVPipelinePhase1.wdl" as phase1
 import "Module04.wdl" as m04
+import "Module04b.wdl" as m04b
 import "Module0506.wdl" as m0506
 import "GATKSVPipelineBatchMetrics.wdl" as BatchMetrics
 import "Utils.wdl" as utils
@@ -210,13 +211,34 @@ workflow GATKSVPipelineBatch {
       discfile_index=GATKSVPipelinePhase1.merged_PE_index,
       splitfile=GATKSVPipelinePhase1.merged_SR,
       splitfile_index=GATKSVPipelinePhase1.merged_SR_index,
-      famfile=GATKSVPipelinePhase1.ped_file_postOutlierExclusion,
+      ped_file=ped_file,
       ref_dict=reference_dict,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker
   }
+
+  call m04b.Module04b as Module04b {
+    input:
+      depth_vcfs=[Module04.genotyped_depth_vcf],
+      batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
+      cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
+      batches=[batch],
+      cohort=batch,
+      medianfiles=[GATKSVPipelinePhase1.median_cov],
+      coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
+      coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
+      ped_file=ped_file,
+      RD_depth_sepcutoffs=[select_first([Module04.trained_genotype_depth_depth_sepcutoff])],
+      contig_list=primary_contigs_list,
+      regeno_coverage_medians=[Module04.regeno_coverage_medians],
+      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker
+  }
+  
 
   call m0506.Module0506 as Module0506 {
     input:
@@ -225,9 +247,9 @@ workflow GATKSVPipelineBatch {
       merge_complex_genotype_vcfs = module0506_merge_complex_genotype_vcfs,
       raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
       raw_sr_background_fail_files=[Module04.sr_background_fail],
-      ped_files=[GATKSVPipelinePhase1.ped_file_postOutlierExclusion],
+      ped_file=ped_file,
       pesr_vcfs=[Module04.genotyped_pesr_vcf],
-      depth_vcfs=[Module04.genotyped_depth_vcf],
+      depth_vcfs=Module04b.regenotyped_depth_vcfs,
       contig_list=primary_contigs_fai,
       ref_dict=reference_dict,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
@@ -254,6 +276,7 @@ workflow GATKSVPipelineBatch {
       contig_index = primary_contigs_fai,
       linux_docker = linux_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_base_mini_docker = sv_base_mini_docker,
 
       coverage_counts = counts_files_,
       pesr_disc = pe_files_,
@@ -288,7 +311,7 @@ workflow GATKSVPipelineBatch {
       filtered_depth_vcf = select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       cutoffs = GATKSVPipelinePhase1.cutoffs,
       outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file,
-      filtered_ped_file = GATKSVPipelinePhase1.ped_file_postOutlierExclusion,
+      ped_file = ped_file,
 
       genotyped_pesr_vcf = Module04.genotyped_pesr_vcf,
       genotyped_depth_vcf = Module04.genotyped_depth_vcf,
@@ -329,7 +352,6 @@ workflow GATKSVPipelineBatch {
     File del_bed = GATKSVPipelinePhase1.merged_dels
     File dup_bed = GATKSVPipelinePhase1.merged_dups
 
-    File final_ped_file = GATKSVPipelinePhase1.ped_file_postOutlierExclusion
     File final_sample_list = GATKSVPipelinePhase1.batch_samples_postOutlierExclusion_file
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file
 

@@ -17,6 +17,7 @@ workflow BatchMetrics {
     File contig_index
     String linux_docker
     String sv_pipeline_base_docker
+    String sv_base_mini_docker
 
     File? baseline_00a_metrics
     File? baseline_00c_metrics
@@ -83,7 +84,7 @@ workflow BatchMetrics {
     File filtered_depth_vcf
     File cutoffs
     File outlier_list
-    File filtered_ped_file
+    File ped_file
     File samples_post_filtering_file
 
     File? baseline_filtered_pesr_vcf
@@ -201,13 +202,14 @@ workflow BatchMetrics {
       filtered_depth_vcf = filtered_depth_vcf,
       cutoffs = cutoffs,
       outlier_list = outlier_list,
-      filtered_ped_file = filtered_ped_file,
+      ped_file = ped_file,
       samples_post_filtering_file = samples_post_filtering_file,
       baseline_filtered_pesr_vcf = baseline_filtered_pesr_vcf,
       baseline_filtered_depth_vcf = baseline_filtered_depth_vcf,
       contig_list = contig_list,
       linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
   call m04.Module04Metrics {

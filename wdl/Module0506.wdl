@@ -10,7 +10,7 @@ workflow Module0506 {
   input {
     String cohort_name
     Array[String] batches
-    Array[File] ped_files
+    File ped_file # cohort ped file
 
     # Merge contig vcfs at each stage for QC
     Boolean merge_cluster_vcfs = false
@@ -73,7 +73,6 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
-    RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
     RuntimeAttr? runtime_override_subset_inversions
     RuntimeAttr? runtime_override_concat_merged_vcfs
@@ -112,6 +111,8 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
     RuntimeAttr? runtime_override_complex_genotype_merge
+    RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -164,7 +165,6 @@ workflow Module0506 {
     input:
       cohort_name=cohort_name,
       batches=batches,
-      ped_files=ped_files,
       merge_vcfs=merge_cluster_vcfs,
       pesr_vcfs=pesr_vcfs,
       depth_vcfs=depth_vcfs,
@@ -183,7 +183,6 @@ workflow Module0506 {
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
       runtime_override_clean_bothside_pass=runtime_override_clean_bothside_pass,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
-      runtime_override_merge_fam_file_list=runtime_override_merge_fam_file_list,
       runtime_override_concat=runtime_override_cluster_merge,
       runtime_override_join_vcfs=runtime_override_join_vcfs,
       runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
@@ -220,7 +219,6 @@ workflow Module0506 {
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
       runtime_override_rename_variants=runtime_override_rename_variants,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
-      runtime_override_merge_fam_file_list=runtime_override_merge_fam_file_list,
       runtime_override_concat=runtime_override_complex_resolve_merge,
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
       runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
@@ -237,8 +235,8 @@ workflow Module0506 {
       merge_vcfs=merge_complex_genotype_vcfs,
       complex_resolve_vcfs=Module0506ComplexResolve.complex_resolve_vcfs,
       complex_resolve_vcf_indexes=Module0506ComplexResolve.complex_resolve_vcf_indexes,
-      merged_ped_file=Module0506Cluster.merged_ped_file,
-      ped_files=ped_files,
+      depth_vcfs=depth_vcfs,
+      merged_ped_file=ped_file,
       bincov_files=bincov_files,
       depth_gt_rd_sep_files=depth_gt_rd_sep_files,
       median_coverage_files=median_coverage_files,
@@ -250,8 +248,6 @@ workflow Module0506 {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
-      runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
-      runtime_override_merge_fam_file_list=runtime_override_merge_fam_file_list,
       runtime_override_concat=runtime_override_complex_genotype_merge,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
@@ -261,7 +257,9 @@ workflow Module0506 {
       runtime_override_merge_melted_gts=runtime_override_merge_melted_gts,
       runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
       runtime_override_rd_genotype=runtime_override_rd_genotype,
-      runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes
+      runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
+      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf,
+      runtime_attr_subset_ped=runtime_attr_subset_ped
   }
 
   call Clean.Module0506Clean {
@@ -270,7 +268,7 @@ workflow Module0506 {
       complex_genotype_vcfs=Module0506ComplexGenotype.complex_genotype_vcfs,
       complex_resolve_bothside_pass_lists=Module0506ComplexResolve.complex_resolve_bothside_pass_lists,
       complex_resolve_background_fail_lists=Module0506ComplexResolve.complex_resolve_background_fail_lists,
-      merged_ped_file=Module0506Cluster.merged_ped_file,
+      merged_ped_file=ped_file,
       contig_list=contig_list,
       max_shards_per_chrom=max_shards_per_chrom,
       max_shards_per_chrom_clean_vcf_step1=max_shards_per_chrom_clean_vcf_step1,
@@ -303,7 +301,7 @@ workflow Module0506 {
     input:
       vcf=Module0506Clean.cleaned_vcf,
       vcf_idx=Module0506Clean.cleaned_vcf_index,
-      ped_file=Module0506Cluster.merged_ped_file,
+      ped_file=ped_file,
       prefix="~{cohort_name}.cleaned",
       sv_per_shard=10000,
       samples_per_shard=100,

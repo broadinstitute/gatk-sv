@@ -19,7 +19,6 @@ workflow Module03 {
     File? wham_vcf
     File? melt_vcf
     File? depth_vcf
-    File ped_file
     File evidence_metrics
     File evidence_metrics_common
 
@@ -34,7 +33,6 @@ workflow Module03 {
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
     RuntimeAttr? runtime_attr_ids_from_vcf
-    RuntimeAttr? runtime_attr_update_ped
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
 
     RuntimeAttr? runtime_attr_identify_outliers
@@ -103,15 +101,6 @@ workflow Module03 {
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
       runtime_attr_filter_samples = runtime_attr_filter_samples
   }
-
-  call UpdatePedFile {
-    input:
-      ped_file = ped_file,
-      excluded_samples = FilterOutlierSamples.outlier_samples_excluded,
-      batch = batch,
-      linux_docker = linux_docker,
-      runtime_attr_override = runtime_attr_update_ped
-  }
   
   call MergePesrVcfs {
     input:
@@ -138,7 +127,6 @@ workflow Module03 {
     Array[String] batch_samples_postOutlierExclusion = FilterOutlierSamples.filtered_batch_samples_list
     File outlier_samples_excluded_file = FilterOutlierSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterOutlierSamples.filtered_batch_samples_file
-    File ped_file_postOutlierExclusion = UpdatePedFile.filtered_ped_file
   }
 }
 

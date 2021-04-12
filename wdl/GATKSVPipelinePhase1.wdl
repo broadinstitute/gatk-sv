@@ -217,7 +217,6 @@ workflow GATKSVPipelinePhase1 {
 
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_filter_annotate_vcf
-    RuntimeAttr? runtime_attr_update_ped
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
     RuntimeAttr? runtime_attr_identify_outliers
     RuntimeAttr? runtime_attr_exclude_outliers
@@ -414,7 +413,6 @@ workflow GATKSVPipelinePhase1 {
       melt_vcf=Module01.melt_vcf,
       depth_vcf=Module01.depth_vcf,
       outlier_cutoff_table=outlier_cutoff_table,
-      ped_file=ped_file,
       evidence_metrics=Module02.metrics,
       evidence_metrics_common=Module02.metrics_common,
       outlier_cutoff_nIQR=outlier_cutoff_nIQR,
@@ -423,7 +421,6 @@ workflow GATKSVPipelinePhase1 {
       linux_docker=linux_docker,
       runtime_attr_adjudicate=runtime_attr_adjudicate,
       runtime_attr_filter_annotate_vcf=runtime_attr_filter_annotate_vcf,
-      runtime_attr_update_ped=runtime_attr_update_ped,
       runtime_attr_merge_pesr_vcfs=runtime_attr_merge_pesr_vcfs,
       runtime_attr_identify_outliers=runtime_attr_identify_outliers,
       runtime_attr_exclude_outliers=runtime_attr_exclude_outliers,
@@ -483,6 +480,5 @@ workflow GATKSVPipelinePhase1 {
     Array[String] batch_samples_postOutlierExclusion = Module03.batch_samples_postOutlierExclusion
     File outlier_samples_excluded_file = Module03.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = Module03.batch_samples_postOutlierExclusion_file
-    File ped_file_postOutlierExclusion = Module03.ped_file_postOutlierExclusion
   }
 }

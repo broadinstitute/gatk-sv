@@ -2,6 +2,7 @@ version 1.0
 
 import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
+import "Utils.wdl" as util
 
 workflow Module04b {
   input {
@@ -15,12 +16,11 @@ workflow Module04b {
     Array[File] coveragefiles
     Array[File] coveragefile_idxs
     Array[File] medianfiles
-    Array[File] famfiles
+    File ped_file  # cohort ped file
     Array[File] RD_depth_sepcutoffs
     Int n_per_split
     Int n_RdTest_bins
     Array[String] batches
-    Array[File] samples_lists
     String cohort             # Cohort name or project prefix for all cohort-level outputs
     File contig_list
     Array[File] regeno_coverage_medians # one file per batch
@@ -37,6 +37,7 @@ workflow Module04b {
     RuntimeAttr? runtime_attr_concat_sampleidlookup
 
     RuntimeAttr? runtime_attr_merge_list
+    RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_get_count_cohort_samplelist
     RuntimeAttr? runtime_attr_get_regeno
     RuntimeAttr? runtime_attr_get_median_subset
@@ -44,6 +45,7 @@ workflow Module04b {
     RuntimeAttr? runtime_attr_concat_regenotyped_vcfs
 
     # Genotype_2
+    RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_add_batch_samples
     RuntimeAttr? runtime_attr_get_regeno_g2
     RuntimeAttr? runtime_attr_split_beds
@@ -111,9 +113,18 @@ workflow Module04b {
       runtime_attr_override = runtime_attr_concat_sampleidlookup
   }
 
+  scatter(i in range(length(batches))) {
+    call util.GetSampleIdsFromVcf {
+      input:
+        vcf = depth_vcfs[i],
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_ids_from_vcf
+    }
+  }
+
   call GetAndCountCohortSampleList {
     input:
-      batch_sample_lists = samples_lists,
+      batch_sample_lists = GetSampleIdsFromVcf.out_file,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_get_count_cohort_samplelist
   }
@@ -155,6 +166,14 @@ workflow Module04b {
 
   if (MergeList.num_regeno > 0) {
     scatter (i in range(length(batches))) {
+      call util.SubsetPedFile {
+        input:
+          ped_file = ped_file,
+          sample_list = GetSampleIdsFromVcf.out_file[i],
+          subset_name = batches[i],
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_subset_ped
+      }
       call g2.Regenotype as Genotype_2 {
         input:
           depth_vcf=depth_vcfs[i],
@@ -164,12 +183,12 @@ workflow Module04b {
           coveragefile=coveragefiles[i],
           coveragefile_idx=coveragefile_idxs[i],
           medianfile=medianfiles[i],
-          famfile=famfiles[i],
+          famfile=SubsetPedFile.ped_subset_file,
           RD_depth_sepcutoff=RD_depth_sepcutoffs[i],
           n_per_split=n_per_split,
           n_RdTest_bins=n_RdTest_bins,
           batch=batches[i],
-          samples_list=samples_lists[i],
+          samples_list=GetSampleIdsFromVcf.out_file[i],
           sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,

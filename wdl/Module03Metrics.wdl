@@ -1,6 +1,8 @@
 version 1.0
 
 import "TestUtils.wdl" as tu
+import "Utils.wdl" as util
+import "Structs.wdl"
 
 workflow Module03Metrics {
   input {
@@ -11,7 +13,7 @@ workflow Module03Metrics {
     File filtered_depth_vcf
     File cutoffs
     File outlier_list
-    File filtered_ped_file
+    File ped_file
     File samples_post_filtering_file
 
     File? baseline_filtered_pesr_vcf
@@ -20,6 +22,9 @@ workflow Module03Metrics {
     File contig_list
     String linux_docker
     String sv_pipeline_base_docker
+    String sv_base_mini_docker
+
+    RuntimeAttr? runtime_attr_subset_ped
   }
 
   Array[String] samples_post_filtering = read_lines(samples_post_filtering_file)
@@ -46,11 +51,20 @@ workflow Module03Metrics {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
+  call util.SubsetPedFile {
+    input:
+      ped_file = ped_file,
+      sample_list = samples_post_filtering_file,
+      subset_name = name,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
+  }
+
   call tu.CutoffAndOutlierMetrics {
     input:
       cutoffs = cutoffs,
       outlier_list = outlier_list,
-      filtered_ped_file = filtered_ped_file,
+      filtered_ped_file = SubsetPedFile.ped_subset_file,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }

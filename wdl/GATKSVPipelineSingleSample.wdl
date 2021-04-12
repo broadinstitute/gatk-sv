@@ -370,7 +370,6 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
-    RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
 
     ############################################################
@@ -818,7 +817,7 @@ workflow GATKSVPipelineSingleSample {
       discfile_index=Module00c.merged_PE_index,
       splitfile=Module00c.merged_SR,
       splitfile_index=Module00c.merged_SR_index,
-      famfile=combined_ped_file,
+      ped_file=combined_ped_file,
       ref_dict=reference_dict,
       n_RD_genotype_bins=n_RD_genotype_bins,
       genotype_pesr_pesr_sepcutoff=genotype_pesr_pesr_sepcutoff,
@@ -866,7 +865,7 @@ workflow GATKSVPipelineSingleSample {
       raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
       raw_sr_background_fail_files=[Module04.sr_background_fail],
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
-      ped_files=[combined_ped_file],
+      ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
       depth_vcfs=[Module04.genotyped_depth_vcf],
       contig_list=primary_contigs_fai,
@@ -918,7 +917,6 @@ workflow GATKSVPipelineSingleSample {
 
       runtime_override_clean_bothside_pass=runtime_override_clean_bothside_pass,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
-      runtime_override_merge_fam_file_list=runtime_override_merge_fam_file_list,
       runtime_override_make_cpx_cnv_input_file=runtime_override_make_cpx_cnv_input_file
 
   }

@@ -14,13 +14,12 @@
 
   "Module04b.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
 
-  "Module04b.famfiles": [{{ test_batch.filtered_ped_file | tojson }}],
+  "Module04b.ped_file": {{ test_batch.ped_file | tojson }},
   "Module04b.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
-  "Module04b.samples_lists": [{{ test_batch.cohort_samplelist | tojson }}],
 
   "Module04b.depth_vcfs": [{{ test_batch.genotyped_depth_vcf | tojson }}],
   "Module04b.coveragefiles": [{{ test_batch.merged_coverage_file | tojson }}],
   "Module04b.coveragefile_idxs": [{{ test_batch.merged_coverage_file_idx| tojson }}],
   "Module04b.medianfiles": [{{ test_batch.medianfile | tojson }}],
-  "Module04b.batches": ["test"]
+  "Module04b.batches": [{{ test_batch.batch_name | tojson }}]
 }

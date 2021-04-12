@@ -7,7 +7,6 @@ workflow Module0506Cluster {
   input {
     String cohort_name
     Array[String] batches
-    Array[File] ped_files
 
     Boolean merge_vcfs = false
 
@@ -36,7 +35,6 @@ workflow Module0506Cluster {
     # overrides for mini tasks
     RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
-    RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_concat
 
     # overrides for VcfClusterContig
@@ -73,14 +71,6 @@ workflow Module0506Cluster {
       runtime_attr_override=runtime_override_clean_background_fail
   }
   File sr_background_fail = CleanBackgroundFail.outfile
-
-  call MiniTasks.CatUncompressedFiles as MergeFamFileList {
-    input:
-      shards=ped_files,
-      outfile_name="merged_famfile.fam",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_merge_fam_file_list
-  }
 
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
@@ -218,7 +208,6 @@ workflow Module0506Cluster {
     Array[File] vcf_indexes = MergePesrDepth.merged_vcf_idx
     Array[File] cluster_bothside_pass_lists = UpdateBothsidePassSecond.updated_list
     Array[File] cluster_background_fail_lists = UpdateBackgroundFailSecond.updated_list
-    File merged_ped_file = MergeFamFileList.outfile  # Needed downstream and for VCF QC
     File? merged_vcf = ConcatVcfs.concat_vcf
     File? merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }

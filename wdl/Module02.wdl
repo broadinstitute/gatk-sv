@@ -52,6 +52,7 @@ workflow Module02 {
     String linux_docker
 
     RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_sample_list
     RuntimeAttr? runtime_attr_baf_samples
     RuntimeAttr? runtime_attr_aggregate_tests
@@ -78,9 +79,18 @@ workflow Module02 {
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
 
-  call GetSampleLists {
+  call util.SubsetPedFile {
     input:
       ped_file = ped_file,
+      sample_list = GetSampleIdsFromVcf.out_file,
+      subset_name = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
+  }
+
+  call GetSampleLists {
+    input:
+      ped_file = SubsetPedFile.ped_subset_file,
       samples = GetSampleIdsFromVcf.out_array,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_sample_list
@@ -98,7 +108,7 @@ workflow Module02 {
           input:
             coveragefile = coveragefile,
             medianfile = medianfile,
-            ped_file = ped_file,
+            ped_file = SubsetPedFile.ped_subset_file,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
             split_size = RD_split_size,
@@ -143,7 +153,7 @@ workflow Module02 {
           input:
             splitfile = splitfile,
             medianfile = medianfile,
-            ped_file = ped_file,
+            ped_file = SubsetPedFile.ped_subset_file,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
             ref_dict = ref_dict,
@@ -171,7 +181,7 @@ workflow Module02 {
           input:
             discfile = discfile,
             medianfile = medianfile,
-            ped_file = ped_file,
+            ped_file = SubsetPedFile.ped_subset_file,
             vcf = vcf,
             autosome_contigs = autosome_contigs,
             ref_dict = ref_dict,
