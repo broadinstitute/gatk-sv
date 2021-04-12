@@ -103,7 +103,7 @@ task MergeList {
   command <<<
     set -euo pipefail
     cut -f 4 ~{regeno_file} >regeno_variants.txt
-    fgrep -wf regeno_variants.txt ~{regeno_sample_ids_lookup} > cohort.regeno_var.combined.bed
+    fgrep -f regeno_variants.txt ~{regeno_sample_ids_lookup} > cohort.regeno_var.combined.bed
     cat ~{sep=' ' nonempty_txt}|sort -k1,1V -k2,2n -k3,3n |bgzip -c > nonempty.bed.gz
     tabix nonempty.bed.gz
     # For each variant in regeno_file, take variants across all batches
@@ -113,7 +113,7 @@ task MergeList {
     done<~{regeno_file} >regeno_variant_sample.txt
     # Use cohort cluster file, add samples that are clustered with the variant in question across whole cohort
     while read chr start end var sample;do
-        expected_samples=$(fgrep -w $var: cohort.regeno_var.combined.bed |cut -f8)
+        expected_samples=$(fgrep $var: cohort.regeno_var.combined.bed |cut -f8)
         printf "$var\t$sample\t$expected_samples\n"
     done<regeno_variant_sample.txt > reassesss_by_var.txt
     python3 <<CODE
