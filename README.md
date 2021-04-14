@@ -44,7 +44,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 ### Data:
 * Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). BAMs must also be indexed.
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
-* Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).
+* Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [Module 00b](#module00b)) should be entered as sex = 0.
 
 
 ## <a name="citation">Citation</a>
@@ -233,7 +233,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 * gCNV training
 
 #### Inputs:
-* PED file (updated with [Module 00b](#module00b) sex assignments)
+* PED file (updated with [Module 00b](#module00b) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
 * Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input)
 * Read count, BAF, PE, and SR files ([Module 00a](#module00a))
 * Caller VCFs ([Module 00a](#module00a))
