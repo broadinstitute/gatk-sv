@@ -42,6 +42,8 @@ workflow Module07MinGQ {
     Int roc_step_gq
     Int roc_shards
     Int min_sv_per_proband_per_condition
+    Int max_shards_per_chrom_step1
+    Int min_records_per_shard_step1
     Float max_noCallRate
     Int global_minGQ
     String ref_build
@@ -55,6 +57,8 @@ workflow Module07MinGQ {
     # overrides for local tasks
     RuntimeAttr? runtime_attr_CombineVcfs
     RuntimeAttr? runtime_attr_GatherTrioData
+    RuntimeAttr? runtime_attr_ReviseSVtypeMEI
+    RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
@@ -936,7 +940,7 @@ task MergePcrVCFs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 10,
+    disk_gb: 20,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
