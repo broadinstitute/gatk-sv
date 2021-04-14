@@ -212,7 +212,7 @@ workflow GATKSVPipelinePhase1 {
     ## Module 03
     ############################################################
 
-    File outlier_cutoff_table
+    File? outlier_cutoff_table
     Int outlier_cutoff_nIQR
 
     RuntimeAttr? runtime_attr_adjudicate

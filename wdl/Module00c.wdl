@@ -227,21 +227,20 @@ workflow Module00c {
     }
   }
 
-  if (!append_first_sample_to_ped) {
-    call util.SubsetPedFile {
-      input:
-        ped_file = ped_file,
-        sample_list = write_lines(samples),
-        subset_name = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_subset_ped
-    }
+  Array[String] samples_batch = select_first([ref_panel_samples, samples])
+  call util.SubsetPedFile {
+    input:
+      ped_file = ped_file,
+      sample_list = write_lines(samples_batch),
+      subset_name = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
   }
 
   if (append_first_sample_to_ped) {
     call AddCaseSampleToPed {
       input:
-        ref_ped_file = ped_file,
+        ref_ped_file = SubsetPedFile.ped_subset_file,
         ploidy_plots = select_first([Ploidy.ploidy_plots]),
         sample_id = samples[0],
         sv_base_mini_docker = sv_base_mini_docker,
