@@ -139,7 +139,7 @@ task RdTest {
   command <<<
     set -euo pipefail
     /opt/RdTest/localize_bincov.sh ~{bed} ~{coverage_file}
-    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' ~{bed} | tail -n+2 > test.bed
+    zcat ~{bed} | awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' | tail -n+2 > test.bed
     Rscript /opt/RdTest/RdTest.R \
       -b test.bed \
       -n ~{prefix} \
