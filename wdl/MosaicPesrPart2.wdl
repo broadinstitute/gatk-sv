@@ -74,7 +74,7 @@ task GetPotential{
       fi
     done<potential.txt > ~{name}.potentialmosaic.rare.bed
 
-    echo "#chr\tstart\tend\tid\ttype\tsample\n" > header.bed
+    echo -e "#chr\tstart\tend\tid\ttype\tsample" > header.bed
     cat header.bed ~{name}.potentialmosaic.rare.bed | bgzip > ~{name}.potentialmosaic.rare.bed.gz
   >>>
   runtime {
@@ -114,7 +114,7 @@ task rdtest {
   command <<<
     set -e
     /opt/RdTest/localize_bincov.sh ~{bed} ~{coverage_file}
-    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' ~{bed} > test.bed
+    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' ~{bed} | tail -n+2 > test.bed
     Rscript /opt/RdTest/RdTest.R \
       -b test.bed \
       -n ~{prefix} \
