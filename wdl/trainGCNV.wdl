@@ -105,7 +105,7 @@ workflow TrainGCNV {
       input:
         strings = samples,
         seed = subsample_seed,
-        quantity = select_first([n_samples_subsample]),
+        subset_size = select_first([n_samples_subsample]),
         prefix = cohort,
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
     }

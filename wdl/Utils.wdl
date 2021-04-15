@@ -124,8 +124,8 @@ task RandomSubsampleStringArray {
   input {
     Array[String] strings
     Int seed
-    Int quantity
-    String prefix = "prefix"
+    Int subset_size
+    String prefix
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -150,10 +150,10 @@ task RandomSubsampleStringArray {
     import random
     string_array = ['~{sep="','" strings}']
     array_len = len(string_array)
-    if ~{quantity} > array_len:
-      raise ValueError("Subsample quantity ~{quantity} cannot > array length %d" % array_len)
+    if ~{subset_size} > array_len:
+      raise ValueError("Subsample quantity ~{subset_size} cannot > array length %d" % array_len)
     random.seed(~{seed})
-    numbers = random.sample(range(0, array_len), k=~{quantity})
+    numbers = random.sample(range(0, array_len), k=~{subset_size})
     numbers.sort()
     with open("~{subsample_indices_filename}", 'w') as indices, open("~{subsampled_strings_filename}", 'w') as strings:
       for num in numbers:
