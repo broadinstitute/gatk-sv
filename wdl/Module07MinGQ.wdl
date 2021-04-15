@@ -252,18 +252,9 @@ workflow Module07MinGQ {
   }
 
 
-  # Merge filtered VCFs by PCR status & across chromosomes
-  scatter (i in range(length(contigs))) {
-    call MergePcrVCFs {
-      input:
-        PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf[i],
-        prefix=prefix,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
-  }
   call MiniTasks.ConcatVcfs as CombineVcfs {
     input:
-      vcfs=MergePcrVCFs.merged_vcf,
+      vcfs=apply_filter_PCRMINUS.filtered_vcf,
       outfile_prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_CombineVcfs
