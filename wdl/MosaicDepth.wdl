@@ -138,8 +138,11 @@ task RdTest {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    /opt/RdTest/localize_bincov.sh ~{bed} ~{coverage_file}
-    zcat ~{bed} | awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' | tail -n+2 > test.bed
+
+    zcat ~{bed} | tail -n+2 > rdtest.bed
+    /opt/RdTest/localize_bincov.sh rdtest.bed ~{coverage_file}
+    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' rdtest.bed > test.bed
+
     Rscript /opt/RdTest/RdTest.R \
       -b test.bed \
       -n ~{prefix} \
