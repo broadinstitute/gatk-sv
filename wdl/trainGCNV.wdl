@@ -4,6 +4,7 @@ import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
 import "CramToBam.wdl" as ctb
 import "GermlineCNVCohort.wdl" as gcnv_cohort
+import "Utils.wdl" as util
 
 # Trains gCNV model on a cohort with counts already collected
 workflow TrainGCNV {
@@ -16,6 +17,9 @@ workflow TrainGCNV {
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
+
+    Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
+    Int subsample_seed = 42
 
     # Condense read counts
     Int? condense_num_bins
@@ -81,6 +85,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
+    String? sv_pipeline_base_docker # required if using n_samples_subsample to select samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr
@@ -95,7 +100,20 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  scatter (i in range(length(samples))) {
+  if (defined(n_samples_subsample)) {
+    call util.RandomSubsampleStringArray {
+      input:
+        strings = samples,
+        seed = subsample_seed,
+        quantity = select_first([n_samples_subsample]),
+        prefix = cohort,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+    }
+  }
+
+  Array[Int] sample_indices = select_first([RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+
+  scatter (i in sample_indices) {
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
         counts = count_files[i],
@@ -120,7 +138,7 @@ workflow TrainGCNV {
       preprocessed_intervals = CountsToIntervals.out,
       filter_intervals = filter_intervals,
       counts = CondenseReadCounts.out,
-      count_entity_ids = samples,
+      count_entity_ids = select_first([RandomSubsampleStringArray.subsampled_strings_array, samples]),
       cohort_entity_id = cohort,
       contig_ploidy_priors = contig_ploidy_priors,
       num_intervals_per_scatter = num_intervals_per_scatter,
