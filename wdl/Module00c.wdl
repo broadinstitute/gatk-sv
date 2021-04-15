@@ -66,6 +66,7 @@ workflow Module00c {
     Array[File]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
+    File? dbsnp_vcf_index
     String? gvcf_gcs_project_for_requester_pays  # Required only if GVCFs are in a requester pays bucket
 
     # BAF Option #2, position-sharded VCFs
@@ -255,6 +256,7 @@ workflow Module00c {
         samples = samples,
         unpadded_intervals_file = select_first([unpadded_intervals_file]),
         dbsnp_vcf = select_first([dbsnp_vcf]),
+        dbsnp_vcf_index = dbsnp_vcf_index,
         ref_fasta = ref_fasta,
         ref_fasta_index = ref_fasta_index,
         ref_dict = ref_dict,
