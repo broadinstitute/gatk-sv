@@ -2,7 +2,7 @@ argparse
 numpy
 Pillow
 Scrapy==0.24.4
-Twisted==14.0.2
+Twisted==20.3.0
 boto==2.36.0
 cffi
 characteristic==14.2.0
