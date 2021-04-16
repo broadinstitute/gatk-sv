@@ -73,6 +73,9 @@ task GetPotential{
         fi
       fi
     done<potential.txt > ~{name}.potentialmosaic.rare.bed
+
+    echo -e "#chr\tstart\tend\tid\ttype\tsample" > header.bed
+    cat header.bed ~{name}.potentialmosaic.rare.bed | bgzip > ~{name}.potentialmosaic.rare.bed.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -84,7 +87,7 @@ task GetPotential{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
   output{
-    File rare="~{name}.potentialmosaic.rare.bed"
+    File rare="~{name}.potentialmosaic.rare.bed.gz"
   }
 }
 # Run rdtest
@@ -109,9 +112,12 @@ task rdtest {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
-    set -e
-    /opt/RdTest/localize_bincov.sh ~{bed} ~{coverage_file}
-    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' ~{bed} > test.bed
+    set -euo pipefail
+
+    zcat ~{bed} | tail -n+2 > rdtest.bed
+    /opt/RdTest/localize_bincov.sh rdtest.bed ~{coverage_file}
+    awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' rdtest.bed > test.bed
+
     Rscript /opt/RdTest/RdTest.R \
       -b test.bed \
       -n ~{prefix} \

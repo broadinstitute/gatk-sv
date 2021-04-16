@@ -12,6 +12,8 @@ import "MinGQRocOpt.wdl" as roc_opt_sub
 import "CalcAF.wdl" as calcAF
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks
+import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
+
 
 
 workflow Module07MinGQ {
@@ -40,6 +42,8 @@ workflow Module07MinGQ {
     Int roc_step_gq
     Int roc_shards
     Int min_sv_per_proband_per_condition
+    Int max_shards_per_chrom_step1
+    Int min_records_per_shard_step1
     Float max_noCallRate
     Int global_minGQ
     String ref_build
@@ -53,17 +57,25 @@ workflow Module07MinGQ {
     # overrides for local tasks
     RuntimeAttr? runtime_attr_CombineVcfs
     RuntimeAttr? runtime_attr_GatherTrioData
+    RuntimeAttr? runtime_attr_ReviseSVtypeMEI
+    RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
 
   # Get svtype of MEI
-  call ReviseSVtypeMEI {
+  call ReviseSVtype.ReviseSVtypeINStoMEI as ReviseSVtypeMEI{
     input:
       vcf = vcf,
       vcf_idx = vcf_idx,
       sv_base_mini_docker = sv_base_mini_docker,
-      prefix = prefix
+      sv_pipeline_docker = sv_pipeline_docker,
+      prefix = prefix,
+      contiglist = contiglist,
+      max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
+      min_records_per_shard_step1 = min_records_per_shard_step1,
+      runtime_attr_ReviseSVtypeMEI = runtime_attr_ReviseSVtypeMEI,
+      runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean
   }
 
   # Get list of PCRMINUS samples
@@ -240,18 +252,9 @@ workflow Module07MinGQ {
   }
 
 
-  # Merge filtered VCFs by PCR status & across chromosomes
-  scatter (i in range(length(contigs))) {
-    call MergePcrVCFs {
-      input:
-        PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf[i],
-        prefix=prefix,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
-  }
   call MiniTasks.ConcatVcfs as CombineVcfs {
     input:
-      vcfs=MergePcrVCFs.merged_vcf,
+      vcfs=apply_filter_PCRMINUS.filtered_vcf,
       outfile_prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_CombineVcfs
@@ -928,7 +931,7 @@ task MergePcrVCFs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 10,
+    disk_gb: 20,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

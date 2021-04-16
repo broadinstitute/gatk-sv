@@ -1,21 +1,22 @@
-##########################
-## EXPERIMENTAL WORKFLOW
-##########################
-
-# Base script https://portal.firecloud.org/#methods/Talkowsk-SV/Coverage_plot/10/wdl
-
 version 1.0
 
 import "Structs.wdl"
 import "RdTestVisualization.wdl" as rdtest
-import "igv_trio_plots.all_samples.wdl" as igv_trio
+import "IGVTrioPlotsAllSamples.wdl" as igv_trio
 
-workflow SV_Visualize{
+workflow Module09VisualizeTrio{
     input{
-        File batches
+        File Fasta
+        File Fasta_idx
+        File Fasta_dict
+
+        File varfile
+        File pedfile
+        String flags
+        String prefix
         File batch_bincov
-        Array[String] coveragefile
-        Array[File] coveragefile_idx
+        File sample_batches
+
         Array[File] medianfile
         Array[String] pb_list
         Array[String] fa_list
@@ -26,37 +27,29 @@ workflow SV_Visualize{
         Array[File] fa_crai_list
         Array[File] mo_cram_list
         Array[File] mo_crai_list
-        File varfile
-        File Fasta
-        File Fasta_dict
-        File Fasta_idx
-        File ped_file
-        File sample_cram
-        String flags
-        String prefix
+
         String sv_base_mini_docker
         String sv_pipeline_rdtest_docker
         String igv_docker
-        String figure_combine_docker
+
         RuntimeAttr? runtime_attr_override
         RuntimeAttr? runtime_attr_concatinate
         RuntimeAttr? runtime_attr_rdtest
         }
     call rdtest.RdTestVisualization as RdTest{
         input:
-            name = prefix,
-            coveragefile = coveragefile,
-            coveragefile_idx = coveragefile_idx,
+            prefix = prefix,
             medianfile = medianfile,
-            famfile = ped_file,
-            batches = batches,
+            pedfile = pedfile,
             batch_bincov=batch_bincov,
             bed = varfile,
             sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+            sample_batches = sample_batches,
             flags = flags,
             runtime_attr_rdtest=runtime_attr_rdtest
+
         }
-    call igv_trio.IGVAllTrios as igv_plots {
+    call igv_trio.IGV_all_samples as igv_plots {
         input:
             pb_list = pb_list,
             fa_list = fa_list,
@@ -71,8 +64,6 @@ workflow SV_Visualize{
             Fasta = Fasta,
             Fasta_dict = Fasta_dict,
             Fasta_idx = Fasta_idx,
-            ped_file = ped_file,
-            sample_cram = sample_cram,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
             igv_docker = igv_docker,
@@ -84,8 +75,8 @@ workflow SV_Visualize{
             igv_plots = igv_plots.tar_gz_pe,
             prefix = prefix,
             varfile = varfile,
-            ped_file = ped_file,
-            figure_combine_docker = figure_combine_docker,
+            pedfile = pedfile,
+            igv_docker = igv_docker,
             runtime_attr_concatinate = runtime_attr_concatinate
     }
     output{
@@ -99,8 +90,8 @@ task concatinate_plots{
         File igv_plots
         String prefix
         File varfile
-        File ped_file
-        String figure_combine_docker
+        File pedfile
+        String igv_docker
         RuntimeAttr? runtime_attr_concatinate
     }
 
@@ -120,7 +111,7 @@ task concatinate_plots{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: figure_combine_docker
+        docker: igv_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -130,21 +121,21 @@ task concatinate_plots{
 
         tar -zxf ~{rd_plots}
         tar -zxf ~{igv_plots}
-        mkdir ~{prefix}.igv_rdtest_plots
+        mkdir ~{prefix}_igv_rdtest_plots
         echo 'test'
-        python /src/MakeRDtest.py \
+        python3 /src/MakeRDtest.py \
             ~{varfile} \
-            ~{ped_file} \
+            ~{pedfile} \
             ~{prefix} \
             10000000 \
             ~{prefix}_igv_plots \
-            rd_plots/ \
-            ~{prefix}.igv_rdtest_plots
-        tar -czf ~{prefix}.igv_rdtest_plots.tar.gz ~{prefix}.igv_rdtest_plots
+            ~{prefix}_rd_plots/ \
+            ~{prefix}_igv_rdtest_plots
+        tar -czf ~{prefix}_igv_rdtest_plots.tar.gz ~{prefix}_igv_rdtest_plots
     >>>
 
     output{
-        File plots = "~{prefix}.igv_rdtest_plots.tar.gz"
+        File plots = "~{prefix}_igv_rdtest_plots.tar.gz"
     }
 
 

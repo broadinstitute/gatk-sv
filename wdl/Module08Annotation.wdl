@@ -7,15 +7,18 @@ import "AnnotateExternalAF.wdl" as eaf
 workflow Module08Annotation {
 
   input {
-    String vcf
-    File   vcf_idx
+    File vcf
+    File vcf_idx
+    File contig_list
     String prefix
-    File   contig_list
 
     File protein_coding_gtf
     File linc_rna_gtf
     File promoter_bed
     File noncoding_bed
+
+    Int max_shards_per_chrom_step1
+    Int min_records_per_shard_step1
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? prune_list              # List of samples to be excluded from the output vcf
@@ -38,6 +41,8 @@ workflow Module08Annotation {
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_modify_vcf
+    RuntimeAttr? runtime_override_combine_vcfs
+    RuntimeAttr? runtime_override_split_vcf
   }
 
   call ann.AnnotateVcf as AnnotateVcf {
@@ -80,14 +85,20 @@ workflow Module08Annotation {
   if (defined(ref_bed)) {
     call eaf.AnnotateExternalAF as AnnotateExternalAF {
       input:
-        vcf = PruneAndAddVafs.output_vcf,
+        vcf     = PruneAndAddVafs.output_vcf,
+        vcf_idx = PruneAndAddVafs.output_vcf_idx,
         ref_bed = select_first([ref_bed]),
         population = select_first([population]),
         ref_prefix = select_first([ref_prefix]),
+        prefix = prefix,
         contigs = read_lines(contig_list),
+        max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
+        min_records_per_shard_step1 = min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_modify_vcf = runtime_attr_modify_vcf
+        runtime_attr_modify_vcf = runtime_attr_modify_vcf,
+        runtime_override_split_vcf = runtime_override_split_vcf,
+        runtime_override_combine_vcfs = runtime_override_combine_vcfs
     }
   }
 

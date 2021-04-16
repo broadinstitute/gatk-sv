@@ -5,12 +5,10 @@ import "Structs.wdl"
 
 workflow RdTestVisualization{
     input{
-        String name
-        Array[String] coveragefile
-        Array[File] coveragefile_idx
+        String prefix
         Array[File] medianfile
-        File famfile
-        File batches
+        File pedfile
+        File sample_batches
         File batch_bincov
         File bed
         String flags
@@ -20,13 +18,11 @@ workflow RdTestVisualization{
         call rdtest{
             input:
                 bed=bed,
-                coveragefile=coveragefile,
-                coveragefile_idx=coveragefile_idx,
                 medianfile=medianfile,
-                famfile=famfile,
-                batches=batches,
+                pedfile=pedfile,
+                sample_batches=sample_batches,
                 batch_bincov=batch_bincov,
-                prefix=name,
+                prefix=prefix,
                 flags=flags,
                 sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
                 runtime_attr_override = runtime_attr_rdtest
@@ -41,12 +37,10 @@ workflow RdTestVisualization{
 task rdtest {
     input{
         File bed
-        File batches # samples, batches
+        File sample_batches # samples, batches
         File batch_bincov # batch, bincov
-        Array[String] coveragefile
-        Array[File] coveragefile_idx
         Array[File] medianfile
-        File famfile
+        File pedfile
         String prefix
         String sv_pipeline_rdtest_docker
         String flags
@@ -62,11 +56,11 @@ task rdtest {
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     command <<<
-        set -euo pipefail
+        set -ex
         awk -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' ~{bed} |egrep "DEL|DUP" | sort -k1,1 -k2,2n> test.bed
         cut -f5 test.bed |sed 's/\,/\n/g'|sort -u > samples.txt
-        fgrep -wf samples.txt ~{batches} |awk '{print $2}' |sort -u >existing_batches.txt
-        fgrep -f existing_batches.txt ~{batch_bincov}>bincovlist.txt
+        fgrep -wf samples.txt ~{sample_batches} |awk '{print $2}' |sort -u >existing_batches.txt
+        fgrep -f existing_batches.txt ~{batch_bincov} > bincovlist.txt
         paste ~{sep=" " medianfile} > medianfile.txt
 
         i=0
@@ -94,18 +88,18 @@ task rdtest {
             -n ~{prefix} \
             -c allcovfile.bed.gz \
             -m medianfile.txt \
-            -f ~{famfile} \
+            -f ~{pedfile} \
             -p TRUE \
             -w samples.txt \
             -s 10000000 \
             ~{flags}
-        mkdir rd_plots
-        mv *jpg rd_plots
-        tar -czvf ~{prefix}.rd_plots.tar.gz rd_plots/
+        mkdir ~{prefix}_rd_plots
+        mv *jpg ~{prefix}_rd_plots
+        tar -czvf ~{prefix}_rd_plots.tar.gz ~{prefix}_rd_plots/
     >>>
     
     output {
-        File plots = "~{prefix}.rd_plots.tar.gz"
+        File plots = "~{prefix}_rd_plots.tar.gz"
     }
     
     runtime {
