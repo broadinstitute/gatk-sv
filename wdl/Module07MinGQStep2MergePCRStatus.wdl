@@ -263,8 +263,12 @@ task merge_PCR_VCFs {
     /opt/sv-pipeline/scripts/drop_empty_records.py \
       "~{prefix}.minGQ_filtered.vcf" \
       "~{prefix}.minGQ_filtered.no_blanks.vcf"
+
+    #extract and add MCNVs:
+    awk '{if ($7=="MULTIALLELIC") print}'  "~{prefix}.minGQ_filtered.vcf" >> "~{prefix}.minGQ_filtered.no_blanks.vcf"
+
     #Bgzip & tabix
-    bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+    vcf-sort  "~{prefix}.minGQ_filtered.no_blanks.vcf" | bgzip > "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
   >>>
 
   output {
