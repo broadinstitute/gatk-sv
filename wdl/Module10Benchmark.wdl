@@ -1,33 +1,18 @@
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
-## 
-## This WDL pipeline implements Duphold 
-##
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
-
 version 1.0
 
 import "Structs.wdl"
-import "TasksBenchmark.wdl" as mini_tasks
+import "Tasks0506.wdl" as tasks0506
+import "TasksBenchmark.wdl" as tasks10
 
 import "VaPoR.wdl" as vapor
 import "Duphold.wdl" as duphold
 import "RdPeSrAnno.wdl" as rdpesr
 
-workflow BenchmarkAnnotation{
-  input{
+# WARNING: This workflow is potentially very expensive! Start small and scale gradually, or consider running the
+# subworkflows separately.
+
+workflow BenchmarkAnnotation {
+  input {
     String prefix
     String il_bam
     String il_bam_bai
@@ -65,7 +50,7 @@ workflow BenchmarkAnnotation{
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    call mini_tasks.LocalizeCram as LocalizeCramPB{
+    call tasks10.LocalizeCram as LocalizeCramPB{
       input:
         contig = contig,
         ref_fasta=ref_fasta,
@@ -77,7 +62,7 @@ workflow BenchmarkAnnotation{
         runtime_attr_override=runtime_attr_LocalizeCram
       }
 
-    call mini_tasks.SplitVcf as SplitVcf{
+    call tasks10.SplitVcf as SplitVcf{
       input:
         contig = contig,
         vcf_file = vcf_file,
@@ -85,7 +70,7 @@ workflow BenchmarkAnnotation{
         runtime_attr_override=runtime_attr_SplitVcf
       }
 
-    call mini_tasks.vcf2bed as vcf2bed{
+    call tasks10.vcf2bed as vcf2bed{
       input:
         vcf = SplitVcf.contig_vcf,
         vcf_index = SplitVcf.contig_vcf_index,
@@ -121,8 +106,8 @@ workflow BenchmarkAnnotation{
       input:
         prefix = prefix,
         contig = contig,
-        bam_or_cram_file=LocalizeCram.local_bam,
-        bam_or_cram_index=LocalizeCram.local_bai,
+        bam_or_cram_file=LocalizeCramPB.local_bam,
+        bam_or_cram_index=LocalizeCramPB.local_bai,
         bed = vcf2bed.bed,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
@@ -135,8 +120,8 @@ workflow BenchmarkAnnotation{
       input:
         prefix = prefix,
         contig = contig,
-        bam_or_cram_file=LocalizeCram.local_bam,
-        bam_or_cram_index=LocalizeCram.local_bai,
+        bam_or_cram_file=LocalizeCramPB.local_bam,
+        bam_or_cram_index=LocalizeCramPB.local_bai,
         bed = vcf2bed.bed,
         pe_metrics = pe_metrics,
         sr_metrics = sr_metrics,
@@ -148,7 +133,7 @@ workflow BenchmarkAnnotation{
         runtime_attr_override = runtime_attr_rdpesr
       }
 
-    call mini_tasks.LocalizeCramRequestPay as LocalizeCramIL{
+    call tasks10.LocalizeCramRequestPay as LocalizeCramIL{
       input:
         contig = contig,
         ref_fasta=ref_fasta,
@@ -184,12 +169,9 @@ workflow BenchmarkAnnotation{
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_bcf2vcf
       }
-
-
     }
 
-
-  call mini_tasks.ConcatVcfs as ConcatVcfsPB{
+  call tasks0506.ConcatVcfs as ConcatVcfsPB{
     input:
       vcfs=Bcf2VcfPB.vcf,
       merge_sort=true,
@@ -198,7 +180,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
 
-  call mini_tasks.ConcatVcfs as ConcatVcfsIL{
+  call tasks0506.ConcatVcfs as ConcatVcfsIL{
     input:
       vcfs=Bcf2VcfIL.vcf,
       merge_sort=true,
@@ -207,7 +189,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
 
-  call mini_tasks.ConcatBeds as ConcatBeds{
+  call tasks0506.ConcatBeds as ConcatBeds{
     input:
       shard_bed_files=RunVaPoR.vapor,
       prefix=prefix,
@@ -215,7 +197,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatBeds
   }
   
-  call mini_tasks.ConcatBeds as ConcatPesrAnno{
+  call tasks0506.ConcatBeds as ConcatPesrAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.pesr_anno,
       prefix=prefix,
@@ -223,7 +205,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnno{
+  call tasks0506.ConcatBeds as ConcatRdAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov,
       prefix=prefix,
@@ -231,7 +213,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnnoLeFlank{
+  call tasks0506.ConcatBeds as ConcatRdAnnoLeFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_le_flank,
       prefix=prefix,
@@ -239,7 +221,7 @@ workflow BenchmarkAnnotation{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnnoRiFlank{
+  call tasks0506.ConcatBeds as ConcatRdAnnoRiFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_ri_flank,
       prefix=prefix,
@@ -293,10 +275,10 @@ task RunDupholdPerContig{
     set -Eeuo pipefail
     
     duphold -t 4 \
-    -v ~{vcf_file} \
-    -b ~{bam_or_cram_file} \
-    -f ~{ref_fasta} \
-    -o ~{prefix}.~{contig}.bcf
+      -v ~{vcf_file} \
+      -b ~{bam_or_cram_file} \
+      -f ~{ref_fasta} \
+      -o ~{prefix}.~{contig}.bcf
 
   >>>
   runtime {
@@ -434,10 +416,10 @@ task RunDuphold{
     set -Eeuo pipefail
     
     duphold -t 4 \
-    -v ~{vcf_file} \
-    -b ~{bam_or_cram_file} \
-    -f ~{ref_fasta} \
-    -o ~{prefix}.bcf
+      -v ~{vcf_file} \
+      -b ~{bam_or_cram_file} \
+      -f ~{ref_fasta} \
+      -o ~{prefix}.bcf
 
   >>>
   runtime {

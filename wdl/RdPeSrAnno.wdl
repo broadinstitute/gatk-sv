@@ -1,28 +1,11 @@
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
-## 
-## This WDL pipeline implements Duphold 
-##
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
-
 version 1.0
 
 import "Structs.wdl"
-import "TasksBenchmark.wdl" as mini_tasks
-workflow RdPeSrAnno{
-  input{
+import "Tasks0506.wdl" as tasks0506
+import "TasksBenchmark.wdl" as tasks10
+
+workflow RdPeSrAnno {
+  input {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
@@ -48,7 +31,7 @@ workflow RdPeSrAnno{
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    call mini_tasks.LocalizeCram as LocalizeCram{
+    call tasks10.LocalizeCram as LocalizeCram{
       input:
         contig = contig,
         ref_fasta=ref_fasta,
@@ -60,7 +43,7 @@ workflow RdPeSrAnno{
         runtime_attr_override=runtime_attr_LocalizeCram
       }
 
-    call mini_tasks.SplitVcf as SplitVcf{
+    call tasks10.SplitVcf as SplitVcf{
       input:
         contig = contig,
         vcf_file = vcf_file,
@@ -68,7 +51,7 @@ workflow RdPeSrAnno{
         runtime_attr_override=runtime_attr_SplitVcf
       }
 
-    call mini_tasks.vcf2bed as vcf2bed{
+    call tasks10.vcf2bed as vcf2bed{
       input:
         vcf = SplitVcf.contig_vcf,
         vcf_index = SplitVcf.contig_vcf_index,
@@ -94,7 +77,7 @@ workflow RdPeSrAnno{
       }
   }
 
-  call mini_tasks.ConcatBeds as ConcatPesrAnno{
+  call tasks0506.ConcatBeds as ConcatPesrAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.pesr_anno,
       prefix=prefix,
@@ -102,7 +85,7 @@ workflow RdPeSrAnno{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnno{
+  call tasks0506.ConcatBeds as ConcatRdAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov,
       prefix=prefix,
@@ -110,7 +93,7 @@ workflow RdPeSrAnno{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnnoLeFlank{
+  call tasks0506.ConcatBeds as ConcatRdAnnoLeFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_le_flank,
       prefix=prefix,
@@ -118,7 +101,7 @@ workflow RdPeSrAnno{
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call mini_tasks.ConcatBeds as ConcatRdAnnoRiFlank{
+  call tasks0506.ConcatBeds as ConcatRdAnnoRiFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_ri_flank,
       prefix=prefix,

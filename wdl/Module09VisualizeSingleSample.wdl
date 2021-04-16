@@ -1,10 +1,9 @@
-# Base script https://portal.firecloud.org/#methods/Talkowsk-SV/Coverage_plot/10/wdl
 version 1.0
 
 import "Structs.wdl"
 import "RdTestVisualization.wdl" as rdtest
-import "igv_trio_plots.all_samples.wdl" as igv_trio
-import "igv_generate_plots.all_samples.wdl" as igv_individual
+import "IGVTrioPlotsAllSamples.wdl" as igv_trio
+import "IGVGeneratePlotsAllSamples.wdl" as igv_individual
 
 workflow Module09VisualizeSingleSample{
     input{

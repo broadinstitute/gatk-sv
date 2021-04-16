@@ -1,9 +1,8 @@
-# Base script https://portal.firecloud.org/#methods/Talkowsk-SV/Coverage_plot/10/wdl
 version 1.0
 
 import "Structs.wdl"
 import "RdTestVisualization.wdl" as rdtest
-import "igv_trio_plots.all_samples.wdl" as igv_trio
+import "IGVTrioPlotsAllSamples.wdl" as igv_trio
 
 workflow Module09VisualizeTrio{
     input{
@@ -65,7 +64,6 @@ workflow Module09VisualizeTrio{
             Fasta = Fasta,
             Fasta_dict = Fasta_dict,
             Fasta_idx = Fasta_idx,
-            sample_cram = sample_cram,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
             igv_docker = igv_docker,

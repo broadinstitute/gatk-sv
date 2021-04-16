@@ -1,30 +1,12 @@
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
-## 
-## This WDL pipeline implements Duphold 
-##
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
-
 version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
 import "VaPoRBedPerContig.wdl" as vapor_bed
 import "VaPoRVcf.wdl" as vapor_vcf
-workflow VaPoR{
-    input{
+
+workflow VaPoR {
+    input {
         String prefix
         String bam_or_cram_file
         String bam_or_cram_index

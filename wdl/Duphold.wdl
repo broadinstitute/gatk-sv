@@ -1,29 +1,11 @@
-##########################################################################################
-
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
-## 
-## This WDL pipeline implements Duphold 
-##
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
-
 version 1.0
 
 import "Structs.wdl"
-import "TasksBenchmark.wdl" as mini_tasks
-workflow Duphold{
-  input{
+import "Tasks0506.wdl" as tasks0506
+import "TasksBenchmark.wdl" as tasks10
+
+workflow Duphold {
+  input {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
@@ -45,7 +27,7 @@ workflow Duphold{
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    call mini_tasks.LocalizeCram as LocalizeCram{
+    call tasks10.LocalizeCram as LocalizeCram{
       input:
         contig = contig,
         ref_fasta=ref_fasta,
@@ -57,7 +39,7 @@ workflow Duphold{
         runtime_attr_override=runtime_attr_LocalizeCram
       }
 
-    call mini_tasks.SplitVcf as SplitVcf{
+    call tasks10.SplitVcf as SplitVcf{
       input:
         contig = contig,
         vcf_file = vcf_file,
@@ -90,7 +72,7 @@ workflow Duphold{
       }
   }
 
-  call mini_tasks.ConcatVcfs as ConcatVcfs{
+  call tasks0506.ConcatVcfs as ConcatVcfs{
     input:
       vcfs=Bcf2Vcf.vcf,
       merge_sort=true,

@@ -1,32 +1,14 @@
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
-## 
-## This WDL pipeline implements Duphold 
-##
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
-
 version 1.0
 
 import "Structs.wdl"
-import "TasksBenchmark.wdl" as mini_tasks
+import "Tasks0506.wdl" as tasks0506
+import "TasksBenchmark.wdl" as tasks10
 
 import "VaPoR.wdl" as vapor
 import "Duphold.wdl" as duphold
 import "RdPeSrAnno.wdl" as rdpesr
 
-workflow AnnoILFeatures{
+workflow AnnoILFeatures {
     input{
         String prefix
         String il_bam
@@ -161,7 +143,7 @@ workflow AnnoILFeatures{
     
     Array[String] contigs = transpose(read_tsv(contig_list))[0]
     scatter ( contig in contigs ) {
-        call mini_tasks.SplitVcf as SplitVcf{
+        call tasks10.SplitVcf as SplitVcf{
             input:
                 contig = contig,
                 vcf_file = vcf_file,
@@ -169,7 +151,7 @@ workflow AnnoILFeatures{
                 runtime_attr_override=runtime_attr_SplitVcf
             }
 
-        call mini_tasks.LocalizeCramRequestPay as LocalizeCramIL{
+        call tasks10.LocalizeCramRequestPay as LocalizeCramIL{
             input:
                 contig = contig,
                 ref_fasta=ref_fasta,
@@ -240,7 +222,7 @@ workflow AnnoILFeatures{
    
     }
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL{
+    call tasks0506.ConcatVcfs as ConcatVcfsIL{
         input:
             vcfs=Bcf2VcfIL.vcf,
             merge_sort=true,
@@ -249,7 +231,7 @@ workflow AnnoILFeatures{
             runtime_attr_override=runtime_attr_ConcatVcfs
     }
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL_le_flank{
+    call tasks0506.ConcatVcfs as ConcatVcfsIL_le_flank{
         input:
             vcfs=Bcf2VcfIL_le_flank.vcf,
             merge_sort=true,
@@ -258,7 +240,7 @@ workflow AnnoILFeatures{
             runtime_attr_override=runtime_attr_ConcatVcfs
     }
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL_ri_flank{
+    call tasks0506.ConcatVcfs as ConcatVcfsIL_ri_flank{
         input:
             vcfs=Bcf2VcfIL_ri_flank.vcf,
             merge_sort=true,

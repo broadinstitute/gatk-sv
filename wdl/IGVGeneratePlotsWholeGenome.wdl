@@ -1,11 +1,5 @@
 version 1.0
 
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 import "Structs.wdl"
 
 workflow IGV_denovo {
