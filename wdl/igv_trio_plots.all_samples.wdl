@@ -9,7 +9,7 @@ version 1.0
 import "igv_trio_plots.wdl" as igv
 import "Structs.wdl"
 
-workflow IGVAllTrios {
+workflow IGV_all_samples {
     input {
         Array[String] pb_list
         Array[String] fa_list
@@ -24,8 +24,6 @@ workflow IGVAllTrios {
         File Fasta
         File Fasta_dict
         File Fasta_idx
-        File ped_file
-        File sample_cram
         String prefix
         String sv_base_mini_docker
         String igv_docker
@@ -33,7 +31,7 @@ workflow IGVAllTrios {
     }
 
     scatter (i in range(length(pb_list))){
-        call GeneratePerSampleBed{
+        call generate_per_sample_bed{
             input:
                 varfile = varfile,
                 sample_id = pb_list[i],
@@ -41,14 +39,12 @@ workflow IGVAllTrios {
                 runtime_attr_override=runtime_attr_override
         }
 
-        call igv.IGVTrio as IGVTrio {
+        call igv.IGV_trio as IGV_trio {
             input:
-                varfile=GeneratePerSampleBed.per_sample_varfile,
+                varfile=generate_per_sample_bed.per_sample_varfile,
                 Fasta = Fasta,
                 Fasta_idx = Fasta_idx,
                 Fasta_dict = Fasta_dict,
-                ped_file=ped_file,
-                sample_cram=sample_cram,
                 pb=pb_list[i],
                 fa=fa_list[i],
                 mo=mo_list[i],
@@ -61,20 +57,20 @@ workflow IGVAllTrios {
                 igv_docker = igv_docker
                 }
         }
-    call IntegrateIGVPlots{
+    call integrate_igv_plots{
         input:
-            igv_tar = IGVTrio.tar_gz_pe,
+            igv_tar = IGV_trio.tar_gz_pe,
             prefix = prefix, 
             sv_base_mini_docker = sv_base_mini_docker
     }
 
     output{
-        File tar_gz_pe = IntegrateIGVPlots.plot_tar
+        File tar_gz_pe = integrate_igv_plots.plot_tar
     }
     }
 
 
-task GeneratePerSampleBed{
+task generate_per_sample_bed{
     input {
         File varfile
         String sample_id
@@ -113,7 +109,7 @@ task GeneratePerSampleBed{
 
     }
 
-task IntegrateIGVPlots{
+task integrate_igv_plots{
     input {
         Array[File] igv_tar
         String prefix

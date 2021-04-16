@@ -122,19 +122,18 @@ task CatUncompressedFiles {
   }
 }
 
-# Combine multiple sorted VCFs
+  # Combine multiple VCFs
 task ConcatVcfs {
   input {
     Array[File] vcfs
-    Array[File]? vcfs_idx
-    Boolean merge_sort = false
     String? outfile_prefix
+    Boolean? index_output
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  String merge_flag = if merge_sort then "--allow-overlaps" else ""
+  Boolean call_tabix = select_first([index_output, true])
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -162,13 +161,18 @@ task ConcatVcfs {
   }
 
   command <<<
-    set -euo pipefail
-    VCFS="~{write_lines(vcfs)}"
-    if ~{!defined(vcfs_idx)}; then
-      cat ${VCFS} | xargs -n1 tabix
+    set -eu -o pipefail
+
+    vcf-concat -f ~{write_lines(vcfs)} \
+      | vcf-sort -c \
+      | bgzip -c \
+      > "~{outfile_name}"
+
+    if ~{call_tabix}; then
+      tabix -p vcf -f "~{outfile_name}"
+    else
+      touch "~{outfile_name}.tbi"
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix -p vcf -f "~{outfile_name}"
   >>>
 
   output {
@@ -176,6 +180,7 @@ task ConcatVcfs {
     File concat_vcf_idx = outfile_name + ".tbi"
   }
 }
+
 
 # Merge shards after VCF stats collection
 task ConcatBeds {
@@ -631,11 +636,11 @@ task SplitVcf {
                                                 else ''} \
         > records.vcf
       N_RECORDS=$(wc -l < records.vcf)
-      rm uncompressed.vcf
 
       # specifying split -n instead of split -l produces more even splits
       N_CHUNKS=$((N_RECORDS / ~{min_vars_per_shard}))
       if [ $N_CHUNKS -gt 1 ]; then
+        rm uncompressed.vcf
         rm "~{vcf}"
         MAX_CHUNKS=~{if defined(n_shards) then n_shards else 0}
         if [ $MAX_CHUNKS -gt 0 ] && [ $MAX_CHUNKS -lt $N_CHUNKS ]; then
@@ -662,9 +667,8 @@ task SplitVcf {
           rm $VCF_RECORD
         done
       else
-        # just one chunk, so use full records.vcf. add header, compress, and name like a chunk
-        # use records.vcf in case vcf_idx not defined and uncompressed.vcf not result of tabix call
-        cat header.vcf records.vcf | bgzip -c > "~{prefix}1.vcf.gz"
+        # just one chunk, so just move the original file to be named like a chunk
+        bgzip -c uncompressed.vcf > "~{prefix}1.vcf.gz"
       fi
     fi
   >>>
