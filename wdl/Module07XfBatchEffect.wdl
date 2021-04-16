@@ -263,7 +263,7 @@ task GetFreqTable {
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
+    mem_gb: 6,
     disk_gb: 50,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -309,6 +309,7 @@ task GetFreqTable {
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.allPops.txt.gz"
+    bgzip "~{prefix}.frequencies.txt"
   >>>
 
   output {
