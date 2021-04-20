@@ -27,7 +27,7 @@ workflow Module04 {
     File coveragefile        # batch coverage file
     File? coveragefile_index # batch coverage index file
     File medianfile          # post-exclusion batch median file
-    File famfile             # post-exclusion batch famfile
+    File ped_file            # cohort ped file
     File? rf_cutoffs         # Random forest cutoffs; required unless skipping training
     File? seed_cutoffs       # Required unless skipping training
     Int n_RD_genotype_bins   # number of RdTest bins
@@ -65,6 +65,7 @@ workflow Module04 {
     RuntimeAttr? runtime_attr_add_batch
     RuntimeAttr? runtime_attr_index_vcf
     RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
 
     # PE train
     RuntimeAttr? runtime_attr_make_batch_bed
@@ -125,6 +126,15 @@ workflow Module04 {
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
 
+  call util.SubsetPedFile {
+    input:
+      ped_file = ped_file,
+      sample_list = GetSampleIdsFromVcf.out_file,
+      subset_name = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
+  }
+
   if (!single_sample_mode) {
     call gp1.GenotypePESRPart1 as GenotypePESRPart1 {
       input:
@@ -143,7 +153,7 @@ workflow Module04 {
         coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
         n_per_PE_split = n_per_split,
-        famfile = famfile,
+        famfile = SubsetPedFile.ped_subset_file,
         splitfile = splitfile,
         splitfile_index = splitfile_index,
         n_per_RD_split = n_per_split,
@@ -186,7 +196,7 @@ workflow Module04 {
       coveragefile_index = coveragefile_index,
       SR_metrics = select_first([SR_metrics, GenotypePESRPart1.SR_metrics]),
       n_per_split = n_per_split,
-      famfile = famfile,
+      famfile = SubsetPedFile.ped_subset_file,
       splitfile = splitfile,
       splitfile_index = splitfile_index,
       ref_dict = ref_dict,
@@ -222,7 +232,7 @@ workflow Module04 {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
-        famfile = famfile,
+        famfile = SubsetPedFile.ped_subset_file,
         n_per_RD_split = n_per_split,
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -250,7 +260,7 @@ workflow Module04 {
       coveragefile = coveragefile,
       coveragefile_index = coveragefile_index,
       n_per_split = n_per_split,
-      famfile = famfile,
+      famfile = SubsetPedFile.ped_subset_file,
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,

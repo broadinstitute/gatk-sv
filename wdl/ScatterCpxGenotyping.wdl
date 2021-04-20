@@ -91,7 +91,6 @@ workflow ScatterCpxGenotyping {
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
-        runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
         runtime_override_parse_genotypes=runtime_override_parse_genotypes,
         runtime_override_merge_melted_gts=runtime_override_merge_melted_gts,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,

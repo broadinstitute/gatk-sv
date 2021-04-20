@@ -45,7 +45,6 @@ workflow GenotypeCpxCnvs {
     # overrides for RunDepthGenotypePerBatch
     RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_override_split_bed_by_size
-    RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
   }

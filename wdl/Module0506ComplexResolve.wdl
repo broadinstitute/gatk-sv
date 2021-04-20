@@ -36,7 +36,6 @@ workflow Module0506ComplexResolve {
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_subset_inversions
-    RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_concat
 
     # overrides for ResolveComplexContig

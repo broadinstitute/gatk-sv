@@ -1,5 +1,6 @@
 {
   "Module03Metrics.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module03Metrics.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "Module03Metrics.linux_docker" : {{ dockers.linux_docker | tojson }},
   "Module03Metrics.contig_list" : {{ reference_resources.primary_contigs_list | tojson }},
 
@@ -9,7 +10,7 @@
   "Module03Metrics.filtered_pesr_vcf" : {{ test_batch.filtered_pesr_vcf | tojson }},
   "Module03Metrics.filtered_depth_vcf" : {{ test_batch.filtered_depth_vcf | tojson }},
   "Module03Metrics.cutoffs" : {{ test_batch.cutoffs | tojson }},
-  "Module03Metrics.filtered_ped_file" : {{ test_batch.filtered_ped_file | tojson }},
+  "Module03Metrics.ped_file" : {{ test_batch.ped_file | tojson }},
   "Module03Metrics.outlier_list" : {{ test_batch.outlier_list | tojson }},
   "Module03Metrics.samples_post_filtering_file" : {{ test_batch.samples_post_filtering_file | tojson }},
 

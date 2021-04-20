@@ -20,6 +20,7 @@ import "PESRPreprocessing.wdl" as pp
 import "GermlineCNVCase.wdl" as gcnv
 import "PloidyEstimation.wdl" as pe
 import "TinyResolve.wdl" as tiny
+import "Utils.wdl" as util
 
 # Batch-level workflow:
 #   - Merge sample evidence data into a single batch
@@ -176,6 +177,7 @@ workflow Module00c {
     RuntimeAttr? runtime_attr_merge_baf
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
+    RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? add_sample_to_ped_runtime_attr
     RuntimeAttr? condense_counts_runtime_attr
     RuntimeAttr? preprocess_calls_runtime_attr
@@ -226,10 +228,20 @@ workflow Module00c {
     }
   }
 
+  Array[String] samples_batch = select_first([ref_panel_samples, samples])
+  call util.SubsetPedFile {
+    input:
+      ped_file = ped_file,
+      sample_list = write_lines(samples_batch),
+      subset_name = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
+  }
+
   if (append_first_sample_to_ped) {
     call AddCaseSampleToPed {
       input:
-        ref_ped_file = ped_file,
+        ref_ped_file = SubsetPedFile.ped_subset_file,
         ploidy_plots = select_first([Ploidy.ploidy_plots]),
         sample_id = samples[0],
         sv_base_mini_docker = sv_base_mini_docker,
@@ -268,7 +280,8 @@ workflow Module00c {
         samples = samples,
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_baf_gen = runtime_attr_baf_gen
     }
   }
 
@@ -300,7 +313,7 @@ workflow Module00c {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
+      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
@@ -326,7 +339,7 @@ workflow Module00c {
       bincov_matrix = merged_bincov_,
       bincov_matrix_index = merged_bincov_idx_,
       chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, ped_file]),
+      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
       exclude_list = cnmops_exclude_list,
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,

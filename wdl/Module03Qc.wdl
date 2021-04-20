@@ -9,6 +9,7 @@
 version 1.0
 
 import "MasterVcfQc.wdl" as vcf_qc
+import "Utils.wdl" as util
 
 workflow Module03Qc {
   input {
@@ -49,6 +50,8 @@ workflow Module03Qc {
     RuntimeAttr? runtime_override_collins_per_sample_plot
     RuntimeAttr? runtime_override_werling_per_sample_plot
     RuntimeAttr? runtime_override_sanitize_outputs
+    RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
@@ -78,12 +81,28 @@ workflow Module03Qc {
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
+  call util.GetSampleIdsFromVcf {
+    input:
+      vcf = select_first(vcfs_array),
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_ids_from_vcf
+  }
+
+  call util.SubsetPedFile {
+    input:
+      ped_file = ped_file,
+      sample_list = GetSampleIdsFromVcf.out_file,
+      subset_name = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
+  }
+
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
       call vcf_qc.MasterVcfQc as VcfQc {
         input:
           vcf = select_first([vcfs_array[i]]),
-          ped_file=ped_file,
+          ped_file=SubsetPedFile.ped_subset_file,
           prefix="${batch}.${algorithms[i]}_03_filtered_vcf",
           sv_per_shard=10000,
           samples_per_shard=100,

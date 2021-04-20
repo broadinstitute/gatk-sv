@@ -25,7 +25,6 @@ workflow Module03Test {
       filtered_depth_vcf = select_first([Module03.filtered_depth_vcf]),
       cutoffs = Module03.cutoffs,
       outlier_list = Module03.outlier_samples_excluded_file,
-      filtered_ped_file = Module03.ped_file_postOutlierExclusion,
       samples_post_filtering_file = Module03.batch_samples_postOutlierExclusion_file
   }
 

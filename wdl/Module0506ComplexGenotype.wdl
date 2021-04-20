@@ -2,13 +2,14 @@ version 1.0
 
 import "ScatterCpxGenotyping.wdl" as GenotypeComplexContig
 import "Tasks0506.wdl" as MiniTasks
+import "Utils.wdl" as util
 
 workflow Module0506ComplexGenotype {
   input {
     String cohort_name
     Array[String] batches
-    Array[File] ped_files
     File merged_ped_file
+    Array[File] depth_vcfs
 
     Boolean merge_vcfs = false
 
@@ -31,8 +32,6 @@ workflow Module0506ComplexGenotype {
     String sv_pipeline_rdtest_docker
 
     # overrides for mini tasks
-    RuntimeAttr? runtime_override_ids_from_vcf
-    RuntimeAttr? runtime_override_merge_fam_file_list
     RuntimeAttr? runtime_override_concat
 
     # overrides for GenotypeComplexContig
@@ -45,6 +44,25 @@ workflow Module0506ComplexGenotype {
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
+    RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
+  }
+
+  scatter (i in range(length(batches))) {
+    call util.GetSampleIdsFromVcf {
+      input:
+        vcf = depth_vcfs[i],
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_ids_from_vcf
+    }
+    call util.SubsetPedFile {
+      input:
+        ped_file = merged_ped_file,
+        sample_list = GetSampleIdsFromVcf.out_file,
+        subset_name = batches[i],
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_ped
+    }
   }
 
   #Scatter per chromosome
@@ -69,7 +87,7 @@ workflow Module0506ComplexGenotype {
         n_rd_test_bins=100000,
         prefix=cohort_name,
         contig=contig,
-        ped_files=ped_files,
+        ped_files=SubsetPedFile.ped_subset_file,
         ref_dict=ref_dict,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
@@ -77,7 +95,6 @@ workflow Module0506ComplexGenotype {
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
-        runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
         runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
         runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
         runtime_override_parse_genotypes=runtime_override_parse_genotypes,
