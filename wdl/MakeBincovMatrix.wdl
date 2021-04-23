@@ -252,7 +252,6 @@ task ZPaste {
 
   command <<<
     set -Eeu -o pipefail
-    GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     # Use loops rather than WDL sep feature in case there are enough samples to exceed bash line limits
     # Use named pipes to stream unzipped column files in memory
