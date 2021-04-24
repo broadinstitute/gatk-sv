@@ -414,13 +414,9 @@ task CleanVcf4 {
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
   Float input_size = size([rd_cn_revise, normal_revise_vcf], "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
-  Float input_mem_scale = 3.0
-  Float input_disk_scale = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + input_size * input_mem_scale,
-    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+    mem_gb: 2.0 + input_size * 3.0,
+    disk_gb: ceil(10 + input_size * 10),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
