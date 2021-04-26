@@ -30,7 +30,7 @@ workflow MakeBincovMatrix {
       binsize = binsize,
       bincov_matrix_samples = bincov_matrix_samples,
       sv_base_mini_docker = sv_base_mini_docker,
-      disk_overhead_gb = disk_overhead_gb,
+      disk_overhead_gb = select_first([disk_overhead_gb, 0]),
       runtime_attr_override = runtime_attr_override
   }
   if(defined(bincov_matrix_samples)) {
@@ -45,9 +45,9 @@ workflow MakeBincovMatrix {
       input:
         count_file = all_count_files[i],
         sample = all_samples[i],
-        binsize = SetBins.binsize,
+        binsize = SetBins.out_binsize,
         bin_locs = SetBins.bin_locs,
-        disk_overhead_gb = disk_overhead_gb,
+        disk_overhead_gb = select_first([disk_overhead_gb, 0]),
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_override
     }
@@ -57,7 +57,7 @@ workflow MakeBincovMatrix {
     input:
       column_files = flatten([[SetBins.bin_locs], MakeBincovMatrixColumns.bincov_bed]),
       matrix_file_name = "~{batch}.RD.txt.gz",
-      disk_overhead_gb = disk_overhead_gb,
+      disk_overhead_gb = select_first([disk_overhead_gb, 0]),
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_override
   }
@@ -97,7 +97,7 @@ task SetBins {
 
   output {
     File bin_locs = bin_file_name
-    Int binsize = read_int(binsize_output_file_name)
+    Int out_binsize = read_int(binsize_output_file_name)
     File bincov_matrix_header_file = bincov_header_file_name
   }
 

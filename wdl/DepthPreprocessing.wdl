@@ -23,7 +23,7 @@ workflow MergeDepth {
     String sv_base_mini_docker
     String sv_pipeline_docker
     Int gcnv_qs_cutoff
-    Float? defragment_max_dist
+    Float defragment_max_dist
     RuntimeAttr? runtime_attr_merge_sample
     RuntimeAttr? runtime_attr_merge_set
     RuntimeAttr? runtime_attr_convert_gcnv

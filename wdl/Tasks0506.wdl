@@ -12,14 +12,14 @@ import "Structs.wdl"
 task ZcatCompressedFiles {
   input {
     Array[File] shards
-    String? outfile_name
+    String outfile_name
     String? filter_command
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String output_file_name = select_first([outfile_name, "output.txt.gz"])
-  Boolean do_filter = defined(filter_command) && filter_command != ""
+  Boolean do_filter = defined(filter_command) && select_first([filter_command]) != ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -81,7 +81,7 @@ task CatUncompressedFiles {
   }
 
   String output_file_name = select_first([outfile_name, "output.txt"])
-  Boolean do_filter = defined(filter_command) && filter_command != ""
+  Boolean do_filter = defined(filter_command) && select_first([filter_command]) != ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)

@@ -196,12 +196,12 @@ workflow Module00a {
   }
 
   if (run_melt) {
-    Float? insert_size_i = if defined(insert_size) then select_first([insert_size]) else NONE_FLOAT_
-    Int? read_length_i = if defined(read_length) then select_first([read_length]) else NONE_INT_
-    Float? coverage_i = if defined(coverage) then select_first([coverage]) else NONE_FLOAT_
-    Float? pct_chimeras_i = if defined(pct_chimeras) then select_first([pct_chimeras]) else NONE_FLOAT_
-    Float? total_reads_i = if defined(total_reads) then select_first([total_reads]) else NONE_INT_
-    Int? pf_reads_improper_pairs_i = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs]) else NONE_INT_
+    Float? insert_size_i = if defined(insert_size) then select_first([insert_size])[0] else NONE_FLOAT_
+    Int? read_length_i = if defined(read_length) then select_first([read_length])[0] else NONE_INT_
+    Float? coverage_i = if defined(coverage) then select_first([coverage])[0] else NONE_FLOAT_
+    Float? pct_chimeras_i = if defined(pct_chimeras) then select_first([pct_chimeras])[0] else NONE_FLOAT_
+    Float? total_reads_i = if defined(total_reads) then select_first([total_reads])[0] else NONE_INT_
+    Int? pf_reads_improper_pairs_i = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[0] else NONE_INT_
     call melt.MELT {
       input:
         bam_or_cram_file = bam_file_,

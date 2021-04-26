@@ -81,13 +81,10 @@ workflow Module04 {
     RuntimeAttr? runtime_attr_genotype_train
     RuntimeAttr? runtime_attr_generate_cutoff
     RuntimeAttr? runtime_attr_update_cutoff
-    RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_merge_genotypes
 
     # PESR part 2
-    RuntimeAttr? runtime_attr_count_pe
     RuntimeAttr? runtime_attr_genotype_pe
-    RuntimeAttr? runtime_attr_count_sr
     RuntimeAttr? runtime_attr_genotype_sr
     RuntimeAttr? runtime_attr_integrate_gq
     RuntimeAttr? runtime_attr_integrate_pesr_gq
@@ -95,7 +92,6 @@ workflow Module04 {
 
     # Depth part 2
     RuntimeAttr? runtime_attr_integrate_depth_gq
-    RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_merge_regeno_cov_med
 
   }

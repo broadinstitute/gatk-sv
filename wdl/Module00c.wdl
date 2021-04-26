@@ -123,7 +123,7 @@ workflow Module00c {
     Boolean append_first_sample_to_ped = false
 
     Int gcnv_qs_cutoff              # QS filtering cutoff
-    Float? defragment_max_dist
+    Float defragment_max_dist
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
@@ -174,7 +174,6 @@ workflow Module00c {
 
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
-    RuntimeAttr? runtime_attr_merge_baf
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped
@@ -193,6 +192,8 @@ workflow Module00c {
     RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
+
+    Array[File]? _NONE_ARRAY_FILE_
   }
 
   Array[String] all_samples = flatten(select_all([samples, ref_panel_samples]))
@@ -288,7 +289,7 @@ workflow Module00c {
   call bem.EvidenceMerging as EvidenceMerging {
     input:
       samples = all_samples,
-      BAF_files = if defined(BAFFromShardedVCF.baf_files) then BAFFromShardedVCF.baf_files else BAF_files,
+      BAF_files = if defined(BAFFromShardedVCF.baf_files) then BAFFromShardedVCF.baf_files else (if defined(BAF_files) then select_all(select_first([BAF_files])) else _NONE_ARRAY_FILE_),
       PE_files = all_PE_files,
       SR_files = all_SR_files,
       inclusion_bed = inclusion_bed,

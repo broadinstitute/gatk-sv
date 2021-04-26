@@ -124,7 +124,7 @@ workflow RDTestChromosome {
   }
 
   output {
-    File stats = MergeStats.merged_stats
+    File out_stats = MergeStats.merged_stats
   }
 }
 

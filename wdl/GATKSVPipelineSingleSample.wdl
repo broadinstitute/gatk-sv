@@ -284,8 +284,8 @@ workflow GATKSVPipelineSingleSample {
     File rmsk
     File segdups
 
-    Int? min_large_pesr_call_size_for_filtering
-    Float? min_large_pesr_depth_overlap_fraction
+    Int min_large_pesr_call_size_for_filtering
+    Float min_large_pesr_depth_overlap_fraction
 
     RuntimeAttr? runtime_attr_filter_large_pesr
     RuntimeAttr? runtime_attr_srtest
@@ -316,7 +316,6 @@ workflow GATKSVPipelineSingleSample {
     File bin_exclude
 
     # Common
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_merge_counts
     RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_make_subset_vcf
@@ -339,7 +338,6 @@ workflow GATKSVPipelineSingleSample {
 
     # Depth part 2
     RuntimeAttr? runtime_attr_integrate_depth_gq
-    RuntimeAttr? runtime_attr_concat_vcfs
 
     ############################################################
     ## Module 0506
@@ -363,7 +361,6 @@ workflow GATKSVPipelineSingleSample {
     Int? clean_vcf_random_seed
 
     RuntimeAttr? runtime_override_update_sr_list
-    RuntimeAttr? runtime_override_merge_pesr_depth
     RuntimeAttr? runtime_override_merge_pesr_depth
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
     RuntimeAttr? runtime_override_rename_variants
@@ -847,8 +844,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_integrate_gq=runtime_attr_integrate_gq,
       runtime_attr_integrate_pesr_gq=runtime_attr_integrate_pesr_gq,
       runtime_attr_triple_stream_cat=runtime_attr_triple_stream_cat,
-      runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq,
-      runtime_attr_concat_vcfs=runtime_attr_concat_vcfs
+      runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq
   }
 
   call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs as ConvertCNVsWithoutDepthSupportToBNDs {
