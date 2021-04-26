@@ -5,6 +5,7 @@ import "Structs.wdl"
 workflow CramToBamReviseBase {
   input {
     File cram_file
+    File? cram_index  # required if cram is requester pays
     File reference_fasta
     File? reference_index
     File contiglist
@@ -18,39 +19,40 @@ workflow CramToBamReviseBase {
   Array[String] contigs = transpose(read_tsv(contiglist))[0]
   String base_name = basename(cram_file, ".cram")
 
-  scatter (contig in contigs){
-      if (requester_pays) {
-        call SplitCramPerContigRequesterPays {
-          input:
-            cram_file = cram_file,
-            contig = contig,
-            reference_fasta = reference_fasta,
-            reference_index = reference_index,
-            samtools_cloud_docker = samtools_cloud_docker,
-            runtime_attr_override = runtime_attr_override
-        }
-      }
-      if (!requester_pays) {
-        call SplitCramPerContig {
-          input:
-            cram_file = cram_file,
-            contig = contig,
-            reference_fasta = reference_fasta,
-            reference_index = reference_index,
-            samtools_cloud_docker = samtools_cloud_docker,
-            runtime_attr_override = runtime_attr_override
-        }
-      }
-
-      call ReviseBaseInBam{
+  scatter (contig in contigs) {
+    if (requester_pays) {
+      call SplitCramPerContigRequesterPays {
         input:
-          bam_file = select_first([SplitCramPerContigRequesterPays.bam_file, SplitCramPerContig.bam_file]),
-          bam_index = select_first([SplitCramPerContigRequesterPays.bam_index, SplitCramPerContig.bam_index]),
+          cram_file = cram_file,
+          cram_index = select_first([cram_index, cram_file + ".crai"]),
+          contig = contig,
           reference_fasta = reference_fasta,
           reference_index = reference_index,
           samtools_cloud_docker = samtools_cloud_docker,
-          runtime_attr_override = runtime_attr_ReviseBaseInBam
+          runtime_attr_override = runtime_attr_override
       }
+    }
+    if (!requester_pays) {
+      call SplitCramPerContig {
+        input:
+          cram_file = cram_file,
+          contig = contig,
+          reference_fasta = reference_fasta,
+          reference_index = reference_index,
+          samtools_cloud_docker = samtools_cloud_docker,
+          runtime_attr_override = runtime_attr_override
+      }
+    }
+
+    call ReviseBaseInBam{
+      input:
+        bam_file = select_first([SplitCramPerContigRequesterPays.bam_file, SplitCramPerContig.bam_file]),
+        bam_index = select_first([SplitCramPerContigRequesterPays.bam_index, SplitCramPerContig.bam_index]),
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        samtools_cloud_docker = samtools_cloud_docker,
+        runtime_attr_override = runtime_attr_ReviseBaseInBam
+    }
   }
  
   call ConcatBam {
@@ -89,19 +91,18 @@ task SplitCramPerContig {
   File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
 
   Int num_cpu = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 4]) else 4
-  Float mem_size_gb = num_cpu * 4.0
   
   Float cram_inflate_ratio = 3.5
-  Float disk_overhead = 20.0
+  Float disk_overhead = 10.0
   Float cram_size = size(cram_file, "GiB")
-  Float bam_size = cram_inflate_ratio * cram_size
+  Float bam_size = (cram_inflate_ratio * cram_size) / 10
   Float ref_size = size(reference_fasta, "GiB")
   Float ref_index_size = size(reference_index_file, "GiB")
   Int vm_disk_size = ceil(bam_size + ref_size + ref_index_size + disk_overhead)
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: mem_size_gb, 
+    mem_gb: 3.75, 
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -148,6 +149,7 @@ task SplitCramPerContig {
 task SplitCramPerContigRequesterPays {
   input {
     File cram_file
+    File cram_index
     File reference_fasta
     File? reference_index
     String contig
@@ -160,19 +162,18 @@ task SplitCramPerContigRequesterPays {
   File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
 
   Int num_cpu = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 4]) else 4
-  Float mem_size_gb = num_cpu * 4.0
 
   Float cram_inflate_ratio = 3.5
-  Float disk_overhead = 20.0
+  Float disk_overhead = 10.0
   Float cram_size = size(cram_file, "GiB")
-  Float bam_size = cram_inflate_ratio * cram_size
+  Float bam_size = (cram_inflate_ratio * cram_size) / 10
   Float ref_size = size(reference_fasta, "GiB")
   Float ref_index_size = size(reference_index_file, "GiB")
   Int vm_disk_size = ceil(cram_size + bam_size + ref_size + ref_index_size + disk_overhead)
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: mem_size_gb,
+    mem_gb: 3.75,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -213,7 +214,7 @@ task SplitCramPerContigRequesterPays {
 }
 
 task ReviseBaseInBam{
-  input{
+  input {
     File bam_file
     File bam_index
     File reference_fasta
@@ -225,7 +226,6 @@ task ReviseBaseInBam{
   String base_name = basename(bam_file, ".bam") 
 
   Int num_cpu = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 4]) else 4
-  Float mem_size_gb = num_cpu * 5.0
 
   File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
   Float cram_inflate_ratio = 3.5
@@ -238,7 +238,7 @@ task ReviseBaseInBam{
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: mem_size_gb,
+    mem_gb: 3.75,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -278,8 +278,8 @@ task ReviseBaseInBam{
   }
 }
 
-task ConcatBam{
-  input{
+task ConcatBam {
+  input {
     String prefix
     Array[File] bam_files
     Array[File] bam_indexes
@@ -287,10 +287,17 @@ task ConcatBam{
     RuntimeAttr? runtime_attr_override
   }
 
+  Int num_cpu = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 2]) else 2
+  
+  Float disk_overhead = 10.0
+  Float bam_size = size(bam_files, "GiB")
+  Float index_size = size(bam_indexes, "GiB")
+  Int vm_disk_size = 2 * ceil(bam_size + index_size + disk_overhead)
+
   RuntimeAttr default_attr = object {
-    cpu_cores: 2,
-    mem_gb: 5,
-    disk_gb: 25,
+    cpu_cores: num_cpu,
+    mem_gb: 3.75,
+    disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
