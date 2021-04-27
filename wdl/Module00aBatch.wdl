@@ -11,6 +11,11 @@ workflow Module00aBatch {
     # Use only for crams in requester pays buckets
     Boolean requester_pays_crams = false
 
+    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
+    # May be more expensive - use only if necessary
+    Boolean revise_base_cram_to_bam = false
+    File? primary_contigs_fai # required if using revise_base_cram_to_bam
+
     # Caller flags
     Boolean collect_coverage = true
     Boolean collect_pesr = true
@@ -81,6 +86,8 @@ workflow Module00aBatch {
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
     RuntimeAttr? runtime_attr_wham_include_list
+    RuntimeAttr? runtime_attr_ReviseBaseInBam
+    RuntimeAttr? runtime_attr_ConcatBam
 
     File? NONE_FILE_
     String? NONE_STRING_
@@ -93,10 +100,12 @@ workflow Module00aBatch {
         bam_or_cram_index = if defined(bam_or_cram_indexes) then select_first([bam_or_cram_indexes])[i] else NONE_FILE_,
         sample_id = sample_ids[i],
         requester_pays_crams = requester_pays_crams,
+        revise_base_cram_to_bam = revise_base_cram_to_bam,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
         delete_intermediate_bam = delete_intermediate_bam,
         primary_contigs_list = primary_contigs_list,
+        primary_contigs_fai = primary_contigs_fai,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
@@ -141,7 +150,9 @@ workflow Module00aBatch {
         runtime_attr_melt = runtime_attr_melt,
         runtime_attr_pesr = runtime_attr_pesr,
         runtime_attr_wham = runtime_attr_wham,
-        runtime_attr_wham_include_list = runtime_attr_wham_include_list
+        runtime_attr_wham_include_list = runtime_attr_wham_include_list,
+        runtime_attr_ReviseBaseInBam = runtime_attr_ReviseBaseInBam,
+        runtime_attr_ConcatBam = runtime_attr_ConcatBam
     }
   }
 

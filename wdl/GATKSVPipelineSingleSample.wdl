@@ -373,7 +373,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
 
     ############################################################
-    ## Module 07
+    ## Module 08
     ############################################################
 
     File protein_coding_gtf
@@ -381,6 +381,8 @@ workflow GATKSVPipelineSingleSample {
     File promoter_bed
     File noncoding_bed
     Int annotation_sv_per_shard
+    Int annotation_max_shards_per_chrom_step1
+    Int annotation_min_records_per_shard_step1
 
     File? external_af_ref_bed             # bed file with population AFs for annotation
     String? external_af_ref_bed_prefix    # name of external AF bed file call set
@@ -1022,6 +1024,8 @@ workflow GATKSVPipelineSingleSample {
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
         sv_per_shard = annotation_sv_per_shard,
+        max_shards_per_chrom_step1 = annotation_max_shards_per_chrom_step1,
+        min_records_per_shard_step1 = annotation_min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker
   }

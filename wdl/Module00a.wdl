@@ -9,6 +9,7 @@ version 1.0
 import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
 import "CramToBam.wdl" as ctb
+import "CramToBam.ReviseBase.wdl" as ctb_revise
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
@@ -24,6 +25,11 @@ workflow Module00a {
 
     # Use only for crams in requester pays buckets
     Boolean requester_pays_crams = false
+
+    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
+    # May be more expensive - use only if necessary
+    Boolean revise_base_cram_to_bam = false
+    File? primary_contigs_fai # required if using revise_base_cram_to_bam
 
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
@@ -98,6 +104,8 @@ workflow Module00a {
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
     RuntimeAttr? runtime_attr_wham_include_list
+    RuntimeAttr? runtime_attr_ReviseBaseInBam
+    RuntimeAttr? runtime_attr_ConcatBam
 
     # Never assign these values! (workaround until None type is implemented)
     Float? NONE_FLOAT_
@@ -116,19 +124,36 @@ workflow Module00a {
 
   # Convert to BAM if we have a CRAM
   if (!is_bam_) {
-    call ctb.CramToBam {
-      input:
-        cram_file = bam_or_cram_file,
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        requester_pays = requester_pays_crams,
-        samtools_cloud_docker = samtools_cloud_docker,
-        runtime_attr_override = runtime_attr_cram_to_bam
+    if (!revise_base_cram_to_bam) {
+      call ctb.CramToBam {
+        input:
+          cram_file = bam_or_cram_file,
+          reference_fasta = reference_fasta,
+          reference_index = reference_index,
+          requester_pays = requester_pays_crams,
+          samtools_cloud_docker = samtools_cloud_docker,
+          runtime_attr_override = runtime_attr_cram_to_bam
+      }
+    }
+    if (revise_base_cram_to_bam) {
+      call ctb_revise.CramToBamReviseBase {
+        input:
+          cram_file = bam_or_cram_file,
+          cram_index = bam_or_cram_index_,
+          reference_fasta = reference_fasta,
+          reference_index = reference_index,
+          requester_pays = requester_pays_crams,
+          contiglist = select_first([primary_contigs_fai]),
+          samtools_cloud_docker = samtools_cloud_docker,
+          runtime_attr_override = runtime_attr_cram_to_bam,
+          runtime_attr_ReviseBaseInBam = runtime_attr_ReviseBaseInBam,
+          runtime_attr_ConcatBam = runtime_attr_ConcatBam
+      }
     }
   }
 
-  File bam_file_ = select_first([CramToBam.bam_file, bam_or_cram_file])
-  File bam_index_ = select_first([CramToBam.bam_index, bam_or_cram_index_])
+  File bam_file_ = select_first([CramToBam.bam_file, CramToBamReviseBase.bam_file, bam_or_cram_file])
+  File bam_index_ = select_first([CramToBam.bam_index, CramToBamReviseBase.bam_index, bam_or_cram_index_])
 
   if (collect_coverage) {
     call cov.CollectCounts {

@@ -14,8 +14,10 @@
   "Module08Annotation.contig_list" :  "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/chromosomes_nochrY.fai",
   "Module08Annotation.ped_file":      "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/FINAL_full_prenatal_dosage_sex.ped",
   "Module08Annotation.sv_per_shard" : "5000",
+  "Module08Annotation.max_shards_per_chrom_step1" : 200,
+  "Module08Annotation.min_records_per_shard_step1" :  5000,
 
-  "Module08Annotation.prefix" :       "Talkowski_SV_PCR-free_WGS_144",
+  "Module08Annotation.prefix" : {{ test_batch.batch_name | tojson }},
 
   "Module08Annotation.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "Module08Annotation.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
