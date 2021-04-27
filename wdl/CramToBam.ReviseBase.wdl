@@ -102,7 +102,7 @@ task SplitCramPerContig {
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: 3.75, 
+    mem_gb: 1.5, 
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -173,7 +173,7 @@ task SplitCramPerContigRequesterPays {
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: 3.75,
+    mem_gb: 1.5,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -238,7 +238,7 @@ task ReviseBaseInBam{
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: 3.75,
+    mem_gb: 1.5,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -296,7 +296,7 @@ task ConcatBam {
 
   RuntimeAttr default_attr = object {
     cpu_cores: num_cpu,
-    mem_gb: 3.75,
+    mem_gb: 1.5,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
