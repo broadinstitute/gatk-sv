@@ -59,6 +59,7 @@ zcat convertsvtype.vcf.gz \
   |awk 'NR==FNR{inFileA[$1]=$2; next} {if ($3 in inFileA && $1!~"#") $6=inFileA[$3]; print }' OFS='\t' vargq.persample - \
   |bgzip \
    >cleaninfo.vcf.gz
+   tabix -p vcf cleaninfo.vcf.gz
 
    
 ##fix sex chr if necessary##
@@ -242,7 +243,6 @@ fi
 
 
   tabix -p vcf combinedsex.vcf.gz
-  tabix -p vcf cleaninfo.vcf.gz
 
 zcat combinedsex.vcf.gz|awk '{if ($1!~"#") print $3}'>modified.ids.txt
 
