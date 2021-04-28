@@ -31,6 +31,7 @@ workflow Module0506 {
 
     File bin_exclude
     File contig_list
+    File allosome_fai
     Int max_shards_per_chrom
     Int min_variants_per_shard
     File cytobands
@@ -270,6 +271,7 @@ workflow Module0506 {
       complex_resolve_background_fail_lists=Module0506ComplexResolve.complex_resolve_background_fail_lists,
       merged_ped_file=ped_file,
       contig_list=contig_list,
+      allosome_fai=allosome_fai,
       max_shards_per_chrom=max_shards_per_chrom,
       max_shards_per_chrom_clean_vcf_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=min_records_per_shard_clean_vcf_step1,
