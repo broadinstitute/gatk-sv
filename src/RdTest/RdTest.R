@@ -229,13 +229,16 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
         cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
                                                           (ncov_col - 3)), ncol = ncov_col - 3))
       colnames(null_model) <- colnames(cov1)
+
       cov1 <- rbind(cov1, null_model)
 
-      cov1 <- cov1[order(cov1[, 2]), ]
-      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##  
+      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
       if (nrow(cov1) > 1) {
         cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
       } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
+      cov1 <- cov1[order(cov1[, 2]), ]
+
+
     }
 
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
@@ -250,9 +253,8 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       {
         # include all bins that overlap the start and end of the interval in Rstart and Rend
         Rstart <- cov1$start[1]
-        Rend <- cov1$end[nrow(conv1)]
+        Rend <- cov1$end[nrow(cov1)]
         compression = 1
-        print(cat("compression is 1, Rstart = ", Rstart, ", Rend = ", Rend))
       }
     }
     
@@ -276,12 +278,9 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       Rend <-
         endAjdToInnerBinEnd - RemainderBack
       compression <- (Rend - Rstart) / (BinSize * bins)
-      print(cat("compression is ", compression, ", Rstart = ", Rstart, ", Rend = ", Rend))
     }
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
-    print("cov1 after cut down")
-    print(cov1)
 
 
     #Samples Filter
@@ -357,9 +356,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       }
       
     }
-    print("cov1 after blacklist")
-    print(cov1)
-
 
     #Rebins values
     if (compression > 1) {
@@ -372,9 +368,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     } else {
       res <- cov1[, 4:ncol(cov1)]
     }
-    print("res")
-    print(res)
-
 
     #Adds sample medians to df
     res0<-rbind((res), allnorm)
@@ -384,9 +377,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
                  function(vals){
                    return(as.numeric(vals[1:(nrow(res0)-1)])/as.numeric(vals[nrow(res0)]))
                  })
-
-    print("res1")
-    print(res1)
 
 
     #need to transpose if more than one bin assessed
@@ -853,8 +843,6 @@ genotype<- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampl
 {
  ##get depth intensities##  
  cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat)
-  print("cnv_median")
-  print(cnv_median)
  ##order by names so same geno output for each variant##
  cnv_median<-cnv_median[order(names(cnv_median))]
  cutoff_table <-read.table(refgeno, header = TRUE)
@@ -1039,8 +1027,6 @@ runRdTest<-function(bed)
   } else {
     cnv_matrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins)
   }
-  print("after loadData")
-  print(cnv_matrix)
 
   if (cnv_matrix[1]=="Failure") {
     ##assign genotype if no coverage##
@@ -1099,8 +1085,6 @@ runRdTest<-function(bed)
   }
   ##Assign intial genotypes (del=1,dup=3,diploid=2)##
   genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype)
-  print("genotype_matrix")
-  print(genotype_matrix)
   ##check if no samples are found in genotype matrix##
   if (as.matrix(genotype_matrix)[1,1]=="No_Samples") {
     return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis"))
