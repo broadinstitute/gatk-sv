@@ -213,36 +213,38 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     #Find window bin size
     BinSize <- median(cov1$end - cov1$start)
     ##Fill in any gaps between coverage bins with zero-count rows##
-    gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
-    if (any(gapLengths) > 0) {
-      gapStarts <- cov1$end[which(gapLengths > 0)]
-      gapEnds <- cov1$start[which(gapLengths > 0)+1]
+    if (nrow(cov1) > 1) {
+      gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
+      if (any(gapLengths) > 0) {
+        gapStarts <- cov1$end[which(gapLengths > 0)]
+        gapEnds <- cov1$start[which(gapLengths > 0)+1]
 
-      zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i], by=BinSize) }))
-      zeroBinEnds <- unlist(lapply(1:length(gapEnds),
-                                   function(i) {
-                                      c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize) }, gapEnds[i])
-                                   }))
+        zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i], by=BinSize) }))
+        zeroBinEnds <- unlist(lapply(1:length(gapEnds),
+                                     function(i) {
+                                       c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize) }, gapEnds[i])
+                                     }))
 
-      column_start = matrix(zeroBinStarts, ncol = 1)
-      column_end = matrix(zeroBinEnds, ncol = 1)
-      ncov_col = ncol(cov1)
-      null_model <-
-        cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
-                                                          (ncov_col - 3)), ncol = ncov_col - 3))
-      colnames(null_model) <- colnames(cov1)
+        column_start = matrix(zeroBinStarts, ncol = 1)
+        column_end = matrix(zeroBinEnds, ncol = 1)
+        ncov_col = ncol(cov1)
+        null_model <-
+          cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
+            (ncov_col - 3)), ncol = ncov_col - 3))
+        colnames(null_model) <- colnames(cov1)
 
-      cov1 <- rbind(cov1, null_model)
+        cov1 <- rbind(cov1, null_model)
 
-      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
-      if (nrow(cov1) > 1) {
-        cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
-      } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
-      cov1 <- cov1[order(cov1[, 2]), ]
+        ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
+        if (nrow(cov1) > 1) {
+          cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
+        } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
+        cov1 <- cov1[order(cov1[, 2]), ]
+      }
     }
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
-    startAdjToInnerBinStart <- cov1$start[which(cov1$start >= start)[1]]
-    endAjdToInnerBinEnd <- cov1$end[max(which(cov1$end <= end))]
+    startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
+    endAjdToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
 
     if ((endAjdToInnerBinEnd - startAdjToInnerBinStart) < bins * BinSize)
     {
