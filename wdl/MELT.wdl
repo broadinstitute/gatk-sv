@@ -1,4 +1,4 @@
-## Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+## Author: Ryan L. Collins <rlcollins@g.harvard.edu>
 ## 
 ## This WDL pipeline runs MELT for mobile element insertion/deletion discovery
 ## Note: runs patched v2.0.5, obtained directly from the MELT authors

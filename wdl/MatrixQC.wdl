@@ -1,4 +1,4 @@
-## Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+## Author: Ryan L. Collins <rlcollins@g.harvard.edu>
 ## 
 ## Workflow to run 00 matrix QC for PE, SR, RD, and BAF in Talkowski SV pipeline
 

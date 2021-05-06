@@ -1,4 +1,4 @@
-# Contact Ryan Collins <rlcollins@g.harvard.edu>
+# Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 # This is an analysis WDL that wraps three steps in the Talkowski SV pipeline:
 #  1) minGQ optimization

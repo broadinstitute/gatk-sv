@@ -1,6 +1,6 @@
 version 1.0
 
-# Contact: Xuefang Zhao <XZHAO12@mgh.harvard.edu>
+# Author: Xuefang Zhao <XZHAO12@mgh.harvard.edu>
 
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks

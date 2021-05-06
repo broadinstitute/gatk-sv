@@ -1,6 +1,6 @@
 version 1.0
 
-# Contact Ryan Collins <rlcollins@g.harvard.edu>
+# Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "GenotypeCpxCnvsPerBatch.wdl" as RunDepthGenotypePerBatch
 import "Tasks0506.wdl" as MiniTasks

@@ -1,6 +1,6 @@
 version 1.0
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 # Workflow to gather SV VCF summary stats for an input VCF
 
