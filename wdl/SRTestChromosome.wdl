@@ -187,7 +187,6 @@ task SRTest {
     String prefix
     File ref_dict
     String sv_pipeline_docker
-    Int disk_gb_baseline = 50
     RuntimeAttr? runtime_attr_override
   }
 
@@ -199,14 +198,10 @@ task SRTest {
     }
   }
 
-  Int disk_gb = disk_gb_baseline + ceil(
-                                      size([vcf, medianfile, include_list], "GiB")
-                                      + 2 * size([splitfile, splitfile_idx], "GiB")
-                                   )
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
-    disk_gb: disk_gb,
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
