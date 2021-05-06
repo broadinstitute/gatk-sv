@@ -212,7 +212,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     }
     #Find window bin size
     BinSize <- median(cov1$end - cov1$start)
-    
     ##Fill in any gaps between coverage bins with zero-count rows##
     gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
     if (any(gapLengths) > 0) {
@@ -220,7 +219,10 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       gapEnds <- cov1$start[which(gapLengths > 0)+1]
 
       zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i], by=BinSize) }))
-      zeroBinEnds <- unlist(lapply(1:length(gapEnds), function(i) { c(seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize), gapEnds[i]) }))
+      zeroBinEnds <- unlist(lapply(1:length(gapEnds),
+                                   function(i) {
+                                      c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize) }, gapEnds[i])
+                                   }))
 
       column_start = matrix(zeroBinStarts, ncol = 1)
       column_end = matrix(zeroBinEnds, ncol = 1)
@@ -237,10 +239,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
         cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
       } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
       cov1 <- cov1[order(cov1[, 2]), ]
-
-
     }
-
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
     startAdjToInnerBinStart <- cov1$start[which(cov1$start >= start)[1]]
     endAjdToInnerBinEnd <- cov1$end[max(which(cov1$end <= end))]
@@ -354,7 +353,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       } else if (nrow(cov3) >9) {
         cov1<-cov3
       }
-      
     }
 
     #Rebins values
@@ -377,7 +375,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
                  function(vals){
                    return(as.numeric(vals[1:(nrow(res0)-1)])/as.numeric(vals[nrow(res0)]))
                  })
-
 
     #need to transpose if more than one bin assessed
     if (ncol(as.matrix(res1)) > 1) {
