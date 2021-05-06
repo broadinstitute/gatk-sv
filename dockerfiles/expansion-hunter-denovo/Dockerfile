@@ -1,10 +1,6 @@
 FROM alpine:latest
 RUN apk --no-cache add curl && \
-    curl -s https://api.github.com/repos/Illumina/ExpansionHunterDenovo/releases/latest \
-    | grep "browser_download_url.*.tar.gz" \
-    | cut -d : -f 2,3 \
-    | tr -d \" \
-    | xargs wget && \
+    wget https://github.com/Illumina/ExpansionHunterDenovo/releases/download/v0.9.0/ExpansionHunterDenovo-v0.9.0-linux_x86_64.tar.gz && \
     mkdir ehdn_extract && \
     tar -xf *.tar.gz --strip-components=1 -C ehdn_extract && \
     rm -rf *.tar.gz && \
