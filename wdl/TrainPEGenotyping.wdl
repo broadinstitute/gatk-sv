@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/04_v2_PE_genotyping_train/6/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "Structs.wdl"

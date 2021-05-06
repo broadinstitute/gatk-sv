@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/03_variant_filtering/27/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "MasterVcfQc.wdl" as vcf_qc

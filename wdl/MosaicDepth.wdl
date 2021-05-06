@@ -1,7 +1,5 @@
 version 1.0
 
-# based on https://portal.firecloud.org/#workspaces/sfari9100/talkowski-SFARI-GMKF-ASC_copy/method-configs/Talkowski-SV/Mosaic_test
-
 import "Structs.wdl"
 
 workflow Mosaic{

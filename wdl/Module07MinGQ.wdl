@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/minGQ_filter_procedure_v2_Harold_temp_copy/18
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "MinGQRocOpt.wdl" as roc_opt_sub

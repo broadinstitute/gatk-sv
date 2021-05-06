@@ -1,10 +1,4 @@
 version 1.0
-# based on snapshot 93
-# https://portal.firecloud.org/#methods/Talkowski-SV/05_CleanVCF/93/wdl
-# based on snapshot 31
-# https://portal.firecloud.org/#methods/Talkowski-SV/05_CleanVcf2/31/wdl
-# based on snapshot 20
-# https://portal.firecloud.org/#methods/Talkowski-SV/05_CleanVCF3/20/wdl
 
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks

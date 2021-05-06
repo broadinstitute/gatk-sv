@@ -1,5 +1,3 @@
-# Based on https://portal.firecloud.org/#methods/Talkowski-SV/filter_cleanup_and_QUAL_recalibration_CMC_copy/7
-
 version 1.0
 
 import "Structs.wdl"

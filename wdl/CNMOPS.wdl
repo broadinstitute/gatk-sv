@@ -1,13 +1,5 @@
 version 1.0
 
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/cnMOPS_hg38/1/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 import "Structs.wdl"
 
 ## cnMOPS worflow definition ##

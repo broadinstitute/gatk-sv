@@ -1,18 +1,6 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/03_filter_outliers/6/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
-# Copyright (c) 2018 Talkowski Lab
-
-# Contact Ryan Collins <rlcollins@g.harvard.edu>
-
-# Distributed under terms of the MIT License
+# Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "Structs.wdl"
 

@@ -1,4 +1,3 @@
-# Base script https://portal.firecloud.org/#methods/Talkowsk-SV/Coverage_plot/10/wdl
 version 1.0
 
 import "Structs.wdl"

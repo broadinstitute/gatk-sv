@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://api.firecloud.org/ga4gh/v1/tools/Talkowski-SV:gather_batch_effects_helper_sfari_hard_code/versions/11/plain-WDL/descriptor
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "Structs.wdl"

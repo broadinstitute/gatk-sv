@@ -1,10 +1,6 @@
 version 1.0
-# based on snapshot 38
-# https://portal.firecloud.org/#methods/Talkowski-SV/collectQC_vcfwide/38/wdl
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
+# Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 # Workflow to gather SV VCF summary stats for an input VCF
 

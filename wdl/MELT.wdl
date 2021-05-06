@@ -1,14 +1,4 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/MELT_hg38/1/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2017
-## 
-## Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+## Author: Ryan L. Collins <rlcollins@g.harvard.edu>
 ## 
 ## This WDL pipeline runs MELT for mobile element insertion/deletion discovery
 ## Note: runs patched v2.0.5, obtained directly from the MELT authors
@@ -19,14 +9,6 @@
 ## - Reference assembly FASTA
 ## - Approximate haploid nucleotide coverage of library (optional)
 ## - Library read length and average insert size (optional)
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
 
 version 1.0
 
