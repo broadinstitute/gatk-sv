@@ -1,10 +1,6 @@
 version 1.0
-# based on snapshot 21
-# https://portal.firecloud.org/#methods/Talkowski-SV/collectQC_perSample/21/wdl
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 import "Tasks0506.wdl" as MiniTasks
 

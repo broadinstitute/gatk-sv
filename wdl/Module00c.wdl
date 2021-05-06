@@ -1,11 +1,5 @@
 version 1.0
 
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 import "Structs.wdl"
 import "BAFFromGVCFs.wdl" as baf
 import "BAFFromShardedVCF.wdl" as sbaf

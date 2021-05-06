@@ -1,12 +1,6 @@
 version 1.0
 
-# based on snapshot 28
-# https://portal.firecloud.org/#methods/Talkowski-SV/04b_resolve_complex_sv/28/wdl
-# Copyright (c) 2018 Talkowski Lab
-
 # Contact Ryan Collins <rlcollins@g.harvard.edu>
-
-# Distributed under terms of the MIT License
 
 import "Tasks0506.wdl" as MiniTasks
 

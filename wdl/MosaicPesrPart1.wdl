@@ -1,5 +1,3 @@
-# Based on https://portal.firecloud.org/#methods/Talkowski-SV/Mosaic_test_pesr/19
-
 version 1.0
 
 import "Structs.wdl"

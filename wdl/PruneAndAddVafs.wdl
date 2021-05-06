@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/prune_and_add_vfs/13/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 # Workflow to perform final sample pruning & compute all relevant AF statistics
 # for a VCF from the Talkowski SV pipeline
 

@@ -1,14 +1,6 @@
 version 1.0
-# based on snapshot 75
-# https://portal.firecloud.org/#methods/Talkowski-SV/master_SV_VCF_QC/75/wdl
-# based on snapshot 18
-# https://portal.firecloud.org/#methods/Talkowski-SV/collectQC_external_benchmarking/18/wdl
 
-
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 
 import "ShardedQcCollection.wdl" as ShardedQcCollection
 import "CollectQcPerSample.wdl" as CollectQcPerSample

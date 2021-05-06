@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:"https://api.firecloud.org/ga4gh/v1/tools/Talkowski-SV:MinGQRocOpt/versions/1/plain-WDL/descriptor"
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "Structs.wdl"

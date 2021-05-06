@@ -1,9 +1,6 @@
 version 1.0
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Xuefang Zhao <XZHAO12@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
-
 
 import "Structs.wdl"
 import "Tasks0506.wdl" as MiniTasks

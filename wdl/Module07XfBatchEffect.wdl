@@ -2,8 +2,6 @@
 ## EXPERIMENTAL WORKFLOW
 ##########################
 
-## Base script:   https://portal.firecloud.org/#workspaces/gnomad-v3-sv/1KGP_2504/method-configs/Talkowski-SV/check_batch_effects_CMC_copy
-
 version 1.0
 
 import "prune_add_af.wdl" as calcAF

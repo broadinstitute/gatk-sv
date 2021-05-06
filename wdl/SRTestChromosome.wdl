@@ -1,12 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/02_srtest_allosome/12/wdl
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/02_srtest_autosome/13/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 import "Tasks02.wdl" as tasks02

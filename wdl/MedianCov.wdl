@@ -1,13 +1,5 @@
 version 1.0
 
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/Median_Cov/10/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 # Workflow definition for Calculating Median Coverage 
 
 import "Structs.wdl"

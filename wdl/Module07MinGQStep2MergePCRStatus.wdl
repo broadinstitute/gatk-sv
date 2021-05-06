@@ -1,9 +1,4 @@
-# Copyright (c) 2018 Talkowski Lab
-
 # Contact Ryan Collins <rlcollins@g.harvard.edu>
-
-# Distributed under terms of the MIT License
-
 
 # This is an analysis WDL that wraps three steps in the Talkowski SV pipeline:
 #  1) minGQ optimization

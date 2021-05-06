@@ -1,24 +1,6 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/00_matrix_QC/15/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2018
-## 
 ## Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
 ## 
 ## Workflow to run 00 matrix QC for PE, SR, RD, and BAF in Talkowski SV pipeline
-##
-## LICENSING : 
-## This script is released under the WDL source code license (BSD-3) (see LICENSE in 
-## https://github.com/broadinstitute/wdl). Note however that the programs it calls may 
-## be subject to different licenses. Users are responsible for checking that they are
-## authorized to run all programs before running this script. Please see the docker 
-## page at https://hub.docker.com/r/broadinstitute/genomes-in-the-cloud/ for detailed
-## licensing information pertaining to the included programs.
 
 version 1.0
 

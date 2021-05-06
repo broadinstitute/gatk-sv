@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:    https://api.firecloud.org/ga4gh/v1/tools/Talkowski-SV:prune_and_add_vfs/versions/20/plain-WDL/descriptor
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 version 1.0
 
 

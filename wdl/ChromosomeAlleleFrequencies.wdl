@@ -1,11 +1,3 @@
-##########################################################################################
-
-## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/compute_simple_AFs_singleChrom/9/wdl
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 # Helper workflow to calculate basic AF statistics for a single chromosome on an input VCF
 
 version 1.0
