@@ -68,28 +68,6 @@ workflow MELT {
       email: "tbrookin@broadinstitute.org"
     }
 
-  Boolean have_wgs_metrics = defined(coverage)
-  if (!have_wgs_metrics) {
-    call GetWgsMetrics {
-      input:
-        bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        intervals = wgs_metrics_intervals,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
-        runtime_attr_override = runtime_attr_coverage
-    }
-    # form map with available properties:
-    # GENOME_TERRITORY, MEAN_COVERAGE, SD_COVERAGE, MEDIAN_COVERAGE, MAD_COVERAGE, PCT_EXC_MAPQ, PCT_EXC_DUPE,
-    # PCT_EXC_UNPAIRED, PCT_EXC_BASEQ, PCT_EXC_OVERLAP, PCT_EXC_CAPPED, PCT_EXC_TOTAL, PCT_1X, PCT_5X, PCT_10X,
-    # PCT_15X, PCT_20X, PCT_25X, PCT_30X, PCT_40X, PCT_50X, PCT_60X, PCT_70X, PCT_80X, PCT_90X, PCT_100X,
-    # HET_SNP_SENSITIVITY, HET_SNP_Q
-    Map[String, String] wgs_metrics_map = read_map(GetWgsMetrics.metrics_file)
-
-    Float calculated_coverage = wgs_metrics_map["MEAN_COVERAGE"]
-  }
-
   Boolean have_multiple_metrics = defined(insert_size) && defined(read_length)
      && defined(pct_chimeras) && defined(total_reads) && defined(pf_reads_improper_pairs)
   if (!have_multiple_metrics) {
@@ -123,6 +101,29 @@ workflow MELT {
     Float calculated_pct_chimeras = multiple_metrics_map["PCT_CHIMERAS"]
     Float calculated_total_reads = multiple_metrics_map["TOTAL_READS"]
     Int calculated_pf_reads_improper_pairs = multiple_metrics_map["PF_READS_IMPROPER_PAIRS"]
+  }
+
+  Boolean have_wgs_metrics = defined(coverage)
+  if (!have_wgs_metrics) {
+    call GetWgsMetrics {
+      input:
+        bam_or_cram_file = bam_or_cram_file,
+        bam_or_cram_index = bam_or_cram_index,
+        read_length = select_first([read_length, calculated_read_length]),
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        intervals = wgs_metrics_intervals,
+        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        runtime_attr_override = runtime_attr_coverage
+    }
+    # form map with available properties:
+    # GENOME_TERRITORY, MEAN_COVERAGE, SD_COVERAGE, MEDIAN_COVERAGE, MAD_COVERAGE, PCT_EXC_MAPQ, PCT_EXC_DUPE,
+    # PCT_EXC_UNPAIRED, PCT_EXC_BASEQ, PCT_EXC_OVERLAP, PCT_EXC_CAPPED, PCT_EXC_TOTAL, PCT_1X, PCT_5X, PCT_10X,
+    # PCT_15X, PCT_20X, PCT_25X, PCT_30X, PCT_40X, PCT_50X, PCT_60X, PCT_70X, PCT_80X, PCT_90X, PCT_100X,
+    # HET_SNP_SENSITIVITY, HET_SNP_Q
+    Map[String, String] wgs_metrics_map = read_map(GetWgsMetrics.metrics_file)
+
+    Float calculated_coverage = wgs_metrics_map["MEAN_COVERAGE"]
   }
 
   Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
@@ -410,6 +411,7 @@ task GetWgsMetrics {
   input {
     File bam_or_cram_file
     File? bam_or_cram_index
+    Int read_length
     File reference_fasta
     File? reference_index
     File? intervals
@@ -462,6 +464,7 @@ task GetWgsMetrics {
       INPUT=~{bam_or_cram_file} \
       VALIDATION_STRINGENCY=SILENT \
       REFERENCE_SEQUENCE=~{reference_fasta} \
+      READ_LENGTH=~{read_length} \
       INCLUDE_BQ_HISTOGRAM=true \
       ~{if defined(intervals) then "INTERVALS=~{intervals}" else ""} \
       OUTPUT="raw_~{metrics_file_name}" \
