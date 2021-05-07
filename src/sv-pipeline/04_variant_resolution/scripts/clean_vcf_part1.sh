@@ -19,6 +19,7 @@ BCFTOOLS=/usr/local/bin/bcftools
 vcf=$1
 backgroundlist=$2
 famfile=$3
+allosome_fai=$4
 
 ##get sampleids from VCF##
 zcat $vcf \
@@ -58,6 +59,7 @@ zcat convertsvtype.vcf.gz \
   |awk 'NR==FNR{inFileA[$1]=$2; next} {if ($3 in inFileA && $1!~"#") $6=inFileA[$3]; print }' OFS='\t' vargq.persample - \
   |bgzip \
    >cleaninfo.vcf.gz
+   tabix -p vcf cleaninfo.vcf.gz
 
    
 ##fix sex chr if necessary##
@@ -83,21 +85,20 @@ awk '{if ($5==2) print $2}' $famfile \
    if [ $(cat clean.bed.ids.txt|wc -l) -gt 0 ]
    then
 
-    zcat cleaninfo.vcf.gz \
-     |awk '{if ($1!~"#" && ($1~"X" || $1~"Y")) $1=$3;print}' OFS="\t"\
-     |vcftools --vcf - --stdout --extract-FORMAT-info RD_CN \
-     |awk -F"\t" 'NR==1{for (i=3;i<=NF;i++) header[i]=$i} NR>1{for(j=3;j<=NF;j++) print $1"\t"header[j] "\t" $j }' \
-     |fgrep -wf clean.bed.ids.txt \
-     |awk '{if ($3!=".") print}' \
-     |gzip \
-      >RD_CN.sexcheck.FORMAT.gz
-     
-    zcat RD_CN.sexcheck.FORMAT.gz|fgrep -wf male.txt| Rscript -e 'd<-read.table("stdin")' \
+  awk '{print $1"\t0\t"$2}' < ${allosome_fai} > allosomes.list
+   ${BCFTOOLS} query -R allosomes.list -S male.txt -i 'ID=@clean.bed.ids.txt' -f '[%ID\t%SAMPLE\t%RD_CN\n]' cleaninfo.vcf.gz \
+      | awk '{if ($3!=".") print}' \
+      | gzip > RD_CN.sexcheck.FORMAT.male.gz
+
+   ${BCFTOOLS} query -R allosomes.list -S female.txt -i 'ID=@clean.bed.ids.txt' -f '[%ID\t%SAMPLE\t%RD_CN\n]' cleaninfo.vcf.gz \
+      | awk '{if ($3!=".") print}' \
+      | gzip > RD_CN.sexcheck.FORMAT.female.gz
+
+    zcat RD_CN.sexcheck.FORMAT.male.gz| Rscript -e 'd<-read.table("stdin")' \
     -e 'x<-tapply(d[,3],d[,1],median)' \
     -e 'write.table(x,"male.median.value.pervar.txt",col.names=FALSE,quote=FALSE,sep = "\t")'
 
-
-     zcat RD_CN.sexcheck.FORMAT.gz|fgrep -wf female.txt| Rscript -e 'd<-read.table("stdin")' \
+     zcat RD_CN.sexcheck.FORMAT.female.gz| Rscript -e 'd<-read.table("stdin")' \
      -e 'x<-tapply(d[,3],d[,1],median)' \
      -e 'write.table(x,"female.median.value.pervar.txt",col.names=FALSE,quote=FALSE,sep = "\t")'
     fi
@@ -242,7 +243,6 @@ fi
 
 
   tabix -p vcf combinedsex.vcf.gz
-  tabix -p vcf cleaninfo.vcf.gz
 
 zcat combinedsex.vcf.gz|awk '{if ($1!~"#") print $3}'>modified.ids.txt
 

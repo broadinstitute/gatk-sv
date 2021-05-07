@@ -9,6 +9,7 @@ workflow CleanVcf {
     String contig
     File background_list
     File ped_file
+    File allosome_fai
     String prefix
     Int max_shards_per_chrom_step1
     File bothsides_pass_list
@@ -60,6 +61,7 @@ workflow CleanVcf {
         ped_file=ped_file,
         sv_pipeline_docker=sv_pipeline_docker,
         bothsides_pass_list=bothsides_pass_list,
+        allosome_fai=allosome_fai,
         runtime_attr_override=runtime_override_clean_vcf_1a
     }
   }
@@ -203,6 +205,7 @@ task CleanVcf1a {
     File ped_file
     String sv_pipeline_docker
     File bothsides_pass_list
+    File allosome_fai
     RuntimeAttr? runtime_attr_override
   }
 
@@ -235,7 +238,7 @@ task CleanVcf1a {
   command <<<
     set -eu -o pipefail
     
-    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part1.sh ~{vcf} ~{background_list} ~{ped_file}
+    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part1.sh ~{vcf} ~{background_list} ~{ped_file} ~{allosome_fai}
     /opt/sv-pipeline/04_variant_resolution/scripts/add_bothsides_support_filter.py \
       --bgzip \
       --outfile int.w_bothsides.vcf.gz \

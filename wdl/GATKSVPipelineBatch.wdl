@@ -251,6 +251,7 @@ workflow GATKSVPipelineBatch {
       pesr_vcfs=[Module04.genotyped_pesr_vcf],
       depth_vcfs=Module04b.regenotyped_depth_vcfs,
       contig_list=primary_contigs_fai,
+      allosome_fai=allosome_file,
       ref_dict=reference_dict,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
       disc_files_index=[GATKSVPipelinePhase1.merged_PE_index],

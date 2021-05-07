@@ -13,6 +13,7 @@ workflow Module0506Clean {
     File merged_ped_file
 
     File contig_list
+    File allosome_fai
     Int max_shards_per_chrom
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
@@ -57,6 +58,7 @@ workflow Module0506Clean {
         background_list=complex_resolve_background_fail_lists[i],
         ped_file=merged_ped_file,
         bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
+        allosome_fai=allosome_fai,
         prefix=cohort_name,
         max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
         min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,

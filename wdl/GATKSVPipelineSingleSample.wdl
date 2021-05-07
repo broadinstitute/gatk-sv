@@ -871,6 +871,7 @@ workflow GATKSVPipelineSingleSample {
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
       depth_vcfs=[Module04.genotyped_depth_vcf],
       contig_list=primary_contigs_fai,
+      allosome_fai=allosome_file,
       ref_dict=reference_dict,
 
       merge_complex_genotype_vcfs = true,
