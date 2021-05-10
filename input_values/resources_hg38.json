@@ -8,7 +8,7 @@
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.OTH.bed.gz"
   ],
   "autosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
-  "bin_exclude" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.bed.gz",
+  "bin_exclude" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz",
   "cnmops_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
   "collins_2017_tarball" : "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz",
   "contig_ploidy_priors" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.contig_ploidy_priors_homo_sapiens.tsv",

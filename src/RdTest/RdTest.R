@@ -211,38 +211,50 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       return("Failure")
     }
     #Find window bin size
-    BinSize <- cov1$end[1] - cov1$start[1]
-    
-    ##Find variants with with some missing bins because bincov blacklist##
-    if (nrow(cov1) < ((end - start) / BinSize)) {
-      Rfinal = round_any(end, BinSize, floor)
-      Rbeg = round_any(start, BinSize, ceiling)
-      column_start = matrix(seq(Rbeg, Rfinal, by = BinSize), ncol = 1)
-      column_end = matrix(seq(Rbeg + BinSize, Rfinal + BinSize, by = BinSize), ncol = 1)
-      ncov_col = ncol(cov1)
-      null_model <-
-        cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
-                                                          (ncov_col - 3)), ncol = ncov_col - 3))
-      colnames(null_model) <- colnames(cov1)
-      covall <- rbind(cov1, null_model)
-      cov1 <- covall[!duplicated(covall[, 2]), ]
-      cov1 <- cov1[order(cov1[, 2]), ]
-      ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##  
-      if (nrow(cov1) > 1) {
-        cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
-      } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
+    BinSize <- median(cov1$end - cov1$start)
+    ##Fill in any gaps between coverage bins with zero-count rows##
+    if (nrow(cov1) > 1) {
+      gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
+      if (any(gapLengths) > 0) {
+        gapStarts <- cov1$end[which(gapLengths > 0)]
+        gapEnds <- cov1$start[which(gapLengths > 0)+1]
+
+        zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i], by=BinSize) }))
+        zeroBinEnds <- unlist(lapply(1:length(gapEnds),
+                                     function(i) {
+                                       c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize) }, gapEnds[i])
+                                     }))
+
+        column_start = matrix(zeroBinStarts, ncol = 1)
+        column_end = matrix(zeroBinEnds, ncol = 1)
+        ncov_col = ncol(cov1)
+        null_model <-
+          cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
+            (ncov_col - 3)), ncol = ncov_col - 3))
+        colnames(null_model) <- colnames(cov1)
+
+        cov1 <- rbind(cov1, null_model)
+
+        ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
+        if (nrow(cov1) > 1) {
+          cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
+        } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
+        cov1 <- cov1[order(cov1[, 2]), ]
+      }
     }
-    
-    
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
-    if ((round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) < bins * BinSize)
+    startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
+    endAjdToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
+
+    if ((endAjdToInnerBinEnd - startAdjToInnerBinStart) < bins * BinSize)
     {
-      bins = (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
+      bins = (endAjdToInnerBinEnd - startAdjToInnerBinStart) /
         BinSize
       if (bins <= 1)
       {
-        Rstart <- round_any(start, BinSize, floor)
-        Rend <- round_any(end, BinSize, ceiling)
+        # include all bins that overlap the start and end of the interval in Rstart and Rend
+        Rstart <- cov1$start[1]
+        Rend <- cov1$end[nrow(cov1)]
         compression = 1
       }
     }
@@ -251,7 +263,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     if (!exists("compression"))
     {
       UnadjustedBins <-
-        (round_any(end, BinSize, floor) - round_any(start, BinSize, ceiling)) /
+        (endAjdToInnerBinEnd - startAdjToInnerBinStart) /
         (bins * BinSize)
       RemainderForRemoval <-
         ##Need to account for round error by trunc so add the decimal####
@@ -263,14 +275,15 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       RemainderBack <-
         round_any(RemainderForRemoval, BinSize, ceiling)
       Rstart <-
-        round_any(start, BinSize, ceiling) + RemainderFront
+        startAdjToInnerBinStart + RemainderFront
       Rend <-
-        round_any(end, BinSize, floor) - RemainderBack
+        endAjdToInnerBinEnd - RemainderBack
       compression <- (Rend - Rstart) / (BinSize * bins)
     }
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
-    
+
+
     #Samples Filter
     if ( !is.null(opt$Blacklist) ) {
       samplesBlacklist <- readLines(opt$Blacklist)
@@ -342,9 +355,8 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       } else if (nrow(cov3) >9) {
         cov1<-cov3
       }
-      
     }
-    
+
     #Rebins values
     if (compression > 1) {
       res <-
@@ -356,7 +368,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     } else {
       res <- cov1[, 4:ncol(cov1)]
     }
-  
+
     #Adds sample medians to df
     res0<-rbind((res), allnorm)
     
@@ -365,7 +377,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
                  function(vals){
                    return(as.numeric(vals[1:(nrow(res0)-1)])/as.numeric(vals[nrow(res0)]))
                  })
-  
+
     #need to transpose if more than one bin assessed
     if (ncol(as.matrix(res1)) > 1) {
       cnv_matrix <- t(res1)
@@ -829,7 +841,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
 genotype<- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
 {
  ##get depth intensities##  
- cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat) 
+ cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat)
  ##order by names so same geno output for each variant##
  cnv_median<-cnv_median[order(names(cnv_median))]
  cutoff_table <-read.table(refgeno, header = TRUE)
@@ -1014,7 +1026,7 @@ runRdTest<-function(bed)
   } else {
     cnv_matrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins)
   }
-  
+
   if (cnv_matrix[1]=="Failure") {
     ##assign genotype if no coverage##
     if (opt$rungenotype == TRUE && !is.null(opt$Whitelist)) {
