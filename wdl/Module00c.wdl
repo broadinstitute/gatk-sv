@@ -123,7 +123,7 @@ workflow Module00c {
     Boolean append_first_sample_to_ped = false
 
     Int gcnv_qs_cutoff              # QS filtering cutoff
-    Float defragment_max_dist
+    Float? defragment_max_dist
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
