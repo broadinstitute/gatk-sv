@@ -23,7 +23,7 @@ workflow MergeDepth {
     String sv_base_mini_docker
     String sv_pipeline_docker
     Int gcnv_qs_cutoff
-    Float defragment_max_dist
+    Float? defragment_max_dist
     RuntimeAttr? runtime_attr_merge_sample
     RuntimeAttr? runtime_attr_merge_set
     RuntimeAttr? runtime_attr_convert_gcnv
@@ -141,11 +141,13 @@ task MergeSample {
   input {
     File gcnv
     Array[File] cnmops
-    Float max_dist = 0.25
+    Float? max_dist = 0.25
     String sample_id
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
+
+  Float _max_dist = select_first([max_dist, 0.25])
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -167,7 +169,7 @@ task MergeSample {
     cat ~{gcnv} cnmops.cnv | sort -k1,1V -k2,2n > ~{sample_id}.bed
     bedtools merge -i ~{sample_id}.bed -d 0 -c 4,5,6,7 -o distinct > ~{sample_id}.merged.bed
     /opt/sv-pipeline/00_preprocessing/scripts/defragment_cnvs.py \
-      --max-dist ~{max_dist} ~{sample_id}.merged.bed ~{sample_id}.merged.defrag.bed
+      --max-dist ~{_max_dist} ~{sample_id}.merged.bed ~{sample_id}.merged.defrag.bed
     sort -k1,1V -k2,2n ~{sample_id}.merged.defrag.bed > ~{sample_id}.merged.defrag.sorted.bed
     
   >>>

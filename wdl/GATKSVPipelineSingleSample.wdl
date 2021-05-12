@@ -284,8 +284,8 @@ workflow GATKSVPipelineSingleSample {
     File rmsk
     File segdups
 
-    Int min_large_pesr_call_size_for_filtering
-    Float min_large_pesr_depth_overlap_fraction
+    Int? min_large_pesr_call_size_for_filtering
+    Float? min_large_pesr_depth_overlap_fraction
 
     RuntimeAttr? runtime_attr_filter_large_pesr
     RuntimeAttr? runtime_attr_srtest
