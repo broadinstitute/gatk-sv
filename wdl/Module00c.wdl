@@ -189,6 +189,7 @@ workflow Module00c {
 
     RuntimeAttr? runtime_attr_standardize
     RuntimeAttr? runtime_attr_defrag
+    RuntimeAttr? runtime_attr_merge_pesr
     RuntimeAttr? runtime_attr_concat_vcfs
 
     RuntimeAttr? runtime_attr_ploidy
@@ -207,7 +208,7 @@ workflow Module00c {
 
   if(defined(ref_panel_bincov_matrix)
      || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
-    call mbm.MakeBincovMatrix as MakeBincovMatrix {
+    call mbm.MakeBincovMatrix {
       input:
         samples = samples,
         count_files = counts,
@@ -223,7 +224,7 @@ workflow Module00c {
   File merged_bincov_idx_ = select_first([MakeBincovMatrix.merged_bincov_idx, bincov_matrix_index])
 
   if (run_ploidy) {
-    call pe.Ploidy as Ploidy {
+    call pe.Ploidy {
       input:
         bincov_matrix = merged_bincov_,
         batch = batch,
@@ -291,7 +292,7 @@ workflow Module00c {
     }
   }
 
-  call bem.EvidenceMerging as EvidenceMerging {
+  call bem.EvidenceMerging {
     input:
       samples = all_samples,
       BAF_files = if defined(BAFFromShardedVCF.baf_files) then BAFFromShardedVCF.baf_files else BAF_files,
@@ -362,7 +363,7 @@ workflow Module00c {
   }
 
   scatter (i in range(length(samples))) {
-    call cov.CondenseReadCounts as CondenseReadCounts {
+    call cov.CondenseReadCounts {
       input:
         counts = counts[i],
         sample = samples[i],
@@ -438,7 +439,7 @@ workflow Module00c {
         wham_vcf=if defined(wham_vcfs) then select_first([wham_vcfs])[i] else NONE_FILE_,
         delly_vcf=if defined(delly_vcfs) then select_first([delly_vcfs])[i] else NONE_FILE_,
         cnv_bed=CombineCnmops.merged_bed_file,
-        gcnv_segments_vcf=gCNVCase.genotyped_segments_vcf,
+        gcnv_segments_vcf=gCNVCase.genotyped_segments_vcf[i],
         min_svsize=min_svsize,
         gcnv_min_qs=gcnv_qs_cutoff,
         defrag_padding_fraction=defragment_max_dist,
@@ -449,37 +450,34 @@ workflow Module00c {
         gatk_docker=gatk_docker,
         runtime_attr_standardize=runtime_attr_standardize,
         runtime_attr_defrag=runtime_attr_defrag,
+        runtime_attr_merge_pesr=runtime_attr_merge_pesr,
         runtime_attr_concat_vcfs=runtime_attr_concat_vcfs
     }
   }
 
-  if (length(samples) > 1) {
-    call svc.SVCluster as MergeVcfs {
-      input:
-        vcfs = GATKSVPreprocessSample.out,
-        vcf_indexes = GATKSVPreprocessSample.out_index,
-        output_name="~{batch}.raw_merged",
-        ref_dict=ref_dict,
-        vid_prefix="~{batch}_",
-        omit_members=true,
-        depth_overlap_fraction=1,
-        mixed_overlap_fraction=1,
-        pesr_overlap_fraction=1,
-        depth_breakend_window=0,
-        mixed_breakend_window=0,
-        pesr_breakend_window=0,
-        depth_sample_overlap=0,
-        mixed_sample_overlap=0,
-        pesr_sample_overlap=0,
-        gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_merge_vcfs
-    }
+  call svc.SVCluster as MergeVcfs {
+    input:
+      vcfs = GATKSVPreprocessSample.out,
+      vcf_indexes = GATKSVPreprocessSample.out_index,
+      output_name="~{batch}.raw_merged",
+      ref_dict=ref_dict,
+      vid_prefix="~{batch}_",
+      omit_members=true,
+      depth_overlap_fraction=1,
+      mixed_overlap_fraction=1,
+      pesr_overlap_fraction=1,
+      depth_breakend_window=0,
+      mixed_breakend_window=0,
+      pesr_breakend_window=0,
+      depth_sample_overlap=0,
+      mixed_sample_overlap=0,
+      pesr_sample_overlap=0,
+      gatk_docker=gatk_docker,
+      runtime_attr_override=runtime_attr_merge_vcfs
   }
-  File merged_vcf_ = select_first([MergeVcfs.out, GATKSVPreprocessSample.out[0]])
-  File merged_vcf_index_ = select_first([MergeVcfs.out_index, GATKSVPreprocessSample.out_index[0]])
 
   Float median_cov_mem_gb = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(all_samples) + 7.5
-  call mc.MedianCov as MedianCov {
+  call mc.MedianCov {
     input:
       bincov_matrix = merged_bincov_,
       cohort_id = batch,
@@ -488,7 +486,7 @@ workflow Module00c {
       mem_gb_override = median_cov_mem_gb
   }
 
-  call pp.PreprocessPESR as PreprocessPESR {
+  call pp.PreprocessPESR {
     input:
       samples = samples,
       manta_vcfs = manta_vcfs,
@@ -499,7 +497,7 @@ workflow Module00c {
   }
 
   if (defined(manta_vcfs)) {
-      call tiny.TinyResolve as TinyResolve {
+      call tiny.TinyResolve {
         input:
           samples = samples,
           manta_vcfs = select_first([PreprocessPESR.std_manta_vcf]),
@@ -547,11 +545,11 @@ workflow Module00c {
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
 
-    File standardized_merged_vcf = merged_vcf_
-    File standardized_merged_vcf_index = merged_vcf_index_
+    File standardized_merged_vcf = MergeVcfs.out
+    File standardized_merged_vcf_index = MergeVcfs.out_index
 
-    File standardized_sample_vcfs = GATKSVPreprocessSample.out
-    File standardized_sample_vcf_indexes = GATKSVPreprocessSample.out_index
+    Array[File] standardized_sample_vcfs = GATKSVPreprocessSample.out
+    Array[File] standardized_sample_vcf_indexes = GATKSVPreprocessSample.out_index
 
     File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
 

@@ -35,6 +35,7 @@ workflow GATKSVPreprocessSample {
     # VM resource options
     RuntimeAttr? runtime_attr_standardize
     RuntimeAttr? runtime_attr_defrag
+    RuntimeAttr? runtime_attr_merge_pesr
     RuntimeAttr? runtime_attr_concat_vcfs
   }
 
@@ -66,8 +67,8 @@ workflow GATKSVPreprocessSample {
 
   call svc.SVCluster as DefragmentCNVs {
     input:
-      vcfs = StandardizeVcfs.out_cnv,
-      vcf_indexes = StandardizeVcfs.out_cnv_index,
+      vcfs = [StandardizeVcfs.out_cnv],
+      vcf_indexes = [StandardizeVcfs.out_cnv_index],
       output_name="~{sample_id}.defragmented",
       ref_dict=ref_dict,
       vid_prefix="~{sample_id}_cnv_",
@@ -78,13 +79,34 @@ workflow GATKSVPreprocessSample {
       runtime_attr_override=runtime_attr_defrag
   }
 
+  call svc.SVCluster as MergePESR {
+    input:
+      vcfs = [StandardizeVcfs.out_pesr],
+      vcf_indexes = [StandardizeVcfs.out_pesr_index],
+      output_name="~{sample_id}.pesr_merged",
+      ref_dict=ref_dict,
+      vid_prefix="~{sample_id}_",
+      omit_members=true,
+      depth_overlap_fraction=1,
+      mixed_overlap_fraction=1,
+      pesr_overlap_fraction=1,
+      depth_breakend_window=0,
+      mixed_breakend_window=0,
+      pesr_breakend_window=0,
+      depth_sample_overlap=0,
+      mixed_sample_overlap=0,
+      pesr_sample_overlap=0,
+      gatk_docker=gatk_docker,
+      runtime_attr_override=runtime_attr_merge_pesr
+  }
+
   call tasks0506.ConcatVcfs {
     input:
-      vcfs = [StandardizeVcfs.out, DefragmentCNVs.out],
-      vcfs_idex = [StandardizeVcfs.out_index, DefragmentCNVs.out_index],
+      vcfs = [MergePESR.out, DefragmentCNVs.out],
+      vcfs_idx = [MergePESR.out_index, DefragmentCNVs.out_index],
       outfile_prefix = "~{sample_id}.std",
-    sv_base_mini_docker=sv_base_mini_docker,
-    runtime_attr_override=runtime_attr_concat_vcfs
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_vcfs
   }
 
   output {
