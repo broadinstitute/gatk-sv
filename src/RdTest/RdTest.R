@@ -218,13 +218,11 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       if (any(gapLengths) > 0) {
         gapStarts <- cov1$end[which(gapLengths > 0)]
         gapEnds <- cov1$start[which(gapLengths > 0)+1]
-
-        zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i], by=BinSize) }))
+        zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i]-1, by=BinSize) }))
         zeroBinEnds <- unlist(lapply(1:length(gapEnds),
                                      function(i) {
-                                       c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i], by=BinSize) }, gapEnds[i])
+                                       c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i]-1, by=BinSize) }, gapEnds[i])
                                      }))
-
         column_start = matrix(zeroBinStarts, ncol = 1)
         column_end = matrix(zeroBinEnds, ncol = 1)
         ncov_col = ncol(cov1)
@@ -244,12 +242,13 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     }
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
     startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
-    endAjdToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
+    endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
 
-    if ((endAjdToInnerBinEnd - startAdjToInnerBinStart) < bins * BinSize)
+    numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
+    if (numInternalBins < bins)
     {
-      bins = (endAjdToInnerBinEnd - startAdjToInnerBinStart) /
-        BinSize
+      bins = numInternalBins
+
       if (bins <= 1)
       {
         # include all bins that overlap the start and end of the interval in Rstart and Rend
@@ -263,26 +262,33 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     if (!exists("compression"))
     {
       UnadjustedBins <-
-        (endAjdToInnerBinEnd - startAdjToInnerBinStart) /
-        (bins * BinSize)
+        numInternalBins / bins
+
+      # Number of bins that need to be removed
       RemainderForRemoval <-
         ##Need to account for round error by trunc so add the decimal####
       trunc(((
         UnadjustedBins - trunc(UnadjustedBins)
-      ) * BinSize * bins / 2) + 0.000000001)
-      RemainderFront <-
-        round_any(RemainderForRemoval, BinSize, floor)
-      RemainderBack <-
-        round_any(RemainderForRemoval, BinSize, ceiling)
+      ) * bins / 2) + 0.000000001)
+      BinsToRemoveFromFront <-
+        round_any(RemainderForRemoval, 1, floor)
+      BinsToRemoveFromBack <-
+        round_any(RemainderForRemoval, 1, ceiling)
+
+      startBinIdx <- which(cov1$start == startAdjToInnerBinStart)
+      endBinIdx <- which(cov1$end == endAdjToInnerBinEnd)
+
+      newStartBinIdx <- startBinIdx + BinsToRemoveFromFront
+      newEndBinIdx <- endBinIdx - BinsToRemoveFromBack
+
       Rstart <-
-        startAdjToInnerBinStart + RemainderFront
+        cov1$start[newStartBinIdx]
       Rend <-
-        endAjdToInnerBinEnd - RemainderBack
-      compression <- (Rend - Rstart) / (BinSize * bins)
+        cov1$end[newEndBinIdx]
+      compression <- (newEndBinIdx - newStartBinIdx + 1) / (bins)
     }
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
-
 
     #Samples Filter
     if ( !is.null(opt$Blacklist) ) {
