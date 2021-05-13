@@ -78,14 +78,13 @@ task SetBins {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_overhead_gb_ = select_first([disk_overhead_gb, 10])
   String bincov_header_file_name = "bincov_header_file.tsv"
 
   String bin_file_name = "locs.bed.gz"
   String binsize_output_file_name = "binsize.txt"
 
   Float disk_scale_factor = 10.0
-  Int disk_gb = disk_overhead_gb_ + ceil(disk_scale_factor * size(count_file, "GiB"))
+  Int disk_gb = select_first([disk_overhead_gb, 10]) + ceil(disk_scale_factor * size(count_file, "GiB"))
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 2.0,
@@ -171,9 +170,8 @@ task MakeBincovMatrixColumns {
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
-  Int disk_overhead_ = select_first([disk_overhead_gb, 10])
   Float disk_scale_factor = 10.0
-  Int disk_gb = disk_overhead_ + ceil(disk_scale_factor * (size(count_file, "GiB") + size(bin_locs, "GiB")))
+  Int disk_gb = select_first([disk_overhead_gb, 10])+ ceil(disk_scale_factor * (size(count_file, "GiB") + size(bin_locs, "GiB")))
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 2.0,
@@ -239,12 +237,9 @@ task ZPaste {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_overhead_gb_ = select_first([disk_overhead_gb, 10])
-
-
   # Only compressed files are stored (if localization_optional, then only output file is stored),
   # so this is a reasonably conservative estimate for disk:
-  Int disk_gb = disk_overhead_gb_ + ceil(3.0 * size(column_files, "GiB"))
+  Int disk_gb = select_first([disk_overhead_gb, 10]) + ceil(3.0 * size(column_files, "GiB"))
   # Some memory is used up by the named pipes. Not a lot, but allocate in case the batch is huge:
   Float mem_gb = mem_overhead_gb + 0.003 * length(column_files)
   RuntimeAttr default_attr = object {

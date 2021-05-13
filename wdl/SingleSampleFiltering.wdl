@@ -223,9 +223,6 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int min_large_pesr_call_size_for_filtering_ = select_first([min_large_pesr_call_size_for_filtering, 1000000])
-  Float min_large_pesr_depth_overlap_fraction_ = select_first([min_large_pesr_depth_overlap_fraction, 0.3])
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
@@ -246,11 +243,11 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
   command <<<
     set -euo pipefail
 
-    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{min_large_pesr_call_size_for_filtering_} && ($5 == "DEL")' \
-        | coverageBed -a stdin -b ~{raw_dels} | awk '$NF < ~{min_large_pesr_depth_overlap_fraction_} {print $4}' > large_dels_without_raw_depth_support.list
+    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{select_first([min_large_pesr_call_size_for_filtering, 1000000])} && ($5 == "DEL")' \
+        | coverageBed -a stdin -b ~{raw_dels} | awk '$NF < ~{select_first([min_large_pesr_depth_overlap_fraction, 0.3])} {print $4}' > large_dels_without_raw_depth_support.list
 
-    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{min_large_pesr_call_size_for_filtering_} && ($5 == "DUP")' \
-        | coverageBed -a stdin -b ~{raw_dups} | awk '$NF < ~{min_large_pesr_depth_overlap_fraction_} {print $4}' > large_dups_without_raw_depth_support.list
+    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{select_first([min_large_pesr_call_size_for_filtering, 1000000])} && ($5 == "DUP")' \
+        | coverageBed -a stdin -b ~{raw_dups} | awk '$NF < ~{select_first([min_large_pesr_depth_overlap_fraction, 0.3])} {print $4}' > large_dups_without_raw_depth_support.list
 
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 
