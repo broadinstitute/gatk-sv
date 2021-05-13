@@ -289,7 +289,7 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_attr_filter_large_pesr
     RuntimeAttr? runtime_attr_srtest
-    RuntimeAttr? runtime_attr_split_vcf
+    RuntimeAttr? runtime_attr_split_vcf_srtest
     RuntimeAttr? runtime_attr_merge_allo
     RuntimeAttr? runtime_attr_merge_stats
     RuntimeAttr? runtime_attr_rewritesrcoords
@@ -322,6 +322,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_split_vcf_module04
+
 
     # Master
     RuntimeAttr? runtime_attr_add_batch
@@ -448,13 +450,13 @@ workflow GATKSVPipelineSingleSample {
         manta_mem_gb_per_job=manta_mem_gb_per_job,
         melt_standard_vcf_header=melt_standard_vcf_header,
         melt_metrics_intervals=melt_metrics_intervals,
-        insert_size=insert_size_input,
-        read_length=read_length_input,
-        coverage=coverage_input,
+        insert_size=insert_size,
+        read_length=read_length,
+        coverage=coverage,
         metrics_intervals=metrics_intervals,
-        pf_reads_improper_pairs=pf_reads_improper_pairs_input,
-        pct_chimeras=pct_chimeras_input,
-        total_reads=total_reads_input,
+        pf_reads_improper_pairs=pf_reads_improper_pairs,
+        pct_chimeras=pct_chimeras,
+        total_reads=total_reads,
         wham_include_list_bed_file=wham_include_list_bed_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
@@ -775,7 +777,7 @@ workflow GATKSVPipelineSingleSample {
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_srtest = runtime_attr_srtest,
-      runtime_attr_split_vcf = runtime_attr_split_vcf,
+      runtime_attr_split_vcf = runtime_attr_split_vcf_srtest,
       runtime_attr_merge_allo = runtime_attr_merge_allo,
       runtime_attr_merge_stats = runtime_attr_merge_stats
   }
@@ -828,7 +830,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
-      runtime_attr_split_vcf=runtime_attr_split_vcf,
+      runtime_attr_split_vcf=runtime_attr_split_vcf_module04,
       runtime_attr_merge_counts=runtime_attr_merge_counts,
       runtime_attr_split_variants=runtime_attr_split_variants,
       runtime_attr_make_subset_vcf=runtime_attr_make_subset_vcf,
