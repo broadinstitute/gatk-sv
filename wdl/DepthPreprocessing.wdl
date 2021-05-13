@@ -147,7 +147,7 @@ task MergeSample {
     RuntimeAttr? runtime_attr_override
   }
 
-  Float _max_dist = select_first([max_dist, 0.25])
+  Float max_dist_ = select_first([max_dist, 0.25])
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -169,7 +169,7 @@ task MergeSample {
     cat ~{gcnv} cnmops.cnv | sort -k1,1V -k2,2n > ~{sample_id}.bed
     bedtools merge -i ~{sample_id}.bed -d 0 -c 4,5,6,7 -o distinct > ~{sample_id}.merged.bed
     /opt/sv-pipeline/00_preprocessing/scripts/defragment_cnvs.py \
-      --max-dist ~{_max_dist} ~{sample_id}.merged.bed ~{sample_id}.merged.defrag.bed
+      --max-dist ~{max_dist_}} ~{sample_id}.merged.bed ~{sample_id}.merged.defrag.bed
     sort -k1,1V -k2,2n ~{sample_id}.merged.defrag.bed > ~{sample_id}.merged.defrag.sorted.bed
     
   >>>
