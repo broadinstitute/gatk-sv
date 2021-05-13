@@ -1,6 +1,8 @@
 version 1.0
 
 import "Structs.wdl"
+import "SVCluster.wdl" as svc
+import "Tasks0506.wdl" as tasks0506
 
 workflow GATKSVPreprocessSample {
   input {
@@ -18,14 +20,22 @@ workflow GATKSVPreprocessSample {
     Int min_svsize = 50
     Int gcnv_min_qs = 80
 
-    # Reference index
+    # Defragmentation options
+    Float defrag_padding_fraction = 0.25
+
+    # Reference
+    File ref_dict
     File ref_fasta_fai
 
     # Docker
+    String gatk_docker
+    String sv_base_mini_docker
     String sv_pipeline_base_docker
 
     # VM resource options
-    RuntimeAttr? runtime_attr_override
+    RuntimeAttr? runtime_attr_standardize
+    RuntimeAttr? runtime_attr_defrag
+    RuntimeAttr? runtime_attr_concat_vcfs
   }
 
   Array[File?] optional_sv_vcfs_ = [manta_vcf, melt_vcf, wham_vcf, delly_vcf]
@@ -51,12 +61,35 @@ workflow GATKSVPreprocessSample {
       min_svsize = min_svsize,
       ref_fasta_fai = ref_fasta_fai,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_override
+      runtime_attr_override = runtime_attr_standardize
+  }
+
+  call svc.SVCluster as DefragmentCNVs {
+    input:
+      vcfs = StandardizeVcfs.out_cnv,
+      vcf_indexes = StandardizeVcfs.out_cnv_index,
+      output_name="~{sample_id}.defragmented",
+      ref_dict=ref_dict,
+      vid_prefix="~{sample_id}_cnv_",
+      omit_members=true,
+      defrag_sample_overlap=0,
+      defrag_padding_fraction=defrag_padding_fraction,
+      gatk_docker=gatk_docker,
+      runtime_attr_override=runtime_attr_defrag
+  }
+
+  call tasks0506.ConcatVcfs {
+    input:
+      vcfs = [StandardizeVcfs.out, DefragmentCNVs.out],
+      vcfs_idex = [StandardizeVcfs.out_index, DefragmentCNVs.out_index],
+      outfile_prefix = "~{sample_id}.std",
+    sv_base_mini_docker=sv_base_mini_docker,
+    runtime_attr_override=runtime_attr_concat_vcfs
   }
 
   output {
-    File out = StandardizeVcfs.out
-    File out_index = StandardizeVcfs.out_index
+    File out = ConcatVcfs.concat_vcf
+    File out_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
@@ -147,7 +180,7 @@ task StandardizeVcfs {
         -o gcnv.vcf.gz \
         gcnv_filtered.vcf.gz
       tabix gcnv.vcf.gz
-      echo "gcnv.vcf.gz" > vcfs.list
+      echo "gcnv.vcf.gz" > cnv_vcfs.list
     fi
 
     ############################################################
@@ -186,20 +219,25 @@ task StandardizeVcfs {
 
       # note svtk generates an index automatically
       svtk rdtest2vcf --contigs ~{ref_fasta_fai} cnvs.bed samples.list cnvs.vcf.gz
-      echo "cnvs.vcf.gz" >> vcfs.list
+      echo "cnvs.vcf.gz" >> cnv_vcfs.list
     fi
 
     ############################################################
     # Combine VCFs
     ############################################################
 
-    bcftools concat -a --output-type z --file-list vcfs.list --output ~{output_basename}.vcf.gz
-    tabix ~{output_basename}.vcf.gz
+    bcftools concat -a --output-type z --file-list vcfs.list --output ~{output_basename}.pesr.vcf.gz
+    tabix ~{output_basename}.pesr.vcf.gz
+
+    bcftools concat -a --output-type z --file-list cnv_vcfs.list --output ~{output_basename}.cnv.vcf.gz
+    tabix ~{output_basename}.cnv.vcf.gz
   >>>
 
   output {
-    File out = "~{output_basename}.vcf.gz"
-    File out_index = "~{output_basename}.vcf.gz.tbi"
+    File out_pesr = "~{output_basename}.pesr.vcf.gz"
+    File out_pesr_index = "~{output_basename}.pesr.vcf.gz.tbi"
+    File out_cnv = "~{output_basename}.cnv.vcf.gz"
+    File out_cnv_index = "~{output_basename}.cnv.vcf.gz.tbi"
   }
 
   runtime {

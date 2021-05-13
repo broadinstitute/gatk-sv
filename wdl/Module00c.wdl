@@ -14,6 +14,7 @@ import "PESRPreprocessing.wdl" as pp
 import "GATKSVPreprocessSample.wdl" as pps
 import "GermlineCNVCase.wdl" as gcnv
 import "PloidyEstimation.wdl" as pe
+import "SVCluster.wdl" as svc
 import "TinyResolve.wdl" as tiny
 import "Utils.wdl" as util
 import "Tasks0506.wdl" as tasks0506
@@ -170,7 +171,6 @@ workflow Module00c {
     Float? cnmops_mem_gb_override_sample3
 
     RuntimeAttr? runtime_attr_combine_cmmops
-    RuntimeAttr? runtime_attr_preprocess_sample
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_merge_baf
@@ -186,6 +186,10 @@ workflow Module00c {
     RuntimeAttr? cnmops_clean_runtime_attr
     RuntimeAttr? matrix_qc_pesrbaf_runtime_attr
     RuntimeAttr? matrix_qc_rd_runtime_attr
+
+    RuntimeAttr? runtime_attr_standardize
+    RuntimeAttr? runtime_attr_defrag
+    RuntimeAttr? runtime_attr_concat_vcfs
 
     RuntimeAttr? runtime_attr_ploidy
     RuntimeAttr? runtime_attr_case
@@ -320,7 +324,6 @@ workflow Module00c {
       allo_file = cnmops_allo_file,
       ref_dict = ref_dict,
       prefix = "header",
-      stitch_and_clean_large_events = false,
       mem_gb_override_sample10 = cnmops_mem_gb_override_sample10,
       mem_gb_override_sample3 = cnmops_mem_gb_override_sample3,
       linux_docker = linux_docker,
@@ -347,7 +350,6 @@ workflow Module00c {
       ref_dict = ref_dict,
       prefix = "large",
       min_size=cnmops_large_min_size,
-      stitch_and_clean_large_events = true,
       mem_gb_override_sample10 = cnmops_mem_gb_override_sample10,
       mem_gb_override_sample3 = cnmops_mem_gb_override_sample3,
       linux_docker = linux_docker,
@@ -439,19 +441,36 @@ workflow Module00c {
         gcnv_segments_vcf=gCNVCase.genotyped_segments_vcf,
         min_svsize=min_svsize,
         gcnv_min_qs=gcnv_qs_cutoff,
+        defrag_padding_fraction=defragment_max_dist,
+        ref_dict=ref_dict,
         ref_fasta_fai=primary_contigs_fai,
         sv_pipeline_base_docker=sv_pipeline_base_docker,
-        runtime_attr_override=runtime_attr_preprocess_sample
+        sv_base_mini_docker=sv_base_mini_docker,
+        gatk_docker=gatk_docker,
+        runtime_attr_standardize=runtime_attr_standardize,
+        runtime_attr_defrag=runtime_attr_defrag,
+        runtime_attr_concat_vcfs=runtime_attr_concat_vcfs
     }
   }
 
   if (length(samples) > 1) {
-    call MergeVcfs {
+    call svc.SVCluster as MergeVcfs {
       input:
         vcfs = GATKSVPreprocessSample.out,
         vcf_indexes = GATKSVPreprocessSample.out_index,
+        output_name="~{batch}.raw_merged",
         ref_dict=ref_dict,
-        batch=batch,
+        vid_prefix="~{batch}_",
+        omit_members=true,
+        depth_overlap_fraction=1,
+        mixed_overlap_fraction=1,
+        pesr_overlap_fraction=1,
+        depth_breakend_window=0,
+        mixed_breakend_window=0,
+        pesr_breakend_window=0,
+        depth_sample_overlap=0,
+        mixed_sample_overlap=0,
+        pesr_sample_overlap=0,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_merge_vcfs
     }
@@ -593,71 +612,6 @@ task AddCaseSampleToPed {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-
-task MergeVcfs {
-  input {
-    Array[File] vcfs
-    Array[File] vcf_indexes
-    File ref_dict
-    String batch
-    String gatk_path = "/gatk/gatk"
-    String gatk_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 7.5,
-                               disk_gb: 10,
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
-
-  output {
-    File out = "~{batch}.merged.vcf.gz"
-    File out_index = "~{batch}.merged.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-
-    # Create arguments file
-    touch args.txt
-    while read line; do
-      echo "-V $line" >> args.txt
-    done < ~{write_lines(vcfs)}
-
-    ~{gatk_path} --java-options "-Xmx~{java_mem_mb}m" SVCluster \
-      --arguments_file args.txt \
-      --output ~{batch}.raw_merged.vcf.gz \
-      --algorithm SINGLE_LINKAGE \
-      --disable-sequence-dictionary-validation \
-      --sequence-dictionary ~{ref_dict} \
-      --depth-overlap-fraction 1 \
-      --mixed-overlap-fraction 1 \
-      --pesr-overlap-fraction 1 \
-      --depth-breakend-window 0 \
-      --mixed-breakend-window 0 \
-      --pesr-breakend-window 0 \
-      --depth-sample-overlap 0 \
-      --mixed-sample-overlap 0 \
-      --pesr-sample-overlap 0
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: mem_gb + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
