@@ -15,7 +15,7 @@
   "sv_pipeline_base_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:rlc_posthoc_filtering_cnv_mcnv_compatability_9a8561",
   "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline:cw_clean_vcf_part1_rm_allosome_greps_8348649",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-xz-fixes-7cbffee",
-  "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline-rdtest:cw_bins_not_multiples_of_binsize_ebd0719",
+  "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline-rdtest:cw_rdtest_bin_fix_update_5f2c8f",
   "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa",
   "igv_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/igv:mw-xz-fixes-2-b1be6a9",
   "duphold_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/duphold:mw-xz-fixes-2-b1be6a9",
