@@ -192,8 +192,6 @@ workflow Module00c {
     RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
-
-    Array[File]? _NONE_ARRAY_FILE_
   }
 
   Array[String] all_samples = flatten(select_all([samples, ref_panel_samples]))
@@ -289,7 +287,7 @@ workflow Module00c {
   call bem.EvidenceMerging as EvidenceMerging {
     input:
       samples = all_samples,
-      BAF_files = if defined(BAFFromShardedVCF.baf_files) then BAFFromShardedVCF.baf_files else (if defined(BAF_files) then select_all(select_first([BAF_files])) else _NONE_ARRAY_FILE_),
+      BAF_files = if defined(BAFFromShardedVCF.baf_files) then BAFFromShardedVCF.baf_files else BAF_files,
       PE_files = all_PE_files,
       SR_files = all_SR_files,
       inclusion_bed = inclusion_bed,
