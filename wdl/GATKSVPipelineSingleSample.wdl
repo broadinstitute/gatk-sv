@@ -412,13 +412,6 @@ workflow GATKSVPipelineSingleSample {
 
   }
 
-  if (defined(insert_size)) { Array[Float]? insert_size_input = [select_first([insert_size])]}
-  if (defined(read_length)) { Array[Int]? read_length_input = [select_first([read_length])]}
-  if (defined(coverage)) { Array[Float]? coverage_input = [select_first([coverage])]}
-  if (defined(pf_reads_improper_pairs)) { Array[Int]? pf_reads_improper_pairs_input = [select_first([pf_reads_improper_pairs])]}
-  if (defined(total_reads)) { Array[Float]? total_reads_input = [select_first([total_reads])]}
-  if (defined(pct_chimeras)) { Array[Float]? pct_chimeras_input = [select_first([pct_chimeras])]}
-
   String? delly_docker_ = if (!defined(case_delly_vcf) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(case_manta_vcf) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(case_melt_vcf) && use_melt) then melt_docker else NONE_STRING_
