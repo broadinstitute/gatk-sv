@@ -7,6 +7,7 @@ import "BatchEvidenceMerging.wdl" as bem
 import "CNMOPS.wdl" as cnmops
 import "CollectCoverage.wdl" as cov
 import "DepthPreprocessing.wdl" as dpn
+import "GATKSVTools.wdl" as gatk
 import "MakeBincovMatrix.wdl" as mbm
 import "MatrixQC.wdl" as mqc
 import "MedianCov.wdl" as mc
@@ -14,7 +15,6 @@ import "PESRPreprocessing.wdl" as pp
 import "GATKSVPreprocessSample.wdl" as pps
 import "GermlineCNVCase.wdl" as gcnv
 import "PloidyEstimation.wdl" as pe
-import "SVCluster.wdl" as svc
 import "TinyResolve.wdl" as tiny
 import "Utils.wdl" as util
 import "Tasks0506.wdl" as tasks0506
@@ -455,7 +455,7 @@ workflow Module00c {
     }
   }
 
-  call svc.SVCluster as MergeVcfs {
+  call gatk.SVCluster as MergeVcfs {
     input:
       vcfs = GATKSVPreprocessSample.out,
       vcf_indexes = GATKSVPreprocessSample.out_index,

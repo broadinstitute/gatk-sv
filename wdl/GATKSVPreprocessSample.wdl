@@ -1,8 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "SVCluster.wdl" as svc
-import "Tasks0506.wdl" as tasks0506
+import "GATKSVTools.wdl" as gatk
 
 workflow GATKSVPreprocessSample {
   input {
@@ -65,7 +64,7 @@ workflow GATKSVPreprocessSample {
       runtime_attr_override = runtime_attr_standardize
   }
 
-  call svc.SVCluster as DefragmentCNVs {
+  call gatk.SVCluster as DefragmentCNVs {
     input:
       vcfs = [StandardizeVcfs.out_cnv],
       vcf_indexes = [StandardizeVcfs.out_cnv_index],
@@ -79,11 +78,11 @@ workflow GATKSVPreprocessSample {
       runtime_attr_override=runtime_attr_defrag
   }
 
-  call svc.SVCluster as MergePESR {
+  call gatk.SVCluster as MergeSVs {
     input:
-      vcfs = [StandardizeVcfs.out_pesr],
-      vcf_indexes = [StandardizeVcfs.out_pesr_index],
-      output_name="~{sample_id}.pesr_merged",
+      vcfs = [StandardizeVcfs.out_pesr, DefragmentCNVs.out],
+      vcf_indexes = [StandardizeVcfs.out_pesr_index, DefragmentCNVs.out_index],
+      output_name="~{sample_id}.std",
       ref_dict=ref_dict,
       vid_prefix="~{sample_id}_",
       omit_members=true,
@@ -100,18 +99,9 @@ workflow GATKSVPreprocessSample {
       runtime_attr_override=runtime_attr_merge_pesr
   }
 
-  call tasks0506.ConcatVcfs {
-    input:
-      vcfs = [MergePESR.out, DefragmentCNVs.out],
-      vcfs_idx = [MergePESR.out_index, DefragmentCNVs.out_index],
-      outfile_prefix = "~{sample_id}.std",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_vcfs
-  }
-
   output {
-    File out = ConcatVcfs.concat_vcf
-    File out_index = ConcatVcfs.concat_vcf_idx
+    File out = MergeSVs.out
+    File out_index = MergeSVs.out_index
   }
 }
 
