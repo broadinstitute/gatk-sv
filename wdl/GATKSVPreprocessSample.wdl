@@ -40,7 +40,7 @@ workflow GATKSVPreprocessSample {
 
   Array[File?] optional_sv_vcfs_ = [manta_vcf, melt_vcf, wham_vcf, delly_vcf]
   Array[String] optional_sv_algorithms_ = ["manta", "melt", "wham", "delly"]
-  scatter (i in range(length(optional_sv_vcfs_))) {
+  scatter (i in range(length(optional_sv_algorithms_))) {
     if (defined(optional_sv_vcfs_[i])) {
       File scattered_sv_vcfs_ = select_first([optional_sv_vcfs_[i]])
       String scattered_sv_algorithms_ = optional_sv_algorithms_[i]
@@ -72,7 +72,7 @@ workflow GATKSVPreprocessSample {
       ref_dict=ref_dict,
       vid_prefix="~{sample_id}_cnv_",
       omit_members=true,
-      defrag_sample_overlap=0,
+      depth_sample_overlap=0,
       defrag_padding_fraction=defrag_padding_fraction,
       gatk_docker=gatk_docker,
       runtime_attr_override=runtime_attr_defrag

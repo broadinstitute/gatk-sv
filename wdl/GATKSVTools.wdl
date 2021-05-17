@@ -18,7 +18,6 @@ task SVCluster {
     Boolean convert_inv = false
     Boolean enable_cnv = false
 
-    Float? defrag_sample_overlap
     Float? defrag_padding_fraction
     String? breakpoint_summary_strategy
 
@@ -78,7 +77,6 @@ task SVCluster {
       ~{"--variant-prefix " + vid_prefix} \
       ~{"-L " + contig} \
       ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
-      ~{"--min-sample-set-fraction-overlap " + defrag_sample_overlap} \
       ~{"--defrag-padding-fraction " + defrag_padding_fraction} \
       ~{"--depth-overlap-fraction " + depth_overlap_fraction} \
       ~{"--mixed-overlap-fraction " + mixed_overlap_fraction} \
