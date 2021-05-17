@@ -153,16 +153,14 @@ task SVAnnotateOverlappingRegions {
     File vcf
     File vcf_index
     String output_name
-    String region_name
+    Array[File] region_files
+    Array[String] region_names
 
     Boolean require_breakend_overlap = false
-    File? inclusion_intervals
-    File? exclusion_intervals
     Float? min_overlap_fraction
     String? region_set_rule
     String? region_merging_rule
-    Int? add_region_padding
-    Int? subtract_region_padding
+    Int? region_padding
 
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -192,13 +190,11 @@ task SVAnnotateOverlappingRegions {
       -V ~{vcf} \
       -O ~{output_name}.vcf.gz \
       ~{if require_breakend_overlap then "--require-breakend-overlap" else ""} \
-      ~{"--add-regions " + inclusion_intervals} \
-      ~{"--subtract-regions " + exclusion_intervals} \
-      ~{"--min-overlap-fraction " + min_overlap_fraction} \
+      "--region-file " ~{sep=" --region-file " region_files} \
+      "--region-name " ~{sep=" --region-name " region_names} \
       ~{"--region-set-rule " + region_set_rule} \
       ~{"--region-merging-rule " + region_merging_rule} \
-      ~{"--add-region-padding " + add_region_padding} \
-      ~{"--subtract-region-padding " + subtract_region_padding}
+      ~{"--region-padding " + region_padding}
 
   >>>
   runtime {

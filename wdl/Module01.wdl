@@ -10,13 +10,13 @@ workflow Module01 {
     File contig_list
     File ref_dict
 
-    File? pesr_exclude_list
-    Float? pesr_min_inclusion_interval_overlap
-    Int? pesr_min_size
+    File pesr_include_intervals
+    Float pesr_min_inclusion_interval_overlap
+    Int pesr_min_size
 
-    File? depth_exclude_list
-    Float? depth_min_inclusion_interval_overlap
-    Int? depth_min_size
+    File depth_include_intervals
+    Float depth_min_inclusion_interval_overlap
+    Int depth_min_size
 
     String cluster1_algorithm = "SINGLE_LINKAGE"
     String cluster1_breakpoint_summary_strategy = "MEDIAN_START_MEDIAN_END"
@@ -61,7 +61,7 @@ workflow Module01 {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       output_name = "~{batch}.pesr",
-      select_expression="ALGORITHMS!=\"depth\"",
+      select_expression="~{primary_region_name}==1 && ALGORITHMS!=\"depth\"",
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_pesr
   }
@@ -71,7 +71,7 @@ workflow Module01 {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       output_name = "~{batch}.depth",
-      select_expression = "ALGORITHMS==\"depth\"",
+      select_expression = "~{primary_region_name}==1 && ALGORITHMS==\"depth\"",
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_depth
   }
@@ -82,10 +82,9 @@ workflow Module01 {
       vcf = SelectPESR.out,
       vcf_index = SelectPESR.out_index,
       output_name = "~{batch}.pesr.ann_regions",
-      region_name = pesr_region_name,
+      region_names = [pesr_region_name],
+      region_files = [pesr_include_intervals],
       require_breakend_overlap = true,
-      inclusion_intervals = contig_list,
-      exclusion_intervals = pesr_exclude_list,
       min_overlap_fraction = pesr_min_inclusion_interval_overlap,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_annotate_regions_pesr
@@ -97,10 +96,9 @@ workflow Module01 {
       vcf = SelectDepth.out,
       vcf_index = SelectDepth.out_index,
       output_name = "~{batch}.depth.ann_regions",
-      region_name = depth_region_name,
+      region_names = [depth_region_name],
+      region_files = [depth_include_intervals],
       require_breakend_overlap = false,
-      inclusion_intervals = contig_list,
-      exclusion_intervals = depth_exclude_list,
       min_overlap_fraction = depth_min_inclusion_interval_overlap,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_annotate_regions_depth
@@ -111,7 +109,7 @@ workflow Module01 {
       vcf = AnnotateIncludedRegionsPESR.out,
       vcf_index = AnnotateIncludedRegionsPESR.out_index,
       output_name = "~{batch}.pesr.select_regions",
-      select_expression="REGIONS==\"~{pesr_region_name}\"",
+      select_expression = pesr_region_name + ">=" + pesr_min_inclusion_interval_overlap,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_regions_pesr
   }
@@ -121,7 +119,7 @@ workflow Module01 {
       vcf = AnnotateIncludedRegionsDepth.out,
       vcf_index = AnnotateIncludedRegionsDepth.out_index,
       output_name = "~{batch}.depth.select_regions",
-      select_expression="REGIONS==\"~{depth_region_name}\"",
+      select_expression = depth_region_name + ">=" + depth_min_inclusion_interval_overlap,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_regions_depth
   }
@@ -174,6 +172,16 @@ workflow Module01 {
         pesr_sample_overlap=cluster2_pesr_sample_overlap,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_cluster_2
+    }
+
+    call gatk.SelectVariants as SelectSize {
+      input:
+        vcf = Cluster2.out,
+        vcf_index = Cluster2.out_index,
+        output_name = "~{batch}.select_size",
+        select_expression = "(ALGORITHMS==\"depth\" && SVLEN>=" + depth_min_size + ")||(ALGORITHMS!=\"depth\" && SVLEN>=" + pesr_min_size + ")",
+        gatk_docker = gatk_docker,
+        runtime_attr_override = runtime_attr_select_regions_depth
     }
   }
 
