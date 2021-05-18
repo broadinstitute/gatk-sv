@@ -5,6 +5,7 @@ import "MakeBincovMatrix.wdl" as mbm
 import "PloidyEstimation.wdl" as pe
 import "RawVcfQC.wdl" as vcfqc
 import "WGD.wdl" as wgd
+import "MedianCov.wdl" as mc
 
 # Runs single sample tasks on collected evidence:
 #   - Ploidy determination
@@ -53,6 +54,7 @@ workflow Module00b {
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
     RuntimeAttr? runtime_attr_bincov_attr
+    RuntimeAttr? runtime_attr_mediancov_attr
   }
 
   call mbm.MakeBincovMatrix as MakeBincovMatrix {
@@ -64,6 +66,15 @@ workflow Module00b {
       sv_base_mini_docker = sv_base_mini_docker,
       sv_base_docker = sv_base_docker,
       runtime_attr_override = runtime_attr_bincov_attr
+  }
+
+  call mc.MedianCov as MedianCov{
+    input:
+      bincov_matrix = MakeBincovMatrix.merged_bincov,
+      cohort_id = batch,
+      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      runtime_attr = runtime_attr_mediancov_attr
+
   }
 
   if (run_ploidy) {
@@ -150,5 +161,6 @@ workflow Module00b {
 
     File bincov_matrix = MakeBincovMatrix.merged_bincov
     File bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx
+    File bincov_median = MedianCov.medianCov
   }
 }
