@@ -741,9 +741,9 @@ task ConcatRegenotypedVcfs {
   command <<<
     set -euo pipefail
     zcat ~{regeno_vcf} |fgrep "#" > head.txt
-    zcat ~{regeno_vcf} |fgrep -f ~{regeno_variants} >body.txt
+    zcat ~{regeno_vcf} |fgrep -wf ~{regeno_variants} >body.txt
     cat head.txt body.txt|bgzip -c > regeno.vcf.gz
-    zcat ~{depth_vcf} |fgrep -f ~{regeno_variants} -v |bgzip -c > no_variant.vcf.gz
+    zcat ~{depth_vcf} |fgrep -wf ~{regeno_variants} -v |bgzip -c > no_variant.vcf.gz
     vcf-concat regeno.vcf.gz no_variant.vcf.gz \
       | vcf-sort -c \
       | bgzip -c > ~{batch}.depth.regeno_final.vcf.gz

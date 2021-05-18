@@ -64,7 +64,7 @@ task Vcf2Bed {
     svtk vcf2bed ~{vcf} ~{vcf}.bed
     awk '{if($6!="")print $0}' ~{vcf}.bed >~{vcf}.nonempty.bed
     cut -f 4 ~{regeno_file} >regeno_variants.txt
-    fgrep -f regeno_variants.txt ~{vcf}.nonempty.bed> nonempty.txt
+    fgrep -wf regeno_variants.txt ~{vcf}.nonempty.bed> nonempty.txt
   >>>
   output {
     File nonempty="nonempty.txt"
