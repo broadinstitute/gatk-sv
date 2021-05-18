@@ -1,0 +1,22 @@
+{
+  "Module01.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "Module01.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+
+  "Module01.contigs": "${workspace.primary_contigs_fai}",
+  "Module01.depth_flags": "--merge-coordinates",
+  "Module01.depth_frac": "0.8",
+  "Module01.pesr_svsize": "0",
+  "Module01.pesr_frac": "0.1",
+  "Module01.pesr_flags": "--preserve-ids",
+  "Module01.pesr_exclude_list": "${workspace.pesr_exclude_list}",
+  "Module01.pesr_distance": "300",
+  "Module01.depth_exclude_list": "${workspace.depth_exclude_list}",
+  "Module01.depth_exclude_list_frac_max": "0.5",
+
+  "Module01.batch": "${this.sample_set_id}",
+  "Module01.del_bed": "${this.merged_dels}",
+  "Module01.dup_bed": "${this.merged_dups}",
+  "Module01.wham_vcfs": "${this.std_wham_vcf}",
+  "Module01.manta_vcfs": "${this.std_manta_vcf}",
+  "Module01.melt_vcfs": "${this.std_melt_vcf}"
+}
