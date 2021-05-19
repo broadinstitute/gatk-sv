@@ -211,7 +211,7 @@ task StandardizeVcfs {
         --contigs ~{ref_fasta_fai} \
         --min-size ~{min_svsize} \
         $vcf unsorted.vcf ${algorithm}
-      vcf-sort -c unsorted.vcf | bgzip > sorted.${algorithm}.vcf.gz
+      bcftools sort unsorted.vcf -O z -o sorted.${algorithm}.vcf.gz
       tabix sorted.${algorithm}.vcf.gz
       echo "sorted.${algorithm}.vcf.gz" >> vcfs.list
     done
@@ -238,10 +238,12 @@ task StandardizeVcfs {
     # Combine VCFs
     ############################################################
 
-    bcftools concat -a --output-type z --file-list vcfs.list --output ~{output_basename}.pesr.vcf.gz
+    bcftools concat --no-version -a --file-list vcfs.list \
+      | bcftools annotate --no-version -x ^FORMAT/GT -O z -o ~{output_basename}.pesr.vcf.gz
     tabix ~{output_basename}.pesr.vcf.gz
 
-    bcftools concat -a --output-type z --file-list cnv_vcfs.list --output ~{output_basename}.cnv.vcf.gz
+    bcftools concat --no-version -a --file-list cnv_vcfs.list \
+      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN -O z -o --output ~{output_basename}.cnv.vcf.gz
     tabix ~{output_basename}.cnv.vcf.gz
   >>>
 
