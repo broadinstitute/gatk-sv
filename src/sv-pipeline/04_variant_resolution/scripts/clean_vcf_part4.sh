@@ -63,14 +63,14 @@ do
  if [ $(cat revise.vcf.lines.txt|fgrep -w $variant|wc -l) -gt 0 ]
  then
   cat revise.vcf.lines.txt \
-   |awk -v col=$col -v var=$variant -v GT=$GT -v GQ=$GQ -v RD_CN=$cn -v RD_GQ=$RD_GQ -v PE_GT=$PE_GT -v PE_GQ=$PE_GQ -v SR_GT=$SR_GT -v SR_GQ=$SR_GT -v EV=$EV '{if ($3==var ) $col="0/1:"GQ":"RD_CN":"RD_GQ":"PE_GT":"PE_GQ":"SR_GT":"SR_GQ":"EV ;print}' \
+   |awk -v col=$col -v var=$variant -v GT=$GT -v GQ=$GQ -v RD_CN=$cn -v RD_GQ=$RD_GQ -v PE_GT=$PE_GT -v PE_GQ=$PE_GQ -v SR_GT=$SR_GT -v SR_GQ=$SR_GQ -v EV=$EV '{if ($3==var ) $col="0/1:"GQ":"RD_CN":"RD_GQ":"PE_GT":"PE_GQ":"SR_GT":"SR_GQ":"EV ;print}' \
    >int.lines.txt
 
   cat int.lines.txt > revise.vcf.lines.txt
 
  else 
   cat line.txt \
-  |awk -v col=$col -v var=$variant -v GT=$GT -v GQ=$GQ -v RD_CN=$cn -v RD_GQ=$RD_GQ -v PE_GT=$PE_GT -v PE_GQ=$PE_GQ -v SR_GT=$SR_GT -v SR_GQ=$SR_GT -v EV=$EV '{if ($3==var ) $col="0/1:"GQ":"RD_CN":"RD_GQ":"PE_GT":"PE_GQ":"SR_GT":"SR_GQ":"EV ;print}' \
+  |awk -v col=$col -v var=$variant -v GT=$GT -v GQ=$GQ -v RD_CN=$cn -v RD_GQ=$RD_GQ -v PE_GT=$PE_GT -v PE_GQ=$PE_GQ -v SR_GT=$SR_GT -v SR_GQ=$SR_GQ -v EV=$EV '{if ($3==var ) $col="0/1:"GQ":"RD_CN":"RD_GQ":"PE_GT":"PE_GQ":"SR_GT":"SR_GQ":"EV ;print}' \
   >>revise.vcf.lines.txt
   fi
 
