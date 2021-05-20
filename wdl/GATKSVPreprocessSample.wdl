@@ -235,15 +235,22 @@ task StandardizeVcfs {
     fi
 
     ############################################################
-    # Combine VCFs
+    # Combine and sanitize VCFs
     ############################################################
 
     bcftools concat --no-version -a --file-list vcfs.list \
-      | bcftools annotate --no-version -x ^FORMAT/GT -O z -o ~{output_basename}.pesr.vcf.gz
+      | bcftools annotate --no-version -x ^FORMAT/GT \
+      | awk -F '\t' -v OFS='\t' '{ if ($0~/^##source=/) {next;} if ($0~/^#/) {print; next;} if ($8~"SVTYPE=BND") {$5="<BND>"} $4="N"; $6="."; $7="."; print}' \
+      | bgzip \
+      > ~{output_basename}.pesr.vcf.gz
     tabix ~{output_basename}.pesr.vcf.gz
 
     bcftools concat --no-version -a --file-list cnv_vcfs.list \
-      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN -O z -o --output ~{output_basename}.cnv.vcf.gz
+      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN \
+      | grep -v "^##GATKCommandLine=" \
+      | grep -v "^##source=" \
+      | bgzip \
+      > ~{output_basename}.cnv.vcf.gz
     tabix ~{output_basename}.cnv.vcf.gz
   >>>
 
