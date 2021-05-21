@@ -10,12 +10,24 @@ workflow BAFFromShardedVCF {
     Array[File] vcfs
     File? vcf_header  # If provided, added to the beginning of each VCF
     Array[String] samples  # Can be a subset of samples in the VCF
+    Array[String]? replacement_snp_vcf_sample_ids
     String batch
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String linux_docker
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_gather
     RuntimeAttr? runtime_attr_sample
+  }
+
+  # Workaround for Cromwell issue #5540 (https://github.com/broadinstitute/cromwell/issues/5540)
+  if (defined(replacement_snp_vcf_sample_ids)) {
+    call WriteLines {
+      input:
+        strings = select_first([replacement_snp_vcf_sample_ids]),
+        output_filename = "samples.list",
+        linux_docker = linux_docker
+    }
   }
 
   scatter (idx in range(length(vcfs))) {
@@ -23,6 +35,7 @@ workflow BAFFromShardedVCF {
       input:
         vcf = vcfs[idx],
         vcf_header = vcf_header,
+        replacement_snp_vcf_sample_ids_file = WriteLines.out,
         samples = samples,
         batch = batch,
         shard = "~{idx}",
@@ -55,11 +68,38 @@ workflow BAFFromShardedVCF {
   }
 }
 
+task WriteLines {
+  input {
+    Array[String] strings
+    String output_filename
+    String linux_docker
+  }
+  output {
+    File out = output_filename
+  }
+  command <<<
+
+    set -euo pipefail
+    mv ~{write_lines(strings)} ~{output_filename}
+
+  >>>
+  runtime {
+    cpu: 1
+    memory: "1 GiB"
+    disks: "local-disk 10 HDD"
+    bootDiskSizeGb: 10
+    docker: linux_docker
+    preemptible: 3
+    maxRetries: 1
+  }
+}
+
 task GenerateBAF {
   input {
     File vcf
     File? vcf_header
     Array[String] samples
+    File? replacement_snp_vcf_sample_ids_file
     String batch
     String shard
     String sv_pipeline_docker
@@ -83,6 +123,7 @@ task GenerateBAF {
 
     set -euo pipefail
     bcftools view -M2 -v snps ~{if defined(vcf_header) then "<(cat ~{vcf_header} ~{vcf})" else vcf} \
+      ~{ if defined(replacement_snp_vcf_sample_ids_file) then "| bcftools reheader -s " + select_first([replacement_snp_vcf_sample_ids_file]) else ""} \
       | python /opt/sv-pipeline/02_evidence_assessment/02d_baftest/scripts/Filegenerate/generate_baf.py \
                --unfiltered --samples-list ~{write_lines(samples)} \
       > BAF.~{batch}.shard-~{shard}.txt
