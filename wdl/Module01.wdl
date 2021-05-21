@@ -51,9 +51,10 @@ workflow Module01 {
     RuntimeAttr? runtime_attr_annotate_regions_depth
     RuntimeAttr? runtime_attr_select_regions_pesr
     RuntimeAttr? runtime_attr_select_regions_depth
-    RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_cluster_1
     RuntimeAttr? runtime_attr_cluster_2
+    RuntimeAttr? runtime_attr_select_size
+    RuntimeAttr? runtime_attr_concat_vcfs
   }
 
   call gatk.SelectVariants as SelectPESR {
@@ -61,7 +62,7 @@ workflow Module01 {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       output_name = "~{batch}.pesr",
-      select_expression="~{primary_region_name}==1 && ALGORITHMS!=\"depth\"",
+      select_expression="ALGORITHMS!=\"depth\"",
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_pesr
   }
@@ -71,7 +72,7 @@ workflow Module01 {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       output_name = "~{batch}.depth",
-      select_expression = "~{primary_region_name}==1 && ALGORITHMS==\"depth\"",
+      select_expression = "ALGORITHMS==\"depth\"",
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_select_depth
   }
@@ -181,14 +182,14 @@ workflow Module01 {
         output_name = "~{batch}.select_size",
         select_expression = "(ALGORITHMS==\"depth\" && SVLEN>=" + depth_min_size + ")||(ALGORITHMS!=\"depth\" && SVLEN>=" + pesr_min_size + ")",
         gatk_docker = gatk_docker,
-        runtime_attr_override = runtime_attr_select_regions_depth
+        runtime_attr_override = runtime_attr_select_size
     }
   }
 
   call tasks0506.ConcatVcfs {
     input:
-      vcfs = Cluster2.out,
-      vcfs_idx = Cluster2.out_index,
+      vcfs = SelectSize.out,
+      vcfs_idx = SelectSize.out_index,
       outfile_prefix = "~{batch}.clustered",
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_vcfs
