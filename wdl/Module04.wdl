@@ -59,7 +59,8 @@ workflow Module04 {
     RuntimeAttr? runtime_attr_make_subset_vcf
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_add_genotypes
-    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
 
     # Master
     RuntimeAttr? runtime_attr_add_batch
@@ -211,7 +212,7 @@ workflow Module04 {
       runtime_attr_integrate_pesr_gq = runtime_attr_integrate_pesr_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_triple_stream_cat = runtime_attr_triple_stream_cat,
-      runtime_attr_concat_vcfs = runtime_attr_concat_vcfs
+      runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs
   }
 
   if (!single_sample_mode) {
@@ -266,7 +267,7 @@ workflow Module04 {
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
       runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
-      runtime_attr_concat_vcfs = runtime_attr_concat_vcfs,
+      runtime_attr_concat_vcfs = runtime_attr_genotype_depths_concat_vcfs,
       runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
   }
   output {

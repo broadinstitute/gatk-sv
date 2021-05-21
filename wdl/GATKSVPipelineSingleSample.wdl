@@ -321,7 +321,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_make_subset_vcf
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_add_genotypes
-    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
     RuntimeAttr? runtime_attr_split_vcf_module04
 
 
@@ -364,6 +365,7 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_override_update_sr_list
     RuntimeAttr? runtime_override_merge_pesr_depth
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
     RuntimeAttr? runtime_override_rename_variants
 
@@ -829,7 +831,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_make_subset_vcf=runtime_attr_make_subset_vcf,
       runtime_attr_rdtest_genotype=runtime_attr_rdtest_genotype,
       runtime_attr_add_genotypes=runtime_attr_add_genotypes,
-      runtime_attr_concat_vcfs=runtime_attr_concat_vcfs,
+      runtime_attr_genotype_depths_concat_vcfs=runtime_attr_genotype_depths_concat_vcfs,
+      runtime_attr_genotype_pesr_concat_vcfs=runtime_attr_genotype_pesr_concat_vcfs,
       runtime_attr_add_batch=runtime_attr_add_batch,
       runtime_attr_index_vcf=runtime_attr_index_vcf,
       runtime_attr_count_pe=runtime_attr_count_pe,
@@ -902,7 +905,7 @@ workflow GATKSVPipelineSingleSample {
 
       runtime_override_update_sr_list=runtime_override_update_sr_list,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
-      runtime_override_breakpoint_overlap_filter=runtime_override_merge_pesr_depth,
+      runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
       runtime_override_rename_variants=runtime_override_rename_variants,
 
