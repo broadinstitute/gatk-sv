@@ -13,7 +13,8 @@ task SVCluster {
     String? vid_prefix
 
     String algorithm = "SINGLE_LINKAGE"
-    Boolean disable_dict_validation = true  # Disabling is very slow
+    Boolean disable_dict_validation = false  # Dict validation is very slow with multiple vcfs
+    Boolean fast_mode = false
     Boolean omit_members = false
     Boolean convert_inv = false
     Boolean enable_cnv = false
@@ -73,6 +74,7 @@ task SVCluster {
       --algorithm ~{algorithm} \
       --sequence-dictionary ~{ref_dict} \
       ~{if disable_dict_validation then "--disable-sequence-dictionary-validation" else ""} \
+      ~{if fast_mode then "--fast-mode" else ""} \
       ~{if omit_members then "--omit-members" else ""} \
       ~{"--variant-prefix " + vid_prefix} \
       ~{"-L " + contig} \

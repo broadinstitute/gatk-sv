@@ -72,6 +72,7 @@ workflow GATKSVPreprocessSample {
       ref_dict=ref_dict,
       vid_prefix="~{sample_id}_cnv_",
       omit_members=true,
+      fast_mode=true,
       depth_sample_overlap=0,
       defrag_padding_fraction=defrag_padding_fraction,
       gatk_docker=gatk_docker,
@@ -86,6 +87,7 @@ workflow GATKSVPreprocessSample {
       ref_dict=ref_dict,
       vid_prefix="~{sample_id}_",
       omit_members=true,
+      fast_mode=true,
       depth_overlap_fraction=1,
       mixed_overlap_fraction=1,
       pesr_overlap_fraction=1,
@@ -181,7 +183,7 @@ task StandardizeVcfs {
       echo '##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">' > header_lines.txt
       echo '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">' >> header_lines.txt
       echo '##INFO=<ID=STRANDS,Number=1,Type=String,Description="Breakpoint strandedness [++,+-,-+,--]">' >> header_lines.txt
-      echo '##INFO=<ID=ALGORITHMS,Number=1,Type=String,Description="Source algorithms">' >> header_lines.txt
+      echo '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">' >> header_lines.txt
 
       bcftools annotate \
         --no-version \
@@ -240,13 +242,14 @@ task StandardizeVcfs {
 
     bcftools concat --no-version -a --file-list vcfs.list \
       | bcftools annotate --no-version -x ^FORMAT/GT \
-      | awk -F '\t' -v OFS='\t' '{ if ($0~/^##source=/) {next;} if ($0~/^#/) {print; next;} if ($8~"SVTYPE=BND") {$5="<BND>"} $4="N"; $6="."; $7="."; print}' \
+      | grep -v "^##GATKCommandLine=" \
+      | awk -F '\t' -v OFS='\t' '{ if ($0~/^#/) {print; next;} if ($8~"SVTYPE=BND") {$5="<BND>"} $4="N"; $6="."; $7="."; print}' \
       | bgzip \
       > ~{output_basename}.pesr.vcf.gz
     tabix ~{output_basename}.pesr.vcf.gz
 
     bcftools concat --no-version -a --file-list cnv_vcfs.list \
-      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN \
+      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN,INFO/CHR2,INFO/END2 \
       | grep -v "^##GATKCommandLine=" \
       | grep -v "^##source=" \
       | bgzip \
