@@ -35,6 +35,10 @@
   "mei_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
   "melt_std_vcf_header" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/melt_standard_vcf_header.txt",
   "noncoding_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
+
+  "pesr_include_intervals" : "gs://broad-sv-dev-data/markw/gatk_sv_inclusion_intervals.hg38.pesr.bed",
+  "depth_include_intervals" : "gs://broad-sv-dev-data/markw/gatk_sv_inclusion_intervals.hg38.depth.bed",
+
   "pesr_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.bed.gz",
   "exclusion_intervals_non_depth_only" : "gs://broad-sv-dev-data/markw/gatk-sv-v2.non_depth_exclude.bed",
   "exclusion_intervals_depth_only" : "gs://broad-sv-dev-data/markw/gatk-sv-v2.depth_exclude.bed",

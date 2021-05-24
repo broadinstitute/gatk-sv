@@ -22,5 +22,5 @@
   "vapor_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/vapor:mw-xz-fixes-2-b1be6a9",
   "cloud_sdk_docker" : "google/cloud-sdk",
   
-  "gatk_sv_v2_docker" : "us.gcr.io/broad-dsde-methods/markw/gatk:a18e3dd21a1fd17a7d2d5e3d4ab959c64d4b02c2"
+  "gatk_sv_v2_docker" : "us.gcr.io/broad-dsde-methods/markw/gatk:4c4e280a28b52f46ddfa25e92d622c43e5bcc1ee"
 }
