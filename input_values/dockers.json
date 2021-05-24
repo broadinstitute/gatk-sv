@@ -3,7 +3,7 @@
   "cnmops_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:mw-gnomad-02-6a66c96",
   "condense_counts_docker" : "us.gcr.io/broad-dsde-methods/gatk:condensecounts-7396ae99aaab07e29c92b509a6515508fbe68158",
   "delly_docker" : "us.gcr.io/broad-dsde-methods/delly:8645aa",
-  "gatk_docker" : "us.gcr.io/broad-dsde-methods/markw/gatk:a18e3dd21a1fd17a7d2d5e3d4ab959c64d4b02c2",
+  "gatk_docker" : "us.gcr.io/broad-dsde-methods/markw/gatk:4c4e280a28b52f46ddfa25e92d622c43e5bcc1ee",
   "gatk_docker_pesr_override" : "us.gcr.io/broad-gatk/gatk:4.1.8.1",
   "genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
