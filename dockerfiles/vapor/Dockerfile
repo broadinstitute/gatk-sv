@@ -44,10 +44,14 @@ RUN apt-get -qqy update --fix-missing && \
 ############### stage 1: other commonly used bioinformatics utilities 
 FROM ubuntu:18.04
 
+<<<<<<< HEAD
 # Set environment variables.
 ENV HOME=/root
 ENV R_HOME=/usr
 
+=======
+ENV HOME=/root
+>>>>>>> 7f721eab0bb39599fabf7d742cc5311b254b8943
 
 # Define default command.
 CMD ["bash"]
@@ -79,15 +83,24 @@ RUN apt-get -qqy update --fix-missing && \
     bcftools --help
 
 
+<<<<<<< HEAD
 # GATK needed for PrintReads
 ARG GATK_TRANSIENT_DEP="git git-lfs"
 ARG GATK_DEP="openjdk-8-jdk ${GATK_TRANSIENT_DEP}"
 ARG GATK_COMMIT="a33bf19dd3188af0af1bd17bce015eb20ba73227"
 ENV GATK_JAR="/opt/gatk.jar"
+=======
+# install GCloud SDK
+ARG CLOUD_SDK_VERSION=239.0.0
+ARG GCLOUD_SDK_EXTRA_COMPONENTS
+ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools "
+ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
+>>>>>>> 7f721eab0bb39599fabf7d742cc5311b254b8943
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
+<<<<<<< HEAD
                  ${GATK_DEP} && \
     cd / && git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && git lfs install && \
@@ -98,10 +111,30 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy clean && \
     rm -rf /gatk \
            /tmp/* \
+=======
+                 ${GCLOUD_SDK_DEPENDENCIES} && \
+    pip install -q -U --no-cache-dir \
+                crcmod \
+                wheel && \
+    export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
+    echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
+    apt-get -qqy update && \
+    apt-get -qqy install --no-install-recommends \
+                 google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \
+                 $GCLOUD_SDK_EXTRA_COMPONENTS && \
+    gcloud config set core/disable_usage_reporting true && \
+    gcloud config set component_manager/disable_update_check true && \
+    gcloud config set metrics/environment github_docker_image && \
+    apt-get -qqy purge ${GCLOUD_SDK_TRANSIENT_DEP} && \
+    apt-get -qqy clean && \
+    rm -rf /tmp/* \
+>>>>>>> 7f721eab0bb39599fabf7d742cc5311b254b8943
            /var/tmp/* \
            /var/cache/apt/* \
            /var/lib/apt/lists/* \
            /usr/share/man/?? \
+<<<<<<< HEAD
            /usr/share/man/??_* && \
     java -jar ${GATK_JAR}
 
@@ -109,6 +142,12 @@ RUN apt-get -qqy update --fix-missing && \
 CMD ["bash"]
 
 #### Basic image utilities
+=======
+           /usr/share/man/??_*
+
+
+
+>>>>>>> 7f721eab0bb39599fabf7d742cc5311b254b8943
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends apt-utils
@@ -140,7 +179,7 @@ RUN pip3 install --no-cache-dir Cython && \
     cd /opt && \
     git clone https://github.com/mills-lab/vapor.git && \
     cd /opt/vapor/ && \
-    git checkout 5e322b5 && \
+    git checkout 13bd4a50a64fdd8517bd4a8cf289b48bf89dab62 && \
     pip3 install -e .
 
 
