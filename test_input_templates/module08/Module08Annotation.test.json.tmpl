@@ -11,7 +11,7 @@
   "Module08Annotation.population" :      {{ reference_resources.external_af_population | tojson }},
 
 
-  "Module08Annotation.contig_list" :  "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/chromosomes_nochrY.fai",
+  "Module08Annotation.contig_list" :  {{ reference_resources.primary_contigs_list | tojson }},
   "Module08Annotation.ped_file":      "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/FINAL_full_prenatal_dosage_sex.ped",
   "Module08Annotation.sv_per_shard" : "5000",
   "Module08Annotation.max_shards_per_chrom_step1" : 200,
