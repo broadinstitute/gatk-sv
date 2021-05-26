@@ -8,7 +8,7 @@
   "Module04.n_per_split": "5000", 
   "Module04.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
   "Module04.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
-  "Module04.reference_build": "hg38",
+  "Module04.reference_build": {{ reference_resources.reference_build | tojson }},
   "Module04.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
   "Module04.batch": {{ test_batch.batch_name | tojson }},

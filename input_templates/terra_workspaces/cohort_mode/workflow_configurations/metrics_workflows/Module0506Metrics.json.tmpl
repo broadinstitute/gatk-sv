@@ -1,0 +1,13 @@
+{
+  "Module0506Metrics.sv_pipeline_base_docker": "${workspace.sv_pipeline_base_docker}",
+  "Module0506Metrics.linux_docker": "${workspace.linux_docker}",
+  "Module0506Metrics.contig_list" : "${workspace.primary_contigs_list}",
+
+  "Module0506Metrics.name" : "${this.sample_set_set_id}",
+  "Module0506Metrics.samples": "${this.sample_sets.samples.sample_id}",
+
+  "Module0506Metrics.cluster_vcf" : "${this.cluster_vcf}",
+  "Module0506Metrics.complex_resolve_vcf" : "${this.complex_resolve_vcf}",
+  "Module0506Metrics.complex_genotype_vcf" : "${this.complex_genotype_vcf}",
+  "Module0506Metrics.cleaned_vcf" : "${this.vcf}"
+}

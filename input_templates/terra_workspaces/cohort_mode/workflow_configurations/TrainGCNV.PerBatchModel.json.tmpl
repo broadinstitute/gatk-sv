@@ -1,0 +1,67 @@
+{
+  "TrainGCNV.reference_fasta": "${workspace.reference_fasta}",
+  "TrainGCNV.reference_index": "${workspace.reference_index}",
+  "TrainGCNV.reference_dict": "${workspace.reference_dict}",
+
+  "TrainGCNV.ref_copy_number_autosomal_contigs": "${workspace.copy_number_autosomal_contigs}",
+  "TrainGCNV.allosomal_contigs": {{ reference_resources.allosomal_contigs | tojson }},
+
+  "TrainGCNV.contig_ploidy_priors": "${workspace.contig_ploidy_priors}",
+  "TrainGCNV.exclude_intervals_for_filter_intervals_ploidy": "${workspace.exclude_intervals_for_gcnv_filter_intervals}",
+  "TrainGCNV.exclude_intervals_for_filter_intervals_cnv": "${workspace.exclude_intervals_for_gcnv_filter_intervals}",
+  "TrainGCNV.num_intervals_per_scatter": "5000",
+  "TrainGCNV.do_explicit_gc_correction": "true",
+  "TrainGCNV.gcnv_enable_bias_factors": "false",
+
+  "TrainGCNV.gcnv_caller_update_convergence_threshold": "0.000001",
+  "TrainGCNV.gcnv_class_coherence_length": "1000",
+  "TrainGCNV.gcnv_convergence_snr_trigger_threshold": "0.2",
+  "TrainGCNV.gcnv_interval_psi_scale": "0.000001",
+  "TrainGCNV.gcnv_log_mean_bias_standard_deviation": "0.01",
+  "TrainGCNV.gcnv_max_bias_factors": "1",
+  "TrainGCNV.gcnv_max_calling_iters": "20",
+  "TrainGCNV.ploidy_global_psi_scale": "0.05",
+  "TrainGCNV.ploidy_mean_bias_standard_deviation": "1",
+
+  "TrainGCNV.gcnv_depth_correction_tau": "10000",
+  "TrainGCNV.gcnv_log_emission_sampling_median_rel_error": "0.001",
+
+  "TrainGCNV.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "TrainGCNV.condense_counts_docker" : "${workspace.condense_counts_docker}",
+  "TrainGCNV.gatk_docker": "${workspace.gatk_docker}",
+  "TrainGCNV.linux_docker" : "${workspace.linux_docker}",
+
+  "TrainGCNV.gcnv_model_learning_rate" : 0.03,
+  "TrainGCNV.gcnv_model_num_thermal_advi_iters" : 2500,
+  "TrainGCNV.gcnv_model_max_advi_iter_first_epoch" : 5000,
+  "TrainGCNV.gcnv_model_max_advi_iter_subsequent_epochs" : 200,
+  "TrainGCNV.gcnv_model_max_training_epochs" : 50,
+  "TrainGCNV.gcnv_model_min_training_epochs" : 5,
+  "TrainGCNV.gcnv_model_convergence_snr_averaging_window" : 500,
+  "TrainGCNV.gcnv_model_convergence_snr_countdown_window" : 10,
+  "TrainGCNV.gcnv_model_cnv_coherence_length" : 1000,
+  "TrainGCNV.gcnv_copy_number_posterior_expectation_mode" : "EXACT",
+
+  "TrainGCNV.gcnv_learning_rate" : 0.03,
+  "TrainGCNV.gcnv_num_thermal_advi_iters" : 250,
+  "TrainGCNV.gcnv_max_advi_iter_first_epoch" : 5000,
+  "TrainGCNV.gcnv_max_advi_iter_subsequent_epochs" : 200,
+  "TrainGCNV.gcnv_max_training_epochs" : 50,
+  "TrainGCNV.gcnv_min_training_epochs" : 5,
+  "TrainGCNV.gcnv_convergence_snr_averaging_window" : 100,
+  "TrainGCNV.gcnv_convergence_snr_countdown_window" : 10,
+  "TrainGCNV.gcnv_cnv_coherence_length" : 1000,
+  "TrainGCNV.gcnv_copy_number_posterior_expectation_mode" : "EXACT",
+
+  "TrainGCNV.gcnv_log_emission_sampling_rounds" : 20,
+  "TrainGCNV.gcnv_p_alt" : 0.000001,
+  "TrainGCNV.gcnv_sample_psi_scale" : 0.000001,
+  "TrainGCNV.ploidy_sample_psi_scale" : 0.001,
+
+  "TrainGCNV.cohort": "${this.sample_set_id}",
+  "TrainGCNV.count_files": "${this.samples.coverage_counts}",
+  "TrainGCNV.samples": "${this.samples.sample_id}",
+
+  "TrainGCNV.n_samples_subsample": 100,
+  "TrainGCNV.sv_pipeline_base_docker": "${workspace.sv_pipeline_base_docker}"
+}
