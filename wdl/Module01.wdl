@@ -182,7 +182,7 @@ workflow Module01 {
         vcf = Cluster2.out,
         vcf_index = Cluster2.out_index,
         output_name = "~{batch}.select_size",
-        select_expression = "(ALGORITHMS==\"depth\" && SVLEN>=" + depth_min_size + ")||(ALGORITHMS!=\"depth\" && SVLEN>=" + pesr_min_size + ")",
+        select_expression = "(SVTYPE==\"BND\")||(ALGORITHMS==\"depth\" && SVLEN>=" + depth_min_size + ")||(ALGORITHMS!=\"depth\" && SVLEN>=" + pesr_min_size + ")",
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_select_size
     }

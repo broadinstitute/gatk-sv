@@ -5,6 +5,7 @@
   "Module02.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "Module02.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "Module02.linux_docker" : {{ dockers.linux_docker | tojson }},
+  "Module02.gatk_docker" : {{ dockers.gatk_docker | tojson }},
 
   "Module02.BAF_split_size": "10000",
   "Module02.RD_split_size": "10000",
@@ -24,8 +25,5 @@
   "Module02.coveragefile": {{ test_batch.merged_coverage_file | tojson }},
   "Module02.splitfile": {{ test_batch.merged_split_file | tojson }},
   "Module02.medianfile": {{ test_batch.medianfile | tojson }},
-  "Module02.depth_vcf" : {{ test_batch.merged_depth_vcf | tojson }},
-  "Module02.manta_vcf" : {{ test_batch.merged_manta_vcf | tojson }},
-  "Module02.wham_vcf" : {{ test_batch.merged_wham_vcf | tojson }},
-  "Module02.melt_vcf" : {{ test_batch.merged_melt_vcf | tojson }}
+  "Module02.vcf" : {{ test_batch.clustered_vcf | tojson }}
 }

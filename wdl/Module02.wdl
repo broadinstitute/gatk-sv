@@ -1,5 +1,6 @@
 version 1.0
 
+import "GATKSVTools.wdl" as gatk
 import "PETest.wdl" as pet
 import "RDTest.wdl" as rdt
 import "SRTest.wdl" as srt
@@ -11,12 +12,7 @@ workflow Module02 {
   input {
     String batch
 
-    File? depth_vcf
-    File? melt_vcf
-    File? delly_vcf
-    File? wham_vcf
-    File? manta_vcf
-
+    File vcf
     File baf_metrics
     File discfile
     File coveragefile
@@ -42,6 +38,13 @@ workflow Module02 {
     String sv_base_docker
     String sv_pipeline_base_docker
     String linux_docker
+    String gatk_docker
+
+    RuntimeAttr? runtime_attr_select_depth
+    RuntimeAttr? runtime_attr_select_manta
+    RuntimeAttr? runtime_attr_select_melt
+    RuntimeAttr? runtime_attr_select_wham
+    RuntimeAttr? runtime_attr_select_delly
 
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_subset_ped
@@ -61,12 +64,62 @@ workflow Module02 {
     RuntimeAttr? runtime_attr_merge_stats
   }
 
+  call gatk.SelectVariants as SelectDepth {
+    input:
+      vcf = vcf,
+      vcf_index = vcf + ".tbi",
+      output_name = "~{batch}.depth",
+      select_expression = "ALGORITHMS=~\"depth\"",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_select_depth
+  }
+
+  call gatk.SelectVariants as SelectManta {
+    input:
+      vcf = vcf,
+      vcf_index = vcf + ".tbi",
+      output_name = "~{batch}.manta",
+      select_expression = "ALGORITHMS=~\"manta\"",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_select_manta
+  }
+
+  call gatk.SelectVariants as SelectMelt {
+    input:
+      vcf = vcf,
+      vcf_index = vcf + ".tbi",
+      output_name = "~{batch}.melt",
+      select_expression = "(ALGORITHMS!~\"manta\")&&(ALGORITHMS=~\"melt\")",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_select_melt
+  }
+
+  call gatk.SelectVariants as SelectWham {
+    input:
+      vcf = vcf,
+      vcf_index = vcf + ".tbi",
+      output_name = "~{batch}.wham",
+      select_expression = "(ALGORITHMS!~\"manta\")&&(ALGORITHMS!~\"melt\")&&(ALGORITHMS=~\"wham\")",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_select_wham
+  }
+
+  call gatk.SelectVariants as SelectDelly {
+    input:
+      vcf = vcf,
+      vcf_index = vcf + ".tbi",
+      output_name = "~{batch}.delly",
+      select_expression = "(ALGORITHMS!~\"manta\")&&(ALGORITHMS!~\"melt\")&&(ALGORITHMS!~\"wham\")&&(ALGORITHMS=~\"delly\")",
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_select_delly
+  }
+
   Array[String] algorithms = ["depth", "melt", "delly", "wham", "manta"]
-  Array[File?] vcfs = [depth_vcf, melt_vcf, delly_vcf, wham_vcf, manta_vcf]
+  Array[File] vcfs = [SelectDepth.out, SelectMelt.out, SelectDelly.out, SelectWham.out, SelectManta.out]
 
   call util.GetSampleIdsFromVcf {
     input:
-      vcf = select_first(vcfs),
+      vcf = vcf,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
@@ -89,143 +142,140 @@ workflow Module02 {
   }
 
   scatter (i in range(length(algorithms))) {
-    
-    if (defined(vcfs[i])) {
 
-      String algorithm = algorithms[i]
-      File vcf = select_first([vcfs[i]])
+    String algorithm = algorithms[i]
+    File vcf = vcfs[i]
 
-      if (algorithm != "melt") {
-        call rdt.RDTest as RDTest {
-          input:
-            coveragefile = coveragefile,
-            medianfile = medianfile,
-            ped_file = SubsetPedFile.ped_subset_file,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            split_size = RD_split_size,
-            flags = "",
-            algorithm = algorithm,
-            allosome_contigs = allosome_contigs,
-            ref_dict = ref_dict,
-            batch = batch,
-            samples = GetSampleLists.samples_file,
-            male_samples = GetSampleLists.male_samples,
-            female_samples = GetSampleLists.female_samples,
-            sv_pipeline_docker = sv_pipeline_docker,
-            sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-            linux_docker = linux_docker,
-            runtime_attr_rdtest = runtime_attr_rdtest,
-            runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
-            runtime_attr_merge_allo = runtime_attr_merge_allo,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-
-        call baft.BAFTest as BAFTest {
-          input:
-            baf_metrics = baf_metrics,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            ref_dict = ref_dict,
-            split_size = BAF_split_size,
-            algorithm = algorithm,
-            batch = batch,
-            samples = GetSampleIdsFromVcf.out_array,
-            linux_docker = linux_docker,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_baftest = runtime_attr_baftest,
-            runtime_attr_split_baf_vcf = runtime_attr_split_baf_vcf,
-            runtime_attr_merge_baf = runtime_attr_merge_baf,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-      }
-
-      if (algorithm != "depth") {
-        call srt.SRTest as SRTest {
-          input:
-            splitfile = splitfile,
-            medianfile = medianfile,
-            ped_file = SubsetPedFile.ped_subset_file,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            ref_dict = ref_dict,
-            split_size = SR_split_size,
-            algorithm = algorithm,
-            allosome_contigs = allosome_contigs,
-            batch = batch,
-            samples = GetSampleLists.samples_file,
-            male_samples = GetSampleLists.male_samples,
-            female_samples = GetSampleLists.female_samples,
-            run_common = true,
-            common_cnv_size_cutoff = common_cnv_size_cutoff,
-            sv_base_mini_docker = sv_base_mini_docker,
-            linux_docker = linux_docker,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_srtest = runtime_attr_srtest,
-            runtime_attr_split_vcf = runtime_attr_split_vcf,
-            runtime_attr_merge_allo = runtime_attr_merge_allo,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-      }
-
-      if (algorithm != "depth" && algorithm != "melt") {
-        call pet.PETest as PETest {
-          input:
-            discfile = discfile,
-            medianfile = medianfile,
-            ped_file = SubsetPedFile.ped_subset_file,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            ref_dict = ref_dict,
-            split_size = PE_split_size,
-            algorithm = algorithm,
-            allosome_contigs = allosome_contigs,
-            batch = batch,
-            samples = GetSampleLists.samples_file,
-            male_samples = GetSampleLists.male_samples,
-            female_samples = GetSampleLists.female_samples,
-            common_cnv_size_cutoff = common_cnv_size_cutoff,
-            sv_base_mini_docker = sv_base_mini_docker,
-            linux_docker = linux_docker,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_petest = runtime_attr_petest,
-            runtime_attr_split_vcf = runtime_attr_split_vcf,
-            runtime_attr_merge_allo = runtime_attr_merge_allo,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-      }
-
-      call AggregateTests {
+    if (algorithm != "melt") {
+      call rdt.RDTest as RDTest {
         input:
+          coveragefile = coveragefile,
+          medianfile = medianfile,
+          ped_file = SubsetPedFile.ped_subset_file,
           vcf = vcf,
-          petest = PETest.petest,
-          srtest = SRTest.srtest,
-          rdtest = RDTest.rdtest,
-          baftest = BAFTest.baftest,
-          segdups = segdups,
-          rmsk = rmsk,
+          autosome_contigs = autosome_contigs,
+          split_size = RD_split_size,
+          flags = "",
+          algorithm = algorithm,
+          allosome_contigs = allosome_contigs,
+          ref_dict = ref_dict,
+          batch = batch,
+          samples = GetSampleLists.samples_file,
+          male_samples = GetSampleLists.male_samples,
+          female_samples = GetSampleLists.female_samples,
           sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_aggregate_tests
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          linux_docker = linux_docker,
+          runtime_attr_rdtest = runtime_attr_rdtest,
+          runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
       }
 
-      call tasks02.GetCommonVCF {
+      call baft.BAFTest as BAFTest {
         input:
+          baf_metrics = baf_metrics,
           vcf = vcf,
-          cnv_size_cutoff = common_cnv_size_cutoff,
+          autosome_contigs = autosome_contigs,
+          ref_dict = ref_dict,
+          split_size = BAF_split_size,
+          algorithm = algorithm,
+          batch = batch,
+          samples = GetSampleIdsFromVcf.out_array,
+          linux_docker = linux_docker,
           sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_split_vcf
+          runtime_attr_baftest = runtime_attr_baftest,
+          runtime_attr_split_baf_vcf = runtime_attr_split_baf_vcf,
+          runtime_attr_merge_baf = runtime_attr_merge_baf,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
       }
+    }
 
-      call AggregateTests as AggregateTestsCommon {
+    if (algorithm != "depth") {
+      call srt.SRTest as SRTest {
         input:
-          vcf = GetCommonVCF.common_vcf,
-          petest = PETest.petest_common,
-          srtest = SRTest.srtest_common,
-          segdups = segdups,
-          rmsk = rmsk,
+          splitfile = splitfile,
+          medianfile = medianfile,
+          ped_file = SubsetPedFile.ped_subset_file,
+          vcf = vcf,
+          autosome_contigs = autosome_contigs,
+          ref_dict = ref_dict,
+          split_size = SR_split_size,
+          algorithm = algorithm,
+          allosome_contigs = allosome_contigs,
+          batch = batch,
+          samples = GetSampleLists.samples_file,
+          male_samples = GetSampleLists.male_samples,
+          female_samples = GetSampleLists.female_samples,
+          run_common = true,
+          common_cnv_size_cutoff = common_cnv_size_cutoff,
+          sv_base_mini_docker = sv_base_mini_docker,
+          linux_docker = linux_docker,
           sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_aggregate_tests
+          runtime_attr_srtest = runtime_attr_srtest,
+          runtime_attr_split_vcf = runtime_attr_split_vcf,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
       }
+    }
+
+    if (algorithm != "depth" && algorithm != "melt") {
+      call pet.PETest as PETest {
+        input:
+          discfile = discfile,
+          medianfile = medianfile,
+          ped_file = SubsetPedFile.ped_subset_file,
+          vcf = vcf,
+          autosome_contigs = autosome_contigs,
+          ref_dict = ref_dict,
+          split_size = PE_split_size,
+          algorithm = algorithm,
+          allosome_contigs = allosome_contigs,
+          batch = batch,
+          samples = GetSampleLists.samples_file,
+          male_samples = GetSampleLists.male_samples,
+          female_samples = GetSampleLists.female_samples,
+          common_cnv_size_cutoff = common_cnv_size_cutoff,
+          sv_base_mini_docker = sv_base_mini_docker,
+          linux_docker = linux_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_petest = runtime_attr_petest,
+          runtime_attr_split_vcf = runtime_attr_split_vcf,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
+      }
+    }
+
+    call AggregateTests {
+      input:
+        vcf = vcf,
+        petest = PETest.petest,
+        srtest = SRTest.srtest,
+        rdtest = RDTest.rdtest,
+        baftest = BAFTest.baftest,
+        segdups = segdups,
+        rmsk = rmsk,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_aggregate_tests
+    }
+
+    call tasks02.GetCommonVCF {
+      input:
+        vcf = vcf,
+        cnv_size_cutoff = common_cnv_size_cutoff,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_split_vcf
+    }
+
+    call AggregateTests as AggregateTestsCommon {
+      input:
+        vcf = GetCommonVCF.common_vcf,
+        petest = PETest.petest_common,
+        srtest = SRTest.srtest_common,
+        segdups = segdups,
+        rmsk = rmsk,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_aggregate_tests
     }
   }
 

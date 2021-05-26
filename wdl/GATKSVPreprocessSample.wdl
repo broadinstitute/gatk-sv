@@ -244,6 +244,7 @@ task StandardizeVcfs {
       | bcftools annotate --no-version -x ^FORMAT/GT \
       | grep -v "^##GATKCommandLine=" \
       | awk -F '\t' -v OFS='\t' '{ if ($0~/^#/) {print; next;} if ($8~"SVTYPE=BND") {$5="<BND>"} $4="N"; $6="."; $7="."; print}' \
+      | sed -E 's/<INS:.+>/<INS>/g' \
       | bgzip \
       > ~{output_basename}.pesr.vcf.gz
     tabix ~{output_basename}.pesr.vcf.gz

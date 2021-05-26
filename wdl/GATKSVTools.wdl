@@ -192,8 +192,8 @@ task SVAnnotateOverlappingRegions {
       -V ~{vcf} \
       -O ~{output_name}.vcf.gz \
       ~{if require_breakend_overlap then "--require-breakend-overlap" else ""} \
-      "--region-file " ~{sep=" --region-file " region_files} \
-      "--region-name " ~{sep=" --region-name " region_names} \
+      --region-file ~{sep=" --region-file " region_files} \
+      --region-name ~{sep=" --region-name " region_names} \
       ~{"--region-set-rule " + region_set_rule} \
       ~{"--region-merging-rule " + region_merging_rule} \
       ~{"--region-padding " + region_padding}

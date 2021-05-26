@@ -1,6 +1,7 @@
 {
   "name" : "test_batch_small",
-  "merged_standardized_vcf" : "gs://broad-sv-dev-data/markw/test_small.raw_merged.vcf.gz",
+  "merged_standardized_vcf" : "gs://broad-sv-dev-data/markw/test_small.raw_merged.no_subtyped_alleles.vcf.gz",
+  "clustered_vcf" : "gs://broad-sv-dev-data/markw/test_small.clustered.vcf.gz",
   "bam_or_cram_files": [
     "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BI/v1/NA19240_NA19240_1a_SM-GN4BI_v1.cram",
     "gs://fc-dce6617d-8c29-47c3-8da9-ed441f0b7287/Set_4_7_HapMap_samples_3-22-2018/RP-1536/WGS/SM-GN4BK/v1/NA19238_NA19238_1a_SM-GN4BK_v1.cram",
