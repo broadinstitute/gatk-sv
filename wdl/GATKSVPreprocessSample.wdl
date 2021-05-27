@@ -137,6 +137,7 @@ task StandardizeVcfs {
   command <<<
 
     set -euxo pipefail
+    BCFTOOLS=/usr/local/bin/bcftools
 
     ############################################################
     # Filter and standardize gCNV segments VCF
@@ -144,28 +145,28 @@ task StandardizeVcfs {
 
     if ~{defined(gcnv_segments_vcf)}; then
       # Force GT type to String to avoid a bcftools bug
-      tabix ~{gcnv_segments_vcf}
-      zcat ~{gcnv_segments_vcf} \
-        | sed 's/ID=GT,Number=1,Type=Integer/ID=GT,Number=1,Type=String/g' \
-        | bgzip \
-        > gcnv_reheadered.vcf.gz
-      tabix gcnv_reheadered.vcf.gz
+      #tabix ~{gcnv_segments_vcf}
+      #zcat ~{gcnv_segments_vcf} \
+      #  | sed 's/ID=GT,Number=1,Type=Integer/ID=GT,Number=1,Type=String/g' \
+      #  | bgzip \
+      #  > gcnv_reheadered.vcf.gz
+      #tabix gcnv_reheadered.vcf.gz
 
       # With older gCNV versions, piping vcf directly into bcftools gives this error:
       # [W::vcf_parse] Contig 'chr1' is not defined in the header. (Quick workaround: index the file with tabix.)
       # Note use of --no-version to avoid header timestamp, which breaks call caching
-      bcftools view \
+      $BCFTOOLS view \
         --no-version \
         -s ~{sample} \
         -i 'ALT!="." && QS>~{gcnv_min_qs}' \
         -O z \
         -o gcnv_filtered.vcf.gz \
-        gcnv_reheadered.vcf.gz
+        ~{gcnv_segments_vcf}
       tabix gcnv_filtered.vcf.gz
 
       # Standardize by adding required INFO fields
       # Note this will not work on VCFs generated with GATK < v4.1.5.0 !
-      bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\t%ID\n' gcnv_filtered.vcf.gz \
+      $BCFTOOLS query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\t%ID\n' gcnv_filtered.vcf.gz \
         | awk -F "\t" -v OFS="\t" '{
           if ($4=="<DEL>")  {
             svtype="DEL"; strands="+-";
@@ -185,7 +186,7 @@ task StandardizeVcfs {
       echo '##INFO=<ID=STRANDS,Number=1,Type=String,Description="Breakpoint strandedness [++,+-,-+,--]">' >> header_lines.txt
       echo '##INFO=<ID=ALGORITHMS,Number=.,Type=String,Description="Source algorithms">' >> header_lines.txt
 
-      bcftools annotate \
+      $BCFTOOLS annotate \
         --no-version \
         -a ann.tab.gz \
         -h header_lines.txt \
@@ -213,7 +214,7 @@ task StandardizeVcfs {
         --contigs ~{ref_fasta_fai} \
         --min-size ~{min_svsize} \
         $vcf unsorted.vcf ${algorithm}
-      bcftools sort unsorted.vcf -O z -o sorted.${algorithm}.vcf.gz
+      $BCFTOOLS sort unsorted.vcf -O z -o sorted.${algorithm}.vcf.gz
       tabix sorted.${algorithm}.vcf.gz
       echo "sorted.${algorithm}.vcf.gz" >> vcfs.list
     done
@@ -240,8 +241,8 @@ task StandardizeVcfs {
     # Combine and sanitize VCFs
     ############################################################
 
-    bcftools concat --no-version -a --file-list vcfs.list \
-      | bcftools annotate --no-version -x ^FORMAT/GT \
+    $BCFTOOLS concat --no-version -a --file-list vcfs.list \
+      | $BCFTOOLS annotate --no-version -x ^FORMAT/GT \
       | grep -v "^##GATKCommandLine=" \
       | awk -F '\t' -v OFS='\t' '{ if ($0~/^#/) {print; next;} if ($8~"SVTYPE=BND") {$5="<BND>"} $4="N"; $6="."; $7="."; print}' \
       | sed -E 's/<INS:.+>/<INS>/g' \
@@ -249,8 +250,8 @@ task StandardizeVcfs {
       > ~{output_basename}.pesr.vcf.gz
     tabix ~{output_basename}.pesr.vcf.gz
 
-    bcftools concat --no-version -a --file-list cnv_vcfs.list \
-      | bcftools annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN,INFO/CHR2,INFO/END2 \
+    $BCFTOOLS concat --no-version -a --file-list cnv_vcfs.list \
+      | $BCFTOOLS annotate --no-version -x ^FORMAT/GT,INFO/AC,INFO/AN,INFO/CHR2,INFO/END2 \
       | grep -v "^##GATKCommandLine=" \
       | grep -v "^##source=" \
       | bgzip \
