@@ -531,7 +531,7 @@ task GetAndCountCohortSampleList {
   }
 }
 
-task GetRegenotype{
+task GetRegenotype {
   input {
     File depth_genotyped_vcf
     File regeno_sample_counts_lookup
@@ -559,22 +559,40 @@ task GetRegenotype{
     min_count=~{regeno_allele_count_threshold}
     svtk vcf2bed ~{depth_genotyped_vcf} ~{Batch}.bed
     sample=$(fgrep -v "#" ~{Batch}.bed|awk '{if($6!="" )print $6}' |head -n1|cut -d"," -f1)||true
-    fgrep "~{Batch}"_ ~{Batch}.bed|sort -k4,4> ~{Batch}.origin.depth.bed
-    sort -k4,4 ~{regeno_raw_combined_depth} > sort.bed
-    join ~{Batch}.origin.depth.bed sort.bed -1 4 -2 4 -o 1.1,1.2,1.3,1.4,1.5,1.6,2.6 > f3.txt
+    # restrict to variants originating in this batch
+    fgrep "~{Batch}"_ ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
+    rm ~{regeno_raw_combined_depth} ~{depth_genotyped_vcf}
+    # construct variant identifier string chr_start_end_svtype since varIDs may have changed
+    python3 <<CODE
+    in_files = ["~{Batch}.bed", "~{Batch}.origin.raw_combined_depth.bed"]
+    out_files = ["match_~{Batch}.bed", "match_~{Batch}.origin.raw_combined_depth.bed"]
+    for in_file, out_file in zip(in_files, out_files):
+      with open(in_file, 'r') as IN, open(out_file, 'w') as OUT:
+        for line in IN:
+          fields = line.strip().split('\t')
+          identifier = "_".join(fields[0:3] + [fields[4]])
+          OUT.write(identifier + "\t" + line)
+    CODE
+    # sort & join on variant identifier to get sample IDs pre- and post-genotyping in one file
+    sort -k1,1 match_~{Batch}.bed > sort_~{Batch}.bed
+    sort -k1,1 match_~{Batch}.origin.raw_combined_depth.bed > sort_~{Batch}.origin.raw_combined_depth.bed
+    join sort_~{Batch}.bed sort_~{Batch}.origin.raw_combined_depth.bed -1 1 -2 1 -o 1.2,1.3,1.4,1.5,1.6,1.7,2.7 > unsorted_f3.txt
+    sort -k4,4 unsorted_f3.txt > f3.txt
+    rm match_~{Batch}.bed sort_~{Batch}.bed match_~{Batch}.origin.raw_combined_depth.bed sort_~{Batch}.origin.raw_combined_depth.bed unsorted_f3.txt
+    # extract variants with samples lost or gained after genotyping
     while read line;do
         string=$(echo "$line" | cut -d" " -f6 |sed 's/,/|/g')
         string2=$(echo "$line" | cut -d" " -f7 |sed 's/,/|/g')
         echo "$line" |sed -r "s/$string|,//g" |awk -v OFS="\t" '{if ($3-$2>10000 && $6!="" && $5!="CN0")print $1,$2,$3,$4,$5}' >> missing_RF.bed
         echo "$line" |sed -r "s/$string2|,//g" |awk -v OFS="\t" '{if ($3-$2>10000 && $6!="" && $5!="CN0")print $1,$2,$3,$4,$5}' >> missing_RF.bed
-    done<f3.txt
-    sort -u missing_RF.bed > test.txt;mv test.txt missing_RF.bed
+    done < f3.txt
+    sort -u missing_RF.bed > test.txt ; mv test.txt missing_RF.bed
     # VF<0.01 (or provided value) filter for missing sample variants, or AC<=3 (or provided value) if cohort is small
     while read chr start end variant type; do
      varid=$variant: #varid should be single variants
      num=$(fgrep -m1 $varid ~{regeno_sample_counts_lookup}|cut -f8)
      if python -c "exit(0 if (((float($num) / float($n_samp)) < float($max_af)) or (int($num) <= int($min_count))) else 1)"; then
-        printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n">>~{Batch}.to_regeno.bed # modify this to suit intput for Rdtest
+        printf "$chr\t$start\t$end\t$variant\t$sample\t$type\n" >> ~{Batch}.to_regeno.bed # modify this to suit intput for Rdtest
      fi
     done < missing_RF.bed 
   >>>
@@ -592,7 +610,7 @@ task GetRegenotype{
   }
 }
 
-task GetMedianSubset{
+task GetMedianSubset {
   input {
     String batch
     File medians # this task runs per batch, so there is just one medians file
@@ -642,7 +660,7 @@ task GetMedianSubset{
   }
 }
 
-task MedianIntersect{
+task MedianIntersect {
   input {
     File median
     File regeno_list
