@@ -13,6 +13,7 @@
 
 #Print traceback on error
 options(error = traceback)
+options(warn = 2)
 
 #Loads required packages; installs if necessary
 RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
@@ -88,14 +89,16 @@ option_list = list(
               help="Optional:Plot JPG visualization of copy state (requires -j TRUE if want to plot kmeans) . Default:FALSE", metavar="logical"),
   make_option(c("-s", "--sizefilter"), type="numeric", default=1000000,
               help="Optional:Restrict to large CNV to inner specified size Default:1000000", metavar="numeric"),
+  make_option(c("-x", "--newsizefilter"), type="numeric", default=5000000,
+              help="Optional:For CNVs over this size load entire coverage range with median window strategy Default:5000000", metavar="numeric"),
   make_option(c("-u", "--quartetDenovo"), type="logical", default=FALSE,
               help="Proband,Father,Mother, & Sib de novo analysis", metavar="logical"),
   make_option(c("-z", "--mosaicsep"), type="logical", default=FALSE,
               help="Optional:Change sep calculation to a maxium rather than medium for determing mosaic variants", metavar="logical"),
-  make_option(c("-l", "--Blacklist"), type="character", default=NULL,
-              help="Optional:Single column file with blacklist of samples to remove", metavar="character"),
-  make_option(c("-w", "--Whitelist"), type="character", default=NULL,
-              help="Optional:Single column file with whitelist of samples to include", metavar="character")
+  make_option(c("-l", "--SampleExcludeList"), type="character", default=NULL,
+              help="Optional:Single column file with list of samples to exclude", metavar="character"),
+  make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
+              help="Optional:Single column file with list of samples to include", metavar="character")
 );
 
 opt_parser = OptionParser(option_list = option_list)
@@ -196,58 +199,193 @@ rebin <- function(df, compression) {
   return(as.data.frame(cbind(Chr, Start, End, newvals)))
 }
 
+fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome)
+{
+  ##Fill in any gaps between coverage bins with zero-count rows##
+  if (nrow(cov1) > 1) {
+    gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
+    if (any(gapLengths) > 0) {
+      gapStarts <- cov1$end[which(gapLengths > 0)]
+      gapEnds <- cov1$start[which(gapLengths > 0)+1]
+      zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i]-1, by=BinSize) }))
+      zeroBinEnds <- unlist(lapply(1:length(gapEnds),
+                                  function(i) {
+                                    c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i]-1, by=BinSize) }, gapEnds[i])
+                                  }))
+      column_start = matrix(zeroBinStarts, ncol = 1)
+      column_end = matrix(zeroBinEnds, ncol = 1)
+      ncov_col = ncol(cov1)
+      null_model_chr_column <- factor(rep(chromosome,times=length(zeroBinStarts)), levels=levels(cov1$chr))
+      null_model_count_values <- matrix(rep(0, times = nrow(column_start) * (ncov_col - 3)), ncol = ncov_col - 3)
+      null_model <- cbind(data.frame(chr=null_model_chr_column, start=column_start, end=column_end), null_model_count_values)
+      colnames(null_model) <- colnames(cov1)
+
+      cov1 <- rbind(cov1, null_model)
+
+      cov1 <- cov1[order(cov1[, 2]), ]
+    }
+  }
+  return(cov1)
+}
+
+
+applySampleIncludeAndExcludeLists <- function(cov1, allnorm, opt)
+{
+  #Samples Filter
+  if ( !is.null(opt$SampleExcludeList) ) {
+    samplesExcludelist <- readLines(opt$SampleExcludeList)
+    IDsSamplesExcludeListButNotCoverage <-
+      samplesExcludelist[!(samplesExcludelist %in% names(cov1))]
+    if (length(IDsSamplesExcludeListButNotCoverage) > 0)
+    {
+      cat (
+        " WARNING: IDs in samplesExcludelist but not coverage:",
+        IDsSamplesExcludeListButNotCoverage
+      )
+    }
+    ##Filter samples based of specified exclude list here##
+    cov1 <- cov1[,!(names(cov1) %in% samplesExcludelist)]
+    allnorm <-
+      allnorm[,!(names(allnorm) %in% samplesExcludelist)]
+  }
+  print("dim cov1 after sample exclude filter")
+  print(dim(cov1))
+
+  ##Allow inlcude list##
+  if (!is.null(opt$SampleIncludelist)) {
+    samplesIncludeList <- readLines(opt$SampleIncludelist)
+    IDsSamplesIncludelistButNotCoverage <-
+      samplesIncludeList[!(samplesIncludeList %in% names(cov1))]
+    if (length(IDsSamplesIncludelistButNotCoverage) > 0)
+    {
+      cat (
+        " WARNING: IDs in samplesIncludeList but not coverage:",
+        IDsSamplesIncludelistButNotCoverage
+      )
+    }
+    ##make sure to still include first three lines###
+    cov1 <- cov1[,names(cov1) %in% c("chr","start","end",samplesIncludeList)]
+    allnorm <-
+      allnorm[, (names(allnorm) %in% samplesIncludeList)]
+  }
+  print("dim cov1 after sample include filter")
+  print(dim(cov1))
+  return(list(cov1, allnorm))
+}
 
 #Reads coverage of specific queried region and compresses to a reasonable number of bins to create a region coverage matrix
 #sampleIDs is comma specficed list of samples##
 
-loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,poorbincov=NULL)
+removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
+  if (!is.null(poorbincov)) {
+    intervalfile = poorbincov
+    ##take off 10% on each of cnv for more accurate check for depth##
+    start10 <- round(start + ((end - start) * 0.10))
+    end10 <- round(end - ((end - start) * 0.10))
+    cov_exclude <- cov1[which(cov1[, 3] <= start10 | cov1[, 2] >= end10),]
+
+    ##pull outcoord that fail##
+    file.length <- tryCatch(read.table(pipe(paste("tabix -h ", intervalfile, " ", chr, ":", start10, "-", end10, sep = "")), sep = "\t"), error = function(e) NULL)
+
+    passing_int <- c(paste(cov_exclude[, 1], "_", cov_exclude[, 2], "_", cov_exclude[, 3], sep = ""), as.character(file.length[, 4]))
+
+    #don't include poor region filter but still shave 10%###
+    passing_int_noregion <- c(paste(cov_exclude[, 1], "_", cov_exclude[, 2], "_", cov_exclude[, 3], sep = ""))
+
+    ##remove failing bins from coverage file##
+    cov2 <- cov1[-which(paste(cov1[, 1], "_", cov1[, 2], "_", cov1[, 3], sep = "") %in% passing_int),]
+    cov3 <- cov1[-which(paste(cov1[, 1], "_", cov1[, 2], "_", cov1[, 3], sep = "") %in% passing_int_noregion),]
+    ##must have at least 10 bins after filtering or exclude##
+    if (nrow(cov2) > 9) {
+      cov1 <- cov2
+    } else if (nrow(cov3) > 9) {
+      cov1 <- cov3
+    }
+  }
+  return(cov1)
+}
+
+loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,poorbincov=NULL,raw_cov=NULL)
   {
-    #Take the coverage matrix header and tabix query the region in the .gz coverage matrix
-    cov1 <-tryCatch(read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
-    #Load plotting values if median coverage file generated by bincov##
-    allnorm <- read.table(medianfile, header = TRUE, check.names = FALSE)
-    ##remove when start or end pull in extra tabix line##
-    cov1<-cov1[cov1$start!=end,]
-    cov1<-cov1[cov1$end!=start,]
+    if (is.null(raw_cov)) {
+      if (end - start > newsizefilter) {
+        print(paste0("using chunking approach for ", chr,":",start,"-",end))
+        numChunks <- ceiling((end - start) / newsizefilter)
+        print(paste0("numchunks ", numChunks))
+        chunkSize <- trunc((end - start) / numChunks)
+        print(paste0("chunkSize ", chunkSize))
+        chunk <- 1
+        cov1 <- data.frame()
+        BinSize <- -1
+        while (chunk <= numChunks) {
+          print(paste0("processing chunk ", chunk))
+          chunkStart <- start + (chunk - 1) * chunkSize
+          chunkEnd <- start + chunk * chunkSize - 1
+          print(paste0("loading chunk ", chr,":",chunkStart,"-",chunkEnd))
+          chunkData <- tryCatch(read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", chunkStart, "-", chunkEnd, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)), error=function(e) NULL)
+
+          if (BinSize == -1) {
+            BinSize <- median(chunkData$end - chunkData$start)
+          }
+
+          chunkData <- fillGapsInCoverageMatrixWithZeroCountBins(chunkData, BinSize, chr)
+          print("chunk dim before subsampling")
+          print(dim(chunkData))
+
+          if (nrow(chunkData) > 1) {
+            chunkData <- chunkData[(seq(1,nrow(chunkData)) - 1) %% numChunks == 0,]
+          }
+          print("chunk dim after subsampling")
+          print(dim(chunkData))
+
+          cov1 <- rbind(cov1, chunkData)
+          print("cov1 dim after loading chunk")
+          print(dim(cov1))
+
+          chunk <- chunk + 1
+        }
+      } else {
+        #Take the coverage matrix header and tabix query the region in the .gz coverage matrix
+        cov1 <-read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
+        ##remove when start or end pull in extra tabix line##
+        cov1<-cov1[cov1$start!=end,]
+        cov1<-cov1[cov1$end!=start,]
+
+        #Find window bin size
+        BinSize <- median(cov1$end - cov1$start)
+
+        cov1 <- fillGapsInCoverageMatrixWithZeroCountBins(cov1, BinSize, chr)
+
+      }
+
+      raw_coverage <- cov1
+    } else {
+      # reuse previously loaded raw_cov as cov1 matrix
+      print("reusing raw_cov as cov1")
+      cov1 <- raw_cov
+      raw_coverage <- raw_cov
+    }
+
+
+    print("Done loading cov1")
+    print(dim(cov1))
+
     #Check if no data
     if (nrow(cov1) < 1) {
       return("Failure")
     }
-    #Find window bin size
-    BinSize <- median(cov1$end - cov1$start)
-    ##Fill in any gaps between coverage bins with zero-count rows##
-    if (nrow(cov1) > 1) {
-      gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
-      if (any(gapLengths) > 0) {
-        gapStarts <- cov1$end[which(gapLengths > 0)]
-        gapEnds <- cov1$start[which(gapLengths > 0)+1]
-        zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i]-1, by=BinSize) }))
-        zeroBinEnds <- unlist(lapply(1:length(gapEnds),
-                                     function(i) {
-                                       c( if (gapStarts[i] + BinSize < gapEnds[i]) { seq(gapStarts[i] + BinSize, gapEnds[i]-1, by=BinSize) }, gapEnds[i])
-                                     }))
-        column_start = matrix(zeroBinStarts, ncol = 1)
-        column_end = matrix(zeroBinEnds, ncol = 1)
-        ncov_col = ncol(cov1)
-        null_model <-
-          cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
-            (ncov_col - 3)), ncol = ncov_col - 3))
-        colnames(null_model) <- colnames(cov1)
 
-        cov1 <- rbind(cov1, null_model)
+    #Load plotting values if median coverage file generated by bincov##
+    allnorm <- read.table(medianfile, header = TRUE, check.names = FALSE)
 
-        ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
-        if (nrow(cov1) > 1) {
-          cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
-        } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
-        cov1 <- cov1[order(cov1[, 2]), ]
-      }
-    }
+
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
     startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
     endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
+    print(paste0("adj to inner bins: ", startAdjToInnerBinStart, "-", endAdjToInnerBinEnd))
 
     numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
+    print(paste0("numInternalBins: ", numInternalBins))
     if (numInternalBins < bins)
     {
       bins = numInternalBins
@@ -270,9 +408,9 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       # Number of bins that need to be removed
       RemainderForRemoval <-
         ##Need to account for round error by trunc so add the decimal####
-      trunc(((
-        UnadjustedBins - trunc(UnadjustedBins)
-      ) * bins / 2) + 0.000000001)
+        trunc(((
+          UnadjustedBins - trunc(UnadjustedBins)
+        ) * bins / 2) + 0.000000001)
       BinsToRemoveFromFront <-
         round_any(RemainderForRemoval, 1, floor)
       BinsToRemoveFromBack <-
@@ -293,45 +431,17 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     #Cut bins down to those required for compressed clean size based on Rstart and Rend##
     cov1<-cov1[which(cov1[,3]>Rstart & cov1[,2]<Rend ),]
 
-    #Samples Filter
-    if ( !is.null(opt$Blacklist) ) {
-      samplesBlacklist <- readLines(opt$Blacklist)
-      IDsSamplesBlacklistButNotCoverage <-
-        samplesBlacklist[!(samplesBlacklist %in% names(cov1))]
-      if (length(IDsSamplesBlacklistButNotCoverage) > 0)
-      {
-        cat (
-          " WARNING: IDs in samplesBlacklist but not coverage:",
-          IDsSamplesBlacklistButNotCoverage
-        )
-      }
-      ##Filter samples based of specified blacklist here##
-      cov1 <- cov1[,!(names(cov1) %in% samplesBlacklist)]
-      allnorm <-
-        allnorm[,!(names(allnorm) %in% samplesBlacklist)]
-    }
-    
-    ##Allow whitelist##
-    if (!is.null(opt$Whitelist)) {
-      samplesWhitelist <- readLines(opt$Whitelist)
-      IDsSamplesWhitelistButNotCoverage <-
-        samplesWhitelist[!(samplesWhitelist %in% names(cov1))]
-      if (length(IDsSamplesWhitelistButNotCoverage) > 0)
-      {
-        cat (
-          " WARNING: IDs in samplesWhitelist but not coverage:",
-          IDsSamplesWhitelistButNotCoverage
-        )
-      }
-      ##make sure to still include first three lines###
-      cov1 <- cov1[,names(cov1) %in% c("chr","start","end",samplesWhitelist)]
-      allnorm <-
-      allnorm[, (names(allnorm) %in% samplesWhitelist)]
-    }
+    sampleFilterResult <- applySampleIncludeAndExcludeLists(cov1, allnorm, opt)
+    cov1 <- sampleFilterResult[[1]]
+    allnorm <- sampleFilterResult[[2]]
+
+    print("after return from sample filter")
+    print(dim(cov1))
     if (ncol(cov1) < 4)
     {
       stop (" WARNING: All samples excluded by filtering")
-    } 
+    }
+
     #Approximates rebinned per-sample medians (approximated for speed & memory)
     allnorm[which(allnorm == 0)] <- 1
     allnorm <- compression * allnorm
@@ -340,31 +450,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     cov1[cov1 == 0] <- 1
     
     ##restrict bins to those with unique mapping##
-    if (!is.null(poorbincov)) {
-      intervalfile=poorbincov
-      ##take off 10% on each of cnv for more accurate check for depth##
-      start10<-round(start+((end-start)*0.10))
-      end10<-round(end-((end-start)*0.10))
-      cov_exclude<-cov1[which(cov1[,3]<=start10 | cov1[,2]>=end10),]
-      
-      ##pull outcoord that fail##
-      file.length<-tryCatch(read.table(pipe(paste("tabix -h ",intervalfile ," ", chr, ":", start10, "-", end10, sep = "")),sep = "\t"), error=function(e) NULL)
-
-      passing_int<-c(paste(cov_exclude[,1],"_",cov_exclude[,2],"_",cov_exclude[,3],sep=""),as.character(file.length[,4]))
-      
-      #don't include poor region filter but still shave 10%###
-      passing_int_noregion<-c(paste(cov_exclude[,1],"_",cov_exclude[,2],"_",cov_exclude[,3],sep=""))
-      
-      ##remove failing bins from coverage file##
-      cov2<-cov1[-which(paste(cov1[,1],"_",cov1[,2],"_",cov1[,3],sep="") %in% passing_int),]
-      cov3<-cov1[-which(paste(cov1[,1],"_",cov1[,2],"_",cov1[,3],sep="") %in% passing_int_noregion),]
-      ##must have at least 10 bins after filtering or exclude##
-      if (nrow(cov2) >9) {
-          cov1<-cov2
-      } else if (nrow(cov3) >9) {
-        cov1<-cov3
-      }
-    }
+    cov1 <- removeExcludedBinCovBins(chr, cov1, end, poorbincov, start)
 
     #Rebins values
     if (compression > 1) {
@@ -393,7 +479,7 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     } else {
       cnv_matrix <- as.matrix(res1)
     }
-    return(cnv_matrix)
+    return(list(cnv_matrix=cnv_matrix, raw_cov=raw_coverage))
   }
 
 #Loads specified sample set in genotyping matrix based on the specified cnv type (del=1,dup=3) and unspecified samples as cn=2
@@ -406,7 +492,7 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
     samplenames <- colnames(as.matrix(genotype_matrix))
     columnswithsamp <- which(colnames(genotype_matrix) %in% unlist(strsplit(as.character(sampleIDs),split=","))) 
     if (length(columnswithsamp)==0) {
-      ##"WARNING: No samples in coverage matrix for comparision check black/whitelist"##
+      ##"WARNING: No samples in coverage matrix for comparision check exclude/include lists"##
       return ("No_Samples")
     }
     
@@ -1014,8 +1100,9 @@ runRdTest<-function(bed)
     assign(names,unname(unlist(opt[names])))
   }
   #Speed up large cnvs by taking inner range of laregest desired size
-  if (end - start  > sizefilter)
-  {
+  if (end - start > newsizefilter) {
+    cat(paste(chr,":",start,"-",end,":Using new large event subsampling\n",sep=""))
+  } else if (end - start  > sizefilter) {
     cat(paste(chr,":",start,"-",end,":Large size so subsampling in middle\n",sep=""))
     center=(start + end) / 2 
     start = round(center - (sizefilter/2))
@@ -1031,22 +1118,35 @@ runRdTest<-function(bed)
   
   ##Get Intesity Data##
   if (exists("poorbincov")) {
-    cnv_matrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,poorbincov)
+    loadResult <-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,poorbincov)
+    print("loaded")
+    print(names(loadResult))
+    cnv_matrix <- loadResult[["cnv_matrix"]]
+    print("dim matrix")
+    print(dim(cnv_matrix))
+    raw_cov <- loadResult[["raw_cov"]]
   } else {
-    cnv_matrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins)
+    loadResult<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter)
+    print("loaded")
+    print(names(loadResult))
+    cnv_matrix <- loadResult[["cnv_matrix"]]
+    print("dim matrix")
+    print(dim(cnv_matrix))
+    raw_cov <- loadResult[["raw_cov"]]
+
   }
 
   if (cnv_matrix[1]=="Failure") {
     ##assign genotype if no coverage##
-    if (opt$rungenotype == TRUE && !is.null(opt$Whitelist)) {
-      samplesWhitelist <- readLines(opt$Whitelist)
+    if (opt$rungenotype == TRUE && !is.null(opt$SampleIncludeList)) {
+      samplesIncludeList <- readLines(opt$SampleIncludeList)
       ##make dots to indicate missing genotype or GQ##
-      dotlist<- samplesWhitelist
+      dotlist<- samplesIncludeList
       dotlist[1:length(dotlist)]<-"."
-      ##write out cnv medians for each sample (requires whitelist)##
+      ##write out cnv medians for each sample (requires include list)##
       if(!file.exists(paste(outFolder,outputname,".median_geno",sep=""))) {
         ##write header##
-        write.table(matrix(c("chr","start","end","cnvID",samplesWhitelist),nrow=1),paste(outFolder, outputname, ".median_geno", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")
+        write.table(matrix(c("chr","start","end","cnvID",samplesIncludeList),nrow=1),paste(outFolder, outputname, ".median_geno", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")
       }
       write.table(matrix(c(chr, start, end, cnvID,dotlist),nrow=1),paste(outFolder, outputname, ".median_geno", sep = ""),
                   quote = FALSE,col.names = FALSE, row.names = FALSE,append=TRUE,sep= "\t")
@@ -1054,7 +1154,7 @@ runRdTest<-function(bed)
       ##write GQ##
       if(!file.exists(paste(outFolder,outputname,".gq",sep=""))) {
         ##write header##
-        write.table(matrix(c("chr","start","end","cnvID",samplesWhitelist),nrow=1),paste(outFolder, outputname, ".gq", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")
+        write.table(matrix(c("chr","start","end","cnvID",samplesIncludeList),nrow=1),paste(outFolder, outputname, ".gq", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")
       }
       write.table(matrix(c(chr, start, end, cnvID,dotlist),nrow=1),paste(outFolder, outputname, ".gq", sep = ""),
                   quote = FALSE,col.names = FALSE, row.names = FALSE,append=TRUE,sep= "\t")
@@ -1071,7 +1171,7 @@ runRdTest<-function(bed)
       
       if(!file.exists(paste(outFolder,outputname,".geno",sep=""))) {
         ##write header##
-        write.table(matrix(c("chr","start","end","cnvID",samplesWhitelist),nrow=1),paste(outFolder, outputname, ".geno", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")  
+        write.table(matrix(c("chr","start","end","cnvID",samplesIncludeList),nrow=1),paste(outFolder, outputname, ".geno", sep = ""),quote=FALSE,row.names=FALSE,col.names=FALSE,sep= "\t")
       } 
       write.table(matrix(c(chr, start, end, cnvID,dotlist),nrow=1),paste(outFolder, outputname, ".geno", sep = ""),
                   quote = FALSE,col.names = FALSE, row.names = FALSE,append=TRUE,sep= "\t")
@@ -1079,7 +1179,7 @@ runRdTest<-function(bed)
     return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"coverage_failure","coverage_failure","coverage_failure","coverage_failure","coverage_failure","coverage_failure"))
   }
   
-  ##remove black or white list samples from sampleIDs###
+  ##remove excluded or included samples from sampleIDs lists###
   idsforsearch<-rownames(cnv_matrix)
   samplestokeep<-match(unlist(strsplit(sampleIDs,",")),idsforsearch)
   sampleIDs<-idsforsearch[na.omit(samplestokeep)]
@@ -1101,7 +1201,7 @@ runRdTest<-function(bed)
   ##genotype and write to file##
   if (opt$rungenotype == TRUE) {
     ##Compress x-axis to 10 bins so it is easier to view###
-    plot_cnvmatrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins=10)  
+    plot_cnvmatrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,newsizefilter,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
   }
   
