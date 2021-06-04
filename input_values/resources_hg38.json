@@ -51,12 +51,12 @@
   "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "sanders_2015_tarball" : "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz",
   "thousand_genomes_tarballs" : [
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.ALL.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.AMR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EAS.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.EUR.bed.gz",
-    "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/1000G_Sudmant/1000G_Sudmant.SV.SAS.bed.gz"
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.AFR.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.ALL.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.AMR.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.EAS.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.EUR.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant/1000G_Sudmant.SV.SAS.bed.gz"
   ],
   "unpadded_intervals_file" : "gs://gcp-public-data--broad-references/hg38/v0/hg38.even.handcurated.20k.intervals",
   "wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
