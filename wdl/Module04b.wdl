@@ -715,7 +715,8 @@ task MergeList {
 
   command {
     set -euo pipefail
-    cat ~{sep=' ' regeno_beds} | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
+    # concatenate, remove duplicate variant IDs (ignore other columns), then sort by position
+    cat ~{sep=' ' regeno_beds} | sort -u -k4,4 | sort -k1,1V -k2,2n -k3,3n > ~{prefix}.bed
     # count non-empty lines in regeno bed file to determine if empty or not --> proceed with regenotyping or stop here?
     # the OR clause is to ignore return code = 1 because that isn't an error, it just means there were 0 matched lines (but don't ignore real error codes > 1)
     NUM_REGENO=$(grep -c '[^[:space:]]' ~{prefix}.bed || [[ $? == 1 ]] ) 
