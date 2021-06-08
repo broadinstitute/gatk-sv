@@ -109,11 +109,11 @@ Sample IDs should NOT:
 
 The same requirements apply to family IDs in the PED file, batch IDs (`sample_set_id`), and the cohort ID (`sample_set_set_id`).
 
-We recommend transforming sample IDs using [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) prior to uploading your sample data table. The following files will need to be updated with the transformed sample IDs:
+Sample IDs are provided to `module00a` directly and need not match sample names from the BAM/CRAM headers or GVCFs. We recommend transforming sample IDs using [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) prior to uploading your sample data table. (Currently, sample IDs can be replaced again in `module00c`.) The following files will need to be updated with the transformed sample IDs:
 * Sample data table (for Terra)
 * PED file
 * Sample set membership file (for Terra)
-* SNP VCF header (if using instead of GVCFs in Module00c)
+* SNP VCF header (if using instead of GVCFs in `module00c`)
 
 ### Workspace setup
 
