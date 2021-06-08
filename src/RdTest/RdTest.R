@@ -248,8 +248,8 @@ applySampleIncludeAndExcludeLists <- function(cov1, allnorm, opt)
     allnorm <-
       allnorm[,!(names(allnorm) %in% samplesExcludelist)]
   }
-  print("dim cov1 after sample exclude filter")
-  print(dim(cov1))
+  #print("dim cov1 after sample exclude filter")
+  #print(dim(cov1))
 
   ##Allow inlcude list##
   if (!is.null(opt$SampleIncludelist)) {
@@ -268,8 +268,8 @@ applySampleIncludeAndExcludeLists <- function(cov1, allnorm, opt)
     allnorm <-
       allnorm[, (names(allnorm) %in% samplesIncludeList)]
   }
-  print("dim cov1 after sample include filter")
-  print(dim(cov1))
+  #print("dim cov1 after sample include filter")
+  #print(dim(cov1))
   return(list(cov1, allnorm))
 }
 
@@ -309,41 +309,52 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
   {
     if (is.null(raw_cov)) {
       if (end - start > newsizefilter) {
-        print(paste0("using chunking approach for ", chr,":",start,"-",end))
-        numChunks <- ceiling((end - start) / newsizefilter)
-        print(paste0("numchunks ", numChunks))
-        chunkSize <- trunc((end - start) / numChunks)
-        print(paste0("chunkSize ", chunkSize))
-        chunk <- 1
-        cov1 <- data.frame()
-        BinSize <- -1
-        while (chunk <= numChunks) {
-          print(paste0("processing chunk ", chunk))
-          chunkStart <- start + (chunk - 1) * chunkSize
-          chunkEnd <- start + chunk * chunkSize - 1
-          print(paste0("loading chunk ", chr,":",chunkStart,"-",chunkEnd))
-          chunkData <- tryCatch(read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", chunkStart, "-", chunkEnd, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)), error=function(e) NULL)
+        #print(paste0("using smmoth subsampling approach for ", chr,":",start,"-",end))
+        regionPoints <- 1000
+        pointSpacing <-  trunc((end - start) / regionPoints)
+        points <- seq(start, end, by=pointSpacing)
+        pointBed <- data.frame(chr=chr, start=points, end=points+1)
+        #print("pointBed")
+        #print(head(pointBed))
+        #print(tail(pointBed))
+        pointFile <- tempfile(pattern=cnvID)
+        write.table(pointBed, file=pointFile, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
+        cov1 <- tryCatch(read.table(pipe(paste("tabix -h ",coveragefile," -R ", pointFile, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)), error=function(e) NULL)
 
-          if (BinSize == -1) {
-            BinSize <- median(chunkData$end - chunkData$start)
-          }
+        #numChunks <- ceiling((end - start) / newsizefilter)
+        #print(paste0("numchunks ", numChunks))
+        #chunkSize <- trunc((end - start) / numChunks)
+        #print(paste0("chunkSize ", chunkSize))
+        #chunk <- 1
+        #cov1 <- data.frame()
+        #BinSize <- -1
+        #while (chunk <= numChunks) {
+        #  print(paste0("processing chunk ", chunk))
+        # chunkStart <- start + (chunk - 1) * chunkSize
+        #  chunkEnd <- start + chunk * chunkSize - 1
+        #  print(paste0("loading chunk ", chr,":",chunkStart,"-",chunkEnd))
+        #  chunkData <- read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", chunkStart, "-", chunkEnd, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
 
-          chunkData <- fillGapsInCoverageMatrixWithZeroCountBins(chunkData, BinSize, chr)
-          print("chunk dim before subsampling")
-          print(dim(chunkData))
+        #  if (BinSize == -1) {
 
-          if (nrow(chunkData) > 1) {
-            chunkData <- chunkData[(seq(1,nrow(chunkData)) - 1) %% numChunks == 0,]
-          }
-          print("chunk dim after subsampling")
-          print(dim(chunkData))
+        #  }
 
-          cov1 <- rbind(cov1, chunkData)
-          print("cov1 dim after loading chunk")
-          print(dim(cov1))
+        #  chunkData <- fillGapsInCoverageMatrixWithZeroCountBins(chunkData, BinSize, chr)
+        #  print("chunk dim before subsampling")
+        #  print(dim(chunkData))
 
-          chunk <- chunk + 1
-        }
+        #  if (nrow(chunkData) > 1) {
+        #    chunkData <- chunkData[(seq(1,nrow(chunkData)) - 1) %% numChunks == 0,]
+        #  }
+        #  print("chunk dim after subsampling")
+        #  print(dim(chunkData))
+
+        #  cov1 <- rbind(cov1, chunkData)
+        #BinSize <- median(cov1$end - chunkData$start)
+        #print("cov1 dim after loading chunk")
+        #print(dim(cov1))
+
+        #  chunk <- chunk + 1
       } else {
         #Take the coverage matrix header and tabix query the region in the .gz coverage matrix
         cov1 <-read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
@@ -361,14 +372,14 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
       raw_coverage <- cov1
     } else {
       # reuse previously loaded raw_cov as cov1 matrix
-      print("reusing raw_cov as cov1")
+      #print("reusing raw_cov as cov1")
       cov1 <- raw_cov
       raw_coverage <- raw_cov
     }
 
 
-    print("Done loading cov1")
-    print(dim(cov1))
+    #print("Done loading cov1")
+    #print(dim(cov1))
 
     #Check if no data
     if (nrow(cov1) < 1) {
@@ -382,10 +393,10 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
     startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
     endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
-    print(paste0("adj to inner bins: ", startAdjToInnerBinStart, "-", endAdjToInnerBinEnd))
+    #print(paste0("adj to inner bins: ", startAdjToInnerBinStart, "-", endAdjToInnerBinEnd))
 
     numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
-    print(paste0("numInternalBins: ", numInternalBins))
+    #print(paste0("numInternalBins: ", numInternalBins))
     if (numInternalBins < bins)
     {
       bins = numInternalBins
@@ -435,8 +446,8 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     cov1 <- sampleFilterResult[[1]]
     allnorm <- sampleFilterResult[[2]]
 
-    print("after return from sample filter")
-    print(dim(cov1))
+    #print("after return from sample filter")
+    #print(dim(cov1))
     if (ncol(cov1) < 4)
     {
       stop (" WARNING: All samples excluded by filtering")
@@ -1119,19 +1130,19 @@ runRdTest<-function(bed)
   ##Get Intesity Data##
   if (exists("poorbincov")) {
     loadResult <-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,poorbincov)
-    print("loaded")
-    print(names(loadResult))
+    #print("loaded")
+    #print(names(loadResult))
     cnv_matrix <- loadResult[["cnv_matrix"]]
-    print("dim matrix")
-    print(dim(cnv_matrix))
+    #print("dim matrix")
+    #print(dim(cnv_matrix))
     raw_cov <- loadResult[["raw_cov"]]
   } else {
     loadResult<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter)
-    print("loaded")
-    print(names(loadResult))
+    #print("loaded")
+    #print(names(loadResult))
     cnv_matrix <- loadResult[["cnv_matrix"]]
-    print("dim matrix")
-    print(dim(cnv_matrix))
+    #print("dim matrix")
+    #print(dim(cnv_matrix))
     raw_cov <- loadResult[["raw_cov"]]
 
   }
