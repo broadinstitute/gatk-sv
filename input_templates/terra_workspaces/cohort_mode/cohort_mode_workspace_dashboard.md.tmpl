@@ -4,7 +4,7 @@ GATK-SV is a structural variation discovery pipeline for Illumina short-read who
 Please refer to the README in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv) for full documentation of this pipeline. This dashboard will focus on the information necessary to run the pipeline through Terra.
 
 ## Data
-The sample data in this workspace is 312 publicly-available 1000 Genomes Project samples from the NYGC/AnVIL high coverage data set, divided into two equally-sized batches.
+The sample data in this workspace is 312 publicly-available 1000 Genomes Project samples from the [NYGC/AnVIL high coverage data set](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019), divided into two equally-sized batches.
 
 ## Pipeline Expectations
 ### What does it do? 
@@ -98,12 +98,21 @@ This section will cover how to run the pipeline on your own data in Terra.
 
 ### Sample ID requirements 
 
-Sample IDs should be unique and contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters). The same requirements apply to family IDs in the PED file, batch IDs (`sample_set_id`), and the cohort ID (`sample_set_set_id`).
+Sample IDs MUST:
+* Be unique within the cohort
+* Contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters) 
+
+Sample IDs should NOT:
+* Contain only numeric characters
+* Be a substring of another sample ID in the same cohort
+* Contain any of the following substrings: `chr`, `name`, `DEL`, `DUP`, `CPX`, `CHROM`
+
+The same requirements apply to family IDs in the PED file, batch IDs (`sample_set_id`), and the cohort ID (`sample_set_set_id`).
 
 We recommend transforming sample IDs using [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) prior to uploading your sample data table. The following files will need to be updated with the transformed sample IDs:
 * Sample data table (for Terra)
 * PED file
-* Sample set membership file
+* Sample set membership file (for Terra)
 * SNP VCF header (if using instead of GVCFs in Module00c)
 
 ### Workspace setup
