@@ -46,7 +46,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
 * Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [Module 00b](#module00b)) should be entered as sex = 0.
 
-#### <a name="sampleids">Sample ID requirements</a>
+#### <a name="sampleids">Sample ID requirements:</a>
 
 Sample IDs must:
 * Be unique within the cohort
