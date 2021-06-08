@@ -46,6 +46,26 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
 * Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [Module 00b](#module00b)) should be entered as sex = 0.
 
+#### <a name="sampleids">Sample ID requirements:</a>
+
+Sample IDs must:
+* Be unique within the cohort
+* Contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters)
+
+Sample IDs should not:
+* Contain only numeric characters
+* Be a substring of another sample ID in the same cohort
+* Contain any of the following substrings: `chr`, `name`, `DEL`, `DUP`, `CPX`, `CHROM`
+
+The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow inputs.
+
+Sample IDs are provided to [Module00a](#module00a) directly and need not match sample names from the BAM/CRAM headers or GVCFs. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [Module 00c](#module00c). 
+
+The following inputs will need to be updated with the transformed sample IDs:
+* Sample ID list for [Module00a](#module00a) or [Module 00c](#module00c)
+* PED file
+* SNP VCF header (if using instead of GVCFs in [Module 00c](#module00c))
+
 
 ## <a name="citation">Citation</a>
 Please cite the following publication:
@@ -176,7 +196,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="module00a">Module 00a</a>
 Runs raw evidence collection on each sample.
 
-Note: a list of sample IDs must be provided. These IDs should be unique and contain only alphanumeric characters and underscores. They need not match sample names from the BAM/CRAM headers. IDs containing other characters may cause errors. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline. Currently, sample IDs can be replaced again in [Module 00c](#module00c).
+Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
 #### Inputs:
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
