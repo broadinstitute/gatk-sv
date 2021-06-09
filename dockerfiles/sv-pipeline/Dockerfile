@@ -27,7 +27,7 @@ RUN apt-get -qqy update --fix-missing && \
     bcftools --help
 
 # Install plink2 & KING (for relatedness inference)
-ARG KING_URL="http://people.virginia.edu/~wc9c/KING/executables/Linux-king215.tar.gz"
+ARG KING_URL="https://www.kingrelatedness.com/executables/Linux-king215.tar.gz"
 ARG PLING2_URL="https://github.com/chrchang/plink-ng/releases/download/2019/plink2_linux_x86_64_20190107.zip"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
