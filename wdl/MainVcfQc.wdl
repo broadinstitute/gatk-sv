@@ -2,6 +2,9 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
+# Note: this WDL has been customized specifically for the gnomAD-SV v3 callset
+# Some components of this WDL will not be generalizable for most cohorts
+
 import "ShardedQcCollection.wdl" as ShardedQcCollection
 import "CollectQcPerSample.wdl" as CollectQcPerSample
 import "PerSampleExternalBenchmark.wdl" as PerSampleExternalBenchmark
@@ -68,6 +71,7 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
+
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
     # Collect VCF-wide summary stats
@@ -96,7 +100,6 @@ workflow MasterVcfQc {
       index_output=true,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_vcfwide_stat_shards
-
   }
 
   # Merge vcf2bed output
@@ -117,6 +120,7 @@ workflow MasterVcfQc {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
   }
+
   # Collect per-sample VID lists
   call CollectQcPerSample.CollectQcPerSample as CollectPerSampleVidLists {
     input:
@@ -153,6 +157,7 @@ workflow MasterVcfQc {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_family
   }
+  
   # Sanitize all outputs
   call SanitizeOutputs {
     input:
