@@ -30,18 +30,14 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * [CI/CD](#cicd)
 * [Troubleshooting](#troubleshooting)
 
+For more information on GATK-SV, please refer to [the documentation provided in the main GATK-SV repo](https://github.com/broadinstitute/gatk-sv) or to the supplementary methods from [the gnomAD-SV v2 paper](https://www.nature.com/articles/s41586-020-2287-8).  
 
-## <a name="requirements">Requirements</a>
+For more information about gnomAD, please visit [the official gnomAD website](https://gnomad.broadinstitute.org/about).
 
+### Contact & Credits  
 
-### Deployment and execution:
-* A [Google Cloud](https://cloud.google.com/) account.
-* A workflow execution system supporting the [Workflow Description Language](https://openwdl.org/) (WDL), either:
-  * [Cromwell](https://github.com/broadinstitute/cromwell) (v36 or higher). A dedicated server is highly recommended.
-  * or [Terra](https://terra.bio/) (note preconfigured GATK-SV workflows are not yet available for this platform)
-* Recommended: [MELT](https://melt.igs.umaryland.edu/). Due to licensing restrictions, we cannot provide a public docker image or reference panel VCFs for this algorithm.
-* Recommended: [cromshell](https://github.com/broadinstitute/cromshell) for interacting with a dedicated Cromwell server.
-* Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
+Copyright (c) 2021 Talkowski Lab and The Broad Institute of M.I.T. and Harvard  
+Contact: [Ryan Collins](mailto:rlcollins@g.harvard.edu)  
 
 #### Alternative backends
 Because GATK-SV has been tested only on the Google Cloud Platform (GCP), we are unable to provide specific guidance or support for other execution platforms including HPC clusters and AWS. Contributions from the community to improve portability between backends will be considered on a case-by-case-basis. We ask contributors to please adhere to the following guidelines when submitting issues and pull requests:
