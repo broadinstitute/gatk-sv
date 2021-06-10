@@ -80,6 +80,10 @@ class CMD_line_args_parser:
                                               action = 'store_true',
                                               help   = 'also update \"latest\" tag in remote docker repo(s)')
 
+        docker_remote_args_group.add_argument('--dry-run',
+                                              action = 'store_true',
+                                              help   = 'If given, the script will not push the built images to gcr.')
+
         # flag to turn off git protection (default modue is refusing to build when there are untracked files and/or uncommited changes)
         parser.add_argument('--disable-git-protect',
                             action = 'store_true',
@@ -373,8 +377,9 @@ class Project_Build:
             self.successfully_built_images.append(docker)
             print(colored('#################################################', 'magenta'))
 
-        for succ in self.successfully_built_images:
-            succ.push(self.project_arguments.update_latest)
+        if not self.project_arguments.dry_run:
+            for succ in self.successfully_built_images:
+                succ.push(self.project_arguments.update_latest)
 
         print(colored('BUILD PROCESS SUCCESS!', 'red'))
 
