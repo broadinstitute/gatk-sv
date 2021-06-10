@@ -17,12 +17,12 @@ workflow MasterVcfQc {
   input {
     File vcf
     File? vcf_idx
-    File ped_file
+    File? ped_file
     String prefix
     Int sv_per_shard
     Int samples_per_shard
-    Array[Pair(String, File)]? site_level_comparison_datasets
-    Array[Pair(String, File)]? sample_level_comparison_datasets
+    File? site_level_comparison_datasets_tsv
+    File? sample_level_comparison_datasets_tsv
     Array[String] contigs
     Int? random_seed
 
@@ -60,6 +60,17 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
+  }
+
+  # Reads external benchmarking dataset input .tsvs as Arrays for scattering
+  # Expected two-column tsv:
+  #   column 1 = dataset prefix / name
+  #   column 2 = gs:// path to dataset tarball
+  if (defined(site_level_comparison_datasets_tsv)) {
+    Array[Array[String]]? site_level_comparison_datasets = read_tsv(select_first([site_level_comparison_datasets_tsv]))
+  }
+  if (defined(sample_level_comparison_datasets_tsv)) {
+    Array[Array[String]]? sample_level_comparison_datasets = read_tsv(select_first([sample_level_comparison_datasets_tsv]))
   }
 
   # Scatter raw variant data collection per chromosome
@@ -111,6 +122,34 @@ workflow MasterVcfQc {
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
   }
 
+  # Collect and plot site-level benchmarking vs. external datasets
+  if (defined(site_level_comparison_datasets)) {
+    scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets, 
+                                                       [[], []]]) ) {
+
+      # Collect site-level external benchmarking data
+      call VcfExternalBenchmark as CollectSiteLevelBenchmarking {
+        input:
+          vcf_stats=MergeVcfwideStatShards.merged_bed_file,
+          prefix=prefix,
+          benchmarking_archives=[comparison_dataset_info[1]],
+          comparator=comparison_dataset_info[0],
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          runtime_attr_override=runtime_override_site_level_benchmark
+      }
+
+      # Plot site-level benchmarking results
+      call PlotQcExternalBenchmarking as PlotSiteLevelBenchmarking {
+        input:
+          benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
+          prefix=prefix,
+          comparator=comparison_dataset_info[0],
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          runtime_attr_override=runtime_override_site_level_benchmark_plot
+      }
+    }
+  }
+
   # Collect per-sample VID lists
   call CollectQcPerSample.CollectQcPerSample as CollectPerSampleVidLists {
     input:
@@ -136,48 +175,24 @@ workflow MasterVcfQc {
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
 
-  # Plot per-family stats
-  call PlotQcPerFamily {
-    input:
-      vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-      samples_list=CollectQcVcfwide.samples_list[0],
-      ped_file=ped_file,
-      per_sample_tarball=CollectPerSampleVidLists.vid_lists,
-      prefix=prefix,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      runtime_attr_override=runtime_override_plot_qc_per_family
-  }
-
-  # Collect and plot site-level benchmarking vs. external datasets
-  if (length(site_level_comparison_datasets) > 0) {
-    scatter ( comparison_dataset_info in site_level_comparison_datasets ) {
-
-      # Collect site-level external benchmarking data
-      call VcfExternalBenchmark as CollectSiteLevelBenchmarking {
-        input:
-          vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-          prefix=prefix,
-          benchmarking_archives=comparison_dataset_info.right,
-          comparator=comparison_dataset_info.left,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_attr_override=runtime_override_site_level_benchmark
-      }
-
-      # Plot site-level benchmarking results
-      call PlotQcExternalBenchmarking as PlotSiteLevelBenchmarking {
-        input:
-          benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
-          prefix=prefix,
-          comparator=comparison_dataset_info.left,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_attr_override=runtime_override_site_level_benchmark_plot
-      }
+  # Plot per-family stats if .ped file provided as input
+  if (defined(ped_file)) {
+    call PlotQcPerFamily {
+      input:
+        vcf_stats=MergeVcfwideStatShards.merged_bed_file,
+        samples_list=CollectQcVcfwide.samples_list[0],
+        ped_file=select_first([ped_file]),
+        per_sample_tarball=CollectPerSampleVidLists.vid_lists,
+        prefix=prefix,
+        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        runtime_attr_override=runtime_override_plot_qc_per_family
     }
   }
 
   # Collect and plot per-sample benchmarking vs. external callsets
-  if (length(sample_level_comparison_datasets) > 0) {
-    scatter ( comparison_dataset_info in sample_level_comparison_datasets ) {
+  if (defined(sample_level_comparison_datasets)) {
+    scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets, 
+                                                       [[], []]]) ) {
 
       # Collect per-sample external benchmarking data
       call PerSampleExternalBenchmark.PerSampleExternalBenchmark as CollectPerSampleBenchmarking {
@@ -185,9 +200,9 @@ workflow MasterVcfQc {
           vcf_stats=MergeVcfwideStatShards.merged_bed_file,
           samples_list=CollectQcVcfwide.samples_list[0],
           per_sample_tarball=CollectPerSampleVidLists.vid_lists,
-          comparison_tarball=comparison_dataset_info.right,
+          comparison_tarball=select_first([comparison_dataset_info[1]]),
           prefix=prefix,
-          comparison_set_name=comparison_dataset_info.left,
+          comparison_set_name=comparison_dataset_info[0],
           samples_per_shard=samples_per_shard,
           random_seed=random_seed,
           sv_base_mini_docker=sv_base_mini_docker,
@@ -202,7 +217,7 @@ workflow MasterVcfQc {
         input:
           per_sample_benchmarking_tarball=CollectPerSampleBenchmarking.benchmarking_results_tarball,
           samples_list=CollectQcVcfwide.samples_list[0],
-          comparison_set_name=comparison_dataset_info.left,
+          comparison_set_name=comparison_dataset_info[0],
           prefix=prefix,
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_per_sample_benchmark_plot
@@ -650,8 +665,8 @@ task SanitizeOutputs {
     Array[File]? plot_qc_site_level_external_benchmarking_tarballs
     File collect_qc_per_sample_tarball
     File plot_qc_per_sample_tarball
-    File plot_qc_per_family_tarball
-    File cleaned_fam_file
+    File? plot_qc_per_family_tarball
+    File? cleaned_fam_file
     Array[File]? plot_qc_per_sample_external_benchmarking_tarballs
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -659,12 +674,14 @@ task SanitizeOutputs {
 
   # simple compress + tar workf
   Float input_size = size(
-    flatten([ vcf_stats, samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball,
-              plot_qc_site_level_external_benchmarking_tarballs, 
-              collect_qc_per_sample_tarball, plot_qc_per_sample_tarball, 
-              plot_qc_per_family_tarball, cleaned_fam_file ]),
+    flatten([[ vcf_stats, samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball,
+               plot_qc_site_level_external_benchmarking_tarballs, 
+               collect_qc_per_sample_tarball, plot_qc_per_sample_tarball, 
+               plot_qc_per_family_tarball, cleaned_fam_file ],
+             select_first([plot_qc_site_level_external_benchmarking_tarballs, []]),
+             select_first([plot_qc_per_sample_external_benchmarking_tarballs, []])]),
     "GiB"
-  ) + size( plot_qc_per_sample_external_benchmarking_tarballs, "GiB" )
+  )
   Float compression_factor = 5.0
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0
@@ -704,7 +721,9 @@ task SanitizeOutputs {
       mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
     done
     mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
-    mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/
+    if ~{defined(plot_qc_per_family_tarball)}; then
+      mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/
+    fi
     for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
       dname="$( basename -s '.tar.gz' $tarball_fname )_per_sample_benchmarking_plots/"
       mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
@@ -744,11 +763,13 @@ task SanitizeOutputs {
       ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/per_sample_plots/
 
     # Process per-family plots
-    tar -xzvf ~{plot_qc_per_family_tarball}
-    cp ~{prefix}_perFamily_plots/main_plots/* \
-      ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
-    cp ~{prefix}_perFamily_plots/supporting_plots/sv_inheritance_plots/* \
-      ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/ || true
+    if ~{defined(plot_qc_per_family_tarball)}; then
+      tar -xzvf ~{plot_qc_per_family_tarball}
+      cp ~{prefix}_perFamily_plots/main_plots/* \
+        ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
+      cp ~{prefix}_perFamily_plots/supporting_plots/sv_inheritance_plots/* \
+        ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/sv_inheritance_plots/ || true
+    fi
 
     # Process per-sample external benchmarking plots
     if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
@@ -759,8 +780,10 @@ task SanitizeOutputs {
     fi
 
     # Process misc files
-    cp ~{cleaned_fam_file} \
-      ~{prefix}_SV_VCF_QC_output/data/~{prefix}.cleaned_trios.fam
+    if ~{defined(cleaned_fam_file)}; then
+      cp ~{cleaned_fam_file} \
+        ~{prefix}_SV_VCF_QC_output/data/~{prefix}.cleaned_trios.fam
+    fi
     cp ~{samples_list} \
       ~{prefix}_SV_VCF_QC_output/data/~{prefix}.samples_analyzed.list
 
