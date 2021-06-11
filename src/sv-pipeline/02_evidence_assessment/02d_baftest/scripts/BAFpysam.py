@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 from scipy import stats
 import numpy as np
-import os
-import os.path
 from sklearn import mixture
 
 

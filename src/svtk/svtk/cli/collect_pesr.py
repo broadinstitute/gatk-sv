@@ -155,7 +155,7 @@ class PESRCollection:
         """
 
         split_positions = get_split_positions(read)
-        #pos, side = get_split_positions(read)
+        # pos, side = get_split_positions(read)
 
         for (pos, side) in split_positions:
             # Calculate distance to previous split and update position tracker

@@ -11,6 +11,7 @@ Currently the major change made are to:
 """
 
 import argparse
+import os
 import pysam
 import sys
 import svtk.utils as svu
@@ -200,7 +201,7 @@ def main():
     else:
         out = args.outfile
         if '.gz' in out or '.bgz' in out:
-            out = path.splitext(out)[0]
+            out = os.path.splitext(out)[0]
         fout = pysam.VariantFile(out, 'w', header=header)
 
     if args.ref_idx is None:

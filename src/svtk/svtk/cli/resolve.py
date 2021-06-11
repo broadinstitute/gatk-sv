@@ -96,11 +96,11 @@ def remove_CPX_from_INV(resolve_CPX, resolve_INV):
 def cluster_INV(independent_INV):
     inv_hash = {}
     for i in independent_INV:
-        if not i.chrom in inv_hash.keys():
+        if i.chrom not in inv_hash.keys():
             inv_hash[i.chrom] = {}
-        if not i.pos in inv_hash[i.chrom].keys():
+        if i.pos not in inv_hash[i.chrom].keys():
             inv_hash[i.chrom][i.pos] = {}
-        if not i.stop in inv_hash[i.chrom][i.pos].keys():
+        if i.stop not in inv_hash[i.chrom][i.pos].keys():
             inv_hash[i.chrom][i.pos][i.stop] = i
     list_INV = {}
     for i in inv_hash.keys():
@@ -169,7 +169,7 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_
     variant_prefix : str
         Prefix to assign to resolved variants
     min_rescan_support : int
-        Number of pairs required to count a sample as 
+        Number of pairs required to count a sample as
         supported during PE rescan
     pe_blacklist : pysam.TabixFile, optional
         Blacklisted genomic regions. Anomalous pairs in these regions will be
@@ -312,7 +312,7 @@ def cluster_cleanup(clusters_v2):
         info = clusters_v2[i]
         info_pos = '_'.join(sorted(
             [','.join([str(k) for k in [j.pos, j.stop, j.info['SVTYPE']]]) for j in info]))
-        if not info_pos in cluster_info:
+        if info_pos not in cluster_info:
             cluster_info.append(info_pos)
             cluster_pos.append(i)
     return [clusters_v2[i] for i in cluster_pos]
@@ -491,7 +491,7 @@ def main(argv):
     resolved_records = []
     unresolved_records = []
     resolve_INV = []
-    cpx_dist = 20000
+    # cpx_dist = 20000
 
     for record in resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, args.prefix,
                                      args.min_rescan_pe_support, blacklist, args.quiet):
@@ -503,20 +503,20 @@ def main(argv):
         # Passes unresolved single-ender inversions to second-pass,
         # otherwise writes resolved records to output files
         if record.info['UNRESOLVED']:
-            if record.info['SVTYPE'] == 'INV' and record.info['UNRESOLVED_TYPE'] is not 'SR_ONLY_LARGE_INVERSION':
+            if record.info['SVTYPE'] == 'INV' and record.info['UNRESOLVED_TYPE'] != 'SR_ONLY_LARGE_INVERSION':
                 resolve_INV.append(record)
             else:
                 unresolved_records.append(record)
         else:
             resolved_records.append(record)
 
-    #out_rec = resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, args.prefix, args.min_rescan_pe_support, blacklist)
+    # out_rec = resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, args.prefix, args.min_rescan_pe_support, blacklist)
     # Print status
     if not args.quiet:
         now = datetime.datetime.now()
         print('svtk resolve @ ' + now.strftime("%H:%M:%S") + ': ' +
-              'starting second pass through unresolved inversion single-enders '
-              + 'for loose inversion linking', flush=True)
+              'starting second pass through unresolved inversion single-enders ' +
+              'for loose inversion linking', flush=True)
 
     # RLC: As of Sept 19, 2018, only considering inversion single-enders in second-pass
     # due to too many errors in second-pass linking and variant reporting

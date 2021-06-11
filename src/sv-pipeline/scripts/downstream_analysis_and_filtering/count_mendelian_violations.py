@@ -11,7 +11,6 @@ Tabulate Mendelian violation rate (MVR) per SV & append other info
 
 import argparse
 import sys
-from collections import defaultdict
 import csv
 import pysam
 import numpy as np
@@ -81,10 +80,10 @@ def classify_trio_AC(ACs):
     n_homref = len([c for c in ACs if c == 0])
     pro_homref = ACs[0] == 0
     n_homref_parents = len([c for c in ACs[1:3] if c == 0])
-    n_het = len([c for c in ACs if c == 1])
-    pro_het = ACs[0] == 1
-    n_het_parents = len([c for c in ACs[1:3] if c == 1])
-    n_homalt = len([c for c in ACs if c == 2])
+    # n_het = len([c for c in ACs if c == 1])
+    # pro_het = ACs[0] == 1
+    # n_het_parents = len([c for c in ACs[1:3] if c == 1])
+    # n_homalt = len([c for c in ACs if c == 2])
     pro_homalt = ACs[0] == 2
     n_homalt_parents = len([c for c in ACs[1:3] if c == 2])
 

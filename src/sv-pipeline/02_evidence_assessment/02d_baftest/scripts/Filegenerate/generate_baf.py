@@ -82,7 +82,7 @@ def calc_BAF(record, samples=None):
 def normalize_bafs(bafs, samples, max_std=0.2):
     """
     Normalize BAFs and exclude outlying sites
-    Normalize so per variant median BAF==0.5. Ignore sites with more than 0.2 standard deviation across samples. 
+    Normalize so per variant median BAF==0.5. Ignore sites with more than 0.2 standard deviation across samples.
 
     Parameters
     ----------

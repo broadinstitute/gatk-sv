@@ -1,5 +1,4 @@
 import sys
-import sys
 [_, varfile] = sys.argv
 plotdir = "plots"
 igvfile = "igv.txt"

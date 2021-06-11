@@ -1,4 +1,3 @@
-import os
 import argparse
 parser = argparse.ArgumentParser("add_sample_name")
 parser.add_argument("sample", type=str,

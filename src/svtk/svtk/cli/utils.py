@@ -34,8 +34,7 @@ def vcf2bed(argv):
                         'If ALL INFO fields are requested, they are reported '
                         'in the order in which they appear in the VCF header.')
     parser.add_argument('--include-filters', action='store_true', default=False,
-                        help='Include FILTER status in output, with the same ' +
-                             'behavior an INFO field.')
+                        help='Include FILTER status in output, with the same behavior an INFO field.')
     parser.add_argument('--split-bnd', action='store_true', default=False,
                         help='Report two entries in bed file for each BND.')
     parser.add_argument('--split-cpx', action='store_true', default=False,

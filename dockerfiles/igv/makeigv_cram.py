@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 # [_,varfile,buff,fasta]=sys.argv #assume the varfile has *.bed in the end

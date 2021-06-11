@@ -1,6 +1,5 @@
 #!python
-#!python script to random shuffle and split rdtest big files:
-import os
+# !python script to random shuffle and split rdtest big files:
 import random
 import numpy
 import argparse

@@ -11,7 +11,6 @@
 import argparse
 import sys
 import heapq
-import itertools
 from collections import deque, defaultdict
 import pysam
 import svtk.utils as svu

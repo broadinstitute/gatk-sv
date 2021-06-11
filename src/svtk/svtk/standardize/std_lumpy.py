@@ -109,8 +109,7 @@ class LumpyStandardizer(VCFStandardizer):
         std_rec = super().standardize_alts(std_rec, raw_rec)
 
         stop = std_rec.stop
-        if (std_rec.info['SVTYPE'] == 'BND' and
-                std_rec.chrom == std_rec.info['CHR2']):
+        if std_rec.info['SVTYPE'] == 'BND' and std_rec.chrom == std_rec.info['CHR2']:
             if std_rec.info['STRANDS'] == '+-':
                 std_rec.info['SVTYPE'] = 'DEL'
                 std_rec.alts = ('<DEL>', )

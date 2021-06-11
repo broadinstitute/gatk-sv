@@ -5,7 +5,6 @@ from collections import deque
 import numpy as np
 import pandas as pd
 import pysam
-import boto3
 import sys
 ##########
 
@@ -102,7 +101,7 @@ def main(argv):
         sys.exit(1)
     args = parser.parse_args(argv)
 
-    fi = args.file
+    # fi = args.file
     # if args.vcf.startswith('s3://'):
     # vcf_path = args.vcf[5:]
     # bucket = vcf_path.split('/')[0]
@@ -168,7 +167,7 @@ def main(argv):
                     line = '\t'.join(dat)
                 if len(dat) < 11:
                     dat = line.split('\t')
-                    samp = dat[4]
+                    # samp = dat[4]
                     nsamp = len(dat[4].split(','))
                     ncontrol = total_sample - nsamp
                     dat = dat[0:-1] + ['0,0\t0,' +

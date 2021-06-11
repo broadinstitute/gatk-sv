@@ -14,7 +14,6 @@ If the provided sample list has more than one id, <sample> will be "_merged".
 import gzip
 import argparse
 import sys
-import numpy as np
 import svtest.utils.TestUtils as tu
 import svtest.utils.IOUtils as iou
 

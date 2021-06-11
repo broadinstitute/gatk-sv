@@ -1,10 +1,7 @@
 #!modify filter label of SR only PASS SVs:
 
 import argparse
-import sys
 import pysam
-import csv
-from numpy import median
 
 
 def revise_filter_Large_SR_only(vcf, fout, size_cutoff=500, sample_proportion_cutoff=0.1):
@@ -24,7 +21,7 @@ def revise_filter_Large_SR_only(vcf, fout, size_cutoff=500, sample_proportion_cu
                 if sum(SR_only_list) / len(SR_only_list) > sample_proportion_cutoff:
                     record.filter.clear()
                     record.filter.add('LARGE_SR_ONLY')
-                    #print([str(j) for j in [record.chrom, record.pos,record.id, sum(SR_only_list)/len(SR_only_list)]])
+                    # print([str(j) for j in [record.chrom, record.pos,record.id, sum(SR_only_list)/len(SR_only_list)]])
         records.append(record)
     for record in records:
         fout.write(record)

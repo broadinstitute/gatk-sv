@@ -121,7 +121,6 @@ def main():
     parser.add_argument('output', type=str,
                         help='name of output files with index')
     args = parser.parse_args()
-    import os
     filein = args.PB_bed
     pe_index = args.pe_file
     sr_index = args.sr_file

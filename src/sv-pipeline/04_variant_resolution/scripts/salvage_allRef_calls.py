@@ -10,11 +10,7 @@ Reformat 100% reference calls salvaged during pesr + depth merging
 
 import argparse
 import sys
-import heapq
-import itertools
-from collections import deque, defaultdict
 import pysam
-import svtk.utils as svu
 import random
 import string
 

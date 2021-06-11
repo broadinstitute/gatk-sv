@@ -58,12 +58,11 @@ def main():
                         help='name of input PacBio bed file')
     parser.add_argument('pe_file', type=str,
                         help='name of pe files with index')
-    #parser.add_argument('sr_file', type=str, help='name of sr files with index')
+    # parser.add_argument('sr_file', type=str, help='name of sr files with index')
     args = parser.parse_args()
-    import os
     filein = args.PB_bed
     pe_index = args.pe_file
-    #sr_index = args.sr_file
+    # sr_index = args.sr_file
     info_list = INS_readin(filein)
     for i in info_list:
         # i+=[add_Num_SR(sr_index,i)]

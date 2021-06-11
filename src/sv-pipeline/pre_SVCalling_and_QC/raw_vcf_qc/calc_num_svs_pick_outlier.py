@@ -95,8 +95,8 @@ def pick_outliers_by_group(
         #  (i.e. greater of std or expected Poisson std)
         # Find counts those deviating by more than threshold from the median (including zeros)
         is_outlier = (
-            numpy.abs(check_stats["NUM"] - count_median)
-            > outlier_std_threshold * numpy.maximum(count_std, numpy.sqrt(count_median))
+            numpy.abs(check_stats["NUM"] - count_median) >
+            outlier_std_threshold * numpy.maximum(count_std, numpy.sqrt(count_median))
         )
         outliers = check_stats.loc[is_outlier].copy()
 

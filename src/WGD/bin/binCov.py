@@ -10,11 +10,9 @@ of a chromosome from an input BAM file
 
 # Import libraries
 import argparse
-import sys
 from subprocess import call
 import pysam
 import pybedtools
-import pandas as pd
 import gzip
 import shutil
 import os
@@ -54,8 +52,8 @@ def filter_mappings(bam, mode='nucleotide'):
     # For nucleotide mode, return non-duplicate primary read mappings
     for read in bam:
         if (not any([read.is_duplicate, read.is_unmapped,
-                     read.is_secondary, read.is_supplementary])
-                and all([read.reference_start > 0, read.next_reference_start])):
+                     read.is_secondary, read.is_supplementary]) and
+                all([read.reference_start > 0, read.next_reference_start])):
             if mode == 'nucleotide':
                 yield '\t'.join([read.reference_name,
                                  str(read.reference_start),
@@ -73,7 +71,7 @@ def filter_mappings(bam, mode='nucleotide'):
 def binCov(bam, chr, binsize, mode='nucleotide', overlap=0.05,
            blacklist=None, presubbed=False, oldBT=False):
     """
-    Generates non-duplicate, primary-aligned nucleotide or physical coverage 
+    Generates non-duplicate, primary-aligned nucleotide or physical coverage
     in regular bin sizes on a specified chromosome from a coordinate-sorted
     bamfile
 
@@ -119,14 +117,14 @@ def binCov(bam, chr, binsize, mode='nucleotide', overlap=0.05,
         bins_filtered = bins
 
     # Filter bam
-    if presubbed == True:
+    if presubbed is True:
         mappings = filter_mappings(bam, mode)
     else:
         mappings = filter_mappings(bam.fetch(chr), mode)
     bambed = pybedtools.BedTool(mappings)
 
     # Generate & return coverage
-    if oldBT == True:
+    if oldBT is True:
         coverage = bambed.coverage(bins_filtered, counts=True)
     else:
         coverage = bins_filtered.coverage(bambed, counts=True, sorted=True)
@@ -215,8 +213,7 @@ def main():
                        args.norm_out]), shell=True)
         # Gzip if optioned
         if args.gzip:
-            with open(args.norm_out, 'rb') as f_in, gzip.open(args.norm_out
-                                                              + '.gz', 'wb') as f_out:
+            with open(args.norm_out, 'rb') as f_in, gzip.open(args.norm_out + '.gz', 'wb') as f_out:
                 shutil.copyfileobj(f_in, f_out)
         os.remove(args.norm_out)
 

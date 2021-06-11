@@ -1,7 +1,6 @@
 import os
 import numpy as np
 from PIL import Image
-import PIL
 from PIL import ImageFont
 from PIL import ImageDraw
 import argparse
@@ -49,8 +48,8 @@ def words(STR1, STR2, outfile, n=100):
 
 ##########
 # class Rdplotprefix():
-  # def __init__(self,variantfile,GetVariantFunc=GetVariants,pedfile,prefixfile,pesrdir,rddir):
-    # self.variants=GetVariantFunc(inputfile,pedfile,prefixfile).variants
+# def __init__(self,variantfile,GetVariantFunc=GetVariants,pedfile,prefixfile,pesrdir,rddir):
+# self.variants=GetVariantFunc(inputfile,pedfile,prefixfile).variants
 
 
 class Variant():

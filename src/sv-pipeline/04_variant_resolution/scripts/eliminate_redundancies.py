@@ -11,7 +11,6 @@ Merge variants that were linked by per-sample bedtools merge
 import argparse
 import sys
 from collections import deque
-from operator import itemgetter
 import numpy as np
 from scipy import sparse
 from scipy.sparse import csgraph

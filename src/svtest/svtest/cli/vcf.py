@@ -70,8 +70,8 @@ def main(argv):
     parser.add_argument('--baseline-vcf', type=str,
                         help='Baseline vcf to provide evaluation metrics against')
     parser.add_argument('--baseline-bed', type=str,
-                        help='Baseline bed file to provide evaluation metrics against. Must have header beginning with "'
-                             + BED_FILE_HEADER_CHAR + '" and the following columns: "' +
+                        help='Baseline bed file to provide evaluation metrics against. Must have header beginning with "' +
+                             BED_FILE_HEADER_CHAR + '" and the following columns: "' +
                         '", "'.join([BED_FILE_CHROM_COL, BED_FILE_START_COL, BED_FILE_END_COL, BED_FILE_SVTYPE_COL]) + '"')
     parser.add_argument('--min-reciprocal-overlap', type=float, default=0.5,
                         help='Minimum reciprocal overlap for validation metrics [0.5]')
@@ -436,7 +436,7 @@ def get_distributions_by_type(records, variant_types, field, bins, exclude_types
         counts[type] = [0] * (num_bins + 1)
     for record in records:
         type = vu.get_sv_type(record, types_set)
-        if not type in exclude_types:
+        if type not in exclude_types:
             val = vu.get_info_field(record, field)
             idx = get_distribution_index(val, bins, num_bins)
             counts[type][idx] += 1

@@ -114,7 +114,7 @@ def _is_child(s):
 
 def fam_info_readin(fam_file):
     fin = open(fam_file)
-    samp_pedi_hash = {}
+    # samp_pedi_hash = {}
     [fam, samp, fa, mo] = [[], [], [], []]
     for line in fin:
         pin = line.strip().split()
@@ -166,10 +166,10 @@ def process_metadata(variants, bed=False, batch_list=None):
     else:
         samples = list(variants.header.samples)
 
-    parents = [s for s in samples if _is_parent(s)]
-    children = [s for s in samples if _is_child(s)]
-    n_parents = len(parents)
-    n_children = len(children)
+    # parents = [s for s in samples if _is_parent(s)]
+    # children = [s for s in samples if _is_child(s)]
+    # n_parents = len(parents)
+    # n_children = len(children)
 
     called_counts = dict()
     called_samples = dict()

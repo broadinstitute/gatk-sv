@@ -12,7 +12,6 @@ Compute allele frequencies for sex & population combinations given an SV VCF
 import sys
 import argparse
 import pysam
-import numpy as np
 from svtk import utils as svu
 from collections import Counter
 import pybedtools as pbt
@@ -60,11 +59,11 @@ def update_sex_freqs(record, pop=None):
 
     m_an = record.info.get(m_prefix + '_AN', 0)
     m_ac = sum(record.info.get(m_prefix + '_AC', 0))
-    m_af = sum(record.info.get(m_prefix + '_AF', 0))
+    # m_af = sum(record.info.get(m_prefix + '_AF', 0))
 
     f_an = record.info.get(f_prefix + '_AN', 0)
     f_ac = sum(record.info.get(f_prefix + '_AC', 0))
-    f_af = sum(record.info.get(f_prefix + '_AF', 0))
+    # f_af = sum(record.info.get(f_prefix + '_AF', 0))
 
     adj_an = m_an + f_an
     adj_ac = m_ac + f_ac

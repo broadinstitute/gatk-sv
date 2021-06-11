@@ -19,7 +19,7 @@ from svtk.utils import is_smaller_chrom
 class _TabixRow:
     def __init__(self, row):
         """
-        Sortable wrapper around a row in a tabix file. 
+        Sortable wrapper around a row in a tabix file.
 
         Can be instantiated from a str or from a pysam TupleProxy.
 

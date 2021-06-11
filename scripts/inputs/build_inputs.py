@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
 import argparse
 import os
 import os.path
@@ -60,7 +59,7 @@ undefined_names = []
 class TrackMissingValuesUndefined(Undefined):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        #dict.__init__(self, fname=fname)
+        # dict.__init__(self, fname=fname)
         if 'name' in self._undefined_obj:
             undefined_names.append(
                 self._undefined_obj['name'] + "." + self._undefined_name)

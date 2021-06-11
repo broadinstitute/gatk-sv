@@ -10,7 +10,6 @@
 
 
 import argparse
-import itertools
 import numpy as np
 import pysam
 import svtk.utils as svu

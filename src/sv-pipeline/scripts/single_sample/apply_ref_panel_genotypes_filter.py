@@ -99,11 +99,11 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
                                                stdin=cov_reg_ref_cds.stdout,
                                                stdout=open('final_merged_intersection.bed', 'w'))
 
-    data = final_intersect_process.communicate()[0]  # expect this to be empty
+    # data = final_intersect_process.communicate()[0]  # expect this to be empty
     return_code = final_intersect_process.returncode
     if return_code != 0:
         raise Exception(
-            'intersection pipeline process exited with return code ' + returncode)
+            'intersection pipeline process exited with return code ' + return_code)
 
     intersection = pybedtools.BedTool('final_merged_intersection.bed')
     filtered_variant_ids = []

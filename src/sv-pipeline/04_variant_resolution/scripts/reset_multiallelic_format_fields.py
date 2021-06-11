@@ -3,6 +3,7 @@
 
 import argparse
 import csv
+import os
 import pysam
 import sys
 
@@ -52,7 +53,7 @@ def main():
     else:
         out = args.outfile
         if '.gz' in out or '.bgz' in out:
-            out = path.splitext(out)[0]
+            out = os.path.splitext(out)[0]
         fout = pysam.VariantFile(out, 'w', header=header)
 
     for record in vcf:

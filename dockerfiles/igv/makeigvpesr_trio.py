@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 # [_,varfile,buff,fasta]=sys.argv #assume the varfile has *.bed in the end
@@ -64,8 +63,8 @@ def cram_info_readin(cram_file):
     return(out)
 
 
-#ped_info = ped_info_readin(args.ped)
-#cram_info = cram_info_readin(args.cram_list)
+# ped_info = ped_info_readin(args.ped)
+# cram_info = cram_info_readin(args.cram_list)
 cram_list = args.cram_list.split(',')
 
 with open(bamfiscript, 'w') as h:

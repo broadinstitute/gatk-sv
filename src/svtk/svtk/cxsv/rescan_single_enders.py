@@ -86,7 +86,7 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
     Test if a putative single-ender inversion has support from other strand.
 
     Selects discordant pairs in the neighborhood of the original record, then
-    clusters them together. If enough samples have sufficient paired-end 
+    clusters them together. If enough samples have sufficient paired-end
     evidence supporting the opposite strand, we have found support for the
     other end of the record.
 

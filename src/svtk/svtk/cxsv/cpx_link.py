@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
@@ -148,14 +147,14 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
 def unify_list(list):
     out = []
     for i in list:
-        if not i in out:
+        if i not in out:
             out.append(i)
     return out
 
 
 def CNV_readin_from_resolved_vcf(resolved_name, inv_intervals):
     resolved_f = pysam.VariantFile(resolved_name, 'r')
-    rec_a = 0
+    # rec_a = 0
     out = []
     for i in resolved_f:
         for j in inv_intervals:
@@ -188,7 +187,7 @@ def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
         else:
             inv_intervals.append([i[0].chrom, i[0].pos, i[0].stop])
     inv_intervals = sorted(unify_list(inv_intervals))
-    #out_rec = unify_list(CNV_readin_from_resolved_vcf(resolved_name,inv_intervals) + CNV_readin_from_resolved_vcf(unresolved_name,inv_intervals))
+    # out_rec = unify_list(CNV_readin_from_resolved_vcf(resolved_name,inv_intervals) + CNV_readin_from_resolved_vcf(unresolved_name,inv_intervals))
     out_rec = resolve_CNV
     cluster = []
     for i in linked_INV_V2:

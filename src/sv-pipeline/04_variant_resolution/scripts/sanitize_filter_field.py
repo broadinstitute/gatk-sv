@@ -10,7 +10,6 @@ Clean up FILTER fields & remove MEMBERS tag at the end of cleanVCF
 
 import argparse
 import sys
-from collections import defaultdict
 import pysam
 
 

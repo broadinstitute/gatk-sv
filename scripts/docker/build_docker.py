@@ -312,17 +312,17 @@ class Project_Build:
             git_checkout_cmd = "git checkout tags/" + self.project_arguments.remote_git_tag
             ret = os.system(git_checkout_cmd)
             if 0 != ret:
-                raise UserError("Seems that the provided git tag ["
-                                + self.project_arguments.remote_git_tag
-                                + "] does not exist")
+                raise UserError("Seems that the provided git tag [" +
+                                self.project_arguments.remote_git_tag +
+                                "] does not exist")
         elif (self.project_arguments.remote_git_hash is not None):
             git_checkout_cmd = "git checkout      " + \
                 self.project_arguments.remote_git_hash
             ret = os.system(git_checkout_cmd)
             if 0 != ret:
-                raise UserError("Seems that the provided git hash ["
-                                + self.project_arguments.remote_git_hash
-                                + "] does not exist")
+                raise UserError("Seems that the provided git hash [" +
+                                self.project_arguments.remote_git_hash +
+                                "] does not exist")
 
         print("Working directory: " + os.getcwd())
         return tmp_dir_path
@@ -450,11 +450,9 @@ def parse_and_build(parsed_project_arguments, launch_script_path):
     try:
         my_build_project.build_and_push()
     except UserError as a:
-        raise Exception("Build Process Errored due to an assertion error!!!\n"
-                        + str(a))
+        raise Exception("Build Process Errored due to an assertion error!!!\n" + str(a))
     except DockerBuildError as d:
-        raise Exception("Build Process Errored due to a docker build error!!!\n"
-                        + str(d))
+        raise Exception("Build Process Errored due to a docker build error!!!\n" + str(d))
     finally:
         if not my_build_project.project_arguments.skip_cleanup:
             my_build_project.cleanup(possible_tmp_dir_path)

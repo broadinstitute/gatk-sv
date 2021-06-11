@@ -10,7 +10,6 @@ Strip CPX INFO fields from non-CPX variants
 
 import argparse
 import sys
-from collections import defaultdict
 import pysam
 
 # Cleanup function

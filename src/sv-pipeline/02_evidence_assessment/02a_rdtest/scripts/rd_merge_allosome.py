@@ -1,7 +1,6 @@
 # This assumes that RDTest splits are already merged
 # This assume for each batch+source, there is one X file for each sex, and one Y file for each sex
 # The usage is ```python rd-merge.py {batch} {source} {chrom} {inputfolder} {outputfolder}```
-import os
 import argparse
 import pandas as pd
 parser = argparse.ArgumentParser("merge_allosomes.py")

@@ -1,4 +1,3 @@
-import sys
 import os
 import argparse
 # [_,varfile,buff,fasta]=sys.argv #assume the varfile has *.bed in the end
@@ -12,7 +11,7 @@ parser = argparse.ArgumentParser("makeigvsplit_cram.py")
 parser.add_argument('varfile', type=str,
                     help='name of variant file in bed format, with cram and SVID in last two columns')
 parser.add_argument('fasta', type=str, help='reference sequences')
-#parser.add_argument('bam', type=str, help='name of bam to make igv on')
+# parser.add_argument('bam', type=str, help='name of bam to make igv on')
 parser.add_argument('sample', type=str, help='name of sample to make igv on')
 parser.add_argument('ped', type=str, help='name of ped file')
 parser.add_argument('cram_list', type=str,

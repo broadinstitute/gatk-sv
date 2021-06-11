@@ -10,9 +10,7 @@ Creates a genetic relatedness matrix (GRM) from biallelic sites in an input VCF
 
 import argparse
 import sys
-from collections import defaultdict
 import pysam
-import svtk.utils as svu
 
 
 def get_allele_dosage(record):

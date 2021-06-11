@@ -45,7 +45,7 @@ def info_cha_extract(pin, character='END'):
 def unify_list(list):
     out = []
     for i in list:
-        if not i in out:
+        if i not in out:
             out.append(i)
     return out
 

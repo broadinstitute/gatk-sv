@@ -10,7 +10,6 @@ Perform preliminary aesthetic cleanup to a VCF after svtk resolve
 
 import argparse
 import sys
-from collections import defaultdict
 import pysam
 import svtk.standardize as standardize
 
@@ -43,11 +42,11 @@ def cleanup(vcf, fout):
             continue
 
         # Get basic info about record
-        chrom = record.chrom
+        # chrom = record.chrom
         svtype = record.info['SVTYPE']
-        end = record.stop
+        # end = record.stop
         record.ref = 'N'
-        alts = record.alts
+        # alts = record.alts
 
         # Clean up insertions
         if svtype == 'INS':

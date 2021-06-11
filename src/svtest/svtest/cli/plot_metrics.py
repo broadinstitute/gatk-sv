@@ -75,8 +75,7 @@ def consolidate_sample_metrics(df, samples):
 
 
 def compute_metrics(metrics_dict, metrics_df, group):
-    metrics_dict[group + "<MEAN>"] = metrics_df[metrics_df["group"]
-                                                == group].mean(axis=0)
+    metrics_dict[group + "<MEAN>"] = metrics_df[metrics_df["group"] == group].mean(axis=0)
 
 
 def get_sample_metric_rows(df, samples):

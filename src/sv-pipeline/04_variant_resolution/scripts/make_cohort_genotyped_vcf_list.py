@@ -9,7 +9,6 @@ Run before 04_integrate_batches
 """
 
 import argparse
-import os
 import firecloud.api as fapi
 from firecloud import fccore
 from firecloud import errors as ferrors

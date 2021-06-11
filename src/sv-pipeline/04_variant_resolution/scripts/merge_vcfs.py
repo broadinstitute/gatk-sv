@@ -31,7 +31,7 @@ def records_match(record, other):
 
 def merge_key(record):
     """
-    Sort records by all fields that records_match will use to check for duplicates, in sequence, 
+    Sort records by all fields that records_match will use to check for duplicates, in sequence,
     so that all identical records according to records_match will be adjacent
     """
     chr2 = record.info['CHR2'] if 'CHR2' in record.info else None
@@ -77,8 +77,8 @@ def merge_records(vcfs):
     """
     Take unique set of VCF records
     Strategy: Merge & roughly sort records from all VCFs by chrom & pos, then gather records that share the same chrom & pos and remove duplicates.
-    Note: The output from heapq.merge cannot be directly used to remove duplicates because it is not sufficiently sorted, so duplicates may not be 
-        adjacent. It is also not sufficient to alter the comparator function to take more than chrom & pos into account, because heapq.merge assumes 
+    Note: The output from heapq.merge cannot be directly used to remove duplicates because it is not sufficiently sorted, so duplicates may not be
+        adjacent. It is also not sufficient to alter the comparator function to take more than chrom & pos into account, because heapq.merge assumes
         that each VCF is already sorted and will make no attempt to further sort them according to the comparator function. Re-sorting all records
         that share a chrom & pos by all necessary comparison fields is more efficient than re-sorting each entire VCF.
     """

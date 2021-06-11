@@ -11,7 +11,6 @@ Extract trio allele counts & GQs for all variants in a vcf
 import argparse
 import sys
 import csv
-from collections import defaultdict
 import pysam
 
 
@@ -91,7 +90,7 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj=None, no_header=False):
 
         # Overwrite ACs, if optioned
         if record.id in vids_to_correct:
-            oldACs = ACs
+            # oldACs = ACs
             newACs = ac_adj[record.id]
             for i in [0, 1, 2]:
                 ACs[i] = str(max([int(ACs[i]), int(newACs[i])]))

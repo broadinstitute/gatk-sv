@@ -8,7 +8,6 @@
 
 """
 
-import argparse
 import sys
 import itertools
 
@@ -18,11 +17,10 @@ def make_link_combos():
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser(
+    #     description=__doc__,
+    #     formatter_class=argparse.RawDescriptionHelpFormatter)
+    # args = parser.parse_args()
 
     for line in sys.stdin:
         links = line.strip().split(',')

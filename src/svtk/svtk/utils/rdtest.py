@@ -8,7 +8,6 @@
 
 """
 
-import argparse
 import os
 import tempfile
 import pkg_resources

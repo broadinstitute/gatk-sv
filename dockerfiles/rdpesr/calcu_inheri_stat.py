@@ -1,6 +1,5 @@
 import pysam
 import argparse
-import os
 
 
 def calcu_inheri_hash(vcf_file, fam_file):
@@ -67,7 +66,7 @@ def trio_info_readin(fam_file):
 def unique_list(list):
     out = []
     for i in list:
-        if not i in out:
+        if i not in out:
             out.append(i)
     return out
 
@@ -89,7 +88,6 @@ def write_output_stat(fileout, inheri_stat):
 
 
 def main():
-    import argparse
     parser = argparse.ArgumentParser("GATK-SV.S1.vcf2bed.py")
     parser.add_argument('fam_file', type=str, help='fam / ped file')
     parser.add_argument('vcf_file', type=str, help='vcf file')

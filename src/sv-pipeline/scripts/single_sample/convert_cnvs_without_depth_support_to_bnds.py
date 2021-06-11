@@ -8,7 +8,6 @@ them to BNDs. This task is ordinarily accomplished by Module 3 but in some cases
 
 import argparse
 import csv
-from os import path
 import pysam
 import sys
 from svtk.famfile import parse_famfile

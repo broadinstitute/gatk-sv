@@ -30,9 +30,9 @@ def vcf_stat_readin(filename):
             if not pin[0] in out.keys():
                 out[pin[0]] = {}
             svtype = chr_extract(pin, 'SVTYPE')
-            if not svtype in out[pin[0]].keys():
+            if svtype not in out[pin[0]].keys():
                 out[pin[0]][svtype] = 0
-                if not svtype in sv_types:
+                if svtype not in sv_types:
                     sv_types.append(svtype)
             out[pin[0]][svtype] += 1
     fin.close()

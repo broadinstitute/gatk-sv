@@ -11,7 +11,6 @@ Filter vcf to clean, autosomal, biallelic sites prior to cohort-wide PCA
 
 import argparse
 import sys
-from collections import defaultdict
 import pysam
 
 

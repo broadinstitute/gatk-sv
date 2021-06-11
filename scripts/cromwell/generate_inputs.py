@@ -359,7 +359,7 @@ def main():
     check_all_metadata_present(script_config, metadata_files)
 
     # Check that all script config fields are present in the WDL inputs file
-    #check_expected_workflow_fields(script_config, default_inputs, workflow_name)
+    # check_expected_workflow_fields(script_config, default_inputs, workflow_name)
 
     # Load prerequisite metadata outputs
     prereq_metadata = load_prerequisite_metadata(metadata_files)
