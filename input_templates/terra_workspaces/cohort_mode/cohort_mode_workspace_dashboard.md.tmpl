@@ -162,6 +162,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 
 * Use the same `sample_set` definitions you used for `train-gCNV`.
 * The default configuration for `module00c` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf", "gs://bucket/shard2.vcf"]`.
+* If you are using GVCFs in a requester-pays bucket, you must provide the Terra billing project for the workspace to the `gvcf_gcs_project_for_requester_pays` argument as a string, surrounded by double-quotes.
 
 #### Module01 and Module02
 
