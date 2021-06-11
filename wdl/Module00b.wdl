@@ -89,7 +89,7 @@ workflow Module00b {
   }
 
   if (run_vcf_qc) {
-    if (defined(delly_vcfs) && (length(select_all(delly_vcfs)) > 0)) {
+    if (defined(delly_vcfs) && (length(delly_vcfs) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Delly {
         input:
           vcfs = select_first([delly_vcfs]),
@@ -99,7 +99,7 @@ workflow Module00b {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
-    if (defined(manta_vcfs) && (length(select_all(manta_vcfs)) > 0)) {
+    if (defined(manta_vcfs) && (length(manta_vcfs) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
           vcfs = select_first([manta_vcfs]),
@@ -109,7 +109,7 @@ workflow Module00b {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
-    if (defined(melt_vcfs) && (length(select_all(melt_vcfs)) > 0)) {
+    if (defined(melt_vcfs) && (length(melt_vcfs) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Melt {
         input:
           vcfs = select_first([melt_vcfs]),
@@ -119,7 +119,7 @@ workflow Module00b {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
-    if (defined(wham_vcfs) && (length(select_all(wham_vcfs)) > 0)) {
+    if (defined(wham_vcfs) && (length(wham_vcfs) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Wham {
         input:
           vcfs = select_first([wham_vcfs]),
