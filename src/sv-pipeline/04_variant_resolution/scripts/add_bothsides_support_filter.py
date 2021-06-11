@@ -33,8 +33,9 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-o', '--outfile', help='Output file [default: stdout]')
-    parser.add_argument('-z', '--bgzip', action='store_true', 
+    parser.add_argument('-o', '--outfile',
+                        help='Output file [default: stdout]')
+    parser.add_argument('-z', '--bgzip', action='store_true',
                         help='Compress output file')
     parser.add_argument('vcf')
     parser.add_argument('vid_list')
@@ -42,13 +43,13 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
-    #Set eligible filters
+    # Set eligible filters
     VCF_FILTERS = [
-    '##FILTER=<ID=BOTHSIDES_SUPPORT,Description="Variant has read-level support for both sides of breakpoint">'
+        '##FILTER=<ID=BOTHSIDES_SUPPORT,Description="Variant has read-level support for both sides of breakpoint">'
     ]
 
     # # Add metadata lines for annotations
@@ -74,11 +75,11 @@ def main():
             record.filter.add('BOTHSIDES_SUPPORT')
         fout.write(record)
 
-    fout.close() # not closing here can cause truncated output files if used with bzip below
-    
+    fout.close()  # not closing here can cause truncated output files if used with bzip below
+
     # Bgzip, if optioned
     if args.bgzip \
-    and args.outfile is not None:
+            and args.outfile is not None:
         subprocess.run(['bgzip', '-f', out])
 
 

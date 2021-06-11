@@ -13,6 +13,7 @@ import pandas as pd
 
 KEY_PREFIX = "rf_cutoff_"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -43,7 +44,8 @@ def get_metrics(df):
     metrics = {}
     for i in range(df.shape[0]):
         row = df.iloc[i]
-        name = KEY_PREFIX + "_".join([row.test, row.svtype, row.metric, row.algtype])
+        name = KEY_PREFIX + \
+            "_".join([row.test, row.svtype, row.metric, row.algtype])
         if not pd.isna(row.min_svsize):
             name += "_min" + str(int(row.min_svsize))
         if not pd.isna(row.max_svsize):

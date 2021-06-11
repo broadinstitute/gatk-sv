@@ -64,9 +64,9 @@ class PESRTest:
         # Fill 0 if called in all samples
         result = result.reindex([True, False]).fillna(0)
         result.index = ['called', 'background']
-        if self.common!="False":
+        if self.common != "False":
             if len(samples) > len(background):
-                result.background=0.0
+                result.background = 0.0
         pval = ss.poisson.cdf(result.background, result.called)
         result['log_pval'] = np.abs(np.log10(pval))
 
@@ -77,10 +77,11 @@ class PESRTest:
             return counts
 
         counts = pd.merge(counts, self.medians, on='sample', how='left')
-        counts['norm_count'] = counts['count'] * target_cov / counts['median_cov']
+        counts['norm_count'] = counts['count'] * \
+            target_cov / counts['median_cov']
         counts['count'] = counts['norm_count'].round()
         counts.drop(['norm_count', 'median_cov'], axis=1, inplace=True)
-        
+
         return counts
 
     def null_score(self, null_val=0.0):
@@ -93,7 +94,7 @@ class PESRTest:
 
 
 class PESRTestRunner:
-    def __init__(self, vcf,common=False, n_background=160, whitelist=None, blacklist=None,
+    def __init__(self, vcf, common=False, n_background=160, whitelist=None, blacklist=None,
                  log=False):
         self.vcf = vcf
 
@@ -125,7 +126,8 @@ class PESRTestRunner:
                 msg = ('%d variants processed. '
                        'Time to process last variant: %0.2f seconds. '
                        'Total time elapsed: %d hours, %d minutes, %0.2f seconds.')
-                msg = msg % (n_records, var_time, int(hours), int(minutes), seconds)
+                msg = msg % (n_records, var_time, int(
+                    hours), int(minutes), seconds)
                 sys.stderr.write(msg + '\n')
 
     def test_record(self, record):

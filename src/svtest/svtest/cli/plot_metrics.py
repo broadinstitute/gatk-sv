@@ -17,6 +17,7 @@ WIDTH = 10.24
 HEIGHT_SCALE = 0.15
 MAX_ROWS_PER_PLOT = 500
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -26,8 +27,10 @@ def main(argv):
     parser.add_argument('metrics_b', type=str)
     parser.add_argument('pdf_out', type=str)
     parser.add_argument('--sample-list', type=str, default=None)
-    parser.add_argument('--changes-only', action='store_true', help='Only plot values that are different')
-    parser.add_argument('--metrics-out', type=str, help='Write plotted metrics to tsv', default=None)
+    parser.add_argument('--changes-only', action='store_true',
+                        help='Only plot values that are different')
+    parser.add_argument('--metrics-out', type=str,
+                        help='Write plotted metrics to tsv', default=None)
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -72,7 +75,8 @@ def consolidate_sample_metrics(df, samples):
 
 
 def compute_metrics(metrics_dict, metrics_df, group):
-    metrics_dict[group + "<MEAN>"] = metrics_df[metrics_df["group"] == group].mean(axis=0)
+    metrics_dict[group + "<MEAN>"] = metrics_df[metrics_df["group"]
+                                                == group].mean(axis=0)
 
 
 def get_sample_metric_rows(df, samples):
@@ -94,7 +98,7 @@ def get_sample_tag_groups(sample_df, samples):
 
 
 def get_metrics(path):
-    df = pd.read_csv(path, sep='\t', names=["name","value"])
+    df = pd.read_csv(path, sep='\t', names=["name", "value"])
     return df.set_index("name")
 
 
@@ -107,12 +111,12 @@ def plot_data(df, out_path):
 
 def plot_empty_data():
     fig = plt.figure()
-    ax = fig.add_axes([0,0,1,1])
+    ax = fig.add_axes([0, 0, 1, 1])
     left, width = .25, .5
     bottom, height = .25, .5
     right = left + width
     top = bottom + height
-    ax.text(0.5*(left+right), 0.5*(bottom+top), 'No data',
+    ax.text(0.5 * (left + right), 0.5 * (bottom + top), 'No data',
             horizontalalignment='center',
             verticalalignment='center',
             fontsize=20, color='red',
@@ -130,11 +134,12 @@ def plot_nonempty_data(df, out_path):
 
 
 def plot_rows(df, start, end, pdf):
-        df.iloc[start:end].iloc[::-1].plot.barh(figsize=(WIDTH, HEIGHT_SCALE * (end - start)))
-        plt.xscale('log')
-        plt.tight_layout()
-        pdf.savefig()
-        plt.close()
+    df.iloc[start:end].iloc[::-
+                            1].plot.barh(figsize=(WIDTH, HEIGHT_SCALE * (end - start)))
+    plt.xscale('log')
+    plt.tight_layout()
+    pdf.savefig()
+    plt.close()
 
 
 if __name__ == '__main__':

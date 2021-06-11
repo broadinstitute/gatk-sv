@@ -69,7 +69,7 @@ class GSNode(object):
         -------
         is_in : bool
         """
-        
+
         if tabixfile is None:
             return False
 

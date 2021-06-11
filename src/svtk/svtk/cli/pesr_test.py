@@ -31,7 +31,8 @@ def sr_test(argv):
     parser.add_argument('-w', '--window', type=int, default=100,
                         help='Window around variant start/end to consider for '
                         'split read support. [100]')
-    parser.add_argument('--common', default=False, action='store_true', help='Ignore background for common AF')
+    parser.add_argument('--common', default=False,
+                        action='store_true', help='Ignore background for common AF')
     parser.add_argument('-b', '--background', type=int, default=160,
                         help='Number of background samples to choose for '
                         'comparison in t-test. [160]')
@@ -43,10 +44,10 @@ def sr_test(argv):
                         'discordant pair file is hosted remotely.')
     # TODO: add normalization
     parser.add_argument('--medianfile', default=None,
-                       help='Median coverage statistics for each library '
-                       '(optional). If provided, each sample\'s split '
-                       'counts will be normalized accordingly. '
-                       'Same format as RdTest, one column per sample.')
+                        help='Median coverage statistics for each library '
+                        '(optional). If provided, each sample\'s split '
+                        'counts will be normalized accordingly. '
+                        'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
 
@@ -57,7 +58,7 @@ def sr_test(argv):
     args = parser.parse_args(argv)
 
     vcf = pysam.VariantFile(args.vcf)
-    
+
     if args.index is not None:
         countfile = pysam.TabixFile(args.countfile, index=args.index,
                                     parser=pysam.asTuple())
@@ -85,8 +86,8 @@ def sr_test(argv):
     else:
         medians = None
 
-    runner = SRTestRunner(vcf, countfile, fout, args.background, args.common, 
-                            args.window, whitelist, medians=medians, log=args.log)
+    runner = SRTestRunner(vcf, countfile, fout, args.background, args.common,
+                          args.window, whitelist, medians=medians, log=args.log)
     runner.run()
 
 
@@ -108,7 +109,8 @@ def pe_test(argv):
     parser.add_argument('-b', '--background', type=int, default=160,
                         help='Number of background samples to sample for PE '
                         'evidence. [160]')
-    parser.add_argument('--common', default=False, action='store_true', help='Ignore background for common AF')
+    parser.add_argument('--common', default=False,
+                        action='store_true', help='Ignore background for common AF')
     parser.add_argument('-s', '--samples', type=argparse.FileType('r'),
                         default=None,
                         help='Whitelist of samples to restrict testing to.')
@@ -116,10 +118,10 @@ def pe_test(argv):
                         help='Tabix index of discordant pair file. Required if '
                         'discordant pair file is hosted remotely.')
     parser.add_argument('--medianfile', default=None,
-                       help='Median coverage statistics for each library '
-                       '(optional). If provided, each sample\'s split '
-                       'counts will be normalized accordingly. '
-                       'Same format as RdTest, one column per sample.')
+                        help='Median coverage statistics for each library '
+                        '(optional). If provided, each sample\'s split '
+                        'counts will be normalized accordingly. '
+                        'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
 
@@ -180,7 +182,8 @@ def count_pe(argv):
     parser.add_argument('-i', '--window-in', type=int, default=50,
                         help='Window inside breakpoint to query for '
                         'discordant pairs. [50]')
-    parser.add_argument('--common', default=False, action='store_true', help='Ignore background for common AF')
+    parser.add_argument('--common', default=False,
+                        action='store_true', help='Ignore background for common AF')
     parser.add_argument('-s', '--samples', type=argparse.FileType('r'),
                         default=None,
                         help='Whitelist of samples to restrict testing to.')
@@ -188,10 +191,10 @@ def count_pe(argv):
                         help='Tabix index of discordant pair file. Required if '
                         'discordant pair file is hosted remotely.')
     parser.add_argument('--medianfile', default=None,
-                       help='Median coverage statistics for each library '
-                       '(optional). If provided, each sample\'s split '
-                       'counts will be normalized accordingly. '
-                       'Same format as RdTest, one column per sample.')
+                        help='Median coverage statistics for each library '
+                        '(optional). If provided, each sample\'s split '
+                        'counts will be normalized accordingly. '
+                        'Same format as RdTest, one column per sample.')
 
     if len(argv) == 0:
         parser.print_help()
@@ -229,7 +232,8 @@ def count_pe(argv):
     else:
         medians = None
 
-    petest = PETest(discfile, args.common,  args.window_in, args.window_out, medians=medians)
+    petest = PETest(discfile, args.common, args.window_in,
+                    args.window_out, medians=medians)
 
     for record in vcf:
         counts = petest.load_counts(record, args.window_in, args.window_out)
@@ -257,7 +261,8 @@ def count_sr(argv):
                         ' Columns: chrom,pos,clip,count,sample')
     parser.add_argument('fout',
                         help='Output table of split read counts.')
-    parser.add_argument('--common', default=False, action='store_true', help='Ignore background for common AF')
+    parser.add_argument('--common', default=False,
+                        action='store_true', help='Ignore background for common AF')
     parser.add_argument('-s', '--samples', type=argparse.FileType('r'),
                         default=None,
                         help='Whitelist of samples to restrict testing to.')
@@ -266,10 +271,10 @@ def count_sr(argv):
                         'discordant pair file is hosted remotely.')
     # TODO: add normalization
     parser.add_argument('--medianfile', default=None,
-                       help='Median coverage statistics for each library '
-                       '(optional). If provided, each sample\'s split '
-                       'counts will be normalized accordingly. '
-                       'Same format as RdTest, one column per sample.')
+                        help='Median coverage statistics for each library '
+                        '(optional). If provided, each sample\'s split '
+                        'counts will be normalized accordingly. '
+                        'Same format as RdTest, one column per sample.')
     # Print help if no arguments specified
     if len(argv) == 0:
         parser.print_help()
@@ -277,7 +282,7 @@ def count_sr(argv):
     args = parser.parse_args(argv)
 
     vcf = pysam.VariantFile(args.vcf)
-    
+
     if args.index is not None:
         countfile = pysam.TabixFile(args.countfile, index=args.index,
                                     parser=pysam.asTuple())

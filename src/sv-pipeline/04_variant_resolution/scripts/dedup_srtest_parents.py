@@ -65,5 +65,6 @@ def main():
     stats = dedup_parents(stats)
     stats.to_csv(args.fout, index=False, sep='\t', na_rep='NA')
 
+
 if __name__ == '__main__':
     main()

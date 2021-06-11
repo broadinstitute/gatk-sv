@@ -17,6 +17,7 @@ from statistics import median
 import numpy as np
 import datetime
 
+
 class DiscPair(GSNode):
     def __init__(self, chrA, posA, strandA, chrB, posB, strandB, sample):
         self.strandA = strandA
@@ -56,14 +57,16 @@ def match_cluster(record, cluster, dist=300):
 
     if record.info['STRANDS'] == '++':
         # Choose max start/end of ++ pairs
-        c_start = max((p.posA for p in cluster if (p.strandA == '+')), default=None)
+        c_start = max((p.posA for p in cluster if (
+            p.strandA == '+')), default=None)
         if c_start is None:
             # If no ++ pairs present, return False
             return False
         c_end = max(p.posB for p in cluster if (p.strandB == '+'))
     elif record.info['STRANDS'] == '--':
         # Choose min start/end of -- pairs
-        c_start = min((p.posA for p in cluster if (p.strandA == '-')), default=None)
+        c_start = min((p.posA for p in cluster if (
+            p.strandA == '-')), default=None)
         if c_start is None:
             # If no -- pairs present, return False
             return False
@@ -76,9 +79,8 @@ def match_cluster(record, cluster, dist=300):
     return abs(r_start - c_start) < dist and abs(r_end - c_end) < dist
 
 
-
-def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300, 
-                        min_frac_samples=0.5, pe_blacklist=None, max_samples=40, 
+def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
+                        min_frac_samples=0.5, pe_blacklist=None, max_samples=40,
                         quiet=False, min_span=50):
     """
     Test if a putative single-ender inversion has support from other strand.
@@ -123,22 +125,23 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
     # Print statement that single ender rescan has been attempted
     if not quiet:
         now = datetime.datetime.now()
-        print('svtk resolve @ ' + now.strftime("%H:%M:%S") + ': ' + 
-              'single-ender rescan procedure started for ' + 
+        print('svtk resolve @ ' + now.strftime("%H:%M:%S") + ': ' +
+              'single-ender rescan procedure started for ' +
               record.id)
 
     # Select pairs nearby record
     search_start = max(0, record.pos - window)
     search_end = max(search_start + 1, record.pos + window)
-    pairs = pe.fetch('{0}:{1}-{2}'.format(record.chrom, search_start, search_end))
+    pairs = pe.fetch(
+        '{0}:{1}-{2}'.format(record.chrom, search_start, search_end))
     pairs = [DiscPair(*p.split()) for p in pairs]
 
-    # To protect against wasting time on particularly messy loci not captured 
-    # in the blacklist, automatically fail site if total number of discordant 
+    # To protect against wasting time on particularly messy loci not captured
+    # in the blacklist, automatically fail site if total number of discordant
     # pairs is > samples * min_support
     all_samples = record.samples.keys()
-    print(len(pairs),flush=True)
-    print(len(all_samples) * min_support,flush=True)
+    print(len(pairs), flush=True)
+    print(len(all_samples) * min_support, flush=True)
     if len(pairs) > len(all_samples) * min_support:
         return record, None
 
@@ -155,12 +158,12 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
             sample_support_precluster[pair.sample] += 1
         # compute median pairs per uncalled sample
         median_pairs_not_called = median(
-            sample_support_precluster.get(s,0) for s in all_samples if s not in called
+            sample_support_precluster.get(s, 0) for s in all_samples if s not in called
         )
         if median_pairs_not_called > min_support:
             return record, None
         # Randomly subset pairs from all samples to max_samples
-    if len(called)>max_samples:
+    if len(called) > max_samples:
         np.random.seed(2)  # arbitrary fixed seed for reproducibility
         called = np.random.choice(called, max_samples, replace=False).tolist()
 
@@ -182,11 +185,11 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
     missing_strand = '+' if record.info['STRANDS'] == '--' else '-'
     supporting_pairs = [p for p in cluster if p.strandA == missing_strand]
 
-    #Check span of supporting pairs from best cluster
+    # Check span of supporting pairs from best cluster
     minA = round(np.percentile([p.posA for p in cluster], 10))
     maxA = round(np.percentile([p.posA for p in cluster], 90))
     spanA = maxA - minA
-    
+
     minB = round(np.percentile([p.posB for p in cluster], 10))
     maxB = round(np.percentile([p.posB for p in cluster], 90))
     spanB = maxB - minB
@@ -198,7 +201,7 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
     sample_support = defaultdict(int)
     for pair in supporting_pairs:
         sample_support[pair.sample] += 1
-   
+
     # If enough samples were found to have support, make new variant record
     n_supported_samples = sum(sample_support[s] > min_support for s in called)
     if n_supported_samples >= min_frac_samples * len(called):
@@ -211,8 +214,8 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
         # Print statement that single ender rescan has been successful
         if not quiet:
             now = datetime.datetime.now()
-            print('svtk resolve @ ' + now.strftime("%H:%M:%S") + ': ' + 
-                  'single-ender rescan successful for ' + 
+            print('svtk resolve @ ' + now.strftime("%H:%M:%S") + ': ' +
+                  'single-ender rescan successful for ' +
                   record.id)
 
         return same_strand, opp_strand
@@ -222,11 +225,11 @@ def rescan_single_ender(record, pe, min_support=4, window=1000, dist=300,
 
 def make_new_record(pairs, old_record, retain_algs=False):
     record = old_record.copy()
-    
+
     record.id = record.id + '_OPPSTRAND'
 
-    #Take third quartile of + read positions for +/+ breakpoints
-    #Take first quartile of - read positions for -/- breakpoints
+    # Take third quartile of + read positions for +/+ breakpoints
+    # Take first quartile of - read positions for -/- breakpoints
     if pairs[0].strandA == '+':
         record.pos = round(np.percentile([p.posA for p in pairs], 90), 0)
         record.stop = round(np.percentile([p.posB for p in pairs], 90), 0)
@@ -247,7 +250,7 @@ def make_new_record(pairs, old_record, retain_algs=False):
 
 def rescan_single_enders(vcf, pe, min_support=4, window=500, pe_blacklist=None):
     for record in vcf:
-        rescan_single_ender(record, pe, min_support, window, 
+        rescan_single_ender(record, pe, min_support, window,
                             pe_blacklist=pe_blacklist)
 
 
@@ -257,7 +260,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('vcf', help='Single enders')
     parser.add_argument('pairs', help='Scraped discordant pair file.')
-    parser.add_argument('--min-rescan-pe-support', type=int, default=4, 
+    parser.add_argument('--min-rescan-pe-support', type=int, default=4,
                         help='Minumum discordant pairs required during '
                         'single-ender rescan ')
     parser.add_argument('--window', type=int, default=500, help='Window around '
@@ -273,7 +276,7 @@ def main():
     pe = pysam.TabixFile(args.pairs)
     blacklist = pysam.TabixFile(args.pe_blacklist)
 
-    rescan_single_enders(vcf, pe, args.min_rescan_pe_support, args.window, 
+    rescan_single_enders(vcf, pe, args.min_rescan_pe_support, args.window,
                          pe_blacklist=blacklist)
 
 

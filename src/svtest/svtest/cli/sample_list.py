@@ -14,6 +14,7 @@ import svtest.utils.IOUtils as iou
 
 KEY_PREFIX = "sample_list_"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,

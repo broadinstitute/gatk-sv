@@ -114,7 +114,7 @@ def main(argv):
     # Add contigs to header if provided
     if args.contigs:
         template = pkg_resources.resource_filename(
-                'svtk', 'data/no_contigs_template.vcf')
+            'svtk', 'data/no_contigs_template.vcf')
         template = pysam.VariantFile(template)
         header = template.header
         contig_line = '##contig=<ID={contig},length={length}>'
@@ -124,7 +124,7 @@ def main(argv):
     # Use GRCh37 by default
     else:
         template = pkg_resources.resource_filename(
-                'svtk', 'data/GRCh37_template.vcf')
+            'svtk', 'data/GRCh37_template.vcf')
         template = pysam.VariantFile(template)
         header = template.header
 
@@ -162,6 +162,7 @@ def main(argv):
         pysam.tabix_compress(fname, args.fout)
         pysam.tabix_index(args.fout, preset='vcf')
         os.remove(fname)
+
 
 if __name__ == '__main__':
     main(sys.argv[1:])

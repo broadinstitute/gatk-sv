@@ -4,6 +4,7 @@
 Useful utilities for IO.
 """
 
+
 def read_samples_list(path, fail_on_empty=True):
     with open(path, 'r') as f:
         samples = f.read().splitlines()

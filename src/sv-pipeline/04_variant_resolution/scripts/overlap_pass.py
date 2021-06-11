@@ -65,9 +65,10 @@ def to_bed(record, cluster):
 def overlap_pass(phase1, pilot, fout, dist=300, frac=0.1, prefix="SSC_merged"):
     svc = VCFCluster([phase1, pilot], dist=dist, frac=frac, preserve_ids=True)
     sources = get_sources(fout.header)
-    
+
     # Helper for testing if SVRecord has pe/sr support
     pesr_sources = set('delly lumpy manta wham'.split())
+
     def _has_pesr(record):
         sources = set(record.record.info['SOURCES'])
         return bool(sources & pesr_sources)
@@ -91,7 +92,7 @@ def overlap_pass(phase1, pilot, fout, dist=300, frac=0.1, prefix="SSC_merged"):
         if len(phase1_records) != 1:
             pesr_records = [r for r in phase1_records if _has_pesr(r)]
             depth_records = [r for r in phase1_records if not _has_pesr(r)]
-                
+
             # Set record position to median of phase1, defaulting to pe/sr
             if len(pesr_records) > 0:
                 record.pos = np.median([r.record.pos for r in pesr_records])

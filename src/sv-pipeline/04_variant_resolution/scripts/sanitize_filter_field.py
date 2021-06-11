@@ -17,27 +17,27 @@ import pysam
 def clean_filt(vcf, fout):
 
     for record in vcf:
-    
+
         filters = record.filter
-    
+
         if 'MULTIALLELIC' in filters \
-        or record.info['SVTYPE'] == 'MCNV':
+                or record.info['SVTYPE'] == 'MCNV':
             record.filter.add('MULTIALLELIC')
-        
+
         if 'UNRESOLVED' in filters \
-        or 'UNRESOLVED' in record.info.keys() \
-        or 'UNRESOLVED_TYPE' in record.info.keys():
+                or 'UNRESOLVED' in record.info.keys() \
+                or 'UNRESOLVED_TYPE' in record.info.keys():
             record.filter.add('UNRESOLVED')
             if 'UNRESOLVED' in record.info.keys():
                 record.info.pop('UNRESOLVED')
 
         if 'HIGH_SR_BACKGROUND' in filters \
-        or 'HIGH_SR_BACKGROUND' in record.info.keys():
+                or 'HIGH_SR_BACKGROUND' in record.info.keys():
             record.filter.add('HIGH_SR_BACKGROUND')
             if 'HIGH_SR_BACKGROUND' in record.info.keys():
                 record.info.pop('HIGH_SR_BACKGROUND')
 
-        #Pop members field
+        # Pop members field
         if 'MEMBERS' in record.info.keys():
             record.info.pop('MEMBERS')
 
@@ -56,11 +56,11 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
-    #No longer needed -- FILTERs assigned in cleanVCF step 5
+    # No longer needed -- FILTERs assigned in cleanVCF step 5
 
     # #Set eligible filters
     # VCF_FILTERS = [

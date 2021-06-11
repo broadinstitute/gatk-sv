@@ -52,7 +52,7 @@ def dedup_records(records):
             curr_alt = curr_record.alts[0]
             new_alt = record.alts[0]
             if (curr_alt.startswith('<') and curr_alt.endswith('>') and new_alt.startswith('<') and new_alt.endswith('>') and
-                len(new_alt.split(':')) > len(curr_alt.split(':'))):
+                    len(new_alt.split(':')) > len(curr_alt.split(':'))):
                 curr_record = record
             continue
         else:
@@ -120,7 +120,7 @@ def main():
     # Copy base VCF header without samples
     args.fout.write('\t'.join(str(vcfs[0].header).split('\t')[:11]) + '\n')
 
-    # Write out sites-only records for dedupped variants + 2 dummy GTs 
+    # Write out sites-only records for dedupped variants + 2 dummy GTs
     # including one 0/1 so svtk bedcluster doesn't break & clusters only on variants not samples
     for record in merge_records(vcfs):
         base = '\t'.join(str(record).split('\t')[:8])

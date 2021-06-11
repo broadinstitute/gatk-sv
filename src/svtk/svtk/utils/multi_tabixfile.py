@@ -130,7 +130,8 @@ class MultiTabixFile:
         """
         iterators = []
         for tbx in self.tabixfiles:
-            iterators.append(_SortableTabixIterator(tbx.fetch(*args, **kwargs)))
+            iterators.append(_SortableTabixIterator(
+                tbx.fetch(*args, **kwargs)))
 
         return _TabixIterator(heapq.merge(*iterators))
 

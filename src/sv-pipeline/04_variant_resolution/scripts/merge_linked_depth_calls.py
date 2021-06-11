@@ -90,7 +90,7 @@ def merge_linked_depth_calls(vcf, ID_links):
 
     # Ignore links on other chromosomes
     linked_IDs = sorted(record_map.keys())
-    ID_links = [l for l in ID_links 
+    ID_links = [l for l in ID_links
                 if l[0] in linked_IDs and l[1] in linked_IDs]
 
     # Convert links from pairs of IDs to pairs of records

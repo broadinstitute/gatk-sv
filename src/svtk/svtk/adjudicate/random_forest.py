@@ -123,10 +123,10 @@ class RandomForest:
         for feature in self.cutoff_features['indep']:
             metric = cutoff_metrics[feature]
             idx = np.searchsorted(self.testable.index, cutoff_metrics.index)
-            if self.name=="PE_prob":
+            if self.name == "PE_prob":
                 cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
                 cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
-                cutoff = min([cutoff1,cutoff2])
+                cutoff = min([cutoff1, cutoff2])
             else:
                 cutoff = learn_cutoff_dist(metric, self.probs[idx])
 
@@ -138,16 +138,16 @@ class RandomForest:
             metric = passing[feature]
             # Subset probabilities to those in passing set
             idx = np.searchsorted(self.testable.index, passing.index)
-            if self.name=="PE_prob":
+            if self.name == "PE_prob":
                 cutoff1 = learn_cutoff_dist(metric, self.probs[idx])
                 cutoff2 = learn_cutoff_fdr(metric, self.probs[idx])
-                cutoffs[feature] = min([cutoff1,cutoff2])
+                cutoffs[feature] = min([cutoff1, cutoff2])
             else:
                 cutoffs[feature] = learn_cutoff_dist(metric, self.probs[idx])
 
         self.cutoffs = pd.DataFrame.from_dict({'cutoff': cutoffs},
                                               orient='columns')\
-                                   .reset_index()
+            .reset_index()
         self.cutoffs = self.cutoffs.rename(columns=dict(index='metric'))
 
     def cutoff_probs(self):
@@ -159,13 +159,17 @@ class RandomForest:
         # If metrics are below the observed cutoff, force failure
         for idx, row in self.cutoffs.iterrows():
             metric, cutoff = row['metric'], row['cutoff']
-            self.testable.loc[passes & (self.testable[metric] < cutoff), 'prob'] = 0.499
+            self.testable.loc[passes & (
+                self.testable[metric] < cutoff), 'prob'] = 0.499
 
-            self.testable['passes_all_cutoffs'] = self.testable.passes_all_cutoffs & (self.testable[metric] >= cutoff)
+            self.testable['passes_all_cutoffs'] = self.testable.passes_all_cutoffs & (
+                self.testable[metric] >= cutoff)
 
-        self.testable.loc[self.testable.passes_all_cutoffs & (self.testable.prob < 0.5), 'prob'] = 0.501
+        self.testable.loc[self.testable.passes_all_cutoffs &
+                          (self.testable.prob < 0.5), 'prob'] = 0.501
 
         self.probs = self.testable.prob.values
+
 
 def learn_cutoff_dist(metric, probs):
     preds = metric.values
@@ -189,7 +193,8 @@ def learn_cutoff_dist(metric, probs):
 
     return thresh[best_idx]
 
-def learn_cutoff_fdr(metric, probs,fdr_cff=.05):
+
+def learn_cutoff_fdr(metric, probs, fdr_cff=.05):
     preds = metric.values
 
     # Pass/fail if greater/less than 0.5
@@ -202,9 +207,9 @@ def learn_cutoff_fdr(metric, probs,fdr_cff=.05):
         return preds.min()
 
     fpr, tpr, thresh = roc_curve(truth, preds)
- 
+
     for i in range(len(fpr)):
-        if fpr[i]>fdr_cff:
+        if fpr[i] > fdr_cff:
             break
     best_idx = i
     # If cutoff set at no instances, scikit-learn sets thresh[0] to max(y_score) + 1

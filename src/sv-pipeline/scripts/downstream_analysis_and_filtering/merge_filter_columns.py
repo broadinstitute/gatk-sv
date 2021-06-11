@@ -23,18 +23,18 @@ def main():
     fout = open(args.fout, 'w')
 
     with open(args.file1) as f1, open(args.file2) as f2:
-      for x, y in zip(f1, f2):
-        x = x.strip().split(';')
-        y = y.strip().split(';')
-        #Only return PASS if both are PASS with no other filters
-        if x == ['PASS'] and y == ['PASS']:
-            newfilt = 'PASS'
-        else:
-            x = [f for f in x if f != 'PASS']
-            y = [f for f in y if f != 'PASS']
-            newfilt = ';'.join(sorted(list(set(x + y))))
-        
-        fout.write(newfilt + '\n')
+        for x, y in zip(f1, f2):
+            x = x.strip().split(';')
+            y = y.strip().split(';')
+            # Only return PASS if both are PASS with no other filters
+            if x == ['PASS'] and y == ['PASS']:
+                newfilt = 'PASS'
+            else:
+                x = [f for f in x if f != 'PASS']
+                y = [f for f in y if f != 'PASS']
+                newfilt = ';'.join(sorted(list(set(x + y))))
+
+            fout.write(newfilt + '\n')
 
     fout.close()
 

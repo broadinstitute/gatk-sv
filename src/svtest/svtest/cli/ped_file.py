@@ -28,6 +28,7 @@ MALE_METRIC = "male"
 FEMALE_METRIC = "female"
 OTHER_METRIC = "other"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -105,7 +106,8 @@ def get_family_counts(df):
     counts_by_id = {}
     for id in family_ids:
         counts_by_id[id] = family_id_col[family_id_col == id].size
-    counts_by_size = {SINGLETON_STR: 0, DUO_STR: 0, TRIO_STR: 0, QUAD_STR: 0, QUINTET_PLUS_STR: 0}
+    counts_by_size = {SINGLETON_STR: 0, DUO_STR: 0,
+                      TRIO_STR: 0, QUAD_STR: 0, QUINTET_PLUS_STR: 0}
     for id in counts_by_id:
         if counts_by_id[id] == 1:
             counts_by_size[SINGLETON_STR] += 1

@@ -60,5 +60,6 @@ def main():
 
         fout.write(record)
 
+
 if __name__ == '__main__':
     main()

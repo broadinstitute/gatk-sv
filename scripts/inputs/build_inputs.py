@@ -2,7 +2,9 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import argparse, os, os.path
+import argparse
+import os
+import os.path
 import glob
 import json
 from jinja2 import Environment, FileSystemLoader, Undefined
@@ -53,18 +55,22 @@ from jinja2 import Environment, FileSystemLoader, Undefined
 
 # this class drops logs undefined value references in the "undefined_names" list
 undefined_names = []
+
+
 class TrackMissingValuesUndefined(Undefined):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         #dict.__init__(self, fname=fname)
         if 'name' in self._undefined_obj:
-            undefined_names.append(self._undefined_obj['name'] + "." + self._undefined_name)
+            undefined_names.append(
+                self._undefined_obj['name'] + "." + self._undefined_name)
         else:
             undefined_names.append(self._undefined_name)
-        #self._fail_with_undefined_error()
+        # self._fail_with_undefined_error()
 
     def __str__(self):
         return ""
+
 
 def to_json_custom(value, *args, **kwargs):
     if isinstance(value, Undefined):
@@ -72,31 +78,37 @@ def to_json_custom(value, *args, **kwargs):
     else:
         return json.dumps(value, *args, **kwargs)
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("input_values_directory", help="Directory containing input value map JSON files")
-    parser.add_argument("template_path", help = "Path to template directory or file (directories will be processed recursively)")
-    parser.add_argument("output_directory", help = "Directory to create output files in")
-    parser.add_argument('-a', '--aliases', type=json.loads, default={}, help="Aliases for input value bundles")
+    parser.add_argument("input_values_directory",
+                        help="Directory containing input value map JSON files")
+    parser.add_argument(
+        "template_path", help="Path to template directory or file (directories will be processed recursively)")
+    parser.add_argument("output_directory",
+                        help="Directory to create output files in")
+    parser.add_argument('-a', '--aliases', type=json.loads,
+                        default={}, help="Aliases for input value bundles")
     args = parser.parse_args()
 
     # prepare input values and bundle aliases
     input_directory = args.input_values_directory
     input_files = glob.glob(input_directory + "/*.json")
-    raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[0]:json.load(open(input_file, "r")) for input_file in input_files}
+    raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[
+        0]: json.load(open(input_file, "r")) for input_file in input_files}
     raw_input_bundles['test_batch_empty'] = {}
     raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
     raw_input_bundles['single_sample_none'] = {}
     raw_input_bundles['single_sample_none']['name'] = 'single_sample'
 
-    default_aliases = { 'dockers' : 'dockers',
-                        'ref_panel' : 'ref_panel_v1b',
-                        'reference_resources' : 'resources_hg38',
-                        'test_batch' : 'test_batch_empty',
-                        'single_sample' : 'single_sample_none'}
+    default_aliases = {'dockers': 'dockers',
+                       'ref_panel': 'ref_panel_v1b',
+                       'reference_resources': 'resources_hg38',
+                       'test_batch': 'test_batch_empty',
+                       'single_sample': 'single_sample_none'}
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}
@@ -108,20 +120,21 @@ def main():
     for alias in user_aliases:
         input_dict[alias] = raw_input_bundles[user_aliases[alias]]
 
-
     template_path = args.template_path
     target_directory = args.output_directory
 
     if os.path.isdir(template_path):
         process_directory(input_dict, template_path, target_directory)
     else:
-        process_file(input_dict, os.path.dirname(template_path), os.path.basename(template_path), target_directory)
+        process_file(input_dict, os.path.dirname(template_path),
+                     os.path.basename(template_path), target_directory)
 
 
 def process_directory(input_dict, template_dir, target_directory):
     template_dir_split = template_dir.split(os.sep)
     template_root = template_dir_split[len(template_dir_split) - 1]
-    template_base = os.sep.join(template_dir_split[0:len(template_dir_split) - 1])
+    template_base = os.sep.join(
+        template_dir_split[0:len(template_dir_split) - 1])
     target_dir_split = target_directory.split(os.sep)
     target_root = target_dir_split[len(target_dir_split) - 1]
     target_base = os.sep.join(target_dir_split[0:len(target_dir_split) - 1])
@@ -129,7 +142,8 @@ def process_directory(input_dict, template_dir, target_directory):
         stripped_subdir = subdir[(len(template_base) + len(os.sep)):]
         stripped_subdir = stripped_subdir[(len(template_root) + len(os.sep)):]
         if len(stripped_subdir) > 0:
-            target_subdir = os.sep.join([target_base, target_root, stripped_subdir])
+            target_subdir = os.sep.join(
+                [target_base, target_root, stripped_subdir])
         else:
             target_subdir = os.sep.join([target_base, target_root])
         for file in fileList:
@@ -142,17 +156,20 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
 
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
-        print("WARNING: skipping file " + template_file_path + " because it does not have .tmpl extension")
+        print("WARNING: skipping file " + template_file_path +
+              " because it does not have .tmpl extension")
         return
 
     target_file = template_file.rsplit('.', 1)[0]
     target_file_path = os.sep.join([target_subdir, target_file])
-    env = Environment(loader=FileSystemLoader(template_subdir), undefined=TrackMissingValuesUndefined)
+    env = Environment(loader=FileSystemLoader(template_subdir),
+                      undefined=TrackMissingValuesUndefined)
     env.policies['json.dumps_function'] = to_json_custom
     print(template_file_path + " -> " + target_file_path)
     processed_content = env.get_template(template_file).render(input_dict)
     if len(undefined_names) > 0:
-        print("WARNING: skipping file " + template_file_path + " due to missing values " + str(undefined_names))
+        print("WARNING: skipping file " + template_file_path +
+              " due to missing values " + str(undefined_names))
     else:
         os.makedirs(target_subdir, exist_ok=True)
         target_file = open(target_file_path, "w")

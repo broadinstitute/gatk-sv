@@ -57,5 +57,6 @@ def main():
                .drop_duplicates()\
                .to_csv(args.fout, index=False, sep='\t')
 
+
 if __name__ == '__main__':
     main()

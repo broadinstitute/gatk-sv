@@ -9,7 +9,8 @@ import pandas
 
 _zero_svs_are_outliers = True
 _outlier_std_threshold = 5.0
-_column_order = ["CHROM", "SVTYPE", "Mean", "Median", "STD", "Outlier_Sample", "Outlier_Number", "Outlier_Cate"]
+_column_order = ["CHROM", "SVTYPE", "Mean", "Median", "STD",
+                 "Outlier_Sample", "Outlier_Number", "Outlier_Cate"]
 
 
 def read_statfile(statfile: str) -> pandas.DataFrame:
@@ -74,9 +75,11 @@ def pick_outliers_by_group(
         count_median = check_stats["NUM"].median()
         count_std = check_stats["NUM"].std()
         # Amongst samples that have SVs, find counts deviating by more than set multiple of std from the median
-        is_outlier = numpy.abs(check_stats["NUM"] - count_median) > outlier_std_threshold * count_std
+        is_outlier = numpy.abs(
+            check_stats["NUM"] - count_median) > outlier_std_threshold * count_std
         # Treat missing samples as outliers.
-        outliers = pandas.concat((missing_samples, check_stats.loc[is_outlier]), axis=0)
+        outliers = pandas.concat(
+            (missing_samples, check_stats.loc[is_outlier]), axis=0)
     else:
         # THIS FINDS FEWER, MORE MEANINGFUL OUTLIERS
         # Which samples are missing / included but have zero counts is unpredictable.
@@ -92,8 +95,8 @@ def pick_outliers_by_group(
         #  (i.e. greater of std or expected Poisson std)
         # Find counts those deviating by more than threshold from the median (including zeros)
         is_outlier = (
-                numpy.abs(check_stats["NUM"] - count_median)
-                > outlier_std_threshold * numpy.maximum(count_std, numpy.sqrt(count_median))
+            numpy.abs(check_stats["NUM"] - count_median)
+            > outlier_std_threshold * numpy.maximum(count_std, numpy.sqrt(count_median))
         )
         outliers = check_stats.loc[is_outlier].copy()
 
@@ -103,7 +106,8 @@ def pick_outliers_by_group(
     outliers["Mean"] = count_mean
     outliers["Median"] = count_median
     outliers["STD"] = count_std
-    outliers["Outlier_Cate"] = numpy.where(outliers["NUM"] > count_median, "high", "low")
+    outliers["Outlier_Cate"] = numpy.where(
+        outliers["NUM"] > count_median, "high", "low")
     # rename and re-order columns
     return outliers.rename({"NUM": "Outlier_Number", "SAMPLE": "Outlier_Sample"}, axis=1).reindex(_column_order, axis=1)
 
@@ -204,7 +208,8 @@ def _parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
         description="Find outliers in SV counts broken down by contig and SV type",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("statfile", type=str, help="name of stats concatinated from all samples")
+    parser.add_argument("statfile", type=str,
+                        help="name of stats concatinated from all samples")
     parser.add_argument("outname", type=str, help="name of output file")
     parser.add_argument("-z", "--zero-counts-are-not-outliers", action="store_true",
                         help="don't make zero SV counts an automatic outlier, check deviation from median as usual")

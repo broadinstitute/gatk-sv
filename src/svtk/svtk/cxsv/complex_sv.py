@@ -39,11 +39,13 @@ class ComplexSV:
         self.clean_record()
 
     def organize_records(self):
-        self.inversions = [r for r in self.records if r.info['SVTYPE'] == 'INV']
+        self.inversions = [
+            r for r in self.records if r.info['SVTYPE'] == 'INV']
         self.tlocs = [r for r in self.records if r.chrom != r.info['CHR2']]
         self.breakends = [r for r in self.records if (r.chrom == r.info['CHR2']) and
-                                                (r.info['SVTYPE'] == 'BND')]
-        self.insertions = [r for r in self.records if r.info['SVTYPE'] == 'INS']
+                          (r.info['SVTYPE'] == 'BND')]
+        self.insertions = [
+            r for r in self.records if r.info['SVTYPE'] == 'INS']
 
         cnvtypes = 'DEL DUP'.split()
         self.cnvs = [r for r in self.records if r.info['SVTYPE'] in cnvtypes]
@@ -89,19 +91,21 @@ class ComplexSV:
         elif self.cluster_type == 'TANDEM_DUPLICATION_FLANKING_INSERTIONS':
             self.report_manta_tandem_dup()
 
-        #Second pass through the record after excluding SR-only breakpoints 
+        # Second pass through the record after excluding SR-only breakpoints
         # if first pass is unsuccessful
         else:
-            #Collect SR-only records that are not remaining in existing cluster
-            #Note: if the cluster only had a single breakpoint to begin with, 
+            # Collect SR-only records that are not remaining in existing cluster
+            # Note: if the cluster only had a single breakpoint to begin with,
             # it will not be removed by .remove_SR_only_breakpoints(), even if
             # it is SR only. The below code is necessary to prevent duplicating
             # SR-only single-enders
             def _is_SR_only(record):
                 return record.info.get('EVIDENCE', None) == ('SR', )
-            non_sr_only_rec_ids = [r.id for r in self.records if not _is_SR_only(r)]
+            non_sr_only_rec_ids = [
+                r.id for r in self.records if not _is_SR_only(r)]
             if len(non_sr_only_rec_ids) > 0:
-                sr_only_recs = [r for r in self.records if _is_SR_only(r) and r.id not in non_sr_only_rec_ids]
+                sr_only_recs = [r for r in self.records if _is_SR_only(
+                    r) and r.id not in non_sr_only_rec_ids]
             else:
                 sr_only_recs = []
 
@@ -111,7 +115,7 @@ class ComplexSV:
 
             if self.cluster_type in 'CANDIDATE_INVERSION CANDIDATE_TRANSLOCATION '.split() + \
                 'CANDIDATE_INSERTION RESOLVED_INSERTION'.split() \
-            and len(self.records) > 0:
+                    and len(self.records) > 0:
                 if self.cluster_type == 'CANDIDATE_INVERSION':
                     self.resolve_inversion(SR_only_cutoff=SR_only_cutoff)
                     if self.svtype == 'UNR':
@@ -136,10 +140,8 @@ class ComplexSV:
                 elif self.cluster_type == 'CANDIDATE_DISDUP':
                     self.resolve_disdup()
 
-
-
             else:
-                #Add back SR-only records if cluster is still unresolved, 
+                # Add back SR-only records if cluster is still unresolved,
                 # and if SR-only record doesnt match only existing cluster
                 if len(sr_only_recs) > 0:
                     for r in sr_only_recs:
@@ -156,7 +158,6 @@ class ComplexSV:
                     r.info['UNRESOLVED'] = True
                     r.info['UNRESOLVED_TYPE'] = self.cpx_type
 
-
     def clean_record(self):
         """
         Merge and clean metadata
@@ -170,7 +171,8 @@ class ComplexSV:
         self.vcf_record.info.pop('ALGORITHMS')
         self.vcf_record.info['ALGORITHMS'] = ','.join(sorted(sources))
 
-        self.vcf_record.info['MEMBERS'] = tuple(sorted(r.id for r in self.records))
+        self.vcf_record.info['MEMBERS'] = tuple(
+            sorted(r.id for r in self.records))
 
         varGQs = []
         for record in self.records:
@@ -247,7 +249,7 @@ class ComplexSV:
 
             # then check for RdTest support
             #  is_dup = check_rdtest(self.vcf_record, source_start, source_end,
-                                  #  self.rdtest)
+            #  self.rdtest)
 
             if is_mei:
                 self.cpx_type = 'MEI_' + self.cpx_type.split('/')[1]
@@ -273,12 +275,11 @@ class ComplexSV:
         self.vcf_record.info['SVTYPE'] = self.svtype
         self.vcf_record.info['CPX_TYPE'] = self.cpx_type
 
-
     def resolve_translocation(self):
         # Force to ++/-- or +-/-+ ordering
         plus, minus = sorted(self.tlocs, key=lambda t: t.info['STRANDS'])
         armA, armB = get_arms(plus, self.cytobands)
-        
+
         self.cpx_type = classify_simple_translocation(plus, minus)
 
         if 'INS' in self.cpx_type:
@@ -440,7 +441,7 @@ class ComplexSV:
             source_start = minus.pos
             source_end = plus.pos
 
-        # RLC Note: no longer need this code, as this will now be handled in 
+        # RLC Note: no longer need this code, as this will now be handled in
         # the complex regenotyping WDL
         # # Don't report insertions with large deletions at insertion site
         # if sink_end - sink_start >= 100:
@@ -501,20 +502,20 @@ class ComplexSV:
 
     # Handles situations where a single insertion clusters with one or more CNVs
     def report_insertion_strip_CNVs(self):
-        # Desired behavior: if cluster contains a single duplication, report it 
+        # Desired behavior: if cluster contains a single duplication, report it
         # and merge INS into the MEMBERS tag for the duplication.
-        # Otherwise, mark cluster as svtype = 'SPLIT' and pass entire cluster 
+        # Otherwise, mark cluster as svtype = 'SPLIT' and pass entire cluster
         # to resolve.py, where they will be parsed and reported appropriately
         if len(self.cnvs) == 1 and len(self.dups) == 1 \
-        and self.cnvs[0].info['SVTYPE'] == 'DUP':
-                record = self.cnvs[0]
-                self.svtype = 'DUP'
-                self.vcf_record.id = record.id
-                self.vcf_record.alts = record.alts
-                self.vcf_record.info['SVTYPE'] = self.svtype
-                self.vcf_record.info['CHR2'] = record.info['CHR2']
-                self.vcf_record.info['SVLEN'] = record.info['SVLEN']
-                self.vcf_record.info['MEMBERS'] = tuple(r.id for r in self.records)
+                and self.cnvs[0].info['SVTYPE'] == 'DUP':
+            record = self.cnvs[0]
+            self.svtype = 'DUP'
+            self.vcf_record.id = record.id
+            self.vcf_record.alts = record.alts
+            self.vcf_record.info['SVTYPE'] = self.svtype
+            self.vcf_record.info['CHR2'] = record.info['CHR2']
+            self.vcf_record.info['SVLEN'] = record.info['SVLEN']
+            self.vcf_record.info['MEMBERS'] = tuple(r.id for r in self.records)
         elif len(self.cnvs) > 0:
             self.svtype = 'SPLIT'
         else:
@@ -542,7 +543,7 @@ class ComplexSV:
         # else:
         #     self.set_unresolved()
 
-    #Where Manta calls two insertions flanking a duplication, report just the dup
+    # Where Manta calls two insertions flanking a duplication, report just the dup
     def report_manta_tandem_dup(self):
         record = self.dups[0]
         self.cpx_type = record.alts[0].strip('<>')
@@ -572,7 +573,7 @@ class ComplexSV:
                 self.vcf_record.info['SVTYPE'] = self.svtype
                 self.vcf_record.info['CPX_TYPE'] = self.cpx_type
                 self.vcf_record.info['CHR2'] = record.info['CHR2']
-                self.vcf_record.info['SVLEN'] = record.info['SVLEN']    
+                self.vcf_record.info['SVLEN'] = record.info['SVLEN']
         else:
             record = self.insertions[0]
             self.cpx_type = record.alts[0].strip('<>')
@@ -583,8 +584,8 @@ class ComplexSV:
             self.vcf_record.info['CHR2'] = record.info['CHR2']
             self.vcf_record.info['SVLEN'] = record.info['SVLEN']
 
+    # Where Manta calls two insertions flanking a duplication, report just the dup
 
-    #Where Manta calls two insertions flanking a duplication, report just the dup
     def report_manta_tandem_dup(self):
         record = self.dups[0]
         self.cpx_type = record.alts[0].strip('<>')
@@ -602,7 +603,7 @@ class ComplexSV:
         #  n_tlocs = len(self.tlocs)
         #  n_bnds = len(self.breakends)
 
-        class_counts = [len(records) for records in 
+        class_counts = [len(records) for records in
                         [self.inversions, self.tlocs, self.breakends, self.insertions]]
 
         paired = np.array([count == 2 for count in class_counts])
@@ -635,7 +636,7 @@ class ComplexSV:
                 else:
                     self.cluster_type = 'STRAND_MISMATCH_INS'
             elif idx == 3:
-                #Catch case where Manta emits two insertions and a duplication
+                # Catch case where Manta emits two insertions and a duplication
                 if len(self.dups) == 1 and len(self.insertions) == 2:
                     self.cluster_type = 'TANDEM_DUPLICATION_FLANKING_INSERTIONS'
                 else:
@@ -643,7 +644,7 @@ class ComplexSV:
 
         elif sum(class_counts) == 0:
             self.cluster_type = 'ERROR_CNV_ONLY'
-            if sum(del_counts)==1 and sum(dup_counts)==1:
+            if sum(del_counts) == 1 and sum(dup_counts) == 1:
                 self.cluster_type = 'CANDIDATE_DISDUP'
         elif sum(class_counts) == 1:
             if len(self.insertions) == 1:
@@ -655,7 +656,8 @@ class ComplexSV:
                 if len(self.cnvs) > 0:
                     self.cluster_type = 'MIXED_BREAKENDS'
                 elif len(self.inversions) > 0:
-                    self.cluster_type = 'INVERSION_SINGLE_ENDER_' + self.inversions[0].info['STRANDS']
+                    self.cluster_type = 'INVERSION_SINGLE_ENDER_' + \
+                        self.inversions[0].info['STRANDS']
                 else:
                     self.cluster_type = 'SINGLE_ENDER'
         elif sum(class_counts) >= 2:
@@ -666,10 +668,10 @@ class ComplexSV:
         else:
             self.cluster_type = 'ERROR_UNCLASSIFIED'
 
-
     def make_record(self):
         self.vcf_record = self.records[0].copy()
-        svu.update_best_genotypes(self.vcf_record, self.records, preserve_multiallelic=False)
+        svu.update_best_genotypes(
+            self.vcf_record, self.records, preserve_multiallelic=False)
 
 
 def ok_tloc_strands(tloc1, tloc2):
@@ -756,7 +758,7 @@ def check_rdtest(record, start, end, rdtest):
     """
     Check if putative insertion has depth support
     """
-   
+
     rdtest_record = record.copy()
     rdtest_record.pos = start
     rdtest_record.stop = end

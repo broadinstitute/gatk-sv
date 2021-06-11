@@ -44,6 +44,7 @@ def get_sources(header):
 
     return []
 
+
 def make_new_record(cluster, header):
     # Make new record and merge in pilot samples
     sources = get_sources(header)
@@ -52,6 +53,7 @@ def make_new_record(cluster, header):
     record = cluster.merge_record_formats(record, sources, call_sources=True)
     record.info['MEMBERS'] = [r.record.id for r in cluster.records]
     return record
+
 
 def is_pesr_only(svrecord):
     return 'depth' not in svrecord.record.info['SOURCES']

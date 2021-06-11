@@ -78,12 +78,14 @@ def copy_blob(storage_client, bucket_name, blob_name, destination_bucket_name, d
     source_uri = f"gs://{source_bucket.name}/{source_blob.name}"
     destination_uri = f"gs://{destination_bucket.name}/{destination_blob_name}"
     if destination_blob.exists():
-        sys.stderr.write(f"Target {destination_uri} exists, cautiously refusing to overwrite. Aborting...\n")
+        sys.stderr.write(
+            f"Target {destination_uri} exists, cautiously refusing to overwrite. Aborting...\n")
         sys.exit(1)
     sys.stderr.write(f"Copying {source_uri}...")
     (token, bytes_rewritten, total_bytes) = destination_blob.rewrite(source=source_blob)
     while token is not None:
-        (token, bytes_rewritten, total_bytes) = destination_blob.rewrite(source=source_blob, token=token)
+        (token, bytes_rewritten, total_bytes) = destination_blob.rewrite(
+            source=source_blob, token=token)
     size_kb = int(bytes_rewritten / 1024)
     sys.stderr.write(f"done ({size_kb} KB)\n")
 
@@ -96,15 +98,18 @@ def copy_uri(source_uri, dest_uri, storage_client):
         return bucket_name, bucket_object
     source_bucket_name, source_blob_name = _parse_uri(source_uri)
     dest_bucket_name, dest_blob_name = _parse_uri(dest_uri)
-    copy_blob(storage_client, source_bucket_name, source_blob_name, dest_bucket_name, dest_blob_name)
+    copy_blob(storage_client, source_bucket_name,
+              source_blob_name, dest_bucket_name, dest_blob_name)
 
 
 # Main function
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--name", help="Batch or cohort name", required=True)
-    parser.add_argument("--metadata", help="Workflow metadata JSON file", required=True)
-    parser.add_argument("--dest", help="Destination GCS URI (e.g. \"gs://my-bucket/output\")", required=True)
+    parser.add_argument(
+        "--metadata", help="Workflow metadata JSON file", required=True)
+    parser.add_argument(
+        "--dest", help="Destination GCS URI (e.g. \"gs://my-bucket/output\")", required=True)
     args = parser.parse_args()
     metadata = json.load(open(args.metadata, 'r'))
     output_uris = get_uris(metadata, args.name, args.dest)
@@ -113,5 +118,5 @@ def main():
         copy_uri(source_uri, dest_uri, client)
 
 
-if __name__== "__main__":
+if __name__ == "__main__":
     main()

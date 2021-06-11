@@ -43,7 +43,8 @@ AF_BINS = [0.01, 0.1, 0.5]
 EVIDENCE_TYPES = ["RD", "BAF", "PE", "SR"]
 
 # Accepted "passing" filters
-PASSING_FILTERS = ["PASS", "BOTHSIDES_SUPPORT", "MULTIALLELIC", "HIGH_SR_BACKGROUND"]
+PASSING_FILTERS = ["PASS", "BOTHSIDES_SUPPORT",
+                   "MULTIALLELIC", "HIGH_SR_BACKGROUND"]
 
 INVALID_CHR2_STR = "invalid_chr2"
 INVALID_END_STR = "invalid_end"
@@ -93,9 +94,11 @@ def main(argv):
         sys.exit(1)
     args = parser.parse_args(argv)
     if (args.baseline_vcf is None and args.baseline_bed is None) and (args.fp_file is not None or args.fn_file is not None):
-        raise ValueError("FP and FN files cannot be generated if --baseline-vcf and --baseline-bed aren't specified")
+        raise ValueError(
+            "FP and FN files cannot be generated if --baseline-vcf and --baseline-bed aren't specified")
     if args.baseline_vcf is not None and args.baseline_bed is not None:
-        raise ValueError("Cannot specify both --baseline-vcf and --baseline-bed")
+        raise ValueError(
+            "Cannot specify both --baseline-vcf and --baseline-bed")
     types_list = args.types.split(',')
 
     contigs = iou.read_contig_list(args.contig_list)
@@ -133,7 +136,8 @@ def write_intervals(path, intervals):
         for type in intervals:
             for contig in intervals[type]:
                 for interval in intervals[type][contig]:
-                    line = "\t".join([contig, str(interval[0]), str(interval[1]), type]) + "\n"
+                    line = "\t".join(
+                        [contig, str(interval[0]), str(interval[1]), type]) + "\n"
                     f.write(line)
 
 
@@ -148,72 +152,95 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
     collect_evidence = check_if_evidence(test_vcf)
     test_records = list(test_vcf.fetch())
 
-    unfiltered_variant_type_counts = get_count_by_type(test_records, variant_types)
+    unfiltered_variant_type_counts = get_count_by_type(
+        test_records, variant_types)
 
     pass_filter_set = set(PASSING_FILTERS)
-    pass_records = [r for r in test_records if ("PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
+    pass_records = [r for r in test_records if (
+        "PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
 
     error_counts = count_errors(test_records, contigs, max_warnings)
 
     variant_type_counts = get_count_by_type(pass_records, variant_types)
-    size_counts = get_distributions_by_type(pass_records, variant_types, "SVLEN", SIZES, exclude_types=['BND'])
+    size_counts = get_distributions_by_type(
+        pass_records, variant_types, "SVLEN", SIZES, exclude_types=['BND'])
 
     metrics = add_error_count_metrics({}, error_counts, metric_prefix)
 
     if fbase_vcf is not None:
         base_vcf = VariantFile(fbase_vcf)
         if genotyped != check_if_genotyped(base_vcf):
-                raise ValueError("One of the vcfs seems to be genotyped but the other does not")
+            raise ValueError(
+                "One of the vcfs seems to be genotyped but the other does not")
         if has_vargq != check_if_vargq(base_vcf):
-            raise ValueError("One of the vcfs has the varGQ field but the other does not")
+            raise ValueError(
+                "One of the vcfs has the varGQ field but the other does not")
         if collect_evidence != check_if_evidence(base_vcf):
-            raise ValueError("One of the vcfs has the EVIDENCE field but the other does not")
+            raise ValueError(
+                "One of the vcfs has the EVIDENCE field but the other does not")
         base_records = list(base_vcf.fetch())
-        test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
-        base_tree = iu.create_trees_from_records(base_records, variant_types, contigs, padding=padding)
-        base_pass_records = [r for r in base_records if ("PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
-        base_pass_tree = iu.create_trees_from_records(base_pass_records, variant_types, contigs, padding=padding)
+        test_tree = iu.create_trees_from_records(
+            test_records, variant_types, contigs, padding=padding)
+        base_tree = iu.create_trees_from_records(
+            base_records, variant_types, contigs, padding=padding)
+        base_pass_records = [r for r in base_records if (
+            "PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
+        base_pass_tree = iu.create_trees_from_records(
+            base_pass_records, variant_types, contigs, padding=padding)
     elif fbase_bed is not None:
         base_records = parse_bed_file(fbase_bed)
-        test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
-        base_tree = iu.create_trees_from_bed_records(base_records, variant_types, contigs, padding=padding)
+        test_tree = iu.create_trees_from_records(
+            test_records, variant_types, contigs, padding=padding)
+        base_tree = iu.create_trees_from_bed_records(
+            base_records, variant_types, contigs, padding=padding)
         base_pass_tree = None
     else:
         base_tree = None
         base_pass_tree = None
 
     if base_tree is not None:
-        metrics, fp_intervals, fn_intervals = add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro, metric_prefix)
+        metrics, fp_intervals, fn_intervals = add_evaluation_metrics(
+            metrics, test_tree, base_tree, variant_types, min_ro, metric_prefix)
     else:
         fp_intervals = None
         fn_intervals = None
 
     if base_pass_tree is not None:
-        metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(metrics, test_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
+        metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(
+            metrics, test_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
     else:
         fp_intervals_pass = None
         fn_intervals_pass = None
 
     if genotyped:
-        allele_frequencies, num_singletons = get_allele_frequency_counts(pass_records, test_vcf.header, variant_types)
+        allele_frequencies, num_singletons = get_allele_frequency_counts(
+            pass_records, test_vcf.header, variant_types)
     if has_vargq:
-        vargq_counts = get_distributions_by_type(pass_records, variant_types, "varGQ", VARGQ_BINS)
+        vargq_counts = get_distributions_by_type(
+            pass_records, variant_types, "varGQ", VARGQ_BINS)
     if collect_evidence:
         evidence_counts = collect_evidence_fields(pass_records, variant_types)
 
     for type in variant_types:
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_count"] = unfiltered_variant_type_counts[type]
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_pass_count"] = variant_type_counts[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type +
+                "_count"] = unfiltered_variant_type_counts[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type +
+                "_pass_count"] = variant_type_counts[type]
         if type != 'BND':
-            metrics = add_binned_metrics(size_counts, SIZES, type, metrics, metric_prefix, "pass_size")
+            metrics = add_binned_metrics(
+                size_counts, SIZES, type, metrics, metric_prefix, "pass_size")
         if genotyped:
-            metrics = add_binned_metrics(allele_frequencies, AF_BINS, type, metrics, metric_prefix, "pass_af")
+            metrics = add_binned_metrics(
+                allele_frequencies, AF_BINS, type, metrics, metric_prefix, "pass_af")
             if type in num_singletons:
-                metrics[metric_prefix + VCF_METRIC_STR + type + "_pass_ac_1"] = num_singletons[type]
+                metrics[metric_prefix + VCF_METRIC_STR +
+                        type + "_pass_ac_1"] = num_singletons[type]
         if has_vargq:
-            metrics = add_binned_metrics(vargq_counts, VARGQ_BINS, type, metrics, metric_prefix, "pass_vargq")
+            metrics = add_binned_metrics(
+                vargq_counts, VARGQ_BINS, type, metrics, metric_prefix, "pass_vargq")
         if collect_evidence:
-            metrics = add_metrics_from_dict(evidence_counts, type, metrics, metric_prefix, "pass_evidence")
+            metrics = add_metrics_from_dict(
+                evidence_counts, type, metrics, metric_prefix, "pass_evidence")
 
     return metrics, fp_intervals, fn_intervals, fp_intervals_pass, fn_intervals_pass
 
@@ -232,11 +259,13 @@ def add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro,
     fp_base = {}
     fp_intervals_base = {}
     for type in variant_types:
-        tp_test_, fp_test_, fp_intervals_test_ = iu.evaluate_tree(test_tree[type], base_tree[type], min_ro)
+        tp_test_, fp_test_, fp_intervals_test_ = iu.evaluate_tree(
+            test_tree[type], base_tree[type], min_ro)
         tp_test[type] = tp_test_
         fp_test[type] = fp_test_
         fp_intervals_test[type] = fp_intervals_test_
-        tp_base_, fp_base_, fp_intervals_base_ = iu.evaluate_tree(base_tree[type], test_tree[type], min_ro)
+        tp_base_, fp_base_, fp_intervals_base_ = iu.evaluate_tree(
+            base_tree[type], test_tree[type], min_ro)
         tp_base[type] = tp_base_
         fp_base[type] = fp_base_
         fp_intervals_base[type] = fp_intervals_base_
@@ -246,9 +275,12 @@ def add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro,
     fp_base_by_type = sum_counts_over_contigs(fp_base)
 
     for type in variant_types:
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_tp" + metric_suffix] = tp_test_by_type[type]
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_fp" + metric_suffix] = fp_test_by_type[type]
-        metrics[metric_prefix + VCF_METRIC_STR + type + "_fn" + metric_suffix] = fp_base_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type +
+                "_tp" + metric_suffix] = tp_test_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type +
+                "_fp" + metric_suffix] = fp_test_by_type[type]
+        metrics[metric_prefix + VCF_METRIC_STR + type +
+                "_fn" + metric_suffix] = fp_base_by_type[type]
     return metrics, fp_intervals_test, fp_intervals_base
 
 
@@ -277,7 +309,7 @@ def get_allele_frequency_counts(records, header, variant_types):
     allele_freq_counts = {}
     num_bins = len(AF_BINS)
     for type in af_types:
-        allele_freq_counts[type] = [0]*(num_bins+1)
+        allele_freq_counts[type] = [0] * (num_bins + 1)
         for val in allele_freq[type]:
             idx = get_distribution_index(val, AF_BINS, num_bins)
             allele_freq_counts[type][idx] += 1
@@ -291,9 +323,11 @@ def count_errors(records, contigs, max_warnings):
     for record in records:
         warnings_maxed = sum(error_counts.values()) > max_warnings
         if warnings_maxed and print_warnings:
-            sys.stderr.write("Max of %d warnings have been given, the rest will be suppressed.\n" % max_warnings)
+            sys.stderr.write(
+                "Max of %d warnings have been given, the rest will be suppressed.\n" % max_warnings)
             print_warnings = False
-        error_counts = check_record(error_counts, record, contigs_set, print_warnings)
+        error_counts = check_record(
+            error_counts, record, contigs_set, print_warnings)
     return error_counts
 
 
@@ -304,7 +338,8 @@ def check_record(error_counts, record, contigs_set, warn):
         error_counts[INVALID_CHR2_STR] += 1
     if not valid_end_field(record):
         if warn:
-            sys.stderr.write("Position was not less than END in record %s\n" % record.id)
+            sys.stderr.write(
+                "Position was not less than END in record %s\n" % record.id)
         error_counts[INVALID_END_STR] += 1
     return error_counts
 
@@ -339,7 +374,8 @@ def check_header_format_field(vcf, name):
 
 def check_header(vcf, expected_samples):
     vcf_samples = vcf.header.samples
-    tu.test_sets_equal(vcf_samples, expected_samples, item_str="sample", name_a="VCF header", name_b="samples list")
+    tu.test_sets_equal(vcf_samples, expected_samples, item_str="sample",
+                       name_a="VCF header", name_b="samples list")
 
 
 def collect_evidence_fields(records, variant_types):
@@ -365,8 +401,9 @@ def add_binned_metrics(metric_counts, bins, type, metrics, prefix, name):
         if i == 0:
             lb = 0
         else:
-            lb = bins[i-1]
-        key = prefix + VCF_METRIC_STR + type + "_" + name + "_" + str(lb) + "_" + str(bins[i])
+            lb = bins[i - 1]
+        key = prefix + VCF_METRIC_STR + type + "_" + \
+            name + "_" + str(lb) + "_" + str(bins[i])
         metrics[key] = metric_counts[type][i]
     key = prefix + VCF_METRIC_STR + type + "_" + name + "_gte_" + str(bins[-1])
     metrics[key] = metric_counts[type][-1]
@@ -396,7 +433,7 @@ def get_distributions_by_type(records, variant_types, field, bins, exclude_types
     counts = {}
     types_set = set(variant_types)
     for type in variant_types:
-        counts[type] = [0]*(num_bins+1)
+        counts[type] = [0] * (num_bins + 1)
     for record in records:
         type = vu.get_sv_type(record, types_set)
         if not type in exclude_types:

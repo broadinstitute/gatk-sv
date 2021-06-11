@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#freq
+# freq
 # Copyright © 2017 Matthew Stone <mstone5@mgh.harvard.edu>
 # Distributed under terms of the MIT license.
 
@@ -113,24 +113,24 @@ def _is_child(s):
 
 
 def fam_info_readin(fam_file):
-        fin=open(fam_file)
-        samp_pedi_hash={}
-        [fam, samp, fa,mo]=[[],[],[],[]]
-        for line in fin:
-                pin=line.strip().split()
-                fam.append(pin[0])
-                samp.append(pin[1])
-                fa.append(pin[2])
-                mo.append(pin[3])
-        fin.close()
-        return [fam, samp, fa,mo]
+    fin = open(fam_file)
+    samp_pedi_hash = {}
+    [fam, samp, fa, mo] = [[], [], [], []]
+    for line in fin:
+        pin = line.strip().split()
+        fam.append(pin[0])
+        samp.append(pin[1])
+        fa.append(pin[2])
+        mo.append(pin[3])
+    fin.close()
+    return [fam, samp, fa, mo]
 
 
 def get_inh_rate(called):
     quads = defaultdict(list)
 
     fam_file = args.fam
-    [fam, samp, fa,mo] = fam_info_readin(fam_file)
+    [fam, samp, fa, mo] = fam_info_readin(fam_file)
 
     for sample in called:
         if 'fa' in sample or 'mo' in sample or 'p1' in sample or 's1' in sample:
@@ -138,9 +138,12 @@ def get_inh_rate(called):
             quads[quad].append(member)
         else:
             quad = fam[samp.index(sample)]
-            if sample in fa: member = 'fa'
-            elif sample in mo: member = 'mo'
-            else:   member='pb'
+            if sample in fa:
+                member = 'fa'
+            elif sample in mo:
+                member = 'mo'
+            else:
+                member = 'pb'
 
     n_called = len([s for s in called if _is_child(s)])
 
@@ -236,13 +239,13 @@ def process_metadata(variants, bed=False, batch_list=None):
         q3 = counts.var_count.quantile(0.75)
         thresh = q3 + 1.5 * (q3 - q1)
         outliers = counts.loc[counts.var_count >= thresh, 'sample'].values
-       
+
         flagged = []
         for var_name, samples in called_samples[svtype].items():
             if samples.issubset(outliers):
                 flagged.append(var_name)
         metadata.loc[metadata.name.isin(flagged), 'is_outlier_specific'] = True
-    
+
     for col in 'start end svsize'.split():
         metadata[col] = metadata[col].astype(int)
 
@@ -254,7 +257,7 @@ def add_pesr(evidence):
                                       evidence['SR_sum_called_median'])
     evidence['PESR_bg_median'] = (evidence['PE_bg_median'] +
                                   evidence['SR_sum_bg_median'])
-    evidence['PESR_bg_frac'] = (evidence['PESR_bg_median'] / 
+    evidence['PESR_bg_frac'] = (evidence['PESR_bg_median'] /
                                 (evidence['PESR_bg_median'] + evidence['PESR_called_median']))
 
     def calc_p(row):

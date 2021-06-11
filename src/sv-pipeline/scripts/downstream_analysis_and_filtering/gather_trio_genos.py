@@ -33,11 +33,11 @@ def read_ac_adj(infile, pro, fa, mo):
     return ac_adj
 
 
-def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
+def gather_info(vcf, fout, pro, fa, mo, ac_adj=None, no_header=False):
     GTs_to_skip = './. None/None 0/None None/0'.split()
     sex_chroms = 'X Y chrX chrY'.split()
 
-    #Write header to output file
+    # Write header to output file
     if not no_header:
         header = '#VID\tSVLEN\tAF\tSVTYPE\tFILTER\tpro_EV\tpro_AC\tfa_AC\tmo_AC\tpro_GQ\tfa_GQ\tmo_GQ\n'
         fout.write(header)
@@ -56,37 +56,37 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
         # or 'UNRESOLVED' in record.filter:
         #     continue
 
-        #Do not include variants from sex chromosomes
+        # Do not include variants from sex chromosomes
         if record.chrom in sex_chroms:
             continue
 
-        #Do not include multiallelic variants
+        # Do not include multiallelic variants
         if 'MULTIALLELIC' in record.info.keys() \
-        or 'MULTIALLELIC' in record.filter \
-        or len(record.alts) > 1:
+                or 'MULTIALLELIC' in record.filter \
+                or len(record.alts) > 1:
             continue
 
-        #Get GTs for trio
+        # Get GTs for trio
         GTs = [get_GT(record, ID) for ID in trio_samples]
 
-        #Skip sites that aren't het in proband
+        # Skip sites that aren't het in proband
         if GTs[0] != '0/1':
             continue
-        
-        #Skip sites that are reference in all three samples
+
+        # Skip sites that are reference in all three samples
         if len([g for g in GTs if g == '0/0']) == 3:
             continue
 
-        #Skip sites that are reference or missing in the proband, as these are
+        # Skip sites that are reference or missing in the proband, as these are
         # uninformative for the purposes of assessing de novo rate
         if GTs[0] in GTs_to_skip or GTs[0] == '0/0':
             continue
-        
-        #Skip sites that are missing in any sample
+
+        # Skip sites that are missing in any sample
         if len([g for g in GTs if g in GTs_to_skip]) > 0:
             continue
 
-        #Convert to ACs
+        # Convert to ACs
         ACs = [get_AC(g) for g in GTs]
 
         # Overwrite ACs, if optioned
@@ -101,18 +101,18 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
             #                                                          oldACs_str,
             #                                                          newACs_str))
 
-        #Get genotype qualities for trio
+        # Get genotype qualities for trio
         GQs = [record.samples[ID]['GQ'] for ID in trio_samples]
 
-        #Skip sites that are missing integer GQs in any member of the trio
-        #This shouldn't occur in theory, but somtimes does. Cause unclear.
+        # Skip sites that are missing integer GQs in any member of the trio
+        # This shouldn't occur in theory, but somtimes does. Cause unclear.
         if len([g for g in GQs if g is None]) > 0:
             continue
-        #Otherwise, convert GQs to string for writing to file
+        # Otherwise, convert GQs to string for writing to file
         else:
             GQs = [str(g) for g in GQs]
 
-        #Get minimal variant info
+        # Get minimal variant info
         vid = record.id
         size = str(record.info['SVLEN'])
         if 'AF' in record.info.keys():
@@ -124,9 +124,9 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
         pro_ev = record.samples[trio_samples[0]]['EV']
         if isinstance(pro_ev, tuple):
             pro_ev = ','.join(list(pro_ev))
-        vinfo = '{0}\t{1}\t{2}\t{3}\t{4}\t{5}'.format(vid, size, freq, 
-                                                           svtype, filt, pro_ev)
-        
+        vinfo = '{0}\t{1}\t{2}\t{3}\t{4}\t{5}'.format(vid, size, freq,
+                                                      svtype, filt, pro_ev)
+
         # Write record to file
         newline = '{0}\t{1}\t{2}'.format(vinfo, '\t'.join(ACs), '\t'.join(GQs))
         fout.write(newline + '\n')
@@ -163,7 +163,7 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
@@ -180,6 +180,7 @@ def main():
     gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.no_header)
 
     fout.close()
+
 
 if __name__ == '__main__':
     main()

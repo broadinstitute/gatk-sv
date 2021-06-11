@@ -24,65 +24,66 @@ INS_ALT_INFO = [
 
 # info keys we need to make sure we have
 INFO_KEYS = {
-    'END2' : '##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">',
-    'CHR2' : '##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END2 coordinate">',
-    'UNRESOLVED' : '##INFO=<ID=UNRESOLVED,Number=0,Type=Flag,Description="Variant is unresolved.">',
-    'UNRESOLVED_TYPE' : '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">'
+    'END2': '##INFO=<ID=END2,Number=1,Type=Integer,Description="Position of breakpoint on CHR2">',
+    'CHR2': '##INFO=<ID=CHR2,Number=1,Type=String,Description="Chromosome for END2 coordinate">',
+    'UNRESOLVED': '##INFO=<ID=UNRESOLVED,Number=0,Type=Flag,Description="Variant is unresolved.">',
+    'UNRESOLVED_TYPE': '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">'
 }
 
-#Cleanup function
+# Cleanup function
+
+
 def cleanup(vcf, fout):
 
-    #Iterate over records
+    # Iterate over records
     for record in vcf:
 
-        #Skip records with SVLEN < 50bp
+        # Skip records with SVLEN < 50bp
         if 0 <= record.info['SVLEN'] < 50:
             continue
 
-        #Get basic info about record
+        # Get basic info about record
         chrom = record.chrom
         svtype = record.info['SVTYPE']
         end = record.stop
         record.ref = 'N'
         alts = record.alts
 
-
-        #Clean up insertions
+        # Clean up insertions
         if svtype == 'INS':
-            
-            #Set alt allele to specify kind of insertion, if known
+
+            # Set alt allele to specify kind of insertion, if known
             metypes = 'INS:ME INS:MEI INS:ME:ALU INS:ME:SVA INS:ME:LINE1'.split()
             if record.alts[0] not in metypes:
 
-                #If ME specified in CPX_TYPE, store that as alt allele
+                # If ME specified in CPX_TYPE, store that as alt allele
                 if 'CPX_TYPE' in record.info.keys():
                     if record.info['CPX_TYPE'] in metypes:
-                        record.alts = ('<{0}>'.format(record.info['CPX_TYPE']), )
+                        record.alts = ('<{0}>'.format(
+                            record.info['CPX_TYPE']), )
                     elif record.info['CPX_TYPE'] in 'MEI_INS5 MEI_INS3'.split():
                         record.alts = ('<INS:ME>', )
                     else:
                         record.alts = ('<INS:UNK>', )
 
-                #Otherwise, set alt allele to insertion of unknown origin
+                # Otherwise, set alt allele to insertion of unknown origin
                 else:
                     record.alts = ('<INS:UNK>', )
             else:
                 record.alts = ('<INS:UNK>', )
 
-            #Clear CPX_TYPE=INS (but leave others, as they're necessary for CPX GT)
+            # Clear CPX_TYPE=INS (but leave others, as they're necessary for CPX GT)
             if 'CPX_TYPE' in record.info.keys():
                 if record.info['CPX_TYPE'] in 'INS MEI_INS5 MEI_INS3'.split() \
-                or record.info['CPX_TYPE'] in metypes:
+                        or record.info['CPX_TYPE'] in metypes:
                     record.info.pop('CPX_TYPE')
 
-            #Scrub all unresolved info from all insertions
+            # Scrub all unresolved info from all insertions
             for info in 'UNRESOLVED UNRESOLVED_TYPE EVENT STRANDS'.split():
                 if info in record.info.keys():
                     record.info.pop(info)
 
-
-        #Clean up BNDs
+        # Clean up BNDs
         elif svtype == 'BND':
 
             if "[" in record.alts[0] or "]" in record.alts[0]:
@@ -92,15 +93,14 @@ def cleanup(vcf, fout):
                 record.info['CHR2'] = chr2
                 record.info['END2'] = end2
 
-            #Correct alt syntax
+            # Correct alt syntax
             record.alts = ('<BND>', )
             record.stop = record.start + 1
 
-
-            #All BNDs are unresolved by definition
+            # All BNDs are unresolved by definition
             record.info['UNRESOLVED'] = True
 
-            #Clean UNRESOLVED_TYPE
+            # Clean UNRESOLVED_TYPE
             trigger = 0
             if 'UNRESOLVED_TYPE' not in record.info.keys():
                 trigger = 1
@@ -109,7 +109,7 @@ def cleanup(vcf, fout):
 
             if trigger == 0:
 
-                #Add strand to SINGLE_ENDER notation, if possible
+                # Add strand to SINGLE_ENDER notation, if possible
                 unres = record.info['UNRESOLVED_TYPE']
                 if unres == 'SINGLE_ENDER':
                     if 'STRANDS' in record.info.keys():
@@ -117,7 +117,7 @@ def cleanup(vcf, fout):
                     else:
                         unres = 'SINGLE_ENDER_UNK'
 
-            #Otherwise, assign UNRESOLVED_TYPE based on number of MEMBERS
+            # Otherwise, assign UNRESOLVED_TYPE based on number of MEMBERS
             else:
                 if 'MEMBERS' in record.info.keys():
                     if len(record.info['MEMBERS']) > 1:
@@ -128,57 +128,54 @@ def cleanup(vcf, fout):
                         else:
                             unres = 'SINGLE_ENDER_UNK'
 
-                #If record missing MEMBERS tag, assume single ender
+                # If record missing MEMBERS tag, assume single ender
                 else:
                     if 'STRANDS' in record.info.keys():
                         unres = 'SINGLE_ENDER_' + record.info['STRANDS']
                     else:
                         unres = 'SINGLE_ENDER_UNK'
-            
-            #Set final UNRESOLVED_TYPE
+
+            # Set final UNRESOLVED_TYPE
             record.info['UNRESOLVED_TYPE'] = unres
 
-
-        #Clean up INVs
+        # Clean up INVs
         elif svtype == 'INV':
 
-            #Make UNRESOLVED inversions SVTYPE=BNDs (retain INV alt allele)
+            # Make UNRESOLVED inversions SVTYPE=BNDs (retain INV alt allele)
             if 'UNRESOLVED' in record.info.keys():
 
-                #All unresolved inversions become BNDs
+                # All unresolved inversions become BNDs
                 record.info['SVTYPE'] = 'BND'
 
-            #Ensure all inversion single-enders are marked as UNRESOLVED
+            # Ensure all inversion single-enders are marked as UNRESOLVED
             else:
 
-                #INV records without CPX_TYPE are unmarked unresolved single enders
+                # INV records without CPX_TYPE are unmarked unresolved single enders
                 if 'CPX_TYPE' not in record.info.keys():
                     record.info['SVTYPE'] = 'BND'
                     record.info['UNRESOLVED'] = True
                     record.info['UNRESOLVED_TYPE'] = 'INVERSION_SINGLE_ENDER_' + \
-                                                        record.info['STRANDS']
+                        record.info['STRANDS']
 
-                #INV records with CPX_TYPE are resolved simple inversions
-                #In these cases, strip CPX_TYPE and CPX_INTERVALS
+                # INV records with CPX_TYPE are resolved simple inversions
+                # In these cases, strip CPX_TYPE and CPX_INTERVALS
                 else:
                     for info in 'CPX_TYPE CPX_INTERVALS'.split():
                         if info in record.info.keys():
                             record.info.pop(info)
 
-
-        #Remove various tags from CNVs
+        # Remove various tags from CNVs
         elif svtype in 'DEL DUP'.split():
             for info in 'CPX_TYPE CPX_INTERVALS UNRESOLVED UNRESOLVED_TYPE'.split():
                 if info in record.info.keys():
                     record.info.pop(info)
 
-
-        #Clean some tags from all variants
+        # Clean some tags from all variants
         for info in 'EVENT'.split():
             if info in record.info.keys():
                 record.info.pop(info)
 
-        #Make sure all UNRESOLVED variants also have an UNRESOLVED_TYPE
+        # Make sure all UNRESOLVED variants also have an UNRESOLVED_TYPE
         if 'UNRESOLVED' in record.info.keys():
             if 'UNRESOLVED_TYPE' not in record.info.keys():
                 record.info['UNRESOLVED_TYPE'] = 'NOT_SPECIFIED'
@@ -189,7 +186,7 @@ def cleanup(vcf, fout):
         fout.write(record)
 
 
-#Main block
+# Main block
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -200,7 +197,7 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
     for line in INS_ALT_INFO:

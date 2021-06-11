@@ -37,11 +37,15 @@ def filter_on_reciprocal_overlap(single_sample_vcf_file,
     single_sample_vcf = single_sample_vcf_file
     ref_vcf = ref_vcf_file
 
-    single_sample_bed = svu.vcf2bedtool(single_sample_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
-    ref_bed = svu.vcf2bedtool(ref_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
-    ref_bed.filter(ac_filter, variant_gts_allowed=variant_gts_allowed, sample_to_exclude=case_sample)
+    single_sample_bed = svu.vcf2bedtool(
+        single_sample_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
+    ref_bed = svu.vcf2bedtool(
+        ref_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
+    ref_bed.filter(ac_filter, variant_gts_allowed=variant_gts_allowed,
+                   sample_to_exclude=case_sample)
 
-    intersection = single_sample_bed.intersect(ref_bed, wa=True, f=overlap_frac, r=True, v=True)
+    intersection = single_sample_bed.intersect(
+        ref_bed, wa=True, f=overlap_frac, r=True, v=True)
 
     filtered_variant_ids = []
 
@@ -54,8 +58,10 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
     single_sample_vcf = single_sample_vcf_file
     ref_vcf = ref_vcf_file
 
-    single_sample_bed = svu.vcf2bedtool(single_sample_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
-    ref_bed = svu.vcf2bedtool(ref_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
+    single_sample_bed = svu.vcf2bedtool(
+        single_sample_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
+    ref_bed = svu.vcf2bedtool(
+        ref_vcf, annotate_ins=False, include_samples=True, svtypes=[svtype])
 
     # in bash bedtools this gets the results we want:
     # bedtools coverage -a single_sample_calls.bed -b ref_panel_calls.bed -d \ # compute per-base coverage of query by intervals in ref
@@ -75,8 +81,8 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
     cov_hist = subprocess.Popen(['bedtools', 'coverage', '-a', 'single_sample_calls.bed', '-b', 'ref_panel_calls.bed', '-d'],
                                 stdout=subprocess.PIPE)
     cov_hist_slim = subprocess.Popen(['awk', '{OFS="\t"; print $1,$2,$3,$8,$9}'],
-                                stdin=cov_hist.stdout,
-                                stdout=subprocess.PIPE)
+                                     stdin=cov_hist.stdout,
+                                     stdout=subprocess.PIPE)
     cov_reg_grouped = subprocess.Popen(['bedtools', 'groupby', '-g', '1,2,3,5', '-c', '4', '-o', 'min,max'],
                                        stdin=cov_hist_slim.stdout,
                                        stdout=subprocess.PIPE)
@@ -90,13 +96,14 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
                                        stdin=cov_reg_ref_ovl.stdout,
                                        stdout=subprocess.PIPE)
     final_intersect_process = subprocess.Popen(['bedtools', 'intersect', '-a', 'single_sample_calls.bed', '-b', 'stdin', '-wao'],
-                                                stdin=cov_reg_ref_cds.stdout,
-                                                stdout=open('final_merged_intersection.bed', 'w'))
+                                               stdin=cov_reg_ref_cds.stdout,
+                                               stdout=open('final_merged_intersection.bed', 'w'))
 
     data = final_intersect_process.communicate()[0]  # expect this to be empty
     return_code = final_intersect_process.returncode
     if return_code != 0:
-        raise Exception('intersection pipeline process exited with return code ' + returncode)
+        raise Exception(
+            'intersection pipeline process exited with return code ' + returncode)
 
     intersection = pybedtools.BedTool('final_merged_intersection.bed')
     filtered_variant_ids = []
@@ -111,7 +118,8 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
 
         if new_case_id != current_case_id:
             if current_case_id != '':
-                covered_by_matching_case_calls = (bases_covered_by_matching_calls / current_case_length) > overlap_frac
+                covered_by_matching_case_calls = (
+                    bases_covered_by_matching_calls / current_case_length) > overlap_frac
                 if has_ref_panel_gts and not covered_by_matching_case_calls:
                     filtered_variant_ids.append(current_case_id)
             current_case_id = new_case_id
@@ -155,7 +163,8 @@ def main():
     filtered_variant_ids = []
 
     filtered_variant_ids += filter_cnv_on_coverage(pysam.VariantFile(args.single_sample_vcf),
-                                                   pysam.VariantFile(args.ref_vcf),
+                                                   pysam.VariantFile(
+                                                       args.ref_vcf),
                                                    'DEL',
                                                    case_sample,
                                                    overlap_frac,
@@ -163,7 +172,8 @@ def main():
                                                    )
 
     filtered_variant_ids += filter_cnv_on_coverage(pysam.VariantFile(args.single_sample_vcf),
-                                                   pysam.VariantFile(args.ref_vcf),
+                                                   pysam.VariantFile(
+                                                       args.ref_vcf),
                                                    'DUP',
                                                    case_sample,
                                                    overlap_frac,
@@ -171,7 +181,8 @@ def main():
                                                    )
 
     filtered_variant_ids += filter_on_reciprocal_overlap(pysam.VariantFile(args.single_sample_vcf),
-                                                         pysam.VariantFile(args.ref_vcf),
+                                                         pysam.VariantFile(
+                                                             args.ref_vcf),
                                                          'INV',
                                                          case_sample,
                                                          overlap_frac,
@@ -179,7 +190,8 @@ def main():
                                                          )
 
     filtered_variant_ids += filter_on_reciprocal_overlap(pysam.VariantFile(args.single_sample_vcf),
-                                                         pysam.VariantFile(args.ref_vcf),
+                                                         pysam.VariantFile(
+                                                             args.ref_vcf),
                                                          'CPX',
                                                          case_sample,
                                                          overlap_frac,

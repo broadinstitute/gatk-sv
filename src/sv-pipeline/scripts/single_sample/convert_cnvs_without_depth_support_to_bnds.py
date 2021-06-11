@@ -16,13 +16,13 @@ from svtk.famfile import parse_famfile
 
 def has_depth_support_autosome(record, sample):
     return record.samples[sample]['RD_CN'] is not None and \
-           ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > 2) or
+        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > 2) or
             (record.info['SVTYPE'] == 'DEL' and record.samples[sample]['RD_CN'] < 2))
 
 
 def has_sr_or_pe_support(record, sample):
     return (record.samples[sample]['PE_GT'] is not None and record.samples[sample]['PE_GT'] > 0) \
-           or (record.samples[sample]['SR_GT'] is not None and record.samples[sample]['SR_GT'] > 0)
+        or (record.samples[sample]['SR_GT'] is not None and record.samples[sample]['SR_GT'] > 0)
 
 
 def has_depth_support_allosome(record, sample, samples_with_same_sex):
@@ -35,8 +35,8 @@ def has_depth_support_allosome(record, sample, samples_with_same_sex):
     cns.sort()
     median_cn = cns[int((len(cns) + 1) / 2)]
     return record.samples[sample]['RD_CN'] is not None and \
-           ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > median_cn) or
-            (record.info['SVTYPE'] == 'DEL' and record.samples[sample]['RD_CN'] < median_cn))
+        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > median_cn) or
+         (record.info['SVTYPE'] == 'DEL' and record.samples[sample]['RD_CN'] < median_cn))
 
 
 def read_contigs_list(contigs_list):
@@ -59,8 +59,10 @@ def main():
     parser.add_argument('allosome_contigs_file')
     parser.add_argument('famfile', type=argparse.FileType('r'))
     parser.add_argument('case_sample')
-    parser.add_argument('min_size', help='minumum size at which to apply conversions', type=int)
-    parser.add_argument('-o', '--outfile', help='Output file [default: stdout]')
+    parser.add_argument(
+        'min_size', help='minumum size at which to apply conversions', type=int)
+    parser.add_argument('-o', '--outfile',
+                        help='Output file [default: stdout]')
 
     args = parser.parse_args()
 

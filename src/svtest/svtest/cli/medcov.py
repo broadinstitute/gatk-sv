@@ -19,6 +19,7 @@ MEAN_KEY = "medcov_mean"
 MEAN_ERROR_KEY = "medcov_mean_abs_err"
 MAX_ERROR_KEY = "medcov_max_abs_err"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -55,20 +56,25 @@ def write_metrics(metrics):
 
 def get_metrics(test_file, baseline_file, samples):
     test_header, test_data = get_medcov_file_data(test_file)
-    tu.test_iterable_sizes_equal(test_header, test_data, name_a="test file header", name_b="test file data row")
-    tu.test_sets_equal(test_header, samples, item_str="sample id", name_a="test file header", name_b="sample list")
+    tu.test_iterable_sizes_equal(
+        test_header, test_data, name_a="test file header", name_b="test file data row")
+    tu.test_sets_equal(test_header, samples, item_str="sample id",
+                       name_a="test file header", name_b="sample list")
     metrics = {
         MEAN_KEY: float(sum(test_data)) / len(test_header)
     }
     if baseline_file is not None:
-        metrics = get_baseline_metrics(metrics, baseline_file, test_data, samples)
+        metrics = get_baseline_metrics(
+            metrics, baseline_file, test_data, samples)
     return metrics
 
 
 def get_baseline_metrics(metrics, baseline_file, test_data, samples):
     baseline_header, baseline_data = get_medcov_file_data(baseline_file)
-    tu.test_iterable_sizes_equal(baseline_header, baseline_data, name_a="baseline file header", name_b="baseline file data row")
-    tu.test_sets_equal(baseline_header, samples, item_str="sample id", name_a="test file header", name_b="sample list")
+    tu.test_iterable_sizes_equal(baseline_header, baseline_data,
+                                 name_a="baseline file header", name_b="baseline file data row")
+    tu.test_sets_equal(baseline_header, samples, item_str="sample id",
+                       name_a="test file header", name_b="sample list")
     n = len(baseline_header)
     error_list = [abs(test_data[i] - baseline_data[i]) for i in range(n)]
     metrics[MEAN_ERROR_KEY] = float(sum(error_list)) / n

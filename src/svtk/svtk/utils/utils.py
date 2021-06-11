@@ -46,8 +46,8 @@ def is_biallelic(record):
     Check if record is biallelic
     """
     if 'MULTIALLELIC' not in record.filter \
-    and len(record.alleles) <= 2 \
-    and record.info['SVTYPE'] not in 'CNV MCNV'.split():
+            and len(record.alleles) <= 2 \
+            and record.info['SVTYPE'] not in 'CNV MCNV'.split():
         return True
     else:
         return False
@@ -119,7 +119,7 @@ def get_called_samples(record, include_null=False):
 
     if record.info.get('SVTYPE', None) == 'CNV':
         for sample in record.samples.keys():
-            if record.samples[sample]['CN']!=2:
+            if record.samples[sample]['CN'] != 2:
                 samples.append(sample)
 
     return sorted(samples)
@@ -128,8 +128,8 @@ def get_called_samples(record, include_null=False):
 # TODO: check if record is CPX and make entry per complex interval
 def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                 include_strands=True, split_cpx=False, include_infos=None,
-                annotate_ins=True, report_alt=False, svtypes=None, 
-                no_sort_coords=False, simple_sinks=False, 
+                annotate_ins=True, report_alt=False, svtypes=None,
+                no_sort_coords=False, simple_sinks=False,
                 include_unresolved=True, include_filters=False):
     """
     Wrap VCF as a bedtool. Necessary as pybedtools does not support SV in VCF.
@@ -203,8 +203,8 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                 continue
             if not include_unresolved:
                 if 'UNRESOLVED' in record.info.keys() \
-                or 'UNRESOLVED_TYPE' in record.info.keys() \
-                or 'UNRESOLVED' in record.filter:
+                        or 'UNRESOLVED_TYPE' in record.info.keys() \
+                        or 'UNRESOLVED' in record.filter:
                     continue
 
             chrom = record.chrom
@@ -218,9 +218,9 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
             else:
                 start, end = sorted([int(record.pos), int(record.stop)])
 
-            #Subtract 1bp from pos to convert to 0-based BED vs 1-based VCF
+            # Subtract 1bp from pos to convert to 0-based BED vs 1-based VCF
             start = max([0, int(start) - 1])
-            
+
             if report_alt:
                 svtype = record.alts[0].strip('<>')
             else:
@@ -289,7 +289,7 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                     end = record.stop
                     yield entry.format(**locals())
 
-            #Deconstruct complex intervals, if optioned
+            # Deconstruct complex intervals, if optioned
             elif 'CPX_INTERVALS' in record.info and split_cpx:
                 # If complex, all constituent intervals are in CPX_INTERVALS
                 for interval in record.info['CPX_INTERVALS']:
@@ -298,7 +298,7 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                     start, end = coords.split('-')
                     start = max([0, int(start) - 1])
                     yield entry.format(**locals())
-                #If complex insertion, return insertion point as 1bp DEL
+                # If complex insertion, return insertion point as 1bp DEL
                 if record.info.get('CPX_TYPE', None) in cpx_ins_classes:
                     svtype = 'DEL'
                     chrom = record.chrom

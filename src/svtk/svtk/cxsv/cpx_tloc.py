@@ -71,9 +71,9 @@ def classify_simple_translocation(plus, minus, mh_buffer=10):
     # Check for PE evidence
     def _hasPE(recA, recB):
         if 'EVIDENCE' in recA.info.keys() \
-        and 'EVIDENCE' in recB.info.keys():
+                and 'EVIDENCE' in recB.info.keys():
             if 'PE' in recA.info['EVIDENCE'] \
-            and 'PE' in recB.info['EVIDENCE']:
+                    and 'PE' in recB.info['EVIDENCE']:
                 return True
             else:
                 return False

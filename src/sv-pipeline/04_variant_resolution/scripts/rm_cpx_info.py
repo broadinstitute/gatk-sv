@@ -13,16 +13,18 @@ import sys
 from collections import defaultdict
 import pysam
 
-#Cleanup function
+# Cleanup function
+
+
 def rmcpx(vcf, fout):
 
-    #Iterate over records
+    # Iterate over records
     for record in vcf:
 
-        #Get basic info about record
+        # Get basic info about record
         svtype = record.info['SVTYPE']
 
-        #Clear CPX info fields for non-CPX variants
+        # Clear CPX info fields for non-CPX variants
         if svtype != "CPX" and svtype != "CTX":
             for info in 'CPX_TYPE CPX_INTERVALS'.split():
                 if info in record.info.keys():
@@ -32,7 +34,7 @@ def rmcpx(vcf, fout):
         fout.write(record)
 
 
-#Main block
+# Main block
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -43,7 +45,7 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 

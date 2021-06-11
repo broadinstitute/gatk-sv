@@ -227,7 +227,6 @@ def get_split_positions(read):
         Direction of soft clip
     """
 
-
     pos = read.pos
 
     split_positions = []
@@ -247,20 +246,25 @@ def get_split_positions(read):
 
     return split_positions
 
+
 def is_left_clipped(read):
     return len(read.cigartuples) >= 1 and is_clipping_operation(read.cigartuples[0][0])
+
 
 def is_right_clipped(read):
     return len(read.cigartuples) >= 1 and is_clipping_operation(read.cigartuples[-1][0])
 
+
 def is_clipping_operation(operation):
     return operation == 4 or operation == 5
+
 
 def operation_consumes_ref_bases(operation):
     """
     Returns true if this is a cigar operation that consumes reference bases
     """
     return operation == 0 or operation == 2 or operation == 3 or operation == 7
+
 
 def main(argv):
     parser = argparse.ArgumentParser(
@@ -303,7 +307,8 @@ def main(argv):
     # Collect data and save
     with svu.BgzipFile(args.splitfile, args.bgzip) as splitfile:
         with svu.BgzipFile(args.discfile, args.bgzip) as discfile:
-            PESRCollection(bam, splitfile, discfile, args.sample).collect_pesr()
+            PESRCollection(bam, splitfile, discfile,
+                           args.sample).collect_pesr()
 
 
 if __name__ == '__main__':

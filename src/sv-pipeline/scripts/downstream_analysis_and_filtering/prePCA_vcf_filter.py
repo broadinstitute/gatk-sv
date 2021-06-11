@@ -20,8 +20,9 @@ NULL_GTs = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
 
 def get_call_rate(record):
     n_samples = len(record.samples)
-    n_non_null = len([s for s in record.samples if record.samples[s]['GT'] not in NULL_GTs])
-    
+    n_non_null = len(
+        [s for s in record.samples if record.samples[s]['GT'] not in NULL_GTs])
+
     callrate = n_non_null / n_samples
 
     return callrate
@@ -41,25 +42,25 @@ def filter_vcf(vcf, fout_common, minAF=0.01, fout_all=None, minCallRate=0.99):
         # or len(record.alts) > 1:
         #     continue
 
-        #Do not include variants on X or Y
+        # Do not include variants on X or Y
         allosomes = ['X', 'Y', 'chrX', 'chrY']
         if record.chrom in allosomes:
             continue
 
-        #Only include PASS variants
+        # Only include PASS variants
         if 'PASS' not in record.filter:
             continue
 
-        #Only include variants with ≥minCallRate
+        # Only include variants with ≥minCallRate
         if get_call_rate(record) < minCallRate:
             continue
 
-        #Only keep common variants
+        # Only keep common variants
         if 'AF' in record.info.keys():
             if record.info['AF'][0] >= minAF:
                 fout_common.write(record)
 
-        #Write AF-unfiltered variants, if optioned
+        # Write AF-unfiltered variants, if optioned
         if fout_all is not None:
             fout_all.write(record)
 
@@ -79,22 +80,22 @@ def main():
 
     args = parser.parse_args()
 
-    #Open input VCF
+    # Open input VCF
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
 
-    #Open outut VCFs
+    # Open outut VCFs
     fout_common = pysam.VariantFile(args.fout, 'w', header=header)
     if args.noAFoutput is not None:
         fout_all = pysam.VariantFile(args.noAFoutput, 'w', header=header)
     else:
         fout_all = None
 
-    #Filter VCF
+    # Filter VCF
     filter_vcf(vcf, fout_common, args.minAF, fout_all, args.minCallRate)
 
 

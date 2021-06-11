@@ -99,11 +99,13 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
 
     # Exclude intersections where two DELs or two DUPs cluster together
     # cnvtypes = 'DEL DUP'.split()
-    overlap = overlap.filter(lambda b: not (b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
-    overlap = overlap.filter(lambda b: not (b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
+    overlap = overlap.filter(lambda b: not (
+        b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
+    overlap = overlap.filter(lambda b: not (
+        b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
 
     # # Exclude intersections with annotated mobile elements (rather than BNDs)
-    # overlap = overlap.filter(lambda b: b.fields[4] is not re.match(re.compile('INS\:ME\:*'), b.fields[4])).saveas()    
+    # overlap = overlap.filter(lambda b: b.fields[4] is not re.match(re.compile('INS\:ME\:*'), b.fields[4])).saveas()
 
     # Get linked variant IDs
     links = [(b[3], b[9]) for b in overlap.intervals]
@@ -144,22 +146,22 @@ def link_cpx(vcf, bkpt_window=300, cpx_dist=2000):
 
 
 def unify_list(list):
-    out=[]
+    out = []
     for i in list:
         if not i in out:
             out.append(i)
     return out
 
 
-def CNV_readin_from_resolved_vcf(resolved_name,inv_intervals):
-    resolved_f = pysam.VariantFile(resolved_name,'r')
-    rec_a=0
-    out= []
+def CNV_readin_from_resolved_vcf(resolved_name, inv_intervals):
+    resolved_f = pysam.VariantFile(resolved_name, 'r')
+    rec_a = 0
+    out = []
     for i in resolved_f:
         for j in inv_intervals:
             if i.chrom == j[0]:
-                if (i.pos - j[1])*(i.pos-j[2])<0 or (i.stop - j[1])*(i.stop-j[2])<0:
-                    if i.info['SVTYPE'] in ['DEL','DUP']:
+                if (i.pos - j[1]) * (i.pos - j[2]) < 0 or (i.stop - j[1]) * (i.stop - j[2]) < 0:
+                    if i.info['SVTYPE'] in ['DEL', 'DUP']:
                         out.append(i)
     resolved_f.close()
     return out
@@ -168,36 +170,40 @@ def CNV_readin_from_resolved_vcf(resolved_name,inv_intervals):
 def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
     linked_INV_V2 = []
     for group in linked_INV:
-        if len(group)>1:
-            for i in group: 
+        if len(group) > 1:
+            for i in group:
                 for j in group:
-                    if (samples_overlap(i,j) and ro_calu(i,j)>0):
-                        linked_INV_V2.append([i,j])
+                    if (samples_overlap(i, j) and ro_calu(i, j) > 0):
+                        linked_INV_V2.append([i, j])
         else:
             linked_INV_V2.append([group[0]])
     inv_intervals = []
     for i in linked_INV_V2:
-        if len(i)>1:
-            tmp=[i[0].chrom]
+        if len(i) > 1:
+            tmp = [i[0].chrom]
             for j in i:
-                tmp+=[j.pos, j.stop]
-            inv_intervals.append([tmp[0],min(unify_list(tmp[1:])), max(unify_list(tmp[1:])) ])
+                tmp += [j.pos, j.stop]
+            inv_intervals.append(
+                [tmp[0], min(unify_list(tmp[1:])), max(unify_list(tmp[1:]))])
         else:
             inv_intervals.append([i[0].chrom, i[0].pos, i[0].stop])
-    inv_intervals=sorted(unify_list(inv_intervals))
-    #out_rec = unify_list(CNV_readin_from_resolved_vcf(resolved_name,inv_intervals) + CNV_readin_from_resolved_vcf(unresolved_name,inv_intervals)) 
+    inv_intervals = sorted(unify_list(inv_intervals))
+    #out_rec = unify_list(CNV_readin_from_resolved_vcf(resolved_name,inv_intervals) + CNV_readin_from_resolved_vcf(unresolved_name,inv_intervals))
     out_rec = resolve_CNV
-    cluster=[]
+    cluster = []
     for i in linked_INV_V2:
-        if len(i)>1:
+        if len(i) > 1:
             if abs(i[1].pos - i[0].pos) > cpx_dist and abs(i[1].stop - i[0].stop) > cpx_dist:
                 if 'STRANDS' in i[0].info.keys() and 'STRANDS' in i[1].info.keys():
-                    if sorted(unify_list([i[0].info['STRANDS'],i[1].info['STRANDS']])) == ['++', '--']:
+                    if sorted(unify_list([i[0].info['STRANDS'], i[1].info['STRANDS']])) == ['++', '--']:
                         if i[0].pos < i[1].pos < i[0].stop < i[1].stop or i[1].pos < i[0].pos < i[1].stop < i[0].stop:
-                            cpx_intervals = [[i[0].chrom , sorted([i[0].pos, i[0].stop,i[1].pos, i[1].stop])[0],sorted([i[0].pos, i[0].stop,i[1].pos, i[1].stop])[1]],[i[0].chrom , sorted([i[0].pos, i[0].stop,i[1].pos, i[1].stop])[2],sorted([i[0].pos, i[0].stop,i[1].pos, i[1].stop])[3]]]
-                            CNV_close=[j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[0])>.5 and abs(j.pos - cpx_intervals[0][1]) <cpx_dist and abs(j.stop - cpx_intervals[0][2]) < cpx_dist]
-                            CNV_close+=[j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[1])>.5 and abs(j.pos - cpx_intervals[1][1]) <cpx_dist and abs(j.stop - cpx_intervals[1][2]) < cpx_dist]
-                            cluster.append(CNV_close+i)
+                            cpx_intervals = [[i[0].chrom, sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[0], sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[1]], [
+                                i[0].chrom, sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[2], sorted([i[0].pos, i[0].stop, i[1].pos, i[1].stop])[3]]]
+                            CNV_close = [j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[0]) > .5 and abs(
+                                j.pos - cpx_intervals[0][1]) < cpx_dist and abs(j.stop - cpx_intervals[0][2]) < cpx_dist]
+                            CNV_close += [j for j in out_rec if ro_calu_interval([j.chrom, j.pos, j.stop], cpx_intervals[1]) > .5 and abs(
+                                j.pos - cpx_intervals[1][1]) < cpx_dist and abs(j.stop - cpx_intervals[1][2]) < cpx_dist]
+                            cluster.append(CNV_close + i)
         else:
             cluster.append(i)
     return cluster
@@ -206,8 +212,10 @@ def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
 def link_inv(vcf, bkpt_window=300, cpx_dist=2000):
     bt = svu.vcf2bedtool(vcf.filename, annotate_ins=False)
     overlap = bt.window(bt, w=bkpt_window).saveas()
-    overlap = overlap.filter(lambda b: not (b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
-    overlap = overlap.filter(lambda b: not (b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
+    overlap = overlap.filter(lambda b: not (
+        b.fields[4] == "DEL" and b.fields[10] == "DEL")).saveas()
+    overlap = overlap.filter(lambda b: not (
+        b.fields[4] == "DUP" and b.fields[10] == "DUP")).saveas()
     links = [(b[3], b[9]) for b in overlap.intervals]
     linked_IDs = natsort.natsorted(set(itertools.chain.from_iterable(links)))
     linked_IDs = np.array(linked_IDs)
@@ -238,12 +246,13 @@ def ro_calu(r1, r2):
     out = 0
     if not r1.chrom == r2.chrom:
         out = 0
-    elif r1.pos>r2.stop or r1.stop < r2.pos:
+    elif r1.pos > r2.stop or r1.stop < r2.pos:
         out = 0
     else:
-        maxval = max([r1.stop-r1.pos ,r2.stop-r2.pos])
+        maxval = max([r1.stop - r1.pos, r2.stop - r2.pos])
         if maxval > 0:
-            out = (sorted([r1.pos, r2.pos, r1.stop, r2.stop])[2] - sorted([r1.pos, r2.pos, r1.stop, r2.stop])[1])/maxval
+            out = (sorted([r1.pos, r2.pos, r1.stop, r2.stop])[
+                   2] - sorted([r1.pos, r2.pos, r1.stop, r2.stop])[1]) / maxval
         else:
             out = 0
     return out
@@ -251,13 +260,11 @@ def ro_calu(r1, r2):
 
 def ro_calu_interval(r1, r2):
     out = 0
-    if not r1[0]==r2[0]:
+    if not r1[0] == r2[0]:
         out = 0
-    elif r1[1] > r2[2] or r1[2]< r2[1]:
+    elif r1[1] > r2[2] or r1[2] < r2[1]:
         out = 0
     else:
-        out = ( sorted(r1[1:]+r2[1:])[2] - sorted(r1[1:]+r2[1:])[1] ) / max([r1[2]-r1[1], r2[2]-r2[1]])
+        out = (sorted(r1[1:] + r2[1:])[2] - sorted(r1[1:] +
+                                                   r2[1:])[1]) / max([r1[2] - r1[1], r2[2] - r2[1]])
     return out
-
-
-

@@ -114,7 +114,7 @@ def binCov(bam, chr, binsize, mode='nucleotide', overlap=0.05,
     bin_starts = range(0, maxchrpos - binsize, binsize)
     bin_stops = range(binsize, maxchrpos, binsize)
     bins = []
-    for i in range(0, len(bin_starts)-1):
+    for i in range(0, len(bin_starts) - 1):
         bins.append([chr, bin_starts[i], bin_stops[i]])
     bins = pybedtools.BedTool(bins)
 

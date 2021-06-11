@@ -80,9 +80,12 @@ class RdTest:
             msg = msg.format(cutoff_type)
             raise Exception(msg)
 
-        min_Median_Separation = cutoffs.loc[cutoffs.metric == 'RD_Median_Separation', 'cutoff'].iloc[0]
-        min_log_pval = cutoffs.loc[cutoffs.metric == 'RD_log_pval', 'cutoff'].iloc[0]
-        min_log_2ndMaxP = cutoffs.loc[cutoffs.metric == 'RD_log_2ndMaxP', 'cutoff'].iloc[0]
+        min_Median_Separation = cutoffs.loc[cutoffs.metric ==
+                                            'RD_Median_Separation', 'cutoff'].iloc[0]
+        min_log_pval = cutoffs.loc[cutoffs.metric ==
+                                   'RD_log_pval', 'cutoff'].iloc[0]
+        min_log_2ndMaxP = cutoffs.loc[cutoffs.metric ==
+                                      'RD_log_2ndMaxP', 'cutoff'].iloc[0]
 
         Cutoffs = namedtuple('Cutoffs', ['min_Median_Separation',
                                          'min_log_pval', 'min_log_2ndMaxP'])
@@ -133,13 +136,13 @@ def call_rdtest(variants, bincov_file, medianfile, famfile, whitelist,
     metrics : pd.DataFrame
         RdTest metrics for the provided variants
     """
-    
+
     if not os.path.exists(bincov_file):
         raise Exception('Bincov file does not exist: {0}'.format(bincov_file))
 
     if not os.path.exists(medianfile):
         raise Exception('Medianfile does not exist: {0}'.format(medianfile))
-    
+
     if not os.path.exists(famfile):
         raise Exception('Famfile does not exist: {0}'.format(famfile))
 

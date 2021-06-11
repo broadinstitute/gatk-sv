@@ -17,7 +17,7 @@ import svtk.utils as svu
 
 def final_filter(vcf, bed, chrom=None):
     bed = bed.set_index('name')
-    new_variant = ((bed.operation == 'add-mosaic-variant') | 
+    new_variant = ((bed.operation == 'add-mosaic-variant') |
                    (bed.operation == 'add-variant'))
 
     filter_names = bed.loc[~new_variant].index.values
@@ -52,7 +52,7 @@ def final_filter(vcf, bed, chrom=None):
         samples = data['samples'].split(',')
         for sample in samples:
             new_record.samples[sample]['GT'] = (0, 1)
-        
+
         new_record.id = new_name
         new_record.chrom = data.chrom
         new_record.pos = data.start
@@ -67,7 +67,7 @@ def final_filter(vcf, bed, chrom=None):
             new_record.info['STRANDS'] = '-+'
         new_record.info['SVLEN'] = int(data.end - data.start)
         new_record.info['SOURCES'] = data.sources.split(',')
-       
+
         new_record.info['MEMBERS'] = (new_name, )
 
         op = bed.loc[new_name, 'operation']
@@ -75,7 +75,8 @@ def final_filter(vcf, bed, chrom=None):
             if len(samples) == 1:
                 new_record.info['MOSAIC'] = samples
             else:
-                parents = [s for s in samples if s.endswith('fa') or s.endswith('mo')]
+                parents = [s for s in samples if s.endswith(
+                    'fa') or s.endswith('mo')]
                 new_record.info['MOSAIC'] = parents
 
         yield new_record
@@ -91,12 +92,13 @@ def main():
     parser.add_argument('--chrom')
     args = parser.parse_args()
 
-    bed = pd.read_table(args.filter_bed) 
+    bed = pd.read_table(args.filter_bed)
 
     vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
-    header.add_line('##INFO=<ID=MOSAIC,Number=.,Type=String,Description="Samples predicted to harbor somatic or germline mosaicism">')
+    header.add_line(
+        '##INFO=<ID=MOSAIC,Number=.,Type=String,Description="Samples predicted to harbor somatic or germline mosaicism">')
 
     if args.fout in '- stdout'.split():
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)

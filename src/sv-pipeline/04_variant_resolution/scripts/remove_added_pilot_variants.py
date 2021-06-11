@@ -13,7 +13,7 @@ import pysam
 
 
 def records_match(A, B):
-    return (A.chrom == B.chrom and 
+    return (A.chrom == B.chrom and
             A.pos == B.pos and
             A.stop == B.stop and
             A.info['STRANDS'] == B.info['STRANDS'])
@@ -21,7 +21,7 @@ def records_match(A, B):
 
 def filter_vcf(recordsA, recordsB):
     """Remove records in B from A."""
-    
+
     currB = next(recordsB)
 
     for record in recordsA:

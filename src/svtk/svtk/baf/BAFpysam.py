@@ -7,13 +7,13 @@ from sklearn import mixture
 # calculate the Del statistic given a FME combo in het files
 def Deltest(F, M, E, length, crit=0.01, thres1=0.0005):
     # if True:
-    thres1 = min(50/length, thres1)
-    if F/length < thres1 and M/length < thres1  \
-            or E/length < thres1 and M/length < thres1:
+    thres1 = min(50 / length, thres1)
+    if F / length < thres1 and M / length < thres1  \
+            or E / length < thres1 and M / length < thres1:
         return "ROH"
     else:
         flank = min(F, E)
-        ratio = np.log10((M+thres1*length)/(flank+thres1*length))
+        ratio = np.log10((M + thres1 * length) / (flank + thres1 * length))
 #         if m<flank:
 #             print()
 #         if ratio<0:
@@ -22,7 +22,7 @@ def Deltest(F, M, E, length, crit=0.01, thres1=0.0005):
 
 
 def ROH(F, M, E, length, thres=0.0001):
-    if min(F, M, E) < length*thres:
+    if min(F, M, E) < length * thres:
         return True
     else:
         return False
@@ -60,7 +60,7 @@ class DeletionTest:
                     nsROH += M
                 ns += M
 
-            self.nullavg = nsROH/(len(self.nullratio)+1)
+            self.nullavg = nsROH / (len(self.nullratio) + 1)
             self.ns = ns
             self.nullratio = np.array(self.nullratio).reshape(-1, 1)
             if len(self.nullratio) > 10:
@@ -116,7 +116,7 @@ class DeletionTest:
 
         testlist = [self.count[x]['Ratio']
                     for x in sample if self.count[x]['Ratio'] != 'ROH']
-        if len(self.nullratio) <= 10 or max(self.nullratio)-min(self.nullratio) < 0.0001:
+        if len(self.nullratio) <= 10 or max(self.nullratio) - min(self.nullratio) < 0.0001:
             return 'nan', "ROHregion"
         elif len(testlist) == 0:
             return 'nan', "ROH"
@@ -152,7 +152,7 @@ class DeletionTest:
         nsamplenullratio = len(self.nullratio)
         nonrohsample = len(testlist)
         nsample = len(sample)
-        nnorm = len(self.count.keys())-nsample
+        nnorm = len(self.count.keys()) - nsample
         return str(nsnp) + ',' + str(self.ns) + '\t' + str(nonrohsample) + ',' + str(nsample) + '\t' + \
             str(self.nullavg) + ',' + str(nsamplenullratio) + ',' + str(nnorm)
 #       return Deltest(self.count[sample]['F'], self.count[sample]['M'], self.count[sample]['E'], self.length)

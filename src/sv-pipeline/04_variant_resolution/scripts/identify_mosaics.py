@@ -15,12 +15,13 @@ import pandas as pd
 
 
 def identify_mosaics(metrics):
-    metrics = metrics.loc[metrics.Median_Separation.astype(str) != 'coverage_failure'].copy()
+    metrics = metrics.loc[metrics.Median_Separation.astype(
+        str) != 'coverage_failure'].copy()
     metrics.Median_Separation = metrics.Median_Separation.astype(float)
-    
+
     q1 = metrics.Median_Separation.quantile(0.25)
     q3 = metrics.Median_Separation.quantile(0.75)
-    IQR = q3 - q1 
+    IQR = q3 - q1
 
     cutoff = q1 - (1.5 * IQR)
 

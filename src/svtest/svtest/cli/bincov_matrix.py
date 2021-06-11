@@ -29,6 +29,7 @@ Q50_KEY = "bincov_matrix_q50"
 Q75_KEY = "bincov_matrix_q75"
 SAMPLE_MEAN_KEY = "bincov_matrix_mean"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -36,7 +37,8 @@ def main(argv):
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('bincov_matrix', type=str)
     parser.add_argument('sample_list', type=str)
-    parser.add_argument('--low-mem-mode', action='store_true', help='Only validate and calculate number of intervals')
+    parser.add_argument('--low-mem-mode', action='store_true',
+                        help='Only validate and calculate number of intervals')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -63,7 +65,8 @@ def get_metrics(matrix_file, sample_list, low_mem_mode):
 
     header = matrix_file.readline().decode().strip().split('\t')
     header_samples_set = set(header[3:])
-    tu.test_sets_equal(header_samples_set, samples_set, item_str="sample", name_a="header", name_b="samples list")
+    tu.test_sets_equal(header_samples_set, samples_set,
+                       item_str="sample", name_a="header", name_b="samples list")
 
     data = []
     interval_size = None

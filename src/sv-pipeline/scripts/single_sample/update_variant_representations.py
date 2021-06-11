@@ -17,13 +17,14 @@ import svtk.utils as svu
 
 
 def get_ref_base(contig, pos, ref):
-    return ref.fetch(contig, pos-1, pos)
+    return ref.fetch(contig, pos - 1, pos)
 
 
 def has_enough_info_to_make_bnd_mates(record):
     info_keys = record.info.keys()
     return 'STRANDS' in info_keys and 'CHR2' in info_keys and \
-           ('END2' in info_keys or (record.info['CHR2'] == record.contig and 'SVLEN' in info_keys))
+           ('END2' in info_keys or (
+               record.info['CHR2'] == record.contig and 'SVLEN' in info_keys))
 
 
 def has_enough_info_to_make_ctx_bnds(record):
@@ -62,7 +63,8 @@ def make_paired_bnd_records(record, ref_fasta):
     mate_record.info['MATEID'] = new_id
     # strands are reversed for the mate BND
     mate_strands = strands[::-1]
-    mate_alt = svu.make_bnd_alt(record.contig, record.pos, mate_strands, ref_base=mate_record.ref)
+    mate_alt = svu.make_bnd_alt(
+        record.contig, record.pos, mate_strands, ref_base=mate_record.ref)
     mate_record.alts = (mate_alt, )
     return record, mate_record
 
@@ -83,10 +85,10 @@ def make_reciprocal_translocation_bnds(record, ref_fasta):
     chr2_pos2_ref = get_ref_base(chr2, chr2_pos2, ref_fasta)
 
     orig_id = record.id
-    m1_id = orig_id + "_M1" # M1: chr1P->chr2 on chr1
-    m2_id = orig_id + "_M2" # M2: chr1P->chr2 on chr2
-    m3_id = orig_id + "_M3" # M3: chr1Q->chr2 on chr1
-    m4_id = orig_id + "_M4" # M3: chr1Q->chr2 on chr2
+    m1_id = orig_id + "_M1"  # M1: chr1P->chr2 on chr1
+    m2_id = orig_id + "_M2"  # M2: chr1P->chr2 on chr2
+    m3_id = orig_id + "_M3"  # M3: chr1Q->chr2 on chr1
+    m4_id = orig_id + "_M4"  # M3: chr1Q->chr2 on chr2
 
     event_id = orig_id
 
@@ -176,7 +178,8 @@ def main():
     parser.add_argument('vcf', help='Input VCF')
     parser.add_argument('ref', help='Reference fasta')
     parser.add_argument('--ref_idx', help='Reference fasta index')
-    parser.add_argument('-o', '--outfile', help='Output file [default: stdout]')
+    parser.add_argument('-o', '--outfile',
+                        help='Output file [default: stdout]')
 
     args = parser.parse_args()
 
@@ -186,8 +189,10 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
     header = vcf.header
 
-    header.add_line('##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">')
-    header.add_line('##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">')
+    header.add_line(
+        '##INFO=<ID=MATEID,Number=.,Type=String,Description="ID of mate breakends">')
+    header.add_line(
+        '##INFO=<ID=EVENT,Number=1,Type=String,Description="ID of event associated to breakend">')
 
     # Open connection to outfile
     if args.outfile is None:
@@ -213,7 +218,8 @@ def main():
             fout.write(record)
             fout.write(mate_record)
         elif svtype == 'CTX' and has_enough_info_to_make_ctx_bnds(record):
-            m1, m2, m3, m4 = make_reciprocal_translocation_bnds(record, ref_fasta)
+            m1, m2, m3, m4 = make_reciprocal_translocation_bnds(
+                record, ref_fasta)
             fout.write(m1)
             fout.write(m3)
             fout.write(m2)

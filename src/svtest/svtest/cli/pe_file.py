@@ -24,6 +24,7 @@ MINUS_MINUS_KEY = "pe_RR"
 PLUS_MINUS_KEY = "pe_LR"
 MINUS_PLUS_KEY = "pe_RL"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -55,7 +56,7 @@ def get_metrics(file, sample_list):
     samples = iou.read_samples_list(sample_list)
     samples_set = set(samples)
 
-    data = [0, 0, 0, 0] # ++, --, +-, -+
+    data = [0, 0, 0, 0]  # ++, --, +-, -+
     for line in file:
         tokens = line.decode().strip().split('\t')
         test_record(tokens, samples_set)
@@ -71,7 +72,8 @@ def get_metrics(file, sample_list):
         elif val == '-+':
             data[3] += 1
         else:
-            raise ValueError("Unrecognized orientation: %s / %s" % (first, second))
+            raise ValueError("Unrecognized orientation: %s / %s" %
+                             (first, second))
 
     if len(samples) == 1:
         metric_suffix = "_" + samples[0]

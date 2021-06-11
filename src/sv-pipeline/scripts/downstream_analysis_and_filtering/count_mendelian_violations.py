@@ -17,44 +17,44 @@ import pysam
 import numpy as np
 
 
-#Convert famfile into list of dicts for complete trios present in vcf
+# Convert famfile into list of dicts for complete trios present in vcf
 def parse_famfile(famfile, vcf):
-    #Get list of samples present in VCF
+    # Get list of samples present in VCF
     samples_in_vcf = [s for s in vcf.header.samples]
 
-    #Iterate over famfile and check for presence of all three members
-    #If all three members exist in VCF, add them as a dict to the trios list
+    # Iterate over famfile and check for presence of all three members
+    # If all three members exist in VCF, add them as a dict to the trios list
     trios = []
     with open(famfile) as f:
-        reader = csv.reader(f, delimiter = '\t')
+        reader = csv.reader(f, delimiter='\t')
 
         for famID, proband, father, mother, sex, pheno in reader:
-            #Skip header line, if any
+            # Skip header line, if any
             if "#" in famID:
                 continue
 
-            #Check for presence of all three family members in VCF
-            #If all are present, add to list of trios
+            # Check for presence of all three family members in VCF
+            # If all are present, add to list of trios
             famIDs = [proband, father, mother]
             matches = len([s for s in famIDs if s in samples_in_vcf])
             if matches == 3:
-                newfam = {"proband" : proband,
-                          "father" : father,
-                          "mother" : mother}
+                newfam = {"proband": proband,
+                          "father": father,
+                          "mother": mother}
                 trios.append(newfam)
 
     return trios
 
 
-#Build lookup dictionary of samples by PCR+ and PCR- status
+# Build lookup dictionary of samples by PCR+ and PCR- status
 def get_pcrdict(vcf, PCRPLUS_samples_file):
-    #Get list of all samples in VCF
+    # Get list of all samples in VCF
     samples = [s for s in vcf.header.samples]
 
-    #Read list of all PCRPLUS samples
+    # Read list of all PCRPLUS samples
     PCRPLUS_samples = [line.rstrip('\n') for line in PCRPLUS_samples_file]
 
-    #Make dictionary of samples with PCR statuses
+    # Make dictionary of samples with PCR statuses
     pcrdict = {}
     for s in samples:
         if s not in pcrdict.keys():
@@ -66,7 +66,7 @@ def get_pcrdict(vcf, PCRPLUS_samples_file):
     return pcrdict
 
 
-#Get allele count for a given sample
+# Get allele count for a given sample
 def get_AC(record, ID):
     GTs_to_skip = './. None/None 0/None None/0'.split()
     GT = '/'.join([str(i) for i in record.samples[ID]['GT']])
@@ -75,7 +75,7 @@ def get_AC(record, ID):
         return AC
 
 
-#Classify single trio allele count
+# Classify single trio allele count
 def classify_trio_AC(ACs):
     n_missing = len([c for c in ACs if c is None])
     n_homref = len([c for c in ACs if c == 0])
@@ -102,7 +102,7 @@ def classify_trio_AC(ACs):
         return 'MENDELIAN'
 
 
-#Count Mendelian violation categories for all trios
+# Count Mendelian violation categories for all trios
 def count_MVs(record, trios, pcrdict):
     mendel = {}
     cats = 'INCOMPLETE NO_VARIANT APPARENT_DE_NOVO UNTRANSMITTED_HOMOZYGOTE ' + \
@@ -118,18 +118,19 @@ def count_MVs(record, trios, pcrdict):
         ACs = [get_AC(record, s) for s in fam.values()]
         classification = classify_trio_AC(ACs)
         mendel['{0}_{1}'.format(propcr, classification)] += 1
-        skips = '{0}_INCOMPLETE {0}_NO_VARIANT {1}_INCOMPLETE {1}_NO_VARIANT'.format('PCRPLUS', 'PCRMINUS')
+        skips = '{0}_INCOMPLETE {0}_NO_VARIANT {1}_INCOMPLETE {1}_NO_VARIANT'.format(
+            'PCRPLUS', 'PCRMINUS')
         if classification not in skips.split(' '):
             mendel['{0}_TRIOS_CONSIDERED'.format(propcr)] += 1
 
     return mendel
 
 
-#Iterate over a vcf and gather MVR data & other info
+# Iterate over a vcf and gather MVR data & other info
 def gather_info(vcf, trios, pcrdict, fout, no_header=False):
     sex_chroms = 'X Y chrX chrY'.split()
 
-    #Write header to output file
+    # Write header to output file
     if not no_header:
         header = '#VID\tSVLEN\tSVTYPE\tFILTER\tQUAL\t' + \
                  '{0}_NULL_GTs\t{0}_REF_GTs\t{0}_NONREF_GTs\t' + \
@@ -157,36 +158,36 @@ def gather_info(vcf, trios, pcrdict, fout, no_header=False):
         header = header.format('PCRPLUS', 'PCRMINUS')
         fout.write(header)
 
-    #Iterate over VCF
+    # Iterate over VCF
     for record in vcf:
-        #Do not include variants from sex chromosomes
+        # Do not include variants from sex chromosomes
         if record.chrom in sex_chroms:
             continue
 
-        #Do not include multiallelic variants
+        # Do not include multiallelic variants
         if 'MULTIALLELIC' in record.info.keys() \
-        or 'MULTIALLELIC' in record.filter \
-        or len(record.alts) > 1:
+                or 'MULTIALLELIC' in record.filter \
+                or len(record.alts) > 1:
             continue
 
-        #Iterate over samples and get count of genotypes by PCR status, 
+        # Iterate over samples and get count of genotypes by PCR status,
         # lists of GQs based on genotype, and counts of non-ref evidence
-        GT_counts = {'PCRPLUS_NULL' : 0,
-                     'PCRPLUS_REF' : 0,
-                     'PCRPLUS_NONREF' : 0,
-                     'PCRMINUS_NULL' : 0,
-                     'PCRMINUS_REF' : 0,
-                     'PCRMINUS_NONREF' : 0}
-        GQ_dict = {'PCRPLUS_REF_GQs' : [],
-                   'PCRPLUS_NONREF_GQs' : [],
-                   'PCRMINUS_REF_GQs' : [],
-                   'PCRMINUS_NONREF_GQs' : []}
-        EV_counts = {'PCRPLUS_RD' : 0, 'PCRPLUS_PE' : 0, 'PCRPLUS_SR' : 0,
-                     'PCRPLUS_RDPE' : 0, 'PCRPLUS_RDSR' : 0, 'PCRPLUS_PESR' : 0,
-                     'PCRPLUS_RDPESR' : 0,
-                     'PCRMINUS_RD' : 0, 'PCRMINUS_PE' : 0, 'PCRMINUS_SR' : 0,
-                     'PCRMINUS_RDPE' : 0, 'PCRMINUS_RDSR' : 0, 'PCRMINUS_PESR' : 0,
-                     'PCRMINUS_RDPESR' : 0}
+        GT_counts = {'PCRPLUS_NULL': 0,
+                     'PCRPLUS_REF': 0,
+                     'PCRPLUS_NONREF': 0,
+                     'PCRMINUS_NULL': 0,
+                     'PCRMINUS_REF': 0,
+                     'PCRMINUS_NONREF': 0}
+        GQ_dict = {'PCRPLUS_REF_GQs': [],
+                   'PCRPLUS_NONREF_GQs': [],
+                   'PCRMINUS_REF_GQs': [],
+                   'PCRMINUS_NONREF_GQs': []}
+        EV_counts = {'PCRPLUS_RD': 0, 'PCRPLUS_PE': 0, 'PCRPLUS_SR': 0,
+                     'PCRPLUS_RDPE': 0, 'PCRPLUS_RDSR': 0, 'PCRPLUS_PESR': 0,
+                     'PCRPLUS_RDPESR': 0,
+                     'PCRMINUS_RD': 0, 'PCRMINUS_PE': 0, 'PCRMINUS_SR': 0,
+                     'PCRMINUS_RDPE': 0, 'PCRMINUS_RDSR': 0, 'PCRMINUS_PESR': 0,
+                     'PCRMINUS_RDPESR': 0}
         for s in vcf.header.samples:
             sgt = get_AC(record, s)
             spcr = pcrdict.get(s, 'PCRMINUS')
@@ -194,16 +195,18 @@ def gather_info(vcf, trios, pcrdict, fout, no_header=False):
                 GT_counts['{0}_NULL'.format(spcr)] += 1
             elif sgt == 0:
                 GT_counts['{0}_REF'.format(spcr)] += 1
-                GQ_dict['{0}_REF_GQs'.format(spcr)].append(record.samples[s]['GQ'])
+                GQ_dict['{0}_REF_GQs'.format(spcr)].append(
+                    record.samples[s]['GQ'])
             else:
                 GT_counts['{0}_NONREF'.format(spcr)] += 1
-                GQ_dict['{0}_NONREF_GQs'.format(spcr)].append(record.samples[s]['GQ'])
+                GQ_dict['{0}_NONREF_GQs'.format(spcr)].append(
+                    record.samples[s]['GQ'])
                 sev = record.samples[s]['EV']
                 if isinstance(sev, tuple):
                     sev = ''.join(list(sev))
                 EV_counts['{0}_{1}'.format(spcr, sev)] += 1
 
-        #Summarize GQ stats
+        # Summarize GQ stats
         GQ_stats = {}
         for PCR in 'PCRPLUS PCRMINUS'.split(' '):
             for GT in 'REF NONREF'.split(' '):
@@ -214,12 +217,13 @@ def gather_info(vcf, trios, pcrdict, fout, no_header=False):
                     gmed = int(np.percentile(GQs, 0.50))
                     g3q = int(np.percentile(GQs, 0.75))
                     gmax = max(GQs)
-                    gstats = '\t'.join([str(i) for i in [gmin, g1q, gmed, g3q, gmax]])
+                    gstats = '\t'.join([str(i)
+                                        for i in [gmin, g1q, gmed, g3q, gmax]])
                 else:
                     gstats = '\t'.join(['NA'] * 5)
-                GQ_stats['{0}_{1}'.format(PCR, GT)] = gstats                    
-        
-        #Compute MVR stats across all trios & format into string for output
+                GQ_stats['{0}_{1}'.format(PCR, GT)] = gstats
+
+        # Compute MVR stats across all trios & format into string for output
         mendel = count_MVs(record, trios, pcrdict)
         mendel_info = ''
         info_order = 'TRIOS_CONSIDERED MENDELIAN APPARENT_DE_NOVO ' + \
@@ -231,7 +235,7 @@ def gather_info(vcf, trios, pcrdict, fout, no_header=False):
                 mendel_info = mendel_info + str(mendel.get(ikey, 'NA')) + '\t'
         mendel_info = mendel_info.rstrip('\t')
 
-        #Get minimal variant info
+        # Get minimal variant info
         vid = record.id
         size = str(record.info['SVLEN'])
         svtype = record.info['SVTYPE']
@@ -239,15 +243,15 @@ def gather_info(vcf, trios, pcrdict, fout, no_header=False):
         VQ = record.qual
         GT_count_string = '\t'.join(str(i) for i in GT_counts.values())
         EV_count_string = '\t'.join(str(i) for i in EV_counts.values())
-        vinfo = '\t'.join([str(i) for i in [vid, size, svtype, filt, VQ, 
-                                            GT_count_string, 
+        vinfo = '\t'.join([str(i) for i in [vid, size, svtype, filt, VQ,
+                                            GT_count_string,
                                             GQ_stats['PCRPLUS_REF'],
                                             GQ_stats['PCRPLUS_NONREF'],
                                             GQ_stats['PCRMINUS_REF'],
                                             GQ_stats['PCRMINUS_NONREF'],
                                             EV_count_string]])
-        
-        #Write record to file
+
+        # Write record to file
         newline = '{0}\t{1}'.format(vinfo, mendel_info)
         fout.write(newline + '\n')
 
@@ -261,13 +265,13 @@ def main():
     parser.add_argument('PCRPLUS_samples', help='List of PCRPLUS sample IDs.')
     parser.add_argument('fout', help='Output file (supports "stdout").')
     parser.add_argument('--no-header', help='Do not write header line.',
-                        action = 'store_true', default = False)
+                        action='store_true', default=False)
 
     args = parser.parse_args()
 
-    #Open input files
+    # Open input files
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
@@ -276,13 +280,13 @@ def main():
     PCRPLUS_samples_file = open(args.PCRPLUS_samples, 'r')
     pcrdict = get_pcrdict(vcf, PCRPLUS_samples_file)
 
-    #Open connection to output vcf
+    # Open connection to output vcf
     if args.fout in '- stdout'.split():
         fout = sys.stdout
     else:
         fout = open(args.fout, 'w')
 
-    #Gather info on all records in VCF
+    # Gather info on all records in VCF
     gather_info(vcf, trios, pcrdict, fout, args.no_header)
 
     fout.close()

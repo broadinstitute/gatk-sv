@@ -21,6 +21,7 @@ import svtest.utils.IOUtils as iou
 LEFT_KEY = "sr_left"
 RIGHT_KEY = "sr_right"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -73,6 +74,7 @@ def get_metrics(sr_file, sample_list):
         RIGHT_KEY + metric_suffix: side_metrics[1]
     }
 
+
 def test_record(columns, sample_ids):
     tu.test_iterable_size(columns, 5)
     tu.test_is_int(columns, 1)
@@ -80,6 +82,7 @@ def test_record(columns, sample_ids):
     tu.test_column_in_iterable(columns, 2, valid_strands)
     tu.test_is_int(columns, 3)
     tu.test_column_in_iterable(columns, 4, sample_ids)
+
 
 if __name__ == '__main__':
     main()

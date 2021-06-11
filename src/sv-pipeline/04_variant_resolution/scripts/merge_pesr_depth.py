@@ -19,17 +19,17 @@ import svtk.utils as svu
 
 # def merge_nested_depth_record(pesr_record, depth_record):
 #     """Add samples from nested depth record to PE/SR record"""
-# 
+#
 #     pesr_record.info['MEMBERS'] = (pesr_record.info.get('MEMBERS', ()) +
 #                                    (depth_record.id, ))
 #     pesr_record.info['ALGORITHMS'] = pesr_record.info['ALGORITHMS'] + ('depth', )
-# 
+#
 #     def _quad(s):
 #         return s.split('.')[0]
-# 
+#
 #     depth_samples = svu.get_called_samples(depth_record)
 #     pesr_samples = svu.get_called_samples(pesr_record)
-# 
+#
 #     # If a sample is called in both the pe/sr record and the nested depth
 #     # record, move any relatives called in the depth record to the pe/sr record
 #     for quad, samples in itertools.groupby(depth_samples, _quad):
@@ -61,11 +61,11 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
     depth_vcf.reset()
     pesr_bed = svu.vcf2bedtool(pesr_vcf, split_bnd=False,
                                include_samples=True,
-                               include_strands=False, 
+                               include_strands=False,
                                report_alt=False)
     depth_bed = svu.vcf2bedtool(depth_vcf, split_bnd=False,
                                 include_samples=True,
-                                include_strands=False, 
+                                include_strands=False,
                                 report_alt=False)
 
     # Remove records with no samples
@@ -80,7 +80,6 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
 
     pesr_bed = pesr_bed.filter(_filter_allref).saveas('filtered_pesr.bed')
     depth_bed = depth_bed.filter(_filter_allref).saveas('filtered_depth.bed')
-    
 
     # Merge depth records with PE/SR records if they share 50% recip overlap
     sect = pesr_bed.intersect(depth_bed, wa=True, wb=True, r=True, f=frac)
@@ -104,11 +103,12 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
 
         # Note removal of depth ID
         filtered_depth_IDs.append(depth_id)
-        
+
         # Update metadata and samples
         pesr_record.info['MEMBERS'] = (pesr_record.info.get('MEMBERS', ()) +
                                        (depth_record.id, ))
-        pesr_record.info['ALGORITHMS'] = pesr_record.info['ALGORITHMS'] + ('depth', )
+        pesr_record.info['ALGORITHMS'] = pesr_record.info['ALGORITHMS'] + \
+            ('depth', )
 
         svu.update_best_genotypes(pesr_record,
                                   [pesr_record, depth_record],
@@ -122,7 +122,8 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
             if 'EV' in pesr_record.samples[sample].keys() and 'EV' in depth_record.info.keys():
                 pesr_ev = pesr_record.samples[sample]['EV']
                 depth_ev = depth_record.samples[sample]['EV']
-                pesr_record.samples[sample]['EV'] = tuple(sorted(set(pesr_ev).union(depth_ev)))
+                pesr_record.samples[sample]['EV'] = tuple(
+                    sorted(set(pesr_ev).union(depth_ev)))
 
     # Remove overlapping depth records (not performed in for loop to account
     # for double overlaps
@@ -152,7 +153,7 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
 #        pesr_record = records['pesr'][pesr_id]
 #
 #        merge_nested_depth_record(pesr_record, depth_record)
-    
+
     # Merge records together
     def _sort_key(record):
         return (record.chrom, record.pos, record.info['CHR2'], record.stop)
@@ -166,8 +167,8 @@ def merge_pesr_depth(pesr_vcf, depth_vcf, frac=0.5, sample_overlap=0.5):
         # EDIT - this should be handled upstream by add_genotypes
         #  FORMATS = 'GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
         #  for key in record.format.keys():
-            #  if key not in FORMATS:
-                #  del record.format[key]
+        #  if key not in FORMATS:
+        #  del record.format[key]
 
         record.info['ALGORITHMS'] = sorted(set(record.info['ALGORITHMS']))
         record.info['MEMBERS'] = sorted(set(record.info.get('MEMBERS', ())))
@@ -204,7 +205,8 @@ def clean_depth_record(base_record, depth_record):
 
 def check_header(vcf):
     if 'MEMBERS' not in vcf.header.info:
-        vcf.header.add_line("##INFO=<ID=MEMBERS,Number=.,Type=String,Description=\"IDs of cluster's constituent records.\">")
+        vcf.header.add_line(
+            "##INFO=<ID=MEMBERS,Number=.,Type=String,Description=\"IDs of cluster's constituent records.\">")
 
 
 def main():

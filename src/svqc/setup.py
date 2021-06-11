@@ -15,7 +15,7 @@ setup(name='svqc',
       packages=['svqc'],
       include_package_data=True,
       zip_safe=False,
-      entry_points = {
+      entry_points={
           'console_scripts': ['svqc=svqc.command_line:main'],
       },
       test_suite='nose.collector',

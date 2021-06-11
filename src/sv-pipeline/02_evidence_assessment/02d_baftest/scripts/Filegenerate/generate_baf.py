@@ -66,7 +66,7 @@ def calc_BAF(record, samples=None):
         DP = record.samples[sample]['DP']
         AD = record.samples[sample]['AD']
 
-        if (DP is not None) and (DP > 10): # SNP sites with >10 DP are included in BAF profile
+        if (DP is not None) and (DP > 10):  # SNP sites with >10 DP are included in BAF profile
             return AD[0] / float(DP)
         else:
             return np.nan
@@ -83,7 +83,7 @@ def normalize_bafs(bafs, samples, max_std=0.2):
     """
     Normalize BAFs and exclude outlying sites
     Normalize so per variant median BAF==0.5. Ignore sites with more than 0.2 standard deviation across samples. 
-    
+
     Parameters
     ----------
     bafs : np.ndarray (n_sites x n_samples)
@@ -130,7 +130,8 @@ def main():
             baf, record_samples = calc_BAF(record, samples=samples_list)
             baf, record_samples = normalize_bafs(baf, record_samples)
             for i in range(len(record_samples)):
-                print(str(record.chrom) + "\t" + str(record.pos) + "\t" + "{0:.2f}".format(baf[i]) + "\t" + record_samples[i])
+                print(str(record.chrom) + "\t" + str(record.pos) + "\t" +
+                      "{0:.2f}".format(baf[i]) + "\t" + record_samples[i])
 
 
 if __name__ == '__main__':

@@ -39,13 +39,13 @@ def main():
     parser.add_argument('vcf')
     parser.add_argument('fout')
     parser.add_argument('--chrom')
-    parser.add_argument('--prefix', default='SV_pipeline', 
+    parser.add_argument('--prefix', default='SV_pipeline',
                         help='Tag prepended to all variant IDs')
 
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 

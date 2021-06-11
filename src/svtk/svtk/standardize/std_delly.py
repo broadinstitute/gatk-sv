@@ -32,11 +32,11 @@ class DellyStandardizer(VCFStandardizer):
         if svtype == 'TRA':
             svtype = 'BND'
         std_rec.info['SVTYPE'] = svtype
-        END=std_rec.stop
+        END = std_rec.stop
         if "<" not in std_rec.alts[0]:
-            std_rec.alts=('<'+svtype+'>', )
-        std_rec.ref="N"
-        std_rec.stop=END
+            std_rec.alts = ('<' + svtype + '>', )
+        std_rec.ref = "N"
+        std_rec.stop = END
         # Convert strandedness notation
         raw_strands = raw_rec.info['CT']
         if raw_strands == '5to3':

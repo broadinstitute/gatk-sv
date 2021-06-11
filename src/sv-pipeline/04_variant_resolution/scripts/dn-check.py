@@ -60,7 +60,8 @@ class DenovoTestRunner(PESRTestRunner):
     def run(self):
         for record in self.vcf:
             # Skip records without any Mendelian violations
-            candidates = get_denovo_candidates(record, self.fam, self.max_parents)
+            candidates = get_denovo_candidates(
+                record, self.fam, self.max_parents)
             if len(candidates) == 0:
                 continue
 
@@ -73,9 +74,9 @@ class DenovoTestRunner(PESRTestRunner):
             # Skip non-stranded (wham)
             if record.info['STRANDS'] not in '+- -+ ++ --'.split():
                 continue
-            
+
             self.test_record(record, candidates)
-    
+
     def test_record(self, record, candidates):
         for child in candidates:
             called = [child]
@@ -83,7 +84,7 @@ class DenovoTestRunner(PESRTestRunner):
 
             self.sr_test(record, called, background)
             self.pe_test(record, called, background)
-    
+
     def sr_test(self, record, called, background):
         sr_results = self.srtest.test_record(record, called, background)
 
@@ -110,7 +111,7 @@ class DenovoTestRunner(PESRTestRunner):
 
         results.to_csv(self.sr_fout, index=False, header=False,
                        sep='\t', na_rep='NA', float_format='%.20f')
-    
+
     def pe_test(self, record, called, background):
         pe_results = self.petest.test_record(record, called, background)
 
