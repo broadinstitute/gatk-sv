@@ -146,7 +146,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 #### Module00a
 
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary partitions. Make sure to try just one sample first though!
-* The workflow is configured by default to use MELT as one of the SV callers. Due to licensing restrictions, we cannot provide a public docker image or reference panel VCFs for this algorithm. In order to use MELT, you will need to provide your own docker image by editing the attribute `melt_docker` in the Workspace Data table. To exclude MELT (which will result in less sensitivity to MEI calls), delete the `melt_docker` input from the `module00a` configuration and then click "Save".
+* Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `module00a` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own docker image, enter it in the `melt_docker` input in the `module00a` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `module00a`.
 
 #### Module00b
 
@@ -162,6 +162,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 
 * Use the same `sample_set` definitions you used for `train-gCNV`.
 * The default configuration for `module00c` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf", "gs://bucket/shard2.vcf"]`.
+* If you are using GVCFs in a requester-pays bucket, you must provide the Terra billing project for the workspace to the `gvcf_gcs_project_for_requester_pays` argument as a string, surrounded by double-quotes.
 
 #### Module01 and Module02
 

@@ -35,7 +35,7 @@ workflow Module01 {
     RuntimeAttr? runtime_attr_rdtest_bed
   }
 
-  if (defined(manta_vcfs)) {
+  if (defined(manta_vcfs) && (length(select_first([manta_vcfs])) > 0)) {
     call pesr.ClusterPESR as ClusterPESR_manta {
       input:
         algorithm = "manta",
@@ -55,7 +55,7 @@ workflow Module01 {
     }
   }
 
-  if (defined(delly_vcfs)) {
+  if (defined(delly_vcfs) && (length(select_first([delly_vcfs])) > 0)) {
     call pesr.ClusterPESR as ClusterPESR_delly {
       input:
         algorithm = "delly",
@@ -75,7 +75,7 @@ workflow Module01 {
     }
   }
 
-  if (defined(wham_vcfs)) {
+  if (defined(wham_vcfs) && (length(select_first([wham_vcfs])) > 0)) {
     call pesr.ClusterPESR as ClusterPESR_wham {
       input:
         algorithm = "wham",
@@ -95,7 +95,7 @@ workflow Module01 {
     }
   }
 
-  if (defined(melt_vcfs)) {
+  if (defined(melt_vcfs) && (length(select_first([melt_vcfs])) > 0)) {
     call pesr.ClusterPESR as ClusterPESR_melt {
       input:
         algorithm = "melt",

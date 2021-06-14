@@ -19,7 +19,7 @@ workflow PreprocessPESR {
   Array[Array[File]?] vcfs = [manta_vcfs, delly_vcfs, melt_vcfs, wham_vcfs]
 
   scatter (i in range(length(algorithms))) {
-    if (defined(vcfs[i])) {
+    if (defined(vcfs[i]) && (length(select_first([vcfs[i]])) > 0)) {
       call StandardizeVCFs {
         input:
           raw_vcfs=select_first([vcfs[i]]),
