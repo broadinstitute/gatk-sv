@@ -129,8 +129,6 @@ workflow MasterVcfQc {
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
       runtime_override_split_samples_list=runtime_override_split_samples_list,
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
-      sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker
   }
 
   # Plot per-sample stats

@@ -91,6 +91,8 @@ workflow Module00aBatch {
 
     File? NONE_FILE_
     String? NONE_STRING_
+    Float? NONE_FLOAT_
+    Int? NONE_INT_
   }
 
   scatter (i in range(length(bam_or_cram_files))) {
@@ -121,13 +123,13 @@ workflow Module00aBatch {
         manta_mem_gb_per_job = manta_mem_gb_per_job,
         melt_standard_vcf_header = melt_standard_vcf_header,
         melt_metrics_intervals = melt_metrics_intervals,
-        insert_size = insert_size,
-        read_length = read_length,
-        coverage = coverage,
+        insert_size = if defined(insert_size) then select_first([insert_size])[i] else NONE_FLOAT_,
+        read_length = if defined(read_length) then select_first([read_length])[i] else NONE_INT_,
+        coverage = if defined(coverage) then select_first([coverage])[i] else NONE_FLOAT_,
         metrics_intervals = metrics_intervals,
-        pct_chimeras = pct_chimeras,
-        total_reads = total_reads,
-        pf_reads_improper_pairs = pf_reads_improper_pairs,
+        pct_chimeras = if defined(pct_chimeras) then select_first([pct_chimeras])[i] else NONE_FLOAT_,
+        total_reads = if defined(total_reads) then select_first([total_reads])[i] else NONE_FLOAT_,
+        pf_reads_improper_pairs = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[i] else NONE_INT_,
         wham_include_list_bed_file = wham_include_list_bed_file,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,

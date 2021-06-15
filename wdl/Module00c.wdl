@@ -168,7 +168,6 @@ workflow Module00c {
 
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
-    RuntimeAttr? runtime_attr_merge_baf
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped

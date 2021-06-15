@@ -61,13 +61,13 @@ workflow Module00a {
     # Melt inputs
     File? melt_standard_vcf_header # required if run_melt True
     File? melt_metrics_intervals
-    Array[Float]? insert_size
-    Array[Int]? read_length
-    Array[Float]? coverage
+    Float? insert_size
+    Int? read_length
+    Float? coverage
     File? metrics_intervals
-    Array[Float]? pct_chimeras
-    Array[Float]? total_reads
-    Array[Int]? pf_reads_improper_pairs
+    Float? pct_chimeras
+    Float? total_reads
+    Int? pf_reads_improper_pairs
 
     # Wham inputs
     File wham_include_list_bed_file
@@ -215,12 +215,6 @@ workflow Module00a {
   }
 
   if (run_melt) {
-    Float? insert_size_i = if defined(insert_size) then select_first([insert_size]) else NONE_FLOAT_
-    Int? read_length_i = if defined(read_length) then select_first([read_length]) else NONE_INT_
-    Float? coverage_i = if defined(coverage) then select_first([coverage]) else NONE_FLOAT_
-    Float? pct_chimeras_i = if defined(pct_chimeras) then select_first([pct_chimeras]) else NONE_FLOAT_
-    Float? total_reads_i = if defined(total_reads) then select_first([total_reads]) else NONE_INT_
-    Int? pf_reads_improper_pairs_i = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs]) else NONE_INT_
     call melt.MELT {
       input:
         bam_or_cram_file = bam_file_,
@@ -231,13 +225,13 @@ workflow Module00a {
         reference_index = reference_index,
         reference_version = reference_version,
         melt_standard_vcf_header = select_first([melt_standard_vcf_header]),
-        insert_size = insert_size_i,
-        read_length = read_length_i,
-        coverage = coverage_i,
+        insert_size = insert_size,
+        read_length = read_length,
+        coverage = coverage,
         wgs_metrics_intervals = melt_metrics_intervals,
-        pct_chimeras = pct_chimeras_i,
-        total_reads = total_reads_i,
-        pf_reads_improper_pairs = pf_reads_improper_pairs_i,
+        pct_chimeras = pct_chimeras,
+        total_reads = total_reads,
+        pf_reads_improper_pairs = pf_reads_improper_pairs,
         runtime_attr_coverage = runtime_attr_melt_coverage,
         runtime_attr_metrics = runtime_attr_melt_metrics,
         samtools_cloud_docker = samtools_cloud_docker,

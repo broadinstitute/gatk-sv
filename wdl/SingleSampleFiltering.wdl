@@ -216,8 +216,8 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
     File raw_dels
     File raw_dups
 
-    Int min_large_pesr_call_size_for_filtering = 1000000
-    Float min_large_pesr_depth_overlap_fraction = 0.3
+    Int? min_large_pesr_call_size_for_filtering
+    Float? min_large_pesr_depth_overlap_fraction
 
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -240,14 +240,15 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
     File out = "~{outfile}"
     File out_idx = "~{outfile}.tbi"
   }
+  
   command <<<
     set -euo pipefail
 
-    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{min_large_pesr_call_size_for_filtering} && ($5 == "DEL")' \
-        | coverageBed -a stdin -b ~{raw_dels} | awk '$NF < ~{min_large_pesr_depth_overlap_fraction} {print $4}' > large_dels_without_raw_depth_support.list
+    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{if defined(min_large_pesr_call_size_for_filtering) then min_large_pesr_call_size_for_filtering else 1000000} && ($5 == "DEL")' \
+        | coverageBed -a stdin -b ~{raw_dels} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dels_without_raw_depth_support.list
 
-    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{min_large_pesr_call_size_for_filtering} && ($5 == "DUP")' \
-        | coverageBed -a stdin -b ~{raw_dups} | awk '$NF < ~{min_large_pesr_depth_overlap_fraction} {print $4}' > large_dups_without_raw_depth_support.list
+    svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{if defined(min_large_pesr_call_size_for_filtering) then min_large_pesr_call_size_for_filtering else 1000000} && ($5 == "DUP")' \
+        | coverageBed -a stdin -b ~{raw_dups} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dups_without_raw_depth_support.list
 
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 

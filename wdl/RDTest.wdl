@@ -88,7 +88,7 @@ workflow RDTest {
 
   call tasks02.MergeStats as MergeStats {
     input:
-      stats = flatten([RDTestAutosome.stats, RDTestAllosome.stats]),
+      stats = flatten([RDTestAutosome.out_stats, RDTestAllosome.out_stats]),
       prefix = "${batch}.${algorithm}",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_merge_stats

@@ -289,7 +289,7 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_attr_filter_large_pesr
     RuntimeAttr? runtime_attr_srtest
-    RuntimeAttr? runtime_attr_split_vcf
+    RuntimeAttr? runtime_attr_split_vcf_srtest
     RuntimeAttr? runtime_attr_merge_allo
     RuntimeAttr? runtime_attr_merge_stats
     RuntimeAttr? runtime_attr_rewritesrcoords
@@ -316,13 +316,15 @@ workflow GATKSVPipelineSingleSample {
     File bin_exclude
 
     # Common
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_merge_counts
     RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_make_subset_vcf
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_add_genotypes
-    RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
+    RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
+    RuntimeAttr? runtime_attr_split_vcf_module04
+
 
     # Master
     RuntimeAttr? runtime_attr_add_batch
@@ -339,7 +341,6 @@ workflow GATKSVPipelineSingleSample {
 
     # Depth part 2
     RuntimeAttr? runtime_attr_integrate_depth_gq
-    RuntimeAttr? runtime_attr_concat_vcfs
 
     ############################################################
     ## Module 0506
@@ -364,7 +365,7 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_override_update_sr_list
     RuntimeAttr? runtime_override_merge_pesr_depth
-    RuntimeAttr? runtime_override_merge_pesr_depth
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
     RuntimeAttr? runtime_override_rename_variants
 
@@ -415,13 +416,6 @@ workflow GATKSVPipelineSingleSample {
 
   }
 
-  if (defined(insert_size)) { Array[Float]? insert_size_input = [select_first([insert_size])]}
-  if (defined(read_length)) { Array[Int]? read_length_input = [select_first([read_length])]}
-  if (defined(coverage)) { Array[Float]? coverage_input = [select_first([coverage])]}
-  if (defined(pf_reads_improper_pairs)) { Array[Int]? pf_reads_improper_pairs_input = [select_first([pf_reads_improper_pairs])]}
-  if (defined(total_reads)) { Array[Float]? total_reads_input = [select_first([total_reads])]}
-  if (defined(pct_chimeras)) { Array[Float]? pct_chimeras_input = [select_first([pct_chimeras])]}
-
   String? delly_docker_ = if (!defined(case_delly_vcf) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(case_manta_vcf) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(case_melt_vcf) && use_melt) then melt_docker else NONE_STRING_
@@ -453,13 +447,13 @@ workflow GATKSVPipelineSingleSample {
         manta_mem_gb_per_job=manta_mem_gb_per_job,
         melt_standard_vcf_header=melt_standard_vcf_header,
         melt_metrics_intervals=melt_metrics_intervals,
-        insert_size=insert_size_input,
-        read_length=read_length_input,
-        coverage=coverage_input,
+        insert_size=insert_size,
+        read_length=read_length,
+        coverage=coverage,
         metrics_intervals=metrics_intervals,
-        pf_reads_improper_pairs=pf_reads_improper_pairs_input,
-        pct_chimeras=pct_chimeras_input,
-        total_reads=total_reads_input,
+        pf_reads_improper_pairs=pf_reads_improper_pairs,
+        pct_chimeras=pct_chimeras,
+        total_reads=total_reads,
         wham_include_list_bed_file=wham_include_list_bed_file,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
@@ -780,7 +774,7 @@ workflow GATKSVPipelineSingleSample {
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_srtest = runtime_attr_srtest,
-      runtime_attr_split_vcf = runtime_attr_split_vcf,
+      runtime_attr_split_vcf = runtime_attr_split_vcf_srtest,
       runtime_attr_merge_allo = runtime_attr_merge_allo,
       runtime_attr_merge_stats = runtime_attr_merge_stats
   }
@@ -833,13 +827,14 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
-      runtime_attr_split_vcf=runtime_attr_split_vcf,
+      runtime_attr_split_vcf=runtime_attr_split_vcf_module04,
       runtime_attr_merge_counts=runtime_attr_merge_counts,
       runtime_attr_split_variants=runtime_attr_split_variants,
       runtime_attr_make_subset_vcf=runtime_attr_make_subset_vcf,
       runtime_attr_rdtest_genotype=runtime_attr_rdtest_genotype,
       runtime_attr_add_genotypes=runtime_attr_add_genotypes,
-      runtime_attr_concat_vcfs=runtime_attr_concat_vcfs,
+      runtime_attr_genotype_depths_concat_vcfs=runtime_attr_genotype_depths_concat_vcfs,
+      runtime_attr_genotype_pesr_concat_vcfs=runtime_attr_genotype_pesr_concat_vcfs,
       runtime_attr_add_batch=runtime_attr_add_batch,
       runtime_attr_index_vcf=runtime_attr_index_vcf,
       runtime_attr_count_pe=runtime_attr_count_pe,
@@ -849,8 +844,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_integrate_gq=runtime_attr_integrate_gq,
       runtime_attr_integrate_pesr_gq=runtime_attr_integrate_pesr_gq,
       runtime_attr_triple_stream_cat=runtime_attr_triple_stream_cat,
-      runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq,
-      runtime_attr_concat_vcfs=runtime_attr_concat_vcfs
+      runtime_attr_integrate_depth_gq=runtime_attr_integrate_depth_gq
   }
 
   call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs as ConvertCNVsWithoutDepthSupportToBNDs {
@@ -914,7 +908,7 @@ workflow GATKSVPipelineSingleSample {
 
       runtime_override_update_sr_list=runtime_override_update_sr_list,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
-      runtime_override_breakpoint_overlap_filter=runtime_override_merge_pesr_depth,
+      runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
       runtime_override_rename_variants=runtime_override_rename_variants,
 
