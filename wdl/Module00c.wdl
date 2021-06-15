@@ -66,6 +66,8 @@ workflow Module00c {
     # BAF Option #2, position-sharded VCFs
     Array[File]? snp_vcfs
     File? snp_vcf_header  # Only use if snp vcfs are unheadered
+    # Sample ids in vcf, where vcf_samples[i] corresponds to samples[i]. Only use if sample ids are different in vcf
+    Array[String]? vcf_samples
 
     # Condense read counts
     Int? condense_num_bins
@@ -270,7 +272,7 @@ workflow Module00c {
       input:
         vcfs = select_first([snp_vcfs]),
         vcf_header = snp_vcf_header,
-        samples = samples,
+        samples = select_first([vcf_samples, samples]),
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
