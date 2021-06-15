@@ -14,9 +14,10 @@ set -e
 
 function usage() {
   printf "Usage: \n \
-    %s -d <REPO_BASE_DIR> -j <WOMTOOL_JAR> \n \
+    %s -d <REPO_BASE_DIR> -j <WOMTOOL_JAR> [-t] \n \
     <REPO_BASE_DIR> \t path to gatk-sv base directory \n \
-    <WOMTOOL_JAR> \t path to womtool jar (downloaded from https://github.com/broadinstitute/cromwell/releases) \n" "$1"
+    <WOMTOOL_JAR> \t path to womtool jar (downloaded from https://github.com/broadinstitute/cromwell/releases) \n \
+    [-t] \t optional flag to run validation on Terra cohort mode input JSONs in addition to test inputs \n" "$1"
 }
 
 if [[ "$#" == 0 ]]; then
@@ -26,10 +27,11 @@ fi
 #################################################
 # Parsing arguments
 #################################################
-while getopts "j:d:" option; do
+while getopts "j:d:t" option; do
   case "$option" in
     j) WOMTOOL_JAR="$OPTARG" ;;
     d) BASE_DIR="$OPTARG" ;;
+    t) TERRA_VALIDATION=true ;;
     *) usage "$0" && exit 1 ;;
   esac
 done
@@ -81,3 +83,10 @@ fi
 echo ""
 echo "#############################################################"
 echo "${COUNTER} TESTS PASSED SUCCESSFULLY!"
+
+if [ $TERRA_VALIDATION = true ]; then
+  echo ""
+  echo "#############################################################"
+  echo "RUNNING TERRA INPUT VALIDATION NOW"
+  eval "python3 ${BASE_DIR}/scripts/test/terra_validation.py -d ${BASE_DIR} -j ${WOMTOOL_JAR}"
+fi
