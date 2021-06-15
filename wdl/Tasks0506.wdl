@@ -12,7 +12,7 @@ import "Structs.wdl"
 task ZcatCompressedFiles {
   input {
     Array[File] shards
-    String outfile_name
+    String? outfile_name
     String? filter_command
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -60,7 +60,7 @@ task ZcatCompressedFiles {
   }
 
   output {
-    File outfile=outfile_name
+    File outfile=output_file_name
   }
 }
 
