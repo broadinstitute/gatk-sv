@@ -64,7 +64,8 @@ Sample IDs are provided to [Module00a](#module00a) directly and need not match s
 The following inputs will need to be updated with the transformed sample IDs:
 * Sample ID list for [Module00a](#module00a) or [Module 00c](#module00c)
 * PED file
-* SNP VCF header (if using instead of GVCFs in [Module 00c](#module00c))
+
+If using a SNP VCF in [Module 00c](#module00c), it does not need to be re-headered; simply provide the `vcf_samples` argument.
 
 
 ## <a name="citation">Citation</a>
