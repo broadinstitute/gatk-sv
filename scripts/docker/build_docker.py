@@ -74,15 +74,12 @@ class CMD_line_args_parser:
 
         docker_remote_args_group.add_argument('--gcr-project',
                                               type = str,
-                                              help = 'GCR billing project to push the images to')
+                                              help = 'GCR billing project to push the images to. If not given, the '
+                                                     'built image(s) will not be push to GCR.')
 
         docker_remote_args_group.add_argument('--update-latest',
                                               action = 'store_true',
                                               help   = 'also update \"latest\" tag in remote docker repo(s)')
-
-        docker_remote_args_group.add_argument('--dry-run',
-                                              action = 'store_true',
-                                              help   = 'If given, the script will not push the built images to gcr.')
 
         # flag to turn off git protection (default modue is refusing to build when there are untracked files and/or uncommited changes)
         parser.add_argument('--disable-git-protect',
@@ -377,9 +374,8 @@ class Project_Build:
             self.successfully_built_images.append(docker)
             print(colored('#################################################', 'magenta'))
 
-        if not self.project_arguments.dry_run:
-            for succ in self.successfully_built_images:
-                succ.push(self.project_arguments.update_latest)
+        for succ in self.successfully_built_images:
+            succ.push(self.project_arguments.update_latest)
 
         print(colored('BUILD PROCESS SUCCESS!', 'red'))
 
