@@ -113,7 +113,9 @@ Sample IDs are provided to `module00a` directly and need not match sample names 
 * Sample data table (for Terra)
 * PED file
 * Sample set membership file (for Terra)
-* SNP VCF header (if using instead of GVCFs in `module00c`)
+
+If using a SNP VCF in `module00c`, it does not need to be re-headered; simply provide the `vcf_samples` argument. An easy way to provide these sample IDs is to add a column `vcf_sample_id` to the sample TSV you upload to the workspace (see **Workspace setup** step 2 below), then reference this column as `this.samples.vcf_sample_id` in the `module00c` inputs.
+
 
 ### Workspace setup
 
