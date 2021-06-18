@@ -18,6 +18,7 @@ workflow MasterVcfQc {
     File vcf
     File? vcf_idx
     File? ped_file
+    Int max_trios = 1000
     String prefix
     Int sv_per_shard
     Int samples_per_shard
@@ -182,6 +183,7 @@ workflow MasterVcfQc {
         vcf_stats=MergeVcfwideStatShards.merged_bed_file,
         samples_list=CollectQcVcfwide.samples_list[0],
         ped_file=select_first([ped_file]),
+        max_trios=max_trios,
         per_sample_tarball=CollectPerSampleVidLists.vid_lists,
         prefix=prefix,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -502,6 +504,7 @@ task PlotQcPerFamily {
     File samples_list
     File ped_file
     File per_sample_tarball
+    Int max_trios
     String prefix
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
@@ -544,7 +547,8 @@ task PlotQcPerFamily {
     rm ~{ped_file} ~{samples_list}
 
     # Only run if any families remain after cleaning
-    if [ $( grep -Ev "^#" cleaned.fam | wc -l ) -gt 0 ]; then
+    n_fams=$( grep -Ev "^#" cleaned.fam | wc -l )
+    if [ $n_fams -gt 0 ]; then
 
       # Make per-sample directory
       mkdir ~{prefix}_perSample/
@@ -556,12 +560,29 @@ task PlotQcPerFamily {
       find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" | while read FILE; do
         mv $FILE ~{prefix}_perSample/
       done
+
+      # Subset fam file, if optioned
+      n_trios=$( grep -Ev "^#" cleaned.fam \
+                 | awk '{ if ($2 != "0" && $2 != "." && \
+                              $3 != "0" && $3 != "." && \
+                              $4 != "0" && $4 != ".") print $0 }' \
+                 | wc -l )
+      if [ $n_trios -gt ~{max_trios} ]; then
+        grep -Ev "^#" cleaned.fam \
+        | awk '{ if ($2 != "0" && $2 != "." && \
+                     $3 != "0" && $3 != "." && \
+                     $4 != "0" && $4 != ".") print $0 }' \
+        | shuf | head -n ~{max_trios} \
+        > cleaned.subset.fam
+      else
+        cp cleaned.fam cleaned.subset.fam
+      fi
       
       # Run family analysis
       /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
         -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
         ~{vcf_stats} \
-        cleaned.fam \
+        cleaned.subset.fam \
         ~{prefix}_perSample/ \
         ~{prefix}_perFamily_plots/
 

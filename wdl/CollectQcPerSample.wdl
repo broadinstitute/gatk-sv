@@ -46,9 +46,9 @@ workflow CollectQcPerSample {
   }
 
   # Merge all VID lists into single output directory and tar it
-  call MiniTasks.FilesToTarredFolder as TarShardVidLists {
+  call TarShardVidLists {
     input:
-      in_files=flatten(CollectVidsPerSample.vid_lists),
+      in_tarballs=CollectVidsPerSample.vid_lists_tarball,
       folder_name=prefix + "_perSample_VIDs_merged",
       tarball_prefix=prefix + "_perSample_VIDs",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -150,10 +150,70 @@ task CollectVidsPerSample {
         echo "ERROR IN TASK collect_VIDs_perSample! FEWER PER-SAMPLE GENOTYPE FILES LOCATED THAN NUMBER OF INPUT SAMPLES"
         exit 1
       fi
+
     fi
+
+    # Bundle all files as a tarball (to make it easier on call caching for large cohorts)
+    cd ~{prefix}_perSample_VIDs && \
+    tar -czvf ../~{prefix}_perSample_VIDs.tar.gz *.VIDs_genotypes.txt.gz && \
+    cd -
   >>>
 
   output {
-    Array[File] vid_lists = glob("~{prefix}_perSample_VIDs/*.VIDs_genotypes.txt.gz")
+    File vid_lists_tarball = "~{prefix}_perSample_VIDs.tar.gz"
+  }
+}
+
+
+# Task to merge VID lists across shards
+task TarShardVidLists {
+  input {
+    Array[File] in_tarballs
+    String? folder_name
+    String? tarball_prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String tar_folder_name = select_first([folder_name, "merged"])
+  String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
+
+  # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
+  Float input_size = size(in_tarballs, "GB")
+  Float base_disk_gb = 5.0
+  Float base_mem_gb = 2.0
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb,
+    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    # Create final output directory
+    mkdir "~{tar_folder_name}"
+
+    while read tarball_path; do
+      tar -xzvf "$tarball_path" --directory ~{tar_folder_name}/
+    done < ~{write_lines(in_tarballs)}
+
+    # Compress final output directory
+    tar -czvf "~{outfile_name}" "~{tar_folder_name}"
+  >>>
+
+  output {
+    File tarball = outfile_name
   }
 }
