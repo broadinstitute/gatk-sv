@@ -4,13 +4,11 @@ on:
   push:
     branches:
       - master
-      - docker_build
     paths:
       - 'src/**'
   pull_request:
     branches:
       - master
-      - docker_build
     paths:
       - 'src/**'
 
