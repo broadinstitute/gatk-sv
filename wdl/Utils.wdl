@@ -313,3 +313,64 @@ task SubsetPedFile {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+# Subset a VCF to a specific subset of samples
+task SubsetVcfBySamplesList {
+  input {
+    File vcf
+    File? vcf_idx
+    File list_of_samples_to_keep
+    String subset_name = "subset"
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String vcf_subset_filename = basename(vcf, ".vcf.gz") + ".~{subset_name}.vcf.gz"
+  String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
+
+  # Disk must be scaled proportionally to the size of the VCF
+  Float input_size = size(vcf, "GiB")
+  Float disk_scaling_factor = 1.5
+  Float base_disk_gb = 10.0
+  RuntimeAttr default_attr = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+
+    bcftools view \
+      -S ~{list_of_samples_to_keep} \
+      --force-samples \
+      ~{vcf} \
+    | bcftools view \
+      --min-ac 1 \
+      -O z \
+      -o ~{vcf_subset_filename}
+
+    tabix -f -p vcf ~{vcf_subset_filename}
+    
+  >>>
+
+  output {
+    File vcf_subset = vcf_subset_filename
+    File vcf_subset_idx = vcf_subset_idx_filename
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
