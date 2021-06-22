@@ -8,8 +8,8 @@ version 1.0
 import "ShardedQcCollection.wdl" as ShardedQcCollection
 import "CollectQcPerSample.wdl" as CollectQcPerSample
 import "PerSampleExternalBenchmark.wdl" as PerSampleExternalBenchmark
-
-import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "Tasks0506.wdl" as MiniTasks
+import "Utils.wdl" as Utils
 
 # Master workflow to perform comprehensive quality control (QC) on
 # an SV VCF output by GATK-SV
@@ -18,6 +18,7 @@ workflow MasterVcfQc {
     File vcf
     File? vcf_idx
     File? ped_file
+    File? list_of_samples_to_include
     Int max_trios = 1000
     String prefix
     Int sv_per_shard
@@ -44,7 +45,8 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_per_sample_benchmark_plot
     RuntimeAttr? runtime_override_sanitize_outputs
 
-    # overrides for MiniTasks
+    # overrides for MiniTasks or Utils
+    RuntimeAttr? runtime_overrite_subset_vcf
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
@@ -78,13 +80,31 @@ workflow MasterVcfQc {
     Array[Array[String]]? sample_level_comparison_datasets = read_tsv(select_first([sample_level_comparison_datasets_tsv]))
   }
 
+  # Restrict to a subset of all samples, if optioned. This can be useful to 
+  # exclude outlier samples, or restrict to males/females on X/Y (for example)
+
+  if (defined(list_of_samples_to_include)) {
+    call Utils.SubsetVcfBySamplesList as SubsetVcf {
+      input:
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        list_of_samples_to_keep=select_first([list_of_samples_to_include]),
+        subset_name=prefix + ".subsetted",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_overrite_subset_vcf
+    }
+  }
+
+  File vcf_for_qc = select_first([SubsetVcf.vcf_subset, vcf])
+  File? vcf_idx_for_qc = select_first([SubsetVcf.vcf_subset_idx, vcf_idx])
+
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
     # Collect VCF-wide summary stats
     call ShardedQcCollection.ShardedQcCollection as CollectQcVcfwide {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
+        vcf=vcf_for_qc,
+        vcf_idx=vcf_idx_for_qc,
         contig=contig,
         sv_per_shard=sv_per_shard,
         prefix="~{prefix}.~{contig}.shard",
@@ -158,7 +178,7 @@ workflow MasterVcfQc {
   # Collect per-sample VID lists
   call CollectQcPerSample.CollectQcPerSample as CollectPerSampleVidLists {
     input:
-      vcf=vcf,
+      vcf=vcf_for_qc,
       samples_list=CollectQcVcfwide.samples_list[0],
       prefix=prefix,
       samples_per_shard=samples_per_shard,
