@@ -642,6 +642,7 @@ task CombineTars {
   }
 }
 
+
 # Subset a VCF to a specific subset of samples
 task SubsetVcfBySamplesList {
   input {
