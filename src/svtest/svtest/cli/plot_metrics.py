@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import svtest.utils.IOUtils as iou
 
-WIDTH = 10.24
+WIDTH = 4 #10.24
 HEIGHT_SCALE = 0.15
 MAX_ROWS_PER_PLOT = 500
 
@@ -130,7 +130,7 @@ def plot_nonempty_data(df, out_path):
 
 
 def plot_rows(df, start, end, pdf):
-        df.iloc[start:end].iloc[::-1].plot.barh(figsize=(WIDTH, HEIGHT_SCALE * (end - start)))
+        df.iloc[start:end].iloc[::-1].plot.barh(figsize=(WIDTH, HEIGHT_SCALE * (max(end - start, 15))))
         plt.xscale('log')
         plt.tight_layout()
         pdf.savefig()
