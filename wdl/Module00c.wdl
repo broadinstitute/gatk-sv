@@ -66,6 +66,8 @@ workflow Module00c {
     # BAF Option #2, position-sharded VCFs
     Array[File]? snp_vcfs
     File? snp_vcf_header  # Only use if snp vcfs are unheadered
+    # Text file with paths to SNP VCF shards, one per line. Use instead of snp_vcfs if Array[File] is too long to manage
+    File? snp_vcfs_shard_list
     # Sample ids in vcf, where vcf_samples[i] corresponds to samples[i]. Only use if sample ids are different in vcf
     Array[String]? vcf_samples
 
@@ -267,10 +269,11 @@ workflow Module00c {
     }
   }
 
-  if (!defined(BAF_files) && !defined(gvcfs) && defined(snp_vcfs)) {
+  if (!defined(BAF_files) && !defined(gvcfs) && (defined(snp_vcfs) || defined(snp_vcfs_shard_list))) {
+    Array[File] snp_vcfs_ = if (defined(snp_vcfs)) then select_first([snp_vcfs]) else read_lines(select_first([snp_vcfs_shard_list]))
     call sbaf.BAFFromShardedVCF {
       input:
-        vcfs = select_first([snp_vcfs]),
+        vcfs = snp_vcfs_,
         vcf_header = snp_vcf_header,
         samples = select_first([vcf_samples, samples]),
         batch = batch,
