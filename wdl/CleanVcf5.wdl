@@ -1659,7 +1659,6 @@ task CleanVcf5_29_TRUE_2 {
       vids = set([x.strip() for x in f.readlines() if x])
 
     vcf = pysam.VariantFile("~{cleantagandmulti_vcf}")
-    sys.stdout.write(str(vcf.header))
 
     for record in vcf:
       if record.id not in vids:
