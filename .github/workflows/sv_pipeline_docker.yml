@@ -18,6 +18,7 @@ jobs:
     name: Build GATK-SV Pipeline Docker Images
     env:
       PR_NUM: ${{ github.event.number }}
+      COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
     strategy:
       matrix:
         python-version: ['3.8']
@@ -38,4 +39,4 @@ jobs:
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets all --image-tag ${PR_NUM}-${GITHUB_SHA::8}
+          python build_docker.py --targets all --image-tag ${PR_NUM}-${COMMIT_SHA::8}
