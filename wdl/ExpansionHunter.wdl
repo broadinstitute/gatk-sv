@@ -2,6 +2,8 @@
 
 version 1.0
 
+import "Structs.wdl"
+
 workflow ComputeSTRProfiles {
 
   input {
@@ -28,7 +30,7 @@ workflow ComputeSTRProfiles {
     runtime_attr: ""
   }
 
-  scatter(reads_filename in [case_reads_filenames, control_reads_filenames]) {
+  scatter(reads_filename in case_reads_filenames) {
     call ComputeSTRProfile {
       input:
         reads_filename = reads_filename,
