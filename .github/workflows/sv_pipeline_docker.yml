@@ -14,7 +14,7 @@ on:
 
 jobs:
   test_build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: Build GATK-SV Pipeline Docker Images
     env:
       PR_NUM: ${{ github.event.number }}
