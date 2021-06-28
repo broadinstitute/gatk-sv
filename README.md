@@ -246,7 +246,7 @@ Trains a gCNV model for use in [Module 00c](#module00c). The WDL can be found at
 
 
 ## <a name="module00c">Module 00c</a>
-Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above]("#cohort-mode") for more information on batching.
+Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
 * [Module 00a](#module00a)
@@ -255,7 +255,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [Module 00b](#module00b) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
-* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input)
+* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input)
 * Read count, BAF, PE, and SR files ([Module 00a](#module00a))
 * Caller VCFs ([Module 00a](#module00a))
 * Contig ploidy model and gCNV model files (gCNV training)
