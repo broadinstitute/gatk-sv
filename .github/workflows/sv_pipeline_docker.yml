@@ -6,11 +6,13 @@ on:
       - master
     paths:
       - 'src/**'
+      - 'dockerfiles/**'
   pull_request:
     branches:
       - master
     paths:
       - 'src/**'
+      - 'dockerfiles/**'
 
 jobs:
   test_build:
