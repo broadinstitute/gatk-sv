@@ -99,7 +99,7 @@ def filter_cnv_on_coverage(single_sample_vcf_file, ref_vcf_file, svtype, case_sa
                                                stdin=cov_reg_ref_cds.stdout,
                                                stdout=open('final_merged_intersection.bed', 'w'))
 
-    data = final_intersect_process.communicate()[0]  # expect this to be empty
+    final_intersect_process.communicate()[0]  # expect this to be empty
     return_code = final_intersect_process.returncode
     if return_code != 0:
         raise Exception(
