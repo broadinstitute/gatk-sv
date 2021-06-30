@@ -31,6 +31,7 @@ workflow Module0506 {
     File bin_exclude
     File contig_list
     File allosome_fai
+    Int? localize_shard_size
     Int max_shards_per_chrom
     Int min_variants_per_shard
     File cytobands
@@ -179,6 +180,7 @@ workflow Module0506 {
       raw_sr_bothside_pass_files=raw_sr_bothside_pass_files,
       raw_sr_background_fail_files=raw_sr_background_fail_files,
       contig_list=contig_list,
+      localize_shard_size=localize_shard_size,
       max_shards_per_chrom=max_shards_per_chrom,
       min_variants_per_shard=min_variants_per_shard,
       pe_exclude_list=pe_exclude_list,

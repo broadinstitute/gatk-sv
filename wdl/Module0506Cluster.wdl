@@ -17,6 +17,7 @@ workflow Module0506Cluster {
     Array[File] raw_sr_background_fail_files
 
     File contig_list
+    Int localize_shard_size = 100000
     Int max_shards_per_chrom
     Int min_variants_per_shard
     File pe_exclude_list
@@ -96,6 +97,7 @@ workflow Module0506Cluster {
         sv_size=50,
         sv_types=["DEL","DUP","INV","BND","INS"],
         contig=contig,
+        localize_shard_size=localize_shard_size,
         max_shards_per_chrom_svtype=100,
         min_variants_per_shard_per_chrom_svtype=100,
         subset_sr_lists=true,
@@ -131,6 +133,7 @@ workflow Module0506Cluster {
         sv_size=5000,
         sv_types=["DEL","DUP"],
         contig=contig,
+        localize_shard_size=localize_shard_size,
         max_shards_per_chrom_svtype=100,
         min_variants_per_shard_per_chrom_svtype=100,
         subset_sr_lists=false,

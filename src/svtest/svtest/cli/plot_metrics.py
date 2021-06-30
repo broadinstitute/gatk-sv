@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import svtest.utils.IOUtils as iou
 
-WIDTH = 4 #10.24
+WIDTH = 10.24
 HEIGHT_SCALE = 0.15
 MAX_ROWS_PER_PLOT = 500
 

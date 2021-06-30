@@ -19,6 +19,7 @@ workflow VcfClusterSingleChrom {
     Int sv_size
     Array[String] sv_types
     String contig
+    Int localize_shard_size
     Int max_shards_per_chrom_svtype
     Int min_variants_per_shard_per_chrom_svtype
     Boolean subset_sr_lists
@@ -49,51 +50,62 @@ workflow VcfClusterSingleChrom {
   }
 
   scatter (i in range(length(vcfs))) {
-    File vcf_indexes_ = vcfs[i] + ".tbi"
+    call LocalizeContigVcfs {
+      input:
+        vcf=vcfs[i],
+        vcf_index = vcfs[i] + ".tbi",
+        shard_size = localize_shard_size,
+        contig=contig,
+        prefix=prefix + "." + contig + "." + batches[i],
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_localize_vcfs
+    }
   }
-  
-  #Stream each vcf & join into a single vcf
-  call LocalizeContigVcfs {
-    input:
-      vcfs=vcfs,
-      vcf_indexes = vcf_indexes_,
-      batches=batches,
-      contig=contig,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_localize_vcfs
+  Array[Array[File]] sharded_vcfs_ = transpose(LocalizeContigVcfs.out)
+
+  scatter (i in range(length(sharded_vcfs_))) {
+    call JoinVcfs {
+      input:
+        vcfs=sharded_vcfs_[i],
+        contig=contig,
+        prefix=prefix + "." + i,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_join_vcfs
+    }
+    call FixMultiallelicRecords {
+      input:
+        joined_vcf=JoinVcfs.out,
+        batch_contig_vcfs=sharded_vcfs_[i],
+        contig=contig,
+        prefix=prefix + "." + i,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_fix_multiallelic
+    }
+    call FixEvidenceTags {
+      input:
+        vcf=FixMultiallelicRecords.out,
+        contig=contig,
+        prefix=prefix + "." + i,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_fix_ev_tags
+    }
   }
-  call JoinVcfs {
+
+  call MiniTasks.ConcatVcfs {
     input:
-      vcfs=LocalizeContigVcfs.out,
-      contig=contig,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_join_vcfs
-  }
-  call FixMultiallelicRecords {
-    input:
-      joined_vcf=JoinVcfs.out,
-      batch_contig_vcfs=LocalizeContigVcfs.out,
-      contig=contig,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_fix_multiallelic
-  }
-  call FixEvidenceTags {
-    input:
-      vcf=FixMultiallelicRecords.out,
-      contig=contig,
-      prefix=prefix,
+      vcfs=FixEvidenceTags.out,
+      vcfs_idx=FixEvidenceTags.out_index,
+      merge_sort=true,
+      outfile_prefix="~{prefix}.~{contig}.precluster_concat",
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_fix_ev_tags
+      runtime_attr_override=runtime_override_concat_shards
   }
 
   #Run vcfcluster per chromosome
   call VcfClusterTasks.ClusterSingleChrom as ClusterSingleChrom {
     input:
-      vcf=FixEvidenceTags.out,
-      vcf_index=FixEvidenceTags.out_index,
+      vcf=ConcatVcfs.concat_vcf,
+      vcf_index=ConcatVcfs.concat_vcf_idx,
       contig=contig,
       prefix=prefix,
       max_shards=max_shards_per_chrom_svtype,
@@ -121,7 +133,7 @@ workflow VcfClusterSingleChrom {
     call MiniTasks.SubsetVariantList as SubsetBothsidePass {
       input:
         vid_list=bothside_pass,
-        vcf=FixEvidenceTags.out,
+        vcf=ConcatVcfs.concat_vcf,
         outfile_name=prefix + "." + contig + ".pass.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_bothside_pass
@@ -129,7 +141,7 @@ workflow VcfClusterSingleChrom {
     call MiniTasks.SubsetVariantList as SubsetBackgroundFail {
       input:
         vid_list=background_fail,
-        vcf=FixEvidenceTags.out,
+        vcf=ConcatVcfs.concat_vcf,
         outfile_name=prefix + "." + contig + ".fail.VIDs.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_background_fail
@@ -144,13 +156,11 @@ workflow VcfClusterSingleChrom {
   }
 }
 
-
-# Shard batch VCFs, pulling down only this contig
 task LocalizeContigVcfs {
   input {
-    Array[File] vcfs
-    Array[File] vcf_indexes
-    Array[String] batches
+    File vcf
+    File vcf_index
+    Int shard_size
     String contig
     String prefix
     String sv_pipeline_docker
@@ -158,13 +168,13 @@ task LocalizeContigVcfs {
   }
 
   RuntimeAttr runtime_default = object {
-    mem_gb: 3.75,
-    disk_gb: ceil(10 + size(vcfs, "GiB") * 1.2),
-    cpu_cores: 1,
-    preemptible_tries: 0,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10 + size(vcf, "GiB") * 1.5),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 1,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   runtime {
@@ -176,41 +186,46 @@ task LocalizeContigVcfs {
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-  
+
   command <<<
     set -euxo pipefail
 
     # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
     # https://github.com/broadinstitute/gatk-sv/issues/52
 
-    #Remote tabix all vcfs to chromosome of interest
-    paste ~{write_lines(batches)} ~{write_lines(vcfs)} | while read BATCH VCF_PATH; do
-      BATCH_VCF="$BATCH.~{contig}.subsetted.vcf.gz"
-      tabix -h "$VCF_PATH" "~{contig}" \
-        | sed "s/AN=[0-9]*;//g" \
-        | sed "s/AC=[0-9]*;//g" \
-        | bgzip \
-        > $BATCH_VCF
-    done
-    VCFS_LIST="subsetted_vcfs.list"
-    ls *.~{contig}.subsetted.vcf.gz > $VCFS_LIST
+    tabix -h "~{vcf}" "~{contig}" \
+      | sed "s/AN=[0-9]*;//g" \
+      | sed "s/AC=[0-9]*;//g" \
+      | bgzip \
+      > contig.vcf.gz
+    tabix contig.vcf.gz
 
-    #Sanity check to make sure all subsetted VCFs have same number of records
-    # crazy ' || printf ""' statement to avoid pipefail if grep encounters no matching lines
-    while read VCF; do
-      zcat "$VCF" | (grep -Ev "^#" || printf "") | wc -l
-    done < $VCFS_LIST \
-    > records_per_vcf.txt
+    python3 <<CODE
+    import pysam
 
-    if [ $( sort records_per_vcf.txt | uniq | wc -l ) -gt 1 ]; then
-      1>&2 echo "ERROR: INCONSISTENT NUMBER OF RECORDS PER VCF DETECTED"
-      cat records_per_vcf.txt
-      exit 1
-    fi
+    vcf = pysam.VariantFile("contig.vcf.gz")
+    SHARD_SIZE = ~{shard_size}
+
+    i = 0
+    shard = 0
+    vcf_out = None
+    for record in vcf:
+      if i % SHARD_SIZE == 0:
+        if vcf_out is not None:
+          vcf_out.close()
+        path = f"~{prefix}.{shard:06d}.vcf.gz"
+        vcf_out = pysam.VariantFile(path, mode='w', header=vcf.header)
+        shard += 1
+      vcf_out.write(record)
+      i += 1
+
+    if vcf_out is not None:
+      vcf_out.close()
+    CODE
   >>>
 
   output {
-    Array[File] out = glob("*.~{contig}.subsetted.vcf.gz")
+    Array[File] out = glob("~{prefix}.*.vcf.gz")
   }
 }
 
@@ -231,7 +246,7 @@ task JoinVcfs {
                                   mem_gb: 1.0,
                                   disk_gb: ceil(base_disk_gb + input_size * input_size_ratio),
                                   cpu_cores: 1,
-                                  preemptible_tries: 0,
+                                  preemptible_tries: 1,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -298,7 +313,7 @@ task FixMultiallelicRecords {
                                   mem_gb: 3.75,
                                   disk_gb: ceil(base_disk_gb + input_size * input_size_fraction),
                                   cpu_cores: 1,
-                                  preemptible_tries: 0,
+                                  preemptible_tries: 1,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
@@ -346,7 +361,7 @@ task FixEvidenceTags {
                                   mem_gb: 3.75,
                                   disk_gb: ceil(base_disk_gb + input_size * input_size_ratio),
                                   cpu_cores: 1,
-                                  preemptible_tries: 0,
+                                  preemptible_tries: 1,
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
