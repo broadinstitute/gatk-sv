@@ -1,5 +1,9 @@
 FROM alpine:latest
-RUN apk --no-cache add curl && \
+RUN apk update && \
+    apk add --no-cache \
+                       # bash is required by container_linux.go
+                       bash \
+                       curl && \
     wget https://github.com/Illumina/ExpansionHunterDenovo/releases/download/v0.9.0/ExpansionHunterDenovo-v0.9.0-linux_x86_64.tar.gz && \
     mkdir ehdn_extract && \
     tar -xf *.tar.gz --strip-components=1 -C ehdn_extract && \
