@@ -1,4 +1,9 @@
-## Runs ExpansionHunter denovo (ehdn)
+## ExpansionHunter denovo (ehdn)
+##
+## This WDL implements workflows for
+## ehdn's two execution modes:
+## (i) case-control analysis;
+## (ii) outliner analysis.
 
 version 1.0
 
