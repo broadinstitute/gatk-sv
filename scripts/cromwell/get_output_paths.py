@@ -10,7 +10,7 @@ from urllib.parse import urlparse
 from google.cloud import storage
 
 """
-Summary: Find GCS paths for specified workflow file outputs for multiple batches without downloading metadata.
+Summary: Find GCS paths for specified workflow file outputs for multiple workflows at once without downloading metadata.
     
 Caveats: Assumes cromwell file structure. Recommended for use with cromwell final_workflow_outputs_dir
     to reduce number of files to search. Requires file suffixes for each output file that are
@@ -227,10 +227,10 @@ def main():
     parser.add_argument("-e", "--entities-file", required=False,
                         help="Newline-separated text file of entity (ie. sample, batch) names (no header). "
                              "Entity here refers to units, like samples within a batch or batches within a cohort, "
-                             "for which the workflow(s) produced outputs; the script expects one output per entity "
-                             "for all outputs, with the filename containing the entity ID provided in the entities "
-                             "file. Output will have one line per entity in the order provided. "
-                             "If multiple batches, outputs will be concatenated and order may be affected.")
+                             "for which the workflow(s) produced outputs; "
+                             "the script expects one output per entity for all outputs, with the filename "
+                             "containing the entity ID provided in the entities file. Output will have one "
+                             "line per entity in the order provided. If multiple batches, outputs will be concatenated.")
     parser.add_argument("-t", "--entity-type", required=False, default="batch",
                         help="Entity type (ie. sample, batch) of each line of output. If using -e, then define "
                              "what each entity name in the file is (ie. a sample, a batch). Otherwise, define "
