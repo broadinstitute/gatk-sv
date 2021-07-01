@@ -10,44 +10,16 @@ from urllib.parse import urlparse
 from google.cloud import storage
 
 """
-Summary: find GCS paths for specified outputs for multiple batches without downloading metadata
+Summary: Find GCS paths for specified workflow file outputs for multiple batches without downloading metadata.
+    
+Caveats: Assumes cromwell file structure. Recommended for use with cromwell final_workflow_outputs_dir
+    to reduce number of files to search. Requires file suffixes for each output file that are
+    unique within the workflow directory.
 
-Usage:
-  python get_output_paths.py [-w workflows.tsv | -i workflow-id] -f filenames.json -o output.tsv 
-            -b gs://bucket/workflow-name [-l LEVEL] [-s] [-k] [-e entities.txt]
+For usage & parameters: Run python get_output_paths.py --help
 
-Parameters:
-    -w WORKFLOWS, --workflows WORKFLOWS
-                        TSV file (no header) with batch (or sample) names and
-                        workflow IDs (one workflow per batch). Either -i or -w
-                        required. -i takes precedence if both provided.
-    -i ID, --id ID        Workflow ID (alternative to -w if only one workflow).
-                        Either -i or -w required. -i takes precedence if both
-                        provided.
-    -f FILENAMES, --filenames FILENAMES
-                        JSON file with output names and filename suffixes
-                        (assumes ONE file per output, not an array)
-    -o OUTPUT_FILE, --output-file OUTPUT_FILE
-                        Output file path
-    -b BUCKET, --bucket BUCKET
-                        Google bucket path to search for files - should
-                        include all subdirectories preceding workflow ID
-    -l LOG_LEVEL, --log-level LOG_LEVEL
-                        Specify level of logging information, ie. info,
-                        warning, error (not case-sensitive)
-    -e ENTITIES_FILE, --entities-file ENTITIES_FILE
-                        Newline-separated text file of entity names. First
-                        line is entity type (ie. sample, batch). Expect one
-                        output per entity for all outputs, with filename
-                        containing entity ID. Output will have one line per
-                        entity. If multiple batches, outputs will be concatenated.
-    -k, --keep-all-entities
-                        With --entities-file, output a line for every entity,
-                        even if none of the output files are found
-
-Outputs:
-    - TSV file with columns for each output variable and a row for each 
-      batch (or entity, if providing --entities-file), containing GCS output paths
+Output: TSV file with columns for each output variable and a row for each 
+    batch (or entity, if providing --entities-file), containing GCS output paths
 
 Author: Emma Pierce-Hoffman (epierceh@broadinstitute.org)
 """
@@ -242,25 +214,28 @@ def main():
                        help="Workflow ID provided directly on the command line; alternative to -w if only "
                             "one workflow. Either -i or -w required.")
     parser.add_argument("-f", "--filenames", required=True,
-                        help="JSON file with output names and filename suffixes "
-                             "(assumes ONE file per output, not an array)")
-    parser.add_argument("-o", "--output-file", required=True, help="Output file path")
+                        help="JSON file with workflow output file names (for column names in output TSV) and a "
+                             "unique filename suffix expected for each workflow output. "
+                             "Format is { \"output_file_name\": \"unique_file_suffix\" }.")
+    parser.add_argument("-o", "--output-file", required=True, help="Output file path to create")
     parser.add_argument("-b", "--bucket", required=True,
                         help="Google bucket path to search for files - should include all subdirectories "
-                             "preceding workflow ID, including the workflow name.")
+                             "preceding the workflow ID, including the workflow name.")
     parser.add_argument("-l", "--log-level", required=False, default="INFO",
                         help="Specify level of logging information, ie. info, warning, error (not case-sensitive). "
                              "Default: INFO")
+    parser.add_argument("-e", "--entities-file", required=False,
+                        help="Newline-separated text file of entity (ie. sample, batch) names (no header). "
+                             "Entity here refers to units, like samples within a batch or batches within a cohort, "
+                             "for which the workflow(s) produced outputs; the script expects one output per entity "
+                             "for all outputs, with the filename containing the entity ID provided in the entities "
+                             "file. Output will have one line per entity in the order provided. "
+                             "If multiple batches, outputs will be concatenated and order may be affected.")
     parser.add_argument("-t", "--entity-type", required=False, default="batch",
                         help="Entity type (ie. sample, batch) of each line of output. If using -e, then define "
                              "what each entity name in the file is (ie. a sample, a batch). Otherwise, define "
                              "what each workflow corresponds to. This type will be the first column name. "
                              "Default: batch")
-    parser.add_argument("-e", "--entities-file", required=False,
-                        help="Newline-separated text file of entity names. First line is entity type "
-                             "(ie. sample, batch). Expect one output per entity for all outputs, with filename "
-                             "containing entity ID. Output will have one line per entity. If multiple batches, "
-                             "outputs will be concatenated.")
     parser.add_argument("-k", "--keep-all-entities", required=False, default=False, action='store_true',
                         help="With --entities-file, output a line for every entity, even if none of the "
                              "output files are found.")
