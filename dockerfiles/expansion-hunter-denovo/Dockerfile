@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM python:3-alpine
 RUN apk update && \
     apk add --no-cache \
                        # bash is required by container_linux.go
@@ -10,5 +10,6 @@ RUN apk update && \
     rm -rf *.tar.gz && \
     mkdir ehdn && \
     mv ehdn_extract/bin/* ehdn/ && \
+    mv ehdn_extract/scripts ehdn/ && \
     rm -rf ehdn_extract
 ENV PATH="/ehdn/:$PATH"
