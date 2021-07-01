@@ -1,7 +1,7 @@
-## ExpansionHunter denovo (ehdn)
+## ExpansionHunter denovo (EHdn)
 ##
 ## This WDL implements workflows for
-## ehdn's two execution modes:
+## EHdn's two execution modes:
 ## (i) case-control analysis;
 ## (ii) outliner analysis.
 
@@ -43,9 +43,9 @@ workflow ComputeSTRProfiles {
   }
 
   # The values of the variables are based on
-  # ehdn's current latest hard-coded postfixes.
+  # EHdn's current latest hard-coded postfixes.
   # Do not change them unless they are changed
-  # in ehdn.
+  # in EHdn.
   FilenamePostfixes postfixes = object {
     locus: ".locus.tsv",
     motif: ".motif.tsv",
@@ -55,7 +55,7 @@ workflow ComputeSTRProfiles {
     # This the length of `profile` postfix without
     # the filename extension. It is used to remove
     # postfix in order to extract sample name from
-    # ehdn generated output.
+    # EHdn generated output.
     # e.g., extract `sample1` from `sample1.str_profile.json`.
     profile_len: 12
   }
@@ -200,7 +200,7 @@ task Merge {
   Int controls_length = length(controls)
   String output_prefix = "merged"
 
-  # This shell script uses ehdn's `merge` command
+  # This shell script uses EHdn's `merge` command
   # to merge STR profiles on all the individual samples
   # into a single JSON file.
   #
@@ -212,7 +212,7 @@ task Merge {
   #       `cases` and `controls`);
   #   (3) file path.
   #
-  # - Call ehdn's `merge` method using the input and
+  # - Call EHdn's `merge` method using the input and
   #   the generaged manifest file.
   command <<<
     get_sample_name()
