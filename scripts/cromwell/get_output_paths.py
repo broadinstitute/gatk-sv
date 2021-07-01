@@ -227,10 +227,10 @@ def main():
     parser.add_argument("-e", "--entities-file", required=False,
                         help="Newline-separated text file of entity (ie. sample, batch) names (no header). "
                              "Entity here refers to units, like samples within a batch or batches within a cohort, "
-                             "for which the workflow(s) produced outputs; "
-                             "the script expects one output per entity for all outputs, with the filename "
-                             "containing the entity ID provided in the entities file. Output will have one "
-                             "line per entity in the order provided. If multiple batches, outputs will be concatenated.")
+                             "for which the workflow(s) produced outputs; the script expects one output per entity "
+                             "for all outputs, with the filename containing the entity ID provided in the entities "
+                             "file. Output will have one line per entity in the order provided. "
+                             "If multiple batches, outputs will be concatenated and order may be affected.")
     parser.add_argument("-t", "--entity-type", required=False, default="batch",
                         help="Entity type (ie. sample, batch) of each line of output. If using -e, then define "
                              "what each entity name in the file is (ie. a sample, a batch). Otherwise, define "
