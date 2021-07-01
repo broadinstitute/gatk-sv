@@ -19,6 +19,7 @@ medium.max.size <- 2500
 medlarge.max.size <- 10000
 large.max.size <- 50000
 huge.max.size <- 300000000
+sex.chroms <- c(1:22, paste("chr", 1:22, sep=""))
 
 
 ###################
@@ -162,6 +163,7 @@ plotDotsSVperChrom <- function(dat,svtypes,title=NULL,ylab="Fraction of SV Type"
   legend("topright",legend=svtypes$svtype,
          pch=19,col=svtypes$color,cex=0.7,border=NA,bty="n")
 }
+
 #Wrapper to plot all barplots of SV counts
 wrapperPlotAllCountBars <- function(){
   #All SV
@@ -376,14 +378,14 @@ wrapperPlotAllCountBars <- function(){
 #####Size plots
 ###############
 #Plot single size distribution
-plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
-                            min.size=50,max.size=1000000,
-                            autosomal=F,biallelic=F,
-                            title=NULL,legend=F,lwd.cex=1){
+plotSizeDistrib <- function(dat, svtypes, n.breaks=150, k=10,
+                            min.size=50, max.size=1000000,
+                            autosomal=F, biallelic=F,
+                            title=NULL, legend=F, lwd.cex=1, text.cex=1){
   #Filter/process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
-    dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))),]
+    dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal SV only")
   }
   if(biallelic==T){
@@ -412,7 +414,7 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
     dens$ALL <- as.numeric(all.h$counts/length(all.vals))
     
     #Prepare plot area
-    ylims <- c(0,quantile(unlist(dens),probs=0.995,na.rm=T))
+    ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
     dens <- lapply(dens,function(vals){
       vals[which(vals>max(ylims))] <- max(ylims)
       return(vals)
@@ -437,11 +439,11 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
     axis(1,at=logscale.major,tck=-0.03,labels=NA)
     axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
          labels=logscale.minor.labs)
-    mtext(1,text="Size",line=2.25,cex=lwd.cex)
+    mtext(1,text="Size",line=2.25,cex=text.cex)
     axis(2,at=axTicks(2),tck=-0.025,labels=NA)
     axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
          labels=paste(round(100*axTicks(2),1),"%",sep=""))
-    mtext(2,text="Fraction of SV",line=2,cex=lwd.cex)
+    mtext(2,text="Fraction of SV",line=2,cex=text.cex)
     sapply(1:2,function(i){
       axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
       axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
@@ -449,7 +451,7 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
     })
     axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
     axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
-    mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+    mtext(3,line=1.5,text=title,font=2,cex=text.cex)
     
     #Add points per SV type
     sapply(1:length(dens),function(i){
@@ -482,8 +484,17 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
     #Add sv type legend
     if(legend==T){
       idx.for.legend <- which(unlist(lapply(dens,function(vals){any(!is.na(vals) & !is.infinite(vals) & vals>0)})))
-      legend("right",bg=NA,bty="n",pch=NA,cex=lwd.cex*0.7,lwd=3,
-             legend=rbind(svtypes,c("ALL","gray15"))$svtype[idx.for.legend],
+      counts.for.legend <- sapply(names(idx.for.legend), function(svtype){
+        if(svtype == "ALL"){
+          nrow(dat)
+        }else{
+          length(which(dat$svtype==svtype))
+        }
+      })
+      legend("right",bg=NA,bty="n",pch=NA,cex=text.cex*0.7,lwd=3,
+             legend=paste(rbind(svtypes, c("ALL","gray15"))$svtype[idx.for.legend],
+                          " (N=", prettyNum(counts.for.legend, big.mark=","),
+                          ")", sep=""),
              col=rbind(svtypes,c("ALL","gray15"))$color[idx.for.legend])
     }
   }else{
@@ -491,7 +502,7 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
     plot(x=c(0,1),y=c(0,1),type="n",
          xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
     text(x=0.5,y=0.5,labels="No Data")
-    mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+    mtext(3,line=1.5,text=title,font=2,cex=text.cex)
   }
   
   #Add number of SV to plot
@@ -500,18 +511,18 @@ plotSizeDistrib <- function(dat,svtypes,n.breaks=250,k=5,
   
   #Add filter labels
   if(!is.null(filter.legend)){
-    legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=lwd.cex)
+    legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=text.cex)
   }
 }
+
 #Plot comparative size distributions for a series of AC & AF restrictions
-plotSizeDistribSeries <- function(dat,svtypes,max.AFs,legend.labs,
-                                  n.breaks=100,min.size=50,max.size=1000000,
-                                  autosomal=T,biallelic=T,
-                                  title=NULL){
+plotSizeDistribSeries <- function(dat, svtypes, max.AFs, legend.labs,
+                                  n.breaks=100, min.size=50, max.size=1000000,
+                                  autosomal=F, biallelic=T, title=NULL, lwd.cex=1){
   #Process sizes & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
-    dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))),]
+    dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal SV only")
   }
   if(biallelic==T){
@@ -519,72 +530,84 @@ plotSizeDistribSeries <- function(dat,svtypes,max.AFs,legend.labs,
     filter.legend <- c(filter.legend,"Biallelic SV only")
   }
   sizes <- log10(dat$length)
-  sizes <- lapply(1:length(max.AFs),function(i){
-    if(i==1){
-      return(sizes[which(dat$AF<=max.AFs[i])])
-    }else{
-      return(sizes[which(dat$AF>max.AFs[i-1] & dat$AF<=max.AFs[i])])
-    }
-  })
-  xlims <- range(sizes[which(!is.infinite(unlist(sizes)))],na.rm=T)
-  xlims[1] <- max(c(log10(min.size),xlims[1]))
-  xlims[2] <- min(c(log10(max.size),xlims[2]))
-  breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/n.breaks)
-  mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
-  
-  #Gather size densities per AF tranche
-  dens <- lapply(sizes,function(vals){
-    h <- hist(vals[which(!is.infinite(vals) & vals>=xlims[1] & vals<=xlims[2])],plot=F,breaks=breaks)
-    h$counts[1] <- h$counts[1]+length(which(!is.infinite(vals) & vals<xlims[1]))
-    h$counts[length(h$counts)] <- h$counts[length(h$counts)]+length(which(!is.infinite(vals) & vals>xlims[2]))
-    return(h$counts/length(vals))
-  })
-  
-  #Prepare plot area
-  ylims <- c(0,quantile(unlist(dens),probs=0.995,na.rm=T))
-  dens <- lapply(dens,function(vals){
-    vals[which(vals>max(ylims))] <- max(ylims)
-    return(vals)
-  })
-  par(bty="n",mar=c(3.5,3.5,3,0.5))
-  plot(x=xlims,y=ylims,type="n",
-       xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
-  
-  #Add vertical gridlines
-  logscale.all <- log10(as.numeric(sapply(0:8,function(i){(1:9)*10^i})))
-  logscale.minor <- log10(as.numeric(sapply(0:8,function(i){c(5,10)*10^i})))
-  logscale.minor.labs <- as.character(sapply(c("bp","kb","Mb"),function(suf){paste(c(1,5,10,50,100,500),suf,sep="")}))
-  logscale.minor.labs <- c(logscale.minor.labs[-1],"1Gb")
-  logscale.major <- log10(as.numeric(10^(0:8)))
-  abline(v=logscale.all,col="gray97")
-  abline(v=logscale.minor,col="gray92")
-  abline(v=logscale.major,col="gray85")
-  
-  #Add axes, title, and Alu/SVA/L1 ticks
-  axis(1,at=logscale.all,tck=-0.015,col="gray50",labels=NA)
-  axis(1,at=logscale.minor,tck=-0.0225,col="gray20",labels=NA)
-  axis(1,at=logscale.major,tck=-0.03,labels=NA)
-  axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
-       labels=logscale.minor.labs)
-  mtext(1,text="Size",line=2.25)
-  axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-  axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-       labels=paste(round(100*axTicks(2),1),"%",sep=""))
-  mtext(2,text="Fraction of SV",line=2)
-  sapply(1:2,function(i){
-    axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
-    axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
-         labels=c("Alu","L1")[i],font=3)
-  })
-  axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
-  axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
-  mtext(3,line=1.5,text=title,font=2)
-  
-  #Add lines per AF tranche
-  col.pal <- rev(colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(sizes)))
-  sapply(length(dens):1,function(i){
-    points(x=mids,y=dens[[i]],type="l",lwd=2,col=col.pal[i])
-  })
+  if(length(sizes) > 0){
+    sizes <- lapply(1:length(max.AFs),function(i){
+      if(i==1){
+        return(sizes[which(dat$AF<=max.AFs[i])])
+      }else{
+        return(sizes[which(dat$AF>max.AFs[i-1] & dat$AF<=max.AFs[i])])
+      }
+    })
+    xlims <- range(sizes[which(!is.infinite(unlist(sizes)))],na.rm=T)
+    xlims[1] <- max(c(log10(min.size),xlims[1]))
+    xlims[2] <- min(c(log10(max.size),xlims[2]))
+    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/n.breaks)
+    mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
+    
+    #Gather size densities per AF tranche
+    dens <- lapply(sizes,function(vals){
+      h <- hist(vals[which(!is.infinite(vals) & vals>=xlims[1] & vals<=xlims[2])],plot=F,breaks=breaks)
+      h$counts[1] <- h$counts[1]+length(which(!is.infinite(vals) & vals<xlims[1]))
+      h$counts[length(h$counts)] <- h$counts[length(h$counts)]+length(which(!is.infinite(vals) & vals>xlims[2]))
+      return(h$counts/length(vals))
+    })
+    
+    #Prepare plot area
+    ylims <- c(0,quantile(unlist(dens),probs=0.99,na.rm=T))
+    dens <- lapply(dens,function(vals){
+      vals[which(vals>max(ylims))] <- max(ylims)
+      return(vals)
+    })
+    par(bty="n",mar=c(3.5,3.5,3,0.5))
+    plot(x=xlims,y=ylims,type="n",
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+    
+    #Add vertical gridlines
+    logscale.all <- log10(as.numeric(sapply(0:8,function(i){(1:9)*10^i})))
+    logscale.minor <- log10(as.numeric(sapply(0:8,function(i){c(5,10)*10^i})))
+    logscale.minor.labs <- as.character(sapply(c("bp","kb","Mb"),function(suf){paste(c(1,5,10,50,100,500),suf,sep="")}))
+    logscale.minor.labs <- c(logscale.minor.labs[-1],"1Gb")
+    logscale.major <- log10(as.numeric(10^(0:8)))
+    abline(v=logscale.all,col="gray97")
+    abline(v=logscale.minor,col="gray92")
+    abline(v=logscale.major,col="gray85")
+    
+    #Add axes, title, and Alu/SVA/L1 ticks
+    axis(1,at=logscale.all,tck=-0.015,col="gray50",labels=NA)
+    axis(1,at=logscale.minor,tck=-0.0225,col="gray20",labels=NA)
+    axis(1,at=logscale.major,tck=-0.03,labels=NA)
+    axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
+         labels=logscale.minor.labs)
+    mtext(1,text="Size",line=2.25)
+    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    mtext(2,text="Fraction of SV",line=2)
+    sapply(1:2,function(i){
+      axis(3,at=log10(c(300,6000))[i],labels=NA,tck=-0.01)
+      axis(3,at=log10(c(300,6000))[i],tick=F,line=-0.9,cex.axis=0.8,
+           labels=c("Alu","L1")[i],font=3)
+    })
+    axis(3,at=log10(c(1000,2000)),labels=NA,tck=-0.01)
+    axis(3,at=mean(log10(c(1000,2000))),tick=F,line=-0.9,cex.axis=0.8,labels="SVA",font=3)
+    mtext(3,line=1.5,text=title,font=2)
+    
+    #Add points & rolling mean per AF tranche
+    col.pal <- rev(colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(sizes)))
+    sapply(1:length(dens), function(i){
+      #Points per individual bin
+      points(x=mids, y=dens[[i]], pch=19, cex=0.25, col=col.pal[i])
+      #Rolling mean for line
+      points(x=mids, y=rollapply(dens[[i]], width=5, mean, partial=T),
+             type="l", lwd=lwd.cex, col=col.pal[i])
+    })  
+  }else{
+    par(bty="n",mar=c(3.5,3.5,3,0.5))
+    plot(x=c(0,1),y=c(0,1),type="n",
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+    text(x=0.5,y=0.5,labels="No Data")
+    mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+  }
   
   #Add filter labels
   if(!is.null(filter.legend)){
@@ -594,8 +617,10 @@ plotSizeDistribSeries <- function(dat,svtypes,max.AFs,legend.labs,
   #Add freq legend
   legend("right",bg="white",bty="n",lwd=3,col=col.pal,legend=legend.labs,cex=0.8)
 }
+
 #Wrapper to plot all size distributions
 wrapperPlotAllSizeDistribs <- function(){
+  
   #All SV
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.all_sv.pdf",sep=""),
       height=4,width=6)
@@ -603,46 +628,52 @@ wrapperPlotAllSizeDistribs <- function(){
                   title="Size Distribution (All SV)",
                   legend=T)
   dev.off()
+  
   #Singletons
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.singletons.pdf",sep=""),
       height=4,width=6)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
+                  autosomal=F,biallelic=T,
                   title="Size Distribution (Singletons; AC = 1)",
                   legend=T)
   dev.off()
+  
   #Rare (>1 & <1%)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.rare_sv.pdf",sep=""),
       height=4,width=6)
   plotSizeDistrib(dat=dat[which(dat$AC>1 & dat$AF<rare.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
+                  autosomal=F, biallelic=T,
                   title="Size Distribution (AC > 1, AF < 1%)",
                   legend=T)
   dev.off()
+  
   #Uncommon (≥1% & <10%)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.uncommon_sv.pdf",sep=""),
       height=4,width=6)
   plotSizeDistrib(dat=dat[which(dat$AF>=rare.max.freq & dat$AF<uncommon.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
+                  autosomal=F, biallelic=T,
                   title="Size Distribution (AF 1% - 10%)",
                   legend=T)
   dev.off()
+  
   #Common (≥10% & <50%)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.common_sv.pdf",sep=""),
       height=4,width=6)
   plotSizeDistrib(dat=dat[which(dat$AF>=uncommon.max.freq & dat$AF<common.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
+                  autosomal=F, biallelic=T,
                   title="Size Distribution (AF 10% - 50%)",
                   legend=T)
   dev.off()
+  
   #Major (≥50%%)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.major_sv.pdf",sep=""),
       height=4,width=6)
   plotSizeDistrib(dat=dat[which(dat$AF>=common.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
+                  autosomal=F, biallelic=T,
                   title="Size Distribution (AF > 50%)",
                   legend=T)
   dev.off()
+  
   #Frequency series
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/size_distribution.across_freqs.pdf",sep=""),
       height=4,width=6)
@@ -652,6 +683,7 @@ wrapperPlotAllSizeDistribs <- function(){
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
                         title="Size Distributions by Allele Frequency")
   dev.off()
+  
   #Merged
   pdf(paste(OUTDIR,"/main_plots/VCF_QC.size_distributions.merged.pdf",sep=""),
       height=6,width=10)
@@ -659,27 +691,23 @@ wrapperPlotAllSizeDistribs <- function(){
          heights=c(4,2))
   plotSizeDistrib(dat=dat,svtypes=svtypes,
                   title="Size Distribution (All SV)",
-                  legend=T)
+                  legend=T, lwd.cex=1.5)
   plotSizeDistribSeries(dat=dat,svtypes=svtypes,
                         max.AFs=c(1.1/(2*nsamp),rare.max.freq,uncommon.max.freq,
                                   common.max.freq,major.max.freq),
                         legend.labs=c("Singleton","<1%","1-10%","10-50%",">50%"),
-                        title="Size Distributions by Allele Frequency")
+                        title="Size Distributions by Allele Frequency",
+                        lwd.cex=2)
   plotSizeDistrib(dat=dat[which(dat$AC==1),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
-                  title="AC = 1",lwd.cex=0.75)
+                  autosomal=F, biallelic=T, title="AC = 1", text.cex=0.75)
   plotSizeDistrib(dat=dat[which(dat$AC>1 & dat$AF<rare.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
-                  title="n > 1 & AF < 1%",lwd.cex=0.75)
+                  autosomal=F, biallelic=T, title="n > 1 & AF < 1%", text.cex=0.75)
   plotSizeDistrib(dat=dat[which(dat$AF>=rare.max.freq & dat$AF<uncommon.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
-                  title="1% - 10%",lwd.cex=0.75)
+                  autosomal=F,biallelic=T, title="1% - 10%", text.cex=0.75)
   plotSizeDistrib(dat=dat[which(dat$AF>=uncommon.max.freq & dat$AF<common.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
-                  title="10% - 50%",lwd.cex=0.75)
+                  autosomal=F, biallelic=T, title="10% - 50%", text.cex=0.75)
   plotSizeDistrib(dat=dat[which(dat$AF>=common.max.freq),],svtypes=svtypes,
-                  autosomal=T,biallelic=T,
-                  title="> 50%",lwd.cex=0.75)
+                  autosomal=F, biallelic=T, title="> 50%", text.cex=0.75)
   dev.off()
 }
 
@@ -688,13 +716,13 @@ wrapperPlotAllSizeDistribs <- function(){
 #####Allele frequency plots
 ###########################
 #Plot single AF spectrum
-plotFreqDistrib <- function(dat,svtypes,
-                            autosomal=T,biallelic=T,
-                            title=NULL,lwd.cex=1,legend=F){
+plotFreqDistrib <- function(dat, svtypes,
+                            autosomal=F, biallelic=T,
+                            title=NULL, lwd.cex=1, legend=F){
   #Process freqs & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
-    dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))),]
+    dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal SV only")
   }
   if(biallelic==T){
@@ -704,7 +732,7 @@ plotFreqDistrib <- function(dat,svtypes,
   freqs <- log10(dat$AF)
   if(length(freqs)>0){
     xlims <- range(freqs[which(!is.infinite(freqs))],na.rm=T)
-    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(20*abs(floor(xlims)[1])))
+    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(25*abs(floor(xlims)[1])))
     mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
     
     #Gather freq densities per class
@@ -721,7 +749,7 @@ plotFreqDistrib <- function(dat,svtypes,
     dens$ALL <- as.numeric(all.h$counts/length(all.vals))
     
     #Prepare plot area
-    ylims <- range(c(0,unlist(dens)),na.rm=T)
+    ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
     par(bty="n",mar=c(4.5,3.5,3,0.5))
     plot(x=xlims,y=ylims,type="n",
          xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
@@ -762,7 +790,7 @@ plotFreqDistrib <- function(dat,svtypes,
         if(any(dens[[i]]>0)){
           points(x=mids[which(dens[[i]]>0)],y=dens[[i]][which(dens[[i]]>0)],col=color,pch=19,cex=0.3*lwd.cex)
           points(x=mids[which(dens[[i]]>0)],
-                 y=rollapply(dens[[i]][which(dens[[i]]>0)],3,mean,partial=T),
+                 y=rollapply(dens[[i]][which(dens[[i]]>0)],width=10,mean,partial=T),
                  type="l",lwd=lwd.cex*lwd,col=color)
         }
       }
@@ -792,14 +820,14 @@ plotFreqDistrib <- function(dat,svtypes,
     legend("topright",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=lwd.cex*0.8)
   }
 }
+
 #Plot AF spectrum series by sizes
-plotFreqDistribSeries <- function(dat,svtypes,max.sizes,legend.labs,
-                                  autosomal=T,biallelic=T,
-                                  title=NULL){
+plotFreqDistribSeries <- function(dat, svtypes, max.sizes, legend.labs,
+                                  autosomal=F, biallelic=T, title=NULL){
   #Process freqs & compute range + breaks
   filter.legend <- NULL
   if(autosomal==T){
-    dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))),]
+    dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal SV only")
   }
   if(biallelic==T){
@@ -807,65 +835,73 @@ plotFreqDistribSeries <- function(dat,svtypes,max.sizes,legend.labs,
     filter.legend <- c(filter.legend,"Biallelic SV only")
   }
   freqs <- log10(dat$AF)
-  freqs <- lapply(1:length(max.sizes),function(i){
-    if(i==1){
-      return(freqs[which(dat$length<=max.sizes[i])])
-    }else{
-      return(freqs[which(dat$length>max.sizes[i-1] & dat$length<=max.sizes[i])])
-    }
-  })
-  xlims <- range(freqs[which(!is.infinite(unlist(freqs)))],na.rm=T)
-  breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(20*abs(floor(xlims)[1])))
-  mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
-  
-  #Gather freq densities per class
-  dens <- lapply(freqs,function(vals){
-    h <- hist(vals[which(!is.infinite(vals) & vals>=xlims[1] & vals<=xlims[2])],plot=F,breaks=breaks)
-    h$counts[1] <- h$counts[1]+length(which(!is.infinite(vals) & vals<xlims[1]))
-    h$counts[length(h$counts)] <- h$counts[length(h$counts)]+length(which(!is.infinite(vals) & vals>xlims[2]))
-    return(h$counts/length(vals))
-  })
-  
-  #Prepare plot area
-  ylims <- range(c(0,unlist(dens)),na.rm=T)
-  par(bty="n",mar=c(4.5,3.5,3,0.5))
-  plot(x=xlims,y=ylims,type="n",
-       xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
-  
-  #Add vertical gridlines
-  logscale.all <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){(1:9)*10^i})))
-  logscale.minor <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){c(5,10)*10^i})))
-  logscale.minor.labs <- as.character(paste(100*round(10^logscale.minor,10),"%",sep=""))
-  logscale.major <- log10(as.numeric(10^(min(floor(xlims)):0)))
-  abline(v=logscale.all,col="gray97")
-  abline(v=logscale.minor,col="gray92")
-  abline(v=logscale.major,col="gray85")
-  
-  #Add axes & title
-  axis(1,at=logscale.all,tck=-0.015,col="gray50",labels=NA)
-  axis(1,at=logscale.minor,tck=-0.0225,col="gray20",labels=NA)
-  axis(1,at=logscale.major,tck=-0.03,labels=NA)
-  axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
-       labels=logscale.minor.labs)
-  mtext(1,text="Allele Frequency",line=3)
-  axis(2,at=axTicks(2),tck=-0.025,labels=NA)
-  axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
-       labels=paste(round(100*axTicks(2),1),"%",sep=""))
-  mtext(2,text="Fraction of SV",line=2.2)
-  mtext(3,line=1.5,text=title,font=2)
-  
-  #Add points & rolling mean lines per size tranche
-  col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(freqs))
-  sapply(1:length(dens),function(i){
-    if(all(!is.nan(dens[[i]]))){
-      if(any(dens[[i]]>0)){
-        points(x=mids[which(dens[[i]]>0)],y=dens[[i]][which(dens[[i]]>0)],col=col.pal[i],pch=19,cex=0.3)
-        points(x=mids[which(dens[[i]]>0)],
-               y=rollapply(dens[[i]][which(dens[[i]]>0)],3,mean,partial=T),
-               type="l",lwd=2,col=col.pal[i])
+  if(length(freqs) > 0){
+    freqs <- lapply(1:length(max.sizes),function(i){
+      if(i==1){
+        return(freqs[which(dat$length<=max.sizes[i])])
+      }else{
+        return(freqs[which(dat$length>max.sizes[i-1] & dat$length<=max.sizes[i])])
       }
-    }
-  })
+    })
+    xlims <- range(freqs[which(!is.infinite(unlist(freqs)))],na.rm=T)
+    breaks <- seq(xlims[1],xlims[2],by=(xlims[2]-xlims[1])/(20*abs(floor(xlims)[1])))
+    mids <- (breaks[1:(length(breaks)-1)]+breaks[2:length(breaks)])/2
+    
+    #Gather freq densities per class
+    dens <- lapply(freqs,function(vals){
+      h <- hist(vals[which(!is.infinite(vals) & vals>=xlims[1] & vals<=xlims[2])],plot=F,breaks=breaks)
+      h$counts[1] <- h$counts[1]+length(which(!is.infinite(vals) & vals<xlims[1]))
+      h$counts[length(h$counts)] <- h$counts[length(h$counts)]+length(which(!is.infinite(vals) & vals>xlims[2]))
+      return(h$counts/length(vals))
+    })
+    
+    #Prepare plot area
+    ylims <- c(0, quantile(unlist(dens), probs=0.99, na.rm=T))
+    par(bty="n",mar=c(4.5,3.5,3,0.5))
+    plot(x=xlims,y=ylims,type="n",
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+    
+    #Add vertical gridlines
+    logscale.all <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){(1:9)*10^i})))
+    logscale.minor <- log10(as.numeric(sapply(min(floor(xlims)):0,function(i){c(5,10)*10^i})))
+    logscale.minor.labs <- as.character(paste(100*round(10^logscale.minor,10),"%",sep=""))
+    logscale.major <- log10(as.numeric(10^(min(floor(xlims)):0)))
+    abline(v=logscale.all,col="gray97")
+    abline(v=logscale.minor,col="gray92")
+    abline(v=logscale.major,col="gray85")
+    
+    #Add axes & title
+    axis(1,at=logscale.all,tck=-0.015,col="gray50",labels=NA)
+    axis(1,at=logscale.minor,tck=-0.0225,col="gray20",labels=NA)
+    axis(1,at=logscale.major,tck=-0.03,labels=NA)
+    axis(1,at=logscale.minor,tick=F,cex.axis=0.8,line=-0.4,las=2,
+         labels=logscale.minor.labs)
+    mtext(1,text="Allele Frequency",line=3)
+    axis(2,at=axTicks(2),tck=-0.025,labels=NA)
+    axis(2,at=axTicks(2),tick=F,line=-0.4,cex.axis=0.8,las=2,
+         labels=paste(round(100*axTicks(2),1),"%",sep=""))
+    mtext(2,text="Fraction of SV",line=2.2)
+    mtext(3,line=1.5,text=title,font=2)
+    
+    #Add points & rolling mean lines per size tranche
+    col.pal <- colorRampPalette(c("#440154","#365C8C","#25A584","#FDE725"))(length(freqs))
+    sapply(1:length(dens),function(i){
+      if(all(!is.nan(dens[[i]]))){
+        if(any(dens[[i]]>0)){
+          points(x=mids[which(dens[[i]]>0)],y=dens[[i]][which(dens[[i]]>0)],col=col.pal[i],pch=19,cex=0.3)
+          points(x=mids[which(dens[[i]]>0)],
+                 y=rollapply(dens[[i]][which(dens[[i]]>0)],3,mean,partial=T),
+                 type="l",lwd=2,col=col.pal[i])
+        }
+      }
+    })
+  }else{
+    par(bty="n",mar=c(4.5,3.5,3,0.5))
+    plot(x=c(0,1),y=c(0,1),type="n",
+         xaxt="n",yaxt="n",xlab="",ylab="",yaxs="i")
+    text(x=0.5,y=0.5,labels="No Data")
+    mtext(3,line=1.5,text=title,font=2,cex=lwd.cex)
+  }
   
   #Add filter labels
   if(!is.null(filter.legend)){
@@ -876,6 +912,7 @@ plotFreqDistribSeries <- function(dat,svtypes,max.sizes,legend.labs,
   legend("right",bg="white",bty="n",lwd=3,col=col.pal,cex=0.7,
          legend=gsub("\n","",legend.labs,fixed=T))
 }
+
 #Wrapper to plot all AF distributions
 wrapperPlotAllFreqDistribs <- function(){
   #All SV
@@ -885,6 +922,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (All SV)",
                   legend=T)
   dev.off()
+  
   #Tiny (<100bp)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.tiny_sv.pdf",sep=""),
       height=4,width=4)
@@ -892,6 +930,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (< 100bp)",
                   legend=T)
   dev.off()
+  
   #Small (>100bp & <500bp)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.small_sv.pdf",sep=""),
       height=4,width=4)
@@ -899,6 +938,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (100bp - 500bp)",
                   legend=T)
   dev.off()
+  
   #Medium (>500bp & <2.5kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.medium_sv.pdf",sep=""),
       height=4,width=4)
@@ -906,6 +946,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (500bp - 2.5kb)",
                   legend=T)
   dev.off()
+  
   #Med-Large (>2.5kb & <10kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.medlarge_sv.pdf",sep=""),
       height=4,width=4)
@@ -913,6 +954,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (2.5kb - 10kb)",
                   legend=T)
   dev.off()
+  
   #Large (>10kb & <50kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.large_sv.pdf",sep=""),
       height=4,width=4)
@@ -920,6 +962,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (10kb - 50kb)",
                   legend=T)
   dev.off()
+  
   #Huge (>50kb)
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.huge_sv.pdf",sep=""),
       height=4,width=4)
@@ -927,6 +970,7 @@ wrapperPlotAllFreqDistribs <- function(){
                   title="AF Distribution (> 50kb)",
                   legend=T)
   dev.off()
+  
   #Size series
   pdf(paste(OUTDIR,"/supporting_plots/vcf_summary_plots/freq_distribution.across_sizes.pdf",sep=""),
       height=4,width=4)
@@ -937,6 +981,7 @@ wrapperPlotAllFreqDistribs <- function(){
                                       "2.5-10kb","10kb-50kb",">50kb"),
                         title="AF Distributions by SV Size")
   dev.off()
+  
   #Merged
   pdf(paste(OUTDIR,"/main_plots/VCF_QC.freq_distributions.merged.pdf",sep=""),
       height=6,width=10)
@@ -975,7 +1020,7 @@ wrapperPlotAllFreqDistribs <- function(){
 #Plot single HW ternary comparison
 plotHWSingle <- function(dat,svtypes,title=NULL,full.legend=T,lab.cex=1){
   #Restrict data to biallelic, autosomal sites
-  HW.dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep="")) & !is.na(dat$AN)),]
+  HW.dat <- dat[which(dat$chr %in% sex.chroms & !is.na(dat$AN)),]
   
   #Only run if there's data
   if(nrow(HW.dat)>0){
@@ -1071,7 +1116,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
   #Process freqs
   filter.legend <- NULL
   if(autosomal==T){
-    dat <- dat[which(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))),]
+    dat <- dat[which(dat$chr %in% sex.chroms),]
     filter.legend <- c(filter.legend,"Autosomal SV only")
   }
   if(biallelic==T){
@@ -1120,6 +1165,7 @@ plotAlleleCarrierCorrelation <- function(dat,autosomal=T,biallelic=T,
     legend("topleft",bg=NA,bty="n",pch=NA,legend=filter.legend,cex=0.8)
   }
 }
+
 #Wrapper to plot all HW distributions
 wrapperPlotAllHWDistribs <- function(){
   #All SV
@@ -1199,10 +1245,10 @@ wrapperPlotAllHWDistribs <- function(){
 ###RSCRIPT FUNCTIONALITY
 ########################
 ###Load libraries as needed
-require(optparse)
-require(RColorBrewer)
-require(zoo)
-require(HardyWeinberg)
+require(optparse, quietly=T)
+require(RColorBrewer, quietly=T)
+require(zoo, quietly=T)
+require(HardyWeinberg, quietly=T)
 
 ###List of command-line options
 option_list <- list(
@@ -1230,12 +1276,6 @@ INFILE <- args$args[1]
 OUTDIR <- args$args[2]
 nsamp <- opts$nsamp
 svtypes.file <- opts$svtypes
-
-#Dev parameters
-# INFILE <- "~/scratch/gnomAD_v2_SV_MASTER_RD_VCF.VCF_sites.stats.bed.gz"
-# OUTDIR <- "~/scratch/VCF_plots_test/"
-# nsamp <- 14245
-# svtypes.file <- "~/Desktop/Collins/Talkowski/code/sv-pipeline/ref/vcf_qc_refs/SV_colors.txt"
 
 ###Prepares I/O files
 #Read & clean data
@@ -1269,10 +1309,13 @@ if(!is.null(svtypes.file)){
 ###Plotting block
 #SV counts
 wrapperPlotAllCountBars()
+
 #SV sizes
 wrapperPlotAllSizeDistribs()
+
 #SV frequencies
 wrapperPlotAllFreqDistribs()
+
 #Genotype frequencies
 wrapperPlotAllHWDistribs()
 
