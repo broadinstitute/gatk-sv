@@ -1,6 +1,5 @@
 FROM python:3.7-slim
 RUN apt-get update && apt-get install -y \
-    # bash is required by container_linux.go
     wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* && \
