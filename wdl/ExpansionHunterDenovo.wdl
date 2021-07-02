@@ -17,9 +17,11 @@ struct FilenamePostfixes {
   Int profile_len
 }
 
-workflow ComputeSTRProfiles {
+workflow EHdnSTRAnalysis {
 
   input {
+    String analysis_type
+    String str_comparison_type
     Array[File] case_reads_filenames
     Array[File] case_indexes_filenames
     Array[File] control_reads_filenames
@@ -30,9 +32,12 @@ workflow ComputeSTRProfiles {
     String ehdn_docker
     RuntimeAttr? runtime_attr_str_profile
     RuntimeAttr? runtime_attr_merge
+    RuntimeAttr? runtime_attr_analysis
   }
 
   parameter_meta {
+    analysis_type: "possible values: {casecontrol, outlier, both}"
+    str_comparison_type: "possible values: {locus, motif, both}"
     case_reads_filenames: ""
     control_reads_filenames: ""
     manifest_filename: ""
@@ -58,6 +63,11 @@ workflow ComputeSTRProfiles {
     # EHdn generated output.
     # e.g., extract `sample1` from `sample1.str_profile.json`.
     profile_len: 12
+  }
+
+  if (analysis_type != "casecontrol" && analysis_type != "outlier" && analysis_type != "both")
+  {
+    # TODO: Throw an exception.
   }
 
   String locus_filename_postfix = ".locus.tsv"
@@ -87,6 +97,18 @@ workflow ComputeSTRProfiles {
   RuntimeAttr runtime_attr_merge = select_first([
     runtime_attr_merge,
     runtime_attr_merge_default])
+
+  RuntimeAttr runtime_attr_analysis_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr_analysis = select_first([
+    runtime_attr_analysis,
+    runtime_attr_analysis_default])
 
   scatter(pair in zip(case_reads_filenames, case_indexes_filenames)) {
     String case_sample_filename = basename(pair.left, ".bam")
@@ -130,6 +152,16 @@ workflow ComputeSTRProfiles {
       postfixes = postfixes
   }
 
+  call STRAnalyze {
+    input:
+      analysis_type = analysis_type,
+      str_comparison_type = str_comparison_type,
+      manifest = Merge.manifest,
+      multisample_profile = Merge.multisample_profile,
+      ehdn_docker = ehdn_docker,
+      runtime_attr = runtime_attr_analysis
+  }
+
   output {
     Array[File] cases_locus = CasesProfiles.locus
     Array[File] cases_motif = CasesProfiles.motif
@@ -138,6 +170,7 @@ workflow ComputeSTRProfiles {
     Array[File] controls_motif = ControlsProfiles.motif
     Array[File] controls_str_profile = ControlsProfiles.str_profile
     File multisample_profile = Merge.multisample_profile
+    Array[File] analysis_results = STRAnalyze.results
   }
 }
 
@@ -193,6 +226,7 @@ task Merge {
   }
 
   output {
+    File manifest = "manifest.tsv"
     File multisample_profile = "${output_prefix}${postfixes.merged_profile}"
   }
 
@@ -253,3 +287,61 @@ task Merge {
     maxRetries: runtime_attr.max_retries
   }
 }
+
+task STRAnalyze {
+  input {
+    String analysis_type
+    String str_comparison_type
+    File manifest
+    File multisample_profile
+    String ehdn_docker
+    RuntimeAttr runtime_attr
+  }
+
+  output {
+    Array[File] results = glob("result_*.tsv")
+  }
+
+  command <<<
+    analysis_types=()
+    comparison_types=()
+    if [ ~{analysis_type} == "both" ]; then
+      analysis_types+=("casecontrol")
+      analysis_types+=("outlier")
+    else
+      analysis_types+=("~{analysis_type}")
+    fi
+
+    if [ ~{analysis_type} == "both" ]; then
+      comparison_types+=("locus")
+      comparison_types+=("motif")
+    else
+      comparison_types+=("~{analysis_type}")
+    fi
+
+    for analysis_type in "${analysis_types[@]}"; do
+      for comparison_type in "${comparison_types[@]}"; do
+        python ${SCRIPTS_DIR}/${analysis_type}.py ${comparison_type} \
+          --manifest ~{manifest} \
+          --multisample-profile ~{multisample_profile} \
+          --output result_${analysis_type}_${comparison_type}.tsv
+      done
+    done
+
+    for script in "${scripts[@]}"
+    do
+      echo "$script"
+    done
+  >>>
+
+  runtime {
+    docker: ehdn_docker
+    cpu: runtime_attr.cpu_cores
+    memory: runtime_attr.mem_gb + " GiB"
+    disks: "local-disk " + runtime_attr.disk_gb + " HDD"
+    bootDiskSizeGb: runtime_attr.boot_disk_gb
+    preemptible: runtime_attr.preemptible_tries
+    maxRetries: runtime_attr.max_retries
+  }
+}
+
