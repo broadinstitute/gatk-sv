@@ -3,7 +3,7 @@
 ##  This WDL implements workflows for EHdn's two execution modes:
 ##  - case-control analysis (read EHdn docs on this:
 ##    https://github.com/Illumina/ExpansionHunterDenovo/blob/master/documentation/03_Case_control_quickstart.md);
-##  - outliner analysis (read EHdn docs on this:
+##  - outlier analysis (read EHdn docs on this:
 ##    https://github.com/Illumina/ExpansionHunterDenovo/blob/master/documentation/04_Outlier_quickstart.md).
 
 version 1.0
