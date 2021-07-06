@@ -1,9 +1,10 @@
-## ExpansionHunter denovo (EHdn)
+##  ExpansionHunter denovo (EHdn)
 ##
-## This WDL implements workflows for
-## EHdn's two execution modes:
-## (i) case-control analysis;
-## (ii) outliner analysis.
+##  This WDL implements workflows for EHdn's two execution modes:
+##  - case-control analysis (read EHdn docs on this:
+##    https://github.com/Illumina/ExpansionHunterDenovo/blob/master/documentation/03_Case_control_quickstart.md);
+##  - outliner analysis (read EHdn docs on this:
+##    https://github.com/Illumina/ExpansionHunterDenovo/blob/master/documentation/04_Outlier_quickstart.md).
 
 version 1.0
 
@@ -36,10 +37,12 @@ workflow EHdnSTRAnalysis {
   }
 
   parameter_meta {
-    analysis_type: "possible values: {casecontrol, outlier, both}"
-    str_comparison_type: "possible values: {locus, motif, both}"
-    case_reads_filenames: ""
-    control_reads_filenames: ""
+    analysis_type: "Sets the analysis type; accepted values are: `casecontrol`, `outlier`, and `both`."
+    str_comparison_type: "Set the STR comparison type; accepted values are: `locus`, `motif`, and `both`."
+    case_reads_filenames: "A list of BAM files to be used as `case` samples."
+    case_indexes_filenames: "A list of index files (.bam.bai) for the `case` samples. Files should be in the same order as the case samples"
+    control_reads_filenames: "A list of BAM files to be used as `control` samples."
+    control_indexes_filenames: "A list of index files (.bam.bai) for `control` samples. Files should be in the same order as the control samples (i.e., the `control_reads_filenames` list)."
     manifest_filename: ""
     reference_filename: ""
     min_anchor_mapq: ""
