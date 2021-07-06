@@ -1,0 +1,44 @@
+name: Build Docker Images
+
+on: 
+  push:
+    branches:
+      - master
+    paths:
+      - 'src/**'
+      - 'dockerfiles/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'src/**'
+      - 'dockerfiles/**'
+
+jobs:
+  test_build:
+    runs-on: ubuntu-20.04
+    name: Build GATK-SV Pipeline Docker Images
+    env:
+      PR_NUM: ${{ github.event.number }}
+      COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+    strategy:
+      matrix:
+        python-version: ['3.8']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install termcolor
+
+      - name: Run build_docker.py
+        run: |
+          cd ./scripts/docker/
+          python build_docker.py --targets all --image-tag ${PR_NUM}-${COMMIT_SHA::8}
