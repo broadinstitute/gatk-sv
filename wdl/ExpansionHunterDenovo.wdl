@@ -197,6 +197,7 @@ task ComputeSTRProfile {
   }
 
   command <<<
+    set -euxo pipefail
 
     ExpansionHunterDenovo profile \
     --reads ~{reads_filename} \
@@ -252,6 +253,8 @@ task Merge {
   # - Call EHdn's `merge` method using the input and
   #   the generaged manifest file.
   command <<<
+    set -euxo pipefail
+
     get_sample_name()
     {
       filename=$(basename -- "$1")
@@ -306,6 +309,8 @@ task STRAnalyze {
   }
 
   command <<<
+    set -euxo pipefail
+
     analysis_types=()
     comparison_types=()
     if [ ~{analysis_type} == "both" ]; then
