@@ -120,6 +120,7 @@ workflow Module04b {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ids_from_vcf
     }
+    File depth_vcf_indexes_ = depth_vcfs[i] + ".tbi"
   }
 
   call GetAndCountCohortSampleList {
@@ -233,6 +234,7 @@ workflow Module04b {
   }
   output {
     Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
+    Array[File] regenotyped_depth_vcf_indexes = select_first([ConcatRegenotypedVcfs.genotyped_vcf_idx, depth_vcf_indexes_])
     File number_regenotyped_file = MergeList.num_regeno_file
     File number_regenotyped_filtered_file = select_first([CombineReassess.num_regeno_filtered_file, MergeList.num_regeno_file])
   }
