@@ -77,42 +77,6 @@ workflow EHdnSTRAnalysis {
   String motif_filename_postfix = ".motif.tsv"
   String profile_filename_postfix = ".str_profile.json"
 
-  RuntimeAttr runtime_attr_str_profile_default = object {
-    cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr_str_profile = select_first([
-    runtime_attr_str_profile,
-    runtime_attr_str_profile_default])
-
-  RuntimeAttr runtime_attr_merge_default = object {
-    cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr_merge = select_first([
-    runtime_attr_merge,
-    runtime_attr_merge_default])
-
-  RuntimeAttr runtime_attr_analysis_default = object {
-    cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr_analysis = select_first([
-    runtime_attr_analysis,
-    runtime_attr_analysis_default])
-
   scatter(pair in zip(case_reads_filenames, case_indexes_filenames)) {
     String case_sample_filename = basename(pair.left, ".bam")
     call ComputeSTRProfile as CasesProfiles {
@@ -124,7 +88,7 @@ workflow EHdnSTRAnalysis {
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
-        runtime_attr = runtime_attr_str_profile,
+        runtime_attr_override = runtime_attr_str_profile,
         postfixes = postfixes
     }
   }
@@ -140,7 +104,7 @@ workflow EHdnSTRAnalysis {
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
-        runtime_attr = runtime_attr_str_profile,
+        runtime_attr_override = runtime_attr_str_profile,
         postfixes = postfixes
     }
   }
@@ -151,7 +115,7 @@ workflow EHdnSTRAnalysis {
       controls = ControlsProfiles.str_profile,
       reference_filename = reference_filename,
       ehdn_docker = ehdn_docker,
-      runtime_attr = runtime_attr_merge,
+      runtime_attr_override = runtime_attr_merge,
       postfixes = postfixes
   }
 
@@ -162,7 +126,7 @@ workflow EHdnSTRAnalysis {
       manifest = Merge.manifest,
       multisample_profile = Merge.multisample_profile,
       ehdn_docker = ehdn_docker,
-      runtime_attr = runtime_attr_analysis
+      runtime_attr_override = runtime_attr_analysis
   }
 
   output {
@@ -186,7 +150,7 @@ task ComputeSTRProfile {
     Int min_anchor_mapq
     Int max_irr_mapq
     String ehdn_docker
-    RuntimeAttr runtime_attr
+    RuntimeAttr? runtime_attr_override
     FilenamePostfixes postfixes
   }
 
@@ -208,6 +172,18 @@ task ComputeSTRProfile {
 
   >>>
 
+  RuntimeAttr runtime_attr_str_profile_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([
+    runtime_attr_override,
+    runtime_attr_str_profile_default])
+
   runtime {
     docker: ehdn_docker
     cpu: runtime_attr.cpu_cores
@@ -225,7 +201,7 @@ task Merge {
     Array[File] controls
     File reference_filename
     String ehdn_docker
-    RuntimeAttr runtime_attr
+    RuntimeAttr? runtime_attr_override
     FilenamePostfixes postfixes
   }
 
@@ -283,6 +259,18 @@ task Merge {
       --output-prefix ~{output_prefix}
   >>>
 
+  RuntimeAttr runtime_attr_merge_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([
+    runtime_attr_override,
+    runtime_attr_merge_default])
+
   runtime {
     docker: ehdn_docker
     cpu: runtime_attr.cpu_cores
@@ -301,7 +289,7 @@ task STRAnalyze {
     File manifest
     File multisample_profile
     String ehdn_docker
-    RuntimeAttr runtime_attr
+    RuntimeAttr? runtime_attr_override
   }
 
   output {
@@ -342,6 +330,18 @@ task STRAnalyze {
     done
   >>>
 
+  RuntimeAttr runtime_attr_analysis_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([
+    runtime_attr_override,
+    runtime_attr_analysis_default])
+
   runtime {
     docker: ehdn_docker
     cpu: runtime_attr.cpu_cores
@@ -352,4 +352,3 @@ task STRAnalyze {
     maxRetries: runtime_attr.max_retries
   }
 }
-
