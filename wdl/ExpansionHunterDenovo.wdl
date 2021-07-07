@@ -27,7 +27,8 @@ workflow EHdnSTRAnalysis {
     Array[File] case_indexes_filenames
     Array[File] control_reads_filenames
     Array[File] control_indexes_filenames
-    File reference_filename
+    File reference_bam_or_cram
+    File? reference_bam_or_cram_index
     Int min_anchor_mapq
     Int max_irr_mapq
     String ehdn_docker
@@ -68,6 +69,10 @@ workflow EHdnSTRAnalysis {
     profile_len: 12
   }
 
+  Boolean is_bam_ = basename(reference_bam_or_cram, ".bam") + ".bam" == basename(reference_bam_or_cram)
+  String index_ext_ = if is_bam_ then ".bai" else ".crai"
+  File reference_bam_or_cram_index = if defined(reference_bam_or_cram_index) then select_first([reference_bam_or_cram_index]) else reference_bam_or_cram + index_ext_
+
   if (analysis_type != "casecontrol" && analysis_type != "outlier" && analysis_type != "both")
   {
     # TODO: Throw an exception.
@@ -84,7 +89,8 @@ workflow EHdnSTRAnalysis {
         filename = case_sample_filename,
         reads_filename = pair.left,
         index_filename = pair.right,
-        reference_filename = reference_filename,
+        reference_bam_or_cram = reference_bam_or_cram,
+        reference_bam_or_cram_index = reference_bam_or_cram_index,
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
@@ -100,7 +106,8 @@ workflow EHdnSTRAnalysis {
         filename = control_sample_filename,
         reads_filename = pair.left,
         index_filename = pair.right,
-        reference_filename = reference_filename,
+        reference_bam_or_cram = reference_bam_or_cram,
+        reference_bam_or_cram_index = reference_bam_or_cram_index,
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
@@ -113,7 +120,8 @@ workflow EHdnSTRAnalysis {
     input:
       cases = CasesProfiles.str_profile,
       controls = ControlsProfiles.str_profile,
-      reference_filename = reference_filename,
+      reference_bam_or_cram = reference_bam_or_cram,
+      reference_bam_or_cram_index = reference_bam_or_cram_index,
       ehdn_docker = ehdn_docker,
       runtime_attr_override = runtime_attr_merge,
       postfixes = postfixes
@@ -146,7 +154,8 @@ task ComputeSTRProfile {
     String filename
     File reads_filename
     File index_filename
-    File reference_filename
+    File reference_bam_or_cram
+    File? reference_bam_or_cram_index
     Int min_anchor_mapq
     Int max_irr_mapq
     String ehdn_docker
@@ -165,7 +174,7 @@ task ComputeSTRProfile {
 
     ExpansionHunterDenovo profile \
     --reads ~{reads_filename} \
-    --reference ~{reference_filename} \
+    --reference ~{reference_bam_or_cram} \
     --output-prefix ~{filename} \
     --min-anchor-mapq ~{min_anchor_mapq} \
     --max-irr-mapq ~{max_irr_mapq}
@@ -199,7 +208,8 @@ task Merge {
   input {
     Array[File] cases
     Array[File] controls
-    File reference_filename
+    File reference_bam_or_cram
+    File? reference_bam_or_cram_index
     String ehdn_docker
     RuntimeAttr? runtime_attr_override
     FilenamePostfixes postfixes
@@ -254,7 +264,7 @@ task Merge {
     cat $manifest_filename
 
     ExpansionHunterDenovo merge \
-      --reference ~{reference_filename} \
+      --reference ~{reference_bam_or_cram} \
       --manifest $manifest_filename \
       --output-prefix ~{output_prefix}
   >>>
