@@ -126,7 +126,5 @@ while read prefix bed; do
   tabix -f ${OUTDIR}/data/${prefix}.overlaps.bed.gz
 done < comparator_beds.tsv
 
-
 ###CLEAN UP
 rm -rf ${QCTMP}
-
