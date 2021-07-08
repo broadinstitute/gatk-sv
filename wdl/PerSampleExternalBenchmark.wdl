@@ -12,6 +12,7 @@ workflow PerSampleExternalBenchmark {
     File per_sample_tarball
     File comparison_tarball
     String prefix
+    Array[String] contigs
     String comparison_set_name
     Int samples_per_shard
     Int? random_seed
@@ -47,6 +48,7 @@ workflow PerSampleExternalBenchmark {
         per_sample_tarball=per_sample_tarball,
         comparison_tarball=comparison_tarball,
         prefix=prefix,
+        contigs=contigs,
         comparison_set_name=comparison_set_name,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_benchmark_samples
@@ -76,6 +78,7 @@ task BenchmarkSamples {
     File per_sample_tarball
     File comparison_tarball
     String prefix
+    Array[String] contigs
     String comparison_set_name
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -117,6 +120,7 @@ task BenchmarkSamples {
       -p ~{comparison_set_name} \
       ~{vcf_stats} \
       ~{samples_list} \
+      ~{write_lines(contigs)} \
       ~{per_sample_tarball} \
       ~{comparison_tarball} \
       ~{output_folder}/
