@@ -8,9 +8,8 @@ import java.util.zip.GZIPOutputStream;
 /** Read a VCF, and try to stitch together adjacent copy-number variations.
  * Eligible Records (which we call "stitchable") must meet certain criteria as specified by the
  * isStitchable method of the StitchableIterator.
- * If two stitchables overlap in a weird way that seems wrong to me (see line 54), and all their
- * samples have identical genotypes, we can replace the first one by adding on the interval covered
- * by the second one.
+ * If two stitchables overlap appropriately, and all their samples have identical genotypes, we can
+ * replace the first one by adding on the interval covered by the second one.
  */
 public class StitchFragmentedCNVs {
     private static final VCFParser.ByteSequence END = new VCFParser.ByteSequence("END");
@@ -20,6 +19,11 @@ public class StitchFragmentedCNVs {
     private static final String GZ = ".gz";
 
     public static void main( final String[] args ) {
+        if ( args.length != 2 ) {
+            System.err.println("Usage: java StitchFragmentedCNVs input.vcf output.vcf");
+            System.err.println("Combines adjacent CNVs with matching genotypes into a larger event.");
+            return;
+        }
         try ( final OutputStream os = createOutputStream(args[1]) ) {
             try ( final VCFParser vcfParser = new VCFParser(args[0]) ) {
                 while ( vcfParser.hasMetadata() ) {
@@ -46,22 +50,26 @@ public class StitchFragmentedCNVs {
         int pad = Math.min(MAX_PAD, (int)(PAD_FACTOR * (endPos - startPos)));
         final int padStartPos = Math.max(1, startPos - pad);
         int padEndPos = endPos + pad;
+        int minStartPos2 = endPos - pad; // smaller positions would cause the overlap to be too great
 
         // sItr.hasNext returns false at EOF, or when the next record is too far away to overlap the subject
         while ( sItr.hasNext() ) {
             final VCFParser.Record record = sItr.next();
             final int startPos2 = record.getPosition();
+            if ( startPos2 < minStartPos2 || !stitchable.getAlt().equals(record.getAlt()) ) {
+                continue;
+            }
             final int endPos2 = record.getInfoField(END).asInt(); // can't be null -- checked in isStitchable
             final int pad2 = Math.min(MAX_PAD, (int)(PAD_FACTOR * (endPos2 - startPos2)));
             final int padStartPos2 = Math.max(1, startPos2 - pad2);
             final int padEndPos2 = endPos2 + pad2;
-            final int overlap = endPos - startPos2; // this seems clearly wrong. need clarification.
+            final int overlap = endPos - startPos2;
             if ( overlap < pad && overlap < pad2 &&
                     Math.max(padStartPos, padStartPos2) < Math.min(padEndPos, padEndPos2) &&
                     genotypesMatch(stitchable, record) ) {
-                endPos = Math.max(endPos, endPos2);
-                pad = Math.min(MAX_PAD, (int)(PAD_FACTOR * (endPos - startPos)));
-                padEndPos = endPos + pad;
+                endPos = endPos2;
+                pad = pad2;
+                padEndPos = padEndPos2;
                 sItr.remove();
             }
         }
@@ -69,11 +77,12 @@ public class StitchFragmentedCNVs {
         if ( endPos != originalEndPos ) {
             stitchable.setInfoField(endField, new VCFParser.ByteSequence(Integer.toString(endPos)));
             final VCFParser.ByteSequence svLenField = stitchable.getInfoField(SVLEN);
-            if ( svLenField != null ) {
-                final VCFParser.ByteSequence svLenValue =
-                        new VCFParser.ByteSequence(Integer.toString(endPos - startPos));
-                stitchable.setInfoField(svLenField, svLenValue);
+            if ( svLenField == null ) {
+                throw new VCFParser.MalformedVCFException(stitchable.getID().toString() + " has no SVLEN field");
             }
+            final VCFParser.ByteSequence svLenValue =
+                    new VCFParser.ByteSequence(Integer.toString(endPos - startPos + 1));
+            stitchable.setInfoField(svLenField, svLenValue);
         }
     }
 
