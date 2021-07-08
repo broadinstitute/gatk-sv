@@ -73,15 +73,6 @@ workflow EHdnSTRAnalysis {
   String index_ext_ = if is_bam_ then ".bai" else ".crai"
   File reference_bam_or_cram_index = if defined(reference_bam_or_cram_index) then select_first([reference_bam_or_cram_index]) else reference_bam_or_cram + index_ext_
 
-  if (analysis_type != "casecontrol" && analysis_type != "outlier" && analysis_type != "both")
-  {
-    # TODO: Throw an exception.
-  }
-
-  String locus_filename_postfix = ".locus.tsv"
-  String motif_filename_postfix = ".motif.tsv"
-  String profile_filename_postfix = ".str_profile.json"
-
   scatter(pair in zip(case_reads_filenames, case_indexes_filenames)) {
     String case_sample_filename = basename(pair.left, ".bam")
     call ComputeSTRProfile as CasesProfiles {
