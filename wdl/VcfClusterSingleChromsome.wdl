@@ -47,6 +47,7 @@ workflow VcfClusterSingleChrom {
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
     RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_concat_sharded_cluster
   }
 
   scatter (i in range(length(vcfs))) {
@@ -123,7 +124,7 @@ workflow VcfClusterSingleChrom {
       runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
       runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
       runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
-      runtime_override_concat_shards=runtime_override_concat_shards
+      runtime_override_concat_shards=runtime_override_concat_sharded_cluster
   }
 
   String filtered_bothside_pass_name = prefix + "." + contig + ".pass.VIDs.list"

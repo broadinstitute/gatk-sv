@@ -35,6 +35,7 @@ workflow ClusterSingleChrom {
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
     RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_concat_sharded_cluster
   }
 
   String contig_prefix = prefix + "." + contig
@@ -73,18 +74,28 @@ workflow ClusterSingleChrom {
         runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
         runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
         runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
-        runtime_override_concat_shards=runtime_override_concat_shards
+        runtime_override_concat_shards=runtime_override_concat_shards,
+        runtime_override_concat_shards=runtime_override_concat_sharded_cluster
+    }
+    call RenameVariants {
+      input:
+        vcf=ShardedCluster.clustered_vcf,
+        prefix=prefix,
+        contig=contig,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_concat_sv_types
     }
   }
 
   #Merge svtypes
-  call ConcatAndRenameVcfs as ConcatSvTypes {
+  call MiniTasks.ConcatVcfs as ConcatSvTypes {
     input:
-      vcfs=ShardedCluster.clustered_vcf,
-      prefix=prefix,
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_concat_sv_types
+      vcfs=RenameVariants.out,
+      vcfs_idx=RenameVariants.out_index,
+      merge_sort=true,
+      outfile_prefix="~{prefix}.~{contig}.precluster_concat",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_shards
   }
 
   #Output clustered vcf
@@ -94,11 +105,9 @@ workflow ClusterSingleChrom {
   }
 }
 
-
-#Merge multiple vcfs
-task ConcatAndRenameVcfs {
+task RenameVariants {
   input {
-    Array[File] vcfs
+    File vcf
     String prefix
     String contig
 
@@ -111,10 +120,10 @@ task ConcatAndRenameVcfs {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(vcfs, "GiB")
+  Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
-    mem_gb: 2.0 + 5.0 * input_size,
-    disk_gb: ceil(10.0 + 40.0 * input_size),
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + 2.0 * input_size),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -132,12 +141,7 @@ task ConcatAndRenameVcfs {
   }
 
   command <<<
-    set -eu -o pipefail
-    
-    vcf-concat -f ~{write_lines(vcfs)} \
-      | vcf-sort -c \
-      | bgzip -c \
-      > ~{raw_vcf_name}
+    set -euo pipefail
 
     /opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
       --chrom ~{contig} \
@@ -150,7 +154,7 @@ task ConcatAndRenameVcfs {
   >>>
 
   output {
-    File concat_vcf = vcf_name
-    File concat_vcf_idx = vcf_name + ".tbi"
+    File out = vcf_name
+    File out_index = vcf_name + ".tbi"
   }
 }

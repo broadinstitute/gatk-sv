@@ -99,6 +99,7 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
     RuntimeAttr? runtime_override_cluster_merge
     RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_concat_sharded_cluster
 
     # overrides for ResolveComplexContig
     RuntimeAttr? runtime_override_get_se_cutoff
@@ -202,7 +203,8 @@ workflow Module0506 {
       runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
       runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
       runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
-      runtime_override_concat_shards=runtime_override_concat_shards
+      runtime_override_concat_shards=runtime_override_concat_shards,
+      runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster
   }
 
   call ComplexResolve.Module0506ComplexResolve {
