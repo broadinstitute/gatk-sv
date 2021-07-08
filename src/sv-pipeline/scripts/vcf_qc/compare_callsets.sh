@@ -8,13 +8,14 @@ set -e
 usage(){
 cat <<EOF
 
-usage: compare_callsets.sh [options] SET1 SET2
+usage: compare_callsets.sh [options] SET1 SET2 CONTIGS
 
 Helper tool to compare the sensitivity of one SV callset vs another
 
 Positional arguments:
   SET1            SV callset to be benchmarked
   SET2            Ground truth SV callset to use for benchmarking
+  CONTIGS         List of contigs to evaluate
 
 Optional arguments:
   -h  HELP        Show this help message and exit
@@ -63,6 +64,7 @@ done
 shift $(( ${OPTIND} - 1))
 SET1=$1
 SET2=$2
+CONTIGS=$3
 
 
 ###SET BIN
@@ -90,6 +92,16 @@ elif ! [ -s ${SET2} ]; then
   usage
   exit 0
 fi
+#Check for required list of contigs
+if [ -z ${CONTIGS} ]; then
+  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list not specified\n"
+  usage
+  exit 1
+elif ! [ -s ${CONTIGS} ]; then
+  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list either empty or not found\n"
+  usage
+  exit 1
+fi
 #Checks output file
 if [ -z ${OUTFILE} ]; then
   echo -e "\nERROR: output file not specified\n"
@@ -104,14 +116,16 @@ fi
 
 ###PREP INPUT FILES
 OVRTMP=`mktemp -d`
-#Unzip SET1, if gzipped, and automatically set SVs with size <1 to 1
+#Unzip SET1, if gzipped, restrict to contigs in $CONTIGS, and automatically set SVs with size <1 to 1
 if [ $( file ${SET1} | fgrep " gzip " | wc -l ) -gt 0 ]; then
   zcat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
   zcat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
+  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
   sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
 else
   cat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
   cat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
+  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
   sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
 fi
 #Set carrierFrequency as final column, if optioned
@@ -130,6 +144,7 @@ if [ $( file ${SET2} | fgrep " gzip " | wc -l ) -gt 0 ]; then
   zcat ${SET2} | fgrep -v "#" | \
   awk -v OFS="\t" -v PREFIX=${PREFIX} \
   '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' | \
+  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
   sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
 else
   cat ${SET2} | fgrep "#" | awk -v OFS="\t" \
@@ -137,6 +152,7 @@ else
   cat ${SET2} | fgrep -v "#" | \
   awk -v OFS="\t" -v PREFIX=${PREFIX} \
   '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' | \
+  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
   sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
 fi
 
@@ -153,7 +169,7 @@ bedtools intersect -loj -r -f 0.1 \
   ${OVRTMP}/OVR1.raw.bed
 #Intersect method 1a: 50% reciprocal overlap (10% for small SV), matching SV types
 awk -v FS="\t" -v OFS="\t" \
-'{ if ($5==$12 || $5=="DUP" && $12=="MCNV" || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL") print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
+'{ if ($5==$12 || $5=="DUP" && $12 ~ /"CNV"/ || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL") print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
 ${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
 awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
 ${OVRTMP}/OVR1a.raw.txt

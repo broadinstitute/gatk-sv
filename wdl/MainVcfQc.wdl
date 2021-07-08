@@ -157,6 +157,7 @@ workflow MasterVcfQc {
         input:
           vcf_stats=MergeVcfwideStatShards.merged_bed_file,
           prefix=prefix,
+          contigs=contigs,
           benchmarking_archives=[comparison_dataset_info[1]],
           comparator=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -230,6 +231,7 @@ workflow MasterVcfQc {
           per_sample_tarball=CollectPerSampleVidLists.vid_lists,
           comparison_tarball=select_first([comparison_dataset_info[1]]),
           prefix=prefix,
+          contigs=contigs,
           comparison_set_name=comparison_dataset_info[0],
           samples_per_shard=samples_per_shard,
           random_seed=random_seed,
@@ -342,6 +344,7 @@ task VcfExternalBenchmark {
     File vcf_stats
     Array[File] benchmarking_archives
     String prefix
+    Array[String] contigs
     String comparator
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
@@ -384,6 +387,7 @@ task VcfExternalBenchmark {
     /opt/sv-pipeline/scripts/vcf_qc/collectQC.external_benchmarking.sh \
       ~{vcf_stats} \
       /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
+      ~{write_lines(contigs)} \
       ~{comparator} \
       benchmarks \
       collectQC_benchmarking_~{comparator}_output/
