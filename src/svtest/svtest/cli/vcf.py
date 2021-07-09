@@ -71,7 +71,7 @@ def main(argv):
     parser.add_argument('--baseline-bed', type=str,
                         help='Baseline bed file to provide evaluation metrics against. Must have header beginning with "'
                              + BED_FILE_HEADER_CHAR + '" and the following columns: "' +
-                        '", "'.join([BED_FILE_CHROM_COL, BED_FILE_START_COL, BED_FILE_END_COL, BED_FILE_SVTYPE_COL]) + '"')
+                             '", "'.join([BED_FILE_CHROM_COL, BED_FILE_START_COL, BED_FILE_END_COL, BED_FILE_SVTYPE_COL]) + '"')
     parser.add_argument('--min-reciprocal-overlap', type=float, default=0.5,
                         help='Minimum reciprocal overlap for validation metrics [0.5]')
     parser.add_argument('--padding', type=int, default=50,
@@ -163,22 +163,26 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
     if fbase_vcf is not None:
         base_vcf = VariantFile(fbase_vcf)
         if genotyped != check_if_genotyped(base_vcf):
-                raise ValueError("One of the vcfs seems to be genotyped but the other does not")
+            raise ValueError("One of the vcfs seems to be genotyped but the other does not")
         if has_vargq != check_if_vargq(base_vcf):
             raise ValueError("One of the vcfs has the varGQ field but the other does not")
         if collect_evidence != check_if_evidence(base_vcf):
             raise ValueError("One of the vcfs has the EVIDENCE field but the other does not")
         base_records = list(base_vcf.fetch())
         test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
+        test_pass_tree = iu.create_trees_from_records(pass_records, variant_types, contigs, padding=padding)
         base_tree = iu.create_trees_from_records(base_records, variant_types, contigs, padding=padding)
         base_pass_records = [r for r in base_records if ("PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
         base_pass_tree = iu.create_trees_from_records(base_pass_records, variant_types, contigs, padding=padding)
     elif fbase_bed is not None:
         base_records = parse_bed_file(fbase_bed)
         test_tree = iu.create_trees_from_records(test_records, variant_types, contigs, padding=padding)
+        test_pass_tree = iu.create_trees_from_records(pass_records, variant_types, contigs, padding=padding)
         base_tree = iu.create_trees_from_bed_records(base_records, variant_types, contigs, padding=padding)
         base_pass_tree = None
     else:
+        test_tree = None
+        test_pass_tree = None
         base_tree = None
         base_pass_tree = None
 
@@ -189,7 +193,7 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
         fn_intervals = None
 
     if base_pass_tree is not None:
-        metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(metrics, test_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
+        metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(metrics, test_pass_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
     else:
         fp_intervals_pass = None
         fn_intervals_pass = None
