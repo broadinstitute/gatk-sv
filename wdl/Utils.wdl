@@ -53,7 +53,7 @@ task CountSamples {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 0.9,
+                               mem_gb: 3.75,
                                disk_gb: 10 + ceil(size(vcf, "GiB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
