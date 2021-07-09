@@ -26,8 +26,8 @@ workflow EHdnSTRAnalysis {
     Array[File] sample_bams_or_crams
     Array[File]? sample_bams_or_crams_indexes
     Array[String] samples_status
-    File reference_bam_or_cram
-    File? reference_bam_or_cram_index
+    File reference_fasta
+    File? reference_fasta_index
     Int min_anchor_mapq
     Int max_irr_mapq
     String ehdn_docker
@@ -64,10 +64,6 @@ workflow EHdnSTRAnalysis {
     # e.g., extract `sample1` from `sample1.str_profile.json`.
     profile_len: 12
   }
-
-  File reference_bam_or_cram_index = select_first([
-    reference_bam_or_cram,
-    reference_bam_or_cram + ".fai"])
 
   # This scatter serves two purposes:
   # 1-  Ensures an index file for each BAM of CRAM file;
@@ -109,8 +105,8 @@ workflow EHdnSTRAnalysis {
         filename = case_sample_filename,
         bam_or_cram = pair.left,
         bam_or_cram_index = pair.right,
-        reference_bam_or_cram = reference_bam_or_cram,
-        reference_bam_or_cram_index = reference_bam_or_cram_index,
+        reference_fasta = reference_fasta,
+        reference_fasta_index = reference_fasta_index,
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
@@ -126,8 +122,8 @@ workflow EHdnSTRAnalysis {
         filename = control_sample_filename,
         bam_or_cram = pair.left,
         bam_or_cram_index = pair.right,
-        reference_bam_or_cram = reference_bam_or_cram,
-        reference_bam_or_cram_index = reference_bam_or_cram_index,
+        reference_fasta = reference_fasta,
+        reference_fasta_index = reference_fasta_index,
         min_anchor_mapq = min_anchor_mapq,
         max_irr_mapq = max_irr_mapq,
         ehdn_docker = ehdn_docker,
@@ -140,8 +136,8 @@ workflow EHdnSTRAnalysis {
     input:
       cases = CasesProfiles.str_profile,
       controls = ControlsProfiles.str_profile,
-      reference_bam_or_cram = reference_bam_or_cram,
-      reference_bam_or_cram_index = reference_bam_or_cram_index,
+      reference_fasta = reference_fasta,
+      reference_fasta_index = reference_fasta_index,
       ehdn_docker = ehdn_docker,
       runtime_attr_override = runtime_attr_merge,
       postfixes = postfixes
@@ -174,8 +170,8 @@ task ComputeSTRProfile {
     String filename
     File bam_or_cram
     File bam_or_cram_index
-    File reference_bam_or_cram
-    File? reference_bam_or_cram_index
+    File reference_fasta
+    File? reference_fasta_index
     Int min_anchor_mapq
     Int max_irr_mapq
     String ehdn_docker
@@ -189,12 +185,20 @@ task ComputeSTRProfile {
     File str_profile = "${filename}${postfixes.profile}"
   }
 
+  # Defining this varialbe is requires since it
+  # will trigger localization of the file. The
+  # localized file is used by the `profile` subcommand
+  # of ExpansionHunterDenovo.
+  File reference_fasta_index_ = select_first([
+    reference_fasta_index,
+    reference_fasta + ".fai"])
+
   command <<<
     set -euxo pipefail
 
     ExpansionHunterDenovo profile \
     --reads ~{bam_or_cram} \
-    --reference ~{reference_bam_or_cram} \
+    --reference ~{reference_fasta} \
     --output-prefix ~{filename} \
     --min-anchor-mapq ~{min_anchor_mapq} \
     --max-irr-mapq ~{max_irr_mapq}
@@ -228,8 +232,8 @@ task Merge {
   input {
     Array[File] cases
     Array[File] controls
-    File reference_bam_or_cram
-    File? reference_bam_or_cram_index
+    File reference_fasta
+    File? reference_fasta_index
     String ehdn_docker
     RuntimeAttr? runtime_attr_override
     FilenamePostfixes postfixes
@@ -243,6 +247,14 @@ task Merge {
   Int cases_length = length(cases)
   Int controls_length = length(controls)
   String output_prefix = "merged"
+
+  # Defining this varialbe is requires since it
+  # will trigger localization of the file. The
+  # localized file is used by the `profile` subcommand
+  # of ExpansionHunterDenovo.
+  File reference_fasta_index_ = select_first([
+    reference_fasta_index,
+    reference_fasta + ".fai"])
 
   # This shell script uses EHdn's `merge` command
   # to merge STR profiles on all the individual samples
@@ -284,7 +296,7 @@ task Merge {
     cat $manifest_filename
 
     ExpansionHunterDenovo merge \
-      --reference ~{reference_bam_or_cram} \
+      --reference ~{reference_fasta} \
       --manifest $manifest_filename \
       --output-prefix ~{output_prefix}
   >>>
