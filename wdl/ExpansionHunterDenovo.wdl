@@ -23,10 +23,9 @@ workflow EHdnSTRAnalysis {
   input {
     String analysis_type
     String str_comparison_type
-    Array[File] case_reads_filenames
-    Array[File] case_indexes_filenames
-    Array[File] control_reads_filenames
-    Array[File] control_indexes_filenames
+    Array[File] sample_bams_or_crams
+    Array[File]? sample_bams_or_crams_indexes
+    Array[String] samples_status
     File reference_bam_or_cram
     File? reference_bam_or_cram_index
     Int min_anchor_mapq
@@ -40,10 +39,7 @@ workflow EHdnSTRAnalysis {
   parameter_meta {
     analysis_type: "Sets the analysis type; accepted values are: `casecontrol`, `outlier`, and `both`."
     str_comparison_type: "Set the STR comparison type; accepted values are: `locus`, `motif`, and `both`."
-    case_reads_filenames: "A list of BAM files to be used as `case` samples."
     case_indexes_filenames: "A list of index files (.bam.bai) for the `case` samples. Files should be in the same order as the case samples"
-    control_reads_filenames: "A list of BAM files to be used as `control` samples."
-    control_indexes_filenames: "A list of index files (.bam.bai) for `control` samples. Files should be in the same order as the control samples (i.e., the `control_reads_filenames` list)."
     manifest_filename: ""
     reference_filename: ""
     min_anchor_mapq: ""
@@ -69,17 +65,50 @@ workflow EHdnSTRAnalysis {
     profile_len: 12
   }
 
-  Boolean is_bam_ = basename(reference_bam_or_cram, ".bam") + ".bam" == basename(reference_bam_or_cram)
-  String index_ext_ = if is_bam_ then ".bai" else ".crai"
-  File reference_bam_or_cram_index = if defined(reference_bam_or_cram_index) then select_first([reference_bam_or_cram_index]) else reference_bam_or_cram + index_ext_
+  File reference_bam_or_cram_index = select_first([
+    reference_bam_or_cram,
+    reference_bam_or_cram + ".fai"])
 
-  scatter(pair in zip(case_reads_filenames, case_indexes_filenames)) {
+  # This scatter serves two purposes:
+  # 1-  Ensures an index file for each BAM of CRAM file;
+  # 2-  Splits input samples in case or control groups,
+  #     which will be used to construct the `manifest.tsv`
+  #     file required for ehdn.
+  scatter (i in range(length(sample_bams_or_crams))) {
+    File sample_bam_or_cram_ = sample_bams_or_crams[i]
+    File bam_or_cram_index_ =
+      if defined(sample_bams_or_crams_indexes) then
+        select_first([sample_bams_or_crams_indexes])[i]
+      else
+        sample_bam_or_cram_ +
+          if basename(sample_bam_or_cram_, ".bam") + ".bam" ==
+              basename(sample_bam_or_cram_) then
+            ".bai"
+          else
+            ".crai"
+
+    if (samples_status[i] == "case") {
+      File case_bam_cram_ = sample_bam_or_cram_
+      File case_bam_or_cram_index_ = bam_or_cram_index_
+    }
+    if (samples_status[i] == "control") {
+      File control_bam_or_cram_ = sample_bam_or_cram_
+      File control_bam_or_cram_index_ = bam_or_cram_index_
+    }
+  }
+
+  Array[File] case_bams_or_crams = select_all(case_bam_cram_)
+  Array[File] case_bams_or_crams_indexes = select_all(case_bam_or_cram_index_)
+  Array[File] control_bams_or_crams = select_all(control_bam_or_cram_)
+  Array[File] control_bams_or_crams_indexes = select_all(control_bam_or_cram_index_)
+
+  scatter (pair in zip(case_bams_or_crams, case_bams_or_crams_indexes)) {
     String case_sample_filename = basename(pair.left, ".bam")
     call ComputeSTRProfile as CasesProfiles {
       input:
         filename = case_sample_filename,
-        reads_filename = pair.left,
-        index_filename = pair.right,
+        bam_or_cram = pair.left,
+        bam_or_cram_index = pair.right,
         reference_bam_or_cram = reference_bam_or_cram,
         reference_bam_or_cram_index = reference_bam_or_cram_index,
         min_anchor_mapq = min_anchor_mapq,
@@ -90,13 +119,13 @@ workflow EHdnSTRAnalysis {
     }
   }
 
-  scatter(pair in zip(control_reads_filenames, control_indexes_filenames)) {
+  scatter (pair in zip(control_bams_or_crams, control_bams_or_crams_indexes)) {
     String control_sample_filename = basename(pair.left, ".bam")
     call ComputeSTRProfile as ControlsProfiles {
       input:
         filename = control_sample_filename,
-        reads_filename = pair.left,
-        index_filename = pair.right,
+        bam_or_cram = pair.left,
+        bam_or_cram_index = pair.right,
         reference_bam_or_cram = reference_bam_or_cram,
         reference_bam_or_cram_index = reference_bam_or_cram_index,
         min_anchor_mapq = min_anchor_mapq,
@@ -143,8 +172,8 @@ workflow EHdnSTRAnalysis {
 task ComputeSTRProfile {
   input {
     String filename
-    File reads_filename
-    File index_filename
+    File bam_or_cram
+    File bam_or_cram_index
     File reference_bam_or_cram
     File? reference_bam_or_cram_index
     Int min_anchor_mapq
@@ -164,7 +193,7 @@ task ComputeSTRProfile {
     set -euxo pipefail
 
     ExpansionHunterDenovo profile \
-    --reads ~{reads_filename} \
+    --reads ~{bam_or_cram} \
     --reference ~{reference_bam_or_cram} \
     --output-prefix ~{filename} \
     --min-anchor-mapq ~{min_anchor_mapq} \
