@@ -16,9 +16,11 @@ import csv
 from numpy import median
 
 
-#Define global variables
-filts_for_info = 'PESR_GT_OVERDISPERSION HIGH_SR_BACKGROUND BOTHSIDES_SUPPORT VARIABLE_ACROSS_BATCHES'.split(' ')
-filts_to_remove = 'HIGH_PCRPLUS_NOCALL_RATE HIGH_PCRMINUS_NOCALL_RATE'.split(' ')
+# Define global variables
+filts_for_info = 'PESR_GT_OVERDISPERSION HIGH_SR_BACKGROUND BOTHSIDES_SUPPORT VARIABLE_ACROSS_BATCHES'.split(
+    ' ')
+filts_to_remove = 'HIGH_PCRPLUS_NOCALL_RATE HIGH_PCRMINUS_NOCALL_RATE'.split(
+    ' ')
 filts_to_remove = filts_to_remove + filts_for_info
 NULL_GTs = [(None, None), (None, )]
 REF_GTs = [(0, 0), (0, ), (None, 2)]
@@ -72,22 +74,23 @@ def recal_qual_score(record):
         return int(median(quals))
 
 
-def cleanup_vcf(vcf, fout, callrates, min_callrate_global=0.85, 
+def cleanup_vcf(vcf, fout, callrates, min_callrate_global=0.85,
                 min_callrate_smallDels=0.95):
-    
+
     # minus_samples = [s for s in vcf.header.samples if s not in plus_samples]
     # male_minus_samples = [s for s in minus_samples if s not in male_samples]
 
     for record in vcf:
-        #Move several filters from FILTER to INFO
+        # Move several filters from FILTER to INFO
         for filt in filts_for_info:
             if filt in record.filter:
                 record.info[filt] = True
 
-        #Move HIGH_SR_BACKGROUND 
+        # Move HIGH_SR_BACKGROUND
 
-        #Remove all HIGH_NOCALL_RATE and HIGH_SR_BACKGROUND tags from FILTER column
-        newfilts = [filt for filt in record.filter if filt not in filts_to_remove]
+        # Remove all HIGH_NOCALL_RATE and HIGH_SR_BACKGROUND tags from FILTER column
+        newfilts = [
+            filt for filt in record.filter if filt not in filts_to_remove]
         record.filter.clear()
         for filt in newfilts:
             record.filter.add(filt)
@@ -101,26 +104,26 @@ def cleanup_vcf(vcf, fout, callrates, min_callrate_global=0.85,
         #         record.info.keys().append('LOW_PCRPLUS_CALL_RATE')
         #     record.info['LOW_PCRPLUS_CALL_RATE'] = True
 
-        #Mark sites with low PCR- call rate
+        # Mark sites with low PCR- call rate
         if record.id in callrates.keys():
             callrate = callrates[record.id]
-            #Mark small (300bp-1kb) deletions with stricter 5% null gt rate,
-            #and mark all other variants at specified null gt rate
+            # Mark small (300bp-1kb) deletions with stricter 5% null gt rate,
+            # and mark all other variants at specified null gt rate
             if record.info['SVTYPE'] == 'DEL' \
-            and record.info['SVLEN'] < 1000 \
-            and record.info['SVLEN'] > 300:
+                    and record.info['SVLEN'] < 1000 \
+                    and record.info['SVLEN'] > 300:
                 if callrate < min_callrate_smallDels:
                     record.filter.add('LOW_CALL_RATE')
             else:
                 if callrate < min_callrate_global:
                     record.filter.add('LOW_CALL_RATE')
 
-        #Recalibrate QUAL score
+        # Recalibrate QUAL score
         newQUAL = recal_qual_score(record)
         if newQUAL is not None:
             record.qual = newQUAL
 
-        #Only write out non-empty variants to output file
+        # Only write out non-empty variants to output file
         for s in record.samples:
             if record.samples[s]['GT'] not in NULL_and_REF_GTs:
                 fout.write(record)
@@ -137,46 +140,46 @@ def main():
     parser.add_argument('fout', help='Output file (supports "stdout").')
     parser.add_argument('--callrate-table', help='TSV of variant IDs and ' +
                         'their corresponding callrates.', required=True)
-    parser.add_argument('--min-callrate-global', type=float, help='Minimum fraction ' + 
+    parser.add_argument('--min-callrate-global', type=float, help='Minimum fraction ' +
                         'of samples required to have non-missing genotypes for ' +
                         'all variants.', default=0.85)
-    parser.add_argument('--min-callrate-smallDels', type=float, help='Minimum fraction ' + 
+    parser.add_argument('--min-callrate-smallDels', type=float, help='Minimum fraction ' +
                         'of samples required to have non-missing genotypes for ' +
                         'DEL variants between 300bp-1kb.', default=0.95)
 
     args = parser.parse_args()
 
-    #Open connection to input VCF
+    # Open connection to input VCF
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 
-    #Add new FILTER lines to VCF header
-    NEW_FILTERS = ['##FILTER=<ID=LOW_CALL_RATE,Description="Site does not meet ' + 
+    # Add new FILTER lines to VCF header
+    NEW_FILTERS = ['##FILTER=<ID=LOW_CALL_RATE,Description="Site does not meet ' +
                    'minimum requirements for fraction of PCR- samples with non-null ' +
                    'genotypes. Flags sites more prone to false discoveries.">']
     header = vcf.header
     for filt in NEW_FILTERS:
         header.add_line(filt)
 
-    #Remove unused FILTER lines from VCF header
+    # Remove unused FILTER lines from VCF header
     for filt in filts_to_remove:
         header.filters.remove_header(filt)
 
-    #Add new INFO lines to VCF header
-    NEW_INFOS = ['##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description=' + 
-                 '"PESR genotyping data is overdispersed. Flags sites where genotypes' + 
+    # Add new INFO lines to VCF header
+    NEW_INFOS = ['##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description=' +
+                 '"PESR genotyping data is overdispersed. Flags sites where genotypes' +
                  ' are likely noisier.">',
-                 '##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description=' + 
-                 '"Suspicious accumulation of split reads in predicted non-carrier ' + 
+                 '##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description=' +
+                 '"Suspicious accumulation of split reads in predicted non-carrier ' +
                  'samples. Flags sites more prone to false discoveries and where ' +
                  'breakpoint precision is reduced.">',
-                 '##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description=' + 
+                 '##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description=' +
                  '"Variant has read-level support for both sides of breakpoint. ' +
                  'Indicates higher-confidence variants.">',
-                 '##INFO=<ID=VARIABLE_ACROSS_BATCHES,Number=0,Type=Flag,Description=' + 
-                 '"Site appears at variable frequencies across batches. Accuracy ' + 
+                 '##INFO=<ID=VARIABLE_ACROSS_BATCHES,Number=0,Type=Flag,Description=' +
+                 '"Site appears at variable frequencies across batches. Accuracy ' +
                  'of allele frequency estimates for these sites may be reduced.">']
     for info in NEW_INFOS:
         header.add_line(info)
@@ -191,17 +194,17 @@ def main():
     # male_samples = f_male_samples.read().splitlines()
     # f_male_samples.close()
 
-    #Read callrates
+    # Read callrates
     callrates = import_callrates(args.callrate_table)
 
-    #Open connection to output VCF
+    # Open connection to output VCF
     if args.fout in '- stdout'.split():
         fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
     else:
         fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
-    #Cleanup VCF
-    cleanup_vcf(vcf, fout, callrates, 
+    # Cleanup VCF
+    cleanup_vcf(vcf, fout, callrates,
                 min_callrate_global=args.min_callrate_global,
                 min_callrate_smallDels=args.min_callrate_smallDels,)
 

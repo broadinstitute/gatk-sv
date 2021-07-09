@@ -23,7 +23,7 @@ def reformat_dn_rdtest(dn_metrics):
 
     # restrict to parents
     #  metrics = metrics.loc[(metrics.member != 'pro') &
-                          #  (metrics.member != 'sib')].copy()
+    #  (metrics.member != 'sib')].copy()
 
     # Restrict to parents of candidate de novo variants
     metrics = metrics.loc[(~metrics.AffectedMember.str.contains('fa')) &
@@ -67,6 +67,7 @@ def main():
     dn_metrics = pd.read_table(args.dn_metrics)
     metrics = reformat_dn_rdtest(dn_metrics)
     metrics.to_csv(args.fout, sep='\t', index=False, na_rep='NA')
+
 
 if __name__ == '__main__':
     main()

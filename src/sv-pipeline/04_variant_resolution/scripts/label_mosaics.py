@@ -29,7 +29,8 @@ def main():
     args = parser.parse_args()
 
     vcf = pysam.VariantFile(args.vcf)
-    vcf.header.add_line('##INFO=<ID=MOSAIC,Number=.,Type=String,Description="Samples predicted to harbor somatic or germline mosaicism">')
+    vcf.header.add_line(
+        '##INFO=<ID=MOSAIC,Number=.,Type=String,Description="Samples predicted to harbor somatic or germline mosaicism">')
     fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
     mosaics = {}

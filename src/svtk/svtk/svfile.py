@@ -153,7 +153,8 @@ class SVRecord(GSNode):
         if clusters and sample_overlap > 0:
             samplesA = get_called_samples(self.record)
             samplesB = get_called_samples(other.record)
-            clusters = clusters and samples_overlap(samplesA, samplesB, sample_overlap, sample_overlap)
+            clusters = clusters and samples_overlap(
+                samplesA, samplesB, sample_overlap, sample_overlap)
 
         return clusters
 
@@ -315,7 +316,7 @@ class SVRecordCluster:
                            'CIEND RMSSTD MEMBERS').split()
         records = [r.record for r in self.records]
         infos = defaultdict(list)
-        
+
         for record in records:
             for info, value in record.info.items():
                 if info not in PROTECTED_INFOS:
@@ -326,11 +327,14 @@ class SVRecordCluster:
                 new_record.info[info] = True
             elif header.info[info].type == 'String':
                 if header.info[info].number == '.':
-                    new_record.info[info] = sorted(set([v for vlist in values for v in vlist]))
+                    new_record.info[info] = sorted(
+                        set([v for vlist in values for v in vlist]))
                 elif header.info[info].number == 1:
-                    new_record.info[info] = ','.join(sorted(set([v for vlist in values for v in vlist])))
+                    new_record.info[info] = ','.join(
+                        sorted(set([v for vlist in values for v in vlist])))
                 else:
-                    new_record.info[info] = [','.join(vlist) for vlist in zip(values)]
+                    new_record.info[info] = [
+                        ','.join(vlist) for vlist in zip(values)]
 
             # TODO merge numeric INFO
             elif info == 'varGQ':
@@ -370,7 +374,7 @@ class SVRecordCluster:
             new_record.samples[sample]['GT'] = (0, 0)
 
             #  for source in sourcelist:
-                #  new_record.samples[sample][source] = 0
+            #  new_record.samples[sample][source] = 0
 
         # Update with called samples
         if preserve_genotypes:
@@ -380,7 +384,8 @@ class SVRecordCluster:
 
             # then overwrite genotypes of non-multiallelic sites as necessary
             records = [r.record for r in self.records]
-            update_best_genotypes(new_record, records, preserve_multiallelic=True)
+            update_best_genotypes(new_record, records,
+                                  preserve_multiallelic=True)
 
         # TODO: optionally permit ./. instead of rejecting
         # I think that was an issue with one caller, maybe handle in preproc
@@ -389,11 +394,11 @@ class SVRecordCluster:
             for record in self.records:
                 for sample in record.record.samples:
                     gt = record.record.samples[sample]['GT']
-    
+
                     # Skip samples without a call
                     if gt in null_GTs:
                         continue
-    
+
                     # Otherwise call the sample in the new record
                     new_record.samples[sample]['GT'] = (0, 1)
 

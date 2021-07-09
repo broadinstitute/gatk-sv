@@ -78,12 +78,14 @@ def update_metadata(namespace, workspace, cohort_batch_id,
 
     list_path = fpath.format(bucket_name, pesr_vcflist)
     update = fapi._attr_set('cohort_filtered_pesr_vcf_list', list_path)
-    r = fapi.update_entity(namespace, workspace, 'sample_set', cohort_batch_id, [update])
+    r = fapi.update_entity(namespace, workspace,
+                           'sample_set', cohort_batch_id, [update])
     fapi._check_response_code(r, 200)
 
     list_path = fpath.format(bucket_name, depth_vcflist)
     update = fapi._attr_set('cohort_filtered_depth_vcf_list', list_path)
-    r = fapi.update_entity(namespace, workspace, 'sample_set', cohort_batch_id, [update])
+    r = fapi.update_entity(namespace, workspace,
+                           'sample_set', cohort_batch_id, [update])
     fapi._check_response_code(r, 200)
 
 
@@ -108,7 +110,8 @@ def main():
 
     batches = [l.strip() for l in args.batch_list.readlines()]
 
-    pesr_vcflist, depth_vcflist = make_vcfs_list(args.project, args.workspace, batches)
+    pesr_vcflist, depth_vcflist = make_vcfs_list(
+        args.project, args.workspace, batches)
 
     upload_vcf_lists(args.project, args.workspace, pesr_vcflist, depth_vcflist)
 
@@ -117,6 +120,7 @@ def main():
 
     os.remove(pesr_vcflist)
     os.remove(depth_vcflist)
+
 
 if __name__ == '__main__':
     main()

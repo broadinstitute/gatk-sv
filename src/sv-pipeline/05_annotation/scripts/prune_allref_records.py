@@ -37,7 +37,7 @@ def main():
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 

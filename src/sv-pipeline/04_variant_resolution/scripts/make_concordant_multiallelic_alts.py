@@ -44,7 +44,7 @@ def make_concordant_multiallelic_alts(joined_record, batch_records):
         else:
             non_multiallelic_idxs.append(i)
 
-    # If any records were multiallelic, use maximum alt count 
+    # If any records were multiallelic, use maximum alt count
     if is_multiallelic:
         alts = make_alts(max_alts, is_bca)
 
@@ -82,7 +82,7 @@ def main():
     batch_vcfs = [pysam.VariantFile(fname) for fname in batch_vcfnames]
 
     fout = pysam.VariantFile(args.fout, 'w', header=joined_vcf.header)
-    
+
     for joined_record, batch_records in zip(joined_vcf, zip(*batch_vcfs)):
         make_concordant_multiallelic_alts(joined_record, batch_records)
         fout.write(joined_record)

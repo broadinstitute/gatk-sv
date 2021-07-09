@@ -24,7 +24,7 @@ def choose_best_genotype(sample, records):
     """
 
     best_GT = (0, 0)
-    best_GQ = 0 
+    best_GQ = 0
     best_record = None
 
     if not any(['GQ' in record.samples[sample].keys() for record in records]):
@@ -34,28 +34,28 @@ def choose_best_genotype(sample, records):
         return records[0]
 
     # Pick best non-reference genotype
-    #for record in records:
+    # for record in records:
     #    if record.samples[sample]['GQ'] >= best_GQ:
-            # if record is non-reference , use it
-            # or if it's a higher GQ for a reference call, use it
+        # if record is non-reference , use it
+        # or if it's a higher GQ for a reference call, use it
     #        if record.samples[sample]['GT'] != (0, 0) or best_GT == (0, 0):
     #            best_GT = record.samples[sample]['GT']
     #            best_GQ = record.samples[sample]['GQ']
     #            best_record = record
 
     for record in records:
-        #if found non-ref GT, replace GT and GQ together
+        # if found non-ref GT, replace GT and GQ together
         if record.samples[sample]['GT'] != (0, 0) and best_GT == (0, 0):
-                best_GT = record.samples[sample]['GT']
-                best_GQ = record.samples[sample]['GQ']
-                best_record = record
+            best_GT = record.samples[sample]['GT']
+            best_GQ = record.samples[sample]['GQ']
+            best_record = record
         elif record.samples[sample]['GT'] == (0, 0) and best_GT != (0, 0):
-                continue
+            continue
         # if new GT  = best_GT, while found a higher GQ, replace GQ
         else:
-                if record.samples[sample]['GQ'] >= best_GQ:
-                    best_GQ = record.samples[sample]['GQ']
-                    best_record = record
+            if record.samples[sample]['GQ'] >= best_GQ:
+                best_GQ = record.samples[sample]['GQ']
+                best_record = record
 
     return best_record
 
@@ -74,7 +74,7 @@ def check_multiallelic(records):
         #  for sample in record.samples:
             #  GT = record.samples[sample]['GT']
             #  if GT[0] > 1 or GT[1] > 1:
-                #  return True
+            #  return True
 
     return False
 
@@ -91,7 +91,7 @@ def make_multiallelic_alts(records):
     -------
     alts : tuple of str
     """
-    
+
     max_CN = 2
 
     is_bca = records[0].info['SVTYPE'] not in 'DEL DUP'.split()

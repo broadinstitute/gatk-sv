@@ -11,7 +11,8 @@ def main():
     parser.add_argument("metrics_file", help="Table of metrics")
     parser.add_argument("criteria_file", help="Table of QC criteria")
     parser.add_argument("output", help="Output file")
-    parser.add_argument("--verbose", help="Enable logging to stderr", action='store_true')
+    parser.add_argument(
+        "--verbose", help="Enable logging to stderr", action='store_true')
     args = parser.parse_args()
 
     eval = QCEvaluator(args.metrics_file, args.criteria_file)

@@ -23,7 +23,7 @@ def parse_attribute(attribute):
     data = [d.strip() for d in data]
     pairs = [d.split() for d in data]
     attribute_dict = {k: v.strip('"') for k, v in pairs}
-    
+
     return attribute_dict
 
 

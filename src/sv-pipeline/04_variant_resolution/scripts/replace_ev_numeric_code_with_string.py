@@ -5,14 +5,15 @@ import gzip
 import sys
 
 ev_numeric_code_to_string_map = {
-    '1' : 'RD',
-    '2' : 'PE',
-    '3' : 'RD,PE',
-    '4' : 'SR',
-    '5' : 'RD,SR',
-    '6' : 'PE,SR',
-    '7' : 'RD,PE,SR'
+    '1': 'RD',
+    '2': 'PE',
+    '3': 'RD,PE',
+    '4': 'SR',
+    '5': 'RD,SR',
+    '6': 'PE,SR',
+    '7': 'RD,PE,SR'
 }
+
 
 def replace_ev_numeric_codes(vcf, fout):
     while True:
@@ -34,6 +35,7 @@ def replace_ev_numeric_codes(vcf, fout):
         new_line = "\t".join(line_fields)
         print(new_line, file=fout)
 
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -53,7 +55,6 @@ def main():
             vcf = gzip.open(args.vcf, 'rt')
         else:
             vcf = open(args.vcf, 'r')
-
 
     new_ev_header_line = '##FORMAT=<ID=EV,Number=1,Type=String,Description="Classes of evidence supporting final genotype">'
 

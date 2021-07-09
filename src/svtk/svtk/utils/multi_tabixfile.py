@@ -19,7 +19,7 @@ from svtk.utils import is_smaller_chrom
 class _TabixRow:
     def __init__(self, row):
         """
-        Sortable wrapper around a row in a tabix file. 
+        Sortable wrapper around a row in a tabix file.
 
         Can be instantiated from a str or from a pysam TupleProxy.
 
@@ -130,7 +130,8 @@ class MultiTabixFile:
         """
         iterators = []
         for tbx in self.tabixfiles:
-            iterators.append(_SortableTabixIterator(tbx.fetch(*args, **kwargs)))
+            iterators.append(_SortableTabixIterator(
+                tbx.fetch(*args, **kwargs)))
 
         return _TabixIterator(heapq.merge(*iterators))
 

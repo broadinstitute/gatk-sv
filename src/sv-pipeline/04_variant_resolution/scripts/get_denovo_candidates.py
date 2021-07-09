@@ -11,7 +11,6 @@
 
 import argparse
 import sys
-import itertools
 import pysam
 import svtk.utils as svu
 from svtk.famfile import parse_famfile

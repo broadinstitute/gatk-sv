@@ -11,7 +11,6 @@ Merge variants that were linked by per-sample bedtools merge
 import argparse
 import sys
 from collections import deque
-from operator import itemgetter
 import numpy as np
 from scipy import sparse
 from scipy.sparse import csgraph
@@ -74,7 +73,7 @@ def merge_linked_depth_calls(vcf, ID_links):
 
     # Ignore links on other chromosomes
     linked_IDs = sorted(record_map.keys())
-    ID_links = [l for l in ID_links 
+    ID_links = [l for l in ID_links
                 if l[0] in linked_IDs and l[1] in linked_IDs]
 
     # Convert links from pairs of IDs to pairs of records
@@ -104,7 +103,8 @@ def merge_linked_depth_calls(vcf, ID_links):
         merged_record.info['MEMBERS'] = members
 
         # Take union of called samples
-        svu.update_best_genotypes(merged_record, cluster, preserve_multiallelic=True)
+        svu.update_best_genotypes(
+            merged_record, cluster, preserve_multiallelic=True)
 
         yield merged_record
 

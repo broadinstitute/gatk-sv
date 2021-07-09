@@ -27,6 +27,7 @@ INTERVALS_SIZE = "rd_intervals_size"
 EXPECTED_COLUMNS = 4
 HEADER_CHAR = '@'
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,

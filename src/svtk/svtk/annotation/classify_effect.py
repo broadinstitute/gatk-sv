@@ -46,8 +46,8 @@ def classify_dup(disrupt_dict):
         if 'SPAN' in disrupt_dict['gene']:
             return 'COPY_GAIN'
         elif 'BOTH-INSIDE' in disrupt_dict['gene'] \
-        and 'CDS' in elements \
-        and 'SPAN' in disrupt_dict['CDS']:
+                and 'CDS' in elements \
+                and 'SPAN' in disrupt_dict['CDS']:
             return 'DUP_LOF'
         else:
             return 'DUP_PARTIAL'

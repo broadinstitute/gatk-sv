@@ -13,7 +13,8 @@ import pysam
 
 def merge_annotations(vcf, protein_coding_vcf, lincRNA_vcf, promoter_vcf, noncoding_vcf):
 
-    record_iter = zip(vcf, protein_coding_vcf, lincRNA_vcf, promoter_vcf, noncoding_vcf)
+    record_iter = zip(vcf, protein_coding_vcf, lincRNA_vcf,
+                      promoter_vcf, noncoding_vcf)
 
     gene_classes = ['PROTEIN_CODING', 'LINCRNA']
 
@@ -44,7 +45,8 @@ def merge_annotations(vcf, protein_coding_vcf, lincRNA_vcf, promoter_vcf, noncod
 
         # Annotate promoters of any genes if there wasn't a coding hit
         promoter_record = records[3]
-        promoters = promoter_record.info.get('NONCODING_SPAN', ()) + promoter_record.info.get('NONCODING_BREAKPOINT', ())
+        promoters = promoter_record.info.get(
+            'NONCODING_SPAN', ()) + promoter_record.info.get('NONCODING_BREAKPOINT', ())
         kept_promoters = []
         for gene in promoters:
             coding_hit = False
@@ -124,7 +126,7 @@ def main():
     update_header(vcf)
     fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
-    for record in merge_annotations(vcf, protein_coding_vcf, lincRNA_vcf, 
+    for record in merge_annotations(vcf, protein_coding_vcf, lincRNA_vcf,
                                     promoter_vcf, noncoding_vcf):
         fout.write(record)
 

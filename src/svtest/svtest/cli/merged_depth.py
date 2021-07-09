@@ -31,6 +31,7 @@ SIZES = [1000, 2000, 3000, 4000, 5000, 10000, 100000]
 
 KEY_PREFIX = "merged_depth_"
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -39,9 +40,12 @@ def main(argv):
     parser.add_argument('test_bed', type=str)
     parser.add_argument('contig_list', type=str)
     parser.add_argument('type', type=str)
-    parser.add_argument('--baseline-bed', type=str, default=None, help="Baseline bed file to evaluate against")
-    parser.add_argument('--test-hits', type=str, help="List of test record ids that overlap baseline set (required if using --baseline-bed)")
-    parser.add_argument('--baseline-hits', type=str, help="List of baseline record ids that overlap test set (required if using --baseline-bed)")
+    parser.add_argument('--baseline-bed', type=str, default=None,
+                        help="Baseline bed file to evaluate against")
+    parser.add_argument('--test-hits', type=str,
+                        help="List of test record ids that overlap baseline set (required if using --baseline-bed)")
+    parser.add_argument('--baseline-hits', type=str,
+                        help="List of baseline record ids that overlap test set (required if using --baseline-bed)")
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -52,17 +56,20 @@ def main(argv):
     if (bool(args.baseline_bed) ^ bool(args.test_hits)) or \
        (bool(args.baseline_bed) ^ bool(args.baseline_hits)) or \
        (bool(args.test_hits) ^ bool(args.baseline_hits)):
-        raise ValueError("Inconsistent arguments specified: --baseline-bed, --test-hits, and --baseline-hits must be specified together.")
+        raise ValueError(
+            "Inconsistent arguments specified: --baseline-bed, --test-hits, and --baseline-hits must be specified together.")
 
     contigs = iou.read_contig_list(args.contig_list)
 
     # Read file
     with gzip.open(args.test_bed, mode='rb') as ftest:
         if args.baseline_bed is None:
-            metrics = get_metrics(ftest, None, contigs, args.type, args.test_hits, args.baseline_hits)
+            metrics = get_metrics(ftest, None, contigs,
+                                  args.type, args.test_hits, args.baseline_hits)
         else:
             with gzip.open(args.baseline_bed, mode='rb') as fbase:
-                metrics = get_metrics(ftest, fbase, contigs, args.type, args.test_hits, args.baseline_hits)
+                metrics = get_metrics(
+                    ftest, fbase, contigs, args.type, args.test_hits, args.baseline_hits)
 
     # Write metrics
     write_metrics(metrics)
@@ -74,13 +81,15 @@ def write_metrics(metrics):
 
 
 def get_metrics(ftest, fbase, contigs, type, test_hits_path, base_hits_path):
-    test_header, test_ids, size_counts, num_test_records = parse_bed(ftest, type, contigs)
+    test_header, test_ids, size_counts, num_test_records = parse_bed(
+        ftest, type, contigs)
     metrics = {
         KEY_PREFIX + type + "_count": num_test_records
     }
     metrics = get_size_metrics(metrics, size_counts, type)
     if fbase is not None:
-        metrics = get_baseline_metrics(metrics, fbase, test_hits_path, base_hits_path, test_header, test_ids, num_test_records, type, contigs)
+        metrics = get_baseline_metrics(
+            metrics, fbase, test_hits_path, base_hits_path, test_header, test_ids, num_test_records, type, contigs)
     return metrics
 
 
@@ -89,7 +98,7 @@ def get_size_metrics(metrics, size_counts, type):
         if i == 0:
             lb = 0
         else:
-            lb = SIZES[i-1]
+            lb = SIZES[i - 1]
         key = KEY_PREFIX + type + "_" + str(lb) + "_" + str(SIZES[i])
         metrics[key] = size_counts[i]
     key = KEY_PREFIX + type + "_gte_" + str(SIZES[-1])
@@ -98,8 +107,10 @@ def get_size_metrics(metrics, size_counts, type):
 
 
 def get_baseline_metrics(metrics, fbase, test_hits_path, base_hits_path, test_header, test_ids, num_test_records, type, contigs):
-    base_header, base_ids, _, num_baseline_records = parse_bed(fbase, type, contigs)
-    tu.test_sets_equal(test_header, base_header, item_str="header column", name_a="test file header", name_b="baseline file header")
+    base_header, base_ids, _, num_baseline_records = parse_bed(
+        fbase, type, contigs)
+    tu.test_sets_equal(test_header, base_header, item_str="header column",
+                       name_a="test file header", name_b="baseline file header")
     if len(base_header) != len(test_header):
         raise ValueError('Files have different column header sizes')
 
@@ -124,7 +135,7 @@ def parse_bed(file, type, contigs):
     n_cols = len(header)
     num_records = 0
     num_sizes = len(SIZES)
-    size_counts = [0]*(num_sizes+1)
+    size_counts = [0] * (num_sizes + 1)
     contigs_set = set(contigs)
     ids = []
     for line in file:
@@ -151,6 +162,7 @@ def get_size_distribution_index(tokens, num_sizes):
         if interval_size < SIZES[i]:
             return i
     return len(SIZES)
+
 
 def check_record(columns, n_cols, type, contigs):
     tu.test_iterable_size(columns, n_cols)

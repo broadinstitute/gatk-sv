@@ -103,7 +103,8 @@ def main():
     parser.add_argument('inbed', help='BED file of CNVs to defragment. Must ' +
                                       'be BED7, where col4 = var ID, col5 = sample ID, '
                                       'col6 = cnv type and col7 = callers.')
-    parser.add_argument('outbed', help='Output BED file for defragmented CNVs.')
+    parser.add_argument(
+        'outbed', help='Output BED file for defragmented CNVs.')
     parser.add_argument('--max-dist', dest='maxdist', type=float, default=0.25,
                         help='Maximum distance to extend each CNV during ' +
                              'defragmentation, specified as a fraction of total CNV ' +

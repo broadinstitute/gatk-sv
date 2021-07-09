@@ -75,7 +75,7 @@ def disruption_type(hit_type, svtype):
             'BOTH-INSIDE': 'DISRUPTING',
             'ONE-INSIDE': 'DISRUPTING',
             'SPAN': 'DISRUPTING'},
-        }
+    }
 
     return disruptions[svtype][hit_type]
 

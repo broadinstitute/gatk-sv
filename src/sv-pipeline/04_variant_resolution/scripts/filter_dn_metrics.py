@@ -175,7 +175,8 @@ class DenovoFilter:
             # If <5 kb, check for any PE/SR evidence
             elif parent.svsize < 5000:
                 if self.SR_support:
-                    filter_pass = filter_pass or (parent.SR_sum_called_median >= 2)
+                    filter_pass = filter_pass or (
+                        parent.SR_sum_called_median >= 2)
                 if self.PE_support:
                     filter_pass = filter_pass or (parent.PE_called_median >= 2)
 
@@ -316,7 +317,8 @@ def filter_denovo(metrics, fam, cutoffs):
                     father = sample
 
         # test each child separately
-        tests = [DenovoFilter(child, father, mother, cutoffs) for child in children]
+        tests = [DenovoFilter(child, father, mother, cutoffs)
+                 for child in children]
 
         # run de novo filtering to identify final set of called samples
         supports = []
@@ -372,7 +374,7 @@ def format_cutoffs(cutoffs):
     cutoffs = cutoffs.loc[cutoffs.test.isin(tests)].copy()
 
     cutoffs = cutoffs.loc[cutoffs.max_svsize.isnull()].copy()
-    
+
     cutoffs.loc[cutoffs.test != 'RD', 'svtype'] = 'SV'
     cutoffs.algtype = cutoffs.algtype.str.lower()
 

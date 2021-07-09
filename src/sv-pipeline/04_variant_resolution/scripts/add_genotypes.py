@@ -19,15 +19,15 @@ def make_multiallelic_alts(record, max_CN, is_bca=False):
     Add alts for CN states up to half of max observed total CN
     """
 
-    max_haplo_CN = int(np.ceil(max_CN / 2)) 
+    max_haplo_CN = int(np.ceil(max_CN / 2))
 
     if is_bca:
-        alts = tuple(['<CN1>'] + 
+        alts = tuple(['<CN1>'] +
                      ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
     else:
-        alts = tuple(['<CN0>'] + 
+        alts = tuple(['<CN0>'] +
                      ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
-    
+
     stop = record.stop
     record.alts = alts
     record.stop = stop
@@ -138,16 +138,25 @@ def update_vcf_header(header):
         if key not in 'GT GQ'.split():
             header.formats.remove_header(key)
 
-    header.add_line('##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description="Predicted copy state">')
-    header.add_line('##FORMAT=<ID=RD_GQ,Number=1,Type=Integer,Description="Read-depth genotype quality">')
-    header.add_line('##FORMAT=<ID=PE_GT,Number=1,Type=Integer,Description="Paired-end genotype">')
-    header.add_line('##FORMAT=<ID=PE_GQ,Number=1,Type=Integer,Description="Paired-end genotype quality">')
-    header.add_line('##FORMAT=<ID=SR_GT,Number=1,Type=Integer,Description="Split-read genotype">')
-    header.add_line('##FORMAT=<ID=SR_GQ,Number=1,Type=Integer,Description="Split read genotype quality">')
-    header.add_line('##FORMAT=<ID=EV,Number=1,Type=Integer,Description="Classes of evidence supporting final genotype">')
+    header.add_line(
+        '##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description="Predicted copy state">')
+    header.add_line(
+        '##FORMAT=<ID=RD_GQ,Number=1,Type=Integer,Description="Read-depth genotype quality">')
+    header.add_line(
+        '##FORMAT=<ID=PE_GT,Number=1,Type=Integer,Description="Paired-end genotype">')
+    header.add_line(
+        '##FORMAT=<ID=PE_GQ,Number=1,Type=Integer,Description="Paired-end genotype quality">')
+    header.add_line(
+        '##FORMAT=<ID=SR_GT,Number=1,Type=Integer,Description="Split-read genotype">')
+    header.add_line(
+        '##FORMAT=<ID=SR_GQ,Number=1,Type=Integer,Description="Split read genotype quality">')
+    header.add_line(
+        '##FORMAT=<ID=EV,Number=1,Type=Integer,Description="Classes of evidence supporting final genotype">')
 
-    header.add_line('##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description="Multiallelic site">')
-    header.add_line('##INFO=<ID=varGQ,Number=1,Type=Integer,Description="Variant genotype quality">')
+    header.add_line(
+        '##INFO=<ID=MULTIALLELIC,Number=0,Type=Flag,Description="Multiallelic site">')
+    header.add_line(
+        '##INFO=<ID=varGQ,Number=1,Type=Integer,Description="Variant genotype quality">')
 
 
 def main():
@@ -170,7 +179,8 @@ def main():
     #  fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
     names = ('key name sample RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ GT GQ EV').split()
-    genotypes = pd.read_table(args.genotypes, names=names,dtype={'sample':str}, sep='\s+')
+    genotypes = pd.read_table(args.genotypes, names=names, dtype={
+                              'sample': str}, sep='\s+')
     genotypes = genotypes.set_index('name sample'.split())
 
     # sort genotype table for faster indexing

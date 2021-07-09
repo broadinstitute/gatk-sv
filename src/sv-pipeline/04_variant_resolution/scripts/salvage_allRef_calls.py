@@ -10,22 +10,22 @@ Reformat 100% reference calls salvaged during pesr + depth merging
 
 import argparse
 import sys
-import heapq
-import itertools
-from collections import deque, defaultdict
 import pysam
-import svtk.utils as svu
 import random
 import string
 
 
-#Reformat salvaged records to be consistent with existing naming scheme
+# Reformat salvaged records to be consistent with existing naming scheme
 def reformat(record, prefix):
     record.info['MEMBERS'] = record.id
-    record.id = prefix + '_' + ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(10))
+    record.id = prefix + '_' + \
+        ''.join(random.choice(string.ascii_uppercase + string.digits)
+                for _ in range(10))
     return record
 
-#Main block
+# Main block
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -33,11 +33,11 @@ def main():
     parser.add_argument('vcf')
     parser.add_argument('fout')
     parser.add_argument('-p', '--prefix', default='salvaged',
-                       help='Prefix to prepend to reformatted variant IDs.')
+                        help='Prefix to prepend to reformatted variant IDs.')
     args = parser.parse_args()
 
     if args.vcf in '- stdin'.split():
-        vcf = pysam.VariantFile(sys.stdin) 
+        vcf = pysam.VariantFile(sys.stdin)
     else:
         vcf = pysam.VariantFile(args.vcf)
 

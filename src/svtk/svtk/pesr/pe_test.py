@@ -43,7 +43,8 @@ class PETest(PESRTest):
 
         # Clean up columns
         results['name'] = record.id
-        results['bg_frac'] = results.called / (results.background + results.called)
+        results['bg_frac'] = results.called / \
+            (results.background + results.called)
         results['bg_frac'] = results.bg_frac.fillna(0)
         cols = 'name log_pval called background bg_frac'.split()
 
@@ -98,14 +99,14 @@ class PETest(PESRTest):
             pairs = []
 
         counts = defaultdict(int)
-        i=0
+        i = 0
         for pair in pairs:
             pair = _DiscPair(*pair)
-            if(i>1000000):
+            if(i > 1000000):
                 print(region)
                 counts = defaultdict(int)
                 break
-            i+=1
+            i += 1
             # Pairs were selected based on window around chrA;
             # just need to check chrB
             if pair.chrB != record.info['CHR2']:
@@ -127,14 +128,15 @@ class PETest(PESRTest):
 
 
 class PETestRunner(PESRTestRunner):
-    def __init__(self, vcf, discfile, fout, n_background=160, common=False, 
+    def __init__(self, vcf, discfile, fout, n_background=160, common=False,
                  window_in=50, window_out=500,
                  whitelist=None, blacklist=None, medians=None, log=False):
         """
         vcf : pysam.VariantFile
         discfile : pysam.TabixFile
         """
-        self.petest = PETest(discfile, common, window_in, window_out, medians=medians)
+        self.petest = PETest(discfile, common, window_in,
+                             window_out, medians=medians)
         self.fout = fout
 
         super().__init__(vcf, common, n_background, whitelist, blacklist, log)

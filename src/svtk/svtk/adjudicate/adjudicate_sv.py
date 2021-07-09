@@ -8,7 +8,7 @@
 
 """
 
-import sys 
+import sys
 import pandas as pd
 import numpy as np
 from svtk.adjudicate import rf_classify, labelers
@@ -26,14 +26,15 @@ def adjudicate_BAF(metrics, labeler, name):
                              ~testable.is_outlier_specific]
 
     trainable['label'] = labeler.label(trainable)
-    trainable.to_csv('{0}_DEL_trainable.txt'.format(name), index=False, sep='\t')
+    trainable.to_csv('{0}_DEL_trainable.txt'.format(
+        name), index=False, sep='\t')
     testable.to_csv('{0}_DEL_testable.txt'.format(name), index=False, sep='\t')
 
     features = 'BAF_snp_ratio BAF_del_loglik'.split()
     cutoffs = {'indep': ['BAF_snp_ratio'], 'dep': ['BAF_del_loglik']}
 
     del_cutoffs = rf_classify(metrics, trainable, testable, features,
-                                       labeler, cutoffs, name)
+                              labeler, cutoffs, name)
 
     # Duplications
     testable = metrics.loc[(metrics.svtype == 'DUP') &
@@ -42,13 +43,14 @@ def adjudicate_BAF(metrics, labeler, name):
                              ~testable.chrom.isin(ALLOSOMES) &
                              ~testable.is_outlier_specific]
     trainable['label'] = labeler.label(trainable)
-    trainable.to_csv('{0}_DUP_trainable.txt'.format(name), index=False, sep='\t')
+    trainable.to_csv('{0}_DUP_trainable.txt'.format(
+        name), index=False, sep='\t')
     testable.to_csv('{0}_DUP_testable.txt'.format(name), index=False, sep='\t')
     features = 'BAF_KS_stat BAF_KS_log_pval'.split()
     cutoffs = {'indep': ['BAF_KS_stat'], 'dep': ['BAF_KS_log_pval']}
 
     dup_cutoffs = rf_classify(metrics, trainable, testable, features,
-                                       labeler, cutoffs, name)
+                              labeler, cutoffs, name)
 
     # Combine cutoffs
     del_cutoffs['svtype'] = 'DEL'
@@ -64,14 +66,16 @@ def adjudicate_BAF(metrics, labeler, name):
 
 
 def adjudicate_BAF1(metrics):
-    cutoffs = adjudicate_BAF(metrics, labelers.BAF1TrainingLabeler(), 'BAF1_prob')
+    cutoffs = adjudicate_BAF(
+        metrics, labelers.BAF1TrainingLabeler(), 'BAF1_prob')
     cutoffs['test'] = 'BAF1'
 
     return cutoffs
 
 
 def adjudicate_BAF2(metrics):
-    cutoffs = adjudicate_BAF(metrics, labelers.BAF2TrainingLabeler(), 'BAF2_prob')
+    cutoffs = adjudicate_BAF(
+        metrics, labelers.BAF2TrainingLabeler(), 'BAF2_prob')
     cutoffs['test'] = 'BAF2'
     return cutoffs
 
@@ -88,7 +92,7 @@ def adjudicate_SR1(metrics):
     trainable.to_csv('SR1_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoffs, 'SR1_prob')
+                          labeler, cutoffs, 'SR1_prob')
 
     cutoffs.to_csv('SR1_cutoffs.txt', index=False, sep='\t')
     cutoffs['test'] = 'SR1'
@@ -100,7 +104,7 @@ def adjudicate_SR1(metrics):
 
 def adjudicate_RD(metrics):
     features = ["RD_Median_Separation", "RD_log_pval", "RD_log_2ndMaxP"]
-    cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'], 
+    cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'],
                        'dep': ['RD_log_2ndMaxP']}
     labeler = labelers.RDTrainingLabeler()
     cutoff_dfs = []
@@ -117,7 +121,7 @@ def adjudicate_RD(metrics):
     trainable['label'] = labeler.label(trainable)
     trainable.to_csv('RD_pesr_gt5kb_trainable.txt', index=False, sep='\t')
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoff_features, 'RD_prob')
+                          labeler, cutoff_features, 'RD_prob')
 
     cutoff_dfs.append(cutoffs)
     cutoff_dfs[0]['algtype'] = 'PESR'
@@ -137,7 +141,7 @@ def adjudicate_RD(metrics):
     trainable.to_csv('RD_pesr_lt5kb_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoff_features, 'RD_prob')
+                          labeler, cutoff_features, 'RD_prob')
 
     cutoff_dfs.append(cutoffs)
     cutoff_dfs[1]['algtype'] = 'PESR'
@@ -146,7 +150,7 @@ def adjudicate_RD(metrics):
     cutoff_dfs[1]['svtype'] = 'CNV'
 
     # Depth dels
-    cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'], 
+    cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'],
                        'dep': []}
     testable = metrics.loc[metrics.name.str.contains('_depth_') &
                            (metrics.svtype == 'DEL')]
@@ -158,15 +162,15 @@ def adjudicate_RD(metrics):
     trainable.to_csv('RD_depth_DEL_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoff_features, 'RD_prob',
-                                   clean_cutoffs=True)
-    
+                          labeler, cutoff_features, 'RD_prob',
+                          clean_cutoffs=True)
+
     cutoff_dfs.append(cutoffs)
     cutoff_dfs[2]['algtype'] = 'Depth'
     cutoff_dfs[2]['max_svsize'] = np.nan
     cutoff_dfs[2]['min_svsize'] = 5000
     cutoff_dfs[2]['svtype'] = 'DEL'
-    
+
     # Depth dups
     testable = metrics.loc[metrics.name.str.contains('_depth_') &
                            (metrics.svtype == 'DUP')]
@@ -178,9 +182,9 @@ def adjudicate_RD(metrics):
     trainable.to_csv('RD_depth_DUP_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoff_features, 'RD_prob',
-                                   clean_cutoffs=True)
-    
+                          labeler, cutoff_features, 'RD_prob',
+                          clean_cutoffs=True)
+
     cutoff_dfs.append(cutoffs)
     cutoff_dfs[3]['algtype'] = 'Depth'
     cutoff_dfs[3]['max_svsize'] = np.nan
@@ -212,7 +216,7 @@ def adjudicate_PE(metrics):
     trainable.to_csv('PE_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoffs, 'PE_prob')
+                          labeler, cutoffs, 'PE_prob')
 
     cutoffs.to_csv('PE_cutoffs.txt', index=False, sep='\t')
     cutoffs['test'] = 'PE'
@@ -236,7 +240,7 @@ def adjudicate_SR2(metrics):
     trainable.to_csv('SR2_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoffs, 'SR2_prob')
+                          labeler, cutoffs, 'SR2_prob')
     cutoffs.to_csv('SR2_cutoffs.txt', index=False, sep='\t')
 
     cutoffs['test'] = 'SR2'
@@ -259,7 +263,7 @@ def adjudicate_PESR(metrics):
     trainable.to_csv('PESR_trainable.txt', index=False, sep='\t')
 
     cutoffs = rf_classify(metrics, trainable, testable, features,
-                                   labeler, cutoffs, 'PESR_prob')
+                          labeler, cutoffs, 'PESR_prob')
 
     cutoffs.to_csv('PESR_cutoffs.txt', index=False, sep='\t')
     cutoffs['test'] = 'PESR'
@@ -288,10 +292,12 @@ def consolidate_score(metrics, cutoffs):
     prob_cols = 'PE_prob SR1_prob RD_prob'.split()
 
     # If variants pass both RD + PE/SR or fail both, use max across the three
-    metrics.loc[gt5kb & ~(PESR_pass ^ RD_pass), 'score'] = metrics[prob_cols].max(axis=1)
+    metrics.loc[gt5kb & ~(PESR_pass ^ RD_pass),
+                'score'] = metrics[prob_cols].max(axis=1)
 
     # If variants pass PE/SR but not RD, use max PE/SR and reclassify as BND
-    metrics.loc[gt5kb & PESR_pass & ~RD_pass, 'score'] = metrics[pesr_cols].max(axis=1)
+    metrics.loc[gt5kb & PESR_pass & ~RD_pass,
+                'score'] = metrics[pesr_cols].max(axis=1)
     metrics.loc[gt5kb & PESR_pass & ~RD_pass, 'svtype'] = 'BND'
 
     # If variants pass RD but not PE/SR, pass if they pass depth-based cutoffs
@@ -306,7 +312,7 @@ def consolidate_score(metrics, cutoffs):
 
     metrics.loc[depth_dels & depth_pass, 'score'] = metrics.RD_prob
     metrics.loc[depth_dels & ~depth_pass, 'score'] = 0.495
-    
+
     # dups
     depth_dups = gt5kb & ~PESR_pass & RD_pass & (metrics.svtype == 'DUP')
 
@@ -352,5 +358,5 @@ def adjudicate_SV(metrics):
     cutoffs = pd.concat(cutoffs)
 
     scores = consolidate_score(metrics, cutoffs)
-    
+
     return scores, cutoffs

@@ -42,11 +42,12 @@ def main():
                         default=sys.stdout, nargs='?')
     args = parser.parse_args()
 
-    clustered = pd.read_table(args.bed,dtype={'sample': str})
+    clustered = pd.read_table(args.bed, dtype={'sample': str})
 
     bed = make_depth_rdtest_bed(clustered)
 
     bed.to_csv(args.fout, sep='\t', index=False)
+
 
 if __name__ == '__main__':
     main()

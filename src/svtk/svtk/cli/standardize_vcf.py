@@ -66,7 +66,7 @@ def main(argv):
     # Add contigs to header if provided
     if args.contigs:
         template = pkg_resources.resource_filename(
-                'svtk', 'data/no_contigs_template.vcf')
+            'svtk', 'data/no_contigs_template.vcf')
         template = VariantFile(template)
         header = template.header
         contig_line = '##contig=<ID={contig},length={length}>'
@@ -76,7 +76,7 @@ def main(argv):
     # Use GRCh37 by default
     else:
         template = pkg_resources.resource_filename(
-                'svtk', 'data/GRCh37_template.vcf')
+            'svtk', 'data/GRCh37_template.vcf')
         template = VariantFile(template)
         header = template.header
 
@@ -97,9 +97,9 @@ def main(argv):
     fout = VariantFile(args.fout, mode='w', header=header)
 
     standardizer = VCFStandardizer.create(
-            args.source, vcf, fout, sample_names_list,
-            args.prefix, args.min_size, args.include_reference_sites,
-            args.call_null_sites)
+        args.source, vcf, fout, sample_names_list,
+        args.prefix, args.min_size, args.include_reference_sites,
+        args.call_null_sites)
 
     for record in standardizer.standardize_vcf():
         fout.write(record)

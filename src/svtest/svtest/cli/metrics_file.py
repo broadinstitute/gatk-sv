@@ -31,6 +31,7 @@ EXPECTED_COLUMNS = ["name", "chrom", "svtype", "svsize", "vf", "poor_region_cov"
 
 EXPECTED_TYPES = ["DEL", "DUP", "INS", "INV", "BND"]
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -63,13 +64,15 @@ def write_metrics(metrics):
 
 
 def get_metrics(df, contigs, common):
-    tu.test_sets_equal(df["chrom"], contigs, item_str="contig", name_a="metric file contigs", name_b="contigs list")
-    tu.test_sets_equal(df.columns, EXPECTED_COLUMNS, item_str="column", name_a="metric file header", name_b="expected columns")
+    tu.test_sets_equal(df["chrom"], contigs, item_str="contig",
+                       name_a="metric file contigs", name_b="contigs list")
+    tu.test_sets_equal(df.columns, EXPECTED_COLUMNS, item_str="column",
+                       name_a="metric file header", name_b="expected columns")
 
     # Columns used as features for adjudication in module 03
     feature_cols = ["BAF_snp_ratio", "BAF_del_loglik", "BAF_KS_stat", "BAF_KS_log_pval",
-            "SR_sum_log_pval", "SR_sum_bg_frac", "RD_Median_Separation", "RD_log_pval",
-            "RD_log_2ndMaxP", "PE_log_pval", "PE_bg_frac"]
+                    "SR_sum_log_pval", "SR_sum_bg_frac", "RD_Median_Separation", "RD_log_pval",
+                    "RD_log_2ndMaxP", "PE_log_pval", "PE_bg_frac"]
     metric_means = get_column_means(df, feature_cols)
     metric_empty_counts = get_columns_num_empty(df, feature_cols)
 

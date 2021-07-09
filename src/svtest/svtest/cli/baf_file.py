@@ -25,6 +25,7 @@ COUNT_KEY = "baf_count"
 
 EXPECTED_COLUMNS = 4
 
+
 def main(argv):
     parser = argparse.ArgumentParser(
         description=__doc__,

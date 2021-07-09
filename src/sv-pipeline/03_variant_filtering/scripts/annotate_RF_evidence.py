@@ -31,7 +31,7 @@ def main():
     fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
     scores = pd.read_table(args.scores)
-    
+
     records = [r for r in vcf]
     IDs = [r.id for r in records]
     scores = scores.loc[scores.name.isin(IDs)].copy()

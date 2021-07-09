@@ -24,4 +24,4 @@ jobs:
         pip install flake8 pytest
     - name: Lint with flake8
       run: |
-        tox -e flake8
+        tox -e lint

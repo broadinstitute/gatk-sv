@@ -22,11 +22,12 @@ def select_mosaic_candidates(vcf, metrics, mode, cutoffs):
 
     if mode == 'pesr':
         candidates = candidates.loc[candidates.RD_log_pval >= cutoffs.min_pval]
-        candidates = candidates.loc[candidates.RD_log_2ndMaxP >= cutoffs.min_secondp]
+        candidates = candidates.loc[candidates.RD_log_2ndMaxP >=
+                                    cutoffs.min_secondp]
     else:
         pval_filter = (((candidates.svtype == 'DEL') & (candidates.RD_log_pval >= cutoffs.del_min_pval)) |
                        ((candidates.svtype == 'DUP') & (candidates.RD_log_pval >= cutoffs.dup_min_pval)))
-                 
+
         candidates = candidates.loc[pval_filter]
 
     candidate_IDs = candidates.name.values
@@ -50,8 +51,10 @@ def choose_cutoffs(cutoffs, mode):
     else:
         cutoffs = cutoffs.loc[cutoffs.algtype == 'PESR']
         cutoffs = cutoffs.loc[cutoffs.min_svsize == 1000]
-        min_pval = cutoffs.loc[cutoffs.metric == 'RD_log_pval', 'cutoff'].iloc[0]
-        min_secondp = cutoffs.loc[cutoffs.metric == 'RD_log_2ndMaxP', 'cutoff'].iloc[0]
+        min_pval = cutoffs.loc[cutoffs.metric ==
+                               'RD_log_pval', 'cutoff'].iloc[0]
+        min_secondp = cutoffs.loc[cutoffs.metric ==
+                                  'RD_log_2ndMaxP', 'cutoff'].iloc[0]
         Cutoffs = namedtuple('Cutoffs', 'min_pval min_secondp'.split())
         cutoffs = Cutoffs(min_pval, min_secondp)
 

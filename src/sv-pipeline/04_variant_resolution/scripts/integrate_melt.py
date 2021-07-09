@@ -48,7 +48,7 @@ def integrate_melt(cxsv, melt, fout, window=100):
         samplesA = interval.fields[6].split(',')
         samplesB = interval.fields[13].split(',')
 
-        if (samples_overlap(samplesA, samplesB) and 
+        if (samples_overlap(samplesA, samplesB) and
                 close_enough(interval) and interval.fields[4] == 'INS'):
             excluded_cxsv.append(interval.fields[3])
 

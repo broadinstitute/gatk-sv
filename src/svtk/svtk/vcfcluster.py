@@ -144,7 +144,7 @@ class VCFCluster(GenomeSLINK):
                                    match_strands=self.match_strands,
                                    match_svtypes=self.match_svtypes,
                                    sample_overlap=self.sample_overlap)
-        
+
         for records in clusters:
             cluster = SVRecordCluster(records)
 
@@ -155,7 +155,8 @@ class VCFCluster(GenomeSLINK):
                                                       self.preserve_genotypes)
                 record = cluster.merge_record_infos(record, self.header)
                 if self.preserve_ids:
-                    record.info['MEMBERS'] = tuple(r.record.id for r in records)
+                    record.info['MEMBERS'] = tuple(
+                        r.record.id for r in records)
 
                 if SVRecord(record).is_in(self.blacklist):
                     continue
@@ -187,7 +188,7 @@ class VCFCluster(GenomeSLINK):
 
         # Read stock template
         template = pkg_resources.resource_filename(
-                        'svtk', 'data/vcfcluster_template.vcf')
+            'svtk', 'data/vcfcluster_template.vcf')
 
         # Make header
         template = VariantFile(template)
@@ -218,11 +219,11 @@ class VCFCluster(GenomeSLINK):
                 tup = (info.name, info.number, info.type, info.description)
                 if tup not in infos:
                     infos.append(tup)
-        
+
         info_line = '##INFO=<ID={0},Number={1},Type={2},Description="{3}">'
         for info in infos:
             header.add_line(info_line.format(*info))
-        
+
         if self.preserve_ids and 'MEMBERS' not in header.info.keys():
             info = ('##INFO=<ID=MEMBERS,Number=.,Type=String,'
                     'Description="IDs of cluster\'s constituent records.">')

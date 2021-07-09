@@ -4,9 +4,11 @@
 Useful utilities for working with pysam variant objects
 """
 
+
 def get_info_field(record, name):
     if name not in record.info:
-        raise ValueError("%s info field not found: %s" % (name, record.info.keys()))
+        raise ValueError("%s info field not found: %s" %
+                         (name, record.info.keys()))
     return record.info[name]
 
 
@@ -16,7 +18,8 @@ def get_record_length(record):
 
 def get_sv_type(record, expected_types):
     if "SVTYPE" not in record.info:
-        raise ValueError("SVTYPE info field not found: %s" % record.info.keys())
+        raise ValueError("SVTYPE info field not found: %s" %
+                         record.info.keys())
     type = record.info["SVTYPE"]
     if type not in expected_types:
         raise ValueError("Unexpected SVTYPE: %s" % type)
@@ -25,7 +28,8 @@ def get_sv_type(record, expected_types):
 
 def get_evidence_types(record, expected_types):
     if "EVIDENCE" not in record.info:
-        raise ValueError("EVIDENCE info field not found: %s" % record.info.keys())
+        raise ValueError("EVIDENCE info field not found: %s" %
+                         record.info.keys())
     types = record.info["EVIDENCE"]
     for type in types:
         if type not in expected_types:

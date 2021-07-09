@@ -40,8 +40,8 @@ def load_s3bam(bam_path, index_dir=None):
     # supports S3 paths directly
     s3 = boto3.client('s3')
     url = s3.generate_presigned_url(
-            ClientMethod='get_object',
-            Params={'Bucket': bucket, 'Key': bam_path},
-            ExpiresIn=86400)
+        ClientMethod='get_object',
+        Params={'Bucket': bucket, 'Key': bam_path},
+        ExpiresIn=86400)
 
     return pysam.AlignmentFile(url)

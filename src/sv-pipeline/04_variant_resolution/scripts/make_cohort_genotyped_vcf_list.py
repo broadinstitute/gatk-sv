@@ -9,7 +9,6 @@ Run before 04_integrate_batches
 """
 
 import argparse
-import os
 import firecloud.api as fapi
 from firecloud import fccore
 from firecloud import errors as ferrors
@@ -51,7 +50,7 @@ def make_vcf_lists(namespace, workspace, batches):
 
     return [('cohort_genotyped_pesr_vcf_list', 'cohort.pesr_vcfs.list'),
             ('cohort_genotyped_depth_vcf_list', 'cohort.depth_vcfs.list'),
-            ('cohort_discfile_list', 'cohort.discfile.list'), 
+            ('cohort_discfile_list', 'cohort.discfile.list'),
             ('cohort_discfile_idx_list', 'cohort.discfile_idx.list')]
 
 
@@ -80,7 +79,8 @@ def update_metadata(namespace, workspace, sample_set, data):
         list_path = fpath.format(bucket_name, fname)
         update = fapi._attr_set(attr, list_path)
         try:
-            r = fapi.update_entity(namespace, workspace, 'sample_set', sample_set, [update])
+            r = fapi.update_entity(namespace, workspace,
+                                   'sample_set', sample_set, [update])
             fapi._check_response_code(r, 200)
         except ferrors.FireCloudServerError:
             pass
@@ -115,6 +115,7 @@ def main():
 
     #  os.remove(pesr_vcflist)
     #  os.remove(depth_vcflist)
+
 
 if __name__ == '__main__':
     main()
