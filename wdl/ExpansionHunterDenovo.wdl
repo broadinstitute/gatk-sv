@@ -65,11 +65,6 @@ workflow EHdnSTRAnalysis {
     profile_len: 12
   }
 
-  # This scatter serves two purposes:
-  # 1-  Ensures an index file for each BAM of CRAM file;
-  # 2-  Splits input samples in case or control groups,
-  #     which will be used to construct the `manifest.tsv`
-  #     file required for ehdn.
   scatter (i in range(length(sample_bams_or_crams))) {
     File sample_bam_or_cram_ = sample_bams_or_crams[i]
     File bam_or_cram_index_ =
@@ -77,34 +72,19 @@ workflow EHdnSTRAnalysis {
         select_first([sample_bams_or_crams_indexes])[i]
       else
         sample_bam_or_cram_ +
-          if basename(sample_bam_or_cram_, ".bam") + ".bam" ==
-              basename(sample_bam_or_cram_) then
-            ".bai"
-          else
-            ".crai"
+        if  basename(sample_bam_or_cram_, ".bam") + ".bam" ==
+            basename(sample_bam_or_cram_) then
+          ".bai"
+        else
+          ".crai"
 
-    if (samples_status[i] == "case") {
-      File case_bam_cram_ = sample_bam_or_cram_
-      File case_bam_or_cram_index_ = bam_or_cram_index_
-    }
-    if (samples_status[i] == "control") {
-      File control_bam_or_cram_ = sample_bam_or_cram_
-      File control_bam_or_cram_index_ = bam_or_cram_index_
-    }
-  }
-
-  Array[File] case_bams_or_crams = select_all(case_bam_cram_)
-  Array[File] case_bams_or_crams_indexes = select_all(case_bam_or_cram_index_)
-  Array[File] control_bams_or_crams = select_all(control_bam_or_cram_)
-  Array[File] control_bams_or_crams_indexes = select_all(control_bam_or_cram_index_)
-
-  scatter (pair in zip(case_bams_or_crams, case_bams_or_crams_indexes)) {
-    String case_sample_filename = basename(pair.left, ".bam")
-    call ComputeSTRProfile as CasesProfiles {
+    # TODO: change this to work for both BAM and CRAM.
+    String case_sample_filename = basename(sample_bam_or_cram_, ".bam")
+    call ComputeSTRProfile {
       input:
         filename = case_sample_filename,
-        bam_or_cram = pair.left,
-        bam_or_cram_index = pair.right,
+        bam_or_cram = sample_bam_or_cram_,
+        bam_or_cram_index = bam_or_cram_index_,
         reference_fasta = reference_fasta,
         reference_fasta_index = reference_fasta_index,
         min_anchor_mapq = min_anchor_mapq,
@@ -115,27 +95,22 @@ workflow EHdnSTRAnalysis {
     }
   }
 
-  scatter (pair in zip(control_bams_or_crams, control_bams_or_crams_indexes)) {
-    String control_sample_filename = basename(pair.left, ".bam")
-    call ComputeSTRProfile as ControlsProfiles {
-      input:
-        filename = control_sample_filename,
-        bam_or_cram = pair.left,
-        bam_or_cram_index = pair.right,
-        reference_fasta = reference_fasta,
-        reference_fasta_index = reference_fasta_index,
-        min_anchor_mapq = min_anchor_mapq,
-        max_irr_mapq = max_irr_mapq,
-        ehdn_docker = ehdn_docker,
-        runtime_attr_override = runtime_attr_str_profile,
-        postfixes = postfixes
+  scatter (i in range(length(samples_status))) {
+    if (samples_status[i] == "case") {
+      File case_str_profile_json = ComputeSTRProfile.str_profile[i]
+    }
+    if (samples_status[i] == "control") {
+      File control_str_profile_json = ComputeSTRProfile.str_profile[i]
     }
   }
+
+  Array[File] cases_str_profile_json = select_all(case_str_profile_json)
+  Array[File] controls_str_profile_json = select_all(control_str_profile_json)
 
   call Merge {
     input:
-      cases = CasesProfiles.str_profile,
-      controls = ControlsProfiles.str_profile,
+      cases = cases_str_profile_json,
+      controls = controls_str_profile_json,
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index,
       ehdn_docker = ehdn_docker,
@@ -154,12 +129,9 @@ workflow EHdnSTRAnalysis {
   }
 
   output {
-    Array[File] cases_locus = CasesProfiles.locus
-    Array[File] cases_motif = CasesProfiles.motif
-    Array[File] cases_str_profile = CasesProfiles.str_profile
-    Array[File] controls_locus = ControlsProfiles.locus
-    Array[File] controls_motif = ControlsProfiles.motif
-    Array[File] controls_str_profile = ControlsProfiles.str_profile
+    Array[File] cases_locus = ComputeSTRProfile.locus
+    Array[File] cases_motif = ComputeSTRProfile.motif
+    Array[File] cases_str_profile = ComputeSTRProfile.str_profile
     File multisample_profile = Merge.multisample_profile
     Array[File] analysis_results = STRAnalyze.results
   }
