@@ -85,7 +85,7 @@ class CMD_line_args_parser:
         docker_remote_args_group.add_argument('--gcr-project',
                                               type=str,
                                               help='GCR billing project to push the images to. If not given, the '
-                                                     'built image(s) will not be push to GCR.')
+                                                   'built image(s) will not be push to GCR.')
 
         docker_remote_args_group.add_argument('--update-latest',
                                               action='store_true',
