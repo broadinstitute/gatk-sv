@@ -1,6 +1,6 @@
 name: Build Docker Images
 
-on: 
+on:
   push:
     branches:
       - master
@@ -8,6 +8,7 @@ on:
       - 'src/**'
       - 'dockerfiles/**'
       - 'scripts/**'
+      - '.github/workflows/sv_pipeline_docker.yml'
   pull_request:
     branches:
       - master
@@ -15,6 +16,7 @@ on:
       - 'src/**'
       - 'dockerfiles/**'
       - 'scripts/**'
+      - '.github/workflows/sv_pipeline_docker.yml'
 
 jobs:
   test_build:
@@ -28,12 +30,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
-      
+
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-          
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
