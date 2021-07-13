@@ -31,6 +31,7 @@ workflow ShardedCluster {
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_shard_vcf_precluster
+    RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
 
@@ -79,9 +80,17 @@ workflow ShardedCluster {
         file=ShardClusters.out[i],
         sv_base_mini_docker=sv_base_mini_docker
     }
-    call SvtkVcfCluster {
+    call PullVcfShard {
       input:
         vcf=vcf,
+        vids=ShardClusters.out[i],
+        prefix="~{prefix}.~{contig}.~{sv_type}.shard_${i}.unclustered",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_pull_vcf_shard
+    }
+    call SvtkVcfCluster {
+      input:
+        vcf=PullVcfShard.out,
         vids=ShardClusters.out[i],
         num_samples=CountSamples.num_samples,
         num_vids=CountLines.out,
@@ -288,6 +297,45 @@ task ShardClusters {
   }
 }
 
+task PullVcfShard {
+  input {
+    File vcf
+    File vids
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String output_prefix = "~{prefix}"
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    bcftools view --no-version --include ID=@~{vids} ~{vcf} -O z -o ~{output_prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+  }
+}
+
 task SvtkVcfCluster {
   input {
     File vcf
@@ -311,7 +359,7 @@ task SvtkVcfCluster {
   String output_prefix = "~{prefix}"
   RuntimeAttr runtime_default = object {
                                   mem_gb: default_mem_gb,
-                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 10.0),
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -330,21 +378,20 @@ task SvtkVcfCluster {
 
   command <<<
     set -euo pipefail
-    bcftools view --no-version --include ID=@~{vids} ~{vcf} -O z -o unclustered.vcf.gz
     ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -p bed ~{exclude_list}" else ""}
     #Run clustering
-    svtk vcfcluster <(echo "unclustered.vcf.gz") ~{output_prefix}.vcf \
-      -d ~{dist} \
-      -f ~{frac} \
-      ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
-      -z ~{svsize} \
-      -p ~{vid_prefix} \
-      -t ~{sep=',' sv_types} \
-      -o ~{sample_overlap} \
-      --preserve-ids \
-      --preserve-genotypes \
-      --preserve-header
-    gzip ~{output_prefix}.vcf
+    svtk vcfcluster <(echo "~{vcf}") - \
+        -d ~{dist} \
+        -f ~{frac} \
+        ~{if defined(exclude_list) then "-x ~{exclude_list}" else ""} \
+        -z ~{svsize} \
+        -p ~{vid_prefix} \
+        -t ~{sep=',' sv_types} \
+        -o ~{sample_overlap} \
+        --preserve-ids \
+        --preserve-genotypes \
+        --preserve-header \
+      | gzip > ~{output_prefix}.vcf.gz
   >>>
 
   output {

@@ -32,6 +32,7 @@ workflow ClusterSingleChrom {
 
     # overrides for ShardedCluster
     RuntimeAttr? runtime_override_shard_vcf_precluster
+    RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
     RuntimeAttr? runtime_override_concat_shards
@@ -72,6 +73,7 @@ workflow ClusterSingleChrom {
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
+        runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
         runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
         runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
         runtime_override_concat_shards=runtime_override_concat_shards,
