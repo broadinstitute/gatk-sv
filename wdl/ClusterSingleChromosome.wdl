@@ -80,6 +80,7 @@ workflow ClusterSingleChrom {
     call RenameVariants {
       input:
         vcf=ShardedCluster.clustered_vcf,
+        vcf_index=ShardedCluster.clustered_vcf_idx,
         prefix=prefix,
         contig=contig,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -108,6 +109,7 @@ workflow ClusterSingleChrom {
 task RenameVariants {
   input {
     File vcf
+    File vcf_index
     String prefix
     String contig
 
