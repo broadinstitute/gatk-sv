@@ -11,14 +11,14 @@ from google.cloud import storage
 
 """
 Summary: Find GCS paths for specified workflow file outputs for multiple workflows at once without downloading metadata.
-    
+
 Caveats: Assumes cromwell file structure. Recommended for use with cromwell final_workflow_outputs_dir
     to reduce number of files to search. Requires file suffixes for each output file that are
     unique within the workflow directory.
 
 For usage & parameters: Run python get_output_paths.py --help
 
-Output: TSV file with columns for each output variable and a row for each 
+Output: TSV file with columns for each output variable and a row for each
     batch (or entity, if providing --entities-file), containing GCS output paths
 
 Author: Emma Pierce-Hoffman (epierceh@broadinstitute.org)
