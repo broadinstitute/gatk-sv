@@ -247,6 +247,7 @@ workflow Module07MinGQ {
   call MiniTasks.ConcatVcfs as CombineVcfs {
     input:
       vcfs=apply_filter_PCRMINUS.filtered_vcf,
+      naive=true,
       outfile_prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_CombineVcfs

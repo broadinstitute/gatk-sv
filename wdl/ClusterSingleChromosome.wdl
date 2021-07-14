@@ -95,7 +95,7 @@ workflow ClusterSingleChrom {
     input:
       vcfs=RenameVariants.out,
       vcfs_idx=RenameVariants.out_index,
-      merge_sort=true,
+      allow_overlaps=true,
       outfile_prefix="~{prefix}.~{contig}.precluster_concat",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_shards
@@ -119,8 +119,7 @@ task RenameVariants {
     RuntimeAttr? runtime_attr_override
   }
 
-  String raw_vcf_name = prefix + "." + contig + ".raw.vcf.gz"
-  String vcf_name = prefix + "." + contig + ".vcf.gz"
+  String vcf_name = prefix + "." + contig + ".renamed.vcf.gz"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -150,7 +149,7 @@ task RenameVariants {
     /opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
       --chrom ~{contig} \
       --prefix ~{prefix} \
-      ~{raw_vcf_name} - \
+      ~{vcf} - \
       | bgzip -c \
       > ~{vcf_name}
 

@@ -173,14 +173,17 @@ task ConcatVcfs {
   input {
     Array[File] vcfs
     Array[File]? vcfs_idx
-    Boolean merge_sort = false
+    Boolean allow_overlaps = false
+    Boolean naive = false
+    Boolean generate_index = true
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  String merge_flag = if merge_sort then "--allow-overlaps" else ""
+  String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
+  String naive_flag = if naive then "--naive-force" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -195,7 +198,7 @@ task ConcatVcfs {
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
     memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " SSD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
@@ -209,8 +212,12 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat --no-version -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix "~{outfile_name}"
+    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    if generate_index; then
+      tabix "~{outfile_name}"
+    else
+      touch ~{outfile_name}.tbi
+    fi
   >>>
 
   output {

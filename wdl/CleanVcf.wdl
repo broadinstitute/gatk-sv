@@ -75,6 +75,8 @@ workflow CleanVcf {
     input:
       vcfs=CleanVcf1a.intermediate_vcf,
       vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
+      naive=true,
+      generate_index=false,
       outfile_prefix=prefix + ".cleanVCF_step1.intermediate_vcf.merged",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_combine_step_1_vcfs

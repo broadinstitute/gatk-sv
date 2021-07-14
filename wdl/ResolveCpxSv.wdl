@@ -118,7 +118,7 @@ workflow ResolveComplexSv {
       input:
         vcfs=RestoreUnresolvedCnvPerShard.res,
         vcfs_idx=RestoreUnresolvedCnvPerShard.res_idx,
-        merge_sort=true,
+        allow_overlaps=true,
         outfile_prefix=prefix + ".resolved",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat_resolved_per_shard

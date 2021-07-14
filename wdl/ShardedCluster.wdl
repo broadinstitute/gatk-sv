@@ -129,7 +129,7 @@ workflow ShardedCluster {
       input:
         vcfs=SortVcf.out,
         vcfs_idx=SortVcf.out_index,
-        merge_sort=true,
+        allow_overlaps=true,
         outfile_prefix="~{prefix}.~{contig}.~{sv_type}.clustered",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat_shards

@@ -97,6 +97,7 @@ workflow ScatterCpxGenotyping {
     input:
       vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
       vcfs_idx=GenotypeShard.cpx_depth_gt_resolved_vcf_idx,
+      naive=true,
       outfile_prefix=contig_prefix + ".regenotyped",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_cpx_cnv_vcfs

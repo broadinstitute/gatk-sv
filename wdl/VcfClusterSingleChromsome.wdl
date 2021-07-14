@@ -97,7 +97,7 @@ workflow VcfClusterSingleChrom {
     input:
       vcfs=FixEvidenceTags.out,
       vcfs_idx=FixEvidenceTags.out_index,
-      merge_sort=true,
+      naive=true,
       outfile_prefix="~{prefix}.~{contig}.precluster_concat",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_shards

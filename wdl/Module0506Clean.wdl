@@ -88,7 +88,7 @@ workflow Module0506Clean {
     input:
       vcfs=CleanContigVcf.out,
       vcfs_idx=CleanContigVcf.out_idx,
-      merge_sort=true,
+      naive=true,
       outfile_prefix="~{cohort_name}.cleaned",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_cleaned_vcfs

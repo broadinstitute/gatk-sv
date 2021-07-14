@@ -183,7 +183,7 @@ workflow Module0506Cluster {
       input:
         vcfs=[ClusterPesr.clustered_vcf, ClusterDepth.clustered_vcf],
         vcfs_idx=[ClusterPesr.clustered_vcf_idx, ClusterDepth.clustered_vcf_idx],
-        merge_sort=true,
+        allow_overlaps=true,
         outfile_prefix="all_batches.pesr_depth.~{contig}.unmerged",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat_pesr_depth
@@ -230,7 +230,7 @@ workflow Module0506Cluster {
       input:
         vcfs=SortMergePesrDepth.out,
         vcfs_idx=SortMergePesrDepth.out_index,
-        merge_sort=true,
+        naive=true,
         outfile_prefix="~{cohort_name}.0506_clustered",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat

@@ -41,6 +41,7 @@ workflow FilterCleanupQualRecalibration {
   call MiniTasks.ConcatVcfs as ConcatVcfs {
     input:
       vcfs=Cleanup.out_vcf,
+      naive=true,
       outfile_prefix="~{prefix}.cleaned_filters_qual_recalibrated",
       sv_base_mini_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs

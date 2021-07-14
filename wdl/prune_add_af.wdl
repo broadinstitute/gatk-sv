@@ -53,6 +53,7 @@ workflow prune_and_add_vafs {
   call MiniTasks.ConcatVcfs as concat_vcfs {
     input:
       vcfs=getAFs.vcf_wAFs,
+      naive=true,
       outfile_prefix="~{prefix}.pruned_wAFs",
       sv_base_mini_docker=sv_pipeline_docker
   }

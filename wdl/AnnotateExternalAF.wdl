@@ -74,6 +74,7 @@ workflow AnnotateExternalAF {
       input:
         vcfs = AnnotateExternalAFperContig.annotated_vcf,
         vcfs_idx = AnnotateExternalAFperContig.annotated_vcf_tbi,
+        naive = true,
         outfile_prefix = "~{prefix}.annotated.vcf",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_combine_vcfs

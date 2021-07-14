@@ -47,6 +47,7 @@ workflow ReviseSVtypeINStoMEIperContig {
       input:
         vcfs=ReviseSVtypeMEI.updated_vcf,
         vcfs_idx=ReviseSVtypeMEI.updated_vcf_idx,
+        naive=true,
         outfile_prefix="~{prefix}.~{contig}.SVtypeRevisedINStoMEI",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_combine_step_1_vcfs
