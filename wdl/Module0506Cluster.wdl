@@ -157,7 +157,8 @@ workflow Module0506Cluster {
         runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
         runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
         runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
-        runtime_override_concat_shards=runtime_override_concat_shards
+        runtime_override_concat_shards=runtime_override_concat_shards,
+        runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster
     }
 
     #Update SR background fail & bothside pass files (1)

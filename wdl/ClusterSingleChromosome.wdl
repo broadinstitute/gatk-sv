@@ -76,8 +76,7 @@ workflow ClusterSingleChrom {
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
         runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
         runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
-        runtime_override_concat_shards=runtime_override_concat_shards,
-        runtime_override_concat_shards=runtime_override_concat_sharded_cluster
+        runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster
     }
     call RenameVariants {
       input:

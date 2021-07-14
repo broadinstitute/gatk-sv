@@ -40,7 +40,7 @@ workflow ShardedCluster {
     RuntimeAttr? runtime_override_concat_inner_shards
 
     # overrides for MiniTasks
-    RuntimeAttr? runtime_override_concat_shards
+    RuntimeAttr? runtime_override_concat_sharded_cluster
     RuntimeAttr? runtime_override_sort_merged_vcf
     RuntimeAttr? runtime_override_count_samples
   }
@@ -132,7 +132,7 @@ workflow ShardedCluster {
         allow_overlaps=true,
         outfile_prefix="~{prefix}.~{contig}.~{sv_type}.clustered",
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_concat_shards
+        runtime_attr_override=runtime_override_concat_sharded_cluster
     }
   }
 
