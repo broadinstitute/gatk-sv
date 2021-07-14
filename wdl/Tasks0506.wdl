@@ -183,7 +183,7 @@ task ConcatVcfs {
 
   String outfile_name = outfile_prefix + ".vcf.gz"
   String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
-  String naive_flag = if naive then "--naive-force" else ""
+  String naive_flag = if naive then "--naive" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
