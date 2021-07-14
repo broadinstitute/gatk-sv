@@ -49,6 +49,8 @@ def load_filenames(filenames):
     # Read -f filenames / output names JSON
     files_dict = json.load(open(filenames, 'r'))
     output_names = sorted(files_dict.keys())
+    if len(output_names) == 0:
+        raise ValueError("No output files to search for found in required -f/--filenames JSON %s." % filenames)
     return files_dict, output_names
 
 
@@ -85,7 +87,7 @@ def find_batch_output_files(batch, bucket, prefix, files_dict, output_names, num
                                       delimiter=None)  # only one workflow per batch - assumes caching if multiple
 
     # Go through each object in directory once, checking if it matches any filenames not yet found
-    batch_outputs = {file: None for file in output_names}
+    batch_outputs = {file: [] for file in output_names}
     names_left = list(output_names)
     num_found = 0
     for blob in blobs:
@@ -94,25 +96,24 @@ def find_batch_output_files(batch, bucket, prefix, files_dict, output_names, num
         for name in output_names:
             if blob_name.endswith(files_dict[name]):
                 blob_path = os.path.join("gs://", bucket, blob_name)  # reconstruct URI
-                if batch_outputs[name] is None:
+                if len(batch_outputs[name]) == 0:
                     num_found += 1
                     names_left.remove(name)
-                    batch_outputs[name] = [blob_path]
-                else:
-                    batch_outputs[name].append(blob_path)
+                batch_outputs[name].append(blob_path)
                 break
 
     # Warn if some outputs not found
     if num_found < num_outputs:
         for name in names_left:
             logging.warning(f"{batch} output file {name} not found in gs://{bucket}/{prefix}. Outputting empty string")
-            batch_outputs[name] = ""
 
     return batch_outputs
 
 
 def sort_files_by_shard(file_list):
     # Attempt to sort file list by shard number based on last occurrence of "shard-" in URI
+    if len(file_list) < 2:
+        return file_list
     regex = r'^(shard-)([0-9]+)(/.*)'  # extract shard number for sorting - group 2
     shard_numbers = []
     check_different_shard = None
@@ -134,18 +135,8 @@ def sort_files_by_shard(file_list):
 
 def format_batch_line(batch, output_names, batch_outputs):
     # Format line with batch and outputs (if not using entities option)
-    batch_line = batch
-    for name in output_names:
-        file_list = batch_outputs[name]
-        # If could not find a file, make sure to add an offset tab to create an empty entry
-        if file_list == "":
-            batch_line += "\t"
-        # Single File output
-        elif len(file_list) == 1:
-            batch_line += "\t" + file_list[0]
-        # Array[File] output - attempt sorting by shard
-        else:
-            batch_line += '\t["' + '", "'.join(sort_files_by_shard(file_list)) + '"]'
+    batch_line = batch + "\t"
+    batch_line += "\t".join(",".join(sort_files_by_shard(batch_outputs[name])) for name in output_names)
     batch_line += "\n"
     return batch_line
 
