@@ -7,7 +7,8 @@ on:
     paths:
       - 'src/**'
       - 'dockerfiles/**'
-      - 'scripts/**'
+      - 'scripts/docker/build_docker.py'
+      - 'scripts/docker/resources.Dockerfile'
       - '.github/workflows/sv_pipeline_docker.yml'
   pull_request:
     branches:
@@ -15,7 +16,8 @@ on:
     paths:
       - 'src/**'
       - 'dockerfiles/**'
-      - 'scripts/**'
+      - 'scripts/docker/build_docker.py'
+      - 'scripts/docker/resources.Dockerfile'
       - '.github/workflows/sv_pipeline_docker.yml'
 
 jobs:
