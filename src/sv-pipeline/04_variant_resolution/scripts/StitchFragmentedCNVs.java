@@ -136,6 +136,7 @@ public class StitchFragmentedCNVs {
         private VCFParser.ByteSequence subjectChromosome;
         private int subjectMinNoOverlapPosition; // far enough downstream that MAX_PAD will ensure there's no overlap
         private int iterationIndex;
+        private VCFParser.Record nextRecord; // this is a pushback for a record that's too far downstream
 
         private static final VCFParser.ByteSequence MULTIALLELIC = new VCFParser.ByteSequence("MULTIALLELIC");
         private static final VCFParser.ByteSequence SVTYPE = new VCFParser.ByteSequence("SVTYPE");
@@ -150,8 +151,6 @@ public class StitchFragmentedCNVs {
         public StitchableIterator( final VCFParser vcfParser ) {
             this.vcfParser = vcfParser;
             this.chunks = new ArrayList<>();
-            this.subjectIndex = 0;
-            this.iterationIndex = 0;
         }
 
         /** write the non-stitchables that preceed the first stitchable, and return the stitchable */
@@ -160,7 +159,7 @@ public class StitchFragmentedCNVs {
             while ( subjectIndex < nChunks ) {
                 final Chunk chunk = chunks.get(subjectIndex);
                 chunks.set(subjectIndex++, null);
-                iterationIndex = subjectIndex + 1;
+                iterationIndex = Math.min(nChunks, subjectIndex + 1);
                 for ( final VCFParser.Record rec : chunk.getNonStitchables() ) {
                     rec.write(os);
                 }
@@ -173,8 +172,9 @@ public class StitchFragmentedCNVs {
             chunks.clear();
             subjectIndex = iterationIndex = 0;
 
-            while ( vcfParser.hasRecord() ) {
-                final VCFParser.Record record = vcfParser.nextRecord();
+            while ( nextRecord != null || vcfParser.hasRecord() ) {
+                final VCFParser.Record record = nextRecord != null ? nextRecord: vcfParser.nextRecord();
+                nextRecord = null;
                 if ( isStitchable(record) ) {
                     return setSubject(record);
                 }
@@ -192,21 +192,30 @@ public class StitchFragmentedCNVs {
                 }
                 ++iterationIndex;
             }
-            if ( vcfParser.hasRecord() ) {
-                final List<VCFParser.Record> nonStitchables = new ArrayList<>();
+            if ( nextRecord != null || vcfParser.hasRecord() ) {
+                List<VCFParser.Record> nonStitchables = null;
                 do {
-                    final VCFParser.Record record = vcfParser.nextRecord();
+                    final VCFParser.Record record = nextRecord != null ? nextRecord : vcfParser.nextRecord();
+                    nextRecord = null;
+                    if ( !record.getChromosome().equals(subjectChromosome) ||
+                            record.getPosition() >= subjectMinNoOverlapPosition ) {
+                        nextRecord = record;
+                        if ( nonStitchables != null ) {
+                            chunks.add(new Chunk(nonStitchables, null));
+                        }
+                        return false;
+                    }
                     if ( isStitchable(record) ) {
+                        if ( nonStitchables == null ) {
+                            nonStitchables = Collections.emptyList();
+                        }
                         chunks.add(new Chunk(nonStitchables, record));
                         return true;
                     }
-                    nonStitchables.add(record);
-                    // don't just build up Chunks indefinitely:
-                    // break when we've read ahead too far downstream of the subject
-                    if ( !record.getChromosome().equals(subjectChromosome) ||
-                            record.getPosition() >= subjectMinNoOverlapPosition ) {
-                        break;
+                    if ( nonStitchables == null ) {
+                        nonStitchables = new ArrayList<>();
                     }
+                    nonStitchables.add(nextRecord);
                 } while ( vcfParser.hasRecord() );
                 chunks.add(new Chunk(nonStitchables, null));
             }

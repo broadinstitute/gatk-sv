@@ -609,7 +609,7 @@ public class VCFParser implements Closeable {
                     mark = itr.mark();
                 }
             }
-            attributes.add(new KeyValue(key, itr.getSequenceNoDelim(mark)));
+            attributes.add(new KeyValue(key, itr.getSequence(mark)));
             return attributes;
         }
     }
