@@ -213,7 +213,7 @@ task ConcatVcfs {
       cat ${VCFS} | xargs -n1 tabix
     fi
     bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    if generate_index; then
+    if ~{generate_index}; then
       tabix "~{outfile_name}"
     else
       touch ~{outfile_name}.tbi
