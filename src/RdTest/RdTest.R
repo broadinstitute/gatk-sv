@@ -325,17 +325,50 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
   {
     if (is.null(raw_cov)) {
       if (end - start > newsizefilter) {
-        print(paste0("using smmoth subsampling approach for ", chr,":",start,"-",end))
-        regionPoints <- 10000
+        print(paste0("using smooth subsampling approach for ", chr,":",start,"-",end))
+        regionPoints <- 500
+        window <- 1000
         pointSpacing <-  trunc((end - start) / regionPoints)
-        points <- seq(start, end, by=pointSpacing)
-        pointBed <- data.frame(chr=chr, start=points, end=points+1)
+        points <- seq(start + window, end - window, by=pointSpacing)
+        pointBed <- data.frame(chr=chr, start=points - window, end=points+window+1)
         print("pointBed")
         print(head(pointBed))
         print(tail(pointBed))
-        pointFile <- tempfile(pattern=cnvID)
+        #pointFile <- tempfile(pattern=cnvID)
+        pointFile <- "regions.bed"
         write.table(pointBed, file=pointFile, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-        cov1 <- tryCatch(read.table(pipe(paste("tabix -h ",coveragefile," -R ", pointFile, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)), error=function(e) NULL)
+        cov1 <- tryCatch(read.table(pipe(paste("bedtools merge -i ", pointFile, " | tabix -h ",coveragefile," -R - | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
+        print("dim cov1 before medians")
+        print(dim(cov1))
+
+
+        cov1 <- removeExcludedBinCovBins(chr, cov1, end, poorbincov, start)
+        print("dim cov1 after bin cov")
+
+        print(cov1[1:30,1:5])
+
+        cov1 <- ldply(seq(1,regionPoints), function(i) {
+          windowCov <- cov1[cov1$end > pointBed[i,"start"] & cov1$start < pointBed[i,"end"],]
+          #print("windowCov")
+          #print(windowCov[,1:5])
+          if (nrow(windowCov) > 0) {
+            #print(head(windowCov[,4:ncol(windowCov)]))
+            covMeds <- data.frame(lapply(windowCov[,4:ncol(windowCov)], median), check.names=FALSE)
+            #covMeds <- adply(windowCov[,4:ncol(windowCov)], 2, function(x) { data.frame(names(x)[1]=median(x[,1]))})
+            #print("covMeds")
+            #print(dim(covMeds))
+            #print(covMeds[,1:5])
+            medianWindowCov <- cbind(data.frame(chr=chr, start=pointBed[i, "start"], end=pointBed[i, "end"]), covMeds)
+            #print("medianWindowCov")
+            #print(medianWindowCov[,1:5])
+            return(medianWindowCov)
+          } else {
+            return(NULL)
+          }
+        })
+        print("dim cov1 after medians")
+        print(dim(cov1))
+        print(cov1[1:30,1:5])
 
         #numChunks <- ceiling((end - start) / newsizefilter)
         #print(paste0("numchunks ", numChunks))
