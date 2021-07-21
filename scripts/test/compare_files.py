@@ -153,7 +153,7 @@ class CompareWorkflowOutputs:
                     self.filetypes_to_compare[extension].equals(
                         obj, test_output_files[call][extension])
                 if not equals:
-                    if not call in mismatches:
+                    if call not in mismatches:
                         mismatches[call] = []
                     mismatches[call].append([x, y])
                     print(f"{color_red}mismatch{color_endc}")
