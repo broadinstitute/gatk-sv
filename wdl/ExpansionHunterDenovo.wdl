@@ -78,11 +78,16 @@ workflow EHdnSTRAnalysis {
         else
           ".crai"
 
-    # TODO: change this to work for both BAM and CRAM.
-    String case_sample_filename = basename(sample_bam_or_cram_, ".bam")
+    String filename =
+      if  basename(sample_bam_or_cram_, ".bam") + ".bam" ==
+          basename(sample_bam_or_cram_) then
+        basename(sample_bam_or_cram_, ".bam")
+      else
+        basename(sample_bam_or_cram_, ".cram")
+
     call ComputeSTRProfile {
       input:
-        filename = case_sample_filename,
+        filename = filename,
         bam_or_cram = sample_bam_or_cram_,
         bam_or_cram_index = bam_or_cram_index_,
         reference_fasta = reference_fasta,
