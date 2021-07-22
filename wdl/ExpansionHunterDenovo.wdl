@@ -256,12 +256,14 @@ task Merge {
     echo ~{cases_length}
     echo ~{controls_length}
     if [ ~{cases_length} -ne 0 ]; then
-      for i in "~{sep=" " cases}"; do
+      cases_arr=(~{sep=" " cases})
+      for i in "${cases_arr[@]}"; do
         echo -e "$( get_sample_name "$i" )\tcase\t$i" >> $manifest_filename
       done
     fi
     if [ ~{controls_length} -ne 0 ]; then
-      for i in "~{sep=" " controls}"; do
+      controls_arr=(~{sep=" " controls})
+      for i in "${controls_arr[@]}"; do
         echo -e "$( get_sample_name "$i" )\tcontrol\t$i" >> $manifest_filename
       done
     fi
@@ -322,11 +324,11 @@ task STRAnalyze {
       analysis_types+=("~{analysis_type}")
     fi
 
-    if [ ~{analysis_type} == "both" ]; then
+    if [ ~{str_comparison_type} == "both" ]; then
       comparison_types+=("locus")
       comparison_types+=("motif")
     else
-      comparison_types+=("~{analysis_type}")
+      comparison_types+=("~{str_comparison_type}")
     fi
 
     for analysis_type in "${analysis_types[@]}"; do
