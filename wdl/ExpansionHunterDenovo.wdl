@@ -112,8 +112,8 @@ workflow EHdnSTRAnalysis {
 
   call STRAnalyze {
     input:
-      cases = cases_str_profile_json,
-      controls = controls_str_profile_json,
+      case_jsons = cases_str_profile_json,
+      control_jsons = controls_str_profile_json,
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index,
       postfixes = postfixes,
@@ -203,8 +203,8 @@ task STRAnalyze {
   input {
     String analysis_type
     String str_comparison_type
-    Array[File] cases
-    Array[File] controls
+    Array[File] case_jsons
+    Array[File] control_jsons
     File reference_fasta
     File? reference_fasta_index
     FilenamePostfixes postfixes
@@ -218,8 +218,8 @@ task STRAnalyze {
     Array[File] results = glob("result_*.tsv")
   }
 
-  Int cases_length = length(cases)
-  Int controls_length = length(controls)
+  Int cases_length = length(case_jsons)
+  Int controls_length = length(control_jsons)
   String output_prefix = "merged"
   String multisample_profile = output_prefix + postfixes.merged_profile
 
@@ -263,13 +263,13 @@ task STRAnalyze {
     manifest_filename="manifest.tsv"
 
     if [ ~{cases_length} -ne 0 ]; then
-      cases_arr=(~{sep=" " cases})
+      cases_arr=(~{sep=" " case_jsons})
       for i in "${cases_arr[@]}"; do
         echo -e "$( get_sample_name "$i" )\tcase\t$i" >> $manifest_filename
       done
     fi
     if [ ~{controls_length} -ne 0 ]; then
-      controls_arr=(~{sep=" " controls})
+      controls_arr=(~{sep=" " control_jsons})
       for i in "${controls_arr[@]}"; do
         echo -e "$( get_sample_name "$i" )\tcontrol\t$i" >> $manifest_filename
       done
