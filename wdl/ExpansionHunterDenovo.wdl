@@ -110,32 +110,24 @@ workflow EHdnSTRAnalysis {
   Array[File] cases_str_profile_json = select_all(case_str_profile_json)
   Array[File] controls_str_profile_json = select_all(control_str_profile_json)
 
-  call Merge {
+  call STRAnalyze {
     input:
       cases = cases_str_profile_json,
       controls = controls_str_profile_json,
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index,
-      ehdn_docker = ehdn_docker,
-      runtime_attr_override = runtime_attr_merge,
-      postfixes = postfixes
-  }
-
-  call STRAnalyze {
-    input:
+      postfixes = postfixes,
       analysis_type = analysis_type,
       str_comparison_type = str_comparison_type,
-      manifest = Merge.manifest,
-      multisample_profile = Merge.multisample_profile,
       ehdn_docker = ehdn_docker,
       runtime_attr_override = runtime_attr_analysis
   }
 
   output {
+    File multisample_profile = STRAnalyze.multisample_profile
     Array[File] cases_locus = ComputeSTRProfile.locus
     Array[File] cases_motif = ComputeSTRProfile.motif
     Array[File] cases_str_profile = ComputeSTRProfile.str_profile
-    File multisample_profile = Merge.multisample_profile
     Array[File] analysis_results = STRAnalyze.results
   }
 }
@@ -203,25 +195,29 @@ task ComputeSTRProfile {
   }
 }
 
-task Merge {
+task STRAnalyze {
   input {
+    String analysis_type
+    String str_comparison_type
     Array[File] cases
     Array[File] controls
     File reference_fasta
     File? reference_fasta_index
+    FilenamePostfixes postfixes
     String ehdn_docker
     RuntimeAttr? runtime_attr_override
-    FilenamePostfixes postfixes
   }
 
   output {
     File manifest = "manifest.tsv"
     File multisample_profile = "${output_prefix}${postfixes.merged_profile}"
+    Array[File] results = glob("result_*.tsv")
   }
 
   Int cases_length = length(cases)
   Int controls_length = length(controls)
   String output_prefix = "merged"
+  String multisample_profile = output_prefix + postfixes.merged_profile
 
   # Defining this varialbe is requires since it
   # will trigger localization of the file. The
@@ -245,6 +241,7 @@ task Merge {
   #
   # - Call EHdn's `merge` method using the input and
   #   the generaged manifest file.
+
   command <<<
     set -euxo pipefail
 
@@ -256,8 +253,6 @@ task Merge {
     }
     manifest_filename="manifest.tsv"
 
-    echo ~{cases_length}
-    echo ~{controls_length}
     if [ ~{cases_length} -ne 0 ]; then
       cases_arr=(~{sep=" " cases})
       for i in "${cases_arr[@]}"; do
@@ -273,50 +268,9 @@ task Merge {
     cat $manifest_filename
 
     ExpansionHunterDenovo merge \
-      --reference ~{reference_fasta} \
-      --manifest $manifest_filename \
-      --output-prefix ~{output_prefix}
-  >>>
-
-  RuntimeAttr runtime_attr_merge_default = object {
-    cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([
-    runtime_attr_override,
-    runtime_attr_merge_default])
-
-  runtime {
-    docker: ehdn_docker
-    cpu: runtime_attr.cpu_cores
-    memory: runtime_attr.mem_gb + " GiB"
-    disks: "local-disk " + runtime_attr.disk_gb + " HDD"
-    bootDiskSizeGb: runtime_attr.boot_disk_gb
-    preemptible: runtime_attr.preemptible_tries
-    maxRetries: runtime_attr.max_retries
-  }
-}
-
-task STRAnalyze {
-  input {
-    String analysis_type
-    String str_comparison_type
-    File manifest
-    File multisample_profile
-    String ehdn_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  output {
-    Array[File] results = glob("result_*.tsv")
-  }
-
-  command <<<
-    set -euxo pipefail
+    --reference ~{reference_fasta} \
+    --manifest $manifest_filename \
+    --output-prefix ~{output_prefix}
 
     analysis_types=()
     comparison_types=()
@@ -337,7 +291,7 @@ task STRAnalyze {
     for analysis_type in "${analysis_types[@]}"; do
       for comparison_type in "${comparison_types[@]}"; do
         python ${SCRIPTS_DIR}/${analysis_type}.py ${comparison_type} \
-          --manifest ~{manifest} \
+          --manifest $manifest_filename \
           --multisample-profile ~{multisample_profile} \
           --output result_${analysis_type}_${comparison_type}.tsv
       done
