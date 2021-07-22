@@ -175,10 +175,14 @@ task ComputeSTRProfile {
   RuntimeAttr runtime_attr_str_profile_default = object {
     cpu_cores: 1,
     mem_gb: 4,
-    disk_gb: 10,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
+    preemptible_tries: 3,
+    max_retries: 1,
+    disk_gb: 10 + ceil(size([
+      bam_or_cram,
+      bam_or_cram_index,
+      reference_fasta,
+      reference_fasta_index_], "GiB"))
   }
   RuntimeAttr runtime_attr = select_first([
     runtime_attr_override,
@@ -309,12 +313,14 @@ task STRAnalyze {
   >>>
 
   RuntimeAttr runtime_attr_analysis_default = object {
-    cpu_cores: 1,
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
+  cpu_cores: 1,
+  mem_gb: 4,
+  boot_disk_gb: 10,
+  preemptible_tries: 3,
+  max_retries: 1,
+  disk_gb: 10 + ceil(size([
+    reference_fasta,
+    reference_fasta_index_], "GiB"))
   }
   RuntimeAttr runtime_attr = select_first([
     runtime_attr_override,
