@@ -67,20 +67,18 @@ workflow EHdnSTRAnalysis {
 
   scatter (i in range(length(sample_bams_or_crams))) {
     File sample_bam_or_cram_ = sample_bams_or_crams[i]
+    Boolean is_bam =
+      basename(sample_bam_or_cram_, ".bam") + ".bam" ==
+      basename(sample_bam_or_cram_)
+
     File bam_or_cram_index_ =
       if defined(sample_bams_or_crams_indexes) then
         select_first([sample_bams_or_crams_indexes])[i]
       else
-        sample_bam_or_cram_ +
-        if  basename(sample_bam_or_cram_, ".bam") + ".bam" ==
-            basename(sample_bam_or_cram_) then
-          ".bai"
-        else
-          ".crai"
+        sample_bam_or_cram_ + if is_bam then ".bai" else ".crai"
 
     String filename =
-      if  basename(sample_bam_or_cram_, ".bam") + ".bam" ==
-          basename(sample_bam_or_cram_) then
+      if is_bam then
         basename(sample_bam_or_cram_, ".bam")
       else
         basename(sample_bam_or_cram_, ".cram")
