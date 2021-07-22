@@ -13,7 +13,7 @@
   "sv_base_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-base:lint-24b9cda",
   "sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-base-mini:lint-24b9cda",
   "sv_pipeline_base_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-pipeline-base:lint-24b9cda",
-  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-pipeline:lint-24b9cda",
+  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-missing-baf-f14df3b",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-pipeline-qc:lint-24b9cda",
   "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/vjalili/sv-pipeline-rdtest:lint-24b9cda",
   "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa",

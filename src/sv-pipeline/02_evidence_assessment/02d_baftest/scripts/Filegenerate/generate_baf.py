@@ -41,7 +41,7 @@ def filter_record(record, unfiltered=False):
     return False
 
 
-def calc_BAF(record, samples=None):
+def calc_BAF(record, samples):
     """
 
     Parameters
@@ -71,10 +71,7 @@ def calc_BAF(record, samples=None):
         else:
             return np.nan
 
-    if samples is None:
-        samples = record.samples.keys()
-
-    bafs = np.array([_calc_BAF(sample) for sample in samples], dtype=np.float)
+    bafs = np.array([_calc_BAF(sample) for sample in samples], dtype=float)
 
     return bafs, samples
 
@@ -116,14 +113,25 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--samples-list', default=None)
+    parser.add_argument('vcf')
+    parser.add_argument('--samples-list')
     parser.add_argument('--unfiltered', action='store_true')
+    parser.add_argument('--ignore-missing-vcf-samples', action='store_true')
     args = parser.parse_args()
-    vcf = pysam.VariantFile(sys.stdin)
+    vcf = pysam.VariantFile(args.vcf)
+    vcf_samples = vcf.header.samples
     if args.samples_list is not None:
         samples_list = read_samples_list(args.samples_list)
+        samples_list_intersection = set(samples_list).intersection(set(vcf_samples))
+        if args.ignore_missing_vcf_samples:
+            samples_list = [s for s in samples_list if s in samples_list_intersection] # Preserves order
+        elif len(samples_list) > len(samples_list_intersection):
+            missing_samples = set(samples_list) - samples_list_intersection
+            raise ValueError("VCF is missing samples in the samples list. Use --ignore-missing-vcf-samples to bypass " \
+                + "this error. Samples: {}".format(", ".join(missing_samples)))
     else:
-        samples_list = None
+        samples_list = vcf_samples
+
     # While loop to iterate over all records, then break if reach the end
     for record in vcf:
         if not filter_record(record, args.unfiltered):
