@@ -227,21 +227,26 @@ task STRAnalyze {
     reference_fasta_index,
     reference_fasta + ".fai"])
 
-  # This shell script uses EHdn's `merge` command
-  # to merge STR profiles on all the individual samples
-  # into a single JSON file.
+  # This script is composed of two stesp:
   #
-  # The script is composed of two parts:
-  # - Create a "manifest" file based on the given inputs.
-  #   The manifest file is composed of three columns:
-  #   (1) Sample name (infered from the filename);
-  #   (2) case/control (infered from files in the inputs
-  #       `cases` and `controls`);
-  #   (3) file path.
+  # - Merge STR profiles determined for each
+  #   sample separately into a single TSV file.
+  #   This step uses the `merge` script of EHdn
+  #   and is composes of the following steps:
+  #   - Create a manifest file, a TSV with three
+  #     columns: (i) Sample name (infered from
+  #     the filename); (2) case/control (infered
+  #     from files in the inputs `cases` and
+  #     `controls`); and  (3) file path.
+  #   - Call EHdn's `merge` method on the manifest
+  #     file. This script outputs a single JSON
+  #     file which contains STR profiles of
+  #     all individual samples.
   #
-  # - Call EHdn's `merge` method using the input and
-  #   the generaged manifest file.
-
+  # - Using the STR profiles in the JSON file and
+  #   the manifest, perform case-control or outlier
+  #   analysis at motif or locus level.
+  #
   command <<<
     set -euxo pipefail
 
