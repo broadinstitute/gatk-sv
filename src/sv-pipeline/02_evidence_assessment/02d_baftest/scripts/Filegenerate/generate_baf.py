@@ -3,7 +3,6 @@
 import argparse
 import numpy as np
 import pysam
-import sys
 
 
 def filter_record(record, unfiltered=False):
@@ -17,7 +16,7 @@ def filter_record(record, unfiltered=False):
 
     Parameters
     ----------
-    records : iterator of pysam.VariantRecords
+    record : Object of pysam.VariantRecords
 
     Returns
     ------
@@ -124,11 +123,11 @@ def main():
         samples_list = read_samples_list(args.samples_list)
         samples_list_intersection = set(samples_list).intersection(set(vcf_samples))
         if args.ignore_missing_vcf_samples:
-            samples_list = [s for s in samples_list if s in samples_list_intersection] # Preserves order
+            samples_list = [s for s in samples_list if s in samples_list_intersection]  # Preserves order
         elif len(samples_list) > len(samples_list_intersection):
             missing_samples = set(samples_list) - samples_list_intersection
-            raise ValueError("VCF is missing samples in the samples list. Use --ignore-missing-vcf-samples to bypass " \
-                + "this error. Samples: {}".format(", ".join(missing_samples)))
+            raise ValueError("VCF is missing samples in the samples list. Use --ignore-missing-vcf-samples to bypass "
+                             "this error. Samples: {}".format(", ".join(missing_samples)))
     else:
         samples_list = vcf_samples
 
