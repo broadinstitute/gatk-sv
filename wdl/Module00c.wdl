@@ -54,11 +54,13 @@ workflow Module00c {
 
     # BAF generation
     # Required for cohorts if BAF_files not provided
+    # Note: pipeline output is not sensitive to having some samples (~1%) missing BAF
 
     # Only set true if some samples are missing from the VCF or some gVCFs are not available
     Boolean? ignore_missing_baf_samples
 
-    # BAF Option #1, GVCFs
+    # BAF Option #1, gVCFs
+    # Missing gVCFs may be "null" (without quotes in the input json)
     Array[File?]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
