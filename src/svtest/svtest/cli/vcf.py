@@ -181,6 +181,8 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
         base_records = list(base_vcf.fetch())
         test_tree = iu.create_trees_from_records(
             test_records, variant_types, contigs, padding=padding)
+        test_pass_tree = iu.create_trees_from_records(
+            pass_records, variant_types, contigs, padding=padding)
         base_tree = iu.create_trees_from_records(
             base_records, variant_types, contigs, padding=padding)
         base_pass_records = [r for r in base_records if (
@@ -191,10 +193,14 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
         base_records = parse_bed_file(fbase_bed)
         test_tree = iu.create_trees_from_records(
             test_records, variant_types, contigs, padding=padding)
+        test_pass_tree = iu.create_trees_from_records(
+            pass_records, variant_types, contigs, padding=padding)
         base_tree = iu.create_trees_from_bed_records(
             base_records, variant_types, contigs, padding=padding)
         base_pass_tree = None
     else:
+        test_tree = None
+        test_pass_tree = None
         base_tree = None
         base_pass_tree = None
 
@@ -207,7 +213,7 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
 
     if base_pass_tree is not None:
         metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(
-            metrics, test_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
+            metrics, test_pass_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
     else:
         fp_intervals_pass = None
         fn_intervals_pass = None
