@@ -6,8 +6,9 @@ import "Structs.wdl"
 
 workflow BAFFromGVCFs {
   input {
-    Array[File] gvcfs
+    Array[File?] gvcfs
     Array[String] samples
+    Boolean ignore_missing_gvcfs
     File unpadded_intervals_file
     File dbsnp_vcf
     File? dbsnp_vcf_index
@@ -26,7 +27,6 @@ workflow BAFFromGVCFs {
   }
 
   Int num_of_original_intervals = length(read_lines(unpadded_intervals_file))
-  Int num_gvcfs = length(gvcfs)
 
   # Make a 2.5:1 interval number to samples in callset ratio interval list
   Int possible_merge_count = floor(num_of_original_intervals / num_gvcfs / 2.5)
@@ -34,9 +34,17 @@ workflow BAFFromGVCFs {
 
   File dbsnp_vcf_index_ = if defined(dbsnp_vcf_index) then select_first([dbsnp_vcf_index]) else dbsnp_vcf + ".idx"
 
-  scatter (gvcf in gvcfs) {
-    File gvcf_indexes = gvcf + ".tbi"
+  scatter (i in range(length(samples))) {
+    if (defined(gvcfs[i])) {
+      String defined_samples_optional_ = samples[i]
+      File defined_gvcfs_optional_ = select_first([gvcfs[i]])
+      File gvcf_indexes_optional_ = select_first([gvcfs[i]]) + ".tbi"
+    }
   }
+  Array[String] defined_samples_ = select_all(defined_samples_optional_)
+  Array[File] defined_gvcfs_ = select_all(defined_gvcfs_optional_)
+  Array[File] gvcf_indexes_ = select_all(gvcf_indexes_optional_)
+  Int num_gvcfs = length(defined_gvcfs_)
 
   call DynamicallyCombineIntervals {
     input:
@@ -47,14 +55,14 @@ workflow BAFFromGVCFs {
 
   Array[String] unpadded_intervals = read_lines(DynamicallyCombineIntervals.output_intervals)
 
-  Int disk_size_gb = 10 + ceil((size(gvcfs, "GB") + size(gvcf_indexes, "GB")) * 1.5)
+  Int disk_size_gb = 10 + ceil((size(defined_gvcfs_, "GB") + size(gvcf_indexes_, "GB")) * 1.5)
 
   scatter (idx in range(length(unpadded_intervals))) {
     call ImportGVCFs {
       input:
-        sample_names = samples,
-        input_gvcfs = gvcfs,
-        input_gvcfs_indices = gvcf_indexes,
+        sample_names = defined_samples_,
+        input_gvcfs = defined_gvcfs_,
+        input_gvcfs_indices = gvcf_indexes_,
         interval = unpadded_intervals[idx],
         workspace_dir_name = "genomicsdb",
         disk_size = disk_size_gb,
@@ -82,7 +90,8 @@ workflow BAFFromGVCFs {
     call GenerateBAF {
       input:
         vcf = GenotypeGVCFs.output_vcf,
-        vcf_index = GenotypeGVCFs.output_vcf_index,
+        samples = samples,
+        ignore_missing_vcf_samples = ignore_missing_gvcfs,
         batch = batch,
         shard = "~{idx}",
         sv_pipeline_docker = sv_pipeline_docker,
@@ -92,8 +101,8 @@ workflow BAFFromGVCFs {
 
   call MergeEvidenceFiles {
       input:
-        files = GenerateBAF.BAF,
-        indexes = GenerateBAF.BAF_idx,
+        files = GenerateBAF.out,
+        indexes = GenerateBAF.out_index,
         batch = batch,
         evidence = "BAF",
         inclusion_bed = inclusion_bed,
@@ -312,36 +321,43 @@ task ImportGVCFs {
 task GenerateBAF {
   input {
     File vcf
-    File vcf_index
+    File? vcf_header
+    Array[String] samples
+    Boolean ignore_missing_vcf_samples
     String batch
     String shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
+  String ignore_missing_vcf_samples_flag = if (ignore_missing_vcf_samples) then "--ignore-missing-vcf-samples" else ""
+
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File BAF = "~{batch}.BAF.shard-~{shard}.txt.gz"
-    File BAF_idx = "~{batch}.BAF.shard-~{shard}.txt.gz.tbi"
+    File out = "~{batch}.~{shard}.txt.gz"
+    File out_index = "~{batch}.~{shard}.txt.gz.tbi"
   }
   command <<<
 
     set -euo pipefail
-    bcftools view -M2 -v snps ~{vcf} \
-      | python /opt/sv-pipeline/02_evidence_assessment/02d_baftest/scripts/Filegenerate/generate_baf.py --unfiltered \
-      | bgzip -c \
-      > ~{batch}.BAF.shard-~{shard}.txt.gz
-    tabix -f -s1 -b 2 -e 2 ~{batch}.BAF.shard-~{shard}.txt.gz
-    
+    python /opt/sv-pipeline/02_evidence_assessment/02d_baftest/scripts/Filegenerate/generate_baf.py \
+      --unfiltered \
+      --samples-list ~{write_lines(samples)} \
+      ~{ignore_missing_vcf_samples_flag} \
+      ~{if defined(vcf_header) then "<(cat ~{vcf_header} ~{vcf})" else vcf} \
+      | bgzip \
+      > ~{batch}.~{shard}.txt.gz
+
+    tabix -s1 -b2 -e2 ~{batch}.~{shard}.txt.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -349,47 +365,6 @@ task GenerateBAF {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
-}
-
-task GatherBAF {
-  input {
-    String batch
-    Array[File] BAF
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75,
-    disk_gb: 100,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{batch}.BAF.txt.gz"
-    File out_index = "~{batch}.BAF.txt.gz.tbi"
-  }
-  command <<<
-
-    set -euo pipefail
-    cat ~{sep=" "  BAF} | bgzip -c > ~{batch}.BAF.txt.gz
-    tabix -f -s1 -b 2 -e 2 ~{batch}.BAF.txt.gz
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -436,7 +411,7 @@ task MergeEvidenceFiles {
 
     mkdir tmp
     sort -m -k1,1V -k2,2n -T tmp data/*.txt | bgzip -c > ~{batch}.~{evidence}.txt.gz
-    tabix -f -s1 -b2 -e2 ~{batch}.~{evidence}.txt.gz
+    tabix -s1 -b2 -e2 ~{batch}.~{evidence}.txt.gz
 
   >>>
   runtime {

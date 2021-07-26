@@ -54,10 +54,14 @@ workflow Module00c {
 
     # BAF generation
     # Required for cohorts if BAF_files not provided
+    # Note: pipeline output is not sensitive to having some samples (~1%) missing BAF
 
+    # Only set true if some samples are missing from the VCF or some gVCFs are not available
+    Boolean? ignore_missing_baf_samples
 
-    # BAF Option #1, GVCFs
-    Array[File]? gvcfs
+    # BAF Option #1, gVCFs
+    # Missing gVCFs may be "null" (without quotes in the input json)
+    Array[File?]? gvcfs
     File? unpadded_intervals_file
     File? dbsnp_vcf
     File? dbsnp_vcf_index
@@ -246,11 +250,14 @@ workflow Module00c {
     }
   }
 
+  Boolean ignore_missing_baf_samples_ = if defined(ignore_missing_baf_samples) then select_first([ignore_missing_baf_samples]) else false
+
   if (!defined(BAF_files) && defined(gvcfs)) {
     call baf.BAFFromGVCFs {
       input:
         gvcfs = select_first([gvcfs]),
         samples = samples,
+        ignore_missing_gvcfs = ignore_missing_baf_samples_,
         unpadded_intervals_file = select_first([unpadded_intervals_file]),
         dbsnp_vcf = select_first([dbsnp_vcf]),
         dbsnp_vcf_index = dbsnp_vcf_index,
@@ -269,6 +276,7 @@ workflow Module00c {
     }
   }
 
+
   if (!defined(BAF_files) && !defined(gvcfs) && (defined(snp_vcfs) || defined(snp_vcfs_shard_list))) {
     Array[File] snp_vcfs_ = if (defined(snp_vcfs)) then select_first([snp_vcfs]) else read_lines(select_first([snp_vcfs_shard_list]))
     call sbaf.BAFFromShardedVCF {
@@ -276,6 +284,7 @@ workflow Module00c {
         vcfs = snp_vcfs_,
         vcf_header = snp_vcf_header,
         samples = select_first([vcf_samples, samples]),
+        ignore_missing_vcf_samples = ignore_missing_baf_samples_,
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
