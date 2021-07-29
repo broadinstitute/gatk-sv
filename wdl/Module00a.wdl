@@ -82,7 +82,6 @@ workflow Module00a {
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
-    Int? min_size
 
     # Docker
     String sv_pipeline_docker

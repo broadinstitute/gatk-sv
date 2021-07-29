@@ -72,7 +72,6 @@ workflow Module00aBatch {
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
-    Int? min_size
 
     # Docker
     String sv_pipeline_docker
@@ -153,7 +152,6 @@ workflow Module00aBatch {
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_melt_vcf = baseline_melt_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
-        min_size = min_size,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,

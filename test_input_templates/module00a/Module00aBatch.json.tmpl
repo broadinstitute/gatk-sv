@@ -28,6 +28,11 @@
   "Module00aBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
   "Module00aBatch.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }},
 
+  "Module00aBatch.batch": {{ test_batch.batch_name | tojson }},
+  "Module00aBatch.primary_contigs_fai": {{ reference_resources.primary_contigs_fai | tojson }},
+  "Module00aBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module00aBatch.linux_docker": {{ dockers.linux_docker | tojson }},
+
   "Module00aBatch.bam_or_cram_files": {{ test_batch.bam_or_cram_files | tojson }},
   "Module00aBatch.sample_ids": {{ test_batch.samples | tojson }}
 }

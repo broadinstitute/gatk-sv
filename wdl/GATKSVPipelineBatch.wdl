@@ -130,6 +130,7 @@ workflow GATKSVPipelineBatch {
         reference_index=reference_index,
         reference_dict=reference_dict,
         run_module_metrics = run_00a_metrics,
+        primary_contigs_fai = primary_contigs_fai,
         batch = batch,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         linux_docker = linux_docker,
