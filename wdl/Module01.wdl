@@ -29,6 +29,7 @@ workflow Module01 {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
+    String? linux_docker  # required if run_module_metrics = true
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_depth_vcf  # baseline files are optional for metrics workflow
@@ -155,15 +156,15 @@ workflow Module01 {
         manta_vcf = ClusterPESR_manta.clustered_vcf,
         wham_vcf = ClusterPESR_wham.clustered_vcf,
         melt_vcf = ClusterPESR_melt.clustered_vcf,
-        baseline_depth_vcf = baseline_merged_depth_vcf,
-        baseline_delly_vcf = baseline_merged_delly_vcf,
-        baseline_manta_vcf = baseline_merged_manta_vcf,
-        baseline_wham_vcf = baseline_merged_wham_vcf,
-        baseline_melt_vcf = baseline_merged_melt_vcf,
+        baseline_depth_vcf = baseline_depth_vcf,
+        baseline_delly_vcf = baseline_delly_vcf,
+        baseline_manta_vcf = baseline_manta_vcf,
+        baseline_wham_vcf = baseline_wham_vcf,
+        baseline_melt_vcf = baseline_melt_vcf,
         contig_list = select_first([primary_contigs_list]),
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
-        linux_docker = linux_docker
+        linux_docker = select_first([linux_docker])
     }
   }
 

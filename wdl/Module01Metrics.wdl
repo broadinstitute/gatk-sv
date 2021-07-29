@@ -85,7 +85,7 @@ workflow Module01Metrics {
       input:
         vcf = select_first([wham_vcf]),
         baseline_vcf = baseline_wham_vcf,
-        samples = samples,
+        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
         prefix = "wham_clustered",
         types = "DEL,DUP",
         contig_list = contig_list,

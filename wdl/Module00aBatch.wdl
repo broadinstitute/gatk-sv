@@ -182,10 +182,11 @@ workflow Module00aBatch {
   }
 
   if (run_module_metrics_) {
+    Array[Array[File]] sample_metrics_files_ = select_all(Module00a.sample_metrics_files)
     call tu.CatMetrics {
       input:
         prefix = "module00a." + select_first([batch]),
-        metric_files = flatten(select_all([Module00a.sample_metrics_files])),
+        metric_files = flatten(sample_metrics_files_),
         linux_docker = select_first([linux_docker])
     }
   }

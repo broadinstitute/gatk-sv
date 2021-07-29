@@ -122,7 +122,7 @@ workflow Module03 {
         name = batch,
         samples = GetSampleIdsFromVcf.out_array,
         filtered_pesr_vcf = MergePesrVcfs.merged_pesr_vcf,
-        filtered_depth_vcf = FilterOutlierSamples.vcfs_noOutliers[4],
+        filtered_depth_vcf = select_first([FilterOutlierSamples.vcfs_noOutliers[4]]),
         cutoffs = AdjudicateSV.cutoffs,
         outlier_list = FilterOutlierSamples.outlier_samples_excluded_file,
         ped_file = select_first([ped_file]),

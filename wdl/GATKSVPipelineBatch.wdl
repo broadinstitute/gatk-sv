@@ -6,9 +6,9 @@ import "GATKSVPipelinePhase1.wdl" as phase1
 import "Module04.wdl" as m04
 import "Module04b.wdl" as m04b
 import "Module0506.wdl" as m0506
-import "GATKSVPipelineBatchMetrics.wdl" as BatchMetrics
 import "Utils.wdl" as utils
 import "Structs.wdl"
+import "TestUtils.wdl" as tu
 
 # GATK SV Pipeline batch mode
 # Runs modules 00abc, 01, 02, 03, 04, 0506
@@ -300,22 +300,22 @@ workflow GATKSVPipelineBatch {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call utils.CatMetrics as CatBatchMetrics {
+  call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + batch,
-        metric_files = [Module00aBatch.metrics_file_00a, GATKSVPipelinePhase1.metrics_file_00c, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506],
+        metric_files = select_all([Module00aBatch.metrics_file_00a, GATKSVPipelinePhase1.metrics_file_00c, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506]),
         linux_docker = linux_docker
     }
 
   Array[File] defined_baseline_metrics = select_all([baseline_00a_metrics, baseline_00c_metrics, baseline_01_metrics, baseline_02_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
   if (length(defined_baseline_metrics) > 0) {
-    call utils.CatMetrics as CatBaselineMetrics {
+    call tu.CatMetrics as CatBaselineMetrics {
       input:
-        prefix = "baseline." + name,
+        prefix = "baseline." + batch,
         metric_files = defined_baseline_metrics,
         linux_docker = linux_docker
     }
-    call utils.PlotMetrics {
+    call tu.PlotMetrics {
       input:
         name = batch,
         samples = sample_ids,

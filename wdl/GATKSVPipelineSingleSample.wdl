@@ -121,6 +121,9 @@ workflow GATKSVPipelineSingleSample {
     # Wham inputs
     File wham_include_list_bed_file
 
+    # Run Module00a metrics - default is off for single sample pipeline
+    Boolean? run_00a_metrics = false
+
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_baf
     RuntimeAttr? runtime_attr_baf_gather
@@ -213,6 +216,9 @@ workflow GATKSVPipelineSingleSample {
     # QC files
     Int matrix_qc_distance
 
+    # Run Module00c metrics - default is off for single sample pipeline
+    Boolean? run_00c_metrics = false
+
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
 
@@ -268,6 +274,9 @@ workflow GATKSVPipelineSingleSample {
     File? Werling_2018_tarball
     File? Collins_2017_tarball
 
+    # Run Module01 metrics - default is off for single sample pipeline
+    Boolean? run_01_metrics = false
+
     RuntimeAttr? runtime_attr_pesr_cluster
     RuntimeAttr? runtime_attr_pesr_concat
     RuntimeAttr? runtime_attr_depth_cluster
@@ -314,6 +323,9 @@ workflow GATKSVPipelineSingleSample {
     File PE_metrics
 
     File bin_exclude
+
+    # Run Module04 metrics - default is off for single sample pipeline
+    Boolean? run_04_metrics = false
 
     # Common
     RuntimeAttr? runtime_attr_merge_counts
@@ -362,6 +374,9 @@ workflow GATKSVPipelineSingleSample {
     Int clean_vcf_samples_per_clean_vcf_step2_shard
 
     Int? clean_vcf_random_seed
+
+    # Run Module0506 metrics - default is off for single sample pipeline
+    Boolean? run_0506_metrics = false
 
     RuntimeAttr? runtime_override_update_sr_list
     RuntimeAttr? runtime_override_merge_pesr_depth
@@ -455,6 +470,7 @@ workflow GATKSVPipelineSingleSample {
         pct_chimeras=pct_chimeras,
         total_reads=total_reads,
         wham_include_list_bed_file=wham_include_list_bed_file,
+        run_module_metrics = run_00a_metrics,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         delly_docker=delly_docker_,
@@ -582,6 +598,7 @@ workflow GATKSVPipelineSingleSample {
       cnmops_allo_file=allosome_file,
       cnmops_large_min_size=cnmops_large_min_size,
       matrix_qc_distance=matrix_qc_distance,
+      run_module_metrics = run_00c_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -664,6 +681,7 @@ workflow GATKSVPipelineSingleSample {
       depth_flags=depth_flags,
       depth_frac=depth_frac,
       contigs=primary_contigs_fai,
+      run_module_metrics = run_01_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_pesr_cluster=runtime_attr_pesr_cluster,
@@ -823,6 +841,7 @@ workflow GATKSVPipelineSingleSample {
       SR_metrics=SR_metrics,
       PE_metrics=PE_metrics,
       bin_exclude=bin_exclude,
+      run_module_metrics = run_04_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -899,6 +918,8 @@ workflow GATKSVPipelineSingleSample {
       samples_per_clean_vcf_step2_shard=clean_vcf_samples_per_clean_vcf_step2_shard,
 
       random_seed=clean_vcf_random_seed,
+
+      run_module_metrics = run_0506_metrics,
 
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,

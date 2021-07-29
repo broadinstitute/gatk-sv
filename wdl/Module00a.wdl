@@ -288,7 +288,7 @@ workflow Module00a {
   if (run_module_metrics_) {
     call metrics.Module00aMetrics {
       input:
-        sample = sample,
+        sample = sample_id,
         coverage_counts = CollectCounts.counts,
         pesr_disc = PESRCollection.disc_out,
         pesr_split = PESRCollection.split_out,

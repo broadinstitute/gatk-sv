@@ -1,6 +1,7 @@
 version 1.0
 
 import "TestUtils.wdl" as tu
+import "Utils.wdl" as util
 
 workflow Module0506Metrics {
   input {

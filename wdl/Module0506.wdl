@@ -5,6 +5,7 @@ import "Module0506ComplexResolve.wdl" as ComplexResolve
 import "Module0506ComplexGenotype.wdl" as ComplexGenotype
 import "Module0506Clean.wdl" as Clean
 import "MasterVcfQc.wdl" as VcfQc
+import "Module0506Metrics.wdl" as metrics
 
 workflow Module0506 {
   input {

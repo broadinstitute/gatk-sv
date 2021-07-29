@@ -377,7 +377,8 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_rdtest_bed=runtime_attr_rdtest_bed,
       run_module_metrics = run_01_metrics,
       primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker, 
+      linux_docker = linux_docker
   }
 
   call m02.Module02 as Module02 {
