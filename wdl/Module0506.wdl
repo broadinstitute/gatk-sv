@@ -55,6 +55,16 @@ workflow Module0506 {
     File? collins_2017_tarball
     File? werling_2018_tarball
 
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_list  # required if run_module_metrics = true
+    File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
+    File? baseline_complex_resolve_vcf
+    File? baseline_complex_genotype_vcf
+    File? baseline_cleaned_vcf
+
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -321,6 +331,25 @@ workflow Module0506 {
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module0506Metrics {
+      input:
+        name = cohort_name,
+        cluster_vcf = Module0506Cluster.merged_vcf,
+        complex_resolve_vcf = Module0506ComplexResolve.merged_vcf,
+        complex_genotype_vcf = Module0506ComplexGenotype.merged_vcf,
+        cleaned_vcf = Module0506Clean.cleaned_vcf,
+        baseline_cluster_vcf = baseline_cluster_vcf,
+        baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
+        baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
+        baseline_cleaned_vcf = baseline_cleaned_vcf,
+        contig_list = select_first([primary_contigs_list]),
+        linux_docker = linux_docker,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+    }
+  }
+
   output {
     File vcf = Module0506Clean.cleaned_vcf
     File vcf_index = Module0506Clean.cleaned_vcf_index
@@ -333,5 +362,7 @@ workflow Module0506 {
     File? complex_resolve_vcf_index = Module0506ComplexResolve.merged_vcf_index
     File? complex_genotype_vcf = Module0506ComplexGenotype.merged_vcf
     File? complex_genotype_vcf_index = Module0506ComplexGenotype.merged_vcf_index
+
+    File? metrics_file_0506 = Module0506Metrics.metrics_file
   }
 }

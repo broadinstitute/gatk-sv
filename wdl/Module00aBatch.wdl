@@ -1,6 +1,7 @@
 version 1.0
 
 import "Module00a.wdl" as m00a
+import "TestUtils.wdl" as tu
 
 workflow Module00aBatch {
   input {
@@ -60,6 +61,19 @@ workflow Module00aBatch {
     # Wham inputs
     File wham_include_list_bed_file
 
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? batch  # required if run_module_metrics = true
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    String? linux_docker  # required if run_module_metrics = true
+    File? primary_contigs_fai  # required if run_module_metrics = true
+    File? baseline_delly_vcf  # baseline files are optional for metrics workflow
+    File? baseline_manta_vcf
+    File? baseline_wham_vcf
+    File? baseline_melt_vcf
+    Int? min_size
+
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -94,6 +108,8 @@ workflow Module00aBatch {
     Float? NONE_FLOAT_
     Int? NONE_INT_
   }
+
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
 
   scatter (i in range(length(bam_or_cram_files))) {
     call m00a.Module00a {
@@ -131,6 +147,13 @@ workflow Module00aBatch {
         total_reads = if defined(total_reads) then select_first([total_reads])[i] else NONE_FLOAT_,
         pf_reads_improper_pairs = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[i] else NONE_INT_,
         wham_include_list_bed_file = wham_include_list_bed_file,
+        run_module_metrics = run_module_metrics_,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        baseline_delly_vcf = baseline_delly_vcf,
+        baseline_manta_vcf = baseline_manta_vcf,
+        baseline_melt_vcf = baseline_melt_vcf,
+        baseline_wham_vcf = baseline_wham_vcf,
+        min_size = min_size,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,
@@ -158,6 +181,15 @@ workflow Module00aBatch {
     }
   }
 
+  if (run_module_metrics_) {
+    call tu.CatMetrics {
+      input:
+        prefix = "module00a." + select_first([batch]),
+        metric_files = flatten(select_all([Module00a.sample_metrics_files])),
+        linux_docker = select_first([linux_docker])
+    }
+  }
+
   output {
     Array[File?] coverage_counts = Module00a.coverage_counts
 
@@ -180,5 +212,7 @@ workflow Module00aBatch {
 
     Array[File?] wham_vcf = Module00a.wham_vcf
     Array[File?] wham_index = Module00a.wham_index
+
+    File? metrics_file_00a = CatMetrics.out
   }
 }

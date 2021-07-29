@@ -10,6 +10,7 @@ import "DepthPreprocessing.wdl" as dpn
 import "MakeBincovMatrix.wdl" as mbm
 import "MatrixQC.wdl" as mqc
 import "MedianCov.wdl" as mc
+import "Module00cMetrics.wdl" as metrics
 import "PESRPreprocessing.wdl" as pp
 import "GermlineCNVCase.wdl" as gcnv
 import "PloidyEstimation.wdl" as pe
@@ -145,6 +146,19 @@ workflow Module00c {
     File mei_bed
     # QC files
     Int matrix_qc_distance
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - off by default for Module00c because of runtime/expense
+    Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_list  # required if run_module_metrics = true
+    File? baseline_merged_dels  # baseline files are optional for metrics workflow
+    File? baseline_merged_dups
+    File? baseline_median_cov
+    Array[File]? baseline_std_delly_vcf
+    Array[File]? baseline_std_manta_vcf
+    Array[File]? baseline_std_melt_vcf
+    Array[File]? baseline_std_wham_vcf
 
     # Runtime parameters
     String sv_base_mini_docker
@@ -498,6 +512,36 @@ workflow Module00c {
     }
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else false
+  if (run_module_metrics_) {
+    call metrics.Module00cMetrics {
+      input:
+        name = batch,
+        samples = samples,
+        merged_BAF = select_first([baf_out]),
+        merged_SR = EvidenceMerging.merged_SR,
+        merged_PE = EvidenceMerging.merged_PE,
+        merged_bincov = merged_bincov_,
+        merged_dels = MergeDepth.del,
+        merged_dups = MergeDepth.dup,
+        median_cov = MedianCov.medianCov,
+        std_delly_vcf = PreprocessPESR.std_delly_vcf,
+        std_manta_vcf = PreprocessPESR.std_manta_vcf,
+        std_melt_vcf = PreprocessPESR.std_melt_vcf,
+        std_wham_vcf = PreprocessPESR.std_wham_vcf,
+        baseline_merged_dels = baseline_merged_dels,
+        baseline_merged_dups = baseline_merged_dups,
+        baseline_median_cov = baseline_median_cov,
+        baseline_std_delly_vcf = baseline_std_delly_vcf,
+        baseline_std_manta_vcf = baseline_std_manta_vcf,
+        baseline_std_melt_vcf = baseline_std_melt_vcf,
+        baseline_std_wham_vcf = baseline_std_wham_vcf,
+        contig_list = select_first([primary_contigs_list]),
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        linux_docker = linux_docker
+    }
+  }
+
   output {
     File? merged_BAF = baf_out
     File? merged_BAF_index = baf_out_index
@@ -540,6 +584,8 @@ workflow Module00c {
     File? Matrix_QC_plot = MatrixQC.QC_plot
     
     Array[File]? manta_tloc = TinyResolve.tloc_manta_vcf
+
+    File? metrics_file_00c = Module00cMetrics.metrics_file
   }
 }
 

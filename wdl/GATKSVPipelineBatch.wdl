@@ -65,6 +65,23 @@ workflow GATKSVPipelineBatch {
     File autosome_file      # fai of autosomal contigs
     File allosome_file      # fai of allosomal contigs
 
+    # Run module metrics - all modules on by default for batch WDL
+    Boolean? run_00a_metrics
+    Boolean? run_00c_metrics = true  # 00c metrics is off by default standalone but on for batch WDL
+    Boolean? run_01_metrics
+    Boolean? run_02_metrics
+    Boolean? run_03_metrics
+    Boolean? run_04_metrics
+    Boolean? run_0506_metrics
+
+    File? baseline_00a_metrics
+    File? baseline_00c_metrics
+    File? baseline_01_metrics
+    File? baseline_02_metrics
+    File? baseline_03_metrics
+    File? baseline_04_metrics
+    File? baseline_0506_metrics
+
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
@@ -112,6 +129,10 @@ workflow GATKSVPipelineBatch {
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
+        run_module_metrics = run_00a_metrics,
+        batch = batch,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        linux_docker = linux_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         delly_docker=delly_docker,
@@ -183,6 +204,11 @@ workflow GATKSVPipelineBatch {
       cnmops_allo_file=allosome_file,
       allosome_contigs=allosome_file,
       autosome_contigs=autosome_file,
+      run_00c_metrics = run_00c_metrics,
+      run_01_metrics = run_01_metrics,
+      run_02_metrics = run_02_metrics,
+      run_03_metrics = run_03_metrics,
+      primary_contigs_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
@@ -213,6 +239,9 @@ workflow GATKSVPipelineBatch {
       splitfile_index=GATKSVPipelinePhase1.merged_SR_index,
       ped_file=ped_file,
       ref_dict=reference_dict,
+      run_module_metrics = run_04_metrics,
+      primary_contigs_list = primary_contigs_list,
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -261,6 +290,9 @@ workflow GATKSVPipelineBatch {
       batches=[batch],
       depth_gt_rd_sep_files=[select_first([Module04.trained_genotype_depth_depth_sepcutoff])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
+      run_module_metrics = run_0506_metrics,
+      primary_contigs_list = primary_contigs_list,
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -268,78 +300,42 @@ workflow GATKSVPipelineBatch {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  call BatchMetrics.BatchMetrics {
-    input:
-      name = batch,
-      samples = sample_ids,
-      samples_post_filtering_file = GATKSVPipelinePhase1.batch_samples_postOutlierExclusion_file,
-      contig_list = primary_contigs_list,
-      contig_index = primary_contigs_fai,
-      linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
-      sv_base_mini_docker = sv_base_mini_docker,
+  call utils.CatMetrics as CatBatchMetrics {
+      input:
+        prefix = "batch_sv." + batch,
+        metric_files = [Module00aBatch.metrics_file_00a, GATKSVPipelinePhase1.metrics_file_00c, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506],
+        linux_docker = linux_docker
+    }
 
-      coverage_counts = counts_files_,
-      pesr_disc = pe_files_,
-      pesr_split = sr_files_,
-      delly_vcf = delly_vcfs_,
-      manta_vcf = manta_vcfs_,
-      melt_vcf = melt_vcfs_,
-      wham_vcf = wham_vcfs_,
-
-      merged_BAF = GATKSVPipelinePhase1.merged_BAF,
-      merged_SR = GATKSVPipelinePhase1.merged_SR,
-      merged_PE = GATKSVPipelinePhase1.merged_PE,
-      merged_bincov = GATKSVPipelinePhase1.merged_bincov,
-      merged_dels = GATKSVPipelinePhase1.merged_dels,
-      merged_dups = GATKSVPipelinePhase1.merged_dups,
-      median_cov = GATKSVPipelinePhase1.median_cov,
-      std_delly_vcf = GATKSVPipelinePhase1.std_delly_vcf,
-      std_manta_vcf = GATKSVPipelinePhase1.std_manta_vcf,
-      std_melt_vcf = GATKSVPipelinePhase1.std_melt_vcf,
-      std_wham_vcf = GATKSVPipelinePhase1.std_wham_vcf,
-
-      merged_depth_vcf = select_first([GATKSVPipelinePhase1.depth_vcf]),
-      merged_delly_vcf = GATKSVPipelinePhase1.delly_vcf,
-      merged_manta_vcf = GATKSVPipelinePhase1.manta_vcf,
-      merged_wham_vcf = GATKSVPipelinePhase1.wham_vcf,
-      merged_melt_vcf = GATKSVPipelinePhase1.melt_vcf,
-
-      metrics = GATKSVPipelinePhase1.evidence_metrics,
-      metrics_common = GATKSVPipelinePhase1.evidence_metrics_common,
-
-      filtered_pesr_vcf = GATKSVPipelinePhase1.filtered_pesr_vcf,
-      filtered_depth_vcf = select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      cutoffs = GATKSVPipelinePhase1.cutoffs,
-      outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file,
-      ped_file = ped_file,
-
-      genotyped_pesr_vcf = Module04.genotyped_pesr_vcf,
-      genotyped_depth_vcf = Module04.genotyped_depth_vcf,
-      cutoffs_pesr_pesr = select_first([Module04.trained_genotype_pesr_pesr_sepcutoff]),
-      cutoffs_pesr_depth = select_first([Module04.trained_genotype_pesr_depth_sepcutoff]),
-      cutoffs_depth_pesr = select_first([Module04.trained_genotype_depth_pesr_sepcutoff]),
-      cutoffs_depth_depth = select_first([Module04.trained_genotype_depth_depth_sepcutoff]),
-      sr_bothside_pass = Module04.sr_bothside_pass,
-      sr_background_fail = Module04.sr_background_fail,
-
-      module0506_cluster_vcf = Module0506.cluster_vcf,
-      module0506_complex_resolve_vcf = Module0506.complex_resolve_vcf,
-      module0506_complex_genotype_vcf = Module0506.complex_genotype_vcf,
-      module0506_cleaned_vcf = Module0506.vcf
+  Array[File] defined_baseline_metrics = select_all([baseline_00a_metrics, baseline_00c_metrics, baseline_01_metrics, baseline_02_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
+  if (length(defined_baseline_metrics) > 0) {
+    call utils.CatMetrics as CatBaselineMetrics {
+      input:
+        prefix = "baseline." + name,
+        metric_files = defined_baseline_metrics,
+        linux_docker = linux_docker
+    }
+    call utils.PlotMetrics {
+      input:
+        name = batch,
+        samples = sample_ids,
+        test_metrics = CatBatchMetrics.out,
+        base_metrics = CatBaselineMetrics.out,
+        sv_pipeline_base_docker = sv_pipeline_base_docker
+    }
   }
 
   call utils.RunQC as BatchQC {
     input:
       name = batch,
-      metrics = BatchMetrics.metrics_file,
+      metrics = CatBatchMetrics.out,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   output {
     File vcf = Module0506.vcf
     File vcf_index = Module0506.vcf_index
-    File metrics_file = BatchMetrics.metrics_file
+    File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
 
     # Additional outputs for creating a reference panel

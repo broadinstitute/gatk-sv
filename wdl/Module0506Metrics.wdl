@@ -4,7 +4,7 @@ import "TestUtils.wdl" as tu
 
 workflow Module0506Metrics {
   input {
-    Array[String] samples
+    Array[String]? samples
     String name
 
     File? cluster_vcf
@@ -20,9 +20,18 @@ workflow Module0506Metrics {
     File contig_list
     String linux_docker
     String sv_pipeline_base_docker
+    String? sv_base_mini_docker  # required if not providing samples array
 
     # Do not use
     Array[File]? NONE_FILE_ARRAY_
+  }
+
+  if (!defined(samples)) {
+    call util.GetSampleIdsFromVcf {
+      input:
+        vcf = cleaned_vcf,
+        sv_base_mini_docker = select_first([sv_base_mini_docker])
+    }
   }
 
   if (defined(cluster_vcf)) {
@@ -30,7 +39,7 @@ workflow Module0506Metrics {
       input:
         vcf = select_first([cluster_vcf]),
         baseline_vcf = baseline_cluster_vcf,
-        samples = samples,
+        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
         prefix = "cluster",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -43,7 +52,7 @@ workflow Module0506Metrics {
       input:
         vcf = select_first([complex_resolve_vcf]),
         baseline_vcf = baseline_complex_resolve_vcf,
-        samples = samples,
+        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
         prefix = "cpx_resolve",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -56,7 +65,7 @@ workflow Module0506Metrics {
       input:
         vcf = select_first([complex_genotype_vcf]),
         baseline_vcf = baseline_complex_genotype_vcf,
-        samples = samples,
+        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
         prefix = "cpx_genotype",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -68,7 +77,7 @@ workflow Module0506Metrics {
     input:
       vcf = cleaned_vcf,
       baseline_vcf = baseline_cleaned_vcf,
-      samples = samples,
+      samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
       prefix = "cleaned",
       types = "DEL,DUP,INS,INV,CTX,CPX,BND,CNV",
       contig_list = contig_list,

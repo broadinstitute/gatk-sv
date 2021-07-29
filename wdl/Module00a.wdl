@@ -7,6 +7,7 @@ import "CramToBam.ReviseBase.wdl" as ctb_revise
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
+import "Module00aMetrics.wdl" as metrics
 import "PESRCollection.wdl" as pesr
 import "Whamg.wdl" as wham
 
@@ -71,6 +72,17 @@ workflow Module00a {
 
     # Wham inputs
     File wham_include_list_bed_file
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_fai  # required if run_module_metrics = true
+    File? baseline_delly_vcf  # baseline files are optional for metrics workflow
+    File? baseline_manta_vcf
+    File? baseline_wham_vcf
+    File? baseline_melt_vcf
+    Int? min_size
 
     # Docker
     String sv_pipeline_docker
@@ -272,6 +284,28 @@ workflow Module00a {
     }
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module00aMetrics {
+      input:
+        sample = sample,
+        coverage_counts = CollectCounts.counts,
+        pesr_disc = PESRCollection.disc_out,
+        pesr_split = PESRCollection.split_out,
+        delly_vcf = Delly.vcf,
+        manta_vcf = Manta.vcf,
+        melt_vcf = MELT.vcf,
+        wham_vcf = Whamg.vcf,
+        baseline_delly_vcf = baseline_delly_vcf,
+        baseline_manta_vcf = baseline_manta_vcf,
+        baseline_melt_vcf = baseline_melt_vcf,
+        baseline_wham_vcf = baseline_wham_vcf,
+        contig_list = primary_contigs_list,
+        contig_index = select_first([primary_contigs_fai]),
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+    }
+  }
+
   output {
     File? coverage_counts = CollectCounts.counts
 
@@ -294,6 +328,8 @@ workflow Module00a {
 
     File? wham_vcf = Whamg.vcf
     File? wham_index = Whamg.index
+
+    Array[File]? sample_metrics_files = Module00aMetrics.sample_metrics_files
   }
 }
 

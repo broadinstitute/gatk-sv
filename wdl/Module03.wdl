@@ -2,6 +2,7 @@ version 1.0
 
 import "FilterOutliers.wdl" as filter_outliers
 import "Utils.wdl" as util
+import "Module03Metrics.wdl" as metrics
 
 workflow Module03 {
   input {
@@ -16,6 +17,15 @@ workflow Module03 {
 
     Int outlier_cutoff_nIQR
     File? outlier_cutoff_table
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_list  # required if run_module_metrics = true
+    File? ped_file  # required if run_module_metrics = true
+    File? baseline_filtered_depth_vcf  # baseline files are optional for metrics workflow
+    File? baseline_filtered_pesr_vcf
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -105,6 +115,27 @@ workflow Module03 {
       runtime_attr_override = runtime_attr_merge_pesr_vcfs
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module03Metrics {
+      input:
+        name = batch,
+        samples = GetSampleIdsFromVcf.out_array,
+        filtered_pesr_vcf = MergePesrVcfs.merged_pesr_vcf,
+        filtered_depth_vcf = FilterOutlierSamples.vcfs_noOutliers[4],
+        cutoffs = AdjudicateSV.cutoffs,
+        outlier_list = FilterOutlierSamples.outlier_samples_excluded_file,
+        ped_file = select_first([ped_file]),
+        samples_post_filtering_file = FilterOutlierSamples.filtered_batch_samples_file,
+        baseline_filtered_pesr_vcf = baseline_filtered_pesr_vcf,
+        baseline_filtered_depth_vcf = baseline_filtered_depth_vcf,
+        contig_list = select_first([primary_contigs_list]),
+        linux_docker = linux_docker,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_base_mini_docker = sv_base_mini_docker
+    }
+  }
+
   output {
     File? filtered_manta_vcf = FilterOutlierSamples.vcfs_noOutliers[0]
     File? filtered_delly_vcf = FilterOutlierSamples.vcfs_noOutliers[1]
@@ -119,6 +150,8 @@ workflow Module03 {
     Array[String] batch_samples_postOutlierExclusion = FilterOutlierSamples.filtered_batch_samples_list
     File outlier_samples_excluded_file = FilterOutlierSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterOutlierSamples.filtered_batch_samples_file
+
+    File? metrics_file_03 = Module03Metrics.metrics_file
   }
 }
 
