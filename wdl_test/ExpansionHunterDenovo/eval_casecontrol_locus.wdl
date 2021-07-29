@@ -23,9 +23,9 @@ task RunEHdn {
         File multisample_profile_expected
         String docker_image
     }
-    command {
-        ls
-    }
+    command <<<
+        cmp --silent ~{multisample_profile} ~{multisample_profile_expected} && exit 0 || exit 1
+    >>>
     runtime {
         docker: docker_image
     }
