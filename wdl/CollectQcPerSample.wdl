@@ -83,7 +83,7 @@ task CollectVidsPerSample {
     mem_gb: 3.75,
     disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -152,7 +152,7 @@ task TarShardVidLists {
     mem_gb: base_mem_gb,
     disk_gb: ceil(base_disk_gb + input_size * 2.0),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
