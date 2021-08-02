@@ -89,14 +89,14 @@ task BenchmarkSamples {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
-  Float compression_factor = 5.0
+  Float compression_factor = 1.5
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float base_mem_gb = 3.0
   RuntimeAttr runtime_default = object {
     mem_gb: base_mem_gb + compression_factor * input_size,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
