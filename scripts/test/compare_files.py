@@ -42,7 +42,7 @@ class VCFCompareAgent(BaseCompareAgent):
         extracted_filename = filename[:-len(".gz")]
         if not os.path.isfile(extracted_filename):
             if not os.path.isfile(filename):
-                check_call(["gsutil", "cp", obj, filename], stdout=DEVNULL, stderr=STDOUT)
+                check_call(["gsutil", "-m", "cp", obj, filename], stdout=DEVNULL, stderr=STDOUT)
             check_call(["gunzip", filename], stdout=DEVNULL, stderr=STDOUT)
         return extracted_filename
 
