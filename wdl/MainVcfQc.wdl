@@ -23,8 +23,8 @@ workflow MasterVcfQc {
     String prefix
     Int sv_per_shard
     Int samples_per_shard
-    File? site_level_comparison_datasets_tsv
-    File? sample_level_comparison_datasets_tsv
+    Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
+    Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     Array[String] contigs
     Int? random_seed
 
@@ -63,17 +63,6 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
-  }
-
-  # Reads external benchmarking dataset input .tsvs as Arrays for scattering
-  # Expected two-column tsv:
-  #   column 1 = dataset prefix / name
-  #   column 2 = gs:// path to dataset tarball
-  if (defined(site_level_comparison_datasets_tsv)) {
-    Array[Array[String]]? site_level_comparison_datasets = read_tsv(select_first([site_level_comparison_datasets_tsv]))
-  }
-  if (defined(sample_level_comparison_datasets_tsv)) {
-    Array[Array[String]]? sample_level_comparison_datasets = read_tsv(select_first([sample_level_comparison_datasets_tsv]))
   }
 
   # Restrict to a subset of all samples, if optioned. This can be useful to 
@@ -154,7 +143,7 @@ workflow MasterVcfQc {
           vcf_stats=MergeVcfwideStatShards.merged_bed_file,
           prefix=prefix,
           contigs=contigs,
-          benchmarking_archives=[comparison_dataset_info[1]],
+          benchmarking_bucket=comparison_dataset_info[1],
           comparator=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_site_level_benchmark
@@ -286,19 +275,11 @@ task PlotQcVcfWide {
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([vcf_stats, samples_list], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  # give extra base memory in case the plotting functions are very inefficient
-  Float base_mem_gb = 3.75
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3.75,
+    disk_gb: 20,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -338,28 +319,18 @@ task PlotQcVcfWide {
 task VcfExternalBenchmark {
   input {
     File vcf_stats
-    Array[File] benchmarking_archives
+    String benchmarking_bucket
     String prefix
     Array[String] contigs
     String comparator
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  # NOTE: in this case, double input size because it will be compared to a data set stored in
-  #       the docker. Other than having space for the at-rest compressed data, this is like
-  #       processing another data set of comparable size to the input
-  Float input_size = 2 * size(vcf_stats, "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3.75,
+    disk_gb: 40,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -376,15 +347,16 @@ task VcfExternalBenchmark {
 
   command <<<
     set -eu -o pipefail
+
+    # Copy benchmarking BED files to local directory
     mkdir benchmarks
-    cp ~{sep=" " benchmarking_archives} benchmarks/
+    gsutil -m cp ~{benchmarking_bucket}/*.bed.gz benchmarks/
     
     # Run benchmarking script
     /opt/sv-pipeline/scripts/vcf_qc/collectQC.external_benchmarking.sh \
       ~{vcf_stats} \
       /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
       ~{write_lines(contigs)} \
-      ~{comparator} \
       benchmarks \
       collectQC_benchmarking_~{comparator}_output/
     
@@ -407,19 +379,11 @@ task PlotQcExternalBenchmarking {
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(benchmarking_tarball, "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  # give extra base memory in case the plotting functions are very inefficient
-  Float base_mem_gb = 8.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3.75,
+    disk_gb: 20,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -463,22 +427,15 @@ task PlotQcPerSample {
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([vcf_stats, samples_list], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  # give extra base memory in case the plotting functions are very inefficient
-  Float base_mem_gb = 3.75
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 7.75,
+    disk_gb: 50,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
+
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
@@ -535,19 +492,11 @@ task PlotQcPerFamily {
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([vcf_stats, samples_list, ped_file, per_sample_tarball], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  # give extra base memory in case the plotting functions are very inefficient
-  Float base_mem_gb = 3.75
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 7.75,
+    disk_gb: 50,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -640,22 +589,15 @@ task PlotQcPerSampleBenchmarking {
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
-  
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([per_sample_benchmarking_tarball, samples_list], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  # give extra base memory in case the plotting functions are very inefficient
-  Float base_mem_gb = 8.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 7.75,
+    disk_gb: 50,
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
+
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
     memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
@@ -736,7 +678,7 @@ task SanitizeOutputs {
     mem_gb: base_mem_gb,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }

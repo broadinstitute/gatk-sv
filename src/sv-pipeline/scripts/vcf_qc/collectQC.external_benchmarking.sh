@@ -128,3 +128,4 @@ done < comparator_beds.tsv
 
 ###CLEAN UP
 rm -rf ${QCTMP}
+
