@@ -9,7 +9,7 @@ set -e
 usage(){
 cat <<EOF
 
-usage: collectQC.external_benchmarking.sh [-h] [-r REF] STATS SVTYPES CONTIGS COMPARATOR BENCHDIR OUTDIR
+usage: collectQC.external_benchmarking.sh [-h] [-r REF] STATS SVTYPES CONTIGS BENCHDIR OUTDIR
 
 Helper tool to collect cohort-level bechmarking data for a VCF output by sv-pipeline vs. an external dataset
 
@@ -18,8 +18,6 @@ Positional arguments:
   SVTYPES         List of SV types to evaluate. Two-column, tab-delimited file.
                   First column: sv type. Second column: HEX color for sv type.
   CONTIGS         List of contigs to evaluate
-  COMPARATOR      Comparison dataset used in benchmarking. Specify one of the
-                  following: 'ASC_Werling', 'HGSV_Chaisson', or '1000G_Sudmant'
   BENCHDIR        Directory containing benchmark archives
   OUTDIR          Output directory for all QC data
 
@@ -48,9 +46,8 @@ shift $(( ${OPTIND} - 1))
 STATS=$1
 SVTYPES=$2
 CONTIGS=$3
-COMPARATOR=$4
-BENCHDIR=$5
-OUTDIR=$6
+BENCHDIR=$4
+OUTDIR=$5
 
 
 ###PROCESS ARGS & OPTIONS
@@ -74,12 +71,6 @@ elif ! [ -s ${CONTIGS} ]; then
   echo -e "\ncollectQC.external_benchmarking.sh ERROR: input contig list either empty or not found\n"
   usage
   exit 1
-fi
-if [ ${COMPARATOR} != "ASC_Werling" ] && [ ${COMPARATOR} != "HGSV_Chaisson" ] && \
-   [ ${COMPARATOR} != "1000G_Sudmant" ]; then
-  echo -e "\nERROR: COMPARATOR must be one of 'ASC_Werling', 'HGSV_Chaisson', or '1000G_Sudmant'\n"
-  usage
-  exit 0
 fi
 if [ -z ${OUTDIR} ]; then
   echo -e "\nERROR: output directory not specified\n"
@@ -105,9 +96,13 @@ fi
 if ! [ -e ${OUTDIR}/data ]; then
   mkdir ${OUTDIR}/data
 fi
-mkdir ${QCTMP}/perSample
 #Gather SV types to process
 cut -f1 ${SVTYPES} | sort | uniq > ${QCTMP}/svtypes.txt
+# Gather list of external BEDs to compare
+for bed in $( find ${BENCHDIR} -name "*.bed.gz" ); do
+  prefix=$( basename $bed | sed 's/\.bed\.gz//g' )
+  echo -e "${prefix}\t${bed}"
+done > comparator_beds.tsv
 
 
 ###GATHER EXTERNAL BENCHMARKING
@@ -115,64 +110,23 @@ cut -f1 ${SVTYPES} | sort | uniq > ${QCTMP}/svtypes.txt
 if [ ${QUIET} == 0 ]; then
   echo -e "$( date ) - VCF QC STATUS: Starting external benchmarking"
 fi
-#1000G (Sudmant) with allele frequencies
-if [ ${COMPARATOR} == "1000G_Sudmant" ]; then
-  for pop in ALL AFR AMR EAS EUR SAS; do
-    #Print status
-    if [ ${QUIET} == 0 ]; then
-      echo -e "$( date ) - VCF QC STATUS: Benchmarking ${pop} samples in ${COMPARATOR}"
-    fi
-    ${BIN}/compare_callsets.sh \
-      -O ${QCTMP}/1000G_Sudmant.SV.${pop}.overlaps.bed \
-      -p 1000G_Sudmant_${pop}_Benchmarking_SV \
-      ${STATS} \
-      ${BENCHDIR}/1000G_Sudmant.SV.${pop}.bed.gz \
-      ${CONTIGS}
-  cp ${QCTMP}/1000G_Sudmant.SV.${pop}.overlaps.bed \
-     ${OUTDIR}/data/1000G_Sudmant.SV.${pop}.overlaps.bed
-  bgzip -f ${OUTDIR}/data/1000G_Sudmant.SV.${pop}.overlaps.bed
-  tabix -f ${OUTDIR}/data/1000G_Sudmant.SV.${pop}.overlaps.bed.gz
-  done
-fi
-#ASC (Werling) with carrier frequencies
-if [ ${COMPARATOR} == "ASC_Werling" ]; then
-  for pop in ALL EUR OTH; do
-    #Print status
-    if [ ${QUIET} == 0 ]; then
-      echo -e "$( date ) - VCF QC STATUS: Benchmarking ${pop} samples in ${COMPARATOR}"
-    fi
-    ${BIN}/compare_callsets.sh -C \
-      -O ${QCTMP}/ASC_Werling.SV.${pop}.overlaps.bed \
-      -p ASC_Werling_${pop}_Benchmarking_SV \
-      ${STATS} \
-      ${BENCHDIR}/ASC_Werling.SV.${pop}.bed.gz \
-      ${CONTIGS}
-  cp ${QCTMP}/ASC_Werling.SV.${pop}.overlaps.bed \
-     ${OUTDIR}/data/ASC_Werling.SV.${pop}.overlaps.bed
-  bgzip -f ${OUTDIR}/data/ASC_Werling.SV.${pop}.overlaps.bed
-  tabix -f ${OUTDIR}/data/ASC_Werling.SV.${pop}.overlaps.bed.gz
-  done
-fi
-#HGSV (Chaisson) with carrier frequencies
-if [ ${COMPARATOR} == "HGSV_Chaisson" ]; then
-  for pop in ALL AFR AMR EAS; do
-    #Print status
-    if [ ${QUIET} == 0 ]; then
-      echo -e "$( date ) - VCF QC STATUS: Benchmarking ${pop} samples in ${COMPARATOR}"
-    fi
-    ${BIN}/compare_callsets.sh -C \
-      -O ${QCTMP}/HGSV_Chaisson.SV.${pop}.overlaps.bed \
-      -p HGSV_Chaisson_${pop}_Benchmarking_SV \
-      ${STATS} \
-      ${BENCHDIR}/HGSV_Chaisson.SV.hg19_liftover.${pop}.bed.gz \
-      ${CONTIGS}
-  cp ${QCTMP}/HGSV_Chaisson.SV.${pop}.overlaps.bed \
-     ${OUTDIR}/data/HGSV_Chaisson.SV.${pop}.overlaps.bed
-  bgzip -f ${OUTDIR}/data/HGSV_Chaisson.SV.${pop}.overlaps.bed
-  tabix -f ${OUTDIR}/data/HGSV_Chaisson.SV.${pop}.overlaps.bed.gz
-  done
-fi
+while read prefix bed; do
+  #Print status
+  if [ ${QUIET} == 0 ]; then
+    echo -e "$( date ) - VCF QC STATUS: Benchmarking ${pop} samples in ${COMPARATOR}"
+  fi
+  ${BIN}/compare_callsets.sh \
+    -O ${QCTMP}/${prefix}.overlaps.bed \
+    -p ${prefix}_Benchmarking_SV \
+    ${STATS} \
+    ${bed} \
+    ${CONTIGS}
+  cp ${QCTMP}/${prefix}.overlaps.bed ${OUTDIR}/data/
+  bgzip -f ${OUTDIR}/data/${prefix}.overlaps.bed
+  tabix -f ${OUTDIR}/data/${prefix}.overlaps.bed.gz
+done < comparator_beds.tsv
 
 
 ###CLEAN UP
 rm -rf ${QCTMP}
+

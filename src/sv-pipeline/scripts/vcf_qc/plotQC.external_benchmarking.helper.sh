@@ -8,15 +8,14 @@ set -e
 usage(){
 cat <<EOF
 
-usage: plotQC_external_benchmarking.helper.sh [-h] TARBALL COMPARATOR
+usage: plotQC_external_benchmarking.helper.sh [-h] TARBALL PREFIX
 
 Wrapper to manage external SV benchmarking plotting from output tarball
 
 Positional arguments:
   TARBALL         .tar.gz file containing results of external benchmarking from
                   collectQC_external_benchmarking WDL
-  COMPARATOR      Comparison dataset used in benchmarking. Specify one of the
-                  following: 'ASC_Werling', 'HGSV_Chaisson', or '1000G_Sudmant'
+  PREFIX          String prefix for labeling outputs
 
 Optional arguments:
   -h  HELP        Show this help message and exit
@@ -27,7 +26,7 @@ EOF
 
 ###PARSE ARGS
 TARBALL=$1
-COMPARATOR=$2
+PREFIX=$2
 
 
 ###PROCESS ARGS & OPTIONS
@@ -42,9 +41,9 @@ if ! [ -s ${TARBALL} ]; then
   usage
   exit 0
 fi
-if [ ${COMPARATOR} != "ASC_Werling" ] && [ ${COMPARATOR} != "HGSV_Chaisson" ] && \
-   [ ${COMPARATOR} != "1000G_Sudmant" ]; then
-  echo -e "\nERROR: COMPARATOR must be one of 'ASC_Werling', 'HGSV_Chaisson', or '1000G_Sudmant'\n"
+#Check for required input
+if [ -z ${PREFIX} ]; then
+  echo -e "\nERROR: output prefix not specified\n"
   usage
   exit 0
 fi
@@ -58,7 +57,7 @@ BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 #Unarchive tarball
 tar -xzvf ${TARBALL} --directory `pwd`
 #Prep directory prefix
-OUTDIR=`pwd`/collectQC_benchmarking_${COMPARATOR}_output/
+OUTDIR=`pwd`/collectQC_benchmarking_${PREFIX}_output/
 #Prep plot directory
 if ! [ -e ${OUTDIR}/plots/ ]; then
   mkdir ${OUTDIR}/plots/
@@ -66,24 +65,16 @@ fi
 
 
 ###GENERATE PLOTS FOR EACH POPULATION
-#Set carrier frequency flag for ASC Werling and HGSV Chaisson
-if [ ${COMPARATOR} == "ASC_Werling" ] || [ ${COMPARATOR} == "HGSV_Chaisson" ]; then
-  carrierFlag=" -C"
-else
-  carrierFlag=""
-fi
-#Iterate over all populations and generate plots
-for pop in ALL AFR AMR EAS EUR SAS OTH; do
-  compdat=${OUTDIR}/data/${COMPARATOR}.SV.${pop}.overlaps.bed.gz
+for compdat in $( find ${OUTDIR}/data/ -name "*.overlaps.bed.gz" ); do
+  outprefix=$( basename "$bed" | sed 's/\.bed\.gz//g' )
   if [ -e ${compdat} ] && [ -s ${compdat} ]; then
     #Print status
-    echo -e "$( date ) - VCF QC STATUS: Plotting benchmarking for ${pop} samples in ${COMPARATOR}"
+    echo -e "$( date ) - VCF QC STATUS: Plotting benchmarking for ${outprefix} subset from ${PREFIX}"
     #Plot benchmarking
     ${BIN}/plot_callset_comparison.R \
-      ${carrierFlag} \
-      -p ${COMPARATOR}_${pop} \
+      -p ${outprefix} \
       ${compdat} \
-      ${OUTDIR}/plots/${COMPARATOR}_${pop}_samples/
+      ${OUTDIR}/plots/${outprefix}/
   fi
 done
 
