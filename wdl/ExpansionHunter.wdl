@@ -47,6 +47,9 @@ workflow ExpansionHunter {
     }
 
     output {
+        File json = RunExpansionHunter.json
+        File vcf = RunExpansionHunter.vcf
+        File overlapping_reads = RunExpansionHunter.overlapping_reads
     }
 }
 
@@ -61,7 +64,12 @@ task RunExpansionHunter {
         RuntimeAttr? runtime_attr_override
     }
 
+    String output_prefix = "output"
+
     output {
+        File json = "${output_prefix}.json"
+        File vcf = "${output_prefix}.vcf"
+        File overlapping_reads = "${output_prefix}_realigned.bam"
     }
 
     command <<<
@@ -71,7 +79,7 @@ task RunExpansionHunter {
             --reads ~{bam_or_cram} \
             --reference ~{reference_fasta} \
             --variant-catalog ~{variant_catalog} \
-            --output-prefix "output_"
+            --output-prefix ~{output_prefix}
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
