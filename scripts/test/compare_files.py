@@ -1,4 +1,5 @@
 import argparse
+import gzip
 import json
 import os
 from itertools import chain
@@ -33,18 +34,18 @@ class VCFCompareAgent(BaseCompareAgent):
     def get_obj(self, obj):
         """
         Ensures the given VCF object is
-        available in working directory,
-        uncompressed, and returns its filename.
-        If not, downloads the VCF object and
-        extracts it.
+        available in the working directory:
+        if it exists, returns its filename, and
+        If it does not, downloads the VCF object and
+        returns its filename.
         """
         filename = self.get_filename(obj)
-        extracted_filename = filename[:-len(".gz")]
-        if not os.path.isfile(extracted_filename):
+        if not os.path.isfile(filename):
             if not os.path.isfile(filename):
-                check_call(["gsutil", "-m", "cp", obj, filename], stdout=DEVNULL, stderr=STDOUT)
-            check_call(["gunzip", filename], stdout=DEVNULL, stderr=STDOUT)
-        return extracted_filename
+                check_call(
+                    ["gsutil", "-m", "cp", obj, filename],
+                    stdout=DEVNULL, stderr=STDOUT)
+        return filename
 
     def equals(self, x, y):
         """
@@ -56,7 +57,8 @@ class VCFCompareAgent(BaseCompareAgent):
         x = self.get_obj(x)
         y = self.get_obj(y)
 
-        with open(x, "r") as X, open(y, "r") as Y:
+        with gzip.open(x, "rt", encoding="utf-8") as X, \
+             gzip.open(y, "rt", encoding="utf-8") as Y:
             # Not an optimal search, but it works
             # if the files are not sorted, which
             # is expected for some files in the
