@@ -174,7 +174,16 @@ if __name__ == '__main__':
                     "The two metadata files should belong to the execution "
                     "of a common workflow (e.g., one workflow with different "
                     "inputs). The script requires `gsutil` and `gzip` to be "
-                    "installed and configured.")
+                    "installed and configured."
+                    "\n\n"
+                    "The currently supported file types are as follows."
+                    "\n\t- VCF (.vcf.gz): The non-header lines of VCF files"
+                    "are compared; except for the ID column, all the other "
+                    "columns of a variation are expected to be identical. "
+                    "The two files are expected to be equally ordered (i.e., "
+                    "n-th variation in one file is compared to the "
+                    "n-th variation on the other file).",
+        formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument(
         "reference_metadata",
