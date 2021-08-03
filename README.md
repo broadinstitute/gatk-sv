@@ -159,7 +159,7 @@ The pipeline should be executed as follows:
 
 Note: [Module 00c](#module00c) requires a [trained gCNV model](#gcnv-training).
 
-### <a name="batching">Batching</a>
+#### <a name="batching">Batching</a>
 For larger cohorts, samples should be split up into batches of about 100-500 samples with similar characteristics. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [Module 00b](#module00b). An example batching process is outlined below:
 1. Divide the cohort into PCR+ and PCR- samples
 2. Partition the samples by median coverage from [Module00b](#module00b)
