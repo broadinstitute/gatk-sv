@@ -95,15 +95,17 @@ class CompareWorkflowOutputs:
         types defined in filetypes_to_compare).
         """
         filtered_outputs = {}
-        if isinstance(task_outputs, list):
-            for task_output in task_outputs:
-                for ext in self.filetypes_to_compare:
-                    if task_output.endswith(ext):
-                        filtered_outputs[ext] = task_output
-        elif isinstance(task_outputs, str):
+        if not isinstance(task_outputs, list):
+            task_outputs = [task_outputs]
+
+        for task_output in task_outputs:
+            if not isinstance(task_output, str):
+                # Happens when output is not a file,
+                # e.g., when it is a number.
+                continue
             for ext in self.filetypes_to_compare:
-                if task_outputs.endswith(ext):
-                    filtered_outputs[ext] = task_outputs
+                if task_output.endswith(ext):
+                    filtered_outputs[ext] = task_output
         return filtered_outputs
 
     def _get_output_files(self, filename):
