@@ -149,7 +149,7 @@ Repository structure:
 ## <a name="cohort-mode">Cohort mode</a>
 A minimum cohort size of 100 with roughly equal number of males and females is recommended. For modest cohorts (~100-500 samples), the pipeline can be run as a single batch using `GATKSVPipelineBatch.wdl`.
 
-For larger cohorts, samples should be split up into batches of ~100-500 samples. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [Module 00b](#module00b). 
+For larger cohorts, samples should be split up into batches of about 100-500 samples. Refer to the [Batching](#batching) section for further guidance on creating batches.
 
 The pipeline should be executed as follows:
 * Modules [00a](#module00a) and [00b](#module00b) can be run on arbitrary cohort partitions
@@ -158,6 +158,13 @@ The pipeline should be executed as follows:
 * [Module 05/06](#module0506) and beyond are run on all batches together
 
 Note: [Module 00c](#module00c) requires a [trained gCNV model](#gcnv-training).
+
+### <a name="batching">Batching</a>
+For larger cohorts, samples should be split up into batches of about 100-500 samples with similar characteristics. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [Module 00b](#module00b). An example batching process is outlined below:
+1. Divide the cohort into PCR+ and PCR- samples
+2. Partition the samples by median coverage from [Module00b](#module00b)
+3. Optionally, divide the samples further by dosage score (WGD) from [Module00b](#module00b) to obtain roughly equal-sized batches of about 100-500 samples
+4. Maintain a roughly equal sex balance within each batch, based on sex assignments from [Module00b](#module00b)
 
 
 ## <a name="sample-sample-mode">Single-sample mode</a>
@@ -213,7 +220,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 ## <a name="module00b">Module 00b</a>
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. The results from this module can be used for QC and batching.
 
-For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio.
+For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
 
 We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file.
 
@@ -228,6 +235,13 @@ We also recommend using sex assignments generated from the ploidy estimates and 
 * Per-sample dosage scores with plots
 * Ploidy estimates, sex assignments, with plots
 * (Optional) Outlier samples detected by call counts
+
+#### <a name="prelim-sample-qc">Preliminary Sample QC</a>
+The purpose of sample filtering at this stage after Module00b is to prevent very poor quality samples from interfering with the results for the rest of the callset. In general, samples that are borderline are okay to leave in, but you should choose filtering thresholds to suit the needs of your cohort and study. There will be future opportunities (as part of [Module03](#module03)) for filtering before the joint genotyping stage if necessary. Here are a few of the basic QC checks that we recommend:
+* Look at the X and Y ploidy plots, and check that sex assignments match your expectations. If there are discrepancies, check for sample swaps and update your PED file before proceeding.
+* Look at the dosage score (WGD) distribution and check that it is centered around 1. Optionally filter outliers.
+* Look at the low outliers for each SV caller (samples with much lower than typical numbers of SV calls per contig for each caller). An empty low outlier file means there were no outliers below the median and no filtering is necessary. Check that no samples had zero calls.
+* Look at the high outliers for each SV caller and optionally filter outliers; samples with many more SV calls than average may be poor quality.
 
 
 ## <a name="gcnv-training">gCNV Training</a>
