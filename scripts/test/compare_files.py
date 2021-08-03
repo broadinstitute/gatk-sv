@@ -108,27 +108,50 @@ class CompareWorkflowOutputs:
                     filtered_outputs[ext] = task_output
         return filtered_outputs
 
-    def _get_output_files(self, filename):
+    def _traverse_workflow(
+            self, calls, parent_workflow="",
+            traverse_sub_workflows=False):
+        output_files = {}
+
+        def update_output_files(outputs):
+            if len(outputs) > 0:
+                output_files[
+                    ((parent_workflow + ".") if parent_workflow else "") +
+                    f"{workflow}.{out_label}" +
+                    (("." + str(run["shardIndex"])) if run["shardIndex"] != -1 else "")] \
+                    = outputs
+
+        for workflow, runs in calls.items():
+            for run in runs:
+                if run["executionStatus"] != "Done":
+                    continue
+                for out_label, out_files in run["outputs"].items():
+                    if not out_files:
+                        continue
+                    update_output_files(self._get_filtered_outputs(out_files))
+                if traverse_sub_workflows and "subWorkflowMetadata" in run:
+                    update_output_files(self._get_filtered_outputs(out_files))
+                    output_files.update(
+                        self._traverse_workflow(
+                            run["subWorkflowMetadata"]["calls"],
+                            workflow, traverse_sub_workflows))
+        return output_files
+
+    def _get_output_files(self, filename, traverse_sub_workflows=False):
         """
         Iterates through a given cromwell metadata file
         and filters the output files to be compared.
         """
-        output_files = {}
         with open(filename, "r") as f:
             metadata = json.load(f)
-            for label, runs in metadata["calls"].items():
-                for run in runs:
-                    if run["executionStatus"] != "Done":
-                        continue
-                    for out_label, out_files in run["outputs"].items():
-                        if not out_files:
-                            continue
-                        outputs = self._get_filtered_outputs(out_files)
-                        if len(outputs) > 0:
-                            output_files[f"{label}.{out_label}"] = outputs
+            output_files = self._traverse_workflow(
+                metadata["calls"],
+                traverse_sub_workflows=traverse_sub_workflows)
         return output_files
 
-    def get_mismatches(self, reference_metadata, target_metadata):
+    def get_mismatches(
+            self, reference_metadata, target_metadata,
+            traverse_sub_workflows=False):
         """
         Takes two metadata files (both belonging to a common
         workflow execution), iterates through the outputs of
@@ -136,8 +159,8 @@ class CompareWorkflowOutputs:
         in the working directory, compares the corresponding
         files, and returns the files that do not match.
         """
-        ref_output_files = self._get_output_files(reference_metadata)
-        test_output_files = self._get_output_files(target_metadata)
+        ref_output_files = self._get_output_files(reference_metadata, traverse_sub_workflows)
+        test_output_files = self._get_output_files(target_metadata, traverse_sub_workflows)
 
         # For coloring the prints; see the following SO
         # answer for details: https://stackoverflow.com/a/287944/947889
@@ -200,6 +223,10 @@ if __name__ == '__main__':
         "-o", "--output",
         help="Output file to store mismatches "
              "(in JSON format); defaults to `output.json`.")
+    parser.add_argument(
+        "-d", "--deep",
+        action="store_true",
+        help="Include sub-workflows traversing the metadata files.")
 
     args = parser.parse_args()
 
@@ -207,7 +234,8 @@ if __name__ == '__main__':
     comparer = CompareWorkflowOutputs(wd)
     mismatches = comparer.get_mismatches(
         args.reference_metadata,
-        args.target_metadata)
+        args.target_metadata,
+        args.deep)
 
     print(f"{len(mismatches)} files did not match.")
 
