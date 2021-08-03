@@ -347,7 +347,8 @@ workflow Module0506 {
         baseline_cleaned_vcf = baseline_cleaned_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_base_mini_docker = sv_base_mini_docker
     }
   }
 
