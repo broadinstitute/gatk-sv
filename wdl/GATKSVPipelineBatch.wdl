@@ -153,16 +153,16 @@ workflow GATKSVPipelineBatch {
   Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([Module00aBatch.pesr_split])) else select_first([sr_files])
 
   if (use_delly) {
-    Array[File] delly_vcfs_ = select_first([delly_vcfs, select_all(select_first([Module00aBatch.delly_vcf]))])
+    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([Module00aBatch.delly_vcf]))
   }
   if (use_manta) {
-    Array[File] manta_vcfs_ = select_first([manta_vcfs, select_all(select_first([Module00aBatch.manta_vcf]))])
+    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([Module00aBatch.manta_vcf]))
   }
   if (use_melt) {
-    Array[File] melt_vcfs_ = select_first([melt_vcfs, select_all(select_first([Module00aBatch.melt_vcf]))])
+    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([Module00aBatch.melt_vcf]))
   }
   if (use_wham) {
-    Array[File] wham_vcfs_ = select_first([wham_vcfs, select_all(select_first([Module00aBatch.wham_vcf]))])
+    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([Module00aBatch.wham_vcf]))
   }
 
   call m00b.Module00b as Module00b {
