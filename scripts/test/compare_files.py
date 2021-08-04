@@ -105,7 +105,9 @@ class CompareWorkflowOutputs:
                 continue
             for ext in self.filetypes_to_compare:
                 if task_output.endswith(ext):
-                    filtered_outputs[ext] = task_output
+                    if ext not in filtered_outputs:
+                        filtered_outputs[ext] = []
+                    filtered_outputs[ext].append(task_output)
         return filtered_outputs
 
     def _traverse_workflow(
@@ -168,24 +170,29 @@ class CompareWorkflowOutputs:
         color_red = '\033[91m'
         color_endc = '\033[0m'
 
+        def record_compare_result(match, reference, target):
+            if not match:
+                if call not in mismatches:
+                    mismatches[call] = []
+                mismatches[call].append([reference, target])
+                print(f"{color_red}mismatch{color_endc}")
+            else:
+                print(f"{color_green}match{color_endc}")
+
         mismatches = {}
         i = 0
         for call, ref_outputs in ref_output_files.items():
             i += 1
             print(f"Comparing\t{i}/{len(ref_output_files)}\t{call} ... ", end="")
-            if len(ref_outputs) > 1:
-                raise NotImplementedError
-            for extension, obj in ref_outputs.items():
-                equals, x, y = \
-                    self.filetypes_to_compare[extension].equals(
-                        obj, test_output_files[call][extension])
-                if not equals:
-                    if call not in mismatches:
-                        mismatches[call] = []
-                    mismatches[call].append([x, y])
-                    print(f"{color_red}mismatch{color_endc}")
-                else:
-                    print(f"{color_green}match{color_endc}")
+            for extension, objs in ref_outputs.items():
+                if len(objs) != len(test_output_files[call][extension]):
+                    record_compare_result(False, objs, test_output_files[call][extension])
+                    continue
+                for idx, obj in enumerate(objs):
+                    equals, x, y = \
+                        self.filetypes_to_compare[extension].equals(
+                            obj, test_output_files[call][extension][idx])
+                    record_compare_result(equals, x, y)
         return mismatches
 
 
