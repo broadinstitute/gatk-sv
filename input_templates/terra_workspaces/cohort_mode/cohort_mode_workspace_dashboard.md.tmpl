@@ -135,14 +135,21 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 
 * It is recommended to run each workflow first on one sample/batch to check that the method is properly configured before you attempt to process all of your data.
 * We recommend enabling call-caching (on by default in each workflow configuration), but be aware this will cause large intermediate data storage that can be tricky to clean up.
+* Managing storage in Terra can be difficult. Always exercise caution with file deletion as it is permanent. 
+	* One option is to manually delete large files, or directories containing failed workflow intermediates (after re-running the workflow successfully to take advantage of call-caching) with the command `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory (only after you are done with all the files!). 
+	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables. Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
+* To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
 * If you only have one batch, you will need to skip `merge-cohort-vcfs` and use the single-batch versions of all workflows after `module04`.
 
 #### Module00a
 
 Read the full Module00a documentation [here](https://github.com/broadinstitute/gatk-sv#module-00a).
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary partitions. Make sure to try just one sample first though!
+* It is normal for a few samples in a cohort to run out of memory during Wham SV calling, so we recommend enabling auto-retry for out-of-memory errors for `module00a` only. Before you launch the workflow, click the checkbox reading "Retry with more memory" and set the memory retry factor to 1.8. This action must be performed each time you launch a `module00a` job.
 * Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `module00a` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own docker image, share it with your Terra proxy account, enter it in the `melt_docker` input in the `module00a` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `module00a`.
+* Successful runs of `module00a` will automatically delete any BAM files generated during the workflow, but BAM files will not be deleted if the run fails. Since BAM files are large, we recommend deleting them to save on storage costs, but only after fixing and re-running the failed workflow, so that it will call-cache.
+
 
 #### Module00b
 
