@@ -118,6 +118,9 @@ class CompareWorkflowOutputs:
         def update_output_files(outputs):
             if len(outputs) > 0:
                 output_files[
+                    # Some examples of constructed keys are:
+                    # - GATKSVPipelineSingleSample.Module00c.Module00c.PreprocessPESR.std_manta_vcf
+                    # - Module00c.PreprocessPESR.PreprocessPESR.StandardizeVCFs.std_vcf.0
                     ((parent_workflow + ".") if parent_workflow else "") +
                     f"{workflow}.{out_label}" +
                     (("." + str(run["shardIndex"])) if run["shardIndex"] != -1 else "")] \
@@ -204,7 +207,9 @@ if __name__ == '__main__':
                     "The two metadata files should belong to the execution "
                     "of a common workflow (e.g., one workflow with different "
                     "inputs). The script requires `gsutil` and `gzip` to be "
-                    "installed and configured."
+                    "installed and configured. If the output of a task is an "
+                    "array of files, the reference and target arrays are "
+                    "expected to be in the same order."
                     "\n\n"
                     "The currently supported file types are as follows."
                     "\n\t- VCF (.vcf.gz): The non-header lines of VCF files"
