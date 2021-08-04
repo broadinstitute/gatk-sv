@@ -178,24 +178,29 @@ class CompareWorkflowOutputs:
                 if call not in mismatches:
                     mismatches[call] = []
                 mismatches[call].append([reference, target])
-                print(f"{color_red}mismatch{color_endc}")
-            else:
-                print(f"{color_green}match{color_endc}")
 
         mismatches = {}
         i = 0
         for call, ref_outputs in ref_output_files.items():
             i += 1
+            matched = True
             print(f"Comparing\t{i}/{len(ref_output_files)}\t{call} ... ", end="")
             for extension, objs in ref_outputs.items():
                 if len(objs) != len(test_output_files[call][extension]):
                     record_compare_result(False, objs, test_output_files[call][extension])
+                    matched = False
                     continue
                 for idx, obj in enumerate(objs):
                     equals, x, y = \
                         self.filetypes_to_compare[extension].equals(
                             obj, test_output_files[call][extension][idx])
                     record_compare_result(equals, x, y)
+                    if not equals:
+                        matched = False
+            if matched:
+                print(f"{color_green}match{color_endc}")
+            else:
+                print(f"{color_red}mismatch{color_endc}")
         return mismatches
 
 
