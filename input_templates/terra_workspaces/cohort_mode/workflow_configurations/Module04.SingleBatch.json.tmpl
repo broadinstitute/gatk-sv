@@ -1,0 +1,26 @@
+{
+  "Module04.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "Module04.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "Module04.sv_pipeline_rdtest_docker": "${workspace.sv_pipeline_rdtest_docker}",
+  "Module04.linux_docker" : "${workspace.linux_docker}",
+
+  "Module04.n_RD_genotype_bins": "100000", 
+  "Module04.n_per_split": "5000", 
+  "Module04.pesr_exclude_list": "${workspace.pesr_exclude_list}",
+  "Module04.seed_cutoffs": "${workspace.seed_cutoffs}",
+  "Module04.reference_build": "${workspace.reference_build}",
+  "Module04.ref_dict": "${workspace.reference_dict}",
+
+  "Module04.batch": "${this.sample_set_id}",
+  "Module04.rf_cutoffs": "${this.cutoffs}",
+  "Module04.batch_depth_vcf": "${this.filtered_depth_vcf}",
+  "Module04.batch_pesr_vcf": "${this.filtered_pesr_vcf}",
+  "Module04.ped_file": "${workspace.cohort_ped_file}",
+  "Module04.bin_exclude": "${workspace.bin_exclude}",
+  "Module04.discfile": "${this.merged_PE}",
+  "Module04.coveragefile": "${this.merged_bincov}",
+  "Module04.splitfile": "${this.merged_SR}",
+  "Module04.medianfile": "${this.median_cov}",
+  "Module04.cohort_depth_vcf": "${this.filtered_depth_vcf}",
+  "Module04.cohort_pesr_vcf": "${this.filtered_pesr_vcf}"
+}

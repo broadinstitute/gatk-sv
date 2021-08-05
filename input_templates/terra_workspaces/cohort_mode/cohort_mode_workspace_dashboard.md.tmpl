@@ -1,7 +1,7 @@
 # GATK-SV
 GATK-SV is a structural variation discovery pipeline for Illumina short-read whole-genome sequencing (WGS) data. 
 
-Please refer to the README in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv) for full documentation of this pipeline. This dashboard will focus on the information necessary to run the pipeline through Terra.
+Before you begin processing, please read the full pipeline documentation in the README in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). This dashboard will focus on additional information specific to Terra and cannot substitute for the full documentation.
 
 ## Data
 The sample data in this workspace is 312 publicly-available 1000 Genomes Project samples from the [NYGC/AnVIL high coverage data set](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019), divided into two equally-sized batches.
@@ -11,7 +11,7 @@ The sample data in this workspace is 312 publicly-available 1000 Genomes Project
 This pipeline performs structural variation discovery from CRAMs, joint genotyping, and variant resolution on a cohort of samples. 
 
 ### Required inputs
-The following inputs must be provided for each sample in the cohort:
+The following inputs must be provided for each sample in the cohort, via the sample table described in **Workspace Setup** step 2:
 
 |Input Type|Input Name|Description|
 |---------|--------|--------------|
@@ -28,8 +28,8 @@ The following cohort-level or batch-level inputs are also required:
 |---------|--------|--------------|
 |`String`|`sample_set_id`|Batch identifier|
 |`String`|`sample_set_set_id`|Cohort identifier|
-|`File`|`cohort_ped_file`|Path to the GCS location of a family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in Module 00b) should be entered as sex = 0.|
-|`Array[File]`|`snp_vcfs`|Paths to the GCS locations of a jointly-genotyped, position-sharded SNP VCF. Alternatively, provide a GCS path to a text file containing one SNP VCF shard path per line using the `File` input `snp_vcfs_shard_list`.**|
+|`File`|`cohort_ped_file`|Path to the GCS location of a family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in Module00b) should be entered as sex = 0.|
+|`Array[File]`|`snp_vcfs`|Paths to the GCS locations of a jointly-genotyped, position-sharded SNP VCF (may contain indels and multiallelic sites). Alternatively, provide a GCS path to a text file containing one SNP VCF shard path per line using the `File` input `snp_vcfs_shard_list`.**|
 
 **Only one of `gvcf` or `snp_vcfs` or `snp_vcfs_shard_list` is required
 
@@ -56,17 +56,17 @@ The following workflows are included in this workspace, to be executed in this o
 5. `module01`: Per-batch variant clustering
 6. `module02`: Per-batch variant filtering, metric generation
 7. `module03`: Per-batch variant filtering; outlier exclusion
-8. `merge-cohort-vcfs`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set` (skip for a single batch)
-9. `module04`: Per-batch genotyping of all sites in the cohort
-10. `module04b`: Cohort-level genotype refinement of some depth calls
-11. `module0506`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup
-12. `module08`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation and AF annotation with external population callsets;
+8. (Skip for a single batch) `merge-cohort-vcfs`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+9. `module04`: Per-batch genotyping of all sites in the cohort. Use `module04_single_batch` if you only have one batch.
+10. `module04b`: Cohort-level genotype refinement of some depth calls. Use `module04b_single_batch` if you only have one batch.
+11. `module0506`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `module0506_single_batch` if you only have one batch.
+12. `module08`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `module08_single_batch` if you only have one batch.
 
-Additional modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository]([GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv)).
+Additional modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv).
 
 The metrics workflows in this workspace (`module01-metrics`, `module02-metrics`, etc.) are provided for testing purposes and do not need to be executed.
 
-For detailed instructions on running the pipeline, see **Step-by-step instructions** below.
+For detailed instructions on running the pipeline in Terra, see **Step-by-step instructions** below.
 
 ### How many samples can I process at once?
 
@@ -76,7 +76,7 @@ There are three modes for this pipeline according to the number of samples you n
 
 1. Single-sample mode (<100 samples): The cohort mode of this pipeline requires at least 100 samples, so for smaller sets of samples we recommend the single-sample version of this pipeline, which is available as a [featured Terra workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample).
 2. Single-batch mode (100-500 samples)
-3. Multi-batch mode (>200 samples): Batches should be 100-500 samples, so you may choose to divide your cohort into multiple batches if you have at least 200 samples. **The default configuration of this workspace is for multiple batches. Please refer to the step-by-step instructions for details on what to change if you only have one batch.**
+3. Cohort (multi-batch) mode (>200 samples): Batches should be 100-500 samples, so you may choose to divide your cohort into multiple batches if you have at least 200 samples. Refer to the [Batching](https://github.com/broadinstitute/gatk-sv#batching) section of the README for further information.
 
 
 #### What is the maximum number of samples the pipeline can handle?
@@ -98,14 +98,7 @@ This section will cover how to run the pipeline on your own data in Terra.
 
 ### Sample ID requirements 
 
-Sample IDs MUST:
-* Be unique within the cohort
-* Contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters) 
-
-Sample IDs should NOT:
-* Contain only numeric characters
-* Be a substring of another sample ID in the same cohort
-* Contain any of the following substrings: `chr`, `name`, `DEL`, `DUP`, `CPX`, `CHROM`
+Refer to [the Sample ID Requirements section of the README](https://github.com/broadinstitute/gatk-sv#sample-id-requirements) for sample ID requirements for the pipeline. IDs that do not meet these requirements may cause errors.
 
 The same requirements apply to family IDs in the PED file, batch IDs (`sample_set_id`), and the cohort ID (`sample_set_set_id`).
 
@@ -124,7 +117,7 @@ If using a SNP VCF in `module00c`, it does not need to be re-headered; simply pr
 2. In your new workspace, delete the sample, sample_set, and sample_set_set data tables. To do this, go to the *Data* tab of the workspace. Select the `sample` data table. Check the box to select all samples. Click the 3 blue dots that appear, and select "Delete Data". Confirm when prompted. Repeat for any remaining samples and for any remaining entries in the `sample_set` or `sample_set_set` tables. 
 <img alt="deleting data tables" title="How to delete the sample data table" src="https://i.imgur.com/jNSXAqj.png" width="600">
 
-3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column), `bam_or_cram_file`, and `requester_pays_cram` at minimum. If you are using GVCFs instead of a joint SNP VCF in Module00c, there should be an additional `gvcf` column. See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
+3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column), `bam_or_cram_file`, and `requester_pays_cram` at minimum. If you are using GVCFs instead of a joint SNP VCF in Module00c, there should be an additional `gvcf` column (if using a joint SNP VCF, you will provide this directly in `module00c` later on). See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
 <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/h0hj2fT.png" width="400">
 
 4. Edit the `cohort_ped_file` item in the Workspace Data table (as shown in the screenshot below) to provide the Google URI to the PED file for your cohort (make sure to share it with your Terra proxy account!). 
@@ -141,55 +134,72 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 #### General recommendations
 
 * It is recommended to run each workflow first on one sample/batch to check that the method is properly configured before you attempt to process all of your data.
-* We recommend enabling call-caching, but be aware this will cause large intermediate data storage that can be tricky to clean up.
+* We recommend enabling call-caching (on by default in each workflow configuration), but be aware this will cause large intermediate data storage that can be tricky to clean up.
+* Managing storage in Terra can be difficult. Always exercise caution with file deletion as it is permanent. 
+	* One option is to manually delete large files, or directories containing failed workflow intermediates (after re-running the workflow successfully to take advantage of call-caching) with the command `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory (only after you are done with all the files!). 
+	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables. Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
-* This workspace is configured assuming multiple batches. If you only have one batch, you will need to make changes to all workflows after `module04`.
+* To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
+* If you only have one batch, you will need to skip `merge-cohort-vcfs` and use the single-batch versions of all workflows after `module04`.
 
 #### Module00a
 
+Read the full Module00a documentation [here](https://github.com/broadinstitute/gatk-sv#module-00a).
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary partitions. Make sure to try just one sample first though!
-* Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `module00a` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own docker image, enter it in the `melt_docker` input in the `module00a` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `module00a`.
+* It is normal for a few samples in a cohort to run out of memory during Wham SV calling, so we recommend enabling auto-retry for out-of-memory errors for `module00a` only. Before you launch the workflow, click the checkbox reading "Retry with more memory" and set the memory retry factor to 1.8. This action must be performed each time you launch a `module00a` job.
+* Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `module00a` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own docker image, share it with your Terra proxy account, enter it in the `melt_docker` input in the `module00a` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `module00a`.
+* Successful runs of `module00a` will automatically delete any BAM files generated during the workflow, but BAM files will not be deleted if the run fails. Since BAM files are large, we recommend deleting them to save on storage costs, but only after fixing and re-running the failed workflow, so that it will call-cache.
+
 
 #### Module00b
 
-* `module00b` is run on arbitrary batches of up to 500 samples.
+Read the full Module00b documentation [here](https://github.com/broadinstitute/gatk-sv#module-00b).
+* `module00b` is run on arbitrary cohort partitions of up to 500 samples.
+* The outputs from Module00b can be used for [preliminary sample QC](https://github.com/broadinstitute/gatk-sv#preliminary-sample-qc) and [batching](https://github.com/broadinstitute/gatk-sv#batching) before moving on to TrainGCNV.
 
 
 #### TrainGCNV
 
+Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/gatk-sv#gcnv-training-1).
 * By default, `train-gCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. 
 * Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline based on sample coverage, WGD score (from `module00b`), and PCR status. These will likely not be the same as the batches you used for `module00b`.
 
 #### Module00c
 
+Read the full Module00c documentation [here](https://github.com/broadinstitute/gatk-sv#module-00c).
 * Use the same `sample_set` definitions you used for `train-gCNV`.
-* The default configuration for `module00c` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf", "gs://bucket/shard2.vcf"]`. Alternatively, provide the input `snp_vcfs_shard_list`: a GCS path to a text file containing one SNP VCF shard path per line (this option is useful if the `Array[File]` of `snp_vcfs` shards is too long for Terra to handle).
+* The default configuration for `module00c` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf.gz", "gs://bucket/shard2.vcf.gz"]`. Alternatively, provide the input `snp_vcfs_shard_list`: a GCS path to a text file containing one SNP VCF shard path per line (this option is useful if the `Array[File]` of `snp_vcfs` shards is too long for Terra to handle).
 * If you are using GVCFs in a requester-pays bucket, you must provide the Terra billing project for the workspace to the `gvcf_gcs_project_for_requester_pays` argument as a string, surrounded by double-quotes.
 
 #### Module01 and Module02
 
+Read the full documentation for these modules [here](https://github.com/broadinstitute/gatk-sv#module-01).
 * Use the same `sample_set` definitions you used for `train-gCNV` and `module00c`.
 
 
 #### Module03
 
+Read the full Module03 documentation [here](https://github.com/broadinstitute/gatk-sv#module-03).
 * Use the same `sample_set` definitions you used for `train-gCNV` through `module02`.
 * The default value for `outlier_cutoff_nIQR`, which is used to filter samples that have an abnormal number of SV calls, is 10000. This essentially means that no samples are filtered. You should adjust this value depending on your scientific needs.
 
 #### MergeCohortVcfs
 
-* You can skip this workflow if you only have one batch.
-* For a multi-batch cohort, `merge-cohort-vcfs` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` when you click "Select Data": choose "Create new sample_set_set [...]", check all the batches to include (the ones used in `train-gCNV` through `module03`), and give it a name that follows the **Sample ID requirements**. 
+Read the full MergeCohortVcfs documentation [here](https://github.com/broadinstitute/gatk-sv#merge-cohort-vcfs).
+* If you only have one batch, skip this workflow.
+* For a multi-batch cohort, `merge-cohort-vcfs` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `merge-cohort-vcfs` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `train-gCNV` through `module03`), and give it a name that follows the **Sample ID requirements**. 
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
 #### Module04
 
+Read the full Module04 documentation [here](https://github.com/broadinstitute/gatk-sv#module-04).
 * Use the same `sample_set` definitions you used for `train-gCNV` through `module03`.
-* If you only have one batch and did not run `merge-cohort-vcfs`, change the `cohort_depth_vcf` input to `this.filtered_depth_vcf` and the `cohort_pesr_vcf` input to `this.filtered_pesr_vcf`.
+* If you only have one batch, use the `module04_single_batch` version of the workflow.
 
 #### Module04b, Module0506, and Module08Annotation
 
+Read the full documentation for [Module04b](https://github.com/broadinstitute/gatk-sv#module-04b), [Module0506](https://github.com/broadinstitute/gatk-sv#module-0506), and [Module08](https://github.com/broadinstitute/gatk-sv#module-08-in-development) on the README.
 * For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `merge-cohort-vcfs`.
-* For a single batch, change the entity type from `sample_set_set` to `sample_set`. Then, for all the inputs with the format `this.sample_sets.attribute`, delete `.sample_sets` so they are now `this.attribute`. Also change the `cohort` or `cohort_name` or or `prefix` input from `this.sample_set_set_id` to `this.sample_set_id`.
+* If you only have one batch, use the `module0X_single_batch` version of the workflow.
 

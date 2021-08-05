@@ -58,7 +58,7 @@ def get_wdl_json_pairs(wdl_path, terra_inputs_path, expected_num_inputs, expecte
     jsons = list_all_jsons(terra_inputs_path, expected_num_inputs, expected_num_metrics)
 
     for json_file in jsons:
-        path_to_wdl = os.path.join(wdl_path, os.path.basename(json_file)[:-5] + ".wdl")
+        path_to_wdl = os.path.join(wdl_path, os.path.basename(json_file).split(".")[0] + ".wdl")
         if os.path.isfile(path_to_wdl):
             yield path_to_wdl, os.path.join(terra_inputs_path, json_file)
         else:
@@ -116,7 +116,7 @@ def main():
     parser.add_argument("-j", "--womtool-jar", help="Path to womtool jar", required=True)
     parser.add_argument("-n", "--num-input-jsons",
                         help="Number of Terra input JSONs expected (excluding metrics workflows)",
-                        required=False, default=12, type=int)
+                        required=False, default=16, type=int)
     parser.add_argument("-m", "--num-metrics-jsons", help="Number of Terra metrics workflow input JSONs expected",
                         required=False, default=7, type=int)
     parser.add_argument("--log-level",
