@@ -3,7 +3,6 @@ import gzip
 import json
 import os
 from metadata import ITaskOutputFilters, Metadata
-from itertools import chain
 from subprocess import DEVNULL, STDOUT, check_call
 
 
@@ -99,14 +98,15 @@ class VCFCompareAgent(BaseCompareAgent):
                 if not x_line.startswith("#"):
                     x_columns = x_line.split(self.d)
                     for y_line in Y:
-                        if y_line.startswith("chr"):
+                        if not y_line.startswith("#"):
                             y_columns = y_line.split(self.d)
                             if len(x_columns) == len(y_columns):
-                                for c in chain(range(0, self.id_col), range(self.id_col + 1, len(x_columns))):
-                                    if x_columns[c] != y_columns[c]:
-                                        break
-                                else:
+                                if any(x_columns[c] != y_columns[c]
+                                       for c in range(0, len(x_columns))
+                                       if c != self.id_col):
                                     break
+                            else:
+                                break
                     else:
                         return False, x, y
         return True, x, y
