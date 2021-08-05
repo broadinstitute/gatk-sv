@@ -96,7 +96,7 @@ class VCFCompareAgent(BaseCompareAgent):
             # is expected for some files in the
             # pipeline.
             for x_line in X:
-                if x_line.startswith("chr"):
+                if not x_line.startswith("#"):
                     x_columns = x_line.split(self.d)
                     for y_line in Y:
                         if y_line.startswith("chr"):
