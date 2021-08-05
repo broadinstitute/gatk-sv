@@ -162,8 +162,8 @@ Note: [Module 00c](#module00c) requires a [trained gCNV model](#gcnv-training).
 #### <a name="batching">Batching</a>
 For larger cohorts, samples should be split up into batches of about 100-500 samples with similar characteristics. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [Module 00b](#module00b). An example batching process is outlined below:
 1. Divide the cohort into PCR+ and PCR- samples
-2. Partition the samples by median coverage from [Module00b](#module00b)
-3. Optionally, divide the samples further by dosage score (WGD) from [Module00b](#module00b) to obtain roughly equal-sized batches of about 100-500 samples
+2. Partition the samples by median coverage from [Module00b](#module00b), grouping samples with similar median coverage together. The end goal is to divide the cohort into roughly equal-sized batches of about 100-500 samples; if your partitions based on coverage are larger or uneven, you can partition the cohort further in the next step to obtain the final batches. 
+3. Optionally, divide the samples further by dosage score (WGD) from [Module00b](#module00b), grouping samples with similar WGD score together, to obtain roughly equal-sized batches of about 100-500 samples
 4. Maintain a roughly equal sex balance within each batch, based on sex assignments from [Module00b](#module00b)
 
 
@@ -239,7 +239,7 @@ We also recommend using sex assignments generated from the ploidy estimates and 
 #### <a name="prelim-sample-qc">Preliminary Sample QC</a>
 The purpose of sample filtering at this stage after Module00b is to prevent very poor quality samples from interfering with the results for the rest of the callset. In general, samples that are borderline are okay to leave in, but you should choose filtering thresholds to suit the needs of your cohort and study. There will be future opportunities (as part of [Module03](#module03)) for filtering before the joint genotyping stage if necessary. Here are a few of the basic QC checks that we recommend:
 * Look at the X and Y ploidy plots, and check that sex assignments match your expectations. If there are discrepancies, check for sample swaps and update your PED file before proceeding.
-* Look at the dosage score (WGD) distribution and check that it is centered around 1. Optionally filter outliers.
+* Look at the dosage score (WGD) distribution and check that it is centered around 0 (the distribution of WGD for PCR- samples is expected to be slightly lower than 0, and the distribution of WGD for PCR+ samples is expected to be slightly greater than 0. Refer to the [gnomAD-SV paper](https://doi.org/10.1038/s41586-020-2287-8) for more information on WGD score). Optionally filter outliers.
 * Look at the low outliers for each SV caller (samples with much lower than typical numbers of SV calls per contig for each caller). An empty low outlier file means there were no outliers below the median and no filtering is necessary. Check that no samples had zero calls.
 * Look at the high outliers for each SV caller and optionally filter outliers; samples with many more SV calls than average may be poor quality.
 
