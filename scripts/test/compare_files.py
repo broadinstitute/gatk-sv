@@ -143,17 +143,17 @@ class CompareWorkflowOutputs:
 
         # First we define a method that takes a list
         # of a task outputs, and keeps only those that
-        # are files, and their extension match that
-        # file types that we want to compare (e.g., VCF)
+        # are files and their extension match the
+        # file types that we want to compare
+        # (e.g., filter only VCF files).
         filter_method = FilterBasedOnExtensions(
             self.filetypes_to_compare.keys()).filter
 
         # Then we create two instances of the Metadata
         # class, one for each metadata file, and we
-        # invoke the method that returns the task outputs
-        # that we want to assert their equality---using
-        # the above-defined filter. For instance, get
-        # all the output VCFs from a given metadata file.
+        # invoke the `get_outputs` method which traverses
+        # the outputs of task, and returns those filtered
+        # by the above-defined filter.
         ref_output_files = Metadata(reference_metadata).get_outputs(
             traverse_sub_workflows, filter_method)
         test_output_files = Metadata(target_metadata).get_outputs(
