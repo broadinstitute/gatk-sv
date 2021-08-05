@@ -32,19 +32,22 @@ workflow EHdnSTRAnalysis {
     Int max_irr_mapq
     String ehdn_docker
     RuntimeAttr? runtime_attr_str_profile
-    RuntimeAttr? runtime_attr_merge
     RuntimeAttr? runtime_attr_analysis
   }
 
   parameter_meta {
     analysis_type: "Sets the analysis type; accepted values are: `casecontrol`, `outlier`, and `both`."
-    str_comparison_type: "Set the STR comparison type; accepted values are: `locus`, `motif`, and `both`."
-    case_indexes_filenames: "A list of index files (.bam.bai) for the `case` samples. Files should be in the same order as the case samples"
-    manifest_filename: ""
-    reference_filename: ""
-    min_anchor_mapq: ""
-    max_irr_mapq: ""
-    ehdn_docker: ""
+    str_comparison_type: "Sets the STR comparison type; accepted values are: `locus`, `motif`, and `both`."
+    sample_bams_or_crams: "A list of bam or cram files to be used as input to EHdn."
+    sample_bams_or_crams_indexes: "[Optional] A list of index files (.bam.bai) for the samples. Files should be in the same order as the samples. If not provided, it will be inferred from sample filenames."
+    samples_status: "A list of `case` or `control` that specify which samples should be considered `case` or `control`. For instance `['case', 'case', 'control']` sets the first two samples in the `sample_bams_or_crams` array to be `case` and the third sample to be `control`."
+    reference_fasta: "Sets the path to the reference."
+    reference_fasta_index: "[Optional] Sets the path to the index of reference. If not provided, it will be inferred from the reference filename."
+    min_anchor_mapq: "Sets anchor mapping quality (mapq) threshold."
+    max_irr_mapq: "Set the mapping quality (mapq) threshold on reads to be considered when searching for in-repeat reads (IRR)."
+    ehdn_docker: "Sets the docker image of EHdn."
+    runtime_attr_str_profile: "[Optional] Override the default runtime attributes for STR profiling task."
+    runtime_attr_analysis: "[Optional] Override the default runtime attributes for the STR analysis task."
   }
 
   # The values of the variables are based on
