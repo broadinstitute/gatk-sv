@@ -2,8 +2,40 @@ import argparse
 import gzip
 import json
 import os
+from metadata import ITaskOutputFilters, Metadata
 from itertools import chain
 from subprocess import DEVNULL, STDOUT, check_call
+
+
+class FilterBasedOnExtensions(ITaskOutputFilters):
+
+    def __init__(self, extensions):
+        self.extensions = extensions
+
+    def filter(self, metadata, outputs):
+        """
+        Iterates through the outputs of a task and
+        filters the outputs whose file type match
+        the types subject to comparison (i.e.,
+        types defined in filetypes_to_compare).
+
+        :return: An array of the filtered outputs.
+        """
+        filtered_outputs = {}
+        if not isinstance(outputs, list):
+            outputs = [outputs]
+
+        for task_output in outputs:
+            if not isinstance(task_output, str):
+                # Happens when output is not a file,
+                # e.g., when it is a number.
+                continue
+            for ext in self.extensions:
+                if task_output.endswith(ext):
+                    if ext not in filtered_outputs:
+                        filtered_outputs[ext] = []
+                    filtered_outputs[ext].append(task_output)
+        return filtered_outputs
 
 
 class BaseCompareAgent:
@@ -87,76 +119,9 @@ class CompareWorkflowOutputs:
             "vcf.gz": VCFCompareAgent(self.working_dir)
         }
 
-    def _get_filtered_outputs(self, task_outputs):
-        """
-        Iterates through the outputs of a task and
-        filters the outputs whose file type match
-        the types subject to comparison (i.e.,
-        types defined in filetypes_to_compare).
-        """
-        filtered_outputs = {}
-        if not isinstance(task_outputs, list):
-            task_outputs = [task_outputs]
-
-        for task_output in task_outputs:
-            if not isinstance(task_output, str):
-                # Happens when output is not a file,
-                # e.g., when it is a number.
-                continue
-            for ext in self.filetypes_to_compare:
-                if task_output.endswith(ext):
-                    if ext not in filtered_outputs:
-                        filtered_outputs[ext] = []
-                    filtered_outputs[ext].append(task_output)
-        return filtered_outputs
-
-    def _traverse_workflow(
-            self, calls, parent_workflow="",
-            traverse_sub_workflows=False):
-        output_files = {}
-
-        def update_output_files(outputs):
-            if len(outputs) > 0:
-                output_files[
-                    # Some examples of constructed keys are:
-                    # - GATKSVPipelineSingleSample.Module00c.Module00c.PreprocessPESR.std_manta_vcf
-                    # - Module00c.PreprocessPESR.PreprocessPESR.StandardizeVCFs.std_vcf.0
-                    ((parent_workflow + ".") if parent_workflow else "") +
-                    f"{workflow}.{out_label}" +
-                    (("." + str(run["shardIndex"])) if run["shardIndex"] != -1 else "")] \
-                    = outputs
-
-        for workflow, runs in calls.items():
-            for run in runs:
-                if run["executionStatus"] != "Done":
-                    continue
-                for out_label, out_files in run["outputs"].items():
-                    if not out_files:
-                        continue
-                    update_output_files(self._get_filtered_outputs(out_files))
-                if traverse_sub_workflows and "subWorkflowMetadata" in run:
-                    update_output_files(self._get_filtered_outputs(out_files))
-                    output_files.update(
-                        self._traverse_workflow(
-                            run["subWorkflowMetadata"]["calls"],
-                            workflow, traverse_sub_workflows))
-        return output_files
-
-    def _get_output_files(self, filename, traverse_sub_workflows=False):
-        """
-        Iterates through a given cromwell metadata file
-        and filters the output files to be compared.
-        """
-        with open(filename, "r") as f:
-            metadata = json.load(f)
-            output_files = self._traverse_workflow(
-                metadata["calls"],
-                traverse_sub_workflows=traverse_sub_workflows)
-        return output_files
-
-    def get_mismatches(
-            self, reference_metadata, target_metadata,
-            traverse_sub_workflows=False):
+    def get_mismatches(self, reference_metadata,
+                       target_metadata,
+                       traverse_sub_workflows=False):
         """
         Takes two metadata files (both belonging to a common
         workflow execution), iterates through the outputs of
@@ -164,9 +129,6 @@ class CompareWorkflowOutputs:
         in the working directory, compares the corresponding
         files, and returns the files that do not match.
         """
-        ref_output_files = self._get_output_files(reference_metadata, traverse_sub_workflows)
-        test_output_files = self._get_output_files(target_metadata, traverse_sub_workflows)
-
         # For coloring the prints; see the following SO
         # answer for details: https://stackoverflow.com/a/287944/947889
         color_green = '\033[92m'
@@ -178,6 +140,24 @@ class CompareWorkflowOutputs:
                 if call not in mismatches:
                     mismatches[call] = []
                 mismatches[call].append([reference, target])
+
+        # First we define a method that takes a list
+        # of a task outputs, and keeps only those that
+        # are files, and their extension match that
+        # file types that we want to compare (e.g., VCF)
+        filter_method = FilterBasedOnExtensions(
+            self.filetypes_to_compare.keys()).filter
+
+        # Then we create two instances of the Metadata
+        # class, one for each metadata file, and we
+        # invoke the method that returns the task outputs
+        # that we want to assert their equality---using
+        # the above-defined filter. For instance, get
+        # all the output VCFs from a given metadata file.
+        ref_output_files = Metadata(reference_metadata).get_outputs(
+            traverse_sub_workflows, filter_method)
+        test_output_files = Metadata(target_metadata).get_outputs(
+            traverse_sub_workflows, filter_method)
 
         mismatches = {}
         i = 0
