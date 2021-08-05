@@ -90,25 +90,20 @@ class VCFCompareAgent(BaseCompareAgent):
 
         with gzip.open(x, "rt", encoding="utf-8") as X, \
              gzip.open(y, "rt", encoding="utf-8") as Y:
-            # Not an optimal search, but it works
-            # if the files are not sorted, which
-            # is expected for some files in the
-            # pipeline.
-            for x_line in X:
-                if not x_line.startswith("#"):
-                    x_columns = x_line.split(self.d)
-                    for y_line in Y:
-                        if not y_line.startswith("#"):
-                            y_columns = y_line.split(self.d)
-                            if len(x_columns) == len(y_columns):
-                                if any(x_columns[c] != y_columns[c]
-                                       for c in range(0, len(x_columns))
-                                       if c != self.id_col):
-                                    break
-                            else:
-                                break
-                    else:
-                        return False, x, y
+            for x_line, y_line in zip(X, Y):
+                if x_line.startswith("#") and y_line.startswith("#"):
+                    continue
+
+                x_columns = x_line.strip().split(self.d)
+                y_columns = y_line.strip().split(self.d)
+
+                if len(x_columns) != len(y_columns):
+                    return False, x, y
+
+                if any(x_columns[c] != y_columns[c]
+                       for c in range(0, len(x_columns))
+                       if c != self.id_col):
+                    return False, x, y
         return True, x, y
 
 
@@ -140,6 +135,7 @@ class CompareWorkflowOutputs:
                 if call not in mismatches:
                     mismatches[call] = []
                 mismatches[call].append([reference, target])
+                exit()
 
         # First we define a method that takes a list
         # of a task outputs, and keeps only those that
