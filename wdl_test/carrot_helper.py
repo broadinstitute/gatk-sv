@@ -1,9 +1,15 @@
 import argparse
+import pathlib
 import subprocess
 from subprocess import DEVNULL, STDOUT, check_call, Popen, PIPE, check_output
 import time
 import calendar
 import json
+import os
+from types import SimpleNamespace
+import urllib.request
+from pathlib import Path
+from urllib.error import HTTPError
 
 
 def get_timestamp():
@@ -64,13 +70,21 @@ def run_test(test_id):
     print(f"Get Run Status: carrot_cli run find_by_id {output['run_id']}")
 
 
+def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
+    command = f"carrot_cli software find --created_by {email}"
+    response = check_output(command, shell=True)
+    my_softwares = json.loads(response.decode("utf8").replace("\'", "\"").replace("None", "\"None\""))
+    for x in my_softwares:
+        response = check_output(command, shell=True)
+
+
 if __name__ == '__main__':
 
     parent_parser = argparse.ArgumentParser(description="Helper methods to scaffold and updated carrot tests.")
     subparsers = parent_parser.add_subparsers(title="service", dest="service_command")
 
     update_parser = subparsers.add_parser("update-and-run", help="Update test")
-    #update_parser.add_argument("target_wdl", help="The WDL whose test should be updated.")
+    update_parser.add_argument("target_wdl", help="The WDL whose test should be updated.")
 
     args = parent_parser.parse_args()
     test_id = create_test()
