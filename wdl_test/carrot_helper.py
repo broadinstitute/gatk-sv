@@ -6,16 +6,13 @@ Requirements:
 """
 
 import argparse
-import pathlib
 import subprocess
-from subprocess import DEVNULL, STDOUT, check_call, Popen, PIPE, check_output
+from subprocess import check_output
 import time
 import calendar
 import json
 import os
-from types import SimpleNamespace
 import urllib.request
-from pathlib import Path
 from urllib.error import HTTPError
 
 # The directories where the WDLs
@@ -262,18 +259,21 @@ class Result(BaseModel):
 def get_timestamp():
     return calendar.timegm(time.gmtime())
 
+
 def response_to_json(response):
     return json.loads(response.decode("utf8").replace("\'", "\"").replace("None", "\"None\""))
 
+
 def call_carrot_cli(command):
-    #process = Popen(command.split(" "), stdout=subprocess.PIPE)
-    #data, err = process.communicate()
+    # process = Popen(command.split(" "), stdout=subprocess.PIPE)
+    # data, err = process.communicate()
     try:
         data = check_output(command, shell=True)
         # return response_to_json(data) if process.returncode == 0 else err
         return response_to_json(data)
     except subprocess.CalledProcessError as grepexc:
         print("error code", grepexc.returncode, grepexc.output)
+
 
 def create_test():
     pipeline_id = "2214f31b-8aee-48cd-a81f-a0bd3091fa54"
@@ -328,19 +328,13 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
 if __name__ == '__main__':
 
     carrot_helper = CarrotHelper()
-
     exit()
-
-
-
-
-
 
     parent_parser = argparse.ArgumentParser(description="Helper methods to scaffold and updated carrot tests.")
     subparsers = parent_parser.add_subparsers(title="service", dest="service_command")
 
     update_parser = subparsers.add_parser("update-and-run", help="Update test")
-    #update_parser.add_argument("target_wdl", help="The WDL whose test should be updated.")
+    # update_parser.add_argument("target_wdl", help="The WDL whose test should be updated.")
 
     args = parent_parser.parse_args()
     test_id = create_test()
