@@ -1,3 +1,10 @@
+"""
+Requirements:
+- Java
+- Womtool
+- carrot_cli
+"""
+
 import argparse
 import pathlib
 import subprocess
@@ -13,8 +20,19 @@ from urllib.error import HTTPError
 
 # The directories where the WDLs
 # and their tests are located.
+WDLS_DIR_RELATIVE = "../wdl"
 WDLS_DIR = "wdl"
 WDLS_TEST_DIR = "wdl_test"
+
+WOMTOOL_PATH = "~/code/cromwell/womtool-61.jar"
+
+# This is the list of the currently
+# supported results type by Carrot.
+# Keep the list lowercase, as carrot is
+# case-sensitive and requires lower-case. See:
+# https://github.com/broadinstitute/carrot/blob/1b2905e634e0887a94c63743a78b1731bd3a637c/src/custom_sql_types.rs#L158-L162
+SUPPORTED_RESULTS_TYPE = ["numeric", "file", "text"]
+
 
 class CarrotHelper:
     def __init__(self, working_dir=".",
@@ -54,6 +72,24 @@ class CarrotHelper:
                 f"The resource {resource} is not accessible from {uri}. "
                 f"Are all your files committed and pushed "
                 f"to the given repository? {e}")
+
+    @staticmethod
+    def _get_wdl_outputs(wdl, include_supported_types_only=True):
+        """
+        Returns a dictionary whose keys are the output
+        variables of the given WDL, and values are
+        variable types.
+
+        This method use womtool to extract outputs of
+        a given WDL.
+        """
+        cmd = f"java -jar {WOMTOOL_PATH} outputs {wdl}"
+        outputs_json = check_output(cmd, shell=True)
+        outputs = json.loads(outputs_json)
+        if include_supported_types_only:
+            outputs = {k: v for k, v in outputs.items()
+                       if v.lower() in SUPPORTED_RESULTS_TYPE}
+        return outputs
 
     def load_pipelines(self):
         if os.path.isfile(self.pipelines_filename):
@@ -97,10 +133,36 @@ class CarrotHelper:
 
         for pipeline, templates in pipelines.items():
             test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline}.wdl")
+            test_workflow_outputs = self._get_wdl_outputs(f"{WDLS_DIR_RELATIVE}/{pipeline}.wdl")
+            if not bool(test_workflow_outputs):
+                # TODO: skip the pipeline instead
+                raise Exception("No supported result type for the pipeline.")
+
+            test_results = []
+            for var_name, var_type in test_workflow_outputs.items():
+                result = self.create_result(name=var_name, result_type=var_type)
+                result.var_name = var_name
+                test_results.append(result)
+
             created_pipeline = self.create_pipeline()
             for template in templates:
                 eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
+                eval_workflow_outputs = self._get_wdl_outputs(f"{pipeline}/{template}/eval.wdl")
+                if not bool(eval_workflow_outputs):
+                    # TODO: skip the pipeline instead
+                    raise Exception("No supported result type for the pipeline.")
+
+                eval_results = []
+                for var_name, var_type in eval_workflow_outputs.items():
+                    result = self.create_result(name=var_name, result_type=var_type)
+                    result.var_name = var_name
+                    eval_results.append(result)
+
                 created_template = self.create_template(created_pipeline.uuid, test_wdl, eval_wdl)
+                for result in test_results + eval_results:
+                    self.create_template_to_result_mapping(created_template, result)
+                    created_template.results.append(result)
+
                 created_pipeline.templates[created_template.uuid] = created_template
 
             self.pipelines[created_pipeline.uuid] = created_pipeline
@@ -121,7 +183,7 @@ class CarrotHelper:
         return Pipeline(**response)
 
     def create_template(self, pipeline_id, test_wdl, eval_wdl, name=None, description=None, timestamp=True):
-        name = name or f"gatk_sv_{get_timestamp()}"
+        name = name or "gatk_sv"
         if timestamp:
             name = f"{name}_{get_timestamp()}"
         description = description or "A template created by the GATK-SV carrot_helper.py"
@@ -133,6 +195,29 @@ class CarrotHelper:
               f"--eval_wdl {eval_wdl}"
         response = self.call_carrot(cmd)
         return Template(**response)
+
+    def create_result(self, result_type, name=None, description=None, timestamp=True):
+        """
+        Outputs of test and evaluation WDLs should be
+        defined as `result`s in carrot.
+        """
+        name = name or "gatk"
+        if timestamp:
+            name = f"{name}_{get_timestamp()}"
+        description = description or "A results type created by GATK-sv carrot_helper.py"
+        cmd = f"carrot_cli result create " \
+              f"--name {name} " \
+              f"--description '{description}' " \
+              f"--result_type {result_type.lower()}"  # lower type is required by carrot.
+        response = self.call_carrot(cmd)
+        return Result(**response)
+
+    def create_template_to_result_mapping(self, template, result):
+        cmd = f"carrot_cli template map_to_result " \
+              f"{template.uuid} " \
+              f"{result.uuid} " \
+              f"{result.var_name}"
+        self.call_carrot(cmd)
 
 
 class BaseModel:
@@ -164,6 +249,14 @@ class Template(BaseModel):
         self.pipeline_id = pipeline_id
         self.test_wdl = test_wdl
         self.eval_wdl = eval_wdl
+        self.results = []
+
+
+class Result(BaseModel):
+    def __init__(self, result_id, result_type, name, description, created_at, created_by):
+        super().__init__(result_id, name, description, created_at, created_by)
+        self.var_name = None
+        self.result_type = result_type
 
 
 def get_timestamp():
@@ -233,6 +326,15 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
 
 
 if __name__ == '__main__':
+
+    carrot_helper = CarrotHelper()
+
+    exit()
+
+
+
+
+
 
     parent_parser = argparse.ArgumentParser(description="Helper methods to scaffold and updated carrot tests.")
     subparsers = parent_parser.add_subparsers(title="service", dest="service_command")
