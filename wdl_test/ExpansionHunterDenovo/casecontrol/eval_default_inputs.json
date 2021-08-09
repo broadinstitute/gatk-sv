@@ -1,4 +1,3 @@
 {
-  "EvalCaseControlLocus.multisample_profile": "test_output:EHdnSTRAnalysis.multisample_profile",
-  "EvalCaseControlLocus.multisample_profile_expected": "gs://broad-dsde-methods-vj/ehdn_unit_test_data/case-control/example_dataset.multisample_profile.json"
+  "EvalCaseControlLocus.docker_image": "python:3.7-slim"
 }
