@@ -23,6 +23,12 @@ WDLS_TEST_DIR = "wdl_test"
 
 WOMTOOL_PATH = "~/code/cromwell/womtool-61.jar"
 
+DEFAULT_EVAL_INPUTS_FILENAME = "eval_input_defaults.json"
+DEFAULT_TEST_INPUTS_FILENAME = "test_input_defaults.json"
+EVAL_INPUTS_FILENAME = "eval_input.json"
+TEST_INPUTS_FILENAME = "test_input.json"
+
+
 # This is the list of the currently
 # supported results type by Carrot.
 # Keep the list lowercase, as carrot is
@@ -160,6 +166,7 @@ class CarrotHelper:
                     self.create_template_to_result_mapping(created_template, result)
                     created_template.results.append(result)
 
+                created_template.test = self.create_test(created_template, os.path.join(self.working_dir, pipeline, template))
                 created_pipeline.templates[created_template.uuid] = created_template
 
             self.pipelines[created_pipeline.uuid] = created_pipeline
@@ -216,6 +223,28 @@ class CarrotHelper:
               f"{result.var_name}"
         self.call_carrot(cmd)
 
+    def create_test(self, template, template_path, name=None, description=None, timestamp=True):
+        name = name or "gatk"
+        if timestamp:
+            name = f"{name}_{get_timestamp()}"
+        description = description or "A test type created by GATK-sv carrot_helper.py"
+
+        def_eval = os.path.join(template_path, DEFAULT_EVAL_INPUTS_FILENAME)
+        if not os.path.isfile(def_eval):
+            raise FileNotFoundError(f"Default inputs for evaluation WDL does not exist; expected file: {def_eval}")
+        def_test = os.path.join(template_path, DEFAULT_TEST_INPUTS_FILENAME)
+        if not os.path.isfile(def_test):
+            raise FileNotFoundError(f"Default inputs for test WDL does not exist; expected file: {def_test}")
+
+        cmd = f"carrot_cli test create" \
+              f" --name '{name}' " \
+              f"--description '{description}' " \
+              f"--template_id {template.uuid} " \
+              f"--eval_input_defaults {def_eval} " \
+              f"--test_input_defaults {def_test}"
+        response = self.call_carrot(cmd)
+        return Test(**response)
+
 
 class BaseModel:
     def __init__(self, pipeline_id, name, description, created_at, created_by):
@@ -247,6 +276,7 @@ class Template(BaseModel):
         self.test_wdl = test_wdl
         self.eval_wdl = eval_wdl
         self.results = []
+        self.test = None
 
 
 class Result(BaseModel):
@@ -254,6 +284,14 @@ class Result(BaseModel):
         super().__init__(result_id, name, description, created_at, created_by)
         self.var_name = None
         self.result_type = result_type
+
+
+class Test(BaseModel):
+    def __init__(self, test_id, name, template_id, eval_input_defaults, test_input_defaults, description, created_at, created_by):
+        super().__init__(test_id, name, description, created_at, created_by)
+        self.template_id = template_id
+        self.eval_input_defaults = eval_input_defaults
+        self.test_input_defaults = test_input_defaults
 
 
 def get_timestamp():
