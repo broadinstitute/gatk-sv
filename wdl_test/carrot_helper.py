@@ -103,7 +103,7 @@ class CarrotHelper:
 
     def persist_pipelines(self):
         with open(self.pipelines_filename, "w") as f:
-            json.dump(self.pipelines, f, default=lambda o: o.__dict__, indent="\t")
+            json.dump(self.pipelines, f, default=lambda o: o.__dict__, indent="\t", sort_keys=True)
 
     def call_carrot(self, command):
         try:
@@ -243,7 +243,7 @@ class CarrotHelper:
               f"--eval_input_defaults {def_eval} " \
               f"--test_input_defaults {def_test}"
         response = self.call_carrot(cmd)
-        return Test(**response)
+        return Test(**response, template_path=template_path)
 
 
 class BaseModel:
@@ -287,11 +287,12 @@ class Result(BaseModel):
 
 
 class Test(BaseModel):
-    def __init__(self, test_id, name, template_id, eval_input_defaults, test_input_defaults, description, created_at, created_by):
+    def __init__(self, test_id, name, template_id, template_path, eval_input_defaults, test_input_defaults, description, created_at, created_by):
         super().__init__(test_id, name, description, created_at, created_by)
         self.template_id = template_id
         self.eval_input_defaults = eval_input_defaults
         self.test_input_defaults = test_input_defaults
+        self.template_path = template_path
 
 
 def get_timestamp():
