@@ -29,6 +29,13 @@ DEFAULT_TEST_INPUTS_FILENAME = "test_input_defaults.json"
 EVAL_INPUTS_FILENAME = "eval_input.json"
 TEST_INPUTS_FILENAME = "test_input.json"
 
+# A JSON file to which the current setup is
+# persisted-to and loaded-from.
+PIPELINES_JSON = ".carrot_pipelines.json"
+
+# This file contains all the submitted runs.
+# If renamed, also rename in `.gitignore`.
+RUNS_JSON = ".runs.json"
 
 # This is the list of the currently
 # supported results type by Carrot.
@@ -40,7 +47,7 @@ SUPPORTED_RESULTS_TYPE = ["numeric", "file", "text"]
 
 class CarrotHelper:
     def __init__(self, working_dir=".",
-                 pipelines_filename=".carrot_pipelines.json",
+                 pipelines_filename=PIPELINES_JSON,
                  repository="https://github.com/vjalili/gatk-sv",
                  branch="ehdn_unit_test",
                  email=None):
@@ -114,11 +121,12 @@ class CarrotHelper:
                         pipeline.templates[tk] = template
                     self.pipelines[k] = pipeline
         else:
-            self.persist_pipelines()
+            self.persist_object(self.pipelines, self.pipelines_filename)
 
-    def persist_pipelines(self):
-        with open(self.pipelines_filename, "w") as f:
-            json.dump(self.pipelines, f, default=lambda o: o.__dict__, indent="\t", sort_keys=True)
+    @staticmethod
+    def persist_object(obj, filename):
+        with open(filename, "w") as f:
+            json.dump(obj, f, default=lambda o: o.__dict__, indent="\t", sort_keys=True)
 
     def call_carrot(self, command):
         try:
@@ -185,7 +193,7 @@ class CarrotHelper:
                 created_pipeline.templates[template] = created_template
 
             self.pipelines[pipeline] = created_pipeline
-        self.persist_pipelines()
+        self.persist_object(self.pipelines, self.pipelines_filename)
 
     def create_pipeline(self, name=None, description=None, timestamp=True):
         name = name or "gatk_sv"
@@ -260,6 +268,19 @@ class CarrotHelper:
         response = self.call_carrot(cmd)
         return Test(**response, template_path=template_path)
 
+    def list_runs(self, pipeline, template):
+        return [x for x in next(os.walk(os.path.join(self.working_dir, pipeline, template)))[1]]
+
+    def create_run(self, test, run_dir, name=None, timestamp=True):
+        name = name or "gatk"
+        if timestamp:
+            name = f"{name}_{get_timestamp()}"
+        eval_input = os.path.join(test.template_path, run_dir, EVAL_INPUTS_FILENAME)
+        test_input = os.path.join(test.template_path, run_dir, TEST_INPUTS_FILENAME)
+        cmd = f"carrot_cli test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
+        response = self.call_carrot(cmd)
+        return Run(**response)
+
 
 class BaseModel:
     def __init__(self, pipeline_id, name, description, created_at, created_by):
@@ -308,6 +329,19 @@ class Test(BaseModel):
         self.eval_input_defaults = eval_input_defaults
         self.test_input_defaults = test_input_defaults
         self.template_path = template_path
+
+
+# for test_dir in next(os.walk(template_path))[1]:
+class Run(BaseModel):
+    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None):
+        super().__init__(run_id or uuid, name, description, created_at, created_by)
+        self.test_id = test_id
+        self.test_cromwell_job_id = test_cromwell_job_id
+        self.eval_cromwell_job_id = eval_cromwell_job_id
+        self.status = status
+        self.finished_at = finished_at
+        self.test_input = test_input
+        self.eval_input = eval_input
 
 
 def get_timestamp():
@@ -380,6 +414,25 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        prog=sys.argv[0],
+        description="Helper methods to scaffold, "
+                    "create, and run carrot tests.")
+
+    subparsers = parser.add_subparsers(help='Sub-commands')
+
+    test_parser = subparsers.add_parser("test", help="Create, list, and run tests.")
+    test_subparsers = test_parser.add_subparsers(title="sub-commands for test", dest="test", help="Commands to interact with carrot tests.")
+    test_list_parser = test_subparsers.add_parser("list")
+    test_list_parser.add_argument('pipeline', type=str)
+    test_list_parser.add_argument('template', type=str)
+
+    test_run_parser = test_subparsers.add_parser("run")
+    test_run_parser.add_argument('pipeline', type=str)
+    test_run_parser.add_argument('template', type=str)
+    test_run_parser.add_argument('run_dir', type=str)
+
+    args = parser.parse_args()
 
     carrot_helper = CarrotHelper()
 
@@ -388,9 +441,19 @@ if __name__ == '__main__':
         if task == "list":
             print(carrot_helper.list_runs(args.pipeline, args.template))
         elif task == "run":
+            try:
+                runs = {}
+                with open(RUNS_JSON, "r") as runs_json:
+                    runs = json.load(runs_json)
+            except json.decoder.JSONDecodeError:
+                # Happens when this script is run for the
+                # first time and the file does not exist.
+                # Passing this exception should be fine
+                # since a JSON object will be created and
+                # persisted to the file if creating a `run`
+                # was run successfully.
+                pass
             test = carrot_helper.pipelines[args.pipeline].templates[args.template].test
-            carrot_helper.create_run(test, args.test)
-        print(args.test)
-    print(args)
-    # test_id = create_test()
-    # run_test(test_id)
+            run = carrot_helper.create_run(test, args.run_dir)
+            runs[run.uuid] = run
+            carrot_helper.persist_object(runs, RUNS_JSON)
