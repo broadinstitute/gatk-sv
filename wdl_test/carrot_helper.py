@@ -14,6 +14,7 @@ import calendar
 import json
 import os
 import urllib.request
+from dataclasses import dataclass
 from urllib.error import HTTPError
 
 # The directories where the WDLs
@@ -281,6 +282,23 @@ class CarrotHelper:
         response = self.call_carrot(cmd)
         return Run(**response)
 
+    @staticmethod
+    def pretty_print_runs_status(statuses):
+        print('\n\n%-40s%-24s%-24s%-40s%-40s' %
+              ("Run UUID",
+               "Previous Status",
+               "Latest Status",
+               "Test Cromwell Job ID",
+               "Eval Cromwell Job ID"))
+
+        for status in statuses:
+            print('%-40s%-24s%-24s%-40s%-40s' %
+                  (status.run_uuid,
+                   status.previous_status,
+                   status.previous_status,
+                   status.test_cromwell_job_id,
+                   status.eval_cromwell_job_id))
+
 
 class BaseModel:
     def __init__(self, pipeline_id, name, description, created_at, created_by):
@@ -333,7 +351,7 @@ class Test(BaseModel):
 
 # for test_dir in next(os.walk(template_path))[1]:
 class Run(BaseModel):
-    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None):
+    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None, results=None):
         super().__init__(run_id or uuid, name, description, created_at, created_by)
         self.test_id = test_id
         self.test_cromwell_job_id = test_cromwell_job_id
@@ -342,6 +360,17 @@ class Run(BaseModel):
         self.finished_at = finished_at
         self.test_input = test_input
         self.eval_input = eval_input
+        self.results = results
+
+
+@dataclass(unsafe_hash=True)
+class RunStatus:
+    run_uuid: str
+    previous_status: str
+    latest_status: str
+    test_cromwell_job_id: str
+    eval_cromwell_job_id: str
+
 
 
 def get_timestamp():
@@ -432,6 +461,8 @@ if __name__ == '__main__':
     test_run_parser.add_argument('template', type=str)
     test_run_parser.add_argument('run_dir', type=str)
 
+    test_update_parser = test_subparsers.add_parser("update_status")
+
     args = parser.parse_args()
 
     carrot_helper = CarrotHelper()
@@ -457,3 +488,33 @@ if __name__ == '__main__':
             run = carrot_helper.create_run(test, args.run_dir)
             runs[run.uuid] = run
             carrot_helper.persist_object(runs, RUNS_JSON)
+        elif task == "update_status":
+            try:
+                with open(RUNS_JSON, "r") as runs_json:
+                    runs_dict = json.load(runs_json)
+                    runs = {}
+                    for k, v in runs_dict.items():
+                        runs[k] = Run(**v)
+            except json.decoder.JSONDecodeError:
+                print(f"The runs JSON file, {RUNS_JSON}, is empty or "
+                      f"corrupted; have you submitted any test runs?")
+
+            updated_status = []
+            print(runs)
+            for run_id, run in runs.items():
+                if run.status in ["succeeded", "failed"]:
+                    updated_status.append(RunStatus(run_id, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
+                    continue
+                cmd = f"carrot_cli run find_by_id {run_id}"
+                previous_status = run.status
+                # At time of submitting a run, the run may not
+                # have a test cromwell job ID and certainly not
+                # eval cromwell job ID, but updated status, depending
+                # on the status of test execution, can update both
+                # of these IDs, which are useful for debugging
+                # failed tests.
+                updated_run = Run(**carrot_helper.call_carrot(cmd))
+                updated_status.append(RunStatus(run_id, run.status, updated_run.status, updated_run.test_cromwell_job_id, updated_run.eval_cromwell_job_id))
+                runs[run_id] = updated_run
+            carrot_helper.persist_object(runs, RUNS_JSON)
+            carrot_helper.pretty_print_runs_status(updated_status)
