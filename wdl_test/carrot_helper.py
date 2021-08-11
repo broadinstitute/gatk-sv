@@ -7,6 +7,7 @@ Requirements:
 
 import argparse
 import subprocess
+import sys
 from subprocess import check_output
 import time
 import calendar
@@ -97,7 +98,21 @@ class CarrotHelper:
     def load_pipelines(self):
         if os.path.isfile(self.pipelines_filename):
             with open(self.pipelines_filename, "r") as f:
-                self.pipelines = json.load(f)
+                self.pipelines = json.loads(f.read())
+                # Pipelines is a dictionary of dictionaries now,
+                # and the following code converts it the object
+                # types as it was when serialized.
+                for k, v in self.pipelines.items():
+                    pipeline = Pipeline(**v)
+                    for tk, tv in pipeline.templates.items():
+                        template = Template(**tv)
+                        results = []
+                        for result in template.results:
+                            results.append(Result(**result))
+                        template.results = results
+                        template.test = Test(**template.test)
+                        pipeline.templates[tk] = template
+                    self.pipelines[k] = pipeline
         else:
             self.persist_pipelines()
 
@@ -167,9 +182,9 @@ class CarrotHelper:
                     created_template.results.append(result)
 
                 created_template.test = self.create_test(created_template, os.path.join(self.working_dir, pipeline, template))
-                created_pipeline.templates[created_template.uuid] = created_template
+                created_pipeline.templates[template] = created_template
 
-            self.pipelines[created_pipeline.uuid] = created_pipeline
+            self.pipelines[pipeline] = created_pipeline
         self.persist_pipelines()
 
     def create_pipeline(self, name=None, description=None, timestamp=True):
@@ -259,9 +274,9 @@ class Pipeline(BaseModel):
     """
     Carrot pipeline groups tests together.
     """
-    def __init__(self, pipeline_id, name, description, created_at, created_by):
-        super().__init__(pipeline_id, name, description, created_at, created_by)
-        self.templates = {}
+    def __init__(self, name, description, created_at, created_by, templates=None, pipeline_id=None, uuid=None):
+        super().__init__(pipeline_id or uuid, name, description, created_at, created_by)
+        self.templates = templates or {}
 
 
 class Template(BaseModel):
@@ -270,25 +285,25 @@ class Template(BaseModel):
     a WDL that evaluates the tested WDL's output, and
     a set of inputs for both test and evaluation WDLs.
     """
-    def __init__(self, template_id, pipeline_id, test_wdl, eval_wdl, name, description, created_at, created_by):
-        super().__init__(template_id, name, description, created_at, created_by)
+    def __init__(self, pipeline_id, test_wdl, eval_wdl, name, description, created_at, created_by, template_id=None, uuid=None, results=None, test=None):
+        super().__init__(template_id or uuid, name, description, created_at, created_by)
         self.pipeline_id = pipeline_id
         self.test_wdl = test_wdl
         self.eval_wdl = eval_wdl
-        self.results = []
-        self.test = None
+        self.results = results or []
+        self.test = test
 
 
 class Result(BaseModel):
-    def __init__(self, result_id, result_type, name, description, created_at, created_by):
-        super().__init__(result_id, name, description, created_at, created_by)
-        self.var_name = None
+    def __init__(self, result_type, name, description, created_at, created_by, result_id=None, uuid=None, var_name=None):
+        super().__init__(result_id or uuid, name, description, created_at, created_by)
+        self.var_name = var_name
         self.result_type = result_type
 
 
 class Test(BaseModel):
-    def __init__(self, test_id, name, template_id, template_path, eval_input_defaults, test_input_defaults, description, created_at, created_by):
-        super().__init__(test_id, name, description, created_at, created_by)
+    def __init__(self, name, template_id, template_path, eval_input_defaults, test_input_defaults, description, created_at, created_by, test_id=None, uuid=None):
+        super().__init__(test_id or uuid, name, description, created_at, created_by)
         self.template_id = template_id
         self.eval_input_defaults = eval_input_defaults
         self.test_input_defaults = test_input_defaults
@@ -367,14 +382,15 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
 if __name__ == '__main__':
 
     carrot_helper = CarrotHelper()
-    exit()
 
-    parent_parser = argparse.ArgumentParser(description="Helper methods to scaffold and updated carrot tests.")
-    subparsers = parent_parser.add_subparsers(title="service", dest="service_command")
-
-    update_parser = subparsers.add_parser("update-and-run", help="Update test")
-    # update_parser.add_argument("target_wdl", help="The WDL whose test should be updated.")
-
-    args = parent_parser.parse_args()
-    test_id = create_test()
-    run_test(test_id)
+    if "test" in args:
+        task = args.test
+        if task == "list":
+            print(carrot_helper.list_runs(args.pipeline, args.template))
+        elif task == "run":
+            test = carrot_helper.pipelines[args.pipeline].templates[args.template].test
+            carrot_helper.create_run(test, args.test)
+        print(args.test)
+    print(args)
+    # test_id = create_test()
+    # run_test(test_id)
