@@ -8,7 +8,7 @@ from os import listdir
 import os.path
 
 """
-Summary: Cursory validation of Terra input JSONs for pipeline workflows. 
+Summary: Cursory validation of Terra input JSONs for pipeline workflows.
     Checks if JSONs contain all required inputs and that
     they do not contain extraneous inputs. Does not perform type-checking.
     Also checks that all expected JSONs have been generated.
