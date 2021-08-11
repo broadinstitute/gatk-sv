@@ -280,20 +280,22 @@ class CarrotHelper:
         test_input = os.path.join(test.template_path, run_dir, TEST_INPUTS_FILENAME)
         cmd = f"carrot_cli test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
         response = self.call_carrot(cmd)
-        return Run(**response)
+        return Run(**response, run_dir=os.path.join(test.template_path, run_dir))
 
     @staticmethod
     def pretty_print_runs_status(statuses):
-        print('\n\n%-40s%-24s%-24s%-40s%-40s' %
+        print('\n\n%-40s%-50s%-20s%-20s%-40s%-40s' %
               ("Run UUID",
+               "Run Directory",
                "Previous Status",
                "Latest Status",
                "Test Cromwell Job ID",
                "Eval Cromwell Job ID"))
 
         for status in statuses:
-            print('%-40s%-24s%-24s%-40s%-40s' %
+            print('%-40s%-50s%-20s%-20s%-40s%-40s' %
                   (status.run_uuid,
+                   status.run_dir,
                    status.previous_status,
                    status.previous_status,
                    status.test_cromwell_job_id,
@@ -351,7 +353,7 @@ class Test(BaseModel):
 
 # for test_dir in next(os.walk(template_path))[1]:
 class Run(BaseModel):
-    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None, results=None):
+    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None, results=None, run_dir=None):
         super().__init__(run_id or uuid, name, description, created_at, created_by)
         self.test_id = test_id
         self.test_cromwell_job_id = test_cromwell_job_id
@@ -361,11 +363,13 @@ class Run(BaseModel):
         self.test_input = test_input
         self.eval_input = eval_input
         self.results = results
+        self.run_dir = run_dir
 
 
 @dataclass(unsafe_hash=True)
 class RunStatus:
     run_uuid: str
+    run_dir: str
     previous_status: str
     latest_status: str
     test_cromwell_job_id: str
@@ -500,10 +504,9 @@ if __name__ == '__main__':
                       f"corrupted; have you submitted any test runs?")
 
             updated_status = []
-            print(runs)
             for run_id, run in runs.items():
                 if run.status in ["succeeded", "failed"]:
-                    updated_status.append(RunStatus(run_id, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
+                    updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
                     continue
                 cmd = f"carrot_cli run find_by_id {run_id}"
                 previous_status = run.status
@@ -513,8 +516,9 @@ if __name__ == '__main__':
                 # on the status of test execution, can update both
                 # of these IDs, which are useful for debugging
                 # failed tests.
-                updated_run = Run(**carrot_helper.call_carrot(cmd))
-                updated_status.append(RunStatus(run_id, run.status, updated_run.status, updated_run.test_cromwell_job_id, updated_run.eval_cromwell_job_id))
-                runs[run_id] = updated_run
+                updated_run = carrot_helper.call_carrot(cmd)
+                run.__dict__.update(updated_run)
+                updated_status.append(RunStatus(run_id, run.run_dir, previous_status, run.status, run.test_cromwell_job_id or "None", run.eval_cromwell_job_id or "None"))
+                runs[run_id] = run
             carrot_helper.persist_object(runs, RUNS_JSON)
             carrot_helper.pretty_print_runs_status(updated_status)
