@@ -63,7 +63,7 @@ class CarrotHelper:
             self.populate_pipelines()
 
     def _get_email_from_config(self):
-        config = self.call_carrot("carrot_cli config get")
+        config = self.call_carrot("carrot_cli -q config get")
         return config["email"]
 
     def _get_online_path(self, resource):
@@ -204,7 +204,7 @@ class CarrotHelper:
         if timestamp:
             name = f"{name}_{get_timestamp()}"
         description = description or "A pipeline created by the GATK-SV carrot_helper.py"
-        cmd = f"carrot_cli pipeline create " \
+        cmd = f"carrot_cli -q pipeline create " \
               f"--name '{name}' " \
               f"--description '{description}'"
         response = self.call_carrot(cmd)
@@ -215,7 +215,7 @@ class CarrotHelper:
         if timestamp:
             name = f"{name}_{get_timestamp()}"
         description = description or "A template created by the GATK-SV carrot_helper.py"
-        cmd = f"carrot_cli template create " \
+        cmd = f"carrot_cli -q template create " \
               f"--pipeline_id {pipeline_id} " \
               f"--name {name} " \
               f"--description '{description}' " \
@@ -233,7 +233,7 @@ class CarrotHelper:
         if timestamp:
             name = f"{name}_{get_timestamp()}"
         description = description or "A results type created by GATK-sv carrot_helper.py"
-        cmd = f"carrot_cli result create " \
+        cmd = f"carrot_cli -q result create " \
               f"--name {name} " \
               f"--description '{description}' " \
               f"--result_type {result_type.lower()}"  # lower type is required by carrot.
@@ -241,7 +241,7 @@ class CarrotHelper:
         return Result(**response)
 
     def create_template_to_result_mapping(self, template, result):
-        cmd = f"carrot_cli template map_to_result " \
+        cmd = f"carrot_cli -q template map_to_result " \
               f"{template.uuid} " \
               f"{result.uuid} " \
               f"{result.var_name}"
@@ -260,7 +260,7 @@ class CarrotHelper:
         if not os.path.isfile(def_test):
             raise FileNotFoundError(f"Default inputs for test WDL does not exist; expected file: {def_test}")
 
-        cmd = f"carrot_cli test create" \
+        cmd = f"carrot_cli -q test create" \
               f" --name '{name}' " \
               f"--description '{description}' " \
               f"--template_id {template.uuid} " \
@@ -278,7 +278,7 @@ class CarrotHelper:
             name = f"{name}_{get_timestamp()}"
         eval_input = os.path.join(test.template_path, run_dir, EVAL_INPUTS_FILENAME)
         test_input = os.path.join(test.template_path, run_dir, TEST_INPUTS_FILENAME)
-        cmd = f"carrot_cli test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
+        cmd = f"carrot_cli -q test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
         response = self.call_carrot(cmd)
         return Run(**response, run_dir=os.path.join(test.template_path, run_dir))
 
@@ -508,7 +508,7 @@ if __name__ == '__main__':
                 if run.status in ["succeeded", "failed"]:
                     updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
                     continue
-                cmd = f"carrot_cli run find_by_id {run_id}"
+                cmd = f"carrot_cli -q run find_by_id {run_id}"
                 previous_status = run.status
                 # At time of submitting a run, the run may not
                 # have a test cromwell job ID and certainly not
