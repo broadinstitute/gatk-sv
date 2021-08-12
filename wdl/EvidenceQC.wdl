@@ -12,7 +12,7 @@ import "MedianCov.wdl" as mc
 #   - Dosage scoring
 #   - QC for raw SV calls (optional)
 
-workflow Module00b {
+workflow EvidenceQC {
   input {
     # Batch info
     String batch

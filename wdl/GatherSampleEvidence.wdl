@@ -7,13 +7,13 @@ import "CramToBam.ReviseBase.wdl" as ctb_revise
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
-import "Module00aMetrics.wdl" as metrics
+import "GatherSampleEvidenceMetrics.wdl" as metrics
 import "PESRCollection.wdl" as pesr
 import "Whamg.wdl" as wham
 
 # Runs selected tools on BAM/CRAM files
 
-workflow Module00a {
+workflow GatherSampleEvidence {
   input {
     File bam_or_cram_file
     File? bam_or_cram_index
@@ -285,7 +285,7 @@ workflow Module00a {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module00aMetrics {
+    call metrics.GatherSampleEvidenceMetrics {
       input:
         sample = sample_id,
         coverage_counts = CollectCounts.counts,
@@ -328,7 +328,7 @@ workflow Module00a {
     File? wham_vcf = Whamg.vcf
     File? wham_index = Whamg.index
 
-    Array[File]? sample_metrics_files = Module00aMetrics.sample_metrics_files
+    Array[File]? sample_metrics_files = GatherSampleEvidenceMetrics.sample_metrics_files
   }
 }
 

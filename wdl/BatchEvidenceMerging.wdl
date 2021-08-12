@@ -39,7 +39,7 @@ workflow EvidenceMerging {
            input:
              file = select_first([BAF_files_value[i]]),
              sample_id = samples[i],
-             output_name = "BAF00c.~{samples[i]}.txt.gz",
+             output_name = "BAF_GatherBatchEvidence.~{samples[i]}.txt.gz",
              sample_column_index = 4,
              sv_base_mini_docker = sv_base_mini_docker,
              runtime_attr_override = runtime_attr_set_sample
@@ -77,7 +77,7 @@ workflow EvidenceMerging {
              input:
              file = SR_files[i],
              sample_id = samples[i],
-             output_name = "SR00c.~{samples[i]}.txt.gz",
+             output_name = "SR_GatherBatchEvidence.~{samples[i]}.txt.gz",
              sample_column_index = 5,
              sv_base_mini_docker = sv_base_mini_docker,
              runtime_attr_override = runtime_attr_set_sample
@@ -87,7 +87,7 @@ workflow EvidenceMerging {
              input:
              file = PE_files[i],
              sample_id = samples[i],
-             output_name = "PE00c.~{samples[i]}.txt.gz",
+             output_name = "PE_GatherBatchEvidence.~{samples[i]}.txt.gz",
              sample_column_index = 7,
              sv_base_mini_docker = sv_base_mini_docker,
              runtime_attr_override = runtime_attr_set_sample

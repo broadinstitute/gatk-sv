@@ -11,10 +11,10 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [Single-sample mode](#single-sample-mode)
     * [gCNV model](#gcnv-training-overview)
 * [Module Descriptions](#descriptions)
-    * [Module 00a](#module00a) - Raw callers and evidence collection
-    * [Module 00b](#module00b) - Batch QC
+    * [GatherSampleEvidence](#gather-sample-evidence) - Raw callers and evidence collection
+    * [EvidenceQC](#evidence-qc) - Batch QC
     * [gCNV training](#gcnv-training) - gCNV model creation
-    * [Module 00c](#module00c) - Batch evidence merging, BAF generation, and depth callers
+    * [GatherBatchEvidence](#gather-batch-evidence) - Batch evidence merging, BAF generation, and depth callers
     * [Module 01](#module01) - Site clustering
     * [Module 02](#module02) - Site metrics
     * [Module 03](#module03) - Filtering
@@ -44,7 +44,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 ### Data:
 * Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). BAMs must also be indexed.
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
-* Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [Module 00b](#module00b)) should be entered as sex = 0.
+* Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
 
 #### <a name="sampleids">Sample ID requirements:</a>
 
@@ -59,13 +59,13 @@ Sample IDs should not:
 
 The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow inputs.
 
-Sample IDs are provided to [Module00a](#module00a) directly and need not match sample names from the BAM/CRAM headers or GVCFs. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [Module 00c](#module00c). 
+Sample IDs are provided to [GatherSampleEvidence](#gather-sample-evidence) directly and need not match sample names from the BAM/CRAM headers or GVCFs. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [GatherBatchEvidence](#gather-batch-evidence). 
 
 The following inputs will need to be updated with the transformed sample IDs:
-* Sample ID list for [Module00a](#module00a) or [Module 00c](#module00c)
+* Sample ID list for [GatherSampleEvidence](#gather-sample-evidence) or [GatherBatchEvidence](#gather-batch-evidence)
 * PED file
 
-If using a SNP VCF in [Module 00c](#module00c), it does not need to be re-headered; simply provide the `vcf_samples` argument.
+If using a SNP VCF in [GatherBatchEvidence](#gather-batch-evidence), it does not need to be re-headered; simply provide the `vcf_samples` argument.
 
 
 ## <a name="citation">Citation</a>
@@ -90,14 +90,14 @@ Example workflow inputs can be found in `/inputs`. All required resources are av
 **Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
 
 * `GATKSVPipelineSingleSample.melt_docker` and `GATKSVPipelineBatch.melt_docker` - MELT docker URI (see [Docker readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
-* `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([Module00c](#module00c))
+* `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([GatherBatchEvidence](#gather-batch-evidence))
 
 The input values are provided only as an example and are not publicly accessible. In order to include MELT, these values must be provided by the user. MELT can be disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to `false`.
 
 #### Requester pays buckets
 **Important**: The following parameters must be set when certain input data is in requester pays (RP) buckets:
 
-* `GATKSVPipelineSingleSample.requester_pays_cram` and `GATKSVPipelineBatch.Module00aBatch.requester_pays_crams` - set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
+* `GATKSVPipelineSingleSample.requester_pays_cram` and `GATKSVPipelineBatch.GatherSampleEvidenceBatch.requester_pays_crams` - set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
 * `GATKSVPipelineBatch.GATKSVPipelinePhase1.gcs_project_for_requester_pays` - set to your Google Cloud Project ID if gVCFs are in an RP bucket, otherwise omit this parameter.
 
 #### Execution
@@ -117,9 +117,9 @@ where `cromwell_config.json` is a Cromwell [workflow options file](https://cromw
 
 ## <a name="overview">Pipeline Overview</a>
 The pipeline consists of a series of modules that perform the following:
-* [Module 00a](#module00a): SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
-* [Module 00b](#module00b): Dosage bias scoring and ploidy estimation
-* [Module 00c](#module00c): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
+* [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+* [EvidenceQC](#evidence-qc): Dosage bias scoring and ploidy estimation
+* [GatherBatchEvidence](#gather-batch-evidence): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 * [Module 01](#module01): Variant clustering
 * [Module 02](#module02): Variant filtering metric generation
 * [Module 03](#module03): Variant filtering; outlier exclusion
@@ -152,19 +152,19 @@ A minimum cohort size of 100 with roughly equal number of males and females is r
 For larger cohorts, samples should be split up into batches of about 100-500 samples. Refer to the [Batching](#batching) section for further guidance on creating batches.
 
 The pipeline should be executed as follows:
-* Modules [00a](#module00a) and [00b](#module00b) can be run on arbitrary cohort partitions
-* Modules [00c](#module00c), [01](#module01), [02](#module02), and [03](#module03) are run separately per batch
+* Modules [GatherSampleEvidence](#gather-sample-evidence) and [EvidenceQC](#evidence-qc) can be run on arbitrary cohort partitions
+* Modules [GatherBatchEvidence](#gather-batch-evidence), [01](#module01), [02](#module02), and [03](#module03) are run separately per batch
 * [Module 04](#module04) is run separately per batch, using filtered variants ([Module 03](#module03) output) combined across all batches
 * [Module 05/06](#module0506) and beyond are run on all batches together
 
-Note: [Module 00c](#module00c) requires a [trained gCNV model](#gcnv-training).
+Note: [GatherBatchEvidence](#gather-batch-evidence) requires a [trained gCNV model](#gcnv-training).
 
 #### <a name="batching">Batching</a>
-For larger cohorts, samples should be split up into batches of about 100-500 samples with similar characteristics. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [Module 00b](#module00b). An example batching process is outlined below:
+For larger cohorts, samples should be split up into batches of about 100-500 samples with similar characteristics. We recommend batching based on overall coverage and dosage score (WGD), which can be generated in [EvidenceQC](#evidence-qc). An example batching process is outlined below:
 1. Divide the cohort into PCR+ and PCR- samples
-2. Partition the samples by median coverage from [Module00b](#module00b), grouping samples with similar median coverage together. The end goal is to divide the cohort into roughly equal-sized batches of about 100-500 samples; if your partitions based on coverage are larger or uneven, you can partition the cohort further in the next step to obtain the final batches. 
-3. Optionally, divide the samples further by dosage score (WGD) from [Module00b](#module00b), grouping samples with similar WGD score together, to obtain roughly equal-sized batches of about 100-500 samples
-4. Maintain a roughly equal sex balance within each batch, based on sex assignments from [Module00b](#module00b)
+2. Partition the samples by median coverage from [EvidenceQC](#evidence-qc), grouping samples with similar median coverage together. The end goal is to divide the cohort into roughly equal-sized batches of about 100-500 samples; if your partitions based on coverage are larger or uneven, you can partition the cohort further in the next step to obtain the final batches. 
+3. Optionally, divide the samples further by dosage score (WGD) from [EvidenceQC](#evidence-qc), grouping samples with similar WGD score together, to obtain roughly equal-sized batches of about 100-500 samples
+4. Maintain a roughly equal sex balance within each batch, based on sex assignments from [EvidenceQC](#evidence-qc)
 
 
 ## <a name="sample-sample-mode">Single-sample mode</a>
@@ -175,15 +175,15 @@ Custom reference panels can be generated by running `GATKSVPipelineBatch.wdl` an
 * `GATKSVPipelineSingleSample.ref_ped_file` : `batch.ped` - Manually created (see [data requirements](#requirements))
 * `GATKSVPipelineSingleSample.contig_ploidy_model_tar` : `batch-contig-ploidy-model.tar.gz` - gCNV contig ploidy model ([gCNV training](#gcnv-training))
 * `GATKSVPipelineSingleSample.gcnv_model_tars` : `batch-model-files-*.tar.gz` - gCNV model tarballs ([gCNV training](#gcnv-training))
-* `GATKSVPipelineSingleSample.ref_pesr_disc_files` - `sample.disc.txt.gz` - Paired-end evidence files ([Module 00a](#module00a))
-* `GATKSVPipelineSingleSample.ref_pesr_split_files` - `sample.split.txt.gz` - Split read evidence files ([Module 00a](#module00a))
-* `GATKSVPipelineSingleSample.ref_panel_bincov_matrix`: `batch.RD.txt.gz` - Read counts matrix ([Module 00c](#module00c))
-* `GATKSVPipelineSingleSample.ref_panel_del_bed` : `batch.DEL.bed.gz` - Depth deletion calls ([Module 00c](#module00c))
-* `GATKSVPipelineSingleSample.ref_panel_dup_bed` : `batch.DUP.bed.gz` - Depth duplication calls ([Module 00c](#module00c))
+* `GATKSVPipelineSingleSample.ref_pesr_disc_files` - `sample.disc.txt.gz` - Paired-end evidence files ([GatherSampleEvidence](#gather-sample-evidence))
+* `GATKSVPipelineSingleSample.ref_pesr_split_files` - `sample.split.txt.gz` - Split read evidence files ([GatherSampleEvidence](#gather-sample-evidence))
+* `GATKSVPipelineSingleSample.ref_panel_bincov_matrix`: `batch.RD.txt.gz` - Read counts matrix ([GatherBatchEvidence](#gather-batch-evidence))
+* `GATKSVPipelineSingleSample.ref_panel_del_bed` : `batch.DEL.bed.gz` - Depth deletion calls ([GatherBatchEvidence](#gather-batch-evidence))
+* `GATKSVPipelineSingleSample.ref_panel_dup_bed` : `batch.DUP.bed.gz` - Depth duplication calls ([GatherBatchEvidence](#gather-batch-evidence))
 * `GATKSVPipelineSingleSample.ref_samples` - Reference panel sample IDs
-* `GATKSVPipelineSingleSample.ref_std_manta_vcfs` - `std_XXX.manta.sample.vcf.gz` - Standardized Manta VCFs ([Module 00c](#module00c))
-* `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - `std_XXX.melt.sample.vcf.gz` - Standardized Melt VCFs ([Module 00c](#module00c))
-* `GATKSVPipelineSingleSample.ref_std_wham_vcfs` - `std_XXX.wham.sample.vcf.gz` - Standardized Wham VCFs ([Module 00c](#module00c))
+* `GATKSVPipelineSingleSample.ref_std_manta_vcfs` - `std_XXX.manta.sample.vcf.gz` - Standardized Manta VCFs ([GatherBatchEvidence](#gather-batch-evidence))
+* `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - `std_XXX.melt.sample.vcf.gz` - Standardized Melt VCFs ([GatherBatchEvidence](#gather-batch-evidence))
+* `GATKSVPipelineSingleSample.ref_std_wham_vcfs` - `std_XXX.wham.sample.vcf.gz` - Standardized Wham VCFs ([GatherBatchEvidence](#gather-batch-evidence))
 * `GATKSVPipelineSingleSample.cutoffs` : `batch.cutoffs` - Filtering cutoffs ([Module 03](#module03))
 * `GATKSVPipelineSingleSample.genotype_pesr_pesr_sepcutoff` : `genotype_pesr.pesr_sepcutoff.txt` - Genotyping cutoffs ([Module 04](#module04))
 * `GATKSVPipelineSingleSample.genotype_pesr_depth_sepcutoff` : `genotype_pesr.depth_sepcutoff.txt` - Genotyping cutoffs ([Module 04](#module04))
@@ -201,7 +201,7 @@ Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline
 ## <a name="descriptions">Module Descriptions</a>
 The following sections briefly describe each module and highlights inter-dependent input/output files. Note that input/output mappings can also be gleaned from `GATKSVPipelineBatch.wdl`, and example input files for each module can be found in `/test`.
 
-## <a name="module00a">Module 00a</a>
+## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 Runs raw evidence collection on each sample.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
@@ -217,7 +217,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * B-allele fraction (BAF) file
 
 
-## <a name="module00b">Module 00b</a>
+## <a name="evidence-qc">EvidenceQC</a>
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. The results from this module can be used for QC and batching.
 
 For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
@@ -225,11 +225,11 @@ For large cohorts, we recommend dividing samples into smaller batches (~500 samp
 We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file.
 
 #### Prerequisites:
-* [Module 00a](#module00a)
+* [GatherSampleEvidence](#gather-sample-evidence)
 
 #### Inputs:
-* Read count files ([Module 00a](#module00a))
-* (Optional) SV call VCFs ([Module 00a](#module00a))
+* Read count files ([GatherSampleEvidence](#gather-sample-evidence))
+* (Optional) SV call VCFs ([GatherSampleEvidence](#gather-sample-evidence))
 
 #### Outputs:
 * Per-sample dosage scores with plots
@@ -237,7 +237,7 @@ We also recommend using sex assignments generated from the ploidy estimates and 
 * (Optional) Outlier samples detected by call counts
 
 #### <a name="prelim-sample-qc">Preliminary Sample QC</a>
-The purpose of sample filtering at this stage after Module00b is to prevent very poor quality samples from interfering with the results for the rest of the callset. In general, samples that are borderline are okay to leave in, but you should choose filtering thresholds to suit the needs of your cohort and study. There will be future opportunities (as part of [Module03](#module03)) for filtering before the joint genotyping stage if necessary. Here are a few of the basic QC checks that we recommend:
+The purpose of sample filtering at this stage after EvidenceQC is to prevent very poor quality samples from interfering with the results for the rest of the callset. In general, samples that are borderline are okay to leave in, but you should choose filtering thresholds to suit the needs of your cohort and study. There will be future opportunities (as part of [Module03](#module03)) for filtering before the joint genotyping stage if necessary. Here are a few of the basic QC checks that we recommend:
 * Look at the X and Y ploidy plots, and check that sex assignments match your expectations. If there are discrepancies, check for sample swaps and update your PED file before proceeding.
 * Look at the dosage score (WGD) distribution and check that it is centered around 0 (the distribution of WGD for PCR- samples is expected to be slightly lower than 0, and the distribution of WGD for PCR+ samples is expected to be slightly greater than 0. Refer to the [gnomAD-SV paper](https://doi.org/10.1038/s41586-020-2287-8) for more information on WGD score). Optionally filter outliers.
 * Look at the low outliers for each SV caller (samples with much lower than typical numbers of SV calls per contig for each caller). An empty low outlier file means there were no outliers below the median and no filtering is necessary. Check that no samples had zero calls.
@@ -245,33 +245,33 @@ The purpose of sample filtering at this stage after Module00b is to prevent very
 
 
 ## <a name="gcnv-training">gCNV Training</a>
-Trains a gCNV model for use in [Module 00c](#module00c). The WDL can be found at `/gcnv/trainGCNV.wdl`.
+Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/gcnv/trainGCNV.wdl`.
 
 #### Prerequisites:
-* [Module 00a](#module00a)
-* (Recommended) [Module 00b](#module00b)
+* [GatherSampleEvidence](#gather-sample-evidence)
+* (Recommended) [EvidenceQC](#evidence-qc)
 
 #### Inputs:
-* Read count files ([Module 00a](#module00a))
+* Read count files ([GatherSampleEvidence](#gather-sample-evidence))
 
 #### Outputs:
 * Contig ploidy model tarball
 * gCNV model tarballs
 
 
-## <a name="module00c">Module 00c</a>
+## <a name="gather-batch-evidence">GatherBatchEvidence</a>
 Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
-* [Module 00a](#module00a)
-* (Recommended) [Module 00b](#module00b)
+* [GatherSampleEvidence](#gather-sample-evidence)
+* (Recommended) [EvidenceQC](#evidence-qc)
 * gCNV training
 
 #### Inputs:
-* PED file (updated with [Module 00b](#module00b) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
+* PED file (updated with [EvidenceQC](#evidence-qc) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
 * Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
-* Read count, BAF, PE, and SR files ([Module 00a](#module00a))
-* Caller VCFs ([Module 00a](#module00a))
+* Read count, BAF, PE, and SR files ([GatherSampleEvidence](#gather-sample-evidence))
+* Caller VCFs ([GatherSampleEvidence](#gather-sample-evidence))
 * Contig ploidy model and gCNV model files (gCNV training)
 
 #### Outputs:
@@ -286,11 +286,11 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 Clusters SV calls across a batch.
 
 #### Prerequisites:
-* [Module 00c](#module00c)
+* [GatherBatchEvidence](#gather-batch-evidence)
 
 #### Inputs:
-* Standardized call VCFs ([Module 00c](#module00c))
-* Depth-only (DEL/DUP) calls ([Module 00c](#module00c))
+* Standardized call VCFs ([GatherBatchEvidence](#gather-batch-evidence))
+* Depth-only (DEL/DUP) calls ([GatherBatchEvidence](#gather-batch-evidence))
 
 #### Outputs:
 * Clustered SV VCFs
@@ -304,8 +304,8 @@ Generates variant metrics for filtering.
 * [Module 01](#module01)
 
 #### Inputs:
-* Combined read count matrix, SR, PE, and BAF files ([Module 00c](#module00c))
-* Per-sample median coverage estimates ([Module 00c](#module00c))
+* Combined read count matrix, SR, PE, and BAF files ([GatherBatchEvidence](#gather-batch-evidence))
+* Per-sample median coverage estimates ([GatherBatchEvidence](#gather-batch-evidence))
 * Clustered SV VCFs ([Module 01](#module01))
 * Clustered depth-only call VCF ([Module 01](#module01))
 
@@ -356,7 +356,7 @@ Genotypes a batch of samples across unfiltered variants combined across all batc
 #### Inputs:
 * Batch PESR and depth VCFs ([Module 03](#module03))
 * Cohort PESR and depth VCFs (Merge Cohort VCFs)
-* Batch read count, PE, and SR files ([Module 00c](#module00c)) 
+* Batch read count, PE, and SR files ([GatherBatchEvidence](#gather-batch-evidence)) 
 
 #### Outputs:
 * Filtered SV (non-depth-only a.k.a. "PESR") VCF with outlier samples excluded
@@ -374,7 +374,7 @@ Re-genotypes probable mosaic variants across multiple batches.
 * [Module 04](#module04)
 
 #### Inputs:
-* Per-sample median coverage estimates ([Module 00c](#module00c))
+* Per-sample median coverage estimates ([GatherBatchEvidence](#gather-batch-evidence))
 * Pre-genotyping depth VCFs ([Module 03](#module03))
 * Batch PED files ([Module 03](#module03))
 * Clustered depth variant BED file (Merge Cohort VCFs)
@@ -394,7 +394,7 @@ Combines variants across multiple batches, resolves complex variants, re-genotyp
 * (Optional) [Module 04b](#module04b)
 
 #### Inputs:
-* RD, PE and SR file URIs ([Module 00c](#module00c))
+* RD, PE and SR file URIs ([GatherBatchEvidence](#gather-batch-evidence))
 * Batch filtered PED file URIs ([Module 03](#module03))
 * Genotyped PESR VCF URIs ([Module 04](#module04))
 * Genotyped depth VCF URIs ([Module 04](#module04) or [04b](#module04b))

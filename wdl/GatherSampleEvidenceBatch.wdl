@@ -1,9 +1,9 @@
 version 1.0
 
-import "Module00a.wdl" as m00a
+import "GatherSampleEvidence.wdl" as sampleevidence
 import "TestUtils.wdl" as tu
 
-workflow Module00aBatch {
+workflow GatherSampleEvidenceBatch {
   input {
     Array[File] bam_or_cram_files
     Array[File]? bam_or_cram_indexes
@@ -111,7 +111,7 @@ workflow Module00aBatch {
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
 
   scatter (i in range(length(bam_or_cram_files))) {
-    call m00a.Module00a {
+    call sampleevidence.GatherSampleEvidence {
       input:
         bam_or_cram_file = bam_or_cram_files[i],
         bam_or_cram_index = if defined(bam_or_cram_indexes) then select_first([bam_or_cram_indexes])[i] else NONE_FILE_,
@@ -180,38 +180,38 @@ workflow Module00aBatch {
   }
 
   if (run_module_metrics_) {
-    Array[Array[File]] sample_metrics_files_ = select_all(Module00a.sample_metrics_files)
+    Array[Array[File]] sample_metrics_files_ = select_all(GatherSampleEvidence.sample_metrics_files)
     call tu.CatMetrics {
       input:
-        prefix = "module00a." + select_first([batch]),
+        prefix = "GatherSampleEvidence." + select_first([batch]),
         metric_files = flatten(sample_metrics_files_),
         linux_docker = select_first([linux_docker])
     }
   }
 
   output {
-    Array[File?] coverage_counts = Module00a.coverage_counts
+    Array[File?] coverage_counts = GatherSampleEvidence.coverage_counts
 
-    Array[File?] delly_vcf = Module00a.delly_vcf
-    Array[File?] delly_index = Module00a.delly_index
+    Array[File?] delly_vcf = GatherSampleEvidence.delly_vcf
+    Array[File?] delly_index = GatherSampleEvidence.delly_index
 
-    Array[File?] manta_vcf = Module00a.manta_vcf
-    Array[File?] manta_index = Module00a.manta_index
+    Array[File?] manta_vcf = GatherSampleEvidence.manta_vcf
+    Array[File?] manta_index = GatherSampleEvidence.manta_index
 
-    Array[File?] melt_vcf = Module00a.melt_vcf
-    Array[File?] melt_index = Module00a.melt_index
-    Array[Float?] melt_coverage = Module00a.melt_coverage
-    Array[Int?] melt_read_length = Module00a.melt_read_length
-    Array[Float?] melt_insert_size = Module00a.melt_insert_size
+    Array[File?] melt_vcf = GatherSampleEvidence.melt_vcf
+    Array[File?] melt_index = GatherSampleEvidence.melt_index
+    Array[Float?] melt_coverage = GatherSampleEvidence.melt_coverage
+    Array[Int?] melt_read_length = GatherSampleEvidence.melt_read_length
+    Array[Float?] melt_insert_size = GatherSampleEvidence.melt_insert_size
 
-    Array[File?] pesr_disc = Module00a.pesr_disc
-    Array[File?] pesr_disc_index = Module00a.pesr_disc_index
-    Array[File?] pesr_split = Module00a.pesr_split
-    Array[File?] pesr_split_index = Module00a.pesr_split_index
+    Array[File?] pesr_disc = GatherSampleEvidence.pesr_disc
+    Array[File?] pesr_disc_index = GatherSampleEvidence.pesr_disc_index
+    Array[File?] pesr_split = GatherSampleEvidence.pesr_split
+    Array[File?] pesr_split_index = GatherSampleEvidence.pesr_split_index
 
-    Array[File?] wham_vcf = Module00a.wham_vcf
-    Array[File?] wham_index = Module00a.wham_index
+    Array[File?] wham_vcf = GatherSampleEvidence.wham_vcf
+    Array[File?] wham_index = GatherSampleEvidence.wham_index
 
-    File? metrics_file_00a = CatMetrics.out
+    File? metrics_file_sampleevidence = CatMetrics.out
   }
 }

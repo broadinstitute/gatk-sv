@@ -2,7 +2,7 @@ version 1.0
 
 import "TestUtils.wdl" as tu
 
-workflow Module00aMetrics {
+workflow GatherSampleEvidenceMetrics {
   input {
     String sample
     File? coverage_counts

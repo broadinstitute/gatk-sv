@@ -1,13 +1,13 @@
 version 1.0
 
-import "Module00c.wdl" as m00c
+import "GatherBatchEvidence.wdl" as batchevidence
 import "Module01.wdl" as m01
 import "Module02.wdl" as m02
 import "Module03.wdl" as m03
 import "Structs.wdl"
 
 # One mighty WDL to rule them all...
-# Runs Modules 00c, 01, 02, and 03
+# Runs GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch
 
 workflow GATKSVPipelinePhase1 {
   input {
@@ -37,7 +37,7 @@ workflow GATKSVPipelinePhase1 {
     String condense_counts_docker
 
     ############################################################
-    ## Module 00c
+    ## GatherBatchEvidence
     ############################################################
 
     # PE/SR/BAF/RD files
@@ -225,11 +225,11 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_filter_samples
 
     ############################################################
-    ## Module metrics parameters for 00c, 01, 02, and 03 metrics
+    ## Module metrics parameters for GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch metrics
     ############################################################
 
-    # Run module metrics workflow at the end - by default on except for Module00c because of runtime/expense
-    Boolean? run_00c_metrics
+    # Run module metrics workflow at the end - by default on except for GatherBatchEvidence because of runtime/expense
+    Boolean? run_batchevidence_metrics
     Boolean? run_01_metrics
     Boolean? run_02_metrics
     Boolean? run_03_metrics
@@ -237,7 +237,7 @@ workflow GATKSVPipelinePhase1 {
 
   }
 
-  call m00c.Module00c as Module00c {
+  call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
       batch = batch,
       samples = samples,
@@ -343,19 +343,19 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_bundle = runtime_attr_bundle,
       runtime_attr_postprocess = runtime_attr_postprocess,
       runtime_attr_explode = runtime_attr_explode,
-      run_module_metrics = run_00c_metrics,
+      run_module_metrics = run_batchevidence_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   call m01.Module01 as Module01 {
     input:
-      manta_vcfs=Module00c.std_manta_vcf,
-      delly_vcfs=Module00c.std_delly_vcf,
-      wham_vcfs=Module00c.std_wham_vcf,
-      melt_vcfs=Module00c.std_melt_vcf,
-      del_bed=Module00c.merged_dels,
-      dup_bed=Module00c.merged_dups,
+      manta_vcfs=GatherBatchEvidence.std_manta_vcf,
+      delly_vcfs=GatherBatchEvidence.std_delly_vcf,
+      wham_vcfs=GatherBatchEvidence.std_wham_vcf,
+      melt_vcfs=GatherBatchEvidence.std_melt_vcf,
+      del_bed=GatherBatchEvidence.merged_dels,
+      dup_bed=GatherBatchEvidence.merged_dups,
       batch=batch,
       pesr_svsize=pesr_svsize,
       pesr_frac=pesr_frac,
@@ -389,11 +389,11 @@ workflow GATKSVPipelinePhase1 {
       delly_vcf=Module01.delly_vcf,
       wham_vcf=Module01.wham_vcf,
       manta_vcf=Module01.manta_vcf,
-      baf_metrics=select_first([Module00c.merged_BAF]),
-      discfile=Module00c.merged_PE,
-      coveragefile=Module00c.merged_bincov,
-      splitfile=Module00c.merged_SR,
-      medianfile=Module00c.median_cov,
+      baf_metrics=select_first([GatherBatchEvidence.merged_BAF]),
+      discfile=GatherBatchEvidence.merged_PE,
+      coveragefile=GatherBatchEvidence.merged_bincov,
+      splitfile=GatherBatchEvidence.merged_SR,
+      medianfile=GatherBatchEvidence.median_cov,
       BAF_split_size=BAF_split_size,
       RD_split_size=RD_split_size,
       PE_split_size=PE_split_size,
@@ -456,32 +456,32 @@ workflow GATKSVPipelinePhase1 {
 
   output {
     # Module 00
-    File merged_BAF = select_first([Module00c.merged_BAF])
-    File merged_BAF_index = select_first([Module00c.merged_BAF_index])
-    File merged_SR = Module00c.merged_SR
-    File merged_SR_index = Module00c.merged_SR_index
-    File merged_PE = Module00c.merged_PE
-    File merged_PE_index = Module00c.merged_PE_index
-    File merged_bincov = Module00c.merged_bincov
-    File merged_bincov_index = Module00c.merged_bincov_index
+    File merged_BAF = select_first([GatherBatchEvidence.merged_BAF])
+    File merged_BAF_index = select_first([GatherBatchEvidence.merged_BAF_index])
+    File merged_SR = GatherBatchEvidence.merged_SR
+    File merged_SR_index = GatherBatchEvidence.merged_SR_index
+    File merged_PE = GatherBatchEvidence.merged_PE
+    File merged_PE_index = GatherBatchEvidence.merged_PE_index
+    File merged_bincov = GatherBatchEvidence.merged_bincov
+    File merged_bincov_index = GatherBatchEvidence.merged_bincov_index
 
-    File median_cov = Module00c.median_cov
+    File median_cov = GatherBatchEvidence.median_cov
 
-    File? PE_stats = Module00c.PE_stats
-    File? RD_stats = Module00c.RD_stats
-    File? SR_stats = Module00c.SR_stats
-    File? BAF_stats = Module00c.BAF_stats
-    File? Matrix_QC_plot=Module00c.Matrix_QC_plot
+    File? PE_stats = GatherBatchEvidence.PE_stats
+    File? RD_stats = GatherBatchEvidence.RD_stats
+    File? SR_stats = GatherBatchEvidence.SR_stats
+    File? BAF_stats = GatherBatchEvidence.BAF_stats
+    File? Matrix_QC_plot=GatherBatchEvidence.Matrix_QC_plot
 
-    File merged_dels = Module00c.merged_dels
-    File merged_dups = Module00c.merged_dups
+    File merged_dels = GatherBatchEvidence.merged_dels
+    File merged_dups = GatherBatchEvidence.merged_dups
 
-    Array[File]? std_manta_vcf = Module00c.std_manta_vcf
-    Array[File]? std_delly_vcf = Module00c.std_delly_vcf
-    Array[File]? std_melt_vcf = Module00c.std_melt_vcf
-    Array[File]? std_wham_vcf = Module00c.std_wham_vcf
+    Array[File]? std_manta_vcf = GatherBatchEvidence.std_manta_vcf
+    Array[File]? std_delly_vcf = GatherBatchEvidence.std_delly_vcf
+    Array[File]? std_melt_vcf = GatherBatchEvidence.std_melt_vcf
+    Array[File]? std_wham_vcf = GatherBatchEvidence.std_wham_vcf
 
-    File? metrics_file_00c = Module00c.metrics_file_00c
+    File? metrics_file_batchevidence = GatherBatchEvidence.metrics_file_batchevidence
 
     # Module 01
     File? depth_vcf = Module01.depth_vcf

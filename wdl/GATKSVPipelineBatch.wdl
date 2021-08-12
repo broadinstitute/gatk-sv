@@ -1,7 +1,7 @@
 version 1.0
 
-import "Module00aBatch.wdl" as m00a
-import "Module00b.wdl" as m00b
+import "GatherSampleEvidenceBatch.wdl" as sampleevidence
+import "EvidenceQC.wdl" as evidenceqc
 import "GATKSVPipelinePhase1.wdl" as phase1
 import "Module04.wdl" as m04
 import "Module04b.wdl" as m04b
@@ -11,7 +11,8 @@ import "Structs.wdl"
 import "TestUtils.wdl" as tu
 
 # GATK SV Pipeline batch mode
-# Runs modules 00abc, 01, 02, 03, 04, 0506
+# Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch, GenotypeBatch, RegenotypeCNVs,
+# CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, and GenotypeComplexVariants
 
 workflow GATKSVPipelineBatch {
   input {
@@ -66,16 +67,16 @@ workflow GATKSVPipelineBatch {
     File allosome_file      # fai of allosomal contigs
 
     # Run module metrics - all modules on by default for batch WDL
-    Boolean? run_00a_metrics
-    Boolean? run_00c_metrics = true  # 00c metrics is off by default standalone but on for batch WDL
+    Boolean? run_sampleevidence_metrics
+    Boolean? run_batchevidence_metrics = true  # GatherBatchEvidenceMetrics is off by default standalone but on for batch WDL
     Boolean? run_01_metrics
     Boolean? run_02_metrics
     Boolean? run_03_metrics
     Boolean? run_04_metrics
     Boolean? run_0506_metrics
 
-    File? baseline_00a_metrics
-    File? baseline_00c_metrics
+    File? baseline_sampleevidence_metrics
+    File? baseline_batchevidence_metrics
     File? baseline_01_metrics
     File? baseline_02_metrics
     File? baseline_03_metrics
@@ -115,10 +116,10 @@ workflow GATKSVPipelineBatch {
   String? melt_docker_ = if (!defined(melt_vcfs) && use_melt) then melt_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_module00a = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
 
-  if (run_module00a) {
-    call m00a.Module00aBatch {
+  if (run_sampleevidence) {
+    call sampleevidence.GatherSampleEvidenceBatch {
       input:
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
@@ -129,7 +130,7 @@ workflow GATKSVPipelineBatch {
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
-        run_module_metrics = run_00a_metrics,
+        run_module_metrics = run_sampleevidence_metrics,
         primary_contigs_fai = primary_contigs_fai,
         batch = batch,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
@@ -148,24 +149,24 @@ workflow GATKSVPipelineBatch {
     }
   }
 
-  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([Module00aBatch.coverage_counts])) else select_first([counts_files])
-  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([Module00aBatch.pesr_disc])) else select_first([pe_files])
-  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([Module00aBatch.pesr_split])) else select_first([sr_files])
+  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files])
+  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files])
+  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files])
 
   if (use_delly) {
-    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([Module00aBatch.delly_vcf]))
+    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
   }
   if (use_manta) {
-    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([Module00aBatch.manta_vcf]))
+    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
   }
   if (use_melt) {
-    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([Module00aBatch.melt_vcf]))
+    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.melt_vcf]))
   }
   if (use_wham) {
-    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([Module00aBatch.wham_vcf]))
+    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
   }
 
-  call m00b.Module00b as Module00b {
+  call evidenceqc.EvidenceQC as EvidenceQC {
     input:
       batch=batch,
       samples=sample_ids,
@@ -190,8 +191,8 @@ workflow GATKSVPipelineBatch {
       reference_dict=reference_dict,
       BAF_files=baf_files,
       counts=counts_files_,
-      bincov_matrix=Module00b.bincov_matrix,
-      bincov_matrix_index=Module00b.bincov_matrix_index,
+      bincov_matrix=EvidenceQC.bincov_matrix,
+      bincov_matrix_index=EvidenceQC.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
       delly_vcfs=delly_vcfs_,
@@ -205,7 +206,7 @@ workflow GATKSVPipelineBatch {
       cnmops_allo_file=allosome_file,
       allosome_contigs=allosome_file,
       autosome_contigs=autosome_file,
-      run_00c_metrics = run_00c_metrics,
+      run_batchevidence_metrics = run_batchevidence_metrics,
       run_01_metrics = run_01_metrics,
       run_02_metrics = run_02_metrics,
       run_03_metrics = run_03_metrics,
@@ -304,11 +305,11 @@ workflow GATKSVPipelineBatch {
   call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + batch,
-        metric_files = select_all([Module00aBatch.metrics_file_00a, GATKSVPipelinePhase1.metrics_file_00c, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506]),
+        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506]),
         linux_docker = linux_docker
     }
 
-  Array[File] defined_baseline_metrics = select_all([baseline_00a_metrics, baseline_00c_metrics, baseline_01_metrics, baseline_02_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
+  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_01_metrics, baseline_02_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
   if (length(defined_baseline_metrics) > 0) {
     call tu.CatMetrics as CatBaselineMetrics {
       input:

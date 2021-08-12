@@ -40,15 +40,15 @@
   "GATKSVPipelineBatch.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "GATKSVPipelineBatch.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }},
 
-  "GATKSVPipelineBatch.Module00aBatch.reference_version": {{ reference_resources.reference_version | tojson }},
-  "GATKSVPipelineBatch.Module00aBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
-  "GATKSVPipelineBatch.Module00aBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
-  "GATKSVPipelineBatch.Module00aBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
-  "GATKSVPipelineBatch.Module00aBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
-  "GATKSVPipelineBatch.Module00aBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
 
-  "GATKSVPipelineBatch.Module00b.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
-  "GATKSVPipelineBatch.Module00b.run_vcf_qc": "false",
+  "GATKSVPipelineBatch.EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
+  "GATKSVPipelineBatch.EvidenceQC.run_vcf_qc": "false",
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.unpadded_intervals_file" : {{ reference_resources.unpadded_intervals_file | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.dbsnp_vcf" : {{ reference_resources.dbsnp_vcf | tojson }},

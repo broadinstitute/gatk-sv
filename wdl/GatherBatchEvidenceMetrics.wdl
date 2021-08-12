@@ -2,7 +2,7 @@ version 1.0
 
 import "TestUtils.wdl" as tu
 
-workflow Module00cMetrics {
+workflow GatherBatchEvidenceMetrics {
   input {
     Array[String] samples
     String name
@@ -174,7 +174,7 @@ workflow Module00cMetrics {
 
   call tu.CatMetrics {
     input:
-      prefix = "module00c." + name,
+      prefix = "GatherBatchEvidence." + name,
       metric_files = flatten([sample_metric_files, [BAFMetrics.out, SRMetrics.out, PEMetrics.out, BincovMetrics.out, MedcovMetrics.out, del_metrics, dup_metrics]]),
       linux_docker = linux_docker
   }
