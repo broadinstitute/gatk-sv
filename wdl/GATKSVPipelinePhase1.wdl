@@ -1,7 +1,7 @@
 version 1.0
 
 import "GatherBatchEvidence.wdl" as batchevidence
-import "Module01.wdl" as m01
+import "ClusterBatch.wdl" as clusterbatch
 import "Module02.wdl" as m02
 import "Module03.wdl" as m03
 import "Structs.wdl"
@@ -161,7 +161,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_explode
 
     ############################################################
-    ## Module 01
+    ## ClusterBatch
     ############################################################
 
     Int pesr_svsize
@@ -230,7 +230,7 @@ workflow GATKSVPipelinePhase1 {
 
     # Run module metrics workflow at the end - by default on except for GatherBatchEvidence because of runtime/expense
     Boolean? run_batchevidence_metrics
-    Boolean? run_01_metrics
+    Boolean? run_clusterbatch_metrics
     Boolean? run_02_metrics
     Boolean? run_03_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
@@ -348,7 +348,7 @@ workflow GATKSVPipelinePhase1 {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  call m01.Module01 as Module01 {
+  call clusterbatch.ClusterBatch as ClusterBatch {
     input:
       manta_vcfs=GatherBatchEvidence.std_manta_vcf,
       delly_vcfs=GatherBatchEvidence.std_delly_vcf,
@@ -375,7 +375,7 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_depth_concat=runtime_attr_depth_concat,
       runtime_attr_depth_vcf=runtime_attr_depth_vcf,
       runtime_attr_rdtest_bed=runtime_attr_rdtest_bed,
-      run_module_metrics = run_01_metrics,
+      run_module_metrics = run_clusterbatch_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker, 
       linux_docker = linux_docker
@@ -384,11 +384,11 @@ workflow GATKSVPipelinePhase1 {
   call m02.Module02 as Module02 {
     input:
       batch=batch,
-      depth_vcf=Module01.depth_vcf,
-      melt_vcf=Module01.melt_vcf,
-      delly_vcf=Module01.delly_vcf,
-      wham_vcf=Module01.wham_vcf,
-      manta_vcf=Module01.manta_vcf,
+      depth_vcf=ClusterBatch.depth_vcf,
+      melt_vcf=ClusterBatch.melt_vcf,
+      delly_vcf=ClusterBatch.delly_vcf,
+      wham_vcf=ClusterBatch.wham_vcf,
+      manta_vcf=ClusterBatch.manta_vcf,
       baf_metrics=select_first([GatherBatchEvidence.merged_BAF]),
       discfile=GatherBatchEvidence.merged_PE,
       coveragefile=GatherBatchEvidence.merged_bincov,
@@ -429,11 +429,11 @@ workflow GATKSVPipelinePhase1 {
   call m03.Module03 as Module03 {
     input:
       batch=batch,
-      manta_vcf=Module01.manta_vcf,
-      delly_vcf=Module01.delly_vcf,
-      wham_vcf=Module01.wham_vcf,
-      melt_vcf=Module01.melt_vcf,
-      depth_vcf=Module01.depth_vcf,
+      manta_vcf=ClusterBatch.manta_vcf,
+      delly_vcf=ClusterBatch.delly_vcf,
+      wham_vcf=ClusterBatch.wham_vcf,
+      melt_vcf=ClusterBatch.melt_vcf,
+      depth_vcf=ClusterBatch.depth_vcf,
       outlier_cutoff_table=outlier_cutoff_table,
       evidence_metrics=Module02.metrics,
       evidence_metrics_common=Module02.metrics_common,
@@ -483,14 +483,14 @@ workflow GATKSVPipelinePhase1 {
 
     File? metrics_file_batchevidence = GatherBatchEvidence.metrics_file_batchevidence
 
-    # Module 01
-    File? depth_vcf = Module01.depth_vcf
-    File? manta_vcf = Module01.manta_vcf
-    File? delly_vcf = Module01.delly_vcf
-    File? wham_vcf = Module01.wham_vcf
-    File? melt_vcf = Module01.melt_vcf
+    # ClusterBatch
+    File? depth_vcf = ClusterBatch.depth_vcf
+    File? manta_vcf = ClusterBatch.manta_vcf
+    File? delly_vcf = ClusterBatch.delly_vcf
+    File? wham_vcf = ClusterBatch.wham_vcf
+    File? melt_vcf = ClusterBatch.melt_vcf
 
-    File? metrics_file_01 = Module01.metrics_file_01
+    File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 
     # Module 02
     File evidence_metrics = Module02.metrics

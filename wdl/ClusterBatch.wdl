@@ -2,9 +2,9 @@ version 1.0
 
 import "PESRClustering.wdl" as pesr
 import "DepthClustering.wdl" as depth
-import "Module01Metrics.wdl" as metrics
+import "ClusterBatchMetrics.wdl" as metrics
 
-workflow Module01 {
+workflow ClusterBatch {
   input {
     Array[File]? manta_vcfs
     Array[File]? delly_vcfs
@@ -148,7 +148,7 @@ workflow Module01 {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module01Metrics {
+    call metrics.ClusterBatchMetrics {
       input:
         name = batch,
         depth_vcf = ClusterDepth.clustered_vcf,
@@ -175,6 +175,6 @@ workflow Module01 {
     File? wham_vcf = ClusterPESR_wham.clustered_vcf
     File? melt_vcf = ClusterPESR_melt.clustered_vcf
 
-    File? metrics_file_01 = Module01Metrics.metrics_file
+    File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }
 }

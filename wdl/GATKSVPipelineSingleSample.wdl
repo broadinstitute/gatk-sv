@@ -5,7 +5,7 @@ import "EvidenceQC.wdl" as evidenceqc
 import "PloidyEstimation.wdl" as pe
 import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
-import "Module01.wdl" as m01
+import "ClusterBatch.wdl" as clusterbatch
 import "Module02.wdl" as m02
 import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
@@ -251,11 +251,11 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_explode
 
     ############################################################
-    ## Module 01
+    ## ClusterBatch
     ############################################################
 
     # Depth merging parameters
-    RuntimeAttr? runtime_attr_depth_merge_pre_01
+    RuntimeAttr? runtime_attr_depth_merge_pre_clusterbatch
 
     # Reference panel standardized caller VCFs
     Array[File] ref_std_manta_vcfs
@@ -275,8 +275,8 @@ workflow GATKSVPipelineSingleSample {
     File? Werling_2018_tarball
     File? Collins_2017_tarball
 
-    # Run Module01 metrics - default is off for single sample pipeline
-    Boolean? run_01_metrics = false
+    # Run ClusterBatch metrics - default is off for single sample pipeline
+    Boolean? run_clusterbatch_metrics = false
 
     RuntimeAttr? runtime_attr_pesr_cluster
     RuntimeAttr? runtime_attr_pesr_concat
@@ -653,7 +653,7 @@ workflow GATKSVPipelineSingleSample {
       svtype="DEL",
       batch=batch,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_depth_merge_pre_01
+      runtime_attr_override=runtime_attr_depth_merge_pre_clusterbatch
   }
   call dpn.MergeSet as MergeSetDup {
     input:
@@ -661,10 +661,10 @@ workflow GATKSVPipelineSingleSample {
       svtype="DUP",
       batch=batch,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_depth_merge_pre_01
+      runtime_attr_override=runtime_attr_depth_merge_pre_clusterbatch
   }
 
-  call m01.Module01 as Module01 {
+  call clusterbatch.ClusterBatch as ClusterBatch {
     input:
       manta_vcfs=merged_manta_vcfs_array,
       wham_vcfs=merged_wham_vcfs_array,
@@ -682,7 +682,7 @@ workflow GATKSVPipelineSingleSample {
       depth_flags=depth_flags,
       depth_frac=depth_frac,
       contigs=primary_contigs_fai,
-      run_module_metrics = run_01_metrics,
+      run_module_metrics = run_clusterbatch_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_pesr_cluster=runtime_attr_pesr_cluster,
@@ -697,7 +697,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_manta) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
         input :
-            vcf_gz=select_first([Module01.manta_vcf]),
+            vcf_gz=select_first([ClusterBatch.manta_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -707,7 +707,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_wham) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
         input :
-            vcf_gz=select_first([Module01.wham_vcf]),
+            vcf_gz=select_first([ClusterBatch.wham_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -717,7 +717,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_melt) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterMelt {
         input :
-            vcf_gz=select_first([Module01.melt_vcf]),
+            vcf_gz=select_first([ClusterBatch.melt_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -727,7 +727,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_delly) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
         input :
-            vcf_gz=select_first([Module01.delly_vcf]),
+            vcf_gz=select_first([ClusterBatch.delly_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -737,7 +737,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
-      vcf_gz=Module01.depth_vcf,
+      vcf_gz=ClusterBatch.depth_vcf,
       sample_id=sample_id,
       evidence="RD",
       sv_base_mini_docker=sv_base_mini_docker,

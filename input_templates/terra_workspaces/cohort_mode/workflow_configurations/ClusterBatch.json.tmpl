@@ -1,0 +1,26 @@
+{
+  "ClusterBatch.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "ClusterBatch.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+
+  "ClusterBatch.contigs": "${workspace.primary_contigs_fai}",
+  "ClusterBatch.depth_flags": "--merge-coordinates",
+  "ClusterBatch.depth_frac": "0.8",
+  "ClusterBatch.pesr_svsize": "0",
+  "ClusterBatch.pesr_frac": "0.1",
+  "ClusterBatch.pesr_flags": "--preserve-ids",
+  "ClusterBatch.pesr_exclude_list": "${workspace.pesr_exclude_list}",
+  "ClusterBatch.pesr_distance": "300",
+  "ClusterBatch.depth_exclude_list": "${workspace.depth_exclude_list}",
+  "ClusterBatch.depth_exclude_list_frac_max": "0.5",
+
+  "ClusterBatch.primary_contigs_list": "${workspace.primary_contigs_list}",
+  "ClusterBatch.sv_pipeline_base_docker": "${workspace.sv_pipeline_base_docker}",
+  "ClusterBatch.linux_docker": "${workspace.linux_docker}",
+
+  "ClusterBatch.batch": "${this.sample_set_id}",
+  "ClusterBatch.del_bed": "${this.merged_dels}",
+  "ClusterBatch.dup_bed": "${this.merged_dups}",
+  "ClusterBatch.wham_vcfs": "${this.std_wham_vcf}",
+  "ClusterBatch.manta_vcfs": "${this.std_manta_vcf}",
+  "ClusterBatch.melt_vcfs": "${this.std_melt_vcf}"
+}

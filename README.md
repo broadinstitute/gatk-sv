@@ -15,7 +15,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [EvidenceQC](#evidence-qc) - Batch QC
     * [gCNV training](#gcnv-training) - gCNV model creation
     * [GatherBatchEvidence](#gather-batch-evidence) - Batch evidence merging, BAF generation, and depth callers
-    * [Module 01](#module01) - Site clustering
+    * [ClusterBatch](#cluster-batch) - Site clustering
     * [Module 02](#module02) - Site metrics
     * [Module 03](#module03) - Filtering
     * [Gather Cohort VCFs](#gather-vcfs) - Cross-batch site merging
@@ -120,7 +120,7 @@ The pipeline consists of a series of modules that perform the following:
 * [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 * [EvidenceQC](#evidence-qc): Dosage bias scoring and ploidy estimation
 * [GatherBatchEvidence](#gather-batch-evidence): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
-* [Module 01](#module01): Variant clustering
+* [ClusterBatch](#cluster-batch): Variant clustering
 * [Module 02](#module02): Variant filtering metric generation
 * [Module 03](#module03): Variant filtering; outlier exclusion
 * [Module 04](#module04): Genotyping
@@ -134,7 +134,7 @@ The pipeline consists of a series of modules that perform the following:
 Repository structure:
 * `/inputs`: Example workflow parameter files for running gCNV training, GATK-SV batch mode, and GATK-SV single-sample mode
 * `/dockerfiles`: Resources for building pipeline docker images (see [readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
-* `/wdl`: WDLs running the pipeline. There is a master WDL for running each module, e.g. `Module01.wdl`.
+* `/wdl`: WDLs running the pipeline. There is a master WDL for running each module, e.g. `ClusterBatch.wdl`.
 * `/scripts`: scripts for running tests, building dockers, and analyzing cromwell metadata files
 * `/src`: main pipeline scripts
   * `/RdTest`: scripts for depth testing
@@ -153,7 +153,7 @@ For larger cohorts, samples should be split up into batches of about 100-500 sam
 
 The pipeline should be executed as follows:
 * Modules [GatherSampleEvidence](#gather-sample-evidence) and [EvidenceQC](#evidence-qc) can be run on arbitrary cohort partitions
-* Modules [GatherBatchEvidence](#gather-batch-evidence), [01](#module01), [02](#module02), and [03](#module03) are run separately per batch
+* Modules [GatherBatchEvidence](#gather-batch-evidence), [ClusterBatch](#cluster-batch), [02](#module02), and [03](#module03) are run separately per batch
 * [Module 04](#module04) is run separately per batch, using filtered variants ([Module 03](#module03) output) combined across all batches
 * [Module 05/06](#module0506) and beyond are run on all batches together
 
@@ -282,7 +282,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 * (Optional) Evidence QC plots
 
 
-## <a name="module01">Module 01</a>
+## <a name="cluster-batch">ClusterBatch</a>
 Clusters SV calls across a batch.
 
 #### Prerequisites:
@@ -301,13 +301,13 @@ Clusters SV calls across a batch.
 Generates variant metrics for filtering.
 
 #### Prerequisites:
-* [Module 01](#module01)
+* [ClusterBatch](#cluster-batch)
 
 #### Inputs:
 * Combined read count matrix, SR, PE, and BAF files ([GatherBatchEvidence](#gather-batch-evidence))
 * Per-sample median coverage estimates ([GatherBatchEvidence](#gather-batch-evidence))
-* Clustered SV VCFs ([Module 01](#module01))
-* Clustered depth-only call VCF ([Module 01](#module01))
+* Clustered SV VCFs ([ClusterBatch](#cluster-batch))
+* Clustered depth-only call VCF ([ClusterBatch](#cluster-batch))
 
 #### Outputs:
 * Metrics file
@@ -322,7 +322,7 @@ Filters poor quality variants and filters outlier samples.
 #### Inputs:
 * Batch PED file
 * Metrics file ([Module 02](#module02))
-* Clustered SV and depth-only call VCFs ([Module 01](#module01))
+* Clustered SV and depth-only call VCFs ([ClusterBatch](#cluster-batch))
 
 #### Outputs:
 * Filtered SV (non-depth-only a.k.a. "PESR") VCF with outlier samples excluded

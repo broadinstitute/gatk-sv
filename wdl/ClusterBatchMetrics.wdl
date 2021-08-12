@@ -3,7 +3,7 @@ version 1.0
 import "TestUtils.wdl" as tu
 import "Utils.wdl" as util
 
-workflow Module01Metrics {
+workflow ClusterBatchMetrics {
   input {
     Array[String]? samples
     String name
@@ -95,7 +95,7 @@ workflow Module01Metrics {
 
   call tu.CatMetrics {
     input:
-      prefix = "module01." + name,
+      prefix = "ClusterBatch." + name,
       metric_files = select_all([depth_metrics.out, delly_metrics.out, manta_metrics.out, melt_metrics.out, wham_metrics.out]),
       linux_docker = linux_docker
   }
