@@ -11,6 +11,9 @@
   "Module04.reference_build": {{ reference_resources.reference_build | tojson }},
   "Module04.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
+  "Module04.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "Module04.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+
   "Module04.batch": {{ test_batch.batch_name | tojson }},
   "Module04.rf_cutoffs": {{ test_batch.cutoffs | tojson }},
   "Module04.batch_depth_vcf": {{ test_batch.filtered_depth_vcf | tojson }},

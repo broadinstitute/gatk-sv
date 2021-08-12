@@ -4,6 +4,7 @@ import "GenotypePESRPart1.wdl" as gp1
 import "GenotypePESRPart2.wdl" as gp2
 import "GenotypeDepthPart1.wdl" as gd1
 import "GenotypeDepthPart2.wdl" as gd2
+import "Module04Metrics.wdl" as metrics
 import "Tasks04.wdl" as tasks04
 import "Utils.wdl" as util
 
@@ -38,6 +39,14 @@ workflow Module04 {
     File? genotype_depth_depth_sepcutoff
     File? SR_metrics
     File? PE_metrics
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_list  # required if run_module_metrics = true
+    File? baseline_genotyped_depth_vcf  # baseline files are optional for metrics workflow
+    File? baseline_genotyped_pesr_vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -262,6 +271,29 @@ workflow Module04 {
       runtime_attr_concat_vcfs = runtime_attr_genotype_depths_concat_vcfs,
       runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
   }
+
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module04Metrics {
+      input:
+        name = batch,
+        samples = GetSampleIdsFromVcf.out_array,
+        genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf,
+        genotyped_depth_vcf = GenotypeDepthPart2.genotyped_vcf,
+        cutoffs_pesr_pesr = select_first([GenotypePESRPart1.RD_pesr_sepcutoff]),
+        cutoffs_pesr_depth = select_first([GenotypePESRPart1.RD_depth_sepcutoff]),
+        cutoffs_depth_pesr = select_first([GenotypeDepthPart1.RD_pesr_sepcutoff]),
+        cutoffs_depth_depth = select_first([GenotypeDepthPart1.RD_depth_sepcutoff]),
+        sr_bothside_pass = GenotypePESRPart2.bothside_pass,
+        sr_background_fail = GenotypePESRPart2.background_fail,
+        baseline_genotyped_pesr_vcf = baseline_genotyped_pesr_vcf,
+        baseline_genotyped_depth_vcf = baseline_genotyped_depth_vcf,
+        contig_list = select_first([primary_contigs_list]),
+        linux_docker = linux_docker,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+    }
+  }
+
   output {
     File sr_bothside_pass = GenotypePESRPart2.bothside_pass
     File sr_background_fail = GenotypePESRPart2.background_fail
@@ -279,6 +311,8 @@ workflow Module04 {
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
     File regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
+
+    File? metrics_file_04 = Module04Metrics.metrics_file
   }
 }
 

@@ -2,6 +2,7 @@ version 1.0
 
 import "PESRClustering.wdl" as pesr
 import "DepthClustering.wdl" as depth
+import "Module01Metrics.wdl" as metrics
 
 workflow Module01 {
   input {
@@ -24,6 +25,18 @@ workflow Module01 {
     String depth_flags
     Float depth_frac
     File contigs
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    String? linux_docker  # required if run_module_metrics = true
+    String? sv_pipeline_base_docker  # required if run_module_metrics = true
+    File? primary_contigs_list  # required if run_module_metrics = true
+    File? baseline_depth_vcf  # baseline files are optional for metrics workflow
+    File? baseline_delly_vcf
+    File? baseline_manta_vcf
+    File? baseline_wham_vcf
+    File? baseline_melt_vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -133,11 +146,35 @@ workflow Module01 {
   	  runtime_attr_rdtest_bed = runtime_attr_rdtest_bed
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module01Metrics {
+      input:
+        name = batch,
+        depth_vcf = ClusterDepth.clustered_vcf,
+        delly_vcf = ClusterPESR_delly.clustered_vcf,
+        manta_vcf = ClusterPESR_manta.clustered_vcf,
+        wham_vcf = ClusterPESR_wham.clustered_vcf,
+        melt_vcf = ClusterPESR_melt.clustered_vcf,
+        baseline_depth_vcf = baseline_depth_vcf,
+        baseline_delly_vcf = baseline_delly_vcf,
+        baseline_manta_vcf = baseline_manta_vcf,
+        baseline_wham_vcf = baseline_wham_vcf,
+        baseline_melt_vcf = baseline_melt_vcf,
+        contig_list = select_first([primary_contigs_list]),
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        linux_docker = select_first([linux_docker])
+    }
+  }
+
   output {
     File depth_vcf = ClusterDepth.clustered_vcf
     File? manta_vcf = ClusterPESR_manta.clustered_vcf
     File? delly_vcf = ClusterPESR_delly.clustered_vcf
     File? wham_vcf = ClusterPESR_wham.clustered_vcf
     File? melt_vcf = ClusterPESR_melt.clustered_vcf
+
+    File? metrics_file_01 = Module01Metrics.metrics_file
   }
 }

@@ -13,6 +13,10 @@
   "Module01.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
   "Module01.depth_exclude_list_frac_max": "0.5",
 
+  "Module01.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "Module01.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "Module01.linux_docker": {{ dockers.linux_docker | tojson }},
+
   "Module01.batch": {{ test_batch.batch_name | tojson }},
   "Module01.del_bed": {{ test_batch.del_bed| tojson }},
   "Module01.dup_bed": {{ test_batch.dup_bed | tojson }},

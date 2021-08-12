@@ -6,6 +6,7 @@ import "SRTest.wdl" as srt
 import "BAFTest.wdl" as baft
 import "Tasks02.wdl" as tasks02
 import "Utils.wdl" as util
+import "Module02Metrics.wdl" as metrics
 
 workflow Module02 {
   input {
@@ -35,6 +36,11 @@ workflow Module02 {
     File autosome_contigs
     File allosome_contigs
     File ref_dict
+
+    # Module metrics parameters
+    # Run module metrics workflow at the end - on by default
+    Boolean? run_module_metrics
+    File? primary_contigs_list  # required if run_module_metrics = true
 
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -247,9 +253,24 @@ workflow Module02 {
       runtime_attr_override = runtime_attr_aggregate_callers
   }
 
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  if (run_module_metrics_) {
+    call metrics.Module02Metrics {
+      input:
+        name = batch,
+        metrics = AggregateCallers.metrics,
+        metrics_common = AggregateCallersCommon.metrics,
+        contig_list = select_first([primary_contigs_list]),
+        linux_docker = linux_docker,
+        sv_pipeline_base_docker = sv_pipeline_base_docker
+    }
+  }
+
   output {
     File metrics = AggregateCallers.metrics
     File metrics_common = AggregateCallersCommon.metrics
+
+    File? metrics_file_02 = Module02Metrics.metrics_file
   }
 }
 

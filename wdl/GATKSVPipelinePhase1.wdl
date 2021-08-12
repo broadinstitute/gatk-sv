@@ -224,6 +224,17 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
 
+    ############################################################
+    ## Module metrics parameters for 00c, 01, 02, and 03 metrics
+    ############################################################
+
+    # Run module metrics workflow at the end - by default on except for Module00c because of runtime/expense
+    Boolean? run_00c_metrics
+    Boolean? run_01_metrics
+    Boolean? run_02_metrics
+    Boolean? run_03_metrics
+    File? primary_contigs_list  # required if run_module_metrics = true
+
   }
 
   call m00c.Module00c as Module00c {
@@ -331,7 +342,10 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_case = runtime_attr_case,
       runtime_attr_bundle = runtime_attr_bundle,
       runtime_attr_postprocess = runtime_attr_postprocess,
-      runtime_attr_explode = runtime_attr_explode
+      runtime_attr_explode = runtime_attr_explode,
+      run_module_metrics = run_00c_metrics,
+      primary_contigs_list = primary_contigs_list,
+      sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   call m01.Module01 as Module01 {
@@ -361,6 +375,10 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_depth_concat=runtime_attr_depth_concat,
       runtime_attr_depth_vcf=runtime_attr_depth_vcf,
       runtime_attr_rdtest_bed=runtime_attr_rdtest_bed,
+      run_module_metrics = run_01_metrics,
+      primary_contigs_list = primary_contigs_list,
+      sv_pipeline_base_docker = sv_pipeline_base_docker, 
+      linux_docker = linux_docker
   }
 
   call m02.Module02 as Module02 {
@@ -403,7 +421,9 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_split_baf_vcf=runtime_attr_split_baf_vcf,
       runtime_attr_merge_allo=runtime_attr_merge_allo,
       runtime_attr_merge_baf=runtime_attr_merge_baf,
-      runtime_attr_merge_stats=runtime_attr_merge_stats
+      runtime_attr_merge_stats=runtime_attr_merge_stats,
+      run_module_metrics = run_02_metrics,
+      primary_contigs_list = primary_contigs_list
   }
 
   call m03.Module03 as Module03 {
@@ -427,7 +447,11 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_identify_outliers=runtime_attr_identify_outliers,
       runtime_attr_exclude_outliers=runtime_attr_exclude_outliers,
       runtime_attr_cat_outliers=runtime_attr_cat_outliers,
-      runtime_attr_filter_samples=runtime_attr_filter_samples
+      runtime_attr_filter_samples=runtime_attr_filter_samples,
+      run_module_metrics = run_03_metrics,
+      primary_contigs_list = primary_contigs_list,
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      ped_file = ped_file
   }
 
   output {
@@ -457,6 +481,8 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? std_melt_vcf = Module00c.std_melt_vcf
     Array[File]? std_wham_vcf = Module00c.std_wham_vcf
 
+    File? metrics_file_00c = Module00c.metrics_file_00c
+
     # Module 01
     File? depth_vcf = Module01.depth_vcf
     File? manta_vcf = Module01.manta_vcf
@@ -464,9 +490,13 @@ workflow GATKSVPipelinePhase1 {
     File? wham_vcf = Module01.wham_vcf
     File? melt_vcf = Module01.melt_vcf
 
+    File? metrics_file_01 = Module01.metrics_file_01
+
     # Module 02
     File evidence_metrics = Module02.metrics
     File evidence_metrics_common = Module02.metrics_common
+
+    File? metrics_file_02 = Module02.metrics_file_02
 
     # Module 03
     File? filtered_manta_vcf = Module03.filtered_manta_vcf
@@ -482,5 +512,7 @@ workflow GATKSVPipelinePhase1 {
     Array[String] batch_samples_postOutlierExclusion = Module03.batch_samples_postOutlierExclusion
     File outlier_samples_excluded_file = Module03.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = Module03.batch_samples_postOutlierExclusion_file
+
+    File? metrics_file_03 = Module03.metrics_file_03
   }
 }
