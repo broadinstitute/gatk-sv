@@ -126,16 +126,18 @@ class CompareWorkflowOutputs:
         """
         # For coloring the prints; see the following SO
         # answer for details: https://stackoverflow.com/a/287944/947889
-        color_green = '\033[92m'
-        color_red = '\033[91m'
-        color_endc = '\033[0m'
+        color_endc = "\033[0m"
+        color_uline = "\033[04m"
+        color_blinking = "\033[05m"
+        color_red = "\033[91m"
+        color_green = "\033[92m"
+        color_yellow = "\033[93m"
 
         def record_compare_result(match, reference, target):
             if not match:
                 if call not in mismatches:
                     mismatches[call] = []
                 mismatches[call].append([reference, target])
-                exit()
 
         # First we define a method that takes a list
         # of a task outputs, and keeps only those that
@@ -157,11 +159,32 @@ class CompareWorkflowOutputs:
 
         mismatches = {}
         i = 0
+
+        r_t = ref_output_files.keys() - test_output_files.keys()
+        t_r = test_output_files.keys() - ref_output_files.keys()
+        if t_r or r_t:
+            print(f"\n{color_blinking}WARNING!{color_endc}")
+            print(f"The reference and test metadata files differ "
+                  f"in their outputs; "
+                  f"{color_uline}the differences will be skipped.{color_endc}")
+            print(f"\t{len(r_t)}/{len(ref_output_files.keys())} "
+                  f"outputs of the reference are not in the test:")
+            for x in r_t:
+                print(f"\t\t- {x}")
+            print(f"\t{len(t_r)}/{len(test_output_files.keys())} "
+                  f"outputs of the test are not in the reference:")
+            for x in t_r:
+                print(f"\t\t- {x}")
+            print("\n")
+
         for call, ref_outputs in ref_output_files.items():
             i += 1
-            matched = True
+            matched, skipped = True, False
             print(f"Comparing\t{i}/{len(ref_output_files)}\t{call} ... ", end="")
             for extension, objs in ref_outputs.items():
+                if call not in test_output_files or extension not in test_output_files[call]:
+                    skipped = True
+                    continue
                 if len(objs) != len(test_output_files[call][extension]):
                     record_compare_result(False, objs, test_output_files[call][extension])
                     matched = False
@@ -173,7 +196,9 @@ class CompareWorkflowOutputs:
                     record_compare_result(equals, x, y)
                     if not equals:
                         matched = False
-            if matched:
+            if skipped:
+                print(f"{color_yellow}not comparable outputs; skipping{color_endc}")
+            elif matched:
                 print(f"{color_green}match{color_endc}")
             else:
                 print(f"{color_red}mismatch{color_endc}")
