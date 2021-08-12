@@ -260,8 +260,8 @@ class CarrotHelper:
         if not os.path.isfile(def_test):
             raise FileNotFoundError(f"Default inputs for test WDL does not exist; expected file: {def_test}")
 
-        cmd = f"carrot_cli -q test create" \
-              f" --name '{name}' " \
+        cmd = f"carrot_cli -q test create " \
+              f"--name '{name}' " \
               f"--description '{description}' " \
               f"--template_id {template.uuid} " \
               f"--eval_input_defaults {def_eval} " \
@@ -447,6 +447,7 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
 
 
 if __name__ == '__main__':
+    wd = "."
     parser = argparse.ArgumentParser(
         prog=sys.argv[0],
         description="Helper methods to scaffold, "
@@ -461,15 +462,17 @@ if __name__ == '__main__':
     test_list_parser.add_argument('template', type=str)
 
     test_run_parser = test_subparsers.add_parser("run")
-    test_run_parser.add_argument('pipeline', type=str)
-    test_run_parser.add_argument('template', type=str)
-    test_run_parser.add_argument('run_dir', type=str)
+    test_run_meg = test_run_parser.add_mutually_exclusive_group()
+    test_run_parser.add_argument("--pipeline", nargs="+")
+    test_run_parser.add_argument("--template", nargs="+")
+    test_run_parser.add_argument("--run_dir", nargs="+")
+    test_run_parser.add_argument("--path", nargs="+")
 
     test_update_parser = test_subparsers.add_parser("update_status")
 
     args = parser.parse_args()
 
-    carrot_helper = CarrotHelper()
+    carrot_helper = CarrotHelper(working_dir=wd)
 
     if "test" in args:
         task = args.test
@@ -488,10 +491,44 @@ if __name__ == '__main__':
                 # persisted to the file if creating a `run`
                 # was run successfully.
                 pass
-            test = carrot_helper.pipelines[args.pipeline].templates[args.template].test
-            run = carrot_helper.create_run(test, args.run_dir)
-            runs[run.uuid] = run
-            carrot_helper.persist_object(runs, RUNS_JSON)
+
+            pipelines = {}
+            if args.path:
+                dirs = [x for x in args.path if os.path.isdir(x)]
+                for d in dirs:
+                    d = os.path.normpath(d).split(os.sep)
+                    if len(d) == 0:
+                        continue
+                    pipeline = d[0]
+                    templates = [d[1]] if len(d) == 2 else None
+                    run_dirs = [d[2]] if len(d) == 3 else None
+
+                    if pipeline not in pipelines:
+                        pipelines[pipeline] = {}
+                    templates = templates or [x for x in next(os.walk(os.path.join(wd, pipeline)))[1]]
+                    for t in templates:
+                        if t not in pipelines[pipeline]:
+                            pipelines[pipeline][t] = []
+                        run_dirs = run_dirs or [x for x in next(os.walk(os.path.join(wd, pipeline, t)))[1]]
+                        for r in run_dirs:
+                            if r not in pipelines[pipeline][t]:
+                                pipelines[pipeline][t].append(r)
+            else:
+                pipelines[args.pipeline] = {args.template: [args.run_dir]}
+
+            c = 0
+            print("Submitting tests ...")
+            print('%-40s%-80s' % ("Run ID", "Test"))
+            for pipeline, templates in pipelines.items():
+                for template, run_dirs in templates.items():
+                    for run_dir in run_dirs:
+                        c += 1
+                        test = carrot_helper.pipelines[pipeline].templates[template].test
+                        run = carrot_helper.create_run(test, run_dir)
+                        runs[run.uuid] = run
+                        carrot_helper.persist_object(runs, RUNS_JSON)
+                        print('%-40s%-80s' % (run.uuid, pipeline + "/" + template + "/" + run_dir))
+            print(f"Submitted {c} test(s).")
         elif task == "update_status":
             try:
                 with open(RUNS_JSON, "r") as runs_json:
