@@ -3,7 +3,7 @@ version 1.0
 import "GatherBatchEvidence.wdl" as batchevidence
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
-import "Module03.wdl" as m03
+import "FilterBatch.wdl" as filterbatch
 import "Structs.wdl"
 
 # One mighty WDL to rule them all...
@@ -210,7 +210,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_merge_stats
 
     ############################################################
-    ## Module 03
+    ## FilterBatch
     ############################################################
 
     File? outlier_cutoff_table
@@ -232,7 +232,7 @@ workflow GATKSVPipelinePhase1 {
     Boolean? run_batchevidence_metrics
     Boolean? run_clusterbatch_metrics
     Boolean? run_batchmetrics_metrics
-    Boolean? run_03_metrics
+    Boolean? run_filterbatch_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
 
   }
@@ -426,7 +426,7 @@ workflow GATKSVPipelinePhase1 {
       primary_contigs_list = primary_contigs_list
   }
 
-  call m03.Module03 as Module03 {
+  call filterbatch.FilterBatch as FilterBatch {
     input:
       batch=batch,
       manta_vcf=ClusterBatch.manta_vcf,
@@ -448,7 +448,7 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_exclude_outliers=runtime_attr_exclude_outliers,
       runtime_attr_cat_outliers=runtime_attr_cat_outliers,
       runtime_attr_filter_samples=runtime_attr_filter_samples,
-      run_module_metrics = run_03_metrics,
+      run_module_metrics = run_filterbatch_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       ped_file = ped_file
@@ -498,21 +498,21 @@ workflow GATKSVPipelinePhase1 {
 
     File? metrics_file_batchmetrics = GenerateBatchMetrics.metrics_file_batchmetrics
 
-    # Module 03
-    File? filtered_manta_vcf = Module03.filtered_manta_vcf
-    File? filtered_delly_vcf = Module03.filtered_delly_vcf
-    File? filtered_wham_vcf = Module03.filtered_wham_vcf
-    File? filtered_melt_vcf = Module03.filtered_melt_vcf
-    File? filtered_depth_vcf = Module03.filtered_depth_vcf
-    File filtered_pesr_vcf = Module03.filtered_pesr_vcf
-    File cutoffs = Module03.cutoffs
-    File scores = Module03.scores
-    File RF_intermediate_files = Module03.RF_intermediate_files
-    Array[String] outlier_samples_excluded = Module03.outlier_samples_excluded
-    Array[String] batch_samples_postOutlierExclusion = Module03.batch_samples_postOutlierExclusion
-    File outlier_samples_excluded_file = Module03.outlier_samples_excluded_file
-    File batch_samples_postOutlierExclusion_file = Module03.batch_samples_postOutlierExclusion_file
+    # FilterBatch
+    File? filtered_manta_vcf = FilterBatch.filtered_manta_vcf
+    File? filtered_delly_vcf = FilterBatch.filtered_delly_vcf
+    File? filtered_wham_vcf = FilterBatch.filtered_wham_vcf
+    File? filtered_melt_vcf = FilterBatch.filtered_melt_vcf
+    File? filtered_depth_vcf = FilterBatch.filtered_depth_vcf
+    File filtered_pesr_vcf = FilterBatch.filtered_pesr_vcf
+    File cutoffs = FilterBatch.cutoffs
+    File scores = FilterBatch.scores
+    File RF_intermediate_files = FilterBatch.RF_intermediate_files
+    Array[String] outlier_samples_excluded = FilterBatch.outlier_samples_excluded
+    Array[String] batch_samples_postOutlierExclusion = FilterBatch.batch_samples_postOutlierExclusion
+    File outlier_samples_excluded_file = FilterBatch.outlier_samples_excluded_file
+    File batch_samples_postOutlierExclusion_file = FilterBatch.batch_samples_postOutlierExclusion_file
 
-    File? metrics_file_03 = Module03.metrics_file_03
+    File? metrics_file_filterbatch = FilterBatch.metrics_file_filterbatch
   }
 }

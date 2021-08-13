@@ -2,9 +2,9 @@ version 1.0
 
 import "FilterOutliers.wdl" as filter_outliers
 import "Utils.wdl" as util
-import "Module03Metrics.wdl" as metrics
+import "FilterBatchMetrics.wdl" as metrics
 
-workflow Module03 {
+workflow FilterBatch {
   input {
     String batch
     File? manta_vcf
@@ -117,7 +117,7 @@ workflow Module03 {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module03Metrics {
+    call metrics.FilterBatchMetrics {
       input:
         name = batch,
         samples = GetSampleIdsFromVcf.out_array,
@@ -151,7 +151,7 @@ workflow Module03 {
     File outlier_samples_excluded_file = FilterOutlierSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterOutlierSamples.filtered_batch_samples_file
 
-    File? metrics_file_03 = Module03Metrics.metrics_file
+    File? metrics_file_filterbatch = FilterBatchMetrics.metrics_file
   }
 }
 

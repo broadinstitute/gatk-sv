@@ -55,7 +55,7 @@ The following workflows are included in this workspace, to be executed in this o
 4. `4-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 5. `5-ClusterBatch`: Per-batch variant clustering
 6. `6-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
-7. `module03`: Per-batch variant filtering; outlier exclusion
+7. `7-FilterBatch`: Per-batch variant filtering; outlier exclusion
 8. (Skip for a single batch) `merge-cohort-vcfs`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
 9. `module04`: Per-batch genotyping of all sites in the cohort. Use `module04_single_batch` if you only have one batch.
 10. `module04b`: Cohort-level genotype refinement of some depth calls. Use `module04b_single_batch` if you only have one batch.
@@ -175,9 +175,9 @@ Read the full documentation for these modules [here](https://github.com/broadins
 * Use the same `sample_set` definitions you used for `3-TrainGCNV` and `4-GatherBatchEvidence`.
 
 
-#### Module03
+#### 7-FilterBatch
 
-Read the full Module03 documentation [here](https://github.com/broadinstitute/gatk-sv#module-03).
+Read the full FilterBatch documentation [here](https://github.com/broadinstitute/gatk-sv#filter-batch).
 * Use the same `sample_set` definitions you used for `3-TrainGCNV` through `6-GenerateBatchMetrics`.
 * The default value for `outlier_cutoff_nIQR`, which is used to filter samples that have an abnormal number of SV calls, is 10000. This essentially means that no samples are filtered. You should adjust this value depending on your scientific needs.
 
@@ -185,14 +185,14 @@ Read the full Module03 documentation [here](https://github.com/broadinstitute/ga
 
 Read the full MergeCohortVcfs documentation [here](https://github.com/broadinstitute/gatk-sv#merge-cohort-vcfs).
 * If you only have one batch, skip this workflow.
-* For a multi-batch cohort, `merge-cohort-vcfs` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `merge-cohort-vcfs` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `3-TrainGCNV` through `module03`), and give it a name that follows the **Sample ID requirements**. 
+* For a multi-batch cohort, `merge-cohort-vcfs` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `merge-cohort-vcfs` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `3-TrainGCNV` through `7-FilterBatch`), and give it a name that follows the **Sample ID requirements**. 
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
 #### Module04
 
 Read the full Module04 documentation [here](https://github.com/broadinstitute/gatk-sv#module-04).
-* Use the same `sample_set` definitions you used for `3-TrainGCNV` through `module03`.
+* Use the same `sample_set` definitions you used for `3-TrainGCNV` through `7-FilterBatch`.
 * If you only have one batch, use the `module04_single_batch` version of the workflow.
 
 #### Module04b, Module0506, and Module08Annotation

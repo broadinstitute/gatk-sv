@@ -3,7 +3,7 @@ version 1.0
 import "MasterVcfQc.wdl" as vcf_qc
 import "Utils.wdl" as util
 
-workflow Module03Qc {
+workflow FilterBatchQc {
   input {
     File? manta_vcf_noOutliers
     File? delly_vcf_noOutliers
@@ -95,7 +95,7 @@ workflow Module03Qc {
         input:
           vcf = select_first([vcfs_array[i]]),
           ped_file=SubsetPedFile.ped_subset_file,
-          prefix="${batch}.${algorithms[i]}_03_filtered_vcf",
+          prefix="${batch}.${algorithms[i]}_FilterBatch_filtered_vcf",
           sv_per_shard=10000,
           samples_per_shard=100,
           thousand_genomes_tarballs=thousand_genomes_tarballs,

@@ -71,7 +71,7 @@ workflow GATKSVPipelineBatch {
     Boolean? run_batchevidence_metrics = true  # GatherBatchEvidenceMetrics is off by default standalone but on for batch WDL
     Boolean? run_clusterbatch_metrics
     Boolean? run_batchmetrics_metrics
-    Boolean? run_03_metrics
+    Boolean? run_filterbatch_metrics
     Boolean? run_04_metrics
     Boolean? run_0506_metrics
 
@@ -79,7 +79,7 @@ workflow GATKSVPipelineBatch {
     File? baseline_batchevidence_metrics
     File? baseline_clusterbatch_metrics
     File? baseline_batchmetrics_metrics
-    File? baseline_03_metrics
+    File? baseline_filterbatch_metrics
     File? baseline_04_metrics
     File? baseline_0506_metrics
 
@@ -209,7 +209,7 @@ workflow GATKSVPipelineBatch {
       run_batchevidence_metrics = run_batchevidence_metrics,
       run_clusterbatch_metrics = run_clusterbatch_metrics,
       run_batchmetrics_metrics = run_batchmetrics_metrics,
-      run_03_metrics = run_03_metrics,
+      run_filterbatch_metrics = run_filterbatch_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
@@ -305,11 +305,11 @@ workflow GATKSVPipelineBatch {
   call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + batch,
-        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506]),
+        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, Module04.metrics_file_04, Module0506.metrics_file_0506]),
         linux_docker = linux_docker
     }
 
-  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
+  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_filterbatch_metrics, baseline_04_metrics, baseline_0506_metrics])
   if (length(defined_baseline_metrics) > 0) {
     call tu.CatMetrics as CatBaselineMetrics {
       input:

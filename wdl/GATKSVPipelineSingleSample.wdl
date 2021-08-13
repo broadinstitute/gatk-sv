@@ -8,7 +8,7 @@ import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
 import "SRTest.wdl" as SRTest
-import "Module03.wdl" as m03
+import "FilterBatch.wdl" as filterbatch
 import "Module04.wdl" as m04
 import "Module0506.wdl" as m0506
 import "Module08Annotation.wdl" as m08
@@ -744,7 +744,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override=runtime_attr_filter_vcf_by_id
   }
 
-  call m03.MergePesrVcfs as MergePesrVcfs {
+  call filterbatch.MergePesrVcfs as MergePesrVcfs {
     input:
       manta_vcf=FilterManta.out,
       wham_vcf=FilterWham.out,

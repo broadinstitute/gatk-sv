@@ -4,7 +4,7 @@ import "TestUtils.wdl" as tu
 import "Utils.wdl" as util
 import "Structs.wdl"
 
-workflow Module03Metrics {
+workflow FilterBatchMetrics {
   input {
     Array[String] samples
     String name
@@ -71,7 +71,7 @@ workflow Module03Metrics {
 
   call tu.CatMetrics {
     input:
-      prefix = "module03." + name,
+      prefix = "FilterBatch." + name,
       metric_files = [PESR_VCF_Metrics.out, Depth_VCF_Metrics.out, CutoffAndOutlierMetrics.out],
       linux_docker = linux_docker
   }
