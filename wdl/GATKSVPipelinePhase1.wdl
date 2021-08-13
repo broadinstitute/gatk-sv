@@ -2,7 +2,7 @@ version 1.0
 
 import "GatherBatchEvidence.wdl" as batchevidence
 import "ClusterBatch.wdl" as clusterbatch
-import "Module02.wdl" as m02
+import "GenerateBatchMetrics.wdl" as batchmetrics
 import "Module03.wdl" as m03
 import "Structs.wdl"
 
@@ -183,7 +183,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_rdtest_bed
 
     ############################################################
-    ## Module 02
+    ## GenerateBatchMetrics
     ############################################################
 
     Int BAF_split_size
@@ -231,7 +231,7 @@ workflow GATKSVPipelinePhase1 {
     # Run module metrics workflow at the end - by default on except for GatherBatchEvidence because of runtime/expense
     Boolean? run_batchevidence_metrics
     Boolean? run_clusterbatch_metrics
-    Boolean? run_02_metrics
+    Boolean? run_batchmetrics_metrics
     Boolean? run_03_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
 
@@ -381,7 +381,7 @@ workflow GATKSVPipelinePhase1 {
       linux_docker = linux_docker
   }
 
-  call m02.Module02 as Module02 {
+  call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
     input:
       batch=batch,
       depth_vcf=ClusterBatch.depth_vcf,
@@ -422,7 +422,7 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_merge_allo=runtime_attr_merge_allo,
       runtime_attr_merge_baf=runtime_attr_merge_baf,
       runtime_attr_merge_stats=runtime_attr_merge_stats,
-      run_module_metrics = run_02_metrics,
+      run_module_metrics = run_batchmetrics_metrics,
       primary_contigs_list = primary_contigs_list
   }
 
@@ -435,8 +435,8 @@ workflow GATKSVPipelinePhase1 {
       melt_vcf=ClusterBatch.melt_vcf,
       depth_vcf=ClusterBatch.depth_vcf,
       outlier_cutoff_table=outlier_cutoff_table,
-      evidence_metrics=Module02.metrics,
-      evidence_metrics_common=Module02.metrics_common,
+      evidence_metrics=GenerateBatchMetrics.metrics,
+      evidence_metrics_common=GenerateBatchMetrics.metrics_common,
       outlier_cutoff_nIQR=outlier_cutoff_nIQR,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -492,11 +492,11 @@ workflow GATKSVPipelinePhase1 {
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 
-    # Module 02
-    File evidence_metrics = Module02.metrics
-    File evidence_metrics_common = Module02.metrics_common
+    # GenerateBatchMetrics
+    File evidence_metrics = GenerateBatchMetrics.metrics
+    File evidence_metrics_common = GenerateBatchMetrics.metrics_common
 
-    File? metrics_file_02 = Module02.metrics_file_02
+    File? metrics_file_batchmetrics = GenerateBatchMetrics.metrics_file_batchmetrics
 
     # Module 03
     File? filtered_manta_vcf = Module03.filtered_manta_vcf

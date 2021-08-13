@@ -2,7 +2,7 @@ version 1.0
 
 import "TestUtils.wdl" as tu
 
-workflow Module02Metrics {
+workflow GenerateBatchMetricsMetrics {
   input {
     String name
     File metrics
@@ -17,7 +17,7 @@ workflow Module02Metrics {
       metrics_file = metrics,
       contig_list = contig_list,
       common = false,
-      prefix = "module02.non_common." + name,
+      prefix = "GenerateBatchMetrics.non_common." + name,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
@@ -26,13 +26,13 @@ workflow Module02Metrics {
       metrics_file = metrics_common,
       contig_list = contig_list,
       common = true,
-      prefix = "module02.common." + name,
+      prefix = "GenerateBatchMetrics.common." + name,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
   call tu.CatMetrics {
     input:
-      prefix = "module02." + name,
+      prefix = "GenerateBatchMetrics." + name,
       metric_files = [MetricsFileMetrics.out, CommonMetricsFileMetrics.out],
       linux_docker = linux_docker
   }

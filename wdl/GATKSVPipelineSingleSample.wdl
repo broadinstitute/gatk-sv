@@ -6,7 +6,7 @@ import "PloidyEstimation.wdl" as pe
 import "GatherBatchEvidence.wdl" as batchevidence
 import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
-import "Module02.wdl" as m02
+import "GenerateBatchMetrics.wdl" as batchmetrics
 import "SRTest.wdl" as SRTest
 import "Module03.wdl" as m03
 import "Module04.wdl" as m04
@@ -288,7 +288,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_filter_vcf_by_id
 
     ############################################################
-    ## Module 02/03
+    ## GenerateBatchMetrics/FilterBatch
     ############################################################
 
     File rmsk
@@ -766,7 +766,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override=runtime_attr_filter_large_pesr
   }
 
-  call m02.GetSampleLists as SamplesList {
+  call batchmetrics.GetSampleLists as SamplesList {
     input:
       ped_file = combined_ped_file,
       samples = flatten([[sample_id], ref_samples]),
@@ -798,7 +798,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_merge_stats = runtime_attr_merge_stats
   }
 
-  call m02.AggregateTests as AggregateTests {
+  call batchmetrics.AggregateTests as AggregateTests {
     input:
       vcf=FilterLargePESRCallsWithoutRawDepthSupport.out,
       srtest=SRTest.srtest,

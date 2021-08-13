@@ -1,0 +1,34 @@
+{
+  "GenerateBatchMetrics.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "GenerateBatchMetrics.sv_pipeline_rdtest_docker": "${workspace.sv_pipeline_rdtest_docker}",
+  "GenerateBatchMetrics.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "GenerateBatchMetrics.sv_base_docker": "${workspace.sv_base_docker}",
+  "GenerateBatchMetrics.sv_pipeline_base_docker": "${workspace.sv_pipeline_base_docker}",
+  "GenerateBatchMetrics.linux_docker" : "${workspace.linux_docker}",
+
+  "GenerateBatchMetrics.BAF_split_size": "10000",
+  "GenerateBatchMetrics.RD_split_size": "10000",
+  "GenerateBatchMetrics.PE_split_size": "10000",
+  "GenerateBatchMetrics.SR_split_size": "1000",
+  "GenerateBatchMetrics.common_cnv_size_cutoff": "5000",
+  "GenerateBatchMetrics.allosome_contigs": "${workspace.allosome_file}",
+  "GenerateBatchMetrics.autosome_contigs": "${workspace.autosome_file}",
+  "GenerateBatchMetrics.rmsk": "${workspace.rmsk}",
+  "GenerateBatchMetrics.segdups": "${workspace.segdups}",
+  "GenerateBatchMetrics.ref_dict": "${workspace.reference_dict}",
+
+  "GenerateBatchMetrics.primary_contigs_list": "${workspace.primary_contigs_list}",
+
+  "GenerateBatchMetrics.batch": "${this.sample_set_id}",
+  "GenerateBatchMetrics.ped_file": "${workspace.cohort_ped_file}",
+  
+  "GenerateBatchMetrics.discfile": "${this.merged_PE}",
+  "GenerateBatchMetrics.baf_metrics": "${this.merged_BAF}",
+  "GenerateBatchMetrics.coveragefile": "${this.merged_bincov}",
+  "GenerateBatchMetrics.splitfile": "${this.merged_SR}",
+  "GenerateBatchMetrics.medianfile": "${this.median_cov}",
+  "GenerateBatchMetrics.depth_vcf" : "${this.clustered_depth_vcf}",
+  "GenerateBatchMetrics.manta_vcf" : "${this.clustered_manta_vcf}",
+  "GenerateBatchMetrics.wham_vcf" : "${this.clustered_wham_vcf}",
+  "GenerateBatchMetrics.melt_vcf" : "${this.clustered_melt_vcf}"
+}

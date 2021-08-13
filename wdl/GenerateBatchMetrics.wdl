@@ -4,11 +4,11 @@ import "PETest.wdl" as pet
 import "RDTest.wdl" as rdt
 import "SRTest.wdl" as srt
 import "BAFTest.wdl" as baft
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "Utils.wdl" as util
-import "Module02Metrics.wdl" as metrics
+import "GenerateBatchMetricsMetrics.wdl" as metrics
 
-workflow Module02 {
+workflow GenerateBatchMetrics {
   input {
     String batch
 
@@ -214,7 +214,7 @@ workflow Module02 {
           runtime_attr_override = runtime_attr_aggregate_tests
       }
 
-      call tasks02.GetCommonVCF {
+      call tasksbatchmetrics.GetCommonVCF {
         input:
           vcf = vcf,
           cnv_size_cutoff = common_cnv_size_cutoff,
@@ -255,7 +255,7 @@ workflow Module02 {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module02Metrics {
+    call metrics.GenerateBatchMetricsMetrics {
       input:
         name = batch,
         metrics = AggregateCallers.metrics,
@@ -270,7 +270,7 @@ workflow Module02 {
     File metrics = AggregateCallers.metrics
     File metrics_common = AggregateCallersCommon.metrics
 
-    File? metrics_file_02 = Module02Metrics.metrics_file
+    File? metrics_file_batchmetrics = GenerateBatchMetricsMetrics.metrics_file
   }
 }
 

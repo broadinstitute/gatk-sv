@@ -16,7 +16,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [gCNV training](#gcnv-training) - gCNV model creation
     * [GatherBatchEvidence](#gather-batch-evidence) - Batch evidence merging, BAF generation, and depth callers
     * [ClusterBatch](#cluster-batch) - Site clustering
-    * [Module 02](#module02) - Site metrics
+    * [GenerateBatchMetrics](#generate-batch-metrics) - Site metrics
     * [Module 03](#module03) - Filtering
     * [Gather Cohort VCFs](#gather-vcfs) - Cross-batch site merging
     * [Module 04](#module04) - Genotyping
@@ -121,7 +121,7 @@ The pipeline consists of a series of modules that perform the following:
 * [EvidenceQC](#evidence-qc): Dosage bias scoring and ploidy estimation
 * [GatherBatchEvidence](#gather-batch-evidence): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 * [ClusterBatch](#cluster-batch): Variant clustering
-* [Module 02](#module02): Variant filtering metric generation
+* [GenerateBatchMetrics](#generate-batch-metrics): Variant filtering metric generation
 * [Module 03](#module03): Variant filtering; outlier exclusion
 * [Module 04](#module04): Genotyping
 * [Module 05/06](#module0506): Cross-batch integration; complex variant resolution and re-genotyping; vcf cleanup
@@ -153,7 +153,7 @@ For larger cohorts, samples should be split up into batches of about 100-500 sam
 
 The pipeline should be executed as follows:
 * Modules [GatherSampleEvidence](#gather-sample-evidence) and [EvidenceQC](#evidence-qc) can be run on arbitrary cohort partitions
-* Modules [GatherBatchEvidence](#gather-batch-evidence), [ClusterBatch](#cluster-batch), [02](#module02), and [03](#module03) are run separately per batch
+* Modules [GatherBatchEvidence](#gather-batch-evidence), [ClusterBatch](#cluster-batch), [GenerateBatchMetrics](#generate-batch-metrics), and [03](#module03) are run separately per batch
 * [Module 04](#module04) is run separately per batch, using filtered variants ([Module 03](#module03) output) combined across all batches
 * [Module 05/06](#module0506) and beyond are run on all batches together
 
@@ -297,7 +297,7 @@ Clusters SV calls across a batch.
 * Clustered depth-only call VCF
 
 
-## <a name="module02">Module 02</a>
+## <a name="generate-batch-metrics">GenerateBatchMetrics</a>
 Generates variant metrics for filtering.
 
 #### Prerequisites:
@@ -313,15 +313,15 @@ Generates variant metrics for filtering.
 * Metrics file
 
 
-## <a name="module02">Module 03</a>
+## <a name="generate-batch-metrics">Module 03</a>
 Filters poor quality variants and filters outlier samples.
 
 #### Prerequisites:
-* [Module 02](#module02)
+* [GenerateBatchMetrics](#generate-batch-metrics)
 
 #### Inputs:
 * Batch PED file
-* Metrics file ([Module 02](#module02))
+* Metrics file ([GenerateBatchMetrics](#generate-batch-metrics))
 * Clustered SV and depth-only call VCFs ([ClusterBatch](#cluster-batch))
 
 #### Outputs:
