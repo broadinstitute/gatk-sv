@@ -505,31 +505,6 @@ if __name__ == '__main__':
                 # was run successfully.
                 pass
 
-            # print(args)
-            # pipelines = [x for x in args.pipeline if os.path.isdir(x)] if args.pipeline else next(os.walk(wd))[1]
-            # pipelines = dict.fromkeys(pipelines)
-            # if not args.template:
-            #     for p in pipelines:
-            #         templates = [x for x in next(os.walk(os.path.join(wd, p)))[1]]
-            #         pipelines[p] = dict.fromkeys(templates)
-            #
-            #         for t in pipelines[p]:
-            #             pipelines[p][t] = [x for x in next(os.walk(os.path.join(wd, p, t)))[1]]
-            # else:
-            #     for p in pipelines:
-            #         templates = [x for x in args.template if os.path.isdir(os.path.join(p, x))]
-            #         pipelines[p] = dict.fromkeys(templates)
-            #
-            #         if args.run_dir:
-            #             for t in pipelines[p]:
-            #                 pipelines[p][t] = [x for x in args.run_dir if os.path.isdir(os.path.join(p, t, x))]
-            #         else:
-            #             for t in pipelines[p]:
-            #                 pipelines[p][t] = [x for x in next(os.walk(os.path.join(wd, p, t)))[1]]
-            #
-            # print("\npipelines:")
-            # print(pipelines)
-
             pipelines = {}
             if args.path:
                 dirs = [x for x in args.path if os.path.isdir(x)]
