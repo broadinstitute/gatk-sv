@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks04.wdl" as tasks04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow TrainRDGenotyping {
   input {
@@ -42,7 +42,7 @@ workflow TrainRDGenotyping {
       runtime_attr_override = runtime_attr_training_bed
   }
 
-  call tasks04.RDTestGenotype as GenotypeTrain {
+  call tasksgenotypebatch.RDTestGenotype as GenotypeTrain {
     input:
       bin_exclude=bin_exclude,
       bin_exclude_idx=bin_exclude_idx,
@@ -79,7 +79,7 @@ workflow TrainRDGenotyping {
       runtime_attr_override = runtime_attr_update_cutoff
   }
 
-  call tasks04.SplitVariants as SplitVariants {
+  call tasksgenotypebatch.SplitVariants as SplitVariants {
     input:
       vcf = vcf,
       n_per_split = n_per_split,
@@ -89,7 +89,7 @@ workflow TrainRDGenotyping {
   }
 
   scatter (pesr_bed in SplitVariants.lt5kb_beds) {
-    call tasks04.RDTestGenotype as GenotypePESR {
+    call tasksgenotypebatch.RDTestGenotype as GenotypePESR {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,
@@ -110,7 +110,7 @@ workflow TrainRDGenotyping {
   }
 
   scatter (gt5kb_bed in SplitVariants.gt5kb_beds) {
-    call tasks04.RDTestGenotype as GenotypeOver5kb {
+    call tasksgenotypebatch.RDTestGenotype as GenotypeOver5kb {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,

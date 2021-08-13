@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks04.wdl" as tasks04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow GenotypePESRPart2 {
   input {
@@ -47,7 +47,7 @@ workflow GenotypePESRPart2 {
 
   File bin_exclude_idx = bin_exclude + ".tbi"
 
-  call tasks04.SplitVariants as SplitVariants {
+  call tasksgenotypebatch.SplitVariants as SplitVariants {
     input:
       vcf = cohort_vcf,
       n_per_split = n_per_split,
@@ -57,7 +57,7 @@ workflow GenotypePESRPart2 {
   }
 
   scatter (lt5kb_bed in SplitVariants.lt5kb_beds) {
-    call tasks04.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
       input:
         vcf = cohort_vcf,
         bed = lt5kb_bed,
@@ -65,7 +65,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_make_subset_vcf
     }
 
-    call tasks04.CountPE as CountPEUnder5kb {
+    call tasksgenotypebatch.CountPE as CountPEUnder5kb {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         discfile = discfile,
@@ -85,7 +85,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
-    call tasks04.CountSR as CountSRUnder5kb {
+    call tasksgenotypebatch.CountSR as CountSRUnder5kb {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         splitfile = splitfile,
@@ -107,7 +107,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
-    call tasks04.RDTestGenotype as RDTestGenotypeUnder5kb {
+    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeUnder5kb {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,
@@ -139,7 +139,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_integrate_gq
     }
 
-    call tasks04.AddGenotypes as AddGenotypesUnder5kb {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesUnder5kb {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         genotypes = IntegrateGQUnder5kb.genotypes,
@@ -151,7 +151,7 @@ workflow GenotypePESRPart2 {
   }
 
   scatter (gt5kb_bed in SplitVariants.gt5kb_beds) {
-    call tasks04.MakeSubsetVcf as MakeSubsetVcfOver5kb {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfOver5kb {
       input:
         vcf = cohort_vcf,
         bed = gt5kb_bed,
@@ -159,7 +159,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_make_subset_vcf
     }
 
-    call tasks04.CountPE as CountPEOver5kb {
+    call tasksgenotypebatch.CountPE as CountPEOver5kb {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         discfile = discfile,
@@ -179,7 +179,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
-    call tasks04.CountSR as CountSROver5kb {
+    call tasksgenotypebatch.CountSR as CountSROver5kb {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         splitfile = splitfile,
@@ -201,7 +201,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
-    call tasks04.RDTestGenotype as RDTestGenotypeOver5kb {
+    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeOver5kb {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,
@@ -233,7 +233,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_integrate_gq
     }
 
-    call tasks04.AddGenotypes as AddGenotypesOver5kb {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesOver5kb {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         genotypes = IntegrateGQOver5kb.genotypes,
@@ -245,7 +245,7 @@ workflow GenotypePESRPart2 {
   }
 
   scatter (bca_bed in SplitVariants.bca_beds) {
-    call tasks04.MakeSubsetVcf as MakeSubsetVcfBca {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfBca {
       input:
         vcf = cohort_vcf,
         bed = bca_bed,
@@ -253,7 +253,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_make_subset_vcf
     }
 
-    call tasks04.CountPE as CountPEBca {
+    call tasksgenotypebatch.CountPE as CountPEBca {
       input:
         vcf = MakeSubsetVcfBca.subset_vcf,
         discfile = discfile,
@@ -273,7 +273,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
-    call tasks04.CountSR as CountSRBca {
+    call tasksgenotypebatch.CountSR as CountSRBca {
       input:
         vcf = MakeSubsetVcfBca.subset_vcf,
         splitfile = splitfile,
@@ -306,7 +306,7 @@ workflow GenotypePESRPart2 {
         runtime_attr_override = runtime_attr_integrate_pesr_gq
     }
 
-    call tasks04.AddGenotypes as AddGenotypesBca {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesBca {
       input:
         vcf = MakeSubsetVcfBca.subset_vcf,
         genotypes = IntegratePesrGQBca.genotypes,
@@ -337,7 +337,7 @@ workflow GenotypePESRPart2 {
       runtime_attr_override = runtime_attr_triple_stream_cat
   }
 
-  call tasks04.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
+  call tasksgenotypebatch.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
     input:
       lt5kb_vcfs = AddGenotypesUnder5kb.genotyped_vcf,
       gt5kb_vcfs = AddGenotypesOver5kb.genotyped_vcf,

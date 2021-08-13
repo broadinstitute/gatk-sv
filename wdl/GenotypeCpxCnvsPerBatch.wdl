@@ -6,7 +6,7 @@ import "Tasks0506.wdl" as MiniTasks
 import "Utils.wdl" as Utils
 
 # Workflow to perform depth-based genotyping per batch
-# on predicted CPX CNVs from 04b
+# on predicted CPX CNVs
 
 workflow GenotypeCpxCnvsPerBatch {
   input {

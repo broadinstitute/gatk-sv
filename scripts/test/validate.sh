@@ -84,7 +84,7 @@ echo ""
 echo "#############################################################"
 echo "${COUNTER} TESTS PASSED SUCCESSFULLY!"
 
-if [ $TERRA_VALIDATION = true ]; then
+if [ "$TERRA_VALIDATION" = true ]; then
   echo ""
   echo "#############################################################"
   echo "RUNNING TERRA INPUT VALIDATION NOW"

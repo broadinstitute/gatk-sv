@@ -4,7 +4,7 @@ import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
 import "Utils.wdl" as util
 
-workflow Module04b {
+workflow RegenotypeCNVs {
   input {
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -539,8 +539,8 @@ task GetRegenotype {
     File regeno_sample_counts_lookup
     File regeno_raw_combined_depth
     Int n_samples_cohort
-    Float regeno_max_allele_freq # default = 0.01 set in Module04b.wdl
-    Int regeno_allele_count_threshold # default = 3 set in Module04b.wdl
+    Float regeno_max_allele_freq # default = 0.01 set in RegenotypeCNVs.wdl
+    Int regeno_allele_count_threshold # default = 3 set in RegenotypeCNVs.wdl
     String Batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override

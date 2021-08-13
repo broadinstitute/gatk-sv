@@ -107,15 +107,15 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_table" : {{ ref_panel.outlier_cutoff_table | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "999999",
 
-  "GATKSVPipelineBatch.Module04.n_RD_genotype_bins": "100000",
-  "GATKSVPipelineBatch.Module04.n_per_split": "5000",
-  "GATKSVPipelineBatch.Module04.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.Module04.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
-  "GATKSVPipelineBatch.Module04.reference_build": "hg38",
-  "GATKSVPipelineBatch.Module04.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.n_RD_genotype_bins": "100000",
+  "GATKSVPipelineBatch.GenotypeBatch.n_per_split": "5000",
+  "GATKSVPipelineBatch.GenotypeBatch.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.seed_cutoffs": {{ reference_resources.seed_cutoffs | tojson }},
+  "GATKSVPipelineBatch.GenotypeBatch.reference_build": "hg38",
+  "GATKSVPipelineBatch.GenotypeBatch.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
 
-  "GATKSVPipelineBatch.Module04b.n_RdTest_bins": "100000",
-  "GATKSVPipelineBatch.Module04b.n_per_split": "5000",
+  "GATKSVPipelineBatch.RegenotypeCNVs.n_RdTest_bins": "100000",
+  "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",
 
   "GATKSVPipelineBatch.Module0506.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
   "GATKSVPipelineBatch.Module0506.empty_file" : {{ reference_resources.empty_file | tojson }},

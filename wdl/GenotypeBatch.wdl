@@ -4,11 +4,11 @@ import "GenotypePESRPart1.wdl" as gp1
 import "GenotypePESRPart2.wdl" as gp2
 import "GenotypeDepthPart1.wdl" as gd1
 import "GenotypeDepthPart2.wdl" as gd2
-import "Module04Metrics.wdl" as metrics
-import "Tasks04.wdl" as tasks04
+import "GenotypeBatchMetrics.wdl" as metrics
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 import "Utils.wdl" as util
 
-workflow Module04 {
+workflow GenotypeBatch {
   input {
     File batch_pesr_vcf
     File batch_depth_vcf
@@ -99,7 +99,7 @@ workflow Module04 {
   }
 
   Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
-  call tasks04.AddBatchSamples as AddBatchSamplesPESR {
+  call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesPESR {
     input:
       batch_vcf = batch_pesr_vcf,
       cohort_vcf = cohort_pesr_vcf,
@@ -108,7 +108,7 @@ workflow Module04 {
       runtime_attr_override = runtime_attr_add_batch
   }
 
-  call tasks04.AddBatchSamples as AddBatchSamplesDepth {
+  call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesDepth {
     input:
       batch_vcf = batch_depth_vcf,
       cohort_vcf = cohort_depth_vcf,
@@ -274,7 +274,7 @@ workflow Module04 {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module04Metrics {
+    call metrics.GenotypeBatchMetrics {
       input:
         name = batch,
         samples = GetSampleIdsFromVcf.out_array,
@@ -312,7 +312,7 @@ workflow Module04 {
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
     File regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
 
-    File? metrics_file_04 = Module04Metrics.metrics_file
+    File? metrics_file_genotypebatch = GenotypeBatchMetrics.metrics_file
   }
 }
 

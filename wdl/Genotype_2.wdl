@@ -1,5 +1,5 @@
 version 1.0
-import "Tasks04.wdl" as task04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow Regenotype {
   input {
@@ -30,7 +30,7 @@ workflow Regenotype {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_concat_regenotyped_vcfs_g2
   }
-  call task04.AddBatchSamples as AddBatchSamplesDepth {
+  call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesDepth {
     input:
       batch_vcf=batch_depth_vcf,
       cohort_vcf=cohort_depth_vcf,
@@ -54,7 +54,7 @@ workflow Regenotype {
       sv_pipeline_docker=sv_pipeline_docker
   }
   scatter (regeno in SplitBeds_regeno.regeno_beds) {
-    call task04.MakeSubsetVcf as make_subset_vcf_regeno {
+    call tasksgenotypebatch.MakeSubsetVcf as make_subset_vcf_regeno {
       input:
         vcf=AddBatchSamplesDepth.updated_vcf,
         bed=regeno,
@@ -75,7 +75,7 @@ workflow Regenotype {
         runtime_attr_override = runtime_attr_rd_test_gt_regeno,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
     }
-    call task04.IntegrateDepthGq as IntegrateGQRegeno {
+    call tasksgenotypebatch.IntegrateDepthGq as IntegrateGQRegeno {
       input:
         vcf=make_subset_vcf_regeno.subset_vcf,
         RD_melted_genotypes=RdTestGenotypeRegeno.melted_genotypes,
@@ -83,7 +83,7 @@ workflow Regenotype {
         runtime_attr_override = runtime_attr_integrate_depth_gq,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    call task04.AddGenotypes as AddGenotypesRegeno {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesRegeno {
       input:
         vcf=make_subset_vcf_regeno.subset_vcf,
         genotypes=IntegrateGQRegeno.genotypes,

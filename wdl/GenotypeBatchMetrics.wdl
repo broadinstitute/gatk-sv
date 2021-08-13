@@ -2,7 +2,7 @@ version 1.0
 
 import "TestUtils.wdl" as tu
 
-workflow Module04Metrics {
+workflow GenotypeBatchMetrics {
   input {
     Array[String] samples
     String name
@@ -90,7 +90,7 @@ workflow Module04Metrics {
 
   call tu.CatMetrics {
     input:
-      prefix = "module04." + name,
+      prefix = "GenotypeBatch." + name,
       metric_files = [PESR_VCF_Metrics.out, Depth_VCF_Metrics.out, Cutoff_PESR_PESR.out, Cutoff_PESR_Depth.out, Cutoff_Depth_PESR.out, Cutoff_Depth_Depth.out, Background_Fail.out, Bothside_Pass.out],
       linux_docker = linux_docker
   }

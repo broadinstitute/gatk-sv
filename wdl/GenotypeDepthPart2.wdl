@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks04.wdl" as tasks04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow GenotypeDepthPart2 {
   input {
@@ -34,7 +34,7 @@ workflow GenotypeDepthPart2 {
 
   File bin_exclude_idx = bin_exclude + ".tbi"
 
-  call tasks04.SplitVariants as SplitVariants {
+  call tasksgenotypebatch.SplitVariants as SplitVariants {
     input:
       vcf = cohort_vcf,
       n_per_split = n_per_split,
@@ -45,7 +45,7 @@ workflow GenotypeDepthPart2 {
 
   scatter (gt5kb_bed in SplitVariants.gt5kb_beds) {
 
-    call tasks04.MakeSubsetVcf as MakeSubsetVcfOver5kb {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfOver5kb {
       input:
         vcf = cohort_vcf,
         bed = gt5kb_bed,
@@ -53,7 +53,7 @@ workflow GenotypeDepthPart2 {
         runtime_attr_override = runtime_attr_make_subset_vcf
     }
 
-    call tasks04.RDTestGenotype as RDTestGenotypeOver5kb {
+    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeOver5kb {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,
@@ -72,7 +72,7 @@ workflow GenotypeDepthPart2 {
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
-    call tasks04.IntegrateDepthGq as IntegrateDepthGqOver5kb {
+    call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqOver5kb {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         RD_melted_genotypes = RDTestGenotypeOver5kb.melted_genotypes,
@@ -81,7 +81,7 @@ workflow GenotypeDepthPart2 {
         runtime_attr_override = runtime_attr_integrate_depth_gq
     }
 
-    call tasks04.AddGenotypes as AddGenotypesOver5kb {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesOver5kb {
       input:
         vcf = MakeSubsetVcfOver5kb.subset_vcf,
         genotypes = IntegrateDepthGqOver5kb.genotypes,
@@ -94,7 +94,7 @@ workflow GenotypeDepthPart2 {
 
   scatter (lt5kb_bed in SplitVariants.lt5kb_beds) {
 
-    call tasks04.RDTestGenotype as RDTestGenotypeUnder5kb {
+    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeUnder5kb {
       input:
         bin_exclude=bin_exclude,
         bin_exclude_idx=bin_exclude_idx,
@@ -113,7 +113,7 @@ workflow GenotypeDepthPart2 {
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
-    call tasks04.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
       input:
         vcf = cohort_vcf,
         bed = lt5kb_bed,
@@ -121,7 +121,7 @@ workflow GenotypeDepthPart2 {
         runtime_attr_override = runtime_attr_make_subset_vcf
     }
 
-    call tasks04.IntegrateDepthGq as IntegrateDepthGqUnder5kb {
+    call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqUnder5kb {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         RD_melted_genotypes = RDTestGenotypeUnder5kb.melted_genotypes,
@@ -129,7 +129,7 @@ workflow GenotypeDepthPart2 {
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_integrate_depth_gq
     }
-    call tasks04.AddGenotypes as AddGenotypesUnder5kb {
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesUnder5kb {
       input:
         vcf = MakeSubsetVcfUnder5kb.subset_vcf,
         genotypes = IntegrateDepthGqUnder5kb.genotypes,
@@ -148,7 +148,7 @@ workflow GenotypeDepthPart2 {
       runtime_attr_override = runtime_attr_merge_regeno_cov_med
   }
 
-  call tasks04.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
+  call tasksgenotypebatch.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
     input:
       lt5kb_vcfs = AddGenotypesUnder5kb.genotyped_vcf,
       gt5kb_vcfs = AddGenotypesOver5kb.genotyped_vcf,

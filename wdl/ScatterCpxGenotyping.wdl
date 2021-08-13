@@ -6,7 +6,7 @@ import "GenotypeCpxCnvs.wdl" as GenotypeCpx
 import "Tasks0506.wdl" as MiniTasks
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered 
-# across batches on predicted CPX CNVs from 04b
+# across batches on predicted CPX CNVs
 workflow ScatterCpxGenotyping {
   input {
     File bin_exclude

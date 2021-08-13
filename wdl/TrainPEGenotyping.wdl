@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks04.wdl" as tasks04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow TrainPEGenotyping {
   input {
@@ -28,7 +28,7 @@ workflow TrainPEGenotyping {
     RuntimeAttr? runtime_attr_genotype
   }
 
-  call tasks04.SplitVcf as SplitVcf {
+  call tasksgenotypebatch.SplitVcf as SplitVcf {
     input:
       vcf = batch_vcf,
       n_per_split = n_per_split,
@@ -47,7 +47,7 @@ workflow TrainPEGenotyping {
   }
 
   scatter (vcf in SplitVcf.vcfs) {
-    call tasks04.CountPE as CountPE {
+    call tasksgenotypebatch.CountPE as CountPE {
       input:
         vcf = vcf,
         discfile = discfile,
@@ -60,7 +60,7 @@ workflow TrainPEGenotyping {
     }
   }
 
-  call tasks04.MergePESRCounts as MergePECounts {
+  call tasksgenotypebatch.MergePESRCounts as MergePECounts {
     input:
       count_list = CountPE.pe_counts,
       sum_list = [],

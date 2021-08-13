@@ -9,7 +9,7 @@ import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
 import "SRTest.wdl" as SRTest
 import "FilterBatch.wdl" as filterbatch
-import "Module04.wdl" as m04
+import "GenotypeBatch.wdl" as genotypebatch
 import "Module0506.wdl" as m0506
 import "Module08Annotation.wdl" as m08
 import "GermlineCNVCase.wdl" as gcnv
@@ -307,7 +307,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
 
     ############################################################
-    ## Module 04
+    ## GenotypeBatch
     ############################################################
 
     Int genotyping_n_per_split
@@ -325,8 +325,8 @@ workflow GATKSVPipelineSingleSample {
 
     File bin_exclude
 
-    # Run Module04 metrics - default is off for single sample pipeline
-    Boolean? run_04_metrics = false
+    # Run GenotypeBatch metrics - default is off for single sample pipeline
+    Boolean? run_genotypebatch_metrics = false
 
     # Common
     RuntimeAttr? runtime_attr_merge_counts
@@ -336,7 +336,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
     RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
-    RuntimeAttr? runtime_attr_split_vcf_module04
+    RuntimeAttr? runtime_attr_split_vcf_genotypebatch
 
 
     # Master
@@ -817,7 +817,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_override = runtime_attr_rewritesrcoords
   }
 
-  call m04.Module04 as Module04 {
+  call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
       batch_pesr_vcf=RewriteSRCoords.annotated_vcf,
       batch_depth_vcf=FilterDepth.out,
@@ -842,12 +842,12 @@ workflow GATKSVPipelineSingleSample {
       SR_metrics=SR_metrics,
       PE_metrics=PE_metrics,
       bin_exclude=bin_exclude,
-      run_module_metrics = run_04_metrics,
+      run_module_metrics = run_genotypebatch_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
-      runtime_attr_split_vcf=runtime_attr_split_vcf_module04,
+      runtime_attr_split_vcf=runtime_attr_split_vcf_genotypebatch,
       runtime_attr_merge_counts=runtime_attr_merge_counts,
       runtime_attr_split_variants=runtime_attr_split_variants,
       runtime_attr_make_subset_vcf=runtime_attr_make_subset_vcf,
@@ -869,7 +869,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.ConvertCNVsWithoutDepthSupportToBNDs as ConvertCNVsWithoutDepthSupportToBNDs {
     input:
-      genotyped_pesr_vcf=Module04.genotyped_pesr_vcf,
+      genotyped_pesr_vcf=GenotypeBatch.genotyped_pesr_vcf,
       allosome_file=allosome_file,
       merged_famfile=combined_ped_file,
       case_sample=sample_id,
@@ -878,12 +878,12 @@ workflow GATKSVPipelineSingleSample {
 
   call m0506.Module0506 as Module0506 {
     input:
-      raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
-      raw_sr_background_fail_files=[Module04.sr_background_fail],
+      raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
+      raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       min_sr_background_fail_batches=clean_vcf_min_sr_background_fail_batches,
       ped_file=combined_ped_file,
       pesr_vcfs=[ConvertCNVsWithoutDepthSupportToBNDs.out_vcf],
-      depth_vcfs=[Module04.genotyped_depth_vcf],
+      depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       contig_list=primary_contigs_fai,
       allosome_fai=allosome_file,
       ref_dict=reference_dict,
@@ -1075,7 +1075,7 @@ workflow GATKSVPipelineSingleSample {
       cleaned_vcf = Module0506.vcf,
       final_vcf = FinalVCFCleanup.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
-      genotyped_depth_vcf = Module04.genotyped_depth_vcf,
+      genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
