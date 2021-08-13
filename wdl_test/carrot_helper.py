@@ -14,7 +14,8 @@ import calendar
 import json
 import os
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List
 from urllib.error import HTTPError
 
 # The directories where the WDLs
@@ -63,7 +64,7 @@ class CarrotHelper:
             self.populate_pipelines()
 
     def _get_email_from_config(self):
-        config = self.call_carrot("carrot_cli -q config get")
+        config = self.call_carrot("carrot_cli config get")
         return config["email"]
 
     def _get_online_path(self, resource):
@@ -129,22 +130,33 @@ class CarrotHelper:
         with open(filename, "w") as f:
             json.dump(obj, f, default=lambda o: o.__dict__, indent="\t", sort_keys=True)
 
-    def call_carrot(self, command):
+    def call_carrot(self, command, resource_id=None):
+        """
+
+        :param command:
+        :param resource_id: If provided, the provided ID field will be renamed to `uuid`.
+        For instance; `resource_id="pipeline_id"` will lead to changing `pipeline_id` to `uuid`
+        in the deserialized object.
+        :return:
+        """
         try:
             data = check_output(command, shell=True)
-            return self.response_to_json(data)
+            return self.response_to_json(data, resource_id)
         except subprocess.CalledProcessError as grepexc:
             print("error code", grepexc.returncode, grepexc.output)
 
     @staticmethod
-    def response_to_json(response):
+    def response_to_json(response, resource_id):
         # A hack to fix the
         response = response.decode("utf8").replace("\'", "\"").replace("None", "\"None\"")
         if "Encountered a connection error." in response:
             raise Exception("Please check your connection, are you connected to the VPN?\n" + response)
         if "\"status\": 500" in response:
             raise Exception(response)
-        return json.loads(response)
+        j = json.loads(response)
+        if resource_id:
+            j["uuid"] = j.pop(resource_id)
+        return j
 
     @staticmethod
     def get_timestamp():
@@ -207,7 +219,7 @@ class CarrotHelper:
         cmd = f"carrot_cli -q pipeline create " \
               f"--name '{name}' " \
               f"--description '{description}'"
-        response = self.call_carrot(cmd)
+        response = self.call_carrot(cmd, "pipeline_id")
         return Pipeline(**response)
 
     def create_template(self, pipeline_id, test_wdl, eval_wdl, name=None, description=None, timestamp=True):
@@ -221,7 +233,7 @@ class CarrotHelper:
               f"--description '{description}' " \
               f"--test_wdl {test_wdl} " \
               f"--eval_wdl {eval_wdl}"
-        response = self.call_carrot(cmd)
+        response = self.call_carrot(cmd, "template_id")
         return Template(**response)
 
     def create_result(self, result_type, name=None, description=None, timestamp=True):
@@ -237,7 +249,7 @@ class CarrotHelper:
               f"--name {name} " \
               f"--description '{description}' " \
               f"--result_type {result_type.lower()}"  # lower type is required by carrot.
-        response = self.call_carrot(cmd)
+        response = self.call_carrot(cmd, "result_id")
         return Result(**response)
 
     def create_template_to_result_mapping(self, template, result):
@@ -266,7 +278,7 @@ class CarrotHelper:
               f"--template_id {template.uuid} " \
               f"--eval_input_defaults {def_eval} " \
               f"--test_input_defaults {def_test}"
-        response = self.call_carrot(cmd)
+        response = self.call_carrot(cmd, "test_id")
         return Test(**response, template_path=template_path)
 
     def list_runs(self, pipeline, template):
@@ -302,59 +314,61 @@ class CarrotHelper:
                    status.eval_cromwell_job_id))
 
 
+@dataclass
 class BaseModel:
-    def __init__(self, pipeline_id, name, description, created_at, created_by):
-        self.uuid = pipeline_id
-        self.name = name
-        self.description = description
-        self.created_at = created_at
-        self.created_by = created_by
+    uuid: str
+    name: str
+    created_at: str
+    created_by: str
+    description: str
 
 
+@dataclass
 class Pipeline(BaseModel):
     """
     Carrot pipeline groups tests together.
     """
-    def __init__(self, name, description, created_at, created_by, templates=None, pipeline_id=None, uuid=None):
-        super().__init__(pipeline_id or uuid, name, description, created_at, created_by)
-        self.templates = templates or {}
+    # See the following docs on mutable default values:
+    # https://docs.python.org/3/library/dataclasses.html#mutable-default-values
+    templates: dict = field(default_factory=dict)
 
 
+@dataclass
 class Template(BaseModel):
     """
     A carrot template is composed of WDL to be tested,
     a WDL that evaluates the tested WDL's output, and
     a set of inputs for both test and evaluation WDLs.
     """
-    def __init__(self, pipeline_id, test_wdl, eval_wdl, name, description, created_at, created_by, template_id=None, uuid=None, results=None, test=None):
-        super().__init__(template_id or uuid, name, description, created_at, created_by)
-        self.pipeline_id = pipeline_id
-        self.test_wdl = test_wdl
-        self.eval_wdl = eval_wdl
-        self.results = results or []
-        self.test = test
+    pipeline_id: str
+    test_wdl: str
+    eval_wdl: str
+    results: List = field(default_factory=list)
+    test: str = None
 
 
+@dataclass
 class Result(BaseModel):
-    def __init__(self, result_type, name, description, created_at, created_by, result_id=None, uuid=None, var_name=None):
-        super().__init__(result_id or uuid, name, description, created_at, created_by)
-        self.var_name = var_name
-        self.result_type = result_type
+    result_type: str
+    var_name: str = None
 
 
+@dataclass
 class Test(BaseModel):
-    def __init__(self, name, template_id, template_path, eval_input_defaults, test_input_defaults, description, created_at, created_by, test_id=None, uuid=None):
-        super().__init__(test_id or uuid, name, description, created_at, created_by)
-        self.template_id = template_id
-        self.eval_input_defaults = eval_input_defaults
-        self.test_input_defaults = test_input_defaults
-        self.template_path = template_path
+    template_id: str
+    eval_input_defaults: str
+    test_input_defaults: str
+    template_path: str
 
 
-# for test_dir in next(os.walk(template_path))[1]:
 class Run(BaseModel):
-    def __init__(self, name, test_id, test_cromwell_job_id, eval_cromwell_job_id, status, finished_at, test_input, eval_input, created_at, created_by, description=None, run_id=None, uuid=None, results=None, run_dir=None):
-        super().__init__(run_id or uuid, name, description, created_at, created_by)
+    def __init__(self, name, test_id, test_cromwell_job_id,
+                 eval_cromwell_job_id, status, finished_at,
+                 test_input, eval_input, created_at, created_by,
+                 description=None, run_id=None, uuid=None,
+                 results=None, run_dir=None):
+        super().__init__(run_id or uuid, name, description,
+                         created_at, created_by)
         self.test_id = test_id
         self.test_cromwell_job_id = test_cromwell_job_id
         self.eval_cromwell_job_id = eval_cromwell_job_id
@@ -366,7 +380,7 @@ class Run(BaseModel):
         self.run_dir = run_dir
 
 
-@dataclass(unsafe_hash=True)
+@dataclass
 class RunStatus:
     run_uuid: str
     run_dir: str
@@ -374,7 +388,6 @@ class RunStatus:
     latest_status: str
     test_cromwell_job_id: str
     eval_cromwell_job_id: str
-
 
 
 def get_timestamp():
@@ -492,6 +505,31 @@ if __name__ == '__main__':
                 # was run successfully.
                 pass
 
+            # print(args)
+            # pipelines = [x for x in args.pipeline if os.path.isdir(x)] if args.pipeline else next(os.walk(wd))[1]
+            # pipelines = dict.fromkeys(pipelines)
+            # if not args.template:
+            #     for p in pipelines:
+            #         templates = [x for x in next(os.walk(os.path.join(wd, p)))[1]]
+            #         pipelines[p] = dict.fromkeys(templates)
+            #
+            #         for t in pipelines[p]:
+            #             pipelines[p][t] = [x for x in next(os.walk(os.path.join(wd, p, t)))[1]]
+            # else:
+            #     for p in pipelines:
+            #         templates = [x for x in args.template if os.path.isdir(os.path.join(p, x))]
+            #         pipelines[p] = dict.fromkeys(templates)
+            #
+            #         if args.run_dir:
+            #             for t in pipelines[p]:
+            #                 pipelines[p][t] = [x for x in args.run_dir if os.path.isdir(os.path.join(p, t, x))]
+            #         else:
+            #             for t in pipelines[p]:
+            #                 pipelines[p][t] = [x for x in next(os.walk(os.path.join(wd, p, t)))[1]]
+            #
+            # print("\npipelines:")
+            # print(pipelines)
+
             pipelines = {}
             if args.path:
                 dirs = [x for x in args.path if os.path.isdir(x)]
@@ -545,7 +583,7 @@ if __name__ == '__main__':
                 if run.status in ["succeeded", "failed"]:
                     updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
                     continue
-                cmd = f"carrot_cli -q run find_by_id {run_id}"
+                cmd = f"carrot_cli run find_by_id {run_id}"
                 previous_status = run.status
                 # At time of submitting a run, the run may not
                 # have a test cromwell job ID and certainly not
