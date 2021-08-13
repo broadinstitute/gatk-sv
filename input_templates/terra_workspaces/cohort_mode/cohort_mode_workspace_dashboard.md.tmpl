@@ -56,7 +56,7 @@ The following workflows are included in this workspace, to be executed in this o
 5. `5-ClusterBatch`: Per-batch variant clustering
 6. `6-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
 7. `7-FilterBatch`: Per-batch variant filtering; outlier exclusion
-8. (Skip for a single batch) `merge-cohort-vcfs`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+8. (Skip for a single batch) `8-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
 9. `module04`: Per-batch genotyping of all sites in the cohort. Use `module04_single_batch` if you only have one batch.
 10. `module04b`: Cohort-level genotype refinement of some depth calls. Use `module04b_single_batch` if you only have one batch.
 11. `module0506`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `module0506_single_batch` if you only have one batch.
@@ -138,7 +138,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables. Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
-* If you only have one batch, you will need to skip `merge-cohort-vcfs` and use the single-batch versions of all workflows after `module04`.
+* If you only have one batch, you will need to skip `8-MergeBatchSites` and use the single-batch versions of all workflows after `module04`.
 
 #### 1-GatherSampleEvidence
 
@@ -181,11 +181,11 @@ Read the full FilterBatch documentation [here](https://github.com/broadinstitute
 * Use the same `sample_set` definitions you used for `3-TrainGCNV` through `6-GenerateBatchMetrics`.
 * The default value for `outlier_cutoff_nIQR`, which is used to filter samples that have an abnormal number of SV calls, is 10000. This essentially means that no samples are filtered. You should adjust this value depending on your scientific needs.
 
-#### MergeCohortVcfs
+#### 8-MergeBatchSites
 
-Read the full MergeCohortVcfs documentation [here](https://github.com/broadinstitute/gatk-sv#merge-cohort-vcfs).
+Read the full MergeBatchSites documentation [here](https://github.com/broadinstitute/gatk-sv#merge-batch-sites).
 * If you only have one batch, skip this workflow.
-* For a multi-batch cohort, `merge-cohort-vcfs` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `merge-cohort-vcfs` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `3-TrainGCNV` through `7-FilterBatch`), and give it a name that follows the **Sample ID requirements**. 
+* For a multi-batch cohort, `8-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `8-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `3-TrainGCNV` through `7-FilterBatch`), and give it a name that follows the **Sample ID requirements**. 
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
@@ -198,6 +198,6 @@ Read the full Module04 documentation [here](https://github.com/broadinstitute/ga
 #### Module04b, Module0506, and Module08Annotation
 
 Read the full documentation for [Module04b](https://github.com/broadinstitute/gatk-sv#module-04b), [Module0506](https://github.com/broadinstitute/gatk-sv#module-0506), and [Module08](https://github.com/broadinstitute/gatk-sv#module-08-in-development) on the README.
-* For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `merge-cohort-vcfs`.
+* For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `8-MergeBatchSites`.
 * If you only have one batch, use the `module0X_single_batch` version of the workflow.
 

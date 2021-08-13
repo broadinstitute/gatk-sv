@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow MergeCohortVcfs {
+workflow MergeBatchSites {
   input {
     Array[File] depth_vcfs    # Filtered depth VCFs across batches
     Array[File] pesr_vcfs     # Filtered PESR VCFs across batches
