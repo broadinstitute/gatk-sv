@@ -13,6 +13,7 @@ import time
 import calendar
 import json
 import os
+import shutil
 import urllib.request
 from dataclasses import dataclass, field
 from typing import List
@@ -381,22 +382,44 @@ class CarrotHelper:
 
     @staticmethod
     def pretty_print_runs_status(statuses):
-        print('\n\n%-40s%-50s%-20s%-20s%-40s%-40s' %
-              ("Run UUID",
-               "Run Directory",
-               "Previous Status",
-               "Latest Status",
-               "Test Cromwell Job ID",
-               "Eval Cromwell Job ID"))
+        def format_run_dir(txt):
+            if run_dir_col_max_width < 3:
+                return ""
+            if run_dir_col_max_width < 10:
+                return "..."
+            return "..." + txt[-(run_dir_col_max_width - 3):] if len(txt) > run_dir_col_max_width else txt
+
+        t_size = shutil.get_terminal_size()
+        # 36: UUID columns
+        # 16: status columns
+        # 15: (5 columns - 1) * 3, spaces between columns
+        run_dir_col_max_width = t_size.columns - (((36 * 3) + (16 * 2)) + 15)
+        row_format = f"{{:<36}}   {{:<{run_dir_col_max_width}}}   {{:<16}}   {{:<16}}   {{:<36}}   {{:<36}}"
+
+        print(row_format.format(
+            "Run UUID",
+            "Run Directory",
+            "Previous Status",
+            "Latest Status",
+            "Test Cromwell Job ID",
+            "Eval Cromwell Job ID"))
 
         for status in statuses:
-            print('%-40s%-50s%-20s%-20s%-40s%-40s' %
-                  (status.run_uuid,
-                   status.run_dir,
-                   status.previous_status,
-                   status.previous_status,
-                   status.test_cromwell_job_id,
-                   status.eval_cromwell_job_id))
+            ec = "\033[0m"
+            if status.latest_status == "succeeded":
+                sc = "\033[92m"  # green color
+            elif status.latest_status == "failed":
+                sc = "\033[91m"  # Red color
+            else:
+                sc = "\033[93m"  # yellow color
+
+            print(row_format.format(
+                status.run_uuid,
+                format_run_dir(status.run_dir),
+                status.previous_status,
+                f"{sc}{status.latest_status}{ec}",
+                status.test_cromwell_job_id,
+                status.eval_cromwell_job_id))
 
 
 @dataclass
