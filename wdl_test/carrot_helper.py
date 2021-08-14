@@ -125,6 +125,34 @@ class CarrotHelper:
         else:
             self.persist_object(self.pipelines, self.pipelines_filename)
 
+    def get_pipelines(self, dirs):
+        """
+        Takes a list of directories as input, traverses every
+        directory and sub-directories and extracts pipelines.
+        """
+        pipelines = {}
+        wd = self.working_dir
+        dirs = [x for x in dirs if os.path.isdir(x)]
+        for d in dirs:
+            d = os.path.normpath(d).split(os.sep)
+            if len(d) == 0:
+                continue
+            pipeline = d[0]
+            templates = [d[1]] if len(d) == 2 else None
+            run_dirs = [d[2]] if len(d) == 3 else None
+
+            if pipeline not in pipelines:
+                pipelines[pipeline] = {}
+            templates = templates or [x for x in next(os.walk(os.path.join(wd, pipeline)))[1]]
+            for t in templates:
+                if t not in pipelines[pipeline]:
+                    pipelines[pipeline][t] = []
+                run_dirs = run_dirs or [x for x in next(os.walk(os.path.join(wd, pipeline, t)))[1]]
+                for r in run_dirs:
+                    if r not in pipelines[pipeline][t]:
+                        pipelines[pipeline][t].append(r)
+        return pipelines
+
     @staticmethod
     def persist_object(obj, filename):
         with open(filename, "w") as f:
@@ -281,9 +309,6 @@ class CarrotHelper:
         response = self.call_carrot(cmd, "test_id")
         return Test(**response, template_path=template_path)
 
-    def list_runs(self, pipeline, template):
-        return [x for x in next(os.walk(os.path.join(self.working_dir, pipeline, template)))[1]]
-
     def create_run(self, test, run_dir, name=None, timestamp=True):
         name = name or "gatk"
         if timestamp:
@@ -293,6 +318,66 @@ class CarrotHelper:
         cmd = f"carrot_cli -q test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
         response = self.call_carrot(cmd)
         return Run(**response, run_dir=os.path.join(test.template_path, run_dir))
+
+    def update_runs_status(self):
+        try:
+            with open(RUNS_JSON, "r") as runs_json:
+                runs_dict = json.load(runs_json)
+                runs = {}
+                for k, v in runs_dict.items():
+                    runs[k] = Run(**v)
+        except json.decoder.JSONDecodeError:
+            print(f"The runs JSON file, {RUNS_JSON}, is empty or "
+                  f"corrupted; have you submitted any test runs?")
+
+        updated_status = []
+        for run_id, run in runs.items():
+            if run.status in ["succeeded", "failed"]:
+                updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
+                continue
+            cmd = f"carrot_cli run find_by_id {run_id}"
+            previous_status = run.status
+            # At time of submitting a run, the run may not
+            # have a test cromwell job ID and certainly not
+            # eval cromwell job ID, but updated status, depending
+            # on the status of test execution, can update both
+            # of these IDs, which are useful for debugging
+            # failed tests.
+            updated_run = self.call_carrot(cmd)
+            run.__dict__.update(updated_run)
+            updated_status.append(RunStatus(run_id, run.run_dir, previous_status, run.status, run.test_cromwell_job_id or "None", run.eval_cromwell_job_id or "None"))
+            runs[run_id] = run
+        self.persist_object(runs, RUNS_JSON)
+        return updated_status
+
+    def submit_tests(self, tests_dir):
+        try:
+            runs = {}
+            with open(RUNS_JSON, "r") as runs_json:
+                runs = json.load(runs_json)
+        except json.decoder.JSONDecodeError:
+            # Happens when this script is run for the
+            # first time and the file does not exist.
+            # Passing this exception should be fine
+            # since a JSON object will be created and
+            # persisted to the file if creating a `run`
+            # was run successfully.
+            pass
+
+        c = 0
+        print("Submitting tests ...")
+        print('%-40s%-80s' % ("Run ID", "Test"))
+        pipelines = self.get_pipelines(tests_dir)
+        for pipeline, templates in pipelines.items():
+            for template, run_dirs in templates.items():
+                for run_dir in run_dirs:
+                    c += 1
+                    test = self.pipelines[pipeline].templates[template].test
+                    run = self.create_run(test, run_dir)
+                    runs[run.uuid] = run
+                    self.persist_object(runs, RUNS_JSON)
+                    print('%-40s%-80s' % (run.uuid, pipeline + "/" + template + "/" + run_dir))
+        print(f"Submitted {c} test(s).")
 
     @staticmethod
     def pretty_print_runs_status(statuses):
@@ -459,116 +544,31 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
         response = check_output(command, shell=True)
 
 
-if __name__ == '__main__':
+def main():
     wd = "."
     parser = argparse.ArgumentParser(
         prog=sys.argv[0],
-        description="Helper methods to scaffold, "
-                    "create, and run carrot tests.")
-
+        description="Helper methods to create, "
+                    "setup, and run carrot tests.")
     subparsers = parser.add_subparsers(help='Sub-commands')
 
     test_parser = subparsers.add_parser("test", help="Create, list, and run tests.")
     test_subparsers = test_parser.add_subparsers(title="sub-commands for test", dest="test", help="Commands to interact with carrot tests.")
-    test_list_parser = test_subparsers.add_parser("list")
-    test_list_parser.add_argument('pipeline', type=str)
-    test_list_parser.add_argument('template', type=str)
-
     test_run_parser = test_subparsers.add_parser("run")
-    test_run_meg = test_run_parser.add_mutually_exclusive_group()
-    test_run_parser.add_argument("--pipeline", nargs="+")
-    test_run_parser.add_argument("--template", nargs="+")
-    test_run_parser.add_argument("--run_dir", nargs="+")
-    test_run_parser.add_argument("--path", nargs="+")
-
-    test_update_parser = test_subparsers.add_parser("update_status")
+    test_run_parser.add_argument("tests_dir", nargs="+")
+    test_subparsers.add_parser("update_status")
 
     args = parser.parse_args()
 
     carrot_helper = CarrotHelper(working_dir=wd)
-
     if "test" in args:
-        task = args.test
-        if task == "list":
-            print(carrot_helper.list_runs(args.pipeline, args.template))
-        elif task == "run":
-            try:
-                runs = {}
-                with open(RUNS_JSON, "r") as runs_json:
-                    runs = json.load(runs_json)
-            except json.decoder.JSONDecodeError:
-                # Happens when this script is run for the
-                # first time and the file does not exist.
-                # Passing this exception should be fine
-                # since a JSON object will be created and
-                # persisted to the file if creating a `run`
-                # was run successfully.
-                pass
-
-            pipelines = {}
-            if args.path:
-                dirs = [x for x in args.path if os.path.isdir(x)]
-                for d in dirs:
-                    d = os.path.normpath(d).split(os.sep)
-                    if len(d) == 0:
-                        continue
-                    pipeline = d[0]
-                    templates = [d[1]] if len(d) == 2 else None
-                    run_dirs = [d[2]] if len(d) == 3 else None
-
-                    if pipeline not in pipelines:
-                        pipelines[pipeline] = {}
-                    templates = templates or [x for x in next(os.walk(os.path.join(wd, pipeline)))[1]]
-                    for t in templates:
-                        if t not in pipelines[pipeline]:
-                            pipelines[pipeline][t] = []
-                        run_dirs = run_dirs or [x for x in next(os.walk(os.path.join(wd, pipeline, t)))[1]]
-                        for r in run_dirs:
-                            if r not in pipelines[pipeline][t]:
-                                pipelines[pipeline][t].append(r)
-            else:
-                pipelines[args.pipeline] = {args.template: [args.run_dir]}
-
-            c = 0
-            print("Submitting tests ...")
-            print('%-40s%-80s' % ("Run ID", "Test"))
-            for pipeline, templates in pipelines.items():
-                for template, run_dirs in templates.items():
-                    for run_dir in run_dirs:
-                        c += 1
-                        test = carrot_helper.pipelines[pipeline].templates[template].test
-                        run = carrot_helper.create_run(test, run_dir)
-                        runs[run.uuid] = run
-                        carrot_helper.persist_object(runs, RUNS_JSON)
-                        print('%-40s%-80s' % (run.uuid, pipeline + "/" + template + "/" + run_dir))
-            print(f"Submitted {c} test(s).")
-        elif task == "update_status":
-            try:
-                with open(RUNS_JSON, "r") as runs_json:
-                    runs_dict = json.load(runs_json)
-                    runs = {}
-                    for k, v in runs_dict.items():
-                        runs[k] = Run(**v)
-            except json.decoder.JSONDecodeError:
-                print(f"The runs JSON file, {RUNS_JSON}, is empty or "
-                      f"corrupted; have you submitted any test runs?")
-
-            updated_status = []
-            for run_id, run in runs.items():
-                if run.status in ["succeeded", "failed"]:
-                    updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
-                    continue
-                cmd = f"carrot_cli run find_by_id {run_id}"
-                previous_status = run.status
-                # At time of submitting a run, the run may not
-                # have a test cromwell job ID and certainly not
-                # eval cromwell job ID, but updated status, depending
-                # on the status of test execution, can update both
-                # of these IDs, which are useful for debugging
-                # failed tests.
-                updated_run = carrot_helper.call_carrot(cmd)
-                run.__dict__.update(updated_run)
-                updated_status.append(RunStatus(run_id, run.run_dir, previous_status, run.status, run.test_cromwell_job_id or "None", run.eval_cromwell_job_id or "None"))
-                runs[run_id] = run
-            carrot_helper.persist_object(runs, RUNS_JSON)
+        args_dict = vars(args)
+        if args.test == "run":
+            carrot_helper.submit_tests(args_dict.get("tests_dir"))
+        elif args.test == "update_status":
+            updated_status = carrot_helper.update_runs_status()
             carrot_helper.pretty_print_runs_status(updated_status)
+
+
+if __name__ == '__main__':
+    main()
