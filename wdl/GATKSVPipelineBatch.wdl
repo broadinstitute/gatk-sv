@@ -1,17 +1,18 @@
 version 1.0
 
-import "Module00aBatch.wdl" as m00a
-import "Module00b.wdl" as m00b
+import "GatherSampleEvidenceBatch.wdl" as sampleevidence
+import "EvidenceQC.wdl" as evidenceqc
 import "GATKSVPipelinePhase1.wdl" as phase1
-import "Module04.wdl" as m04
-import "Module04b.wdl" as m04b
-import "Module0506.wdl" as m0506
+import "GenotypeBatch.wdl" as genotypebatch
+import "RegenotypeCNVs.wdl" as regenocnvs
+import "MakeCohortVcf.wdl" as makecohortvcf
 import "Utils.wdl" as utils
 import "Structs.wdl"
 import "TestUtils.wdl" as tu
 
 # GATK SV Pipeline batch mode
-# Runs modules 00abc, 01, 02, 03, 04, 0506
+# Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch, GenotypeBatch, RegenotypeCNVs,
+# and MakeCohortVcf (CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, and GenotypeComplexVariants)
 
 workflow GATKSVPipelineBatch {
   input {
@@ -49,10 +50,10 @@ workflow GATKSVPipelineBatch {
     Array[File]? snp_vcfs
     File? snp_vcf_header # Required only if VCFs are unheadered
 
-    # Merge contig vcfs at each stage of Module 0506 for QC
-    Boolean module0506_merge_cluster_vcfs = false
-    Boolean module0506_merge_complex_resolve_vcfs = false
-    Boolean module0506_merge_complex_genotype_vcfs = false
+    # Merge contig vcfs at each stage of MakeCohortVcf for QC
+    Boolean makecohortvcf_merge_cluster_vcfs = false
+    Boolean makecohortvcf_merge_complex_resolve_vcfs = false
+    Boolean makecohortvcf_merge_complex_genotype_vcfs = false
 
     # Global files
     File ped_file
@@ -66,21 +67,21 @@ workflow GATKSVPipelineBatch {
     File allosome_file      # fai of allosomal contigs
 
     # Run module metrics - all modules on by default for batch WDL
-    Boolean? run_00a_metrics
-    Boolean? run_00c_metrics = true  # 00c metrics is off by default standalone but on for batch WDL
-    Boolean? run_01_metrics
-    Boolean? run_02_metrics
-    Boolean? run_03_metrics
-    Boolean? run_04_metrics
-    Boolean? run_0506_metrics
+    Boolean? run_sampleevidence_metrics
+    Boolean? run_batchevidence_metrics = true  # GatherBatchEvidenceMetrics is off by default standalone but on for batch WDL
+    Boolean? run_clusterbatch_metrics
+    Boolean? run_batchmetrics_metrics
+    Boolean? run_filterbatch_metrics
+    Boolean? run_genotypebatch_metrics
+    Boolean? run_makecohortvcf_metrics
 
-    File? baseline_00a_metrics
-    File? baseline_00c_metrics
-    File? baseline_01_metrics
-    File? baseline_02_metrics
-    File? baseline_03_metrics
-    File? baseline_04_metrics
-    File? baseline_0506_metrics
+    File? baseline_sampleevidence_metrics
+    File? baseline_batchevidence_metrics
+    File? baseline_clusterbatch_metrics
+    File? baseline_batchmetrics_metrics
+    File? baseline_filterbatch_metrics
+    File? baseline_genotypebatch_metrics
+    File? baseline_makecohortvcf_metrics
 
     String sv_base_mini_docker
     String sv_base_docker
@@ -115,10 +116,10 @@ workflow GATKSVPipelineBatch {
   String? melt_docker_ = if (!defined(melt_vcfs) && use_melt) then melt_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_module00a = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
 
-  if (run_module00a) {
-    call m00a.Module00aBatch {
+  if (run_sampleevidence) {
+    call sampleevidence.GatherSampleEvidenceBatch {
       input:
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
@@ -129,7 +130,7 @@ workflow GATKSVPipelineBatch {
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
-        run_module_metrics = run_00a_metrics,
+        run_module_metrics = run_sampleevidence_metrics,
         primary_contigs_fai = primary_contigs_fai,
         batch = batch,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
@@ -148,24 +149,24 @@ workflow GATKSVPipelineBatch {
     }
   }
 
-  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([Module00aBatch.coverage_counts])) else select_first([counts_files])
-  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([Module00aBatch.pesr_disc])) else select_first([pe_files])
-  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([Module00aBatch.pesr_split])) else select_first([sr_files])
+  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files])
+  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files])
+  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files])
 
   if (use_delly) {
-    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([Module00aBatch.delly_vcf]))
+    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
   }
   if (use_manta) {
-    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([Module00aBatch.manta_vcf]))
+    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
   }
   if (use_melt) {
-    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([Module00aBatch.melt_vcf]))
+    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.melt_vcf]))
   }
   if (use_wham) {
-    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([Module00aBatch.wham_vcf]))
+    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
   }
 
-  call m00b.Module00b as Module00b {
+  call evidenceqc.EvidenceQC as EvidenceQC {
     input:
       batch=batch,
       samples=sample_ids,
@@ -190,8 +191,8 @@ workflow GATKSVPipelineBatch {
       reference_dict=reference_dict,
       BAF_files=baf_files,
       counts=counts_files_,
-      bincov_matrix=Module00b.bincov_matrix,
-      bincov_matrix_index=Module00b.bincov_matrix_index,
+      bincov_matrix=EvidenceQC.bincov_matrix,
+      bincov_matrix_index=EvidenceQC.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
       delly_vcfs=delly_vcfs_,
@@ -205,10 +206,10 @@ workflow GATKSVPipelineBatch {
       cnmops_allo_file=allosome_file,
       allosome_contigs=allosome_file,
       autosome_contigs=autosome_file,
-      run_00c_metrics = run_00c_metrics,
-      run_01_metrics = run_01_metrics,
-      run_02_metrics = run_02_metrics,
-      run_03_metrics = run_03_metrics,
+      run_batchevidence_metrics = run_batchevidence_metrics,
+      run_clusterbatch_metrics = run_clusterbatch_metrics,
+      run_batchmetrics_metrics = run_batchmetrics_metrics,
+      run_filterbatch_metrics = run_filterbatch_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
@@ -223,7 +224,7 @@ workflow GATKSVPipelineBatch {
       condense_counts_docker=condense_counts_docker
   }
 
-  call m04.Module04 as Module04 {
+  call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
       batch_pesr_vcf=GATKSVPipelinePhase1.filtered_pesr_vcf,
       batch_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
@@ -240,7 +241,7 @@ workflow GATKSVPipelineBatch {
       splitfile_index=GATKSVPipelinePhase1.merged_SR_index,
       ped_file=ped_file,
       ref_dict=reference_dict,
-      run_module_metrics = run_04_metrics,
+      run_module_metrics = run_genotypebatch_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       sv_base_mini_docker=sv_base_mini_docker,
@@ -249,9 +250,9 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker
   }
 
-  call m04b.Module04b as Module04b {
+  call regenocnvs.RegenotypeCNVs as RegenotypeCNVs {
     input:
-      depth_vcfs=[Module04.genotyped_depth_vcf],
+      depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
       cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       batches=[batch],
@@ -260,9 +261,9 @@ workflow GATKSVPipelineBatch {
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
       ped_file=ped_file,
-      RD_depth_sepcutoffs=[select_first([Module04.trained_genotype_depth_depth_sepcutoff])],
+      RD_depth_sepcutoffs=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
       contig_list=primary_contigs_list,
-      regeno_coverage_medians=[Module04.regeno_coverage_medians],
+      regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -270,16 +271,16 @@ workflow GATKSVPipelineBatch {
   }
   
 
-  call m0506.Module0506 as Module0506 {
+  call makecohortvcf.MakeCohortVcf as MakeCohortVcf {
     input:
-      merge_cluster_vcfs = module0506_merge_cluster_vcfs,
-      merge_complex_resolve_vcfs = module0506_merge_complex_resolve_vcfs,
-      merge_complex_genotype_vcfs = module0506_merge_complex_genotype_vcfs,
-      raw_sr_bothside_pass_files=[Module04.sr_bothside_pass],
-      raw_sr_background_fail_files=[Module04.sr_background_fail],
+      merge_cluster_vcfs = makecohortvcf_merge_cluster_vcfs,
+      merge_complex_resolve_vcfs = makecohortvcf_merge_complex_resolve_vcfs,
+      merge_complex_genotype_vcfs = makecohortvcf_merge_complex_genotype_vcfs,
+      raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
+      raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       ped_file=ped_file,
-      pesr_vcfs=[Module04.genotyped_pesr_vcf],
-      depth_vcfs=Module04b.regenotyped_depth_vcfs,
+      pesr_vcfs=[GenotypeBatch.genotyped_pesr_vcf],
+      depth_vcfs=RegenotypeCNVs.regenotyped_depth_vcfs,
       contig_list=primary_contigs_fai,
       allosome_fai=allosome_file,
       ref_dict=reference_dict,
@@ -289,9 +290,9 @@ workflow GATKSVPipelineBatch {
       cohort_name=batch,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],
       batches=[batch],
-      depth_gt_rd_sep_files=[select_first([Module04.trained_genotype_depth_depth_sepcutoff])],
+      depth_gt_rd_sep_files=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
-      run_module_metrics = run_0506_metrics,
+      run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       linux_docker=linux_docker,
@@ -304,11 +305,11 @@ workflow GATKSVPipelineBatch {
   call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + batch,
-        metric_files = select_all([Module00aBatch.metrics_file_00a, GATKSVPipelinePhase1.metrics_file_00c, GATKSVPipelinePhase1.metrics_file_01, GATKSVPipelinePhase1.metrics_file_02, GATKSVPipelinePhase1.metrics_file_03, Module04.metrics_file_04, Module0506.metrics_file_0506]),
+        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, MakeCohortVcf.metrics_file_makecohortvcf]),
         linux_docker = linux_docker
     }
 
-  Array[File] defined_baseline_metrics = select_all([baseline_00a_metrics, baseline_00c_metrics, baseline_01_metrics, baseline_02_metrics, baseline_03_metrics, baseline_04_metrics, baseline_0506_metrics])
+  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_filterbatch_metrics, baseline_genotypebatch_metrics, baseline_makecohortvcf_metrics])
   if (length(defined_baseline_metrics) > 0) {
     call tu.CatMetrics as CatBaselineMetrics {
       input:
@@ -334,8 +335,8 @@ workflow GATKSVPipelineBatch {
   }
 
   output {
-    File vcf = Module0506.vcf
-    File vcf_index = Module0506.vcf_index
+    File vcf = MakeCohortVcf.vcf
+    File vcf_index = MakeCohortVcf.vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
 
@@ -354,12 +355,12 @@ workflow GATKSVPipelineBatch {
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file
 
     File cutoffs = GATKSVPipelinePhase1.cutoffs
-    File genotype_pesr_pesr_sepcutoff = select_first([Module04.trained_genotype_pesr_pesr_sepcutoff])
-    File genotype_pesr_depth_sepcutoff = select_first([Module04.trained_genotype_pesr_depth_sepcutoff])
-    File genotype_depth_pesr_sepcutoff = select_first([Module04.trained_genotype_depth_pesr_sepcutoff])
-    File genotype_depth_depth_sepcutoff = select_first([Module04.trained_genotype_depth_depth_sepcutoff])
-    File PE_metrics = select_first([Module04.trained_PE_metrics])
-    File SR_metrics = select_first([Module04.trained_SR_metrics])
+    File genotype_pesr_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_pesr_sepcutoff])
+    File genotype_pesr_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_depth_sepcutoff])
+    File genotype_depth_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_pesr_sepcutoff])
+    File genotype_depth_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])
+    File PE_metrics = select_first([GenotypeBatch.trained_PE_metrics])
+    File SR_metrics = select_first([GenotypeBatch.trained_SR_metrics])
   }
 }
 

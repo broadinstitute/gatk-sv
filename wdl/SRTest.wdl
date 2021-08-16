@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "SRTestChromosome.wdl" as src
 
 workflow SRTest {
@@ -93,7 +93,7 @@ workflow SRTest {
   }
 
   # Combine srtest results into single file
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = flatten([SRTestAutosome.stats, SRTestAllosome.stats]),
       prefix = "${batch}.${algorithm}",
@@ -102,7 +102,7 @@ workflow SRTest {
   }
 
   if (run_common) {
-    call tasks02.MergeStats as MergeStatsCommon {
+    call tasksbatchmetrics.MergeStats as MergeStatsCommon {
       input:
         stats = select_all(SRTestAutosome.stats_common),
         prefix = "${batch}.${algorithm}.common",

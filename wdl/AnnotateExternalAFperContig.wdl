@@ -3,7 +3,7 @@ version 1.0
 # Author: Xuefang Zhao <XZHAO12@mgh.harvard.edu>
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow AnnotateExternalAFperContig {
     input{

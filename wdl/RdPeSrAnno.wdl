@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as tasks0506
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
 workflow RdPeSrAnno {
@@ -77,7 +77,7 @@ workflow RdPeSrAnno {
       }
   }
 
-  call tasks0506.ConcatBeds as ConcatPesrAnno{
+  call MiniTasks.ConcatBeds as ConcatPesrAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.pesr_anno,
       prefix=prefix,
@@ -85,7 +85,7 @@ workflow RdPeSrAnno {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnno{
+  call MiniTasks.ConcatBeds as ConcatRdAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov,
       prefix=prefix,
@@ -93,7 +93,7 @@ workflow RdPeSrAnno {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnnoLeFlank{
+  call MiniTasks.ConcatBeds as ConcatRdAnnoLeFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_le_flank,
       prefix=prefix,
@@ -101,7 +101,7 @@ workflow RdPeSrAnno {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnnoRiFlank{
+  call MiniTasks.ConcatBeds as ConcatRdAnnoRiFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_ri_flank,
       prefix=prefix,

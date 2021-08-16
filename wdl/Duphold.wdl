@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as tasks0506
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
 workflow Duphold {
@@ -72,7 +72,7 @@ workflow Duphold {
       }
   }
 
-  call tasks0506.ConcatVcfs as ConcatVcfs{
+  call MiniTasks.ConcatVcfs as ConcatVcfs{
     input:
       vcfs=Bcf2Vcf.vcf,
       merge_sort=true,

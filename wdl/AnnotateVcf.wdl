@@ -1,23 +1,33 @@
-# Workflow to parallelize VCF annotation by chromosome
-
 version 1.0
 
-import "Tasks0506.wdl" as tasks0506
-import "AnnotateChromosome.wdl" as annotate_by_chrom
+import "ScatterAnnotateVcfByChrom.wdl" as ann
+import "PruneAndAddVafs.wdl" as pav
+import "AnnotateExternalAF.wdl" as eaf
 
-# Scatter VCF and apply prepraed annotations
 workflow AnnotateVcf {
 
   input {
-
     File vcf
-    String prefix
     File vcf_idx
     File contig_list
+    String prefix
+
     File protein_coding_gtf
     File linc_rna_gtf
     File promoter_bed
     File noncoding_bed
+
+    Int max_shards_per_chrom_step1
+    Int min_records_per_shard_step1
+
+    File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
+    File? prune_list              # List of samples to be excluded from the output vcf
+    File? ped_file                # Used for M/F AF calculations
+    Int   sv_per_shard
+
+    File? ref_bed              # File with external allele frequencies
+    String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
+    Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -26,115 +36,74 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_merge_annotations
     RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_prune_vcf
+    RuntimeAttr? runtime_attr_shard_vcf
+    RuntimeAttr? runtime_attr_compute_AFs
+    RuntimeAttr? runtime_attr_combine_vcfs
+    RuntimeAttr? runtime_attr_modify_vcf
+    RuntimeAttr? runtime_override_combine_vcfs
+    RuntimeAttr? runtime_override_split_vcf
   }
 
-  Array[Array[String]] contigs = read_tsv(contig_list)
-
-  # Annotate, scattered by chromosome
-  scatter (contig in contigs) {
-    # Remote tabix each chromosome
-    call SubsetVcf {
-      input:
-        vcf     = vcf,
-        vcf_idx = vcf_idx,
-        contig  = contig[0],
-        prefix  = "${prefix}.${contig[0]}",
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_subset_vcf
-    }
-
-    # Annotate per chromosome
-    call annotate_by_chrom.AnnotateChromosome as AnnotateChromosome {
-      input:
-        vcf                = SubsetVcf.subsetted_vcf,
-        prefix             = "${prefix}.${contig[0]}",
-        protein_coding_gtf = protein_coding_gtf,
-        linc_rna_gtf       = linc_rna_gtf,
-        promoter_bed       = promoter_bed,
-        noncoding_bed      = noncoding_bed,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_annotate_intervals = runtime_attr_annotate_intervals,
-        runtime_attr_merge_annotations  = runtime_attr_merge_annotations
-    }
-  }
-
-  # Merge integrated vcfs across chromosomes
-  call tasks0506.ConcatVcfs as ConcatVcfs {
+  call ann.ScatterAnnotateVcfByChrom as ScatterAnnotateVcfByChrom {
     input:
-      vcfs = AnnotateChromosome.annotated_vcf,
-      vcfs_idx = AnnotateChromosome.annotated_vcf_idx,
-      outfile_prefix = "${prefix}.annotated",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_vcfs
+      vcf                = vcf,
+      vcf_idx            = vcf_idx,
+      prefix             = prefix,
+      contig_list        = contig_list,
+      protein_coding_gtf = protein_coding_gtf,
+      linc_rna_gtf       = linc_rna_gtf,
+      promoter_bed       = promoter_bed,
+      noncoding_bed      = noncoding_bed,
+      sv_base_mini_docker     = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_annotate_intervals = runtime_attr_annotate_intervals,
+      runtime_attr_merge_annotations  = runtime_attr_merge_annotations,
+      runtime_attr_subset_vcf         = runtime_attr_subset_vcf,
+      runtime_attr_concat_vcfs        = runtime_attr_concat_vcfs
+  }
+
+  call pav.PruneAndAddVafs as PruneAndAddVafs {
+    input:
+      vcf                    = ScatterAnnotateVcfByChrom.annotated_vcf,
+      vcf_idx                = ScatterAnnotateVcfByChrom.annotated_vcf_idx,
+      prefix                 = prefix,
+      sample_pop_assignments = sample_pop_assignments,
+      prune_list             = prune_list,
+      ped_file               = ped_file,
+      sv_per_shard           = sv_per_shard,
+      contig_list            = contig_list,
+      sv_base_mini_docker     = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_prune_vcf    = runtime_attr_prune_vcf,
+      runtime_attr_shard_vcf    = runtime_attr_shard_vcf,
+      runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
+      runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
+      runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs
+  }
+
+  if (defined(ref_bed)) {
+    call eaf.AnnotateExternalAF as AnnotateExternalAF {
+      input:
+        vcf     = PruneAndAddVafs.output_vcf,
+        vcf_idx = PruneAndAddVafs.output_vcf_idx,
+        ref_bed = select_first([ref_bed]),
+        population = select_first([population]),
+        ref_prefix = select_first([ref_prefix]),
+        prefix = prefix,
+        contigs = read_lines(contig_list),
+        max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
+        min_records_per_shard_step1 = min_records_per_shard_step1,
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_modify_vcf = runtime_attr_modify_vcf,
+        runtime_override_split_vcf = runtime_override_split_vcf,
+        runtime_override_combine_vcfs = runtime_override_combine_vcfs
+    }
   }
 
   output {
-    File annotated_vcf = ConcatVcfs.concat_vcf
-    File annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
-  }
-}
-
-# Scatter VCF by chromosome
-task SubsetVcf {
-
-  input {
-
-    File vcf
-    File   vcf_idx
-    String contig
-    String prefix
-    
-    String sv_pipeline_docker
-    
-    RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    vcf: {
-      localization_optional: true
-    }
-    vcf_idx: {
-      localization_optional: true
-    }
-  }
-
-  output {
-    File subsetted_vcf     = "${prefix}.${contig}.vcf.gz"
-    File subsetted_vcf_idx = "${prefix}.${contig}.vcf.gz.tbi"
-  }
-
-  #########################
-  RuntimeAttr default_attr = object {
-    cpu_cores:          1,
-    mem_gb:             3.75,
-    disk_gb:            50,
-    boot_disk_gb:       10,
-    preemptible_tries:  3,
-    max_retries:        0
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
-
-  command <<<
-
-    set -euo pipefail
-
-    java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} SelectVariants \
-      -V "~{vcf}" \
-      -L "~{contig}" \
-      -O ~{prefix}.~{contig}.vcf.gz
-  
-  >>>
-
-  runtime {
-    cpu:                    select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
-    memory:                 mem_gb + " GiB"
-    disks: "local-disk " +  select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
-    preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
-    docker:                 sv_pipeline_docker
+    File output_vcf     = select_first([AnnotateExternalAF.annotated_vcf, PruneAndAddVafs.output_vcf])
+    File output_vcf_idx = select_first([AnnotateExternalAF.annotated_vcf_tbi, PruneAndAddVafs.output_vcf_idx])
   }
 }

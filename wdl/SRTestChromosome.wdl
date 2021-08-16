@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 
 workflow SRTestChromosome {
   input {
@@ -32,7 +32,7 @@ workflow SRTestChromosome {
   
   File splitfile_idx = splitfile + ".tbi"
 
-  call tasks02.SplitVCF as SplitVCF {
+  call tasksbatchmetrics.SplitVCF as SplitVCF {
     input:
       vcf = vcf,
       batch = batch,
@@ -74,7 +74,7 @@ workflow SRTestChromosome {
           runtime_attr_override = runtime_attr_srtest
       }
 
-      call tasks02.MergeAllosomes as MergeAllosomes {
+      call tasksbatchmetrics.MergeAllosomes as MergeAllosomes {
         input:
           male_test = SRTestMale.stats,
           female_test = SRTestFemale.stats,
@@ -103,7 +103,7 @@ workflow SRTestChromosome {
   }
 
   if (run_common && !allosome) {
-    call tasks02.GetCommonVCF {
+    call tasksbatchmetrics.GetCommonVCF {
       input:
         vcf = vcf,
         cnv_size_cutoff = select_first([common_cnv_size_cutoff]),
@@ -111,7 +111,7 @@ workflow SRTestChromosome {
         runtime_attr_override = runtime_attr_split_vcf
     }
 
-    call tasks02.SplitVCF as SplitCommonVCF {
+    call tasksbatchmetrics.SplitVCF as SplitCommonVCF {
       input:
         vcf = GetCommonVCF.common_vcf,
         batch = batch,
@@ -143,7 +143,7 @@ workflow SRTestChromosome {
   Array[File] unmerged_stats = if allosome then select_all(MergeAllosomes.merged_test) else select_all(SRTestAutosome.stats)
   Array[File] unmerged_stats_common = select_first([SRTestAutosomeCommon.stats, []])
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = unmerged_stats,
       prefix = "${batch}.${algorithm}.${chrom}",
@@ -152,7 +152,7 @@ workflow SRTestChromosome {
   }
 
   if (run_common && !allosome) {
-    call tasks02.MergeStats as MergeStatsCommon {
+    call tasksbatchmetrics.MergeStats as MergeStatsCommon {
       input:
         stats = unmerged_stats_common,
         prefix = "${batch}.${algorithm}.${chrom}.common",

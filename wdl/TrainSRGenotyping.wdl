@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks04.wdl" as tasks04
+import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 
 workflow TrainSRGenotyping {
   input {
@@ -27,7 +27,7 @@ workflow TrainSRGenotyping {
     RuntimeAttr? runtime_attr_genotype
   }
 
-  call tasks04.SplitVcf as SplitVcf {
+  call tasksgenotypebatch.SplitVcf as SplitVcf {
     input:
       vcf = batch_vcf,
       n_per_split = n_per_split,
@@ -38,7 +38,7 @@ workflow TrainSRGenotyping {
   }
 
   scatter (vcf in SplitVcf.vcfs) {
-    call tasks04.CountSR as CountSR {
+    call tasksgenotypebatch.CountSR as CountSR {
       input:
         vcf = vcf,
         splitfile = splitfile,
@@ -51,7 +51,7 @@ workflow TrainSRGenotyping {
     }
   }
 
-  call tasks04.MergePESRCounts as MergeSRCounts {
+  call tasksgenotypebatch.MergePESRCounts as MergeSRCounts {
     input:
       count_list = CountSR.sr_counts,
       sum_list = CountSR.sr_sum,

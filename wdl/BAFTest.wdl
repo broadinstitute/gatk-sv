@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "BAFTestChromosome.wdl" as bafc
 
 workflow BAFTest {
@@ -44,7 +44,7 @@ workflow BAFTest {
     }
   }
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = BAFTestAutosome.stats,
       prefix = "${batch}.${algorithm}",

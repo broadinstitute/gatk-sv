@@ -2,7 +2,7 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "ShardedCluster.wdl" as ShardedCluster
 
 # Workflow to perform sharding & clustering of a vcf for a single chromosome

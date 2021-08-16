@@ -2,7 +2,7 @@ version 1.0
 
 
 import "CalcAF.wdl" as calcAF
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow prune_and_add_vafs {
   input {

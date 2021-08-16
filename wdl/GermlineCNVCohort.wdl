@@ -1,6 +1,6 @@
 # Standalone gCNV cohort WDL
 #   - To be run on reference batches only
-#   - Most samples should be run in case mode using Module00a
+#   - Most samples should be run in case mode using GatherBatchEvidence
 
 version 1.0
 

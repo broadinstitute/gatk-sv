@@ -6,7 +6,7 @@ version 1.0
 
 import "prune_add_af.wdl" as calcAF
 import "batch_effect_helper.wdl" as helper
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow XfBatchEffect {
   input{

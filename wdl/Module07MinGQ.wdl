@@ -3,7 +3,7 @@ version 1.0
 import "MinGQRocOpt.wdl" as roc_opt_sub
 import "CalcAF.wdl" as calcAF
 import "Structs.wdl"
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 

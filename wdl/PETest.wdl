@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "PETestChromosome.wdl" as pec
 
 workflow PETest {
@@ -88,7 +88,7 @@ workflow PETest {
     }
   }
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = flatten([PETestAutosome.stats, PETestAllosome.stats]),
       prefix = "${batch}.${algorithm}",
@@ -96,7 +96,7 @@ workflow PETest {
       runtime_attr_override = runtime_attr_merge_stats
   }
 
-  call tasks02.MergeStats as MergeStatsCommon {
+  call tasksbatchmetrics.MergeStats as MergeStatsCommon {
     input:
       stats = select_all(PETestAutosome.stats_common),
       prefix = "${batch}.${algorithm}.common",

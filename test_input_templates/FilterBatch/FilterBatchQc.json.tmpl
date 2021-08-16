@@ -1,0 +1,23 @@
+{
+  "FilterBatchQc.contig_list": {{ reference_resources.primary_contigs_fai | tojson }},
+
+  "FilterBatchQc.thousand_genomes_tarballs": {{ reference_resources.thousand_genomes_tarballs | tojson }},
+  "FilterBatchQc.hgsv_tarballs": {{ reference_resources.hgsv_tarballs | tojson }},
+  "FilterBatchQc.asc_tarballs": {{ reference_resources.asc_tarballs | tojson }},
+  "FilterBatchQc.sanders_2015_tarball": {{ reference_resources.sanders_2015_tarball | tojson }},
+  "FilterBatchQc.collins_2017_tarball": {{ reference_resources.collins_2017_tarball | tojson }},
+  "FilterBatchQc.werling_2018_tarball": {{ reference_resources.werling_2018_tarball | tojson }},
+
+  "FilterBatchQc.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "FilterBatchQc.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "FilterBatchQc.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
+  
+  "FilterBatchQc.batch": {{ test_batch.batch_name | tojson }},
+  
+  "FilterBatchQc.ped_file": {{ test_batch.ped_file | tojson }},
+  "FilterBatchQc.depth_vcf_noOutliers": {{ test_batch.filtered_depth_vcf | tojson }},
+  "FilterBatchQc.merged_pesr_vcf": {{ test_batch.filtered_pesr_vcf | tojson }}
+}
+
+
+

@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 
 workflow PETestChromosome {
   input {
@@ -31,7 +31,7 @@ workflow PETestChromosome {
 
   File discfile_idx = discfile + ".tbi"
 
-  call tasks02.SplitVCF as SplitVCF {
+  call tasksbatchmetrics.SplitVCF as SplitVCF {
     input:
       vcf = vcf,
       batch = batch,
@@ -73,7 +73,7 @@ workflow PETestChromosome {
           runtime_attr_override = runtime_attr_petest
       }
 
-      call tasks02.MergeAllosomes as MergeAllosomes {
+      call tasksbatchmetrics.MergeAllosomes as MergeAllosomes {
         input:
           male_test = PETestMale.stats,
           female_test = PETestFemale.stats,
@@ -101,7 +101,7 @@ workflow PETestChromosome {
   }
 
   if (!allosome) {
-    call tasks02.GetCommonVCF {
+    call tasksbatchmetrics.GetCommonVCF {
       input:
         vcf = vcf,
         cnv_size_cutoff = common_cnv_size_cutoff,
@@ -109,7 +109,7 @@ workflow PETestChromosome {
         runtime_attr_override = runtime_attr_split_vcf
     }
 
-    call tasks02.SplitVCF as SplitCommonVCF {
+    call tasksbatchmetrics.SplitVCF as SplitCommonVCF {
       input:
         vcf = GetCommonVCF.common_vcf,
         batch = batch,
@@ -141,7 +141,7 @@ workflow PETestChromosome {
   Array[File] unmerged_stats = if allosome then select_all(MergeAllosomes.merged_test) else select_all(PETestAutosome.stats)
   Array[File] unmerged_stats_common = select_first([PETestAutosomeCommon.stats, []])
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = unmerged_stats,
       prefix = "${batch}.${algorithm}.${chrom}",
@@ -150,7 +150,7 @@ workflow PETestChromosome {
   }
 
   if (!allosome) {
-    call tasks02.MergeStats as MergeStatsCommon {
+    call tasksbatchmetrics.MergeStats as MergeStatsCommon {
       input:
         stats = unmerged_stats_common,
         prefix = "${batch}.${algorithm}.${chrom}.common",

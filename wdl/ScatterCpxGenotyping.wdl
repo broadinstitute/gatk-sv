@@ -3,10 +3,10 @@ version 1.0
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "GenotypeCpxCnvs.wdl" as GenotypeCpx
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 # Workflow to perform depth-based genotyping for a single vcf shard scattered 
-# across batches on predicted CPX CNVs from 04b
+# across batches on predicted CPX CNVs
 workflow ScatterCpxGenotyping {
   input {
     File bin_exclude

@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 
 workflow RDTestChromosome {
   input {
@@ -75,7 +75,7 @@ workflow RDTestChromosome {
           runtime_attr_override = runtime_attr_rdtest
       }
 
-      call tasks02.MergeAllosomes as MergeAllosomes {
+      call tasksbatchmetrics.MergeAllosomes as MergeAllosomes {
         input:
           male_test = RDTestMale.stats,
           female_test = RDTestFemale.stats,
@@ -106,7 +106,7 @@ workflow RDTestChromosome {
 
   Array[File?] stats = if allosome then MergeAllosomes.merged_test else RDTestAutosome.stats
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = select_all(stats),
       prefix = "${batch}.${algorithm}.${chrom}",

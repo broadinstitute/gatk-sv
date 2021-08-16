@@ -1,6 +1,6 @@
 version 1.0
 
-import "Tasks02.wdl" as tasks02
+import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "RDTestChromosome.wdl" as rdc
 
 workflow RDTest {
@@ -86,7 +86,7 @@ workflow RDTest {
     }
   }
 
-  call tasks02.MergeStats as MergeStats {
+  call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = flatten([RDTestAutosome.out_stats, RDTestAllosome.out_stats]),
       prefix = "${batch}.${algorithm}",

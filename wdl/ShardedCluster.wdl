@@ -3,7 +3,7 @@ version 1.0
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 # Workflow to shard a filtered vcf & run vcfcluster (sub-sub-sub workflow)
 workflow ShardedCluster {
