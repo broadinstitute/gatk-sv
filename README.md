@@ -204,6 +204,7 @@ Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline
 The following sections briefly describe each module and highlights inter-dependent input/output files. Note that input/output mappings can also be gleaned from `GATKSVPipelineBatch.wdl`, and example input files for each module can be found in `/test_input_templates`.
 
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
+*Formerly Module00a*
 Runs raw evidence collection on each sample.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
@@ -220,6 +221,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 
 
 ## <a name="evidence-qc">EvidenceQC</a>
+*Formerly Module00b*
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. The results from this module can be used for QC and batching.
 
 For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
@@ -263,6 +265,7 @@ Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). Th
 
 
 ## <a name="gather-batch-evidence">GatherBatchEvidence</a>
+*Formerly Module00c*
 Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
@@ -286,6 +289,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 
 ## <a name="cluster-batch">ClusterBatch</a>
+*Formerly Module01*
 Clusters SV calls across a batch.
 
 #### Prerequisites:
@@ -301,6 +305,7 @@ Clusters SV calls across a batch.
 
 
 ## <a name="generate-batch-metrics">GenerateBatchMetrics</a>
+*Formerly Module02*
 Generates variant metrics for filtering.
 
 #### Prerequisites:
@@ -317,6 +322,7 @@ Generates variant metrics for filtering.
 
 
 ## <a name="generate-batch-metrics">FilterBatch</a>
+*Formerly Module03*
 Filters poor quality variants and filters outlier samples.
 
 #### Prerequisites:
@@ -335,6 +341,7 @@ Filters poor quality variants and filters outlier samples.
 
 
 ## <a name="merge-batch-sites">MergeBatchSites</a>
+*Formerly MergeCohortVcfs*
 Combines filtered variants across batches. The WDL can be found at: `/wdl/MergeBatchSites.wdl`.
 
 #### Prerequisites:
@@ -349,6 +356,7 @@ Combines filtered variants across batches. The WDL can be found at: `/wdl/MergeB
 
 
 ## <a name="genotype-batch">GenotypeBatch</a>
+*Formerly Module04*
 Genotypes a batch of samples across unfiltered variants combined across all batches.
 
 #### Prerequisites:
@@ -370,6 +378,7 @@ Genotypes a batch of samples across unfiltered variants combined across all batc
 
 
 ## <a name="regenotype-cnvs">RegenotypeCNVs</a>
+*Formerly Module04b*
 Re-genotypes probable mosaic variants across multiple batches.
 
 #### Prerequisites:
@@ -388,6 +397,7 @@ Re-genotypes probable mosaic variants across multiple batches.
 
 
 ## <a name="make-cohort-vcf">MakeCohortVcf</a>
+*Formerly Module0506*
 Combines variants across multiple batches, resolves complex variants, re-genotypes, and performs final VCF clean-up.
 
 #### Prerequisites:
@@ -425,6 +435,7 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 * FilterCleanupQualRecalibration - sanitize filter columns and recalibrate variant QUAL scores for easier interpretation
 
 ## <a name="annotate-vcf">AnnotateVcf</a> (in development)
+*Formerly Module08Annotation*
 Add annotations, such as the inferred function and allele frequencies of variants, to final vcf.
 
 Annotations methods include:
@@ -446,7 +457,7 @@ Visualization methods include:
 ### VM runs out of memory or disk
 * Default pipeline settings are tuned for batches of 100 samples. Larger batches or cohorts may require additional VM resources. Most runtime attributes can be modified through the `RuntimeAttr` inputs. These are formatted like this in the json:
 ```
-"ModuleX.runtime_attr_override": {
+"MyWorkflow.runtime_attr_override": {
   "disk_gb": 100,
   "mem_gb": 16
 },
