@@ -59,8 +59,8 @@ The following workflows are included in this workspace, to be executed in this o
 8. (Skip for a single batch) `08-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
 9. `09-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `09-GenotypeBatch_SingleBatch` if you only have one batch.
 10. `10-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `10-RegenotypeCNVs_SingleBatch` if you only have one batch.
-11. `module0506`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `module0506_SingleBatch` if you only have one batch.
-12. `module08`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `module08_SingleBatch` if you only have one batch.
+11. `11-MakeCohortVcf`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `11-MakeCohortVcf_SingleBatch` if you only have one batch.
+12. `12-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `12-AnnotateVcf_SingleBatch` if you only have one batch.
 
 Additional modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv).
 
@@ -195,9 +195,9 @@ Read the full GenotypeBatch documentation [here](https://github.com/broadinstitu
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `07-FilterBatch`.
 * If you only have one batch, use the `09-GenotypeBatch_SingleBatch` version of the workflow.
 
-#### 10-RegenotypeCNVs, Module0506, and Module08Annotation
+#### 10-RegenotypeCNVs, 11-MakeCohortVcf, and 12-AnnotateVcf
 
-Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [Module0506](https://github.com/broadinstitute/gatk-sv#module-0506), and [Module08](https://github.com/broadinstitute/gatk-sv#module-08-in-development) on the README.
+Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [CombineResolveClean](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
 * For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `08-MergeBatchSites`.
 * If you only have one batch, use the `[...]_SingleBatch` version of the workflow.
 

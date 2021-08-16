@@ -5,14 +5,14 @@ import "EvidenceQC.wdl" as evidenceqc
 import "GATKSVPipelinePhase1.wdl" as phase1
 import "GenotypeBatch.wdl" as genotypebatch
 import "RegenotypeCNVs.wdl" as regenocnvs
-import "Module0506.wdl" as m0506
+import "MakeCohortVcf.wdl" as makecohortvcf
 import "Utils.wdl" as utils
 import "Structs.wdl"
 import "TestUtils.wdl" as tu
 
 # GATK SV Pipeline batch mode
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch, GenotypeBatch, RegenotypeCNVs,
-# CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, and GenotypeComplexVariants
+# and MakeCohortVcf (CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, and GenotypeComplexVariants)
 
 workflow GATKSVPipelineBatch {
   input {
@@ -50,10 +50,10 @@ workflow GATKSVPipelineBatch {
     Array[File]? snp_vcfs
     File? snp_vcf_header # Required only if VCFs are unheadered
 
-    # Merge contig vcfs at each stage of Module 0506 for QC
-    Boolean module0506_merge_cluster_vcfs = false
-    Boolean module0506_merge_complex_resolve_vcfs = false
-    Boolean module0506_merge_complex_genotype_vcfs = false
+    # Merge contig vcfs at each stage of MakeCohortVcf for QC
+    Boolean makecohortvcf_merge_cluster_vcfs = false
+    Boolean makecohortvcf_merge_complex_resolve_vcfs = false
+    Boolean makecohortvcf_merge_complex_genotype_vcfs = false
 
     # Global files
     File ped_file
@@ -73,7 +73,7 @@ workflow GATKSVPipelineBatch {
     Boolean? run_batchmetrics_metrics
     Boolean? run_filterbatch_metrics
     Boolean? run_genotypebatch_metrics
-    Boolean? run_0506_metrics
+    Boolean? run_makecohortvcf_metrics
 
     File? baseline_sampleevidence_metrics
     File? baseline_batchevidence_metrics
@@ -81,7 +81,7 @@ workflow GATKSVPipelineBatch {
     File? baseline_batchmetrics_metrics
     File? baseline_filterbatch_metrics
     File? baseline_genotypebatch_metrics
-    File? baseline_0506_metrics
+    File? baseline_makecohortvcf_metrics
 
     String sv_base_mini_docker
     String sv_base_docker
@@ -271,11 +271,11 @@ workflow GATKSVPipelineBatch {
   }
   
 
-  call m0506.Module0506 as Module0506 {
+  call makecohortvcf.MakeCohortVcf as MakeCohortVcf {
     input:
-      merge_cluster_vcfs = module0506_merge_cluster_vcfs,
-      merge_complex_resolve_vcfs = module0506_merge_complex_resolve_vcfs,
-      merge_complex_genotype_vcfs = module0506_merge_complex_genotype_vcfs,
+      merge_cluster_vcfs = makecohortvcf_merge_cluster_vcfs,
+      merge_complex_resolve_vcfs = makecohortvcf_merge_complex_resolve_vcfs,
+      merge_complex_genotype_vcfs = makecohortvcf_merge_complex_genotype_vcfs,
       raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
       raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
       ped_file=ped_file,
@@ -292,7 +292,7 @@ workflow GATKSVPipelineBatch {
       batches=[batch],
       depth_gt_rd_sep_files=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
-      run_module_metrics = run_0506_metrics,
+      run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
       linux_docker=linux_docker,
@@ -305,11 +305,11 @@ workflow GATKSVPipelineBatch {
   call tu.CatMetrics as CatBatchMetrics {
       input:
         prefix = "batch_sv." + batch,
-        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, Module0506.metrics_file_0506]),
+        metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, MakeCohortVcf.metrics_file_makecohortvcf]),
         linux_docker = linux_docker
     }
 
-  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_filterbatch_metrics, baseline_genotypebatch_metrics, baseline_0506_metrics])
+  Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_filterbatch_metrics, baseline_genotypebatch_metrics, baseline_makecohortvcf_metrics])
   if (length(defined_baseline_metrics) > 0) {
     call tu.CatMetrics as CatBaselineMetrics {
       input:
@@ -335,8 +335,8 @@ workflow GATKSVPipelineBatch {
   }
 
   output {
-    File vcf = Module0506.vcf
-    File vcf_index = Module0506.vcf_index
+    File vcf = MakeCohortVcf.vcf
+    File vcf_index = MakeCohortVcf.vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
 

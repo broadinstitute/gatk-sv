@@ -2,7 +2,7 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Utils.wdl" as Utils
 
 # Workflow to perform depth-based genotyping per batch

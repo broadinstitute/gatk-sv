@@ -3,7 +3,7 @@ version 1.0
 import "TestUtils.wdl" as tu
 import "Utils.wdl" as util
 
-workflow Module0506Metrics {
+workflow MakeCohortVcfMetrics {
   input {
     Array[String]? samples
     String name
@@ -87,7 +87,7 @@ workflow Module0506Metrics {
 
   call tu.CatMetrics {
     input:
-      prefix = "module0506." + name,
+      prefix = "MakeCohortVcf." + name,
       metric_files = select_all([ClusterMetrics.out, ComplexResolveMetrics.out, ComplesGenotypeMetrics.out, CleanedMetrics.out]),
       linux_docker = linux_docker
   }

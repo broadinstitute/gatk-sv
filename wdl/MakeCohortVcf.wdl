@@ -1,13 +1,13 @@
 version 1.0
 
-import "Module0506Cluster.wdl" as Cluster
-import "Module0506ComplexResolve.wdl" as ComplexResolve
-import "Module0506ComplexGenotype.wdl" as ComplexGenotype
-import "Module0506Clean.wdl" as Clean
+import "CombineBatches.wdl" as Cluster
+import "ResolveComplexVariants.wdl" as ComplexResolve
+import "GenotypeComplexVariants.wdl" as ComplexGenotype
+import "CleanVcf.wdl" as Clean
 import "MasterVcfQc.wdl" as VcfQc
-import "Module0506Metrics.wdl" as metrics
+import "MakeCohortVcfMetrics.wdl" as metrics
 
-workflow Module0506 {
+workflow MakeCohortVcf {
   input {
     String cohort_name
     Array[String] batches
@@ -173,7 +173,7 @@ workflow Module0506 {
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
 
-  call Cluster.Module0506Cluster {
+  call Cluster.CombineBatches {
     input:
       cohort_name=cohort_name,
       batches=batches,
@@ -207,13 +207,13 @@ workflow Module0506 {
       runtime_override_concat_shards=runtime_override_concat_shards
   }
 
-  call ComplexResolve.Module0506ComplexResolve {
+  call ComplexResolve.ResolveComplexVariants {
     input:
       cohort_name=cohort_name,
       merge_vcfs=merge_complex_resolve_vcfs,
-      cluster_vcfs=Module0506Cluster.vcfs,
-      cluster_bothside_pass_lists=Module0506Cluster.cluster_bothside_pass_lists,
-      cluster_background_fail_lists=Module0506Cluster.cluster_background_fail_lists,
+      cluster_vcfs=CombineBatches.vcfs,
+      cluster_bothside_pass_lists=CombineBatches.cluster_bothside_pass_lists,
+      cluster_background_fail_lists=CombineBatches.cluster_background_fail_lists,
       disc_files=disc_files,
       disc_files_index=disc_files_index,
       rf_cutoff_files=rf_cutoff_files,
@@ -240,13 +240,13 @@ workflow Module0506 {
       runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard
   }
 
-  call ComplexGenotype.Module0506ComplexGenotype {
+  call ComplexGenotype.GenotypeComplexVariants {
     input:
       cohort_name=cohort_name,
       batches=batches,
       merge_vcfs=merge_complex_genotype_vcfs,
-      complex_resolve_vcfs=Module0506ComplexResolve.complex_resolve_vcfs,
-      complex_resolve_vcf_indexes=Module0506ComplexResolve.complex_resolve_vcf_indexes,
+      complex_resolve_vcfs=ResolveComplexVariants.complex_resolve_vcfs,
+      complex_resolve_vcf_indexes=ResolveComplexVariants.complex_resolve_vcf_indexes,
       depth_vcfs=depth_vcfs,
       merged_ped_file=ped_file,
       bincov_files=bincov_files,
@@ -274,12 +274,12 @@ workflow Module0506 {
       runtime_attr_subset_ped=runtime_attr_subset_ped
   }
 
-  call Clean.Module0506Clean {
+  call Clean.CleanVcf {
     input:
       cohort_name=cohort_name,
-      complex_genotype_vcfs=Module0506ComplexGenotype.complex_genotype_vcfs,
-      complex_resolve_bothside_pass_lists=Module0506ComplexResolve.complex_resolve_bothside_pass_lists,
-      complex_resolve_background_fail_lists=Module0506ComplexResolve.complex_resolve_background_fail_lists,
+      complex_genotype_vcfs=GenotypeComplexVariants.complex_genotype_vcfs,
+      complex_resolve_bothside_pass_lists=ResolveComplexVariants.complex_resolve_bothside_pass_lists,
+      complex_resolve_background_fail_lists=ResolveComplexVariants.complex_resolve_background_fail_lists,
       merged_ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
@@ -312,8 +312,8 @@ workflow Module0506 {
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   call VcfQc.MasterVcfQc {
     input:
-      vcf=Module0506Clean.cleaned_vcf,
-      vcf_idx=Module0506Clean.cleaned_vcf_index,
+      vcf=CleanVcf.cleaned_vcf,
+      vcf_idx=CleanVcf.cleaned_vcf_index,
       ped_file=ped_file,
       prefix="~{cohort_name}.cleaned",
       sv_per_shard=10000,
@@ -334,13 +334,13 @@ workflow Module0506 {
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
-    call metrics.Module0506Metrics {
+    call metrics.MakeCohortVcfMetrics {
       input:
         name = cohort_name,
-        cluster_vcf = Module0506Cluster.merged_vcf,
-        complex_resolve_vcf = Module0506ComplexResolve.merged_vcf,
-        complex_genotype_vcf = Module0506ComplexGenotype.merged_vcf,
-        cleaned_vcf = Module0506Clean.cleaned_vcf,
+        cluster_vcf = CombineBatches.merged_vcf,
+        complex_resolve_vcf = ResolveComplexVariants.merged_vcf,
+        complex_genotype_vcf = GenotypeComplexVariants.merged_vcf,
+        cleaned_vcf = CleanVcf.cleaned_vcf,
         baseline_cluster_vcf = baseline_cluster_vcf,
         baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
         baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
@@ -353,18 +353,18 @@ workflow Module0506 {
   }
 
   output {
-    File vcf = Module0506Clean.cleaned_vcf
-    File vcf_index = Module0506Clean.cleaned_vcf_index
+    File vcf = CleanVcf.cleaned_vcf
+    File vcf_index = CleanVcf.cleaned_vcf_index
     File vcf_qc = MasterVcfQc.sv_vcf_qc_output
 
     # If merge_intermediate_vcfs enabled
-    File? cluster_vcf = Module0506Cluster.merged_vcf
-    File? cluster_vcf_index = Module0506Cluster.merged_vcf_index
-    File? complex_resolve_vcf = Module0506ComplexResolve.merged_vcf
-    File? complex_resolve_vcf_index = Module0506ComplexResolve.merged_vcf_index
-    File? complex_genotype_vcf = Module0506ComplexGenotype.merged_vcf
-    File? complex_genotype_vcf_index = Module0506ComplexGenotype.merged_vcf_index
+    File? cluster_vcf = CombineBatches.merged_vcf
+    File? cluster_vcf_index = CombineBatches.merged_vcf_index
+    File? complex_resolve_vcf = ResolveComplexVariants.merged_vcf
+    File? complex_resolve_vcf_index = ResolveComplexVariants.merged_vcf_index
+    File? complex_genotype_vcf = GenotypeComplexVariants.merged_vcf
+    File? complex_genotype_vcf_index = GenotypeComplexVariants.merged_vcf_index
 
-    File? metrics_file_0506 = Module0506Metrics.metrics_file
+    File? metrics_file_makecohortvcf = MakeCohortVcfMetrics.metrics_file
   }
 }

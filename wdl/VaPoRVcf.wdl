@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as tasks0506
 import "TasksBenchmark.wdl" as tasks10
 
 workflow VaPoRVcf {

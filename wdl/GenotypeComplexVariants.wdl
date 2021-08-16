@@ -1,10 +1,10 @@
 version 1.0
 
 import "ScatterCpxGenotyping.wdl" as GenotypeComplexContig
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Utils.wdl" as util
 
-workflow Module0506ComplexGenotype {
+workflow GenotypeComplexVariants {
   input {
     String cohort_name
     Array[String] batches
@@ -112,7 +112,7 @@ workflow Module0506ComplexGenotype {
         vcfs=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf,
         vcfs_idx=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx,
         merge_sort=true,
-        outfile_prefix="~{cohort_name}.0506_complex",
+        outfile_prefix="~{cohort_name}.complex_genotype",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat
     }

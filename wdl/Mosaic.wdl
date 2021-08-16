@@ -7,7 +7,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "PreRFCohort.wdl" as preRF 
 import "MosaicDepth.wdl" as depth_mosaic
 import "MosaicPesrPart1.wdl" as mosaic_pesr_part1

@@ -2,7 +2,7 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 #Resolve complex SV for a single chromosome
 workflow ResolveComplexSv {

@@ -10,8 +10,8 @@ import "GenerateBatchMetrics.wdl" as batchmetrics
 import "SRTest.wdl" as SRTest
 import "FilterBatch.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
-import "Module0506.wdl" as m0506
-import "Module08Annotation.wdl" as m08
+import "MakeCohortVcf.wdl" as makecohortvcf
+import "AnnotateVcf.wdl" as annotate
 import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
@@ -21,7 +21,7 @@ import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode
 # Runs GatherSampleEvidence, EvidenceQC, GatherBatchEvidence, ClusterBatch, FilterBatch.MergePesrVcfs, GenotypeBatch, 
-# CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, GenotypeComplexVariants, and AnnotateVcf
+# MakeCohortVcf (CombineBatches, ResolveComplexVariants, GenotypeComplexVariants, GenotypeComplexVariants), and AnnotateVcf
 
 workflow GATKSVPipelineSingleSample {
   meta {
@@ -356,7 +356,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_integrate_depth_gq
 
     ############################################################
-    ## Module 0506
+    ## MakeCohortVcf
     ############################################################
 
     Float clean_vcf_min_sr_background_fail_batches
@@ -376,8 +376,8 @@ workflow GATKSVPipelineSingleSample {
 
     Int? clean_vcf_random_seed
 
-    # Run Module0506 metrics - default is off for single sample pipeline
-    Boolean? run_0506_metrics = false
+    # Run MakeCohortVcf metrics - default is off for single sample pipeline
+    Boolean? run_makecohortvcf_metrics = false
 
     RuntimeAttr? runtime_override_update_sr_list
     RuntimeAttr? runtime_override_merge_pesr_depth
@@ -390,7 +390,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
 
     ############################################################
-    ## Module 08
+    ## AnnotateVcf
     ############################################################
 
     File protein_coding_gtf
@@ -876,7 +876,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call m0506.Module0506 as Module0506 {
+  call makecohortvcf.MakeCohortVcf as MakeCohortVcf {
     input:
       raw_sr_bothside_pass_files=[GenotypeBatch.sr_bothside_pass],
       raw_sr_background_fail_files=[GenotypeBatch.sr_background_fail],
@@ -920,7 +920,7 @@ workflow GATKSVPipelineSingleSample {
 
       random_seed=clean_vcf_random_seed,
 
-      run_module_metrics = run_0506_metrics,
+      run_module_metrics = run_makecohortvcf_metrics,
 
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -942,7 +942,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.FilterVcfForShortDepthCalls as FilterVcfDepthLt5kb {
     input:
-      vcf_gz=Module0506.vcf,
+      vcf_gz=MakeCohortVcf.vcf,
       min_length=5000,
       filter_name="DEPTH_LT_5KB",
       sv_base_mini_docker=sv_base_mini_docker
@@ -950,7 +950,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.GetUniqueNonGenotypedDepthCalls as GetUniqueNonGenotypedDepthCalls {
     input:
-      vcf_gz=select_first([Module0506.complex_genotype_vcf]),
+      vcf_gz=select_first([MakeCohortVcf.complex_genotype_vcf]),
       sample_id=sample_id,
       ref_panel_dels=ref_panel_del_bed,
       ref_panel_dups=ref_panel_dup_bed,
@@ -1027,7 +1027,7 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_base_docker=sv_pipeline_base_docker,
   }
 
-  call m08.Module08Annotation {
+  call annotate.AnnotateVcf {
        input:
         vcf = FilterSample.out,
         vcf_idx = FilterSample.out_idx,
@@ -1049,15 +1049,15 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = Module08Annotation.output_vcf,
+      vcf = AnnotateVcf.output_vcf,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
     input:
-      single_sample_vcf=Module08Annotation.output_vcf,
-      single_sample_vcf_idx=Module08Annotation.output_vcf_idx,
+      single_sample_vcf=AnnotateVcf.output_vcf,
+      single_sample_vcf_idx=AnnotateVcf.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
       sv_pipeline_docker=sv_pipeline_docker
@@ -1072,7 +1072,7 @@ workflow GATKSVPipelineSingleSample {
       sample_pe = case_pe_file_,
       sample_sr = case_sr_file_,
       sample_counts = case_counts_file_,
-      cleaned_vcf = Module0506.vcf,
+      cleaned_vcf = MakeCohortVcf.vcf,
       final_vcf = FinalVCFCleanup.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
@@ -1099,8 +1099,8 @@ workflow GATKSVPipelineSingleSample {
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
-    File pre_cleanup_vcf = Module08Annotation.output_vcf
-    File pre_cleanup_vcf_idx = Module08Annotation.output_vcf_idx
+    File pre_cleanup_vcf = AnnotateVcf.output_vcf
+    File pre_cleanup_vcf_idx = AnnotateVcf.output_vcf_idx
 
     File ploidy_matrix = select_first([GatherBatchEvidence.ploidy_matrix])
     File ploidy_plots = select_first([GatherBatchEvidence.ploidy_plots])

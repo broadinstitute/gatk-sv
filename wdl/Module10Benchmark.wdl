@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as tasks0506
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
 import "VaPoR.wdl" as vapor
@@ -171,7 +171,7 @@ workflow BenchmarkAnnotation {
       }
     }
 
-  call tasks0506.ConcatVcfs as ConcatVcfsPB{
+  call MiniTasks.ConcatVcfs as ConcatVcfsPB{
     input:
       vcfs=Bcf2VcfPB.vcf,
       merge_sort=true,
@@ -180,7 +180,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
 
-  call tasks0506.ConcatVcfs as ConcatVcfsIL{
+  call MiniTasks.ConcatVcfs as ConcatVcfsIL{
     input:
       vcfs=Bcf2VcfIL.vcf,
       merge_sort=true,
@@ -189,7 +189,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
 
-  call tasks0506.ConcatBeds as ConcatBeds{
+  call MiniTasks.ConcatBeds as ConcatBeds{
     input:
       shard_bed_files=RunVaPoR.vapor,
       prefix=prefix,
@@ -197,7 +197,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatBeds
   }
   
-  call tasks0506.ConcatBeds as ConcatPesrAnno{
+  call MiniTasks.ConcatBeds as ConcatPesrAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.pesr_anno,
       prefix=prefix,
@@ -205,7 +205,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnno{
+  call MiniTasks.ConcatBeds as ConcatRdAnno{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov,
       prefix=prefix,
@@ -213,7 +213,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnnoLeFlank{
+  call MiniTasks.ConcatBeds as ConcatRdAnnoLeFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_le_flank,
       prefix=prefix,
@@ -221,7 +221,7 @@ workflow BenchmarkAnnotation {
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  call tasks0506.ConcatBeds as ConcatRdAnnoRiFlank{
+  call MiniTasks.ConcatBeds as ConcatRdAnnoRiFlank{
     input:
       shard_bed_files=RunRdPeSrAnnotation.cov_ri_flank,
       prefix=prefix,

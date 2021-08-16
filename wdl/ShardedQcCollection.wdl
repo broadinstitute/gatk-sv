@@ -4,7 +4,7 @@ version 1.0
 
 # Workflow to gather SV VCF summary stats for an input VCF
 
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow ShardedQcCollection {
   input {

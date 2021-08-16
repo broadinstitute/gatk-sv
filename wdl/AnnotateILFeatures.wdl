@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as tasks0506
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
 import "VaPoR.wdl" as vapor
@@ -222,7 +222,7 @@ workflow AnnoILFeatures {
    
     }
 
-    call tasks0506.ConcatVcfs as ConcatVcfsIL{
+    call MiniTasks.ConcatVcfs as ConcatVcfsIL{
         input:
             vcfs=Bcf2VcfIL.vcf,
             merge_sort=true,
@@ -231,7 +231,7 @@ workflow AnnoILFeatures {
             runtime_attr_override=runtime_attr_ConcatVcfs
     }
 
-    call tasks0506.ConcatVcfs as ConcatVcfsIL_le_flank{
+    call MiniTasks.ConcatVcfs as ConcatVcfsIL_le_flank{
         input:
             vcfs=Bcf2VcfIL_le_flank.vcf,
             merge_sort=true,
@@ -240,7 +240,7 @@ workflow AnnoILFeatures {
             runtime_attr_override=runtime_attr_ConcatVcfs
     }
 
-    call tasks0506.ConcatVcfs as ConcatVcfsIL_ri_flank{
+    call MiniTasks.ConcatVcfs as ConcatVcfsIL_ri_flank{
         input:
             vcfs=Bcf2VcfIL_ri_flank.vcf,
             merge_sort=true,

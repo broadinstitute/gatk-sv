@@ -3,7 +3,7 @@
 
 version 1.0
 
-import "Tasks0506.wdl" as tasks0506
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "ChromosomeAlleleFrequencies.wdl" as calcAF
 
 # Prune off samples in annotated VCF, add VAF annotation
@@ -68,7 +68,7 @@ workflow PruneAndAddVafs {
   }
 
   # Merge pruned VCFs with allele info
-  call tasks0506.ConcatVcfs as ConcatVcfs{
+  call MiniTasks.ConcatVcfs as ConcatVcfs{
     input:
       vcfs = ChromosomeAlleleFrequencies.vcf_wAFs,
       vcfs_idx = ChromosomeAlleleFrequencies.vcf_wAFs_idx,

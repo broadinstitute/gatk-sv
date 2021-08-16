@@ -1,9 +1,9 @@
 version 1.0
 
 import "VcfClusterSingleChromsome.wdl" as VcfClusterContig
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow Module0506Cluster {
+workflow CombineBatches {
   input {
     String cohort_name
     Array[String] batches
@@ -196,7 +196,7 @@ workflow Module0506Cluster {
         vcfs=MergePesrDepth.merged_vcf,
         vcfs_idx=MergePesrDepth.merged_vcf_idx,
         merge_sort=true,
-        outfile_prefix="~{cohort_name}.0506_clustered",
+        outfile_prefix="~{cohort_name}.CombineBatches_clustered",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat
     }

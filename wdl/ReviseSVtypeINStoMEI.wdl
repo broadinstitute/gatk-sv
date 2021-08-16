@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "ReviseSVtypeINStoMEIperContig.wdl" as ReviseSVtypePerContig
 
 workflow ReviseSVtypeINStoMEI {

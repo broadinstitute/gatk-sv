@@ -3,8 +3,8 @@ version 1.0
 import "PrepareGencode.wdl" as pg
 # import "PrepareNoncoding.wdl" as pn
 
-# Workflow for the preprocessing sub-module in Module07, its output will be used for the annotation sub-module
-workflow Module07Preprocessing {
+# Workflow for preprocessing for functional annotation
+workflow GenerateFunctionalAnnotationResources {
   input {
     
     ### args for PrepareGencode

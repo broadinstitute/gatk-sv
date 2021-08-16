@@ -1,9 +1,9 @@
 version 1.0
 
 import "ResolveCpxSv.wdl" as ResolveComplexContig
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow Module0506ComplexResolve {
+workflow ResolveComplexVariants {
   input {
     String cohort_name
 
@@ -173,7 +173,7 @@ workflow Module0506ComplexResolve {
         vcfs=RenameVariants.renamed_vcf,
         vcfs_idx=RenameVariants.renamed_vcf_index,
         merge_sort=true,
-        outfile_prefix="~{cohort_name}.0506_complex",
+        outfile_prefix="~{cohort_name}.complex_resolve",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat
     }
