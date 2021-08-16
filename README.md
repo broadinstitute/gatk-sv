@@ -84,7 +84,7 @@ There are two scripts for running the full pipeline:
 * `wdl/GATKSVPipelineSingleSample.wdl`: Runs GATK-SV on a single sample, given a reference panel
 
 #### Inputs
-Example workflow inputs can be found in `/inputs`. All required resources are available in public Google buckets.
+Example workflow inputs can be found in `/input_templates` or `/test_input_templates`. All required resources are available in public Google buckets.
 
 #### MELT
 **Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
@@ -106,10 +106,11 @@ We recommend running the pipeline on a dedicated [Cromwell](https://github.com/b
 ```
 > mkdir gatksv_run && cd gatksv_run
 > mkdir wdl && cd wdl
-> cp $GATK_SV_V1_ROOT/wdl/*.wdl .
+> cp $GATK_SV_ROOT/wdl/*.wdl .
 > zip dep.zip *.wdl
 > cd ..
-> cp $GATK_SV_V1_ROOT/inputs/GATKSVPipelineBatch.ref_panel_1kg.json GATKSVPipelineBatch.my_run.json
+> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT
+> cp $GATK_SV_ROOT/inputs/GATKSVPipelineBatch.ref_panel_1kg.json GATKSVPipelineBatch.my_run.json
 > cromshell submit wdl/GATKSVPipelineBatch.wdl GATKSVPipelineBatch.my_run.json cromwell_config.json wdl/dep.zip
 ```
 
@@ -132,7 +133,8 @@ The pipeline consists of a series of modules that perform the following:
 
 
 Repository structure:
-* `/inputs`: Example workflow parameter files for running gCNV training, GATK-SV batch mode, and GATK-SV single-sample mode
+* `/input_templates`: Example workflow parameter file templates for running gCNV training, GATK-SV batch mode, and GATK-SV single-sample mode. Generate parameter files from templates using `scripts/inputs/build_default_inputs.sh`.
+* `/input_values`: Example workflow input values to populate templates. Please note that file inputs may not be publicly available.
 * `/dockerfiles`: Resources for building pipeline docker images (see [readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
 * `/wdl`: WDLs running the pipeline. There is a master WDL for running each module, e.g. `ClusterBatch.wdl`.
 * `/scripts`: scripts for running tests, building dockers, and analyzing cromwell metadata files
@@ -143,7 +145,7 @@ Repository structure:
   * `/svtest`: Python module for generating various summary metrics from module outputs
   * `/svtk`: Python module of tools for SV-related datafile parsing and analysis
   * `/WGD`: whole-genome dosage scoring scripts
-* `/test`: WDL test parameter files. Please note that file inputs may not be publicly available.
+* `/test_input_templates`: WDL test parameter file templates. Generate parameter files from templates using `scripts/inputs/build_default_inputs.sh`.
 
 
 ## <a name="cohort-mode">Cohort mode</a>
@@ -199,7 +201,7 @@ Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline
 
 
 ## <a name="descriptions">Module Descriptions</a>
-The following sections briefly describe each module and highlights inter-dependent input/output files. Note that input/output mappings can also be gleaned from `GATKSVPipelineBatch.wdl`, and example input files for each module can be found in `/test`.
+The following sections briefly describe each module and highlights inter-dependent input/output files. Note that input/output mappings can also be gleaned from `GATKSVPipelineBatch.wdl`, and example input files for each module can be found in `/test_input_templates`.
 
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 Runs raw evidence collection on each sample.
