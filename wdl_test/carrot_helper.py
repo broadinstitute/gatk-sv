@@ -355,6 +355,10 @@ class CarrotHelper:
                 runs = {}
                 for k, v in runs_dict.items():
                     runs[k] = Run(**v)
+        # TODO: instead of capturing exceptions and printing messages here
+        # a better alternative would be to capture the errors at the callers level.
+        except FileNotFoundError:
+            print(f"The runs JSON file, {RUNS_JSON}, does not exist.")
         except json.decoder.JSONDecodeError:
             print(f"The runs JSON file, {RUNS_JSON}, is empty or "
                   f"corrupted; have you submitted any test runs?")
