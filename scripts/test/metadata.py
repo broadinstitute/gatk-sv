@@ -68,25 +68,23 @@ class Metadata:
         output_files = {}
 
         def update_output_files(outputs):
-            if len(outputs) > 0:
+            if run["executionStatus"] == "Done" and len(outputs) > 0:
                 output_files[self._get_output_label(
                     parent_workflow, workflow, out_label,
                     run["shardIndex"])] = outputs
 
         for workflow, runs in calls.items():
             for run in runs:
-                if run["executionStatus"] != "Done":
-                    continue
-                for out_label, out_files in run["outputs"].items():
-                    if not out_files:
-                        continue
-                    update_output_files(self._get_filtered_outputs(out_files))
-                    if deep and "subWorkflowMetadata" in run:
+                if "outputs" in run:
+                    for out_label, out_files in run["outputs"].items():
+                        if not out_files:
+                            continue
                         update_output_files(self._get_filtered_outputs(out_files))
-                        output_files.update(
-                            self._traverse_outputs(
-                                run["subWorkflowMetadata"]["calls"],
-                                workflow, deep))
+                if deep and "subWorkflowMetadata" in run:
+                    output_files.update(
+                        self._traverse_outputs(
+                            run["subWorkflowMetadata"]["calls"],
+                            workflow, deep))
         return output_files
 
     def get_outputs(self, include_sub_workflows=False, filter_method=None):
