@@ -6,6 +6,7 @@ Requirements:
 """
 
 import argparse
+import hashlib
 import subprocess
 import sys
 from subprocess import check_output
@@ -88,6 +89,14 @@ class CarrotHelper:
                 f"to the given repository? {e}")
 
     @staticmethod
+    def _get_test_wdl_local_path(wdl):
+        return f"{WDLS_DIR_RELATIVE}/{wdl}.wdl"
+
+    @staticmethod
+    def _get_eval_wdl_local_path(pipeline, template):
+        return f"{pipeline}/{template}/eval.wdl"
+
+    @staticmethod
     def _get_wdl_outputs(wdl, include_supported_types_only=True):
         """
         Returns a dictionary whose keys are the output
@@ -104,6 +113,21 @@ class CarrotHelper:
             outputs = {k: v for k, v in outputs.items()
                        if v.lower() in SUPPORTED_RESULTS_TYPE}
         return outputs
+
+    @staticmethod
+    def get_checksum(filename):
+        """
+        Implemented based on: https://stackoverflow.com/a/22058673/947889
+        """
+        buffer_size = 65536  # 64kb
+        sha3 = hashlib.sha3_256()
+        with open(filename, "rb") as f:
+            while True:
+                data = f.read(buffer_size)
+                if not data:
+                    break
+                sha3.update(data)
+        return sha3.hexdigest()
 
     def load_pipelines(self):
         if os.path.isfile(self.pipelines_filename):
@@ -201,7 +225,9 @@ class CarrotHelper:
 
         for pipeline, templates in pipelines.items():
             test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline}.wdl")
-            test_workflow_outputs = self._get_wdl_outputs(f"{WDLS_DIR_RELATIVE}/{pipeline}.wdl")
+            test_wdl_local = self._get_test_wdl_local_path(pipeline)
+            test_wdl_checksum = self.get_checksum(test_wdl_local)
+            test_workflow_outputs = self._get_wdl_outputs(test_wdl_local)
             if not bool(test_workflow_outputs):
                 # TODO: skip the pipeline instead
                 raise Exception("No supported result type for the pipeline.")
@@ -215,7 +241,9 @@ class CarrotHelper:
             created_pipeline = self.create_pipeline()
             for template in templates:
                 eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
-                eval_workflow_outputs = self._get_wdl_outputs(f"{pipeline}/{template}/eval.wdl")
+                eval_wdl_local = self._get_eval_wdl_local_path(pipeline, template)
+                eval_wdl_checksum = self.get_checksum(eval_wdl_local)
+                eval_workflow_outputs = self._get_wdl_outputs(eval_wdl_local)
                 if not bool(eval_workflow_outputs):
                     # TODO: skip the pipeline instead
                     raise Exception("No supported result type for the pipeline.")
@@ -226,7 +254,7 @@ class CarrotHelper:
                     result.var_name = var_name
                     eval_results.append(result)
 
-                created_template = self.create_template(created_pipeline.uuid, test_wdl, eval_wdl)
+                created_template = self.create_template(created_pipeline.uuid, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum)
                 for result in test_results + eval_results:
                     self.create_template_to_result_mapping(created_template, result)
                     created_template.results.append(result)
@@ -251,7 +279,7 @@ class CarrotHelper:
         response = self.call_carrot(cmd, "pipeline_id")
         return Pipeline(**response)
 
-    def create_template(self, pipeline_id, test_wdl, eval_wdl, name=None, description=None, timestamp=True):
+    def create_template(self, pipeline_id, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum, name=None, description=None, timestamp=True):
         name = name or "gatk_sv"
         if timestamp:
             name = f"{name}_{get_timestamp()}"
@@ -263,7 +291,7 @@ class CarrotHelper:
               f"--test_wdl {test_wdl} " \
               f"--eval_wdl {eval_wdl}"
         response = self.call_carrot(cmd, "template_id")
-        return Template(**response)
+        return Template(**response, test_wdl_checksum=test_wdl_checksum, eval_wdl_checksum=eval_wdl_checksum)
 
     def create_result(self, result_type, name=None, description=None, timestamp=True):
         """
@@ -450,7 +478,9 @@ class Template(BaseModel):
     """
     pipeline_id: str
     test_wdl: str
+    test_wdl_checksum: str
     eval_wdl: str
+    eval_wdl_checksum: str
     results: List = field(default_factory=list)
     test: str = None
 
