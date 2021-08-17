@@ -328,6 +328,8 @@ class CarrotHelper:
         def_test = os.path.join(template_path, DEFAULT_TEST_INPUTS_FILENAME)
         if not os.path.isfile(def_test):
             raise FileNotFoundError(f"Default inputs for test WDL does not exist; expected file: {def_test}")
+        def_eval_checksum = self.get_checksum(def_eval)
+        def_test_checksum = self.get_checksum(def_test)
 
         cmd = f"carrot_cli -q test create " \
               f"--name '{name}' " \
@@ -336,7 +338,7 @@ class CarrotHelper:
               f"--eval_input_defaults {def_eval} " \
               f"--test_input_defaults {def_test}"
         response = self.call_carrot(cmd, "test_id")
-        return Test(**response, template_path=template_path)
+        return Test(**response, template_path=template_path, eval_input_defaults_checksum=def_eval_checksum, test_input_defaults_checksum=def_test_checksum)
 
     def create_run(self, test, run_dir, name=None, timestamp=True):
         name = name or "gatk"
@@ -498,9 +500,11 @@ class Result(BaseModel):
 @dataclass
 class Test(BaseModel):
     template_id: str
-    eval_input_defaults: str
-    test_input_defaults: str
+    eval_input_defaults_checksum: str
+    test_input_defaults_checksum: str
     template_path: str
+    eval_input_defaults: dict = field(default_factory=dict)
+    test_input_defaults: dict = field(default_factory=dict)
 
 
 class Run(BaseModel):
