@@ -208,7 +208,7 @@ class CompareWorkflowOutputs:
         return mismatches
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(
         description="Takes two cromwell metadata files as input, "
                     "reference and target, compares their corresponding "
@@ -268,3 +268,7 @@ if __name__ == '__main__':
         with open(output_file, "w") as f:
             json.dump(mismatches, f, indent=2)
         print(f"Mismatches are persisted in {output_file}.")
+
+
+if __name__ == '__main__':
+    main()
