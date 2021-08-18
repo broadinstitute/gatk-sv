@@ -133,8 +133,9 @@ class CarrotHelper:
         if os.path.isfile(self.pipelines_filename):
             with open(self.pipelines_filename, "r") as f:
                 self.pipelines = json.loads(f.read())
-                # Pipelines is a dictionary of dictionaries now,
-                # and the following code converts it the object
+                # At this point, pipelines is loaded as a
+                # dictionary of dictionaries, and the
+                # following code converts it the object
                 # types as it was when serialized.
                 for k, v in self.pipelines.items():
                     pipeline = Pipeline(**v)
@@ -232,34 +233,10 @@ class CarrotHelper:
                 # TODO: skip the pipeline instead
                 raise Exception("No supported result type for the pipeline.")
 
-            test_results = []
-            for var_name, var_type in test_workflow_outputs.items():
-                result = self.create_result(name=var_name, result_type=var_type)
-                result.var_name = var_name
-                test_results.append(result)
-
+            test_results = self.setup_results(test_workflow_outputs)
             created_pipeline = self.create_pipeline()
             for template in templates:
-                eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
-                eval_wdl_local = self._get_eval_wdl_local_path(pipeline, template)
-                eval_wdl_checksum = self.get_checksum(eval_wdl_local)
-                eval_workflow_outputs = self._get_wdl_outputs(eval_wdl_local)
-                if not bool(eval_workflow_outputs):
-                    # TODO: skip the pipeline instead
-                    raise Exception("No supported result type for the pipeline.")
-
-                eval_results = []
-                for var_name, var_type in eval_workflow_outputs.items():
-                    result = self.create_result(name=var_name, result_type=var_type)
-                    result.var_name = var_name
-                    eval_results.append(result)
-
-                created_template = self.create_template(created_pipeline.uuid, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum)
-                for result in test_results + eval_results:
-                    self.create_template_to_result_mapping(created_template, result)
-                    created_template.results.append(result)
-
-                created_template.test = self.create_test(created_template, os.path.join(self.working_dir, pipeline, template))
+                created_template = self.setup_template(pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_results)
                 created_pipeline.templates[template] = created_template
 
             self.pipelines[pipeline] = created_pipeline
@@ -278,6 +255,37 @@ class CarrotHelper:
               f"--description '{description}'"
         response = self.call_carrot(cmd, "pipeline_id")
         return Pipeline(**response)
+
+    def setup_results(self, workflow_outputs):
+        results = []
+        for var_name, var_type in workflow_outputs.items():
+            result = self.create_result(name=var_name, result_type=var_type)
+            result.var_name = var_name
+            results.append(result)
+        return results
+
+    def setup_template(self, pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_results):
+        eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
+        eval_wdl_local = self._get_eval_wdl_local_path(pipeline, template)
+        eval_wdl_checksum = self.get_checksum(eval_wdl_local)
+        eval_workflow_outputs = self._get_wdl_outputs(eval_wdl_local)
+        if not bool(eval_workflow_outputs):
+            # TODO: skip the pipeline instead
+            raise Exception("No supported result type for the pipeline.")
+
+        eval_results = []
+        for var_name, var_type in eval_workflow_outputs.items():
+            result = self.create_result(name=var_name, result_type=var_type)
+            result.var_name = var_name
+            eval_results.append(result)
+
+        created_template = self.create_template(created_pipeline.uuid, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum)
+        for result in test_results + eval_results:
+            self.create_template_to_result_mapping(created_template, result)
+            created_template.results.append(result)
+
+        created_template.test = self.create_test(created_template, os.path.join(self.working_dir, pipeline, template))
+        return created_template
 
     def create_template(self, pipeline_id, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum, name=None, description=None, timestamp=True):
         name = name or "gatk_sv"
