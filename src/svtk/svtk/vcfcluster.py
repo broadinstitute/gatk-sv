@@ -119,7 +119,6 @@ class VCFCluster(GenomeSLINK):
 
         super().__init__(nodes, dist, 1, blacklist)
 
-
     def clusters_with(self, first, second):
         """
         Check if two SV cluster with each other.

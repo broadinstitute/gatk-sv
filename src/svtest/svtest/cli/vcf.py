@@ -186,7 +186,7 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
         base_tree = iu.create_trees_from_records(
             base_records, variant_types, contigs, padding=padding)
         base_pass_records = [r for r in base_records if (
-                "PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
+            "PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
         base_pass_tree = iu.create_trees_from_records(
             base_pass_records, variant_types, contigs, padding=padding)
     elif fbase_bed is not None:

@@ -179,7 +179,7 @@ def link_cpx_V2(linked_INV, resolve_CNV, cpx_dist=2000):
         if len(group) > 1:
             for i in group:
                 for j in group:
-                    if (ro_calu(i,j) > 0 and samples_overlap_records(i, j)):
+                    if ro_calu(i, j) > 0 and samples_overlap_records(i, j):
                         linked_INV_V2.append([i, j])
         else:
             linked_INV_V2.append([group[0]])

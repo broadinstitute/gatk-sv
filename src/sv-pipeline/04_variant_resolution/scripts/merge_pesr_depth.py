@@ -96,9 +96,9 @@ def merge_pesr_depth(vcf, fout, prefix, frac=0.5, sample_overlap=0.5):
 
     def _records_cluster_together(record_a, record_b):
         return _record_is_depth(record_a) != _record_is_depth(record_b) \
-               and record_a.info['SVTYPE'] == record_b.info['SVTYPE'] \
-               and _reciprocal_overlap(record_a, record_b) \
-               and _sample_overlap(record_a, record_b)
+            and record_a.info['SVTYPE'] == record_b.info['SVTYPE'] \
+            and _reciprocal_overlap(record_a, record_b) \
+            and _sample_overlap(record_a, record_b)
 
     def _get_base_record(vcf):
         for record in vcf.fetch():
