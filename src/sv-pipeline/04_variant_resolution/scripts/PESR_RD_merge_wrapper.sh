@@ -6,7 +6,7 @@
 
 # Wrapper for PESR + depth merging in module 04b
 
-set -ex
+set -e
 
 ###USAGE
 usage(){
@@ -93,67 +93,64 @@ PROCDIR=`mktemp -d`
 
 #Get list of calls with 100% ref genotypes
 #This is necessary to protect against X/Y false negatives before cleanVCF
-#svtk vcf2bed ${PESR} ${PROCDIR}/PESR.bed
-#awk -v FS="\t" '{ if ($6=="") print $4 }' ${PROCDIR}/PESR.bed \
-#  | sort | uniq \
-#  > ${PROCDIR}/VIDs_with_no_samples.pesr.list
-#
-#svtk vcf2bed ${RD} ${PROCDIR}/RD.bed
-#awk -v FS="\t" '{ if ($6=="") print $4 }' ${PROCDIR}/RD.bed \
-#  | sort | uniq \
-#  > ${PROCDIR}/VIDs_with_no_samples.depth.list
+svtk vcf2bed ${PESR} ${PROCDIR}/PESR.bed
+awk -v FS="\t" '{ if ($6=="") print $4 }' ${PROCDIR}/PESR.bed \
+  | sort | uniq \
+  > ${PROCDIR}/VIDs_with_no_samples.pesr.list
 
-# Merge VCFs (doesn't merge variants)
-bcftools concat -a --output-type z \
-  ${PESR} ${RD} --output ${PROCDIR}/pesr_depth_unmerged.${chrom}.vcf.gz
+svtk vcf2bed ${RD} ${PROCDIR}/RD.bed
+awk -v FS="\t" '{ if ($6=="") print $4 }' ${PROCDIR}/RD.bed \
+  | sort | uniq \
+  > ${PROCDIR}/VIDs_with_no_samples.depth.list
 
-#Run merging script (merges variants)
+
+#Run merging script
 ${BIN}/merge_pesr_depth.py \
   --prefix pesr_depth_merged_${chrom} \
-  ${PROCDIR}/pesr_depth_unmerged.${chrom}.vcf.gz \
-  ${PROCDIR}/pesr_depth_merged_unsorted.${chrom}.vcf
+  ${PESR} ${RD} \
+  ${PROCDIR}/pesr_depth_merged.${chrom}.vcf
 
-rm ${PROCDIR}/pesr_depth_unmerged.${chrom}.vcf.gz
 
-# Sort output
-bcftools sort ${PROCDIR}/pesr_depth_merged_unsorted.${chrom}.vcf -Oz -o ${OUT}
+#Get list of members in merged VCF
+if [ $( cat ${PROCDIR}/VIDs_with_no_samples.pesr.list | wc -l ) -gt 0 ] || \
+   [ $( cat ${PROCDIR}/VIDs_with_no_samples.depth.list | wc -l ) -gt 0 ]; then
+  svtk vcf2bed -i MEMBERS --no-samples \
+    ${PROCDIR}/pesr_depth_merged.${chrom}.vcf \
+    ${PROCDIR}/pesr_depth_merged.${chrom}.bed
+  awk '{ print $NF }' ${PROCDIR}/pesr_depth_merged.${chrom}.bed \
+    | sed 's/,/\n/g' | sort -Vk1,1 | uniq \
+    > ${PROCDIR}/VIDs_in_merged_vcf.list
+fi
 
-##Get list of members in merged VCF
-#if [ $( cat ${PROCDIR}/VIDs_with_no_samples.pesr.list | wc -l ) -gt 0 ] || \
-#   [ $( cat ${PROCDIR}/VIDs_with_no_samples.depth.list | wc -l ) -gt 0 ]; then
-#  svtk vcf2bed -i MEMBERS --no-samples \
-#    ${PROCDIR}/pesr_depth_merged.${chrom}.vcf \
-#    ${PROCDIR}/pesr_depth_merged.${chrom}.bed
-#  awk '{ print $NF }' ${PROCDIR}/pesr_depth_merged.${chrom}.bed \
-#    | sed 's/,/\n/g' | sort -Vk1,1 | uniq \
-#    > ${PROCDIR}/VIDs_in_merged_vcf.list
-#fi
-#
-#
-##Salvage 100% ref PESR calls
-#if [ $( cat ${PROCDIR}/VIDs_with_no_samples.pesr.list | wc -l ) -gt 0 ]; then
-#  cat <(zgrep '^#' ${PESR}) \
-#    <( fgrep -wf <(fgrep -wvf ${PROCDIR}/VIDs_in_merged_vcf.list ${PROCDIR}/VIDs_with_no_samples.pesr.list) <( zgrep -v "^#" ${PESR} ) ) \
-#    | ${BIN}/salvage_allRef_calls.py -p salvaged_pesr_allref /dev/stdin /dev/stdout \
-#    | grep -v "^#" \
-#    >> ${PROCDIR}/pesr_depth_merged.${chrom}.vcf
-#fi
-#
-#
-##Salvage 100% ref depth calls
-#if [ $( cat ${PROCDIR}/VIDs_with_no_samples.depth.list | wc -l ) -gt 0 ]; then
-#  cat <( zgrep "^#" ${RD} ) \
-#      <( fgrep -wf <(fgrep -wvf ${PROCDIR}/VIDs_in_merged_vcf.list ${PROCDIR}/VIDs_with_no_samples.depth.list) <( zgrep -v "^#" ${RD} ) ) \
-#    | ${BIN}/salvage_allRef_calls.py -p salvaged_depth_allref /dev/stdin /dev/stdout \
-#    | grep -v "^#" \
-#    >> ${PROCDIR}/pesr_depth_merged.${chrom}.vcf
-#fi
-#
-#
-##Sort and compress final output
-#vcf-sort ${PROCDIR}/pesr_depth_merged.${chrom}.vcf \
-#  | bgzip -c \
-#  > ${OUT}
+
+#Salvage 100% ref PESR calls
+if [ $( cat ${PROCDIR}/VIDs_with_no_samples.pesr.list | wc -l ) -gt 0 ]; then
+  cat <(zgrep '^#' ${PESR}) \
+    <( fgrep -wvf ${PROCDIR}/VIDs_in_merged_vcf.list \
+         ${PROCDIR}/VIDs_with_no_samples.pesr.list \
+         | fgrep -wf - <( zgrep -v "^#" ${PESR} ) ) \
+    | ${BIN}/salvage_allRef_calls.py -p salvaged_pesr_allref /dev/stdin /dev/stdout \
+    | grep -v "^#" \
+    >> ${PROCDIR}/pesr_depth_merged.${chrom}.vcf
+fi
+
+
+#Salvage 100% ref depth calls
+if [ $( cat ${PROCDIR}/VIDs_with_no_samples.depth.list | wc -l ) -gt 0 ]; then
+  cat <( zgrep "^#" ${RD} ) \
+      <( fgrep -wvf ${PROCDIR}/VIDs_in_merged_vcf.list \
+           ${PROCDIR}/VIDs_with_no_samples.depth.list \
+         | fgrep -wf - <( zgrep -v "^#" ${RD} ) ) \
+    | ${BIN}/salvage_allRef_calls.py -p salvaged_depth_allref /dev/stdin /dev/stdout \
+    | grep -v "^#" \
+    >> ${PROCDIR}/pesr_depth_merged.${chrom}.vcf
+fi
+
+
+#Sort and compress final output
+vcf-sort ${PROCDIR}/pesr_depth_merged.${chrom}.vcf \
+  | bgzip -c \
+  > ${OUT}
 
 
 #Clean up

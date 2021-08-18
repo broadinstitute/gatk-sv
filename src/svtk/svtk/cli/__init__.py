@@ -11,4 +11,3 @@ from .utils import vcf2bed, remote_tabix
 from .pesr_test import pe_test, sr_test, count_pe, count_sr
 from .adjudicate import main as adjudicate
 from .baf_test import main as baf_test
-from .shardresolve import main as shardresolve
