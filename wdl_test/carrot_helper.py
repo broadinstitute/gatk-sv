@@ -64,6 +64,8 @@ class CarrotHelper:
         self.load_pipelines()
         if not bool(self.pipelines):
             self.populate_pipelines()
+        else:
+            self.update_resources()
 
     def _get_email_from_config(self):
         config = self.call_carrot("carrot_cli config get")
@@ -151,6 +153,30 @@ class CarrotHelper:
         else:
             self.persist_object(self.pipelines, self.pipelines_filename)
 
+    def update_resources(self):
+        for pipeline_key, pipeline_value in self.pipelines.items():
+            self.setup_pipeline(pipeline_key, pipeline_value, pipeline_value.templates.keys())
+        self.persist_object(self.pipelines, self.pipelines_filename)
+
+    def setup_pipeline(self, pipeline_key, pipeline_value, templates):
+        test_wdl_local = self._get_test_wdl_local_path(pipeline_key)
+        test_workflow_outputs = self._get_wdl_outputs(test_wdl_local)
+        if not bool(test_workflow_outputs):
+            # TODO: skip the pipeline instead
+            raise Exception("No supported result type for the pipeline.")
+
+        if not pipeline_value:
+            pipeline_value = self.create_pipeline()
+        test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline_key}.wdl")
+        test_wdl_checksum = self.get_checksum(test_wdl_local)
+        for template in templates:
+            if template in pipeline_value.templates and (pipeline_value.templates[template].test_wdl_checksum == test_wdl_checksum and pipeline_value.templates[template].eval_wdl_checksum == self.get_checksum(self._get_eval_wdl_local_path(pipeline_key, template))):
+                continue
+            created_template = self.setup_template(pipeline_key, pipeline_value, template, test_wdl, test_wdl_checksum, test_workflow_outputs) #, test_results)
+            pipeline_value.templates[template] = created_template
+
+        return pipeline_value
+
     def get_pipelines(self, dirs):
         """
         Takes a list of directories as input, traverses every
@@ -225,21 +251,7 @@ class CarrotHelper:
             dirs.clear()
 
         for pipeline, templates in pipelines.items():
-            test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline}.wdl")
-            test_wdl_local = self._get_test_wdl_local_path(pipeline)
-            test_wdl_checksum = self.get_checksum(test_wdl_local)
-            test_workflow_outputs = self._get_wdl_outputs(test_wdl_local)
-            if not bool(test_workflow_outputs):
-                # TODO: skip the pipeline instead
-                raise Exception("No supported result type for the pipeline.")
-
-            test_results = self.setup_results(test_workflow_outputs)
-            created_pipeline = self.create_pipeline()
-            for template in templates:
-                created_template = self.setup_template(pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_results)
-                created_pipeline.templates[template] = created_template
-
-            self.pipelines[pipeline] = created_pipeline
+            self.pipelines[pipeline] = self.setup_pipeline(pipeline, None, templates)
         self.persist_object(self.pipelines, self.pipelines_filename)
 
     def create_pipeline(self, name=None, description=None, timestamp=True):
@@ -256,15 +268,22 @@ class CarrotHelper:
         response = self.call_carrot(cmd, "pipeline_id")
         return Pipeline(**response)
 
-    def setup_results(self, workflow_outputs):
-        results = []
+    def setup_results(self, results, workflow_outputs):
+        updated_results = []
         for var_name, var_type in workflow_outputs.items():
-            result = self.create_result(name=var_name, result_type=var_type)
-            result.var_name = var_name
-            results.append(result)
-        return results
+            # because carrot lowers output types.
+            var_type = var_type.lower()
+            for result in results:
+                if result.var_name == var_name and result.result_type == var_type:
+                    updated_results.append(result)
+                    break
+            else:
+                result = self.create_result(name=var_name, result_type=var_type)
+                result.var_name = var_name
+                updated_results.append(result)
+        return updated_results
 
-    def setup_template(self, pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_results):
+    def setup_template(self, pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_workflow_outputs): #, test_results):
         eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
         eval_wdl_local = self._get_eval_wdl_local_path(pipeline, template)
         eval_wdl_checksum = self.get_checksum(eval_wdl_local)
@@ -273,13 +292,9 @@ class CarrotHelper:
             # TODO: skip the pipeline instead
             raise Exception("No supported result type for the pipeline.")
 
-        eval_results = []
-        for var_name, var_type in eval_workflow_outputs.items():
-            result = self.create_result(name=var_name, result_type=var_type)
-            result.var_name = var_name
-            eval_results.append(result)
-
         created_template = self.create_template(created_pipeline.uuid, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum)
+        test_results = self.setup_results(created_pipeline.templates[template].results, test_workflow_outputs)
+        eval_results = self.setup_results(created_pipeline.templates[template].results, eval_workflow_outputs)
         for result in test_results + eval_results:
             self.create_template_to_result_mapping(created_template, result)
             created_template.results.append(result)
@@ -325,11 +340,6 @@ class CarrotHelper:
         self.call_carrot(cmd)
 
     def create_test(self, template, template_path, name=None, description=None, timestamp=True):
-        name = name or "gatk"
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        description = description or "A test type created by GATK-sv carrot_helper.py"
-
         def_eval = os.path.join(template_path, DEFAULT_EVAL_INPUTS_FILENAME)
         if not os.path.isfile(def_eval):
             raise FileNotFoundError(f"Default inputs for evaluation WDL does not exist; expected file: {def_eval}")
@@ -339,6 +349,13 @@ class CarrotHelper:
         def_eval_checksum = self.get_checksum(def_eval)
         def_test_checksum = self.get_checksum(def_test)
 
+        if template.test.test_input_defaults_checksum == def_test_checksum and template.test.eval_input_defaults_checksum == def_eval_checksum:
+            return template.test
+
+        name = name or "gatk"
+        if timestamp:
+            name = f"{name}_{get_timestamp()}"
+        description = description or "A test type created by GATK-sv carrot_helper.py"
         cmd = f"carrot_cli -q test create " \
               f"--name '{name}' " \
               f"--description '{description}' " \
