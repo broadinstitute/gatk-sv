@@ -110,8 +110,6 @@ workflow GenotypeComplexVariants {
       input:
         vcfs=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf,
         vcfs_idx=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx,
-        merge_sort=true,
-        outfile_prefix="~{cohort_name}.complex_genotype",
         naive=true,
         outfile_prefix="~{cohort_name}.complex_genotype",
         sv_base_mini_docker=sv_base_mini_docker,

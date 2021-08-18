@@ -378,7 +378,9 @@ workflow GATKSVPipelineSingleSample {
     # Run MakeCohortVcf metrics - default is off for single sample pipeline
     Boolean? run_makecohortvcf_metrics = false
 
-    RuntimeAttr? runtime_override_update_sr_list
+    RuntimeAttr? runtime_override_update_sr_list_cluster
+    RuntimeAttr? runtime_override_update_sr_list_pass
+    RuntimeAttr? runtime_override_update_sr_list_fail
     RuntimeAttr? runtime_override_merge_pesr_depth
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
@@ -893,7 +895,6 @@ workflow GATKSVPipelineSingleSample {
       bin_exclude=bin_exclude,
 
       disc_files=[GatherBatchEvidence.merged_PE],
-      disc_files_index=[GatherBatchEvidence.merged_PE_index],
       bincov_files=[GatherBatchEvidence.merged_bincov],
 
       mei_bed=mei_bed,
@@ -926,7 +927,9 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
 
-      runtime_override_update_sr_list=runtime_override_update_sr_list,
+      runtime_override_update_sr_list_cluster=runtime_override_update_sr_list_cluster,
+      runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
+      runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,

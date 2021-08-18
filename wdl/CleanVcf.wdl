@@ -1,6 +1,6 @@
 version 1.0
 
-import "CleanVcf.wdl" as CleanVcfContig
+import "CleanVcfChromosome.wdl" as CleanVcfChromosome
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow CleanVcf {
@@ -50,7 +50,7 @@ workflow CleanVcf {
   scatter ( i in range(length(contigs)) ) {
     String contig = contigs[i]
 
-    call CleanVcfContig.CleanVcf as CleanContigVcf {
+    call CleanVcfChromosome.CleanVcfChromosome {
       input:
         vcf=complex_genotype_vcfs[i],
         contig=contig,
@@ -86,8 +86,8 @@ workflow CleanVcf {
 
   call MiniTasks.ConcatVcfs as ConcatCleanedVcfs {
     input:
-      vcfs=CleanContigVcf.out,
-      vcfs_idx=CleanContigVcf.out_idx,
+      vcfs=CleanVcfChromosome.out,
+      vcfs_idx=CleanVcfChromosome.out_idx,
       naive=true,
       outfile_prefix="~{cohort_name}.cleaned",
       sv_base_mini_docker=sv_base_mini_docker,
