@@ -52,7 +52,7 @@ class BaseCompareAgent:
         self.working_dir = working_dir
 
     def get_filename(self, obj):
-        return obj.replace("gs://", self.working_dir)
+        return obj.replace("gs://", os.path.join(self.working_dir, ""))
 
     def get_obj(self, obj):
         """
