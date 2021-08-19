@@ -273,8 +273,8 @@ class CarrotHelper:
 
     def call_carrot(
             self, command, subcommand,
-            named_args=field(default_factory=dict),
-            positional_args=field(default_factory=list),
+            named_args=None,
+            positional_args=None,
             name=None, description=None, timestamp=True,
             field_to_uuid=None, add_name=True):
         """
@@ -322,10 +322,12 @@ class CarrotHelper:
             c += f"--name '{name}' "
         if description:
             c += f"--description '{description}' "
-        for k, v in named_args.items():
-            c += f"--{k} {v} "
-        for x in positional_args:
-            c += f"{x} "
+        if named_args:
+            for k, v in named_args.items():
+                c += f"--{k} {v} "
+        if positional_args:
+            for x in positional_args:
+                c += f"{x} "
 
         try:
             data = check_output(c, shell=True)
