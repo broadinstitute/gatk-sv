@@ -60,15 +60,11 @@ class CarrotHelper:
         self.repository = repository
         self.branch = branch
         self.email = email or self._get_email_from_config()
-        self.pipelines = {}
-        self.load_pipelines()
-        if not bool(self.pipelines):
-            self.populate_pipelines()
-        else:
-            self.update_resources()
+        self.pipelines = self.load_pipelines(self.pipelines_filename)
+        self.populate_pipelines()
 
     def _get_email_from_config(self):
-        config = self.call_carrot("carrot_cli config get")
+        config = self.call_carrot("config", "get", add_name=False)
         return config["email"]
 
     def _get_online_path(self, resource):
@@ -119,7 +115,8 @@ class CarrotHelper:
     @staticmethod
     def get_checksum(filename):
         """
-        Implemented based on: https://stackoverflow.com/a/22058673/947889
+        Implemented based on:
+        https://stackoverflow.com/a/22058673/947889
         """
         buffer_size = 65536  # 64kb
         sha3 = hashlib.sha3_256()
@@ -131,16 +128,27 @@ class CarrotHelper:
                 sha3.update(data)
         return sha3.hexdigest()
 
-    def load_pipelines(self):
-        if os.path.isfile(self.pipelines_filename):
-            with open(self.pipelines_filename, "r") as f:
-                self.pipelines = json.loads(f.read())
-                # At this point, pipelines is loaded as a
-                # dictionary of dictionaries, and the
-                # following code converts it the object
-                # types as it was when serialized.
-                for k, v in self.pipelines.items():
-                    pipeline = Pipeline(**v)
+    def load_pipelines(self, filename):
+        """
+        Reads pipelines stored in the given JSON file
+        into a dictionary of Pipelines. If the file
+        does not exist, it creates an empty JSON file,
+        and returns an empty dictionary.
+
+        :param filename: A JSON file that contains pipelines.
+        :return: Loaded pipelines in the Dictionary<string, Pipeline>
+        format.
+        """
+        pipelines = {}
+        if os.path.isfile(filename):
+            with open(filename, "r") as f:
+                pipelines = json.loads(f.read())
+                # At this point, pipelines is loaded
+                # as a dictionary, and the following
+                # code converts it the object types
+                # as it was when serialized.
+                for pk, pv in pipelines.items():
+                    pipeline = Pipeline(**pv)
                     for tk, tv in pipeline.templates.items():
                         template = Template(**tv)
                         results = []
@@ -149,35 +157,79 @@ class CarrotHelper:
                         template.results = results
                         template.test = Test(**template.test)
                         pipeline.templates[tk] = template
-                    self.pipelines[k] = pipeline
+                    pipelines[pk] = pipeline
         else:
-            self.persist_object(self.pipelines, self.pipelines_filename)
+            self.persist_object(pipelines, filename)
+        return pipelines
 
-    def update_resources(self):
-        for pipeline_key, pipeline_value in self.pipelines.items():
-            self.setup_pipeline(pipeline_key, pipeline_value, pipeline_value.templates.keys())
+    def populate_pipelines(self):
+        """
+        Traverses the folders under the working directory
+        and constructs Pipelines, Templates, and Tests.
+        Any missing or modified pipeline, template, or test
+        in the self.pipelines will be updated. It uses
+        checksums to determine if any resource is updated.
+        The updated pipelines are persisted as a JSON objects
+        in the pipelines_filename.
+
+        The expected directory structure is:
+
+            ├── PIPELINE
+            │ └── TEMPLATE
+            │     ├── eval.wdl
+            │     ├── eval_input_defaults.json
+            │     ├── TEST
+            │     │ ├── eval_input.json
+            │     │ └── test_input.json
+            │     └── test_input_defaults.json
+
+        Please refer to the README for details on the
+        directory structure.
+        """
+        pipelines = {}
+        for root, dirs, _ in os.walk(self.working_dir, topdown=True):
+            if root == self.working_dir:
+                continue
+            pipelines[os.path.basename(root)] = dirs.copy()
+            # prevents os.walk to traverse any deeper.
+            dirs.clear()
+
+        for pipeline_name, template_names in pipelines.items():
+            self.pipelines[pipeline_name] = \
+                self.create_pipeline(pipeline_name, template_names)
         self.persist_object(self.pipelines, self.pipelines_filename)
 
-    def setup_pipeline(self, pipeline_key, pipeline_value, templates):
-        test_wdl_local = self._get_test_wdl_local_path(pipeline_key)
+    def create_pipeline(self, pipeline_name, template_names):
+        def _create_pipeline():
+            response = self.call_carrot(
+                "pipeline", "create", field_to_uuid="pipeline_id")
+            return Pipeline(**response)
+
+        test_wdl_local = self._get_test_wdl_local_path(pipeline_name)
         test_workflow_outputs = self._get_wdl_outputs(test_wdl_local)
         if not bool(test_workflow_outputs):
             # TODO: skip the pipeline instead
             raise Exception("No supported result type for the pipeline.")
-
-        if not pipeline_value:
-            pipeline_value = self.create_pipeline()
-        test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline_key}.wdl")
+        test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline_name}.wdl")
         test_wdl_checksum = self.get_checksum(test_wdl_local)
-        for template in templates:
-            if template in pipeline_value.templates and (pipeline_value.templates[template].test_wdl_checksum == test_wdl_checksum and pipeline_value.templates[template].eval_wdl_checksum == self.get_checksum(self._get_eval_wdl_local_path(pipeline_key, template))):
+
+        pipeline = self.pipelines.get(pipeline_name, _create_pipeline())
+        for template_name in template_names:
+            if template_name in pipeline.templates and \
+                    (pipeline.templates[template_name].test_wdl_checksum ==
+                     test_wdl_checksum and
+                     pipeline.templates[template_name].eval_wdl_checksum ==
+                     self.get_checksum(self._get_eval_wdl_local_path(
+                         pipeline_name, template_name))):
                 continue
-            created_template = self.setup_template(pipeline_key, pipeline_value, template, test_wdl, test_wdl_checksum, test_workflow_outputs) #, test_results)
-            pipeline_value.templates[template] = created_template
+            template = self.create_template(
+                pipeline_name, pipeline, template_name, test_wdl,
+                test_wdl_checksum, test_workflow_outputs)
+            pipeline.templates[template_name] = template
 
-        return pipeline_value
+        return pipeline
 
-    def get_pipelines(self, dirs):
+    def get_pipelines_from_dirs(self, dirs):
         """
         Takes a list of directories as input, traverses every
         directory and sub-directories and extracts pipelines.
@@ -195,11 +247,16 @@ class CarrotHelper:
 
             if pipeline not in pipelines:
                 pipelines[pipeline] = {}
-            templates = templates or [x for x in next(os.walk(os.path.join(wd, pipeline)))[1]]
+            templates = \
+                templates or \
+                [x for x in next(os.walk(os.path.join(wd, pipeline)))[1]]
             for t in templates:
                 if t not in pipelines[pipeline]:
                     pipelines[pipeline][t] = []
-                run_dirs = run_dirs or [x for x in next(os.walk(os.path.join(wd, pipeline, t)))[1]]
+                run_dirs = \
+                    run_dirs or \
+                    [x for x in next(os.walk(os.path.join(
+                        wd, pipeline, t)))[1]]
                 for r in run_dirs:
                     if r not in pipelines[pipeline][t]:
                         pipelines[pipeline][t].append(r)
@@ -208,172 +265,192 @@ class CarrotHelper:
     @staticmethod
     def persist_object(obj, filename):
         with open(filename, "w") as f:
-            json.dump(obj, f, default=lambda o: o.__dict__, indent="\t", sort_keys=True)
+            json.dump(
+                obj, f,
+                default=lambda o: o.__dict__,
+                indent="\t",
+                sort_keys=True)
 
-    def call_carrot(self, command, resource_id=None):
+    def call_carrot(
+            self, command, subcommand,
+            named_args=field(default_factory=dict),
+            positional_args=field(default_factory=list),
+            name=None, description=None, timestamp=True,
+            field_to_uuid=None, add_name=True):
         """
+        Calls Carrot using the given commands, sub-commands and arguments,
+        and returns Carrot's response as a JSON object.
 
-        :param command:
-        :param resource_id: If provided, the provided ID field will be renamed to `uuid`.
-        For instance; `resource_id="pipeline_id"` will lead to changing `pipeline_id` to `uuid`
-        in the deserialized object.
-        :return:
+        :param command:         Carrot command to be called.
+        :param subcommand:      Carrot sub-command to be called.
+        :param named_args:      A dictionary of named arguments for
+                                the sub-command.
+        :param positional_args: A list of positional arguments for
+                                the sub-command.
+        :param name:            The name of the resource, if creating/updating.
+                                Carrot uses names as unique identifiers, to
+                                ensure uniqueness, by default, this method
+                                appends a timestamp to the provided name.
+                                If name's uniqueness is guaranteed, set
+                                `timestamp` to False to avoid appending a
+                                timestamp to the given name. Name is required
+                                field for some [sub-]commands (e.g.,
+                                `result create`) and it is optional for many
+                                others. By default, name is included in all
+                                the commands, if you want to skip adding name,
+                                set the `add_name` argument to True.
+        :param description:     If provided, it is added when
+                                creating/updating resources.
+        :param timestamp:       This method appends a timestamp to any given
+                                name, if otherwise is intended, set this
+                                argument to False.
+        :param field_to_uuid:   If provided, the provided field will be
+                                renamed to `uuid`. For instance,
+                                `resource_id="pipeline_id"` will lead to
+                                changing `pipeline_id` to `uuid` in the
+                                deserialized object.
+        :param add_name:        Sets whether the `name` argument should be
+                                included or not.
+        :return:                A JSON object containing Carrot's response.
         """
+        name = name or "gatk-sv"
+        if timestamp:
+            name = f"{name}_{get_timestamp()}"
+
+        c = f"carrot_cli -q {command} {subcommand} "
+        if add_name:
+            c += f"--name '{name}' "
+        if description:
+            c += f"--description '{description}' "
+        for k, v in named_args.items():
+            c += f"--{k} {v} "
+        for x in positional_args:
+            c += f"{x} "
+
         try:
-            data = check_output(command, shell=True)
-            return self.response_to_json(data, resource_id)
-        except subprocess.CalledProcessError as grepexc:
-            print("error code", grepexc.returncode, grepexc.output)
+            data = check_output(c, shell=True)
+            data = self.response_to_json(data)
+            if field_to_uuid:
+                data["uuid"] = data.pop(field_to_uuid)
+            return data
+        except subprocess.CalledProcessError as e:
+            print("error code", e.returncode, e.output)
 
     @staticmethod
-    def response_to_json(response, resource_id):
-        # A hack to fix the
-        response = response.decode("utf8").replace("\'", "\"").replace("None", "\"None\"")
+    def response_to_json(response):
+        response = response\
+            .decode("utf8")\
+            .replace("\'", "\"")\
+            .replace("None", "\"None\"")
+        # Some hack on carrot's output until it returns a valid JSON.
         if "Encountered a connection error." in response:
-            raise Exception("Please check your connection, are you connected to the VPN?\n" + response)
+            raise Exception("Please check your connection, are you "
+                            "connected to the VPN?\n" + response)
         if "\"status\": 500" in response:
             raise Exception(response)
-        j = json.loads(response)
-        if resource_id:
-            j["uuid"] = j.pop(resource_id)
-        return j
+        return json.loads(response)
 
     @staticmethod
     def get_timestamp():
         return calendar.timegm(time.gmtime())
 
-    def populate_pipelines(self):
-        pipelines = {}
-        for root, dirs, _ in os.walk(self.working_dir, topdown=True):
-            if root == self.working_dir:
-                continue
-            pipelines[os.path.basename(root)] = dirs.copy()
-            dirs.clear()
-
-        for pipeline, templates in pipelines.items():
-            self.pipelines[pipeline] = self.setup_pipeline(pipeline, None, templates)
-        self.persist_object(self.pipelines, self.pipelines_filename)
-
-    def create_pipeline(self, name=None, description=None, timestamp=True):
-        name = name or "gatk_sv"
-        # Name is a unique identifier in carrot,
-        # if not timestamped, make sure the given
-        # name does not already exist.
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        description = description or "A pipeline created by the GATK-SV carrot_helper.py"
-        cmd = f"carrot_cli -q pipeline create " \
-              f"--name '{name}' " \
-              f"--description '{description}'"
-        response = self.call_carrot(cmd, "pipeline_id")
-        return Pipeline(**response)
-
-    def setup_results(self, results, workflow_outputs):
+    def create_results(self, results, workflow_outputs):
         updated_results = []
         for var_name, var_type in workflow_outputs.items():
             # because carrot lowers output types.
             var_type = var_type.lower()
             for result in results:
-                if result.var_name == var_name and result.result_type == var_type:
+                if result.var_name == var_name and \
+                   result.result_type == var_type:
                     updated_results.append(result)
                     break
             else:
-                result = self.create_result(name=var_name, result_type=var_type)
+                response = self.call_carrot(
+                    "result", "create",
+                    name=var_name,
+                    field_to_uuid="result_id",
+                    # lower chars for result_type is required by carrot.
+                    named_args={"result_type": var_type.lower()})
+                result = Result(**response)
                 result.var_name = var_name
                 updated_results.append(result)
         return updated_results
 
-    def setup_template(self, pipeline, created_pipeline, template, test_wdl, test_wdl_checksum, test_workflow_outputs): #, test_results):
-        eval_wdl = self._get_online_path(f"{WDLS_TEST_DIR}/{pipeline}/{template}/eval.wdl")
-        eval_wdl_local = self._get_eval_wdl_local_path(pipeline, template)
+    def create_template(self, pipeline_name, pipeline, template_name,
+                        test_wdl, test_wdl_checksum, test_workflow_outputs):
+        eval_wdl = self._get_online_path(
+            f"{WDLS_TEST_DIR}/{pipeline_name}/{template_name}/eval.wdl")
+        eval_wdl_local = self._get_eval_wdl_local_path(
+            pipeline_name, template_name)
         eval_wdl_checksum = self.get_checksum(eval_wdl_local)
         eval_workflow_outputs = self._get_wdl_outputs(eval_wdl_local)
         if not bool(eval_workflow_outputs):
             # TODO: skip the pipeline instead
             raise Exception("No supported result type for the pipeline.")
 
-        created_template = self.create_template(created_pipeline.uuid, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum)
-        test_results = self.setup_results(created_pipeline.templates[template].results, test_workflow_outputs)
-        eval_results = self.setup_results(created_pipeline.templates[template].results, eval_workflow_outputs)
+        response = self.call_carrot(
+            "template", "create",
+            field_to_uuid="template_id",
+            named_args={
+                "pipeline_id": pipeline.uuid,
+                "test_wdl": test_wdl,
+                "eval_wdl": eval_wdl
+            })
+        template = Template(**response,
+                            test_wdl_checksum=test_wdl_checksum,
+                            eval_wdl_checksum=eval_wdl_checksum)
+
+        current_results = \
+            pipeline.templates[template_name].results \
+            if template_name in pipeline.templates else []
+
+        test_results = self.create_results(current_results,
+                                           test_workflow_outputs)
+        eval_results = self.create_results(current_results,
+                                           eval_workflow_outputs)
         for result in test_results + eval_results:
-            self.create_template_to_result_mapping(created_template, result)
-            created_template.results.append(result)
+            self.call_carrot(
+                "template", "map_to_result",
+                positional_args=[template.uuid, result.uuid, result.var_name])
+            template.results.append(result)
 
-        created_template.test = self.create_test(created_template, os.path.join(self.working_dir, pipeline, template))
-        return created_template
+        template.test = \
+            pipeline.templates[template_name].test \
+            if template_name in pipeline.templates else None
+        template.test = self.create_test(
+            template,
+            os.path.join(self.working_dir, pipeline_name, template_name))
+        return template
 
-    def create_template(self, pipeline_id, test_wdl, test_wdl_checksum, eval_wdl, eval_wdl_checksum, name=None, description=None, timestamp=True):
-        name = name or "gatk_sv"
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        description = description or "A template created by the GATK-SV carrot_helper.py"
-        cmd = f"carrot_cli -q template create " \
-              f"--pipeline_id {pipeline_id} " \
-              f"--name {name} " \
-              f"--description '{description}' " \
-              f"--test_wdl {test_wdl} " \
-              f"--eval_wdl {eval_wdl}"
-        response = self.call_carrot(cmd, "template_id")
-        return Template(**response, test_wdl_checksum=test_wdl_checksum, eval_wdl_checksum=eval_wdl_checksum)
-
-    def create_result(self, result_type, name=None, description=None, timestamp=True):
-        """
-        Outputs of test and evaluation WDLs should be
-        defined as `result`s in carrot.
-        """
-        name = name or "gatk"
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        description = description or "A results type created by GATK-sv carrot_helper.py"
-        cmd = f"carrot_cli -q result create " \
-              f"--name {name} " \
-              f"--description '{description}' " \
-              f"--result_type {result_type.lower()}"  # lower type is required by carrot.
-        response = self.call_carrot(cmd, "result_id")
-        return Result(**response)
-
-    def create_template_to_result_mapping(self, template, result):
-        cmd = f"carrot_cli -q template map_to_result " \
-              f"{template.uuid} " \
-              f"{result.uuid} " \
-              f"{result.var_name}"
-        self.call_carrot(cmd)
-
-    def create_test(self, template, template_path, name=None, description=None, timestamp=True):
+    def create_test(self, template, template_path):
         def_eval = os.path.join(template_path, DEFAULT_EVAL_INPUTS_FILENAME)
         if not os.path.isfile(def_eval):
-            raise FileNotFoundError(f"Default inputs for evaluation WDL does not exist; expected file: {def_eval}")
+            raise FileNotFoundError(f"Default inputs for evaluation WDL does "
+                                    f"not exist; expected file: {def_eval}")
         def_test = os.path.join(template_path, DEFAULT_TEST_INPUTS_FILENAME)
         if not os.path.isfile(def_test):
-            raise FileNotFoundError(f"Default inputs for test WDL does not exist; expected file: {def_test}")
+            raise FileNotFoundError(f"Default inputs for test WDL does not "
+                                    f"exist; expected file: {def_test}")
         def_eval_checksum = self.get_checksum(def_eval)
         def_test_checksum = self.get_checksum(def_test)
 
-        if template.test.test_input_defaults_checksum == def_test_checksum and template.test.eval_input_defaults_checksum == def_eval_checksum:
+        if template.test and \
+           template.test.test_input_defaults_checksum == def_test_checksum and\
+           template.test.eval_input_defaults_checksum == def_eval_checksum:
             return template.test
 
-        name = name or "gatk"
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        description = description or "A test type created by GATK-sv carrot_helper.py"
-        cmd = f"carrot_cli -q test create " \
-              f"--name '{name}' " \
-              f"--description '{description}' " \
-              f"--template_id {template.uuid} " \
-              f"--eval_input_defaults {def_eval} " \
-              f"--test_input_defaults {def_test}"
-        response = self.call_carrot(cmd, "test_id")
-        return Test(**response, template_path=template_path, eval_input_defaults_checksum=def_eval_checksum, test_input_defaults_checksum=def_test_checksum)
-
-    def create_run(self, test, run_dir, name=None, timestamp=True):
-        name = name or "gatk"
-        if timestamp:
-            name = f"{name}_{get_timestamp()}"
-        eval_input = os.path.join(test.template_path, run_dir, EVAL_INPUTS_FILENAME)
-        test_input = os.path.join(test.template_path, run_dir, TEST_INPUTS_FILENAME)
-        cmd = f"carrot_cli -q test run --name {name} --test_input {test_input} --eval_input {eval_input} {test.uuid}"
-        response = self.call_carrot(cmd)
-        return Run(**response, run_dir=os.path.join(test.template_path, run_dir))
+        response = self.call_carrot(
+            "test", "create",
+            field_to_uuid="test_id",
+            named_args={
+                "template_id": template.uuid,
+                "eval_input_defaults": def_eval,
+                "test_input_defaults": def_test
+            })
+        return Test(**response,
+                    template_path=template_path,
+                    eval_input_defaults_checksum=def_eval_checksum,
+                    test_input_defaults_checksum=def_test_checksum)
 
     def update_runs_status(self):
         try:
@@ -382,8 +459,9 @@ class CarrotHelper:
                 runs = {}
                 for k, v in runs_dict.items():
                     runs[k] = Run(**v)
-        # TODO: instead of capturing exceptions and printing messages here
-        # a better alternative would be to capture the errors at the callers level.
+        # TODO: instead of capturing exceptions and printing
+        #  messages here a better alternative would be to
+        #  capture the errors at the callers level.
         except FileNotFoundError:
             print(f"The runs JSON file, {RUNS_JSON}, does not exist.")
         except json.decoder.JSONDecodeError:
@@ -393,9 +471,11 @@ class CarrotHelper:
         updated_status = []
         for run_id, run in runs.items():
             if run.status in ["succeeded", "failed"]:
-                updated_status.append(RunStatus(run_id, run.run_dir, run.status, run.status, run.test_cromwell_job_id, run.eval_cromwell_job_id))
+                updated_status.append(
+                    RunStatus(run_id, run.run_dir, run.status, run.status,
+                              run.test_cromwell_job_id,
+                              run.eval_cromwell_job_id))
                 continue
-            cmd = f"carrot_cli run find_by_id {run_id}"
             previous_status = run.status
             # At time of submitting a run, the run may not
             # have a test cromwell job ID and certainly not
@@ -403,9 +483,17 @@ class CarrotHelper:
             # on the status of test execution, can update both
             # of these IDs, which are useful for debugging
             # failed tests.
-            updated_run = self.call_carrot(cmd)
+            updated_run = self.call_carrot(
+                "run", "find_by_id",
+                positional_args=[run_id],
+                add_name=False)
+
             run.__dict__.update(updated_run)
-            updated_status.append(RunStatus(run_id, run.run_dir, previous_status, run.status, run.test_cromwell_job_id or "None", run.eval_cromwell_job_id or "None"))
+            updated_status.append(
+                RunStatus(run_id, run.run_dir, previous_status, run.status,
+                          run.test_cromwell_job_id or "None",
+                          run.eval_cromwell_job_id or "None"))
+
             runs[run_id] = run
         self.persist_object(runs, RUNS_JSON)
         return updated_status
@@ -415,19 +503,23 @@ class CarrotHelper:
             runs = {}
             with open(RUNS_JSON, "r") as runs_json:
                 runs = json.load(runs_json)
-        except json.decoder.JSONDecodeError:
-            # Happens when this script is run for the
-            # first time and the file does not exist.
-            # Passing this exception should be fine
-            # since a JSON object will be created and
-            # persisted to the file if creating a `run`
-            # was run successfully.
+        except FileNotFoundError:
+            # Happens when this method is run for the
+            # first time and the RUNS_JSON file does
+            # not exist. Passing this exception should
+            # be fine since a JSON object will be created
+            # and persisted to the file if creating a `run`
+            # was executed successfully.
             pass
+        except json.decoder.JSONDecodeError as e:
+            # TODO: tell user that json file is corrupt,
+            #  either delete it or fix the issue.
+            raise e
 
         c = 0
         print("Submitting tests ...")
         print('%-40s%-80s' % ("Run ID", "Test"))
-        pipelines = self.get_pipelines(tests_dir)
+        pipelines = self.get_pipelines_from_dirs(tests_dir)
         for pipeline, templates in pipelines.items():
             for template, run_dirs in templates.items():
                 for run_dir in run_dirs:
@@ -436,8 +528,23 @@ class CarrotHelper:
                     run = self.create_run(test, run_dir)
                     runs[run.uuid] = run
                     self.persist_object(runs, RUNS_JSON)
-                    print('%-40s%-80s' % (run.uuid, pipeline + "/" + template + "/" + run_dir))
+                    print('%-40s%-80s' %
+                          (run.uuid,
+                           pipeline + "/" + template + "/" + run_dir))
         print(f"Submitted {c} test(s).")
+
+    def create_run(self, test, run_dir):
+        response = self.call_carrot(
+            "test", "run",
+            positional_args=[test.uuid],
+            named_args={
+                "test_input": os.path.join(test.template_path, run_dir,
+                                           TEST_INPUTS_FILENAME),
+                "eval_input": os.path.join(test.template_path, run_dir,
+                                           EVAL_INPUTS_FILENAME)
+            })
+        return Run(**response, run_dir=os.path.join(
+            test.template_path, run_dir))
 
     @staticmethod
     def pretty_print_runs_status(statuses):
@@ -446,14 +553,16 @@ class CarrotHelper:
                 return ""
             if run_dir_col_max_width < 10:
                 return "..."
-            return "..." + txt[-(run_dir_col_max_width - 3):] if len(txt) > run_dir_col_max_width else txt
+            return "..." + txt[-(run_dir_col_max_width - 3):] \
+                if len(txt) > run_dir_col_max_width else txt
 
         t_size = shutil.get_terminal_size()
         # 36: UUID columns
         # 16: status columns
         # 15: (5 columns - 1) * 3, spaces between columns
         run_dir_col_max_width = t_size.columns - (((36 * 3) + (16 * 2)) + 15)
-        row_format = f"{{:<36}}   {{:<{run_dir_col_max_width}}}   {{:<16}}   {{:<16}}   {{:<36}}   {{:<36}}"
+        row_format = f"{{:<36}}   {{:<{run_dir_col_max_width}}}   " \
+                     f"{{:<16}}   {{:<16}}   {{:<36}}   {{:<36}}"
 
         print(row_format.format(
             "Run UUID",
@@ -638,8 +747,11 @@ def main():
                     "setup, and run carrot tests.")
     subparsers = parser.add_subparsers(help='Sub-commands')
 
-    test_parser = subparsers.add_parser("test", help="Create, list, and run tests.")
-    test_subparsers = test_parser.add_subparsers(title="sub-commands for test", dest="test", help="Commands to interact with carrot tests.")
+    test_parser = subparsers.add_parser(
+        "test", help="Create, list, and run tests.")
+    test_subparsers = test_parser.add_subparsers(
+        title="sub-commands for test",
+        dest="test", help="Commands to interact with carrot tests.")
     test_run_parser = test_subparsers.add_parser("run")
     test_run_parser.add_argument("tests_dir", nargs="+")
     test_subparsers.add_parser("update_status")
