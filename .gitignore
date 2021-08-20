@@ -33,3 +33,4 @@ src/svtk/svtk/vcfcluster.pyc
 /test_inputs
 /inputs/
 /wdl_test/.runs.json
+/wdl_test/.configs.json

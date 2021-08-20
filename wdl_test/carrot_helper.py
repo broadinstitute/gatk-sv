@@ -14,6 +14,7 @@ import time
 import calendar
 import json
 import os
+import re
 import shutil
 import urllib.request
 from dataclasses import dataclass, field
@@ -25,8 +26,6 @@ from urllib.error import HTTPError
 WDLS_DIR_RELATIVE = "../wdl"
 WDLS_DIR = "wdl"
 WDLS_TEST_DIR = "wdl_test"
-
-WOMTOOL_PATH = "~/code/cromwell/womtool-61.jar"
 
 DEFAULT_EVAL_INPUTS_FILENAME = "eval_input_defaults.json"
 DEFAULT_TEST_INPUTS_FILENAME = "test_input_defaults.json"
@@ -40,6 +39,11 @@ PIPELINES_JSON = ".carrot_pipelines.json"
 # This file contains all the submitted runs.
 # If renamed, also rename in `.gitignore`.
 RUNS_JSON = ".runs.json"
+
+CONFIGS_JSON = ".configs.json"
+CONF_REPO = "repo"
+CONF_BRANCH = "branch"
+CONF_WOMTOOL = "womtool_path"
 
 # This is the list of the currently
 # supported results type by Carrot.
@@ -64,16 +68,14 @@ class CarrotHelper:
     cg = "\033[92m"  # Color Green
     cy = "\033[93m"  # Color Yellow
 
-    def __init__(self, working_dir=".",
-                 pipelines_filename=PIPELINES_JSON,
-                 repository="https://github.com/vjalili/gatk-sv",
-                 branch="ehdn_unit_test",
-                 email=None,
+    def __init__(self, working_dir, repository, branch, womtool_path,
+                 pipelines_filename=PIPELINES_JSON, email=None,
                  initialize_pipelines=True):
         self.working_dir = working_dir
-        self.pipelines_filename = pipelines_filename
         self.repository = repository
         self.branch = branch
+        self.womtool_path = womtool_path
+        self.pipelines_filename = pipelines_filename
         self.email = email or self._get_email_from_config()
         self.pipelines = {}
         if initialize_pipelines:
@@ -111,8 +113,7 @@ class CarrotHelper:
     def _get_eval_wdl_local_path(pipeline, template):
         return f"{pipeline}/{template}/eval.wdl"
 
-    @staticmethod
-    def _get_wdl_outputs(wdl, include_supported_types_only=True):
+    def _get_wdl_outputs(self, wdl, include_supported_types_only=True):
         """
         Returns a dictionary whose keys are the output
         variables of the given WDL, and values are
@@ -121,7 +122,7 @@ class CarrotHelper:
         This method use womtool to extract outputs of
         a given WDL.
         """
-        cmd = f"java -jar {WOMTOOL_PATH} outputs {wdl}"
+        cmd = f"java -jar {self.womtool_path} outputs {wdl}"
         outputs_json = check_output(cmd, shell=True)
         outputs = json.loads(outputs_json)
         if include_supported_types_only:
@@ -826,8 +827,80 @@ def delete_all_software_created_by(email="jalili.vahid@broadinstitute.org"):
         response = check_output(command, shell=True)
 
 
+def is_url_accessible(url):
+    try:
+        # Ultimately, if want to make sure the github repo is a fork
+        # of broadinstitute/gatk-sv, we could either replace the last
+        # `.*` with `gatk-sv` (loose check) or use github API (hard check)
+        # to check if the given repo is a fork of broadinstitute/gatk-sv.
+        p = re.compile("https://github.com/.*/.*", re.IGNORECASE)
+        return p.match(url) and urllib.request.urlopen(url).getcode() == 200
+    except (ValueError, urllib.error.HTTPError):
+        return False
+
+
+def is_valid_womtool(womtool_path):
+    try:
+        check_output(f"java -jar {womtool_path} --help", shell=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
+def init_config():
+    configs = {}
+    print("Some resources of tests are required to be publicly accessible "
+          "from Github. If you are running existing tests, this can be "
+          "`https://github.com/broadinstitute/gatk-sv`, and if you are "
+          "developing tests, set this to your fork of "
+          "broadinstitute/gatk-sv where your feature branch is defined.")
+    repo = None
+    while not repo or not is_url_accessible(repo):
+        repo = input("\tPlease enter a valid/accessible "
+                     "Github repository: ")
+    configs[CONF_REPO] = repo
+
+    print("\nPlease enter the branch that contains the test and evaluation"
+          "WDLs and their input JSON files. If you want to run the "
+          "existing tests on broadinstitute/gatk-sv, this can be "
+          "`master`, or the name of your feature branch.")
+    branch = None
+    while not branch or not is_url_accessible(f"{repo}/tree/{branch}"):
+        branch = input("\tPlease enter branch name: ")
+    configs[CONF_BRANCH] = branch
+
+    womtool_path = None
+    while not womtool_path or not is_valid_womtool(womtool_path):
+        womtool_path = input("\nPlease enter the path to womtool: ")
+    configs[CONF_WOMTOOL] = womtool_path
+
+    CarrotHelper.persist_object(configs, CONFIGS_JSON)
+    return configs
+
+
+def get_config():
+    try:
+        with open(CONFIGS_JSON, "r") as f:
+            config = json.loads(f.read())
+            if CONF_BRANCH not in config or \
+                    CONF_REPO not in config or \
+                    CONF_WOMTOOL not in config:
+                raise
+            else:
+                return config
+    except FileNotFoundError:
+        return init_config()
+    except (Exception, json.decoder.JSONDecodeError):
+        print(f"The configurations JSON file is corrupt. Please check if the "
+              f"file `{CONFIGS_JSON}` is a valid JSON and contains the "
+              f"following keys: `{CONF_REPO}`, `{CONF_BRANCH}`, and "
+              f"`{CONF_WOMTOOL}`. Please fix the file and re-try. "
+              f"Alternatively, you may delete the file and re-try, which "
+              f"will trigger re-initialization.")
+        exit()
+
+
 def main():
-    wd = "."
     parser = argparse.ArgumentParser(
         prog=sys.argv[0],
         description="Helper methods to create, "
@@ -847,8 +920,15 @@ def main():
 
     args = parser.parse_args()
 
+    # Currently we do not support invoking this script
+    # from a directory other than the wdl_test dir.
+    wd = "."
+    config = get_config()
+
     if args.commands == "test":
-        carrot_helper = CarrotHelper(working_dir=wd)
+        carrot_helper = CarrotHelper(
+            working_dir=wd, repository=config[CONF_REPO],
+            branch=config[CONF_BRANCH], womtool_path=config[CONF_WOMTOOL])
         args_dict = vars(args)
         if args.test == "run":
             carrot_helper.submit_tests(args_dict.get("tests_dir"))
@@ -861,8 +941,10 @@ def main():
         while True:
             choice = input().lower()
             if choice in ["y", "yes"]:
-                carrot_helper = CarrotHelper(working_dir=wd,
-                                             initialize_pipelines=False)
+                carrot_helper = CarrotHelper(
+                    working_dir=wd, repository=config[CONF_REPO],
+                    branch=config[CONF_BRANCH], initialize_pipelines=False,
+                    womtool_path=config[CONF_WOMTOOL])
                 carrot_helper.prune()
                 break
             elif choice in ["n", "no"]:
