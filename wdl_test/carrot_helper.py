@@ -747,7 +747,7 @@ def main():
         prog=sys.argv[0],
         description="Helper methods to create, "
                     "setup, and run carrot tests.")
-    subparsers = parser.add_subparsers(help='Sub-commands')
+    subparsers = parser.add_subparsers(dest="commands", help="Commands")
 
     test_parser = subparsers.add_parser(
         "test", help="Create, list, and run tests.")
@@ -761,7 +761,7 @@ def main():
     args = parser.parse_args()
 
     carrot_helper = CarrotHelper(working_dir=wd)
-    if "test" in args:
+    if args.commands == "test":
         args_dict = vars(args)
         if args.test == "run":
             carrot_helper.submit_tests(args_dict.get("tests_dir"))
