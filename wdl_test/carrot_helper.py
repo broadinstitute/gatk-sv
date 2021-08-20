@@ -60,14 +60,17 @@ class CarrotHelper:
                  pipelines_filename=PIPELINES_JSON,
                  repository="https://github.com/vjalili/gatk-sv",
                  branch="ehdn_unit_test",
-                 email=None):
+                 email=None,
+                 initialize_pipelines=True):
         self.working_dir = working_dir
         self.pipelines_filename = pipelines_filename
         self.repository = repository
         self.branch = branch
         self.email = email or self._get_email_from_config()
-        self.pipelines = self.load_pipelines(self.pipelines_filename)
-        self.populate_pipelines()
+        self.pipelines = {}
+        if initialize_pipelines:
+            self.pipelines = self.load_pipelines(self.pipelines_filename)
+            self.populate_pipelines()
 
     def _get_email_from_config(self):
         config = self.call_carrot("config", "get", add_name=False)
@@ -852,8 +855,8 @@ def main():
 
     args = parser.parse_args()
 
-    carrot_helper = CarrotHelper(working_dir=wd)
     if args.commands == "test":
+        carrot_helper = CarrotHelper(working_dir=wd)
         args_dict = vars(args)
         if args.test == "run":
             carrot_helper.submit_tests(args_dict.get("tests_dir"))
@@ -866,6 +869,8 @@ def main():
         while True:
             choice = input().lower()
             if choice in ["y", "yes"]:
+                carrot_helper = CarrotHelper(working_dir=wd,
+                                             initialize_pipelines=False)
                 carrot_helper.prune()
                 break
             elif choice in ["n", "no"]:
