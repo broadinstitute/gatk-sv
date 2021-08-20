@@ -48,6 +48,14 @@ RUNS_JSON = ".runs.json"
 # https://github.com/broadinstitute/carrot/blob/1b2905e634e0887a94c63743a78b1731bd3a637c/src/custom_sql_types.rs#L158-L162
 SUPPORTED_RESULTS_TYPE = ["numeric", "file", "text"]
 
+# A list of the currently support status of carrot's jobs.
+JOB_STATUS = [
+    "succeeded", "buildfailed", "building", "carrotfailed", "created",
+    "evalaborted", "evalaborting", "evalfailed", "evalqueuedincromwell",
+    "evalrunning", "evalstarting", "evalsubmitted", "evalwaitingforqueuespace",
+    "testaborted", "testaborting", "testfailed", "testqueuedincromwell",
+    "testrunning", "teststarting", "testsubmitted", "testwaitingforqueuespace"]
+
 
 class CarrotHelper:
 
@@ -557,8 +565,7 @@ class CarrotHelper:
         return Run(**response, run_dir=os.path.join(
             test.template_path, run_dir))
 
-    @staticmethod
-    def pretty_print_runs_status(statuses):
+    def pretty_print_runs_status(self, statuses):
         def format_run_dir(txt):
             if run_dir_col_max_width < 3:
                 return ""
@@ -584,19 +591,11 @@ class CarrotHelper:
             "Eval Cromwell Job ID"))
 
         for status in statuses:
-            ec = "\033[0m"
-            if status.latest_status == "succeeded":
-                sc = "\033[92m"  # green color
-            elif status.latest_status == "failed":
-                sc = "\033[91m"  # Red color
-            else:
-                sc = "\033[93m"  # yellow color
-
             print(row_format.format(
                 status.run_uuid,
                 format_run_dir(status.run_dir),
                 status.previous_status,
-                f"{sc}{status.latest_status}{ec}",
+                f"{self.cr}{status.latest_status}{self.ce}",
                 status.test_cromwell_job_id,
                 status.eval_cromwell_job_id))
 
@@ -630,16 +629,9 @@ class CarrotHelper:
                     print(f"{self.cr}Failed: {_r['detail']}{self.ce}")
             return _r if successful else []
 
-        include_job_status = include_job_status or [
-            # Carrot currently does not deleting non-failed runs.
-            # "succeeded",
-            "buildfailed", "building", "carrotfailed", "created",
-            "evalaborted", "evalaborting", "evalfailed",
-            "evalqueuedincromwell", "evalrunning", "evalstarting",
-            "evalsubmitted", "evalwaitingforqueuespace", "testaborted",
-            "testaborting", "testfailed", "testqueuedincromwell",
-            "testrunning", "teststarting", "testsubmitted",
-            "testwaitingforqueuespace"]
+        include_job_status = include_job_status or JOB_STATUS
+        # Carrot currently does not deleting non-failed runs.
+        include_job_status.remove("succeeded")
 
         # Get all the pipelines created by the user;
         # user email is added in the carrot caller wrapper.
