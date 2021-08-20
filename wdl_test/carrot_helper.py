@@ -50,6 +50,12 @@ SUPPORTED_RESULTS_TYPE = ["numeric", "file", "text"]
 
 
 class CarrotHelper:
+
+    ce = "\033[0m"   # Color End
+    cr = "\033[91m"  # Color Red
+    cg = "\033[92m"  # Color Green
+    cy = "\033[93m"  # Color Yellow
+
     def __init__(self, working_dir=".",
                  pipelines_filename=PIPELINES_JSON,
                  repository="https://github.com/vjalili/gatk-sv",
@@ -591,6 +597,90 @@ class CarrotHelper:
                 status.test_cromwell_job_id,
                 status.eval_cromwell_job_id))
 
+    def prune(self, include_job_status=None):
+        def _call_carrot(command, subcommand, nargs=None, pargs=None):
+            """
+            A wrapper for carrot calls.
+            """
+            # Can I write this shorter?!
+            if subcommand in ["find", "find_runs", "find_result_maps"]:
+                if nargs:
+                    nargs["created_by"] = self.email
+                else:
+                    nargs = {"created_by": self.email}
+
+            _r = self.call_carrot(
+                command, subcommand, add_name=False,
+                named_args=nargs, positional_args=pargs)
+
+            successful = "detail" not in _r
+            if subcommand in ["delete", "delete_result_map_by_id"]:
+                if command == "pipeline":
+                    print("└─ ", end="")
+                elif command == "template" and \
+                        subcommand != "delete_result_map_by_id":
+                    print("|  └── ", end="")
+
+                if successful:
+                    print(f"{self.cg}Successful{self.ce}")
+                else:
+                    print(f"{self.cr}Failed: {_r['detail']}{self.ce}")
+            return _r if successful else []
+
+        include_job_status = include_job_status or [
+            # Carrot currently does not deleting non-failed runs.
+            # "succeeded",
+            "buildfailed", "building", "carrotfailed", "created",
+            "evalaborted", "evalaborting", "evalfailed",
+            "evalqueuedincromwell", "evalrunning", "evalstarting",
+            "evalsubmitted", "evalwaitingforqueuespace", "testaborted",
+            "testaborting", "testfailed", "testqueuedincromwell",
+            "testrunning", "teststarting", "testsubmitted",
+            "testwaitingforqueuespace"]
+
+        # Get all the pipelines created by the user;
+        # user email is added in the carrot caller wrapper.
+        pipelines = _call_carrot("pipeline", "find")
+
+        for pipeline in pipelines:
+            print(f"\n└─ Deleting resource of pipeline "
+                  f"{pipeline['pipeline_id']}")
+
+            # Get of all the templates mapped to this pipeline
+            # created by the user.
+            templates = _call_carrot(
+                "template", "find", {"pipeline_id": pipeline["pipeline_id"]})
+            for template in templates:
+                print(f"|  └── Deleting resources of template "
+                      f"{template['template_id']}")
+
+                # Get run
+                runs = _call_carrot(
+                    "template", "find_runs", None, [template["template_id"]])
+                for run in runs:
+                    if run["status"] in include_job_status:
+                        print(f"|  |  └── Deleting Run "
+                              f"{run['run_id']} ... ", end="")
+                        _call_carrot("run", "delete", None, [run["run_id"]])
+
+                # Get result mappings to the template, and delete them.
+                template_result_mappings = _call_carrot(
+                    "template", "find_result_maps", None,
+                    [template["template_id"]])
+                for mapping in template_result_mappings:
+                    print(f"|  |  └── Deleting Result {mapping['result_id']} "
+                          f"mapping Template {template['template_id']} "
+                          f"... ", end="")
+                    _call_carrot(
+                        "template", "delete_result_map_by_id", None,
+                        [template["template_id"],
+                         mapping["result_id"]])
+
+                _call_carrot(
+                    "template", "delete", None, [template["template_id"]])
+            _call_carrot(
+                "pipeline", "delete", None, [pipeline["pipeline_id"]])
+
 
 @dataclass
 class BaseModel:
@@ -758,6 +848,8 @@ def main():
     test_run_parser.add_argument("tests_dir", nargs="+")
     test_subparsers.add_parser("update_status")
 
+    subparsers.add_parser("prune", help="Deletes resources")
+
     args = parser.parse_args()
 
     carrot_helper = CarrotHelper(working_dir=wd)
@@ -768,6 +860,18 @@ def main():
         elif args.test == "update_status":
             updated_status = carrot_helper.update_runs_status()
             carrot_helper.pretty_print_runs_status(updated_status)
+    elif args.commands == "prune":
+        print("This will delete ALL the resources created by you, "
+              "continue? {Y[es], N[o]}: ", end="")
+        while True:
+            choice = input().lower()
+            if choice in ["y", "yes"]:
+                carrot_helper.prune()
+                break
+            elif choice in ["n", "no"]:
+                break
+            else:
+                print("Please respond with {`y`, `yes`, `n`, `no`}: ", end="")
 
 
 if __name__ == '__main__':
