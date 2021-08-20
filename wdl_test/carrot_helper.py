@@ -213,7 +213,7 @@ class CarrotHelper:
         test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline_name}.wdl")
         test_wdl_checksum = self.get_checksum(test_wdl_local)
 
-        pipeline = self.pipelines.get(pipeline_name, _create_pipeline())
+        pipeline = self.pipelines.get(pipeline_name, _create_pipeline)
         for template_name in template_names:
             if template_name in pipeline.templates and \
                     (pipeline.templates[template_name].test_wdl_checksum ==
