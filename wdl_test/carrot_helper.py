@@ -218,11 +218,6 @@ class CarrotHelper:
         self.persist_object(self.pipelines, self.pipelines_filename)
 
     def create_pipeline(self, pipeline_name, template_names):
-        def _create_pipeline():
-            response = self.call_carrot(
-                "pipeline", "create", field_to_uuid="pipeline_id")
-            return Pipeline(**response)
-
         test_wdl_local = self._get_test_wdl_local_path(pipeline_name)
         test_workflow_outputs = self._get_wdl_outputs(test_wdl_local)
         if not bool(test_workflow_outputs):
@@ -231,7 +226,12 @@ class CarrotHelper:
         test_wdl = self._get_online_path(f"{WDLS_DIR}/{pipeline_name}.wdl")
         test_wdl_checksum = self.get_checksum(test_wdl_local)
 
-        pipeline = self.pipelines.get(pipeline_name, _create_pipeline)
+        pipeline = self.pipelines.get(pipeline_name)
+        if not pipeline:
+            pipeline = Pipeline(
+                **self.call_carrot(
+                    "pipeline", "create", field_to_uuid="pipeline_id"))
+
         for template_name in template_names:
             if template_name in pipeline.templates and \
                     (pipeline.templates[template_name].test_wdl_checksum ==
@@ -430,7 +430,7 @@ class CarrotHelper:
                                            eval_workflow_outputs)
         for result in test_results + eval_results:
             self.call_carrot(
-                "template", "map_to_result",
+                "template", "map_to_result", add_name=False,
                 positional_args=[template.uuid, result.uuid, result.var_name])
             template.results.append(result)
 
