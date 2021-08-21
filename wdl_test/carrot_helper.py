@@ -1,8 +1,4 @@
 """
-Requirements:
-- Java
-- Womtool
-- carrot_cli
 """
 
 import argparse
