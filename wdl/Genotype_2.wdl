@@ -65,6 +65,7 @@ workflow Regenotype {
       input:
         bed=regeno,
         coveragefile=coveragefile,
+        coveragefile_idx=coveragefile_idx,
         generate_melted_genotypes = true,
         medianfile=medianfile,
         famfile=famfile,
@@ -150,6 +151,7 @@ task RdTestGenotypeRegeno {
   input {
     File bed
     File coveragefile
+    File coveragefile_idx
     File medianfile
     File famfile
     Array[String] samples
@@ -163,6 +165,9 @@ task RdTestGenotypeRegeno {
 
   parameter_meta {
     coveragefile: {
+      localization_optional: true
+    }
+    coveragefile_idx: {
       localization_optional: true
     }
   }
