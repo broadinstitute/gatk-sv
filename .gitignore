@@ -1,5 +1,6 @@
 .DS_Store
 .idea/
+gatk-sv.iml
 src/svqc/svqc/__pycache__/
 src/svqc/svqc/tests/__pycache__/
 src/svtest/svtest/__pycache__/
