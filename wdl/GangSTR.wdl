@@ -1,0 +1,117 @@
+version 1.0
+
+import "Structs.wdl"
+
+struct FilenamePostfixes {
+  String locus
+  String motif
+  String profile
+  String merged_profile
+  Int profile_len
+}
+
+workflow GangSTR {
+
+  input {
+    Array[File] bams_or_crams
+    Array[File]? bams_or_crams_indexes
+    File reference_fasta
+    File? reference_fasta_index
+    File regions
+    String docker
+    RuntimeAttr? runtime_attr
+  }
+
+  scatter (i in range(length(bams_or_crams))) {
+    File bam_or_cram_ = bams_or_crams[i]
+    Boolean is_bam =
+      basename(bam_or_cram_, ".bam") + ".bam" == basename(bam_or_cram_)
+
+    File bam_or_cram_index_ =
+      if defined(bams_or_crams_indexes) then
+        select_first([bams_or_crams_indexes])[i]
+      else
+        bam_or_cram_ + if is_bam then ".bai" else ".crai"
+  }
+  Array[File] bams_or_crams_indexes_ = select_all(bam_or_cram_index_)
+
+  File reference_fasta_index_ = select_first([
+    reference_fasta_index, reference_fasta + ".fai"])
+
+
+    call CallGangSTR {
+      input:
+        bams_or_crams = bams_or_crams,
+        bams_or_crams_indexes = bams_or_crams_indexes_,
+        reference_fasta = reference_fasta,
+        reference_fasta_index = reference_fasta_index_,
+        regions = regions,
+        docker = docker,
+        runtime_attr_override = runtime_attr
+    }
+
+  output {
+  }
+}
+
+task CallGangSTR {
+  input {
+    Array[File] bams_or_crams
+    Array[File] bams_or_crams_indexes
+    File reference_fasta
+    File reference_fasta_index
+    File regions
+    String docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int cases_length = length(bams_or_crams)
+
+  output {
+  }
+
+  command <<<
+    set -euxo pipefail
+
+    function join_by
+    {
+      local d=${1-} f=${2-};
+      if shift 2; then printf %s "$f" "${@/#/$d}"; fi;
+    }
+
+    bams_arr=(~{sep=" " bams_or_crams})
+    joined_bams=$( join_by , "$bams_arr" )
+
+    GangSTR \
+      --bam $joined_bams \
+      --ref ~{reference_fasta} \
+      --regions ~{regions} \
+      --out output
+  >>>
+
+  RuntimeAttr runtime_attr_str_profile_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1,
+    disk_gb: 10 + ceil(size([
+      bams_or_crams,
+      bams_or_crams_indexes,
+      reference_fasta,
+      reference_fasta_index], "GiB"))
+  }
+  RuntimeAttr runtime_attr = select_first([
+    runtime_attr_override,
+    runtime_attr_str_profile_default])
+
+  runtime {
+    docker: docker
+    cpu: runtime_attr.cpu_cores
+    memory: runtime_attr.mem_gb + " GiB"
+    disks: "local-disk " + runtime_attr.disk_gb + " HDD"
+    bootDiskSizeGb: runtime_attr.boot_disk_gb
+    preemptible: runtime_attr.preemptible_tries
+    maxRetries: runtime_attr.max_retries
+  }
+}
