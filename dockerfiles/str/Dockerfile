@@ -33,13 +33,13 @@ RUN wget -O samtools-1.9.tar.bz2 https://github.com/samtools/samtools/releases/d
 
 # Install bedtools (needed for DumpSTR)
 ## Option 1: install from source
-#RUN wget -O bedtools-2.27.1.tar.gz https://github.com/arq5x/bedtools2/releases/download/v2.27.1/bedtools-2.27.1.tar.gz
-#RUN tar -xzvf bedtools-2.27.1.tar.gz
-#WORKDIR bedtools2
-#RUN make && make install
-#WORKDIR ..
+RUN wget -O bedtools-2.27.1.tar.gz https://github.com/arq5x/bedtools2/releases/download/v2.27.1/bedtools-2.27.1.tar.gz
+RUN tar -xzvf bedtools-2.27.1.tar.gz
+WORKDIR bedtools2
+RUN make && make install
+WORKDIR ..
 ## Option 2: install from apt
-RUN apt-get install bedtools
+#RUN apt-get install bedtools
 
 # Download, compile, and install GangSTR
 RUN wget -O GangSTR-2.4.tar.gz https://github.com/gymreklab/GangSTR/releases/download/v2.4/GangSTR-2.4.tar.gz \
