@@ -1,3 +1,9 @@
+# This docker image contains the following
+# list of tools and their dependencies:
+# - GangSTR
+# - TRTools
+# - ExpansionHunter
+
 FROM ubuntu:20.04
 
 RUN apt-get update && DEBIAN_FRONTEND="noninteractive" apt-get install -qqy \
