@@ -1,8 +1,8 @@
 version 1.0
 
-import "FilterSitesBatch.wdl" as filter_sites
+import "FilterBatchSites.wdl" as filter_sites
 import "PlotSVCountsPerSample.wdl" as sv_counts
-import "FilterOutliers.wdl" as filter_outliers
+import "FilterBatchSamples.wdl" as filter_outliers
 import "Utils.wdl" as util
 import "FilterBatchMetrics.wdl" as metrics
 
@@ -49,7 +49,7 @@ workflow FilterBatch {
     RuntimeAttr? runtime_attr_filter_samples
   }
 
-  call filter_sites.FilterSitesBatch {
+  call filter_sites.FilterBatchSites {
     input:
       batch = batch,
       manta_vcf = manta_vcf,
@@ -60,18 +60,16 @@ workflow FilterBatch {
       evidence_metrics = evidence_metrics,
       evidence_metrics_common = evidence_metrics_common,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_adjudicate = runtime_attr_adjudicate,
       runtime_attr_rewrite_scores = runtime_attr_rewrite_scores,
-      runtime_attr_filter_annotate_vcf = runtime_attr_filter_annotate_vcf,
-      runtime_attr_merge_pesr_vcfs = runtime_attr_merge_pesr_vcfs
+      runtime_attr_filter_annotate_vcf = runtime_attr_filter_annotate_vcf
   }
 
   call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs = FilterSitesBatch.sites_filtered_vcfs,
-      algorithms = FilterSitesBatch.algorithms_filtersites,
+      vcfs = FilterBatchSites.sites_filtered_vcfs,
+      vcf_identifiers = FilterBatchSites.algorithms_filtersites,
       N_IQR_cutoff = outlier_cutoff_nIQR,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
@@ -79,13 +77,12 @@ workflow FilterBatch {
       runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
   }
 
-  call filter_outliers.FilterOutlierSamples as FilterOutlierSamples {
+  call filter_outliers.FilterBatchSamples as FilterBatchSamples {
     input:
       batch = batch,
       outlier_cutoff_table = outlier_cutoff_table,
       N_IQR_cutoff = outlier_cutoff_nIQR,
-      vcfs = FilterSitesBatch.sites_filtered_vcfs,
-      pesr_vcf = FilterSitesBatch.sites_filtered_pesr_vcf,
+      vcfs = FilterBatchSites.sites_filtered_vcfs,
       sv_counts = PlotSVCountsPerSample.sv_counts,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -94,7 +91,9 @@ workflow FilterBatch {
       runtime_attr_exclude_outliers= runtime_attr_exclude_outliers,
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
       runtime_attr_filter_samples = runtime_attr_filter_samples,
-      runtime_attr_ids_from_vcf = runtime_attr_ids_from_vcf
+      runtime_attr_ids_from_vcf = runtime_attr_ids_from_vcf,
+      runtime_attr_merge_pesr_vcfs = runtime_attr_merge_pesr_vcfs,
+      runtime_attr_count_svs = runtime_attr_count_svs
   }
 
   call util.GetSampleIdsFromVcf {
@@ -110,12 +109,12 @@ workflow FilterBatch {
       input:
         name = batch,
         samples = GetSampleIdsFromVcf.out_array,
-        filtered_pesr_vcf = select_first([FilterOutlierSamples.outlier_filtered_pesr_vcf]),
-        filtered_depth_vcf = select_first([FilterOutlierSamples.outlier_filtered_depth_vcf]),
-        cutoffs = FilterSitesBatch.cutoffs,
-        outlier_list = FilterOutlierSamples.outlier_samples_excluded_file,
+        filtered_pesr_vcf = select_first([FilterBatchSamples.outlier_filtered_pesr_vcf]),
+        filtered_depth_vcf = select_first([FilterBatchSamples.outlier_filtered_depth_vcf]),
+        cutoffs = FilterBatchSites.cutoffs,
+        outlier_list = FilterBatchSamples.outlier_samples_excluded_file,
         ped_file = select_first([ped_file]),
-        samples_post_filtering_file = FilterOutlierSamples.filtered_batch_samples_file,
+        samples_post_filtering_file = FilterBatchSamples.filtered_batch_samples_file,
         baseline_filtered_pesr_vcf = baseline_filtered_pesr_vcf,
         baseline_filtered_depth_vcf = baseline_filtered_depth_vcf,
         contig_list = select_first([primary_contigs_list]),
@@ -126,21 +125,21 @@ workflow FilterBatch {
   }
 
   output {
-    File? filtered_manta_vcf = FilterOutlierSamples.outlier_filtered_manta_vcf
-    File? filtered_delly_vcf = FilterOutlierSamples.outlier_filtered_delly_vcf
-    File? filtered_wham_vcf = FilterOutlierSamples.outlier_filtered_wham_vcf
-    File? filtered_melt_vcf = FilterOutlierSamples.outlier_filtered_melt_vcf
-    File? filtered_depth_vcf = FilterOutlierSamples.outlier_filtered_depth_vcf
-    File? filtered_pesr_vcf = FilterOutlierSamples.outlier_filtered_pesr_vcf
-    File cutoffs = FilterSitesBatch.cutoffs
-    File scores = FilterSitesBatch.scores
-    File RF_intermediate_files = FilterSitesBatch.RF_intermediate_files
+    File? filtered_manta_vcf = FilterBatchSamples.outlier_filtered_manta_vcf
+    File? filtered_delly_vcf = FilterBatchSamples.outlier_filtered_delly_vcf
+    File? filtered_wham_vcf = FilterBatchSamples.outlier_filtered_wham_vcf
+    File? filtered_melt_vcf = FilterBatchSamples.outlier_filtered_melt_vcf
+    File? filtered_depth_vcf = FilterBatchSamples.outlier_filtered_depth_vcf
+    File? filtered_pesr_vcf = FilterBatchSamples.outlier_filtered_pesr_vcf
+    File cutoffs = FilterBatchSites.cutoffs
+    File scores = FilterBatchSites.scores
+    File RF_intermediate_files = FilterBatchSites.RF_intermediate_files
     Array[File?] sv_counts = PlotSVCountsPerSample.sv_counts
     Array[File?] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
-    Array[String] outlier_samples_excluded = FilterOutlierSamples.outlier_samples_excluded
-    Array[String] batch_samples_postOutlierExclusion = FilterOutlierSamples.filtered_batch_samples_list
-    File outlier_samples_excluded_file = FilterOutlierSamples.outlier_samples_excluded_file
-    File batch_samples_postOutlierExclusion_file = FilterOutlierSamples.filtered_batch_samples_file
+    Array[String] outlier_samples_excluded = FilterBatchSamples.outlier_samples_excluded
+    Array[String] batch_samples_postOutlierExclusion = FilterBatchSamples.filtered_batch_samples_list
+    File outlier_samples_excluded_file = FilterBatchSamples.outlier_samples_excluded_file
+    File batch_samples_postOutlierExclusion_file = FilterBatchSamples.filtered_batch_samples_file
 
     File? metrics_file_filterbatch = FilterBatchMetrics.metrics_file
   }

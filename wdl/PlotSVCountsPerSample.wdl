@@ -6,8 +6,8 @@ import "Structs.wdl"
 workflow PlotSVCountsPerSample {
   input {
     String prefix
-    Array[File?] vcfs  # in order of algorithms array. To skip one, use null keyword
-    Array[String] algorithms
+    Array[File?] vcfs  # in order of vcf_identifiers array. To skip one, use null keyword
+    Array[String] vcf_identifiers  # VCF identifiers - could be algorithms like manta, wham, etc or pesr, depth or just cohort VCF
     Int N_IQR_cutoff
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_count_svs
@@ -15,14 +15,14 @@ workflow PlotSVCountsPerSample {
     RuntimeAttr? runtime_attr_cat_outliers_preview
   }
 
-  Int num_algorithms = length(algorithms)
+  Int num_identifiers = length(vcf_identifiers)
 
-  scatter (i in range(num_algorithms)) {
+  scatter (i in range(num_identifiers)) {
     if (defined(vcfs[i])) {
       call CountSVsPerSamplePerType {
         input:
           vcf = select_first([vcfs[i]]),
-          prefix = "~{prefix}.~{algorithms[i]}",
+          prefix = "~{prefix}.~{vcf_identifiers[i]}",
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_count_svs
       }
@@ -31,7 +31,7 @@ workflow PlotSVCountsPerSample {
         input:
           svcounts = CountSVsPerSamplePerType.sv_counts,
           n_iqr_cutoff = N_IQR_cutoff,
-          prefix = "~{prefix}.~{algorithms[i]}",
+          prefix = "~{prefix}.~{vcf_identifiers[i]}",
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_plot_svcounts
       }
@@ -139,7 +139,7 @@ task PlotSVCountsWithCutoff {
   }
 }
 
-# Merge outlier sample lists across algorithms
+# Merge outlier sample lists detected across multiple VCFs
 task CatOutliersPreview {
   input {
     Array[File] outliers

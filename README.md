@@ -441,7 +441,7 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 ```
 
 * BatchEffect - remove variants that show significant discrepancies in allele frequencies across batches
-* FilterOutlierSamples - remove outlier samples with unusually high or low number of SVs
+* FilterOutlierSamplesPostMinGQ - remove outlier samples with unusually high or low number of SVs
 * FilterCleanupQualRecalibration - sanitize filter columns and recalibrate variant QUAL scores for easier interpretation
 
 ## <a name="annotate-vcf">AnnotateVcf</a> (in development)

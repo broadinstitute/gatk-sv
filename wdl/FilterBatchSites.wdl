@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow FilterSitesBatch {
+workflow FilterBatchSites {
   input {
     String batch
     File? manta_vcf
@@ -14,8 +14,6 @@ workflow FilterSitesBatch {
     File evidence_metrics_common
 
     String sv_pipeline_docker
-    String sv_base_mini_docker
-
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
@@ -60,24 +58,12 @@ workflow FilterSitesBatch {
     }
   }
 
-  call MergePesrVcfs {
-    input:
-      manta_vcf = FilterAnnotateVcf.annotated_vcf[0],
-      delly_vcf = FilterAnnotateVcf.annotated_vcf[1],
-      wham_vcf = FilterAnnotateVcf.annotated_vcf[2],
-      melt_vcf = FilterAnnotateVcf.annotated_vcf[3],
-      batch = batch,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_merge_pesr_vcfs
-  }
-
   output {
     Array[File?] sites_filtered_vcfs = FilterAnnotateVcf.annotated_vcf
     File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[4]
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
-    File sites_filtered_pesr_vcf = MergePesrVcfs.merged_pesr_vcf
     Array[String] algorithms_filtersites = algorithms
   }
 }
@@ -225,53 +211,4 @@ task FilterAnnotateVcf {
   }
 
 }
-
-task MergePesrVcfs {
-  input {
-    File? manta_vcf
-    File? delly_vcf
-    File? wham_vcf
-    File? melt_vcf
-    String batch
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Array[File] vcfs_array = select_all([manta_vcf, delly_vcf, wham_vcf, melt_vcf])
-
-  output {
-    File merged_pesr_vcf = "${batch}.filtered_pesr_merged.vcf.gz"
-  }
-  command <<<
-
-    set -euo pipefail
-    vcf-concat ~{sep=" " vcfs_array} \
-      | vcf-sort -c \
-      | bgzip -c \
-      > ~{batch}.filtered_pesr_merged.vcf.gz
-  
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
-}
-
-
 
