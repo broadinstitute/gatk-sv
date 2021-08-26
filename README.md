@@ -206,7 +206,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample.
+Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. Delly can be enabled but is no longer officially supported.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -226,9 +226,9 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. The results from this module can be used for QC and batching.
 
-For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
+For large cohorts, this workflow can be run on arbitrary cohort partitions of up to about 500 samples. Afterwards, we recommend using the results to divide samples into smaller batches (~100-500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
 
-We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file.
+We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
@@ -278,7 +278,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [EvidenceQC](#evidence-qc) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
-* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
+* Per-sample indexed GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
 * Read count, BAF, PE, and SR files ([GatherSampleEvidence](#gather-sample-evidence))
 * Caller VCFs ([GatherSampleEvidence](#gather-sample-evidence))
 * Contig ploidy model and gCNV model files ([gCNV training](#gcnv-training))
