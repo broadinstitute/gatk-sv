@@ -60,7 +60,6 @@ workflow FilterBatchSites {
 
   output {
     Array[File?] sites_filtered_vcfs = FilterAnnotateVcf.annotated_vcf
-    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[4]
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
