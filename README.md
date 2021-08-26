@@ -329,7 +329,10 @@ Generates variant metrics for filtering.
 ## <a name="generate-batch-metrics">FilterBatch</a>
 *Formerly Module03*
 
-Filters poor quality variants and filters outlier samples.
+Filters poor quality variants and filters outlier samples. This workflow can be run all at once with the WDL at `wdl/FilterBatch.wdl`, or it can be run in three steps to enable tuning of outlier filtration cutoffs. The three subworkflows are:
+1. FilterBatchSites: Per-batch variant filtration
+2. PlotSVCountsPerSample: Visualize SV counts per sample per type to help choose an IQR cutoff for outlier filtering, and preview outlier samples for a given cutoff
+3. FilterBatchSamples: Per-batch outlier sample filtration; provide an appropriate `outlier_cutoff_nIQR` based on the SV count plots and outlier previews from step 2.
 
 #### Prerequisites:
 * [GenerateBatchMetrics](#generate-batch-metrics)
