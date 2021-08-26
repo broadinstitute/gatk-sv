@@ -8,7 +8,7 @@ import "DepthPreprocessing.wdl" as dpn
 import "ClusterBatch.wdl" as clusterbatch
 import "GenerateBatchMetrics.wdl" as batchmetrics
 import "SRTest.wdl" as SRTest
-import "FilterBatch.wdl" as filterbatch
+import "FilterSitesBatch.wdl" as filterbatch
 import "GenotypeBatch.wdl" as genotypebatch
 import "MakeCohortVcf.wdl" as makecohortvcf
 import "AnnotateVcf.wdl" as annotate

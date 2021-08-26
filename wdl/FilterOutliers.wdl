@@ -3,14 +3,15 @@ version 1.0
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
 import "Structs.wdl"
+import "Utils.wdl" as util
 
-# Workflow to identify & filter outliers from VCFs after module 03 (random forest)
+# Workflow to identify & filter outliers from VCFs. Intended for use as part of FilterBatch after FilterSitesBatch
 workflow FilterOutlierSamples {
   input {
     String batch
-    Array[File?] vcfs
-    Array[String] samples
-    Array[String] algorithms
+    Array[File?] vcfs  # in order of algorithms array: ["manta", "delly", "wham", "melt", "depth"]. To skip one, use null keyword - ex. ["manta.vcf.gz", null, "wham.vcf.gz", null, "depth.vcf.gz"]
+    Array[File?] sv_counts  # one SV counts file from PlotSVCountsPerSample per VCF in the same order
+    File? pesr_vcf  # Apply outlier filtration to this VCF but do not use for outlier determination
     Int N_IQR_cutoff
     File? outlier_cutoff_table
     String sv_pipeline_docker
@@ -20,8 +21,10 @@ workflow FilterOutlierSamples {
     RuntimeAttr? runtime_attr_exclude_outliers
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
+    RuntimeAttr? runtime_attr_ids_from_vcf
   }
 
+  Array[String] algorithms = ["manta", "delly", "wham", "melt", "depth"]  # fixed algorithms to enable File outputs to be determined
   Int num_algorithms = length(algorithms)
 
   scatter (i in range(num_algorithms)) {
@@ -30,6 +33,7 @@ workflow FilterOutlierSamples {
         call IdentifyOutliersByCutoffTable {
           input:
             vcf = select_first([vcfs[i]]),
+            svcounts = select_first([sv_counts[i]]),
             outlier_cutoff_table = select_first([outlier_cutoff_table]),
             outfile = "${algorithms[i]}_outliers.txt",
             algorithm = algorithms[i],
@@ -40,6 +44,7 @@ workflow FilterOutlierSamples {
       call IdentifyOutliersByIQR {
         input:
           vcf = select_first([vcfs[i]]),
+          svcounts = select_first([sv_counts[i]]),
           N_IQR_cutoff = N_IQR_cutoff,
           outfile = "${algorithms[i]}_outliers.txt",
           sv_pipeline_docker = sv_pipeline_docker,
@@ -70,10 +75,28 @@ workflow FilterOutlierSamples {
     }
   }
 
+  if (defined(pesr_vcf)) {
+    call ExcludeOutliers as ExcludeOutliersMergedVcf {
+      input:
+        vcf = select_first([pesr_vcf]),
+        outliers_list = CatOutliers.outliers_list,
+        outfile = "${batch}.pesr.outliers_removed.vcf.gz",
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_exclude_outliers
+    }
+  }
+  
+  call util.GetSampleIdsFromVcf {
+    input:
+      vcf = select_first(vcfs),
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_ids_from_vcf
+  }
+
   # Write new list of samples without outliers
   call FilterSampleList {
     input:
-      original_samples = samples,
+      original_samples = GetSampleIdsFromVcf.out_array,
       outlier_samples = CatOutliers.outliers_list,
       batch = batch,
       linux_docker = linux_docker,
@@ -81,7 +104,12 @@ workflow FilterOutlierSamples {
   }
 
   output {
-    Array[File?] vcfs_noOutliers = ExcludeOutliers.vcf_no_outliers
+    File? outlier_filtered_manta_vcf = ExcludeOutliers.vcf_no_outliers[0]
+    File? outlier_filtered_delly_vcf = ExcludeOutliers.vcf_no_outliers[1]
+    File? outlier_filtered_wham_vcf = ExcludeOutliers.vcf_no_outliers[2]
+    File? outlier_filtered_melt_vcf = ExcludeOutliers.vcf_no_outliers[3]
+    File? outlier_filtered_depth_vcf = ExcludeOutliers.vcf_no_outliers[4]
+    File? outlier_filtered_pesr_vcf = ExcludeOutliersMergedVcf.vcf_no_outliers
     Array[String] filtered_batch_samples_list = FilterSampleList.filtered_samples_list
     File filtered_batch_samples_file = FilterSampleList.filtered_samples_file
     Array[String] outlier_samples_excluded = CatOutliers.outliers_list
@@ -92,6 +120,7 @@ workflow FilterOutlierSamples {
 task IdentifyOutliersByIQR {
   input {
     File vcf
+    File svcounts
     Int N_IQR_cutoff
     String outfile
     String sv_pipeline_docker
@@ -114,12 +143,10 @@ task IdentifyOutliersByIQR {
   command <<<
 
     set -euo pipefail
-    # Count sv per class per sample
-    svtk count-svtypes ~{vcf} svcounts.txt
 
     # Return list of samples exceeding cutoff for at least one sv class
     /opt/sv-pipeline/03_variant_filtering/scripts/get_outliers_from_svcounts.helper.R \
-      svcounts.txt \
+      ~{svcounts} \
       ~{N_IQR_cutoff} \
       ~{outfile}
   
@@ -139,6 +166,7 @@ task IdentifyOutliersByIQR {
 task IdentifyOutliersByCutoffTable {
   input {
     File vcf
+    File svcounts
     File outlier_cutoff_table
     String outfile
     String algorithm
@@ -162,12 +190,10 @@ task IdentifyOutliersByCutoffTable {
   command <<<
 
     set -euo pipefail
-    # Count sv per class per sample
-    svtk count-svtypes ~{vcf} svcounts.txt
 
     # Return list of samples exceeding cutoff for at least one sv class
     /opt/sv-pipeline/03_variant_filtering/scripts/get_outliers_from_svcounts.helper_V2.R \
-      svcounts.txt \
+      ~{svcounts} \
       ~{outlier_cutoff_table} \
       ~{outfile} \
       ~{algorithm}

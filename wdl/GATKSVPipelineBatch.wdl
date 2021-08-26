@@ -226,9 +226,9 @@ workflow GATKSVPipelineBatch {
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
-      batch_pesr_vcf=GATKSVPipelinePhase1.filtered_pesr_vcf,
+      batch_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       batch_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      cohort_pesr_vcf=GATKSVPipelinePhase1.filtered_pesr_vcf,
+      cohort_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       batch=batch,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
