@@ -2,7 +2,7 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-import "FilterOutliers.wdl" as filter_outliers
+import "FilterOutlierSamples.wdl" as filter_outliers
 import "Structs.wdl"
 import "Utils.wdl" as util
 import "IdentifyOutlierSamples.wdl" as identify_outliers

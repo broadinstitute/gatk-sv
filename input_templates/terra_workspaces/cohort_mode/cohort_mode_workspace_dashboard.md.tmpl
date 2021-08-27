@@ -67,7 +67,7 @@ The following workflows are included in this workspace, to be executed in this o
 Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
-* `FilterOutliers`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `07b-PlotSVCountsPerSample` beforehand to enable IQR cutoff choice.
+* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `07b-PlotSVCountsPerSample` beforehand (reconfigured with the single VCF you want to filter) to enable IQR cutoff choice.
 
 For detailed instructions on running the pipeline in Terra, see **Step-by-step instructions** below.
 
