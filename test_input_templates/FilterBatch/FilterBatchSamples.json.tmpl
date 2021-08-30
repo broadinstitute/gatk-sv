@@ -1,0 +1,24 @@
+{
+  "FilterBatchSamples.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "FilterBatchSamples.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "FilterBatchSamples.linux_docker" : {{ dockers.linux_docker | tojson }},
+
+  "FilterBatchSamples.N_IQR_cutoff": "10000",
+  "FilterBatchSamples.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
+
+  "FilterBatchSamples.batch": {{ test_batch.batch_name | tojson }},
+  "FilterBatchSamples.vcfs" : [ 
+    {{ test_batch.sites_filtered_manta_vcf | tojson }}, 
+    null,
+    {{ test_batch.sites_filtered_wham_vcf | tojson }}, 
+    {{ test_batch.sites_filtered_melt_vcf | tojson }}, 
+    {{ test_batch.sites_filtered_depth_vcf | tojson }}
+  ],
+  "FilterBatchSamples.sv_counts": [
+    {{ test_batch.sites_filtered_svcounts_manta | tojson }},
+    null,
+    {{ test_batch.sites_filtered_svcounts_wham | tojson }},
+    {{ test_batch.sites_filtered_svcounts_melt | tojson }},
+    {{ test_batch.sites_filtered_svcounts_depth | tojson }}
+  ]
+}

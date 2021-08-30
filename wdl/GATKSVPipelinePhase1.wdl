@@ -504,7 +504,7 @@ workflow GATKSVPipelinePhase1 {
     File? filtered_wham_vcf = FilterBatch.filtered_wham_vcf
     File? filtered_melt_vcf = FilterBatch.filtered_melt_vcf
     File? filtered_depth_vcf = FilterBatch.filtered_depth_vcf
-    File filtered_pesr_vcf = FilterBatch.filtered_pesr_vcf
+    File? filtered_pesr_vcf = FilterBatch.filtered_pesr_vcf
     File cutoffs = FilterBatch.cutoffs
     File scores = FilterBatch.scores
     File RF_intermediate_files = FilterBatch.RF_intermediate_files
