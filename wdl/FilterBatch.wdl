@@ -77,7 +77,7 @@ workflow FilterBatch {
       runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
   }
 
-  call filter_outliers.FilterBatchSamples as FilterBatchSamples {
+  call filter_outliers.FilterBatchSamples {
     input:
       batch = batch,
       outlier_cutoff_table = outlier_cutoff_table,
@@ -96,15 +96,14 @@ workflow FilterBatch {
       runtime_attr_count_svs = runtime_attr_count_svs
   }
 
-  call util.GetSampleIdsFromVcf {
-    input:
-      vcf = select_first([depth_vcf, wham_vcf, manta_vcf, melt_vcf, delly_vcf]),
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_ids_from_vcf
-  }
-
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
   if (run_module_metrics_) {
+    call util.GetSampleIdsFromVcf {
+      input:
+        vcf = select_first([depth_vcf, wham_vcf, manta_vcf, melt_vcf, delly_vcf]),
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_ids_from_vcf
+    }
     call metrics.FilterBatchMetrics {
       input:
         name = batch,

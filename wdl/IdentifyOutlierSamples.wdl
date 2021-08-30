@@ -1,7 +1,5 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 import "Structs.wdl"
 import "PlotSVCountsPerSample.wdl" as plot_svcounts
 

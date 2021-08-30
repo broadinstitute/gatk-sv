@@ -1,7 +1,5 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 import "Structs.wdl"
 import "Utils.wdl" as util
 import "IdentifyOutlierSamples.wdl" as identify_outliers
