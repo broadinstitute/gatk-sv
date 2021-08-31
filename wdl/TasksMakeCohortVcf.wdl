@@ -776,6 +776,16 @@ task ShardVids {
 
     vcf = pysam.VariantFile("~{clustered_vcf}")
 
+    # Exit early if the vcf is empty
+    is_empty = True
+    for record in vcf:
+      is_empty = False
+      break
+    if is_empty:
+      print("empty vcf - no shards will be produced")
+      sys.exit(0)
+    vcf.reset()
+
     current_cluster = None
     current_cluster_vids = []
     current_shard = 0
