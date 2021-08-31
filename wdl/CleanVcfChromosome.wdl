@@ -20,6 +20,7 @@ workflow CleanVcfChromosome {
     Int min_records_per_shard_step1
     Int samples_per_step2_shard
     File? outlier_samples_list
+    Int? max_samples_per_shard_step3
 
     String linux_docker
     String sv_base_mini_docker
@@ -127,6 +128,7 @@ workflow CleanVcfChromosome {
   call CleanVcf3 {
     input:
       rd_cn_revise=CombineCleanVcf2.outfile,
+      max_samples_shard = max_samples_per_shard_step3,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_clean_vcf_3
   }
@@ -254,13 +256,14 @@ task CleanVcf2 {
 }
 
 
-task CleanVcf3{
+task CleanVcf3 {
   input {
     File rd_cn_revise
+    Int? max_samples_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-
+  Int max_samples_shard_ = select_first([max_samples_shard, 6000])
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
   Float input_size = size(rd_cn_revise, "GB")
@@ -290,12 +293,10 @@ task CleanVcf3{
   command <<<
     set -euo pipefail
     
-    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.sh ~{rd_cn_revise}
+    /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part3.py ~{rd_cn_revise} -s ~{max_samples_shard_}
 
     # Ensure there is at least one shard
-    if [ -z "$(ls -A shards/)" ]; then
-      touch shards/out.0_0.txt
-    fi
+    touch shards/out.0.txt
   >>>
 
   output {

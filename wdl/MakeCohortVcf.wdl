@@ -43,6 +43,7 @@ workflow MakeCohortVcf {
     Int min_records_per_shard_clean_vcf_step1
     Int samples_per_clean_vcf_step2_shard
     Float min_sr_background_fail_batches
+    Int? max_samples_per_shard_clean_vcf_step3
 
     File empty_file
     File? outlier_samples_list
@@ -309,6 +310,7 @@ workflow MakeCohortVcf {
       max_shards_per_chrom_clean_vcf_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=min_records_per_shard_clean_vcf_step1,
       samples_per_clean_vcf_step2_shard=samples_per_clean_vcf_step2_shard,
+      max_samples_per_shard_step3=max_samples_per_shard_clean_vcf_step3,
       outlier_samples_list=outlier_samples_list,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
