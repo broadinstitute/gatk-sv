@@ -68,7 +68,7 @@ workflow FilterBatch {
   call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs = FilterBatchSites.sites_filtered_vcfs,
+      vcfs = [FilterBatchSites.sites_filtered_manta_vcf, FilterBatchSites.sites_filtered_delly_vcf, FilterBatchSites.sites_filtered_wham_vcf, FilterBatchSites.sites_filtered_melt_vcf, FilterBatchSites.sites_filtered_depth_vcf],
       vcf_identifiers = FilterBatchSites.algorithms_filtersites,
       N_IQR_cutoff = outlier_cutoff_nIQR,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -82,8 +82,11 @@ workflow FilterBatch {
       batch = batch,
       outlier_cutoff_table = outlier_cutoff_table,
       N_IQR_cutoff = outlier_cutoff_nIQR,
-      vcfs = FilterBatchSites.sites_filtered_vcfs,
-      sv_counts = PlotSVCountsPerSample.sv_counts,
+      sites_filtered_manta_vcf = FilterBatchSites.sites_filtered_manta_vcf,
+      sites_filtered_delly_vcf = FilterBatchSites.sites_filtered_delly_vcf,
+      sites_filtered_wham_vcf = FilterBatchSites.sites_filtered_wham_vcf,
+      sites_filtered_melt_vcf = FilterBatchSites.sites_filtered_melt_vcf,
+      sites_filtered_depth_vcf = FilterBatchSites.sites_filtered_depth_vcf,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,

@@ -7,14 +7,11 @@
   "FilterBatchSamples.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
 
   "FilterBatchSamples.batch": {{ test_batch.batch_name | tojson }},
-  "FilterBatchSamples.vcfs" : [ 
-    {{ test_batch.sites_filtered_manta_vcf | tojson }}, 
-    null,
-    {{ test_batch.sites_filtered_wham_vcf | tojson }}, 
-    {{ test_batch.sites_filtered_melt_vcf | tojson }}, 
-    {{ test_batch.sites_filtered_depth_vcf | tojson }}
-  ],
-  "FilterBatchSamples.sv_counts": [
+  "FilterBatchSamples.sites_filtered_manta_vcf": {{ test_batch.sites_filtered_manta_vcf | tojson }},
+  "FilterBatchSamples.sites_filtered_wham_vcf": {{ test_batch.sites_filtered_wham_vcf | tojson }},
+  "FilterBatchSamples.sites_filtered_melt_vcf": {{ test_batch.sites_filtered_melt_vcf | tojson }},
+  "FilterBatchSamples.sites_filtered_depth_vcf": {{ test_batch.sites_filtered_depth_vcf | tojson }},
+  "FilterBatchSamples.sv_counts_array": [
     {{ test_batch.sites_filtered_svcounts_manta | tojson }},
     null,
     {{ test_batch.sites_filtered_svcounts_wham | tojson }},

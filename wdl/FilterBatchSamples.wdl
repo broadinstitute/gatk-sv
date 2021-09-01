@@ -9,8 +9,12 @@ import "IdentifyOutlierSamples.wdl" as identify_outliers
 workflow FilterBatchSamples {
   input {
     String batch
-    Array[File?] vcfs  # in order of algorithms array: ["manta", "delly", "wham", "melt", "depth"]. To skip one, use null keyword - ex. ["manta.vcf.gz", null, "wham.vcf.gz", null, "depth.vcf.gz"]
-    Array[File?] sv_counts  # one SV counts file from PlotSVCountsPerSample per VCF in the same order
+    File? sites_filtered_manta_vcf
+    File? sites_filtered_delly_vcf
+    File? sites_filtered_wham_vcf
+    File? sites_filtered_melt_vcf
+    File? sites_filtered_depth_vcf
+    Array[File?]? sv_counts_array  # one SV counts file from PlotSVCountsPerSample per VCF in the order ["manta", "delly", "wham", "melt", "depth"]. Enter null for missing SV counts
     Int N_IQR_cutoff
     File? outlier_cutoff_table
     String sv_pipeline_docker
@@ -23,10 +27,14 @@ workflow FilterBatchSamples {
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
+
+    File? NONE_FILE  # do not supply input
   }
 
+  Array[File?] vcfs = [sites_filtered_manta_vcf, sites_filtered_delly_vcf, sites_filtered_wham_vcf, sites_filtered_melt_vcf, sites_filtered_depth_vcf]
   Array[String] algorithms = ["manta", "delly", "wham", "melt", "depth"]  # fixed algorithms to enable File outputs to be determined
   Int num_algorithms = length(algorithms)
+  Array[File?] sv_counts_ = if defined(sv_counts_array) then select_first([sv_counts_array]) else [NONE_FILE, NONE_FILE, NONE_FILE, NONE_FILE, NONE_FILE]
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
@@ -34,7 +42,7 @@ workflow FilterBatchSamples {
         input:
           vcf = select_first([vcfs[i]]),
           name = batch,
-          sv_counts = sv_counts[i], 
+          sv_counts = sv_counts_[i],
           N_IQR_cutoff = N_IQR_cutoff,
           outlier_cutoff_table = outlier_cutoff_table,
           vcf_identifier = algorithms[i],
