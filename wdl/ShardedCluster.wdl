@@ -172,11 +172,11 @@ task GetVcfHeaderWithMembersInfoLine {
   }
 
   command <<<
-    set -euo pipefail
-    gunzip -c ~{vcf_gz} | grep "^##" > header
-    echo "##INFO=<ID=MEMBERS,Number=.,Type=String,Description=\"IDs of cluster's constituent records.\">" >> header
-    gunzip -c ~{vcf_gz} | grep "^#" | grep -v "^##" >> header
-    bgzip -c header > ~{prefix}.members.vcf.gz
+    set -euxo pipefail
+    zgrep "^##" ~{vcf_gz} > ~{prefix}.vcf
+    echo "##INFO=<ID=MEMBERS,Number=.,Type=String,Description=\"IDs of cluster's constituent records.\">" >> ~{prefix}.vcf
+    zgrep "^#CHROM" ~{vcf_gz} >> ~{prefix}.vcf
+    bgzip ~{prefix}.vcf
     tabix ~{prefix}.vcf.gz
   >>>
 
