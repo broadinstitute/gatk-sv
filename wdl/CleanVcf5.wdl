@@ -885,8 +885,8 @@ task CleanVcf5_14 {
   command <<<
     set -euxo pipefail
     zcat ~{overlap_revise_vcf} \
-      |{ fgrep -wf ~{gt5kb_dup_ids} || true; } \
-      >dup.int.txt
+      |fgrep -wf ~{gt5kb_dup_ids} \
+      >dup.int.txt || true
   >>>
 
   output {
@@ -925,8 +925,8 @@ task CleanVcf5_15 {
   command <<<
     set -euxo pipefail
     zcat ~{overlap_revise_vcf} \
-      |{ fgrep -wf ~{gt5kb_del_ids} || true; } \
-      >>del.int.txt
+      |fgrep -wf ~{gt5kb_del_ids} \
+      >>del.int.txt || true
   >>>
 
   output {
