@@ -82,11 +82,11 @@ workflow FilterBatch {
       batch = batch,
       outlier_cutoff_table = outlier_cutoff_table,
       N_IQR_cutoff = outlier_cutoff_nIQR,
-      sites_filtered_manta_vcf = FilterBatchSites.sites_filtered_manta_vcf,
-      sites_filtered_delly_vcf = FilterBatchSites.sites_filtered_delly_vcf,
-      sites_filtered_wham_vcf = FilterBatchSites.sites_filtered_wham_vcf,
-      sites_filtered_melt_vcf = FilterBatchSites.sites_filtered_melt_vcf,
-      sites_filtered_depth_vcf = FilterBatchSites.sites_filtered_depth_vcf,
+      manta_vcf = FilterBatchSites.sites_filtered_manta_vcf,
+      delly_vcf = FilterBatchSites.sites_filtered_delly_vcf,
+      wham_vcf = FilterBatchSites.sites_filtered_wham_vcf,
+      melt_vcf = FilterBatchSites.sites_filtered_melt_vcf,
+      depth_vcf = FilterBatchSites.sites_filtered_depth_vcf,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,
@@ -136,8 +136,8 @@ workflow FilterBatch {
     File cutoffs = FilterBatchSites.cutoffs
     File scores = FilterBatchSites.scores
     File RF_intermediate_files = FilterBatchSites.RF_intermediate_files
-    Array[File?] sv_counts = PlotSVCountsPerSample.sv_counts
-    Array[File?] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    Array[File] sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
     Array[String] outlier_samples_excluded = FilterBatchSamples.outlier_samples_excluded
     Array[String] batch_samples_postOutlierExclusion = FilterBatchSamples.filtered_batch_samples_list
     File outlier_samples_excluded_file = FilterBatchSamples.outlier_samples_excluded_file

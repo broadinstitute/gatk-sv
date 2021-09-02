@@ -49,8 +49,8 @@ workflow PlotSVCountsPerSample {
 
 
   output {
-    Array[File?] sv_counts = CountSVsPerSamplePerType.sv_counts
-    Array[File?] sv_count_plots = PlotSVCountsWithCutoff.svcount_distrib_plots
+    Array[File] sv_counts = select_all(CountSVsPerSamplePerType.sv_counts)
+    Array[File] sv_count_plots = select_all(PlotSVCountsWithCutoff.svcount_distrib_plots)
     File outlier_samples_preview = CatOutliersPreview.outliers_preview_file
   }
 }
