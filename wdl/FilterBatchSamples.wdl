@@ -31,8 +31,6 @@ workflow FilterBatchSamples {
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
-
-    File? NONE_FILE  # do not supply input
   }
 
   Array[File?] vcfs = [manta_vcf, delly_vcf, wham_vcf, melt_vcf, depth_vcf]
