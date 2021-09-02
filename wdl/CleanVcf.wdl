@@ -88,7 +88,7 @@ workflow CleanVcf {
     input:
       vcfs=CleanVcfChromosome.out,
       vcfs_idx=CleanVcfChromosome.out_idx,
-      naive=true,
+      allow_overlaps=true,
       outfile_prefix="~{cohort_name}.cleaned",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_cleaned_vcfs
