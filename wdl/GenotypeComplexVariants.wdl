@@ -110,7 +110,7 @@ workflow GenotypeComplexVariants {
       input:
         vcfs=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf,
         vcfs_idx=ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx,
-        naive=true,
+        allow_overlaps=true,
         outfile_prefix="~{cohort_name}.complex_genotype",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat
