@@ -460,7 +460,7 @@ task CleanVcf1b_7 {
   command <<<
     set -euxo pipefail
     ##Update genotypes##
-    { zfgrep -wf <(awk '{print $1}' ~{geno_normal_revise}|sort -u) ~{int_vcf} || [[ $? == 1 ]]; }\
+    { zfgrep -wf <(awk '{print $1}' ~{geno_normal_revise}|sort -u) ~{int_vcf} || true; }\
     |bgzip \
     >subset.vcf.gz
   >>>
@@ -732,7 +732,7 @@ task CleanVcf1b_12 {
     zcat ~{copystate_per_variant} \
       |awk '{if ($2!="." && $2>3) print $1}' \
       |sort -u \
-      |{ fgrep -wf <(zcat ~{int_bed}|awk -F"\t" '{if ($5=="DEL" && $3-$2>=1000) print $4}' ) || [[ $? == 1 ]]; } \
+      |{ fgrep -wf <(zcat ~{int_bed}|awk -F"\t" '{if ($5=="DEL" && $3-$2>=1000) print $4}' ) || true; } \
       >multi.cnvs.del.txt
   >>>
 
@@ -779,7 +779,7 @@ task CleanVcf1b_13 {
     zcat ~{copystate_per_variant} \
       |awk '{if ($2!="." && ($2<1 || $2>4)) print $1}' \
       |sort -u \
-      |{ fgrep -wf <(zcat ~{int_bed}|awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}' ) || [[ $? == 1 ]]; } \
+      |{ fgrep -wf <(zcat ~{int_bed}|awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}' ) || true; } \
       >>multi.cnvs.txt
   >>>
 

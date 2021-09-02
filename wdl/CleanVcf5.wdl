@@ -463,7 +463,7 @@ task CleanVcf5_5 {
     vf_1=$(zcat ~{copystate_rd_cn_format}|awk 'NR==1{print (NF-2) * 0.01}'|awk '{if ($1<=1) print 2; else print }' )
 
     zcat ~{copystate_rd_cn_format} \
-    |{ fgrep -wf <(zcat ~{overlap_revise_bed} |awk -F"\t" '{if ($5=="DEL" && $3-$2>=1000) print $4}' ) || [[ $? == 1 ]]; } \
+    |{ fgrep -wf <(zcat ~{overlap_revise_bed} |awk -F"\t" '{if ($5=="DEL" && $3-$2>=1000) print $4}' ) || true; } \
     |awk 'NR>1{for(i=3;i<=NF;i++) if ($i!="." && $i>3) print  $1 }' \
     |sort \
     |uniq -c \
@@ -510,7 +510,7 @@ task CleanVcf5_6 {
     vf_1=$(zcat ~{copystate_rd_cn_format}|awk 'NR==1{print (NF-2) * 0.01}'|awk '{if ($1<=1) print 2; else print }' )
 
     zcat ~{copystate_rd_cn_format} \
-    |{ fgrep -wf <(zcat ~{overlap_revise_bed}|awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}' ) || [[ $? == 1 ]]; } \
+    |{ fgrep -wf <(zcat ~{overlap_revise_bed}|awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}' ) || true; } \
     |awk 'NR>1{for(i=3;i<=NF;i++) if ($i!="." && $i>4) print  $1 }' \
     |sort \
     |uniq -c \
@@ -555,7 +555,7 @@ task CleanVcf5_7 {
     set -euxo pipefail
     ##Case with CN 0,1,2,3,4##
     zcat ~{copystate_rd_cn_format} \
-    |{ fgrep -wf <(zcat ~{overlap_revise_bed} | awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}') || [[ $? == 1 ]]; } \
+    |{ fgrep -wf <(zcat ~{overlap_revise_bed} | awk -F"\t" '{if ($5=="DUP" && $3-$2>=1000) print $4}') || true; } \
     |awk 'NR>1{for(i=3;i<=NF;i++) if ($i!="." && ($i<1 || $i>4)) print  $1 "\t" $i }'\
     |sort -u \
     |awk  '{print $1}' \
@@ -696,7 +696,7 @@ task CleanVcf5_10 {
       |awk '{if ($1~"DUP") print}' \
       |awk '{for (i = 3; i <= NF; ++i) print $1 "\t" $i}' \
       |awk '{if ($2!="1/1" && $2!="0/0" && $2!="0/1" && $2!="./.") print $1}' \
-      |{ fgrep -wvf <(zcat ~{multi_dup_ids}) || [[ $? == 1 ]]; } \
+      |{ fgrep -wvf <(zcat ~{multi_dup_ids}) || true; } \
       |sort -u \
       >gt5kb.dup.ids.txt
   >>>
@@ -741,7 +741,7 @@ task CleanVcf5_11 {
       |awk '{if ($1~"DEL") print}' \
       |awk '{for (i = 3; i <= NF; ++i) print $1 "\t" $i}' \
       |awk '{if ($2!="1/1" && $2!="0/0" && $2!="0/1" && $2!="./.") print $1}' \
-      |{ fgrep -wvf <(zcat ~{multi_del_ids}) || [[ $? == 1 ]]; } \
+      |{ fgrep -wvf <(zcat ~{multi_del_ids}) || true; } \
       |sort -u \
       >gt5kb.del.ids.txt
   >>>
@@ -789,7 +789,7 @@ task CleanVcf5_12 {
     then
       zcat ~{regeno_bed}  \
       |awk '{if ($3-$2>=5000 && $5=="DUP")print $4}' \
-      |{ fgrep -wvf <(zcat ~{multi_dup_ids}) || [[ $? == 1 ]]; } \
+      |{ fgrep -wvf <(zcat ~{multi_dup_ids}) || true; } \
       >>gt5kb.dup.ids.txt
     else
       zcat ~{regeno_bed} \
@@ -839,7 +839,7 @@ task CleanVcf5_13 {
     then
       zcat ~{regeno_bed} \
         |awk '{if ($3-$2>=5000 && $5=="DEL")print $4}' \
-        |{ fgrep -wvf <(zcat ~{multi_del_ids}) || [[ $? == 1 ]]; } \
+        |{ fgrep -wvf <(zcat ~{multi_del_ids}) || true; } \
         >>gt5kb.del.ids.txt
     else
       zcat ~{regeno_bed} \
@@ -885,7 +885,7 @@ task CleanVcf5_14 {
   command <<<
     set -euxo pipefail
     zcat ~{overlap_revise_vcf} \
-      |{ fgrep -wf ~{gt5kb_dup_ids} || [[ $? == 1 ]]; } \
+      |{ fgrep -wf ~{gt5kb_dup_ids} || true; } \
       >dup.int.txt
   >>>
 
@@ -925,7 +925,7 @@ task CleanVcf5_15 {
   command <<<
     set -euxo pipefail
     zcat ~{overlap_revise_vcf} \
-      |{ fgrep -wf ~{gt5kb_del_ids} || [[ $? == 1 ]]; } \
+      |{ fgrep -wf ~{gt5kb_del_ids} || true; } \
       >>del.int.txt
   >>>
 
@@ -1520,7 +1520,7 @@ task CleanVcf5_27 {
     awk -F'\t' '{if ($6=="") print $4}' tmp.bed \
     |cat - ~{multi_remove} \
     |sed '/^$/d' \
-    |{ fgrep -wvf - <(zcat ~{multitagged_geno_vcf} ) || [[ $? == 1 ]]; } \
+    |{ fgrep -wvf - <(zcat ~{multitagged_geno_vcf} ) || true; } \
     |awk -F';' '{if ($1~"MULTIALLELIC" && ( $2~"DEL" || $2~"DUP")) $2="SVTYPE=CNV"; print}' OFS=';' \
     |awk '{OFS="\t"; if ($8~"SVTYPE=CNV;") $5="<CNV>"; print}' \
     |bgzip \
@@ -1608,7 +1608,7 @@ task CleanVcf5_29_TRUE_1 {
     >col.txt
 
     awk '{if ($5==1) print $2}' ~{famfile} \
-    |{ fgrep -wf - col.txt || [[ $? == 1 ]]; } \
+    |{ fgrep -wf - col.txt || true; } \
     >malecols.txt
   >>>
 
@@ -1802,11 +1802,11 @@ task CleanVcf5_31 {
     ##add new filters##
     zcat cleanGQ.vcf.gz \
     |awk '{if ($1~"##" && NR>1)  print}' \
-    |{ fgrep -v "MULTIALLELIC" || [[ $? == 1 ]]; } \
+    |{ fgrep -v "MULTIALLELIC" || true; } \
     |awk '{if (NR==2) print $0 "\n" "##FILTER=<ID=MULTIALLELIC,Description=\"Multiallelic site\">" ;else print}' \
     |awk '{if (NR==2) print $0 "\n" "##ALT=<ID=CNV,Description=\"Copy Number Polymorphism\">" ;else print}' \
     |sort -k1,1 \
-    |{ egrep -v "CIPOS|CIEND|RMSSTD|EVENT|INFO=<ID=UNRESOLVED,|source|varGQ|bcftools|ALT=<ID=UNR" || [[ $? == 1 ]]; } \
+    |{ egrep -v "CIPOS|CIEND|RMSSTD|EVENT|INFO=<ID=UNRESOLVED,|source|varGQ|bcftools|ALT=<ID=UNR" || true; } \
     |cat <(zcat cleanGQ.vcf.gz|head -n 1) - <(zcat cleanGQ.vcf.gz|fgrep -wvf ~{blankcheck_ids} |awk '{if ($1!~"##")  print}') \
     |bgzip >polished.vcf.gz
   >>>
