@@ -67,7 +67,6 @@ workflow FilterBatchSites {
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
-    Array[String] algorithms_filtersites = algorithms
   }
 }
 

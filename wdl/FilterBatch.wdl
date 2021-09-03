@@ -69,7 +69,6 @@ workflow FilterBatch {
     input:
       prefix = batch,
       vcfs = [FilterBatchSites.sites_filtered_manta_vcf, FilterBatchSites.sites_filtered_delly_vcf, FilterBatchSites.sites_filtered_wham_vcf, FilterBatchSites.sites_filtered_melt_vcf, FilterBatchSites.sites_filtered_depth_vcf],
-      vcf_identifiers = FilterBatchSites.algorithms_filtersites,
       N_IQR_cutoff = outlier_cutoff_nIQR,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
