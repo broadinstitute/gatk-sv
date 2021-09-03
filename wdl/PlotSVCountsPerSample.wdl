@@ -16,7 +16,7 @@ workflow PlotSVCountsPerSample {
 
   scatter (vcf in vcfs) {
     if (defined(vcf)) {
-      String vcf_name = basename(select_first([vcf]), "vcf.gz")
+      String vcf_name = basename(select_first([vcf]), ".vcf.gz")
       call CountSVsPerSamplePerType {
         input:
           vcf = select_first([vcf]),
