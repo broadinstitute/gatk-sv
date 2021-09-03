@@ -7,7 +7,6 @@ workflow PlotSVCountsPerSample {
   input {
     String prefix
     Array[File?] vcfs  # in order of vcf_identifiers array. To skip one, use null keyword
-    Array[String] vcf_identifiers  # VCF identifiers - could be algorithms like manta, wham, etc or pesr, depth or just cohort VCF
     Int N_IQR_cutoff
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_count_svs
@@ -15,14 +14,13 @@ workflow PlotSVCountsPerSample {
     RuntimeAttr? runtime_attr_cat_outliers_preview
   }
 
-  Int num_identifiers = length(vcf_identifiers)
-
-  scatter (i in range(num_identifiers)) {
-    if (defined(vcfs[i])) {
+  scatter (vcf in vcfs) {
+    if (defined(vcf)) {
+      String vcf_name = basename(select_first([vcf]), ".vcf.gz")
       call CountSVsPerSamplePerType {
         input:
-          vcf = select_first([vcfs[i]]),
-          prefix = "~{prefix}.~{vcf_identifiers[i]}",
+          vcf = select_first([vcf]),
+          prefix = vcf_name,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_count_svs
       }
@@ -31,7 +29,7 @@ workflow PlotSVCountsPerSample {
         input:
           svcounts = CountSVsPerSamplePerType.sv_counts,
           n_iqr_cutoff = N_IQR_cutoff,
-          prefix = "~{prefix}.~{vcf_identifiers[i]}",
+          prefix = vcf_name,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_plot_svcounts
       }
