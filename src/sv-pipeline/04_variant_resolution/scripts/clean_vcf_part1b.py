@@ -162,6 +162,64 @@ def get_depth_based_copy_number_variant(vcf_gz, normaloverlap):
     return tmp5.name + ".gz"
 
 
+def get_evidence_supporting_each_normal_overlapping_variant(vcf_gz, normaloverlap):
+    # Probably the only difference between this method and the previous one
+    # is the VCF filter they use. another diff is at creating tmp2,
+    # double-check the above method, it seems that method is doing an
+    # unnecessary additional step.
+    ids = set()
+    with open(normaloverlap) as f:
+        for line in f:
+            sline = line.strip().split(BED_DELIMITER)
+            ids.add(sline[3])
+            ids.add(sline[9])
+
+    # keep only those lines in vcf whose ID is in the ids set.
+    tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with gzip.open(vcf_gz, "rt") as f, tmp as t:
+        for line in f:
+            if line.startswith("#"):
+                t.write(line)
+            else:
+                sline = line.split(VCF_DELIMITER)
+                if sline[2] in ids:
+                    t.write(line)
+
+    tmp2 = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with open(tmp.name) as t1, tmp2 as t2:
+        for line in t1:
+            sline = line.strip().split(VCF_DELIMITER)
+            if "#" not in sline[0]:
+                sline[0] = sline[2]
+            t2.write(VCF_DELIMITER.join(sline) + "\n")
+
+    tmp3 = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    tmp3.close()
+    format_id = "EV"
+    check_call(["vcftools", "--vcf", tmp2.name, "--extract-FORMAT-info", format_id, "--out", tmp3.name])
+    vcftools_output = f"{tmp3.name}.{format_id}.FORMAT"
+
+    c = 0
+    header = []
+    tmp4 = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with open(vcftools_output, "r") as f, tmp4 as t:
+        for line in f:
+            sline = line.strip().split(VCF_DELIMITER)
+            c += 1
+            if c == 1:
+                for i in range(2, len(sline)):
+                    header.append(sline[i])
+            else:
+                for i in range(2, len(sline)):
+                    t.write(f"{sline[0]}@{header[i-2]}\t{sline[i]}\n")
+
+    tmp5 = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    check_call(["sort", "-k1,1", tmp4.name], stdout=tmp5)
+    check_call(["gzip", tmp5.name])
+    return tmp5.name + ".gz"
+
+
+
 def main(input_vcf):
     headers = get_columns_headers(input_vcf)
     headers = headers.replace("\t", "\n")
@@ -169,8 +227,9 @@ def main(input_vcf):
         f.writelines(headers)
     int_bed_gz = get_filtered_vcf_in_bed(input_vcf)
     normaloverlap_txt = get_normal_overlap(int_bed_gz)
-    ev_normalcheck_FORMAT_gz= get_depth_based_copy_number_variant(input_vcf, normaloverlap_txt)
-    print(ev_normalcheck_FORMAT_gz)
+    rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(input_vcf, normaloverlap_txt)
+    ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(input_vcf, normaloverlap_txt)
+    print(ev_normalcheck_format_gz)
 
 
 if __name__ == '__main__':
