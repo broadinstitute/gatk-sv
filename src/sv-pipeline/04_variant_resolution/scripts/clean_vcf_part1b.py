@@ -219,6 +219,45 @@ def get_evidence_supporting_each_normal_overlapping_variant(vcf_gz, normaloverla
     return tmp5.name + ".gz"
 
 
+def check_if_nested_is_incorrectly_classified_as_normal(normaloverlap):
+    overlap_test_txt = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with open(normaloverlap, "r") as f, overlap_test_txt as o:
+        for line in f:
+            line = line.strip()
+            line = line.replace(" ", "\t")
+            sline = line.split("\t")
+            # lfile.write("\t".join(sline[0:6]) + "\n") # maybe 5
+            # sfile.write("\t".join(sline[6:12]) + "\n") # maybe 11
+
+            ss = int(sline[7])
+            se = int(sline[8])
+            ls = int(sline[1])
+            le = int(sline[2])
+
+            coverage_percentage = 0
+            if ls <= se and ss <= le:
+                intersection_size = min(se, le) - max(ss, ls)
+                coverage_percentage = intersection_size / (se-ss)
+
+            alist = []
+            if coverage_percentage >= 0.5:
+                fgrep_part_a = sline[11].split(",")
+                smallid = sline[9]
+                # wrong variable name
+                large_ids = sline[5].split(",")
+                for x in large_ids:
+                    alist.append(f"{smallid}@{x}\t{sline[3]}@{x}\t{sline[4]}")
+
+                not_match_count = 0
+                # not sure if this check is what it was intended.
+                for x in alist:
+                    for y in fgrep_part_a:
+                        if y in x:
+                            break
+                    else:
+                        o.write(x + "\n")
+    return overlap_test_txt.name
+
 
 def main(input_vcf):
     headers = get_columns_headers(input_vcf)
@@ -229,7 +268,8 @@ def main(input_vcf):
     normaloverlap_txt = get_normal_overlap(int_bed_gz)
     rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(input_vcf, normaloverlap_txt)
     ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(input_vcf, normaloverlap_txt)
-    print(ev_normalcheck_format_gz)
+    overlap_test_txt = check_if_nested_is_incorrectly_classified_as_normal(normaloverlap_txt)
+    print(overlap_test_txt)
 
 
 if __name__ == '__main__':
