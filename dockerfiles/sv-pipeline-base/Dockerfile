@@ -91,6 +91,10 @@ RUN apt-get -qqy update --fix-missing && \
     cd /opt/pysam && \
     git checkout af6ff23322af451b8ab6ea78b53676c45ae0a779 && \
     pip install -e . && \
+    git clone https://github.com/brentp/cyvcf2.git /opt/cyvcf2 && \
+    cd /opt/cyvcf2 && \
+    git checkout v0.30.11 && \
+    pip install -e . && \
     rm -rf ${HOME}/.cache/pip && \
     conda clean -tipsy && \
     rm /tmp/miniconda.sh && \
