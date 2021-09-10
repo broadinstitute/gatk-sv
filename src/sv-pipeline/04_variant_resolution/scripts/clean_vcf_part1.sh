@@ -21,5 +21,5 @@ allosome_fai=$4		# names of allosomes in fai format -- we only look at column 1:
 # int.vcr.gz: a revised vcf, bgzipped
 
 zcat "$vcf" \
-    | awk -v allosomeFile="$allosome_fai" -v pedFile="$famfile" -f /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part1.awk \
+    | awk -v allosomeFile="$allosome_fai" -v pedFile="$famfile" -v bgdFile="$backgroundlist" -f /opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part1.awk \
     | bgzip -c > int.vcf.gz

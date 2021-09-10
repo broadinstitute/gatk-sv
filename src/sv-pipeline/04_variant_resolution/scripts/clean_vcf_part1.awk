@@ -16,6 +16,10 @@ BEGIN {while ( getline < allosomeFile )
 BEGIN {while ( getline < pedFile )
 	{sexForSampleName[$2] = $5}}
 
+# read the background file
+BEGIN {while ( getline < bgdFile )
+	{bgdEvent[$1]}}
+
 # regexp for the #CHROM line with all the sample names
 /^#C/  {# add a couple of filters at the end of the metadata
 	print "##FILTER=<ID=HIGH_SR_BACKGROUND,Description=\"High number of SR splits in background samples indicating messy region\">";
@@ -62,6 +66,9 @@ BEGIN {while ( getline < pedFile )
 		 # remove MULTIALLELIC flags from INFOs
 		 else if ( infoFld=="MULTIALLELIC" ) continue;
 		 $8=$8 sep infoFld; sep=";"}
+
+	# mark the background events
+	if ( $3 in bgdEvent ) $7=$7 ";HIGH_SR_BACKGROUND";
 
 	# patch some genotypes on allosomes
 	if ( $1==xChr || $1==yChr )
