@@ -259,6 +259,44 @@ def check_if_nested_is_incorrectly_classified_as_normal(normaloverlap):
     return overlap_test_txt.name
 
 
+def get_variants_to_be_revised_from_normal_copy_state_into_cnv(
+        overlap_test_txt, rd_cn_normalcheck_format_gz,
+        ev_normalcheck_format_gz):
+    data = {}
+    with open(overlap_test_txt) as f:
+        for line in f:
+            sline = line.strip().split("\t")
+            data[sline[0]] = [sline[0], sline[1], sline[2]]
+
+    rd_cn_dict = {}
+    with gzip.open(rd_cn_normalcheck_format_gz, "rt") as f:
+        for line in f:
+            sline = line.strip().split("\t")
+            if sline[0] in data:
+                data[sline[0]].append(int(sline[1]))
+            rd_cn_dict[sline[0]] = int(sline[1])
+
+    with gzip.open(ev_normalcheck_format_gz, "rt") as f:
+        for line in f:
+            sline = line.strip().split("\t")
+            if sline[0] in data:
+                data[sline[0]].append(sline[1])
+
+    joined = []
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with output as t:
+        for k, v in data.items():
+            if v[0] in rd_cn_dict:
+                joined.append([v[0], v[1], v[2], v[3], v[4], rd_cn_dict[v[1]]])
+                if v[2] == "DUP" and v[3] == 2 and rd_cn_dict[v[1]] == 3:
+                    aaa = v[0].replace("@", "\t") + "\t" + "1" + "\n"
+                    t.write(aaa)
+                elif v[2] == "DEL" and v[3] == 2 and rd_cn_dict[v[1]] == 1:
+                    t.write(v[0].replace("@", "\t") + "\t" + "3" + "\n")
+
+    return output.name
+
+
 def main(input_vcf):
     headers = get_columns_headers(input_vcf)
     headers = headers.replace("\t", "\n")
@@ -269,7 +307,8 @@ def main(input_vcf):
     rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(input_vcf, normaloverlap_txt)
     ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(input_vcf, normaloverlap_txt)
     overlap_test_txt = check_if_nested_is_incorrectly_classified_as_normal(normaloverlap_txt)
-    print(overlap_test_txt)
+    geno_normal_revise_txt = get_variants_to_be_revised_from_normal_copy_state_into_cnv(overlap_test_txt, rd_cn_normalcheck_FORMAT_gz, ev_normalcheck_format_gz)
+    print(geno_normal_revise_txt)
 
 
 if __name__ == '__main__':
