@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
 
     print("finding redundant overlapping sites", file=sys.stderr)
-    cleangq_bed = svu.vcf2bedtool(cleangq_filename, include_filters=True)
+    cleangq_bed = svu.vcf2bedtool(args.cleangq_filename, include_filters=True)
 
     multiallelic_bed = cleangq_bed.filter(lambda feature: 'MULTIALLELIC' in feature.fields[6].split(',')).saveas('multiallelics.bed')
 
@@ -38,7 +38,7 @@ def main():
     print("identified {} redundant multiallelic sites".format(len(redundant_multiallelics)), file=sys.stderr)
 
     # one more pass through the VCF to remove variants with no called samples and the redundant multiallelics
-    cleangq_vcf = pysam.VariantFile(cleangq_filename)
+    cleangq_vcf = pysam.VariantFile(args.cleangq_filename)
 
     if args.fout in '- stdout'.split():
         fout = pysam.VariantFile(sys.stdout, 'w', header=cleangq_vcf.header)
