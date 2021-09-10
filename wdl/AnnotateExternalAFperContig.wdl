@@ -154,6 +154,7 @@ workflow AnnotateExternalAFperContig {
       input:
         vcfs = ModifyVcf.annotated_vcf,
         vcfs_idx = ModifyVcf.annotated_vcf_tbi,
+        naive = true,
         outfile_prefix = "~{contig}.annotated.vcf",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_combine_vcfs

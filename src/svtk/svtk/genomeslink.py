@@ -42,21 +42,6 @@ class GSNode(object):
             self.chrA, self.chrB = self.chrB, self.chrA
             self.posA, self.posB = self.posB, self.posA
 
-    def is_clusterable_with(self, other, dist):
-        """
-        Identify cluster candidates if chrA, posB meet cluster distance limit
-        """
-        return (self.chrA == other.chrA and
-                abs(self.posA - other.posA) < dist)
-
-    def clusters_with(self, other, dist):
-        """
-        Test if candidates meet cluster distance requirement on chrB, posB
-        """
-        return (self.chrB == other.chrB and
-                abs(self.posA - other.posA) < dist and
-                abs(self.posB - other.posB) < dist)
-
     def is_in(self, tabixfile):
         """
         Test if breakpoints of SV fall into any region in tabix-indexed bed.
@@ -171,6 +156,21 @@ class GenomeSLINK(object):
         self.size = size
         self.blacklist = blacklist
 
+    def is_clusterable_with(self, first, second):
+        """
+        Identify cluster candidates if chrA, posB meet cluster distance limit
+        """
+        return (first.chrA == second.chrA and
+                abs(first.posA - second.posA) < self.dist)
+
+    def clusters_with(self, first, second):
+        """
+        Test if candidates meet cluster distance requirement on chrB, posB
+        """
+        return (first.chrB == second.chrB and
+                abs(first.posA - second.posA) < self.dist and
+                abs(first.posB - second.posB) < self.dist)
+
     def filter_nodes(self):
         """
         Filter provided nodes. By default, remove nodes in blacklisted regions.
@@ -208,7 +208,7 @@ class GenomeSLINK(object):
         for node in self.filter_nodes():
             node_count += 1
 
-            if prev is None or prev.is_clusterable_with(node, self.dist):
+            if prev is None or self.is_clusterable_with(prev, node):
                 candidates.append(node)
 
             else:
@@ -239,7 +239,7 @@ class GenomeSLINK(object):
         # Add edges between nodes with overlap
         for p1, p2 in combinations(range(n), 2):
             node1, node2 = candidates[p1], candidates[p2]
-            if node1.clusters_with(node2, self.dist, *args, **kwargs):
+            if self.clusters_with(node1, node2):
                 G[p1, p2] = 1
 
         # Get indices of connected components

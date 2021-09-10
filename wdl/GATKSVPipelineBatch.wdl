@@ -285,7 +285,6 @@ workflow GATKSVPipelineBatch {
       allosome_fai=allosome_file,
       ref_dict=reference_dict,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
-      disc_files_index=[GATKSVPipelinePhase1.merged_PE_index],
       bincov_files=[GATKSVPipelinePhase1.merged_bincov],
       cohort_name=batch,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],

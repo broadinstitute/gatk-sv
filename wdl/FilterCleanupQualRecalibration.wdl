@@ -45,6 +45,7 @@ workflow FilterCleanupQualRecalibration {
     input:
       vcfs=Cleanup.out_vcf,
       outfile_prefix="~{prefix}.cleaned_filters_qual_recalibrated",
+      naive=true,
       sv_base_mini_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs
   }
@@ -53,7 +54,7 @@ workflow FilterCleanupQualRecalibration {
     input:
       vcfs= [ConcatVcfs.concat_vcf, RemoveMCNVs.mcnv_vcf],
       vcfs_idx = [ConcatVcfs.concat_vcf_idx,RemoveMCNVs.mcnv_idx],
-      merge_sort = true,
+      allow_overlaps = true,
       outfile_prefix = "~{prefix}.cleaned_filters_qual_recali",
       sv_base_mini_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs

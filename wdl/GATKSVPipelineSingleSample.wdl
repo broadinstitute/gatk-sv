@@ -360,8 +360,6 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     Float clean_vcf_min_sr_background_fail_batches
-    Int clean_vcf_max_shards_per_chrom
-    Int clean_vcf_min_variants_per_shard
 
     File cytobands
 
@@ -369,7 +367,8 @@ workflow GATKSVPipelineSingleSample {
     File pe_exclude_list
     File depth_exclude_list
     File empty_file
-    
+
+    Int max_shard_size_resolve
     Int clean_vcf_max_shards_per_chrom_clean_vcf_step1
     Int clean_vcf_min_records_per_shard_clean_vcf_step1
     Int clean_vcf_samples_per_clean_vcf_step2_shard
@@ -379,7 +378,9 @@ workflow GATKSVPipelineSingleSample {
     # Run MakeCohortVcf metrics - default is off for single sample pipeline
     Boolean? run_makecohortvcf_metrics = false
 
-    RuntimeAttr? runtime_override_update_sr_list
+    RuntimeAttr? runtime_override_update_sr_list_cluster
+    RuntimeAttr? runtime_override_update_sr_list_pass
+    RuntimeAttr? runtime_override_update_sr_list_fail
     RuntimeAttr? runtime_override_merge_pesr_depth
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_integrate_resolved_vcfs
@@ -889,14 +890,11 @@ workflow GATKSVPipelineSingleSample {
       ref_dict=reference_dict,
 
       merge_complex_genotype_vcfs = true,
-      max_shards_per_chrom=clean_vcf_max_shards_per_chrom,
-      min_variants_per_shard=clean_vcf_min_variants_per_shard,
       cytobands=cytobands,
 
       bin_exclude=bin_exclude,
 
       disc_files=[GatherBatchEvidence.merged_PE],
-      disc_files_index=[GatherBatchEvidence.merged_PE_index],
       bincov_files=[GatherBatchEvidence.merged_bincov],
 
       mei_bed=mei_bed,
@@ -914,6 +912,7 @@ workflow GATKSVPipelineSingleSample {
       depth_gt_rd_sep_files=[genotype_depth_depth_sepcutoff],
       median_coverage_files=[GatherBatchEvidence.median_cov],
 
+      max_shard_size_resolve=max_shard_size_resolve,
       max_shards_per_chrom_clean_vcf_step1=clean_vcf_max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_clean_vcf_step1=clean_vcf_min_records_per_shard_clean_vcf_step1,
       samples_per_clean_vcf_step2_shard=clean_vcf_samples_per_clean_vcf_step2_shard,
@@ -928,7 +927,9 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
 
-      runtime_override_update_sr_list=runtime_override_update_sr_list,
+      runtime_override_update_sr_list_cluster=runtime_override_update_sr_list_cluster,
+      runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
+      runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,

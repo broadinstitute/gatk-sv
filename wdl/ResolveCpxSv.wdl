@@ -10,16 +10,17 @@ workflow ResolveComplexSv {
     File vcf
     String prefix
     String contig
-    Int max_shards_per_chrom
-    Int min_variants_per_shard
+    Int max_shard_size
     File cytobands
     File mei_bed
     Array[File] disc_files
-    Array[File]? disc_files_index
     Array[File] rf_cutoff_files
     File pe_exclude_list
     Boolean inv_only
     File ref_dict
+
+    Int precluster_distance
+    Float precluster_overlap_frac
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -27,9 +28,11 @@ workflow ResolveComplexSv {
     # overrides for local tasks
     RuntimeAttr? runtime_override_get_se_cutoff
     RuntimeAttr? runtime_override_shard_vcf_cpx
+    RuntimeAttr? runtime_override_shard_vids
     RuntimeAttr? runtime_override_resolve_prep
     RuntimeAttr? runtime_override_resolve_cpx_per_shard
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
+    RuntimeAttr? runtime_override_merge_resolve_inner
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_concat_resolved_per_shard
@@ -38,6 +41,9 @@ workflow ResolveComplexSv {
   File vcf_idx = vcf + ".tbi"
   File pe_exclude_list_idx = pe_exclude_list + ".tbi"
   File cytobands_idx = cytobands + ".tbi"
+  scatter (i in range(length(disc_files))) {
+    File disc_files_idx = disc_files[i]
+  }
 
   # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
 
@@ -47,16 +53,24 @@ workflow ResolveComplexSv {
   call ShardVcfCpx {
     input:
       vcf=vcf,
-      vcf_idx=vcf_idx,
-      max_shards=max_shards_per_chrom,
-      min_variants_per_shard=min_variants_per_shard,
-      prefix="~{prefix}.~{contig}",
-      inv_only=inv_only,
+      dist=precluster_distance,
+      frac=precluster_overlap_frac,
+      records_per_shard=max_shard_size,
+      prefix="~{prefix}.shard_cpx",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_shard_vcf_cpx
   }
 
-  if (length(ShardVcfCpx.VID_lists) > 0) {
+  call MiniTasks.ShardVids {
+    input:
+      clustered_vcf=ShardVcfCpx.out,
+      prefix=prefix,
+      records_per_shard=max_shard_size,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_shard_vids
+  }
+
+  if (length(ShardVids.out) > 0) {
 
     call GetSeCutoff {
       input:
@@ -66,26 +80,26 @@ workflow ResolveComplexSv {
     }
 
     #Scatter over shards and resolve variants per shard
-    scatter ( VID_list in ShardVcfCpx.VID_lists ) {
+    scatter ( i in range(length(ShardVids.out)) ) {
 
       #Prep files for svtk resolve using bucket streaming
       call ResolvePrep {
         input:
           vcf=vcf,
-          VIDs_list=VID_list,
+          VIDs_list=ShardVids.out[i],
           chrom=contig,
           disc_files=disc_files,
-          disc_files_index=disc_files_index,
+          disc_files_index=disc_files_idx,
           ref_dict=ref_dict,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_prep
       }
 
       #Run svtk resolve
-      call SvtkResolve as ResolveCpxPerShard {
+      call SvtkResolve {
         input:
-          full_vcf=ResolvePrep.subsetted_vcf,
           noref_vcf=ResolvePrep.noref_vcf,
+          prefix="~{prefix}.svtk_resolve.shard_~{i}",
           chrom=contig,
           cytobands=cytobands,
           cytobands_idx=cytobands_idx,
@@ -93,19 +107,28 @@ workflow ResolveComplexSv {
           pe_exclude_list=pe_exclude_list,
           pe_exclude_list_idx=pe_exclude_list_idx,
           se_pe_cutoff=GetSeCutoff.median_PE_cutoff,
-          noref_vids=ResolvePrep.noref_vids,
           merged_discfile=ResolvePrep.merged_discfile,
           merged_discfile_idx=ResolvePrep.merged_discfile_idx,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_resolve_cpx_per_shard
       }
 
+      call MergeResolve {
+        input:
+          full_vcf=ResolvePrep.subsetted_vcf,
+          resolved_vcf=SvtkResolve.rs_vcf,
+          prefix="~{prefix}.merge_resolve.shard_~{i}",
+          noref_vids=ResolvePrep.noref_vids,
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_attr_override=runtime_override_merge_resolve_inner
+      }
+
       #Add unresolved variants back into resolved VCF
       call RestoreUnresolvedCnv as RestoreUnresolvedCnvPerShard {
         input:
-          resolved_vcf=ResolveCpxPerShard.rs_vcf,
-          unresolved_vcf=ResolveCpxPerShard.un_vcf,
-          contig=contig,
+          resolved_vcf=MergeResolve.out,
+          unresolved_vcf=SvtkResolve.un_vcf,
+          prefix="~{prefix}.restore_unresolved.shard_~{i}",
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_restore_unresolved_cnv_per_shard
       }
@@ -116,7 +139,7 @@ workflow ResolveComplexSv {
       input:
         vcfs=RestoreUnresolvedCnvPerShard.res,
         vcfs_idx=RestoreUnresolvedCnvPerShard.res_idx,
-        merge_sort=true,
+        allow_overlaps=true,
         outfile_prefix=prefix + ".resolved",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat_resolved_per_shard
@@ -180,28 +203,23 @@ task GetSeCutoff {
 }
 
 
-#Split VCF into chunks for parallelized CPX resolution
 task ShardVcfCpx {
   input {
     File vcf
-    File vcf_idx
-    Int max_shards
-    Int min_variants_per_shard
     String prefix
-    Boolean inv_only
+    Int dist
+    Float frac
+    Int records_per_shard
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size([vcf, vcf_idx], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float input_size = size(vcf, "GiB")
+  Float base_disk_gb = 10.0
+  Float input_disk_scale = 10.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -220,18 +238,22 @@ task ShardVcfCpx {
 
   command <<<
     set -euo pipefail
-
-    SHARD_SCRIPT="shardVCF_preResolveCPX~{if inv_only then "_invOnly" else ""}_part1.sh"
-    /opt/sv-pipeline/04_variant_resolution/scripts/$SHARD_SCRIPT \
-      -L ~{min_variants_per_shard} \
-      -S ~{max_shards} \
-      -P ~{prefix} \
-      -T ~{vcf_idx} \
-      ~{vcf}
+    bcftools view -G ~{vcf} -Oz -o sites_only.vcf.gz
+    svtk vcfcluster <(echo "sites_only.vcf.gz") ~{prefix}.vcf \
+      -d ~{dist} \
+      -f ~{frac} \
+      -p candidate_complex_clusters \
+      --svtypes DEL,DUP,INS,INV,BND \
+      --ignore-svtypes \
+      -o 0 \
+      --preserve-header \
+      --preserve-ids \
+      --skip-merge
+    bgzip ~{prefix}.vcf
   >>>
 
   output {
-    Array[File] VID_lists = glob("*.VIDs.list")
+    File out = "~{prefix}.vcf.gz"
   }
 }
 
@@ -265,7 +287,7 @@ task ResolvePrep {
   #   big and disk is cheap)
   Float compressed_input_size = size(vcf, "GiB")
   Float uncompressed_input_size = size([VIDs_list], "GiB")
-  Float compression_factor = 5.0
+  Float compression_factor = 30.0
   Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
@@ -292,7 +314,7 @@ task ResolvePrep {
   }
 
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
     
     # First, subset VCF to variants of interest
     # -uncompress vcf
@@ -412,8 +434,8 @@ task ResolvePrep {
 #Resolve complex SV
 task SvtkResolve {
   input {
-    File full_vcf
     File noref_vcf
+    String prefix
     String chrom
     File cytobands
     File cytobands_idx
@@ -421,31 +443,24 @@ task SvtkResolve {
     File pe_exclude_list
     File pe_exclude_list_idx
     Int se_pe_cutoff
-    File noref_vids
     File merged_discfile
     File merged_discfile_idx
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   
-  String resolved_vcf = "all_batches.resolved." + chrom + ".shard.vcf"
-  String unresolved_vcf = "all_batches.unresolved." + chrom + ".shard.vcf"
+  String resolved_vcf = "~{prefix}.resolved.unmerged.vcf"
+  String unresolved_vcf = "~{prefix}.unresolved.vcf"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(
-    [full_vcf, noref_vcf, cytobands, cytobands_idx, mei_bed, pe_exclude_list, pe_exclude_list_idx, noref_vids,
-     merged_discfile, merged_discfile_idx],
-    "GiB"
-  )
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 3.0
+    [noref_vcf, cytobands, mei_bed, pe_exclude_list, pe_exclude_list_idx,merged_discfile], "GiB")
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: 3 + input_size * 10,
+    disk_gb: ceil(10 + input_size * 12),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -462,51 +477,21 @@ task SvtkResolve {
 
   command <<<
     set -eu -o pipefail
-    if [ $( zcat ~{noref_vcf} | cut -f1 | fgrep -v "#" | wc -l ) -gt 0 ]; then
-        #Run svtk resolve on variants after all-ref exclusion
-        svtk resolve \
-          ~{noref_vcf} \
-          ~{resolved_vcf} \
-          -p AllBatches_CPX_~{chrom} \
-          -u ~{unresolved_vcf} \
-          --discfile ~{merged_discfile} \
-          --mei-bed ~{mei_bed} \
-          --cytobands ~{cytobands} \
-          --min-rescan-pe-support ~{se_pe_cutoff} \
-          -x ~{pe_exclude_list}
 
-        echo "svtk resolve complete"
-        else
-          echo "no records in noref.vcf.gz; skipping svtk resolve"
-          zcat ~{noref_vcf} > ~{resolved_vcf}
-          zcat ~{noref_vcf} > ~{unresolved_vcf}
-    fi
-    #Add all-ref variants back into resolved VCF
-    #Note: requires modifying the INFO field with sed & awk given pysam C bug
-    zcat ~{full_vcf} \
-      | (grep -Ev "^#" || printf "") \
-      | (fgrep -wvf ~{noref_vids} || printf "") \
-      | sed -e 's/;MEMBERS=[^\t]*\t/\t/g' \
-      | awk -v OFS="\t" '{ $8=$8";MEMBERS="$3; print }' \
-      | cat ~{resolved_vcf} - \
-      | vcf-sort \
-      > ~{resolved_vcf}.tmp ||true
-    # write to temporary file then move to original location, to prevent
-    # the input from being obliterated
-    mv ~{resolved_vcf}.tmp ~{resolved_vcf}
+    #Run svtk resolve on variants after all-ref exclusion
+    svtk resolve \
+      ~{noref_vcf} \
+      ~{resolved_vcf} \
+      -p AllBatches_CPX_~{chrom} \
+      -u ~{unresolved_vcf} \
+      --discfile ~{merged_discfile} \
+      --mei-bed ~{mei_bed} \
+      --cytobands ~{cytobands} \
+      --min-rescan-pe-support ~{se_pe_cutoff} \
+      -x ~{pe_exclude_list}
 
-    echo "all-ref variants added back into resolved vcf"
-    
-    #Sanity check for failed svtk jobs
-    if ! grep -qEv "^#" ~{resolved_vcf} && ! grep -qEv "^#" ~{unresolved_vcf}; then
-      print "ERROR: BOTH OUTPUT VCFS EMPTY"
-      exit 1
-    fi
-
-    echo "passed sanity check, bgzipping vcfs"
-
-    bgzip -f ~{resolved_vcf}
-    bgzip -f ~{unresolved_vcf}
+    bgzip ~{resolved_vcf}
+    bgzip ~{unresolved_vcf}
   >>>
 
   output {
@@ -515,27 +500,78 @@ task SvtkResolve {
   }  
 }
 
+task MergeResolve {
+  input {
+    File full_vcf
+    File resolved_vcf
+    String prefix
+    File noref_vids
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String out_vcf = "~{prefix}.resolved.vcf.gz"
+
+  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+  # be held in memory or disk while working, potentially in a form that takes up more space)
+  Float input_size = size([full_vcf, resolved_vcf, noref_vids], "GiB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10 + input_size * 15),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 1,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -eu -o pipefail
+    #Add all-ref variants back into resolved VCF
+    #Note: requires modifying the INFO field with sed & awk given pysam C bug
+    zcat ~{full_vcf} \
+      | grep -Ev "^#" \
+      | awk 'ARGIND==1{inFileA[$1]; next} {if (!($3 in inFileA)) print }' ~{noref_vids} - OFS='\t' \
+      | sed -e 's/;MEMBERS=[^\t]*\t/\t/g' \
+      | awk -v OFS="\t" '{ $8=$8";MEMBERS="$3; print }' \
+      | cat <(zcat ~{resolved_vcf}) - \
+      | vcf-sort \
+      | bgzip \
+      > ~{out_vcf}
+  >>>
+
+  output {
+    File out = out_vcf
+  }
+}
+
 #Restore unresolved CNVs to resolved VCF
 task RestoreUnresolvedCnv {
   input {
     File resolved_vcf
     File unresolved_vcf
-    String contig
+    String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String resolved_plus_cnv = "all_batches.resolved_plus_cnv." + contig + ".vcf.gz"
+  String resolved_plus_cnv = "~{prefix}.vcf.gz"
 
   # straightforward filtering via grep and python script (line-by-line processing)
   #   -> means essentially no memory or disk overhead
   Float input_size = size([resolved_vcf, unresolved_vcf], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10 + input_size * 20),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
