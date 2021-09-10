@@ -297,18 +297,37 @@ def get_variants_to_be_revised_from_normal_copy_state_into_cnv(
     return output.name
 
 
-def main(input_vcf):
-    headers = get_columns_headers(input_vcf)
+def get_subset_vcf(geno_normal_revise_txt, int_vcf_gz):
+    ids = set()
+    with open(geno_normal_revise_txt, "r") as f:
+        for line in f:
+            ids.add(line.strip().split("\t")[0])
+
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with gzip.open(int_vcf_gz, "rt") as f, output as o:
+        for line in f:
+            if line.startswith("#"):
+                continue
+            id = line.split("\t")[2]
+            if id in ids:
+                o.write(line)
+
+    return output.name
+
+
+def main(int_vcf_gz):
+    headers = get_columns_headers(int_vcf_gz)
     headers = headers.replace("\t", "\n")
     with open("col.txt", "w") as f:
         f.writelines(headers)
-    int_bed_gz = get_filtered_vcf_in_bed(input_vcf)
+    int_bed_gz = get_filtered_vcf_in_bed(int_vcf_gz)
     normaloverlap_txt = get_normal_overlap(int_bed_gz)
-    rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(input_vcf, normaloverlap_txt)
-    ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(input_vcf, normaloverlap_txt)
+    rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(int_vcf_gz, normaloverlap_txt)
+    ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(int_vcf_gz, normaloverlap_txt)
     overlap_test_txt = check_if_nested_is_incorrectly_classified_as_normal(normaloverlap_txt)
     geno_normal_revise_txt = get_variants_to_be_revised_from_normal_copy_state_into_cnv(overlap_test_txt, rd_cn_normalcheck_FORMAT_gz, ev_normalcheck_format_gz)
-    print(geno_normal_revise_txt)
+    subset_vcf_gz = get_subset_vcf(geno_normal_revise_txt, int_vcf_gz)
+    print(subset_vcf_gz)
 
 
 if __name__ == '__main__':
