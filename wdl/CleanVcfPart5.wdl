@@ -14,6 +14,7 @@ workflow CleanVcfChromosome {
 
         File? shard_script
         File? make_clean_gq_script
+        File? find_redundant_sites_script
         File? polish_script
 
         String sv_base_mini_docker
@@ -54,9 +55,26 @@ workflow CleanVcfChromosome {
             runtime_attr_override=runtime_override_clean_vcf_5
     }
 
+    call MiniTasks.ConcatVcfs as GatherMultiallelicShards {
+        input:
+            vcfs = CleanVcf5MakeCleanGQ.multiallelic_vcf,
+            outfile_prefix="multiallelic",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_override_clean_vcf_5
+    }
+
+    call CleanVcf5FindRedundantMultiallelics {
+        input:
+            multiallelic_vcf=GatherMultiallelicShards.concat_vcf,
+            find_redundant_sites_script=find_redundant_sites_script,
+            sv_pipeline_docker=sv_pipeline_docker,
+            runtime_attr_override=runtime_override_clean_vcf_5
+    }
+
     call CleanVcf5Polish {
         input:
             clean_gq_vcf=GatherCleanGQShards.concat_vcf,
+            redundant_multiallelics_list=CleanVcf5FindRedundantMultiallelics.redundant_multiallelics_list,
             polish_script=polish_script,
             sv_pipeline_docker=sv_pipeline_docker,
             runtime_attr_override=runtime_override_clean_vcf_5
@@ -166,18 +184,68 @@ task CleanVcf5MakeCleanGQ {
             ~{ped_file} \
             ~{sex_chr_revise} \
             ~{multi_ids} \
-            outliers.txt \
-            cleanGQ.vcf.gz
+            outliers.txt
     >>>
 
     output {
         File clean_gq_vcf="cleanGQ.vcf.gz"
+        File multiallelic_vcf="multiallelic.vcf.gz"
     }
 }
+
+task CleanVcf5FindRedundantMultiallelics {
+    input {
+        File multiallelic_vcf
+        File? find_redundant_sites_script
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
+    # generally assume working memory is ~3 * inputs
+    Float input_size = size(multiallelic_vcf, "GB")
+    Float base_disk_gb = 10.0
+    Float input_mem_scale = 4.0
+    Float input_disk_scale = 5.0
+
+    RuntimeAttr runtime_default = object {
+                                      mem_gb: 16,
+                                      disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+                                      cpu_cores: 1,
+                                      preemptible_tries: 3,
+                                      max_retries: 1,
+                                      boot_disk_gb: 10
+                                  }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_pipeline_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -euo pipefail
+
+        python3 ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part5_find_redundant_multiallelics.py" find_redundant_sites_script} \
+            ~{multiallelic_vcf} \
+            redundant_multiallelics.list
+
+    >>>
+
+    output {
+        File redundant_multiallelics_list="redundant_multiallelics.list"
+    }
+}
+
 
 task CleanVcf5Polish {
     input {
         File clean_gq_vcf
+        File redundant_multiallelics_list
         File? polish_script
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -214,6 +282,7 @@ task CleanVcf5Polish {
 
         python3 ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part5_new_remove_redundant_or_empty_sites.py" polish_script} \
             ~{clean_gq_vcf} \
+            ~{redundant_multiallelics_list} \
             polished.need_reheader.vcf.gz
 
         ls -l polished.need_reheader.vcf.gz

@@ -1,26 +1,20 @@
 #!/usr/bin/env python
 
 import argparse
-from collections import Counter
-import gzip
-import pysam
 import svtk.utils as svu
 import sys
-
 
 
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('cleangq_filename')
+    parser.add_argument('multiallelic_filename')
     parser.add_argument('fout')
     args = parser.parse_args()
 
     print("finding redundant overlapping sites", file=sys.stderr)
-    cleangq_bed = svu.vcf2bedtool(args.cleangq_filename, include_filters=True)
-
-    multiallelic_bed = cleangq_bed.filter(lambda feature: 'MULTIALLELIC' in feature.fields[6].split(',')).saveas('multiallelics.bed')
+    multiallelic_bed = svu.vcf2bedtool(args.multiallelic_filename, include_filters=True)
 
     redundant_multiallelics = set()
     self_inter = multiallelic_bed.intersect(multiallelic_bed, wo=True)\
@@ -36,25 +30,10 @@ def main():
             else:
                 redundant_multiallelics.add(feature.fields[10])
     print("identified {} redundant multiallelic sites".format(len(redundant_multiallelics)), file=sys.stderr)
+    with open(args.fout, "w") as list_file:
+        for vid in redundant_multiallelics:
+            print(vid, file=list_file)
 
-    # one more pass through the VCF to remove variants with no called samples and the redundant multiallelics
-    cleangq_vcf = pysam.VariantFile(args.cleangq_filename)
-
-    if args.fout in '- stdout'.split():
-        fout = pysam.VariantFile(sys.stdout, 'w', header=cleangq_vcf.header)
-    else:
-        fout = pysam.VariantFile(args.fout, 'w', header=cleangq_vcf.header)
-
-    print("removing redundant overlapping sites", file=sys.stderr)
-    for idx, record in enumerate(cleangq_vcf):
-        if (idx - 1) % 1000 == 0:
-            print("processed {} records".format(idx), file=sys.stderr)
-        if record.id in redundant_multiallelics or len(svu.get_called_samples(record)) == 0:
-            continue
-        fout.write(record)
-    fout.close()
-    cleangq_vcf.close()
-    print("done", file=sys.stderr)
 
 if __name__ == '__main__':
     main()

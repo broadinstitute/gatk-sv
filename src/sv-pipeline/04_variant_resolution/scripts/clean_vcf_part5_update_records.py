@@ -4,9 +4,7 @@ import argparse
 from collections import Counter
 import gzip
 import pysam
-import svtk.utils as svu
 import sys
-
 
 
 def main():
@@ -19,8 +17,6 @@ def main():
     parser.add_argument('sexchr_revise')
     parser.add_argument('multi_geno_ids_txt')
     parser.add_argument('outlier_samples_list', type=argparse.FileType('r'))
-
-    parser.add_argument('fout')
     args = parser.parse_args()
 
     # load the revised lines and index by ID
@@ -73,18 +69,21 @@ def main():
     non_outlier_samples = set([s for s in header1.samples if not s in outlier_samples])
     vf_1 = max(len(non_outlier_samples) * 0.01, 2)
 
-    multi_del_ids = set()
-    multi_dup_ids = set()
-    gt4_copystate = set()
-    gt5kb_dups = set()
-    gt5kb_dels = set()
-
     biallelic_gts = { (1, 1), (0, 0), (0, 1), (None, None)}
 
     print("reformatting records", file=sys.stderr)
     cleangq_filename = "cleanGQ.vcf.gz"
     cleanqg_out = pysam.VariantFile(cleangq_filename, 'w', header=normal_vcf.header)
+
+    mulitallelic_filename = "multiallelic.vcf.gz"
+    multiallelic_out = pysam.VariantFile(mulitallelic_filename, 'w', header=normal_vcf.header)
+
     for idx, record in enumerate(normal_vcf):
+        multi_del = False
+        multi_dup = False
+        gt4_copystate = False
+        gt5kb_dup = False
+        gt5kb_del = False
         if (idx - 1) % 1000 == 0:
             print("processed {} records".format(idx), file=sys.stderr)
         if record.id in revised_lines_by_id:
@@ -93,32 +92,32 @@ def main():
             if abs(record.stop - record.pos) >= 1000:
                 sample_cn_map = {s: record.samples[s]['RD_CN'] for s in non_outlier_samples}
                 if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and sample_cn_map[s] > 3)]) > vf_1:
-                    multi_del_ids.add(record.id)
+                    multi_del = True
             gts = [record.samples[s]['GT'] for s in non_outlier_samples]
             if len([gt for gt in gts if gt not in biallelic_gts]) > 0:
-                gt5kb_dels.add(record.id)
+                gt5kb_del = True
             if abs(record.stop - record.pos) >= 5000:
-                if record.id not in multi_del_ids:
-                    gt5kb_dels.add(record.id)
+                if not multi_del:
+                    gt5kb_del = True
 
         if record.info.get('SVTYPE', None) == 'DUP':
             if abs(record.stop - record.pos) >= 1000:
                 sample_cn_map = {s: record.samples[s]['RD_CN'] for s in non_outlier_samples}
                 if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and sample_cn_map[s] > 4)]) > vf_1:
-                    multi_dup_ids.add(record.id)
+                    multi_dup = True
                 if len([x for x in Counter(sample_cn_map.values()) if (x is not None and (x < 1 or x > 4))]) > 4:
-                    gt4_copystate.add(record.id)
+                    gt4_copystate
                 if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
-                                                     record.id in gt4_copystate)]) > vf_1:
-                    multi_dup_ids.add(record.id)
+                                                     gt4_copystate)]) > vf_1:
+                    multi_dup = True
             gts = [record.samples[s]['GT'] for s in non_outlier_samples]
             if len([gt for gt in gts if gt not in biallelic_gts]) > 0:
-                gt5kb_dups.add(record.id)
+                gt5kb_dup = True
             if abs(record.stop - record.pos) >= 5000:
-                if record.id not in multi_dup_ids:
-                    gt5kb_dups.add(record.id)
+                if not multi_dup:
+                    gt5kb_dup = True
 
-        if record.id in gt5kb_dels:
+        if gt5kb_del:
             for sample in record.samples:
                 if not record.samples[sample]['GQ'] is None and record.samples[sample]['RD_CN'] >= 2:
                     record.samples[sample]['GT'] = (0, 0)
@@ -127,7 +126,7 @@ def main():
                 elif not record.samples[sample]['GQ'] is None:
                     record.samples[sample]['GT'] = (1, 1)  # RD_CN 0 DEL
 
-        if record.id in gt5kb_dups:
+        if gt5kb_dup:
             for sample in record.samples:
                 if not record.samples[sample]['GQ'] is None and record.samples[sample]['RD_CN'] <= 2:
                     record.samples[sample]['GT'] = (0, 0)
@@ -139,7 +138,7 @@ def main():
         if record.id in multi_geno_ids:
             record.filter.add('PESR_GT_OVERDISPERSION')
 
-        if record.id in multi_del_ids or record.id in multi_dup_ids:
+        if multi_del or multi_dup:
             record.filter.add('MULTIALLELIC')
             for j, sample in enumerate(record.samples):
                 record.samples[sample]['GT'] = None
@@ -165,8 +164,13 @@ def main():
 
         cleanqg_out.write(record)
 
+        if 'MULTIALLELIC' in record.filter:
+            multiallelic_out.write(record)
+
     cleanqg_out.close()
+    multiallelic_out.close()
     print("done", file=sys.stderr)
+
 
 if __name__ == '__main__':
     main()
