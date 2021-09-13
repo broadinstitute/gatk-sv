@@ -220,6 +220,8 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Discordant read pairs (PE) file
 * B-allele fraction (BAF) file
 
+#### <a name="sample-exclusion">Sample Exclusion</a>
+We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers. A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination, and these samples have been observed to have longer runtimes and higher compute costs for `GatherSampleEvidence`.
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*

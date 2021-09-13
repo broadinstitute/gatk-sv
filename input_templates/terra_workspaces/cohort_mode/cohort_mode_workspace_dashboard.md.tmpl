@@ -95,6 +95,7 @@ The following estimates pertain to the 1000 Genomes sample data in this workspac
 |--------------|--------|----------|----------|
 |312|~76 hours|~$675|~$2.16/sample|
 
+Please note that sample characteristics, cohort size, and level of filtering may influence pipeline compute costs, with average costs ranging between $2-$3 per sample. For instance, PCR+ samples and samples with a high percentage of improperly paired reads have been observed to cost more. Consider [excluding low-quality samples](https://github.com/broadinstitute/gatk-sv#sample-exclusion) prior to processing to keep costs low.
 
 ## Running GATK-SV on your data in Terra
 This section will cover how to run the pipeline on your own data in Terra.
