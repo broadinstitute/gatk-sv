@@ -13,6 +13,7 @@ RD_genotypes=$3
 RD_melted_genotypes=$4
 RF_cutoffs=$5
 blacklist=$6
+batch=$7
 
 egrep "DEL|DUP" ${bed} > cnv.bed;
 
@@ -136,7 +137,7 @@ awk '{if ($1!~"X" && $1!~"Y") print $4}' cnv.bed \
   | fgrep -wf copystate.pass.txt \
   | fgrep -wf size.pass.txt \
   | fgrep -wvf <(cat cnv.exclude.all.bed depthonly.fail.txt repeat.breakpoint.fail.ids.txt) \
-  > pe.train.include.txt;
+  > "$batch.pe.train.include.txt";
 
 # select training
 pe_pval=$( awk -F'\t' '{if ( $5=="PE_log_pval") print $2}' $RF_cutoffs)
@@ -150,10 +151,10 @@ zcat ${PE_counts} \
 # Join RD and PE genotypes
 join -j 1 -a 1 -e "2" -o 1.2 1.3 1.4 2.2 \
     <(zcat pe.geno.all.txt.gz \
-        | fgrep -wf pe.train.include.txt \
+        | fgrep -wf "$batch.pe.train.include.txt" \
         | awk '{print $1"_"$2 "\t" $0}' \
         | sort -k1,1 ) \
-    <(fgrep -wf pe.train.include.txt <(zcat ${RD_melted_genotypes}) \
+    <(fgrep -wf "$batch.pe.train.include.txt" <(zcat ${RD_melted_genotypes}) \
         | awk '{print $4"_"$5 "\t" $6}' \
         | sort -k1,1) \
   | tr ' ' '\t' \
@@ -194,9 +195,9 @@ sd_het=$(awk '{if ($NF==1 || $NF==3) print $3}' PE.RD.hetfilter.merged.txt \
           | awk '{print $NF*1.645}')
 
 ##generate PE metric file##
-echo -e "pe_count"'\t'$pe_count>pe_metric_file.txt
-echo -e "median_hom"'\t'$median_hom>>pe_metric_file.txt
-echo -e "sd_het"'\t'$sd_het>>pe_metric_file.txt
+echo -e "pe_count"'\t'$pe_count>"$batch.pe_metric_file.txt"
+echo -e "median_hom"'\t'$median_hom>>"$batch.pe_metric_file.txt"
+echo -e "sd_het"'\t'$sd_het>>"$batch.pe_metric_file.txt"
 
 zcat ${PE_counts} \
   | fgrep -v name \
@@ -228,7 +229,7 @@ zcat pe.geno.final.txt.gz|awk '{if ($NF>0) print}' \
   -e "zfinal<-round((pmin(z1,z2)-z)* $normalization)" \
   -e 'write.table(cbind(d[1],d[,2],d[,3],d[,4],zfinal),"wreads.geno.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
 
-cat wreads.geno.txt null.wreads.geno.txt <(zcat null.geno.txt.gz)|awk '{if ($NF<0) print $1,$2,$3,$4,1;else if ($NF>999) print $1,$2,$3,$4,999 ;else print}' |tr ' ' '\t'|sort -k1,1 -k2,2|gzip>pe.geno.withquality.txt.gz
+cat wreads.geno.txt null.wreads.geno.txt <(zcat null.geno.txt.gz)|awk '{if ($NF<0) print $1,$2,$3,$4,1;else if ($NF>999) print $1,$2,$3,$4,999 ;else print}' |tr ' ' '\t'|sort -k1,1 -k2,2|gzip>"$batch.pe.geno.withquality.txt.gz"
 
 ##Per variant quality scores##
 ##Assign a normalization factor to scale variant up to 999 if based on expected het median ##
@@ -253,5 +254,5 @@ awk '{print $1}' pe.variant.quality.final.txt \
 awk -v var=$normalization_var '{if ($2*var>999) print $1 "\t" 999;else print $1 "\t" $2*var}' pe.variant.quality.final.txt \
   |cat - pe.variant.quality.final.null.txt \
   |sort -k1,1|gzip \
-  >pe.variant.quality.final.txt.gz
+  >"$batch.pe.variant.quality.final.txt.gz"
 

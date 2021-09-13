@@ -11,6 +11,7 @@ import "Structs.wdl"
 workflow RawVcfQC {
   input {
     Array[File] vcfs
+    String prefix
     String caller
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_qc
@@ -30,6 +31,7 @@ workflow RawVcfQC {
   call PickOutliers {
     input:
       stat_files = RunIndividualQC.stat,
+      prefix = prefix,
       caller = caller,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_outlier
@@ -84,6 +86,7 @@ task RunIndividualQC {
 task PickOutliers {
   input {
     Array[File] stat_files
+    String prefix
     String caller
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -102,15 +105,15 @@ task PickOutliers {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File low = "${caller}.QC.outlier.low"
-    File high = "${caller}.QC.outlier.high"
+    File low = "${prefix}.${caller}.QC.outlier.low"
+    File high = "${prefix}.${caller}.QC.outlier.high"
   }
   command <<<
     set -eu -o pipefail
     # concatenate all stat_files into one input file
     xargs cat < ~{write_lines(stat_files)} > ~{caller}.QC.input
     # pick outliers from input stats
-    /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calc_num_svs_pick_outlier.py ~{caller}.QC.input ~{caller}.QC.outlier -z
+    /opt/sv-pipeline/pre_SVCalling_and_QC/raw_vcf_qc/calc_num_svs_pick_outlier.py ~{caller}.QC.input ~{prefix}.~{caller}.QC.outlier -z
     
   >>>
   runtime {
