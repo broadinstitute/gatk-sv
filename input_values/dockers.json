@@ -14,6 +14,7 @@
   "sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
   "sv_pipeline_base_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-base:mw-gnomad-0506-pr-087d4df",
   "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_mediancov_mem_and_names-3f0c76d",
+  "sv_pipeline_updates_docker" : "http://us.gcr.io/broad-dsde-methods/tbrookin/sv-pipeline-updates:tb_rewrite_resolve_cpx_cnv_redundancies-04c5e9a",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-gnomad-0506-pr-087d4df",
   "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-rdtest:mw-gnomad-0506-pr-087d4df",
   "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa",

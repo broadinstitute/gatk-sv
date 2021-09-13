@@ -5,7 +5,6 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "CleanVcf1.wdl" as c1
 import "CleanVcf1b.wdl" as c1b
 import "CleanVcf5.wdl" as c5
-import "DropRedundantCNVs.wdl" as drc
 
 workflow CleanVcfChromosome {
   input {
@@ -24,6 +23,7 @@ workflow CleanVcfChromosome {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -169,16 +169,16 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_clean_vcf_5
   }
 
-  call drc.DropRedundantCNVs {
+  call DropRedundantCnvs {
     input:
       vcf=CleanVcf5.polished,
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_updates_docker
   }
 
   call StitchFragmentedCnvs {
     input:
-      vcf=DropRedundantCNVs.cleaned_vcf_shard,
+      vcf=DropRedundantCnvs.cleaned_vcf_shard,
       contig=contig,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -426,6 +426,56 @@ task CleanVcf4 {
   output {
     File out="revise.vcf.lines.txt.gz"
     File multi_ids="multi.geno.ids.txt.gz"
+  }
+}
+
+
+# Remove CNVs that are redundant with CPX events or other CNVs
+task DropRedundantCnvs {
+  input {
+    File vcf
+    String contig
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String concise_vcf_name = contig + ".shard.no_CNV_redundancies.vcf.gz"
+
+  Float input_size = size(vcf, "GiB")
+  # disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
+  Float base_disk_gb = 1000.0
+  Float base_mem_gb = 1.0
+  Float input_mem_scale = 1.5 # in tests on large VCFs, memory usage is ~1.0 * input VCF size
+  Float input_disk_scale = 2.0 # the biggest disk usage is at the end of the task, with input + output VCF on disk
+  Int cpu_cores = 2 # speed up compression / decompression of VCFs
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + input_size * input_mem_scale,
+    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+    cpu_cores: cpu_cores,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    /opt/sv-pipeline/04_variant_resolution/scripts/resolve_cpx_cnv_redundancies.py \
+      ~{vcf} ~{concise_vcf_name} --temp-dir /cromwell_root/tmp
+  >>>
+
+  output {
+    File cleaned_vcf_shard = concise_vcf_name
   }
 }
 
