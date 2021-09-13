@@ -78,9 +78,9 @@ RUN apt-get -qqy update --fix-missing && \
 #  3. install R packages that all/most child images depend on
 #  4. remove doc, help, demos and tests (saves ~ 10% space)
 #  4. final clean up
-COPY install_R_packages.R /opt/
-COPY install_bioconductor_packages.R /opt/
-COPY install_deprecated_R_package.sh /opt/
+COPY dockerfiles/sv-base/install_R_packages.R /opt/
+COPY dockerfiles/sv-base/install_bioconductor_packages.R /opt/
+COPY dockerfiles/sv-base/install_deprecated_R_package.sh /opt/
 ARG R_DEP_TRANSIENT="make gpg-agent gnupg"
 ARG R_DEPENDENCIES="software-properties-common build-essential \
     ${R_DEP_TRANSIENT} libz-dev libncurses5-dev libbz2-dev liblzma-dev \

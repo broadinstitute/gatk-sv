@@ -5,22 +5,7 @@
 # a pysam dependency.
 
 # IMPORTANT: these arguments must be specified at the begining to take advantage of multi-stage build AND runtime specification of base images
-ARG GATKSV_PIPELINE_V1_RESOURCES_IMAGE=gatksv-pipeline-v1-resources:latest
 ARG SVBASE_IMAGE=gatksv/sv-base:latest
-
-####################################################################################################
-### stage 1 for moving needed files to a promised location
-FROM ${GATKSV_PIPELINE_V1_RESOURCES_IMAGE}
-RUN mkdir -p /opt/ && \
-    mv ${RESOURCES}WGD /opt/WGD && \
-    mv ${RESOURCES}svtk /opt/svtk && \
-    mv ${RESOURCES}sv-pipeline /opt/sv-pipeline && \
-    mv ${RESOURCES}RdTest /opt/RdTest && \
-    mv ${RESOURCES}svtest /opt/svtest && \
-    mv ${RESOURCES}svqc /opt/svqc
-
-####################################################################################################
-### stage 2
 FROM ${SVBASE_IMAGE}
 
 ##################################################
@@ -104,37 +89,26 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/??_*
 
 ##################################################
-# copy needed resources from previous stage 
-# Add sv-pipeline
-COPY --from=0 /opt/sv-pipeline /opt/sv-pipeline
-
-# Add WGD
-COPY --from=0 /opt/WGD /opt/WGD
+# copy needed resources from git repo
+COPY src/sv-pipeline /opt/sv-pipeline
+COPY src/WGD /opt/WGD
 ENV PATH="/opt/WGD/bin:${PATH}"
-
-# Add RdTest
-COPY --from=0 /opt/RdTest /opt/RdTest
-
-# Install svtk and test that it runs 
+COPY src/RdTest /opt/RdTest
+# Install svtk and test that it runs
 # IMPORTANT NOTE: this is using, because of the conda packages installation above, a special version of pysam
-COPY --from=0 /opt/svtk /opt/svtk
-
+COPY src/svtk /opt/svtk
 RUN echo "about to install svtk" && \
     python --version && cd /opt/svtk && \
     pip install -e . && \
     svtk -h
-
 # Install svtest and test that it runs
-COPY --from=0 /opt/svtest /opt/svtest
-
+COPY src/svtest /opt/svtest
 RUN echo "about to install svtest" && \
     python --version && cd /opt/svtest && \
     pip install -e . && \
     svtest -h
-
 # Install svqc and test that it runs
-COPY --from=0 /opt/svqc /opt/svqc
-
+COPY src/svqc /opt/svqc
 RUN echo "about to install svqc" && \
     python --version && cd /opt/svqc && \
     pip install -e . && \

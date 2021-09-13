@@ -48,5 +48,5 @@ RUN echo "export PATH=${MELT_DIR}/MELTv${MELT_RELEASE}_patch/:$PATH" > /etc/prof
 ENV PATH="${MELT_DIR}/MELTv${MELT_RELEASE}_patch/:$PATH"
 
 # Add master script
-COPY run_MELT_${MELT_RELEASE}.sh .
+COPY dockerfiles/melt/run_MELT_${MELT_RELEASE}.sh .
 RUN chmod +x run_MELT_${MELT_RELEASE}.sh

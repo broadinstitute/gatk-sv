@@ -1,6 +1,7 @@
 ## Overview
 
-The scripts here are to be used for building all, or any combination of dockers that are listed in `dockerfiles` directory.
+The scripts here are to be used for building all, or any combination of dockers that are listed in `dockerfiles` directory
+(and have their dependencies specified in build_docker.py).
 
 We support both building from your local git repo, and remote Github repo.
 
@@ -26,8 +27,6 @@ Conda packages `termcolor` and `pprint` are assumed to be available.
     also be included automatically. Additional options can be viewed by running `python build_docker.py`.
 
 ### Notes
-
-* The `build_docker.py` script must be run with `scripts/docker` as your current working directory
 
 * Multiple target images can be specified like so: `--targets sv-pipeline wham manta` or `--targets all`
 
