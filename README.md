@@ -221,7 +221,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * B-allele fraction (BAF) file
 
 #### <a name="sample-exclusion">Sample Exclusion</a>
-We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers. A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination, and these samples have been observed to have longer runtimes and higher compute costs for `GatherSampleEvidence`.
+We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers prior to running `GatherSampleEvidence`. A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination. Artifactual improperly paired reads could cause incorrect SV calls, and these samples have been observed to have longer runtimes and higher compute costs for `GatherSampleEvidence`.
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*
