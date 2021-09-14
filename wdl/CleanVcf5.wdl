@@ -169,7 +169,7 @@ task CleanVcf5MakeCleanGQ {
         bcftools view -h ~{normal_revise_vcf} > header.txt
         cat header.txt <(zcat ~{revise_vcf_lines} | grep . | tr " " "\t") | bgzip -c > revise.vcf.lines.vcf.gz
 
-        python3 ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part5_new_update_records.py" make_clean_gq_script} \
+        python3 ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part5_update_records.py" make_clean_gq_script} \
             revise.vcf.lines.vcf.gz \
             ~{normal_revise_vcf} \
             ~{ped_file} \
