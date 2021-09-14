@@ -26,17 +26,17 @@ def assign_shards(variant_counts, max_samples):
         shard_assignments[variant] = shard_number
         sample_counter += variant_counts[variant]
         first = False
-    return shard_assignments
+    return shard_number, shard_assignments
 
 
-def create_shards(infile, shard_assignments):
+def create_shards(infile, shard_assignments, num_shards):
     if not path.isdir("./shards"):
         mkdir("./shards")
     with open(infile, 'r') as IN:
         for line in IN:
             var_id = line.strip().split('\t')[0]
             shard = shard_assignments[var_id]
-            shard_file = f"shards/out.{shard}.txt"
+            shard_file = f"shards/out.{shard}_{num_shards}.txt"
             with open(shard_file, 'a') as OUT:
                 OUT.write(line)
 
@@ -45,13 +45,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("combined_file", help="rd_cn_revise file with variant ID, sample ID, and CN columns")
     parser.add_argument("-s", "--max-samples",
-                        help="Maximum number of variant x sample entries in a shard (default = 6,000)",
-                        default=6000)
+                        help="Maximum number of variant x sample entries in a shard (default = 7,000)",
+                        default=7000)
     args = parser.parse_args()
 
     variant_counts = count_variants(args.combined_file)
-    shard_assignments = assign_shards(variant_counts, args.max_samples)
-    create_shards(args.combined_file, shard_assignments)
+    num_shards, shard_assignments = assign_shards(variant_counts, args.max_samples)
+    create_shards(args.combined_file, shard_assignments, num_shards)
 
 
 if __name__ == "__main__":
