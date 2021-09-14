@@ -70,6 +70,7 @@ workflow TrainSRGenotyping {
       samples = samples,
       PE_train = PE_train,
       PE_genotypes = PE_genotypes,
+      batch = batch_ID,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_genotype
   }
@@ -89,6 +90,7 @@ task GenotypeSRPart1 {
     Array[String] samples
     File PE_train
     File PE_genotypes
+    String batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -104,7 +106,7 @@ task GenotypeSRPart1 {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File SR_metrics = "sr_metric_file.txt"
+    File SR_metrics = "~{batch}.sr_metric_file.txt"
   }
   command <<<
 
@@ -116,7 +118,8 @@ task GenotypeSRPart1 {
       ~{RF_cutoffs} \
       ~{write_lines(samples)} \
       ~{PE_train} \
-      ~{PE_genotypes}
+      ~{PE_genotypes} \
+      ~{batch}
   
   >>>
   runtime {

@@ -54,7 +54,9 @@ workflow EvidenceQC {
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
     RuntimeAttr? runtime_attr_bincov_attr
-    RuntimeAttr? runtime_attr_mediancov_attr
+
+    RuntimeAttr? runtime_attr_mediancov       # Memory ignored, use median_cov_mem_gb_per_sample
+    Float? median_cov_mem_gb_per_sample
   }
 
   call mbm.MakeBincovMatrix as MakeBincovMatrix {
@@ -68,13 +70,14 @@ workflow EvidenceQC {
       runtime_attr_override = runtime_attr_bincov_attr
   }
 
-  call mc.MedianCov as MedianCov{
+  Float median_cov_mem_gb = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(samples) + 7.5
+  call mc.MedianCov as MedianCov {
     input:
       bincov_matrix = MakeBincovMatrix.merged_bincov,
       cohort_id = batch,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
-      runtime_attr = runtime_attr_mediancov_attr
-
+      runtime_attr = runtime_attr_mediancov,
+      mem_gb_override = median_cov_mem_gb
   }
 
   if (run_ploidy) {
@@ -104,6 +107,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Delly {
         input:
           vcfs = select_first([delly_vcfs]),
+          prefix = batch,
           caller = "Delly",
           runtime_attr_qc = runtime_attr_qc,
           sv_pipeline_docker = sv_pipeline_docker,
@@ -114,6 +118,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
           vcfs = select_first([manta_vcfs]),
+          prefix = batch,
           caller = "Manta",
           runtime_attr_qc = runtime_attr_qc,
           sv_pipeline_docker = sv_pipeline_docker,
@@ -124,6 +129,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Melt {
         input:
           vcfs = select_first([melt_vcfs]),
+          prefix = batch,
           caller = "Melt",
           runtime_attr_qc = runtime_attr_qc,
           sv_pipeline_docker = sv_pipeline_docker,
@@ -134,6 +140,7 @@ workflow EvidenceQC {
       call vcfqc.RawVcfQC as RawVcfQC_Wham {
         input:
           vcfs = select_first([wham_vcfs]),
+          prefix = batch,
           caller = "Wham",
           runtime_attr_qc = runtime_attr_qc,
           sv_pipeline_docker = sv_pipeline_docker,
