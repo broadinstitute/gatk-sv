@@ -46,6 +46,9 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
 * Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
 
+#### <a name="sample-exclusion">Sample Exclusion</a>
+We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers prior to running [GatherSampleEvidence](#gather-sample-evidence). A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination. Artifactual improperly paired reads could cause incorrect SV calls, and these samples have been observed to have longer runtimes and higher compute costs for [GatherSampleEvidence](#gather-sample-evidence).
+
 #### <a name="sampleids">Sample ID requirements:</a>
 
 Sample IDs must:
@@ -206,7 +209,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. Delly can be enabled but is no longer officially supported.
+Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. Delly can be enabled but is no longer officially supported. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -219,7 +222,6 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Split reads (SR) file
 * Discordant read pairs (PE) file
 * B-allele fraction (BAF) file
-
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*

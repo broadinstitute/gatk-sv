@@ -95,6 +95,7 @@ The following estimates pertain to the 1000 Genomes sample data in this workspac
 |--------------|--------|----------|----------|
 |312|~76 hours|~$675|~$2.16/sample|
 
+Please note that sample characteristics, cohort size, and level of filtering may influence pipeline compute costs, with average costs ranging between $2-$3 per sample. For instance, PCR+ samples and samples with a high percentage of improperly paired reads have been observed to cost more. Consider [excluding low-quality samples](https://github.com/broadinstitute/gatk-sv#sample-exclusion) prior to processing to keep costs low.
 
 ## Running GATK-SV on your data in Terra
 This section will cover how to run the pipeline on your own data in Terra.
@@ -150,6 +151,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 
 Read the full GatherSampleEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-sample-evidence).
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary partitions. Make sure to try just one sample first though!
+* Refer to the [Data section of the README](https://github.com/broadinstitute/gatk-sv#data) for details on input files, sample exclusion, and sample IDs.
 * It is normal for a few samples in a cohort to run out of memory during Wham SV calling, so we recommend enabling auto-retry for out-of-memory errors for `01-GatherSampleEvidence` only. Before you launch the workflow, click the checkbox reading "Retry with more memory" and set the memory retry factor to 1.8. This action must be performed each time you launch a `01-GatherSampleEvidence` job.
 * Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `01-GatherSampleEvidence` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own private docker image (example Dockerfile [here](https://github.com/broadinstitute/gatk-sv/blob/master/dockerfiles/melt/Dockerfile)), share it with your Terra proxy account, enter it in the `melt_docker` input in the `01-GatherSampleEvidence` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `01-GatherSampleEvidence`. 
 	* Note that the version of MELT tested with GATK-SV is v2.0.5. If you use a different version to create your own docker image, we recommend testing your image by running one pilot sample through `01-GatherSampleEvidence` to check that it runs as expected, then running a small group of about 10 pilot samples through the pipeline until the end of `04-GatherBatchEvidence` to check that the outputs are compatible with GATK-SV.
