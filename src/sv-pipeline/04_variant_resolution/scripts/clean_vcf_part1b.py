@@ -11,6 +11,7 @@ within a real CNV
 #  required to aggregate operations, and maybe using stdio/stdout for
 #  streaming data would be better alternatives.
 
+import copy
 import gzip
 import os
 import sys
@@ -315,19 +316,68 @@ def get_subset_vcf(geno_normal_revise_txt, int_vcf_gz):
     return output.name
 
 
+def pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt, subset_vcf, col_txt, cols):
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    variants_dict = {}
+    col_headers = {}
+    for x in range(len(cols)):
+        col_headers[cols[x][0]] = x
+
+    with open(subset_vcf) as f:
+        for line in f:
+            sline = line.strip().split("\t")
+            variants_dict[sline[2]] = sline
+
+    ids = []
+    with open(geno_normal_revise_txt) as f:
+        for line in f:
+            sline = line.strip().split("\t")
+            ids.append(sline)
+
+    for _id in ids:  # variant, v in ids.items():
+        variant = _id[0]
+        # copy the dict to its state is reset at every iteration.
+        tmp_cols = copy.deepcopy(cols)
+
+        sline_txt = variants_dict[variant]
+        for x in range(len(sline_txt)):
+            tmp_cols[x].extend(sline_txt[x].split(":"))
+
+        i = col_headers[_id[1]]
+        tmp_cols[i][1] = "0/1"
+        tmp_cols[i][2] = tmp_cols[i][4]
+
+        for i in range(len(sline_txt)):
+            if i < 9:
+                continue
+            sline_txt[i] = ":".join(tmp_cols[i][1:])
+
+    with output as o:
+        sorted_keys = list(variants_dict.keys())
+        sorted_keys.sort()
+        for key in sorted_keys:
+            o.write("\t".join(variants_dict[key]) + "\n")
+    return output.name
+
+
 def main(int_vcf_gz):
     headers = get_columns_headers(int_vcf_gz)
-    headers = headers.replace("\t", "\n")
-    with open("col.txt", "w") as f:
-        f.writelines(headers)
+    headers = headers.strip().split("\t")
+    col_txt = "col.txt"
+    cols = {}
+    with open(col_txt, "w") as f:
+        for x in range(len(headers)):
+            f.write(f"{x}\t{headers[x]}\n")
+            cols[x] = [headers[x]]
     int_bed_gz = get_filtered_vcf_in_bed(int_vcf_gz)
     normaloverlap_txt = get_normal_overlap(int_bed_gz)
     rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(int_vcf_gz, normaloverlap_txt)
     ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(int_vcf_gz, normaloverlap_txt)
     overlap_test_txt = check_if_nested_is_incorrectly_classified_as_normal(normaloverlap_txt)
     geno_normal_revise_txt = get_variants_to_be_revised_from_normal_copy_state_into_cnv(overlap_test_txt, rd_cn_normalcheck_FORMAT_gz, ev_normalcheck_format_gz)
-    subset_vcf_gz = get_subset_vcf(geno_normal_revise_txt, int_vcf_gz)
-    print(subset_vcf_gz)
+    subset_vcf = get_subset_vcf(geno_normal_revise_txt, int_vcf_gz)
+    normal_revise_vcf_lines_txt = pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt, subset_vcf, col_txt, cols)
+    print(normal_revise_vcf_lines_txt)
 
 
 if __name__ == '__main__':
