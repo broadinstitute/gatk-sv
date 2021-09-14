@@ -15,7 +15,7 @@ workflow GatherSampleEvidenceBatch {
     # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
     # May be more expensive - use only if necessary
     Boolean revise_base_cram_to_bam = false
-    File? primary_contigs_fai # required if using revise_base_cram_to_bam
+    File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
 
     # Caller flags
     Boolean collect_coverage = true
@@ -67,7 +67,6 @@ workflow GatherSampleEvidenceBatch {
     String? batch  # required if run_module_metrics = true
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
     String? linux_docker  # required if run_module_metrics = true
-    File? primary_contigs_fai  # required if run_module_metrics = true
     File? baseline_delly_vcf  # baseline files are optional for metrics workflow
     File? baseline_manta_vcf
     File? baseline_wham_vcf

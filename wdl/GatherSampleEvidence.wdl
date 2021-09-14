@@ -24,7 +24,7 @@ workflow GatherSampleEvidence {
     # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
     # May be more expensive - use only if necessary
     Boolean revise_base_cram_to_bam = false
-    File? primary_contigs_fai # required if using revise_base_cram_to_bam
+    File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
 
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
@@ -77,7 +77,6 @@ workflow GatherSampleEvidence {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
-    File? primary_contigs_fai  # required if run_module_metrics = true
     File? baseline_delly_vcf  # baseline files are optional for metrics workflow
     File? baseline_manta_vcf
     File? baseline_wham_vcf
