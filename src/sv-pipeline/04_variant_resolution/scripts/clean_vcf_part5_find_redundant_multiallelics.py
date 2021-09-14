@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
-import svtk.utils as svu
 import sys
+import svtk.utils as svu
 
 
 def main():

@@ -5,6 +5,7 @@ from collections import Counter
 import gzip
 import pysam
 import sys
+import svtk.utils as svu
 
 
 def main():
@@ -77,6 +78,9 @@ def main():
 
     mulitallelic_filename = "multiallelic.vcf.gz"
     multiallelic_out = pysam.VariantFile(mulitallelic_filename, 'w', header=normal_vcf.header)
+
+    no_variant_samples_list_file = "no_called_samples.list"
+    no_variant_samples_out = open(no_variant_samples_list_file, 'w')
 
     for idx, record in enumerate(normal_vcf):
         multi_del = False
@@ -167,8 +171,12 @@ def main():
         if 'MULTIALLELIC' in record.filter:
             multiallelic_out.write(record)
 
+        if len(svu.get_called_samples(record)) == 0:
+            print(record.id, file=no_variant_samples_out)
+
     cleanqg_out.close()
     multiallelic_out.close()
+    no_variant_samples_out.close()
     print("done", file=sys.stderr)
 
 

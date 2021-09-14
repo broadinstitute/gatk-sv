@@ -15,7 +15,6 @@ workflow CleanVcfChromosome {
         File? shard_script
         File? make_clean_gq_script
         File? find_redundant_sites_script
-        File? polish_script
 
         String sv_base_mini_docker
         String sv_pipeline_docker
@@ -47,14 +46,6 @@ workflow CleanVcfChromosome {
         }
     }
 
-    call MiniTasks.ConcatVcfs as GatherCleanGQShards {
-        input:
-            vcfs = CleanVcf5MakeCleanGQ.clean_gq_vcf,
-            outfile_prefix="cleanGQ",
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_override_clean_vcf_5
-    }
-
     call MiniTasks.ConcatVcfs as GatherMultiallelicShards {
         input:
             vcfs = CleanVcf5MakeCleanGQ.multiallelic_vcf,
@@ -73,9 +64,9 @@ workflow CleanVcfChromosome {
 
     call CleanVcf5Polish {
         input:
-            clean_gq_vcf=GatherCleanGQShards.concat_vcf,
+            clean_gq_vcfs=CleanVcf5MakeCleanGQ.clean_gq_vcf,
+            no_sample_lists=CleanVcf5MakeCleanGQ.no_sample_list,
             redundant_multiallelics_list=CleanVcf5FindRedundantMultiallelics.redundant_multiallelics_list,
-            polish_script=polish_script,
             sv_pipeline_docker=sv_pipeline_docker,
             runtime_attr_override=runtime_override_clean_vcf_5
     }
@@ -185,11 +176,15 @@ task CleanVcf5MakeCleanGQ {
             ~{sex_chr_revise} \
             ~{multi_ids} \
             outliers.txt
+
+        tabix cleanGQ.vcf.gz
     >>>
 
     output {
         File clean_gq_vcf="cleanGQ.vcf.gz"
+        File clean_gq_vcf_idx="cleanGQ.vcf.gz.tbi"
         File multiallelic_vcf="multiallelic.vcf.gz"
+        File no_sample_list = "no_called_samples.list"
     }
 }
 
@@ -244,16 +239,16 @@ task CleanVcf5FindRedundantMultiallelics {
 
 task CleanVcf5Polish {
     input {
-        File clean_gq_vcf
+        Array[File] clean_gq_vcfs
+        Array[File] no_sample_lists
         File redundant_multiallelics_list
-        File? polish_script
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
     # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
     # generally assume working memory is ~3 * inputs
-    Float input_size = size(clean_gq_vcf, "GB")
+    Float input_size = size(clean_gq_vcfs, "GB")
     Float base_disk_gb = 10.0
     Float input_mem_scale = 4.0
     Float input_disk_scale = 5.0
@@ -261,7 +256,7 @@ task CleanVcf5Polish {
     RuntimeAttr runtime_default = object {
                                       mem_gb: 16,
                                       disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-                                      cpu_cores: 1,
+                                      cpu_cores: 4,
                                       preemptible_tries: 3,
                                       max_retries: 1,
                                       boot_disk_gb: 10
@@ -280,12 +275,11 @@ task CleanVcf5Polish {
     command <<<
         set -euo pipefail
 
-        python3 ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/clean_vcf_part5_new_remove_redundant_or_empty_sites.py" polish_script} \
-            ~{clean_gq_vcf} \
-            ~{redundant_multiallelics_list} \
-            polished.need_reheader.vcf.gz
-
-        ls -l polished.need_reheader.vcf.gz
+        cat ~{redundant_multiallelics_list} ~{sep=" " no_sample_lists} > ids_to_remove.list
+        /usr/local/bin/bcftools concat --no-version --output-type u --file-list ~{write_lines(clean_gq_vcfs)} | \
+            /usr/local/bin/bcftools view --no-version \
+                --exclude 'ID=@ids_to_remove.list' \
+                --output-type z -o polished.need_reheader.vcf.gz --threads 3
 
         # do the last bit of header cleanup
         bcftools view -h polished.need_reheader.vcf.gz | awk 'NR == 1' > new_header.vcf
