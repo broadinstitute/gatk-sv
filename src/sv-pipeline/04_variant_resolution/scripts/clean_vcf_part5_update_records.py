@@ -67,10 +67,10 @@ def main():
         header1.add_line(f)
         header2.add_line(f)
 
-    non_outlier_samples = set([s for s in header1.samples if not s in outlier_samples])
+    non_outlier_samples = set([s for s in header1.samples if s not in outlier_samples])
     vf_1 = max(len(non_outlier_samples) * 0.01, 2)
 
-    biallelic_gts = { (1, 1), (0, 0), (0, 1), (None, None)}
+    biallelic_gts = {(1, 1), (0, 0), (0, 1), (None, None)}
 
     print("reformatting records", file=sys.stderr)
     cleangq_filename = "cleanGQ.vcf.gz"
@@ -110,8 +110,9 @@ def main():
                 if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and sample_cn_map[s] > 4)]) > vf_1:
                     multi_dup = True
                 if len([x for x in Counter(sample_cn_map.values()) if (x is not None and (x < 1 or x > 4))]) > 4:
-                    gt4_copystate
-                if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
+                    gt4_copystate = True
+                if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and
+                                                     (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
                                                      gt4_copystate)]) > vf_1:
                     multi_dup = True
             gts = [record.samples[s]['GT'] for s in non_outlier_samples]
@@ -164,7 +165,7 @@ def main():
                     if cn is not None and cn > 0:
                         record.samples[sample]['RD_CN'] = cn - 1
                         if 'CN' in record.samples[sample]:
-                           record.samples[sample]['CN'] = cn - 1  # the old script didn't do this but I think it should
+                            record.samples[sample]['CN'] = cn - 1  # the old script didn't do this but I think it should
 
         cleanqg_out.write(record)
 
