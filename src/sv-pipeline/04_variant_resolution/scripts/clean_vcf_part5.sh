@@ -7,6 +7,8 @@
 # Copyright (C) 2018 Harrison Brand<hbrand1@mgh.harvard.edu>
 # Distributed under terms of the MIT license.
 
+# Deprecated in favor of CleanVcf5.wdl
+
 set -euo pipefail
 
 ##gzipped combined bed file##
