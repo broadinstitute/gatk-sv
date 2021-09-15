@@ -40,6 +40,8 @@ class RecordData:
             self.level_of_support = 6
         elif 'SR' in ev:
             self.level_of_support = 7
+        elif len(ev) == 0:
+            self.level_of_support = 8
         else:
             raise ValueError("Uninterpretable evidence: {}".format(ev))
         if record.id in bothside_pass:
