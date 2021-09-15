@@ -360,6 +360,28 @@ def pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt,
     return output.name
 
 
+def modify_vcf(int_vcf_gz, normal_revise_vcf_lines_txt):
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with gzip.open(int_vcf_gz, "rt") as in_file, open(output.name, "wt") as out_file:
+        for l in in_file:
+            if not l.startswith("#"):
+                sl = l.strip().split("\t")
+                variant_id = sl[2]
+                with open(normal_revise_vcf_lines_txt) as m_file:
+                    for l2 in m_file:
+                        sl2 = l2.strip().split("\t")
+                        if sl2[2] == variant_id:
+                            sl = sl2
+                            break
+                l = "\t".join(sl) + "\n"
+            out_file.write(l)
+
+    check_call(["bgzip", output.name])
+    output_name = output.name + ".gz"
+    check_call(["bcftools", "index", output_name])
+    return output_name
+
+
 def main(int_vcf_gz):
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
@@ -377,7 +399,8 @@ def main(int_vcf_gz):
     geno_normal_revise_txt = get_variants_to_be_revised_from_normal_copy_state_into_cnv(overlap_test_txt, rd_cn_normalcheck_FORMAT_gz, ev_normalcheck_format_gz)
     subset_vcf = get_subset_vcf(geno_normal_revise_txt, int_vcf_gz)
     normal_revise_vcf_lines_txt = pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt, subset_vcf, col_txt, cols)
-    print(normal_revise_vcf_lines_txt)
+    normal_revise_vcf_gz = modify_vcf(int_vcf_gz, normal_revise_vcf_lines_txt)
+    print(normal_revise_vcf_gz)
 
 
 if __name__ == '__main__':
