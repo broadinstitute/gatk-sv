@@ -405,6 +405,27 @@ def get_copystate_per_variant(normal_revise_vcf_gz):
     return output_name + ".gz"
 
 
+def get_copystate_per_variant_2(copystate_rd_cn_format_gz):
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    output_data = set()
+    with gzip.open(copystate_rd_cn_format_gz, "rt") as f, output as o:
+        c = 0
+        for l in f:
+            c += 1
+            if c <= 1:
+                continue
+            sl = l.strip().split("\t")
+            for i in range(3, len(sl)):
+                x = f"{sl[0]}\t{sl[i]}"
+                if x not in output_data:
+                    output_data.add(x)
+
+        for x in output_data:
+            o.write(x + "\n")
+    check_call(["gzip", output.name])
+    return output.name + ".gz"
+
+
 def main(int_vcf_gz):
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
@@ -424,7 +445,8 @@ def main(int_vcf_gz):
     normal_revise_vcf_lines_txt = pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt, subset_vcf, col_txt, cols)
     normal_revise_vcf_gz = modify_vcf(int_vcf_gz, normal_revise_vcf_lines_txt)
     copystate_rd_cn_format_gz = get_copystate_per_variant(normal_revise_vcf_gz)
-    print(copystate_rd_cn_format_gz)
+    copystate_per_variant_txt_gz = get_copystate_per_variant_2(copystate_rd_cn_format_gz)
+    print(copystate_per_variant_txt_gz)
 
 
 if __name__ == '__main__':
