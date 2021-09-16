@@ -14,6 +14,7 @@ within a real CNV
 import copy
 import gzip
 import os
+import shutil
 import sys
 import tempfile
 from subprocess import check_call, Popen, PIPE, STDOUT
@@ -415,7 +416,7 @@ def get_copystate_per_variant_2(copystate_rd_cn_format_gz):
             if c <= 1:
                 continue
             sl = l.strip().split("\t")
-            for i in range(3, len(sl)):
+            for i in range(2, len(sl)):
                 x = f"{sl[0]}\t{sl[i]}"
                 if x not in output_data:
                     output_data.add(x)
@@ -462,6 +463,7 @@ def find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_c
 
     return multi_cnvs_txt
 
+
 def main(int_vcf_gz):
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
@@ -484,7 +486,19 @@ def main(int_vcf_gz):
     copystate_per_variant_txt_gz = get_copystate_per_variant_2(copystate_rd_cn_format_gz)
     multi_cnvs_txt = find_multi_allelic_for_del(copystate_per_variant_txt_gz, int_bed_gz)
     multi_cnvs_txt = find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_cnvs_txt)
-    print(multi_cnvs_txt)
+
+    shutil.move(int_bed_gz, "/Users/vahid/Desktop/mine/int_bed.gz")
+    shutil.move(normaloverlap_txt, "/Users/vahid/Desktop/mine/normaloverlap")
+    shutil.move(rd_cn_normalcheck_FORMAT_gz, "/Users/vahid/Desktop/mine/rd_cn_normalcheck_FORMAT.gz")
+    shutil.move(ev_normalcheck_format_gz, "/Users/vahid/Desktop/mine/ev_normalcheck_format.gz")
+    shutil.move(overlap_test_txt, "/Users/vahid/Desktop/mine/overlap_test_txt")
+    shutil.move(geno_normal_revise_txt, "/Users/vahid/Desktop/mine/geno_normal_revise_txt")
+    shutil.move(subset_vcf, "/Users/vahid/Desktop/mine/subset_vcf")
+    shutil.move(normal_revise_vcf_lines_txt, "/Users/vahid/Desktop/mine/normal_revise_vcf_lines_txt")
+    shutil.move(normal_revise_vcf_gz, "/Users/vahid/Desktop/mine/normal_revise_vcf.gz")
+    shutil.move(copystate_rd_cn_format_gz, "/Users/vahid/Desktop/mine/copystate_rd_cn_format.gz")
+    shutil.move(copystate_per_variant_txt_gz, "/Users/vahid/Desktop/mine/copystate_per_variant_txt.gz")
+    shutil.move(multi_cnvs_txt, "/Users/vahid/Desktop/mine/multi_cnvs_txt")
 
 
 if __name__ == '__main__':
