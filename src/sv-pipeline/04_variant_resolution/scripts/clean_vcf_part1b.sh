@@ -127,6 +127,7 @@ do
    |cut -f3-|tr '\t' ':' \
    |tr '\n' '\t' \
    |awk '{print $0}' \
+   |awk '{ sub(/[ \t]+$/, ""); print }' \
    >>normal.revise.vcf.lines.txt
 
 done< <(awk '{print $1}' geno.normal.revise.txt|sort -u)
