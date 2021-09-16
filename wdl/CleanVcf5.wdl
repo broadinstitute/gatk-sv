@@ -94,7 +94,7 @@ task ScatterVcf {
     RuntimeAttr runtime_default = object {
                                       mem_gb: 16,
                                       disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-                                      cpu_cores: 1,
+                                      cpu_cores: 4,
                                       preemptible_tries: 3,
                                       max_retries: 1,
                                       boot_disk_gb: 10
@@ -177,13 +177,14 @@ task CleanVcf5MakeCleanGQ {
             ~{multi_ids} \
             outliers.txt
 
+        bcftools view -G -O z multiallelic.vcf.gz > multiallelic.sites.vcf.gz
         tabix cleanGQ.vcf.gz
     >>>
 
     output {
         File clean_gq_vcf="cleanGQ.vcf.gz"
         File clean_gq_vcf_idx="cleanGQ.vcf.gz.tbi"
-        File multiallelic_vcf="multiallelic.vcf.gz"
+        File multiallelic_vcf="multiallelic.sites.vcf.gz"
         File no_sample_list = "no_called_samples.list"
     }
 }
