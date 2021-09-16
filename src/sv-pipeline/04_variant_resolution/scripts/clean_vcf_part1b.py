@@ -445,6 +445,23 @@ def find_multi_allelic_for_del(copystate_per_variant_txt_gz, int_bed_gz):
     return output.name
 
 
+def find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_cnvs_txt):
+    variants = set()
+    with gzip.open(copystate_per_variant_txt_gz, "rt") as f:
+        for l in f:
+            sl = l.strip().split("\t")
+            if sl[1] != "." and (int(sl[1]) < 1 or int(sl[1]) > 4):
+                variants.add(sl[0])
+
+    with gzip.open(int_bed_gz, "rt") as f, open(multi_cnvs_txt, "a") as o:
+        for l in f:
+            sl = l.strip().split("\t")
+            if sl[3] in variants:
+                if sl[4] == "DUP" and int(sl[2]) - int(sl[1]) >= 1000:
+                    o.write(sl[3] + "\n")
+
+    return multi_cnvs_txt
+
 def main(int_vcf_gz):
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
@@ -466,6 +483,7 @@ def main(int_vcf_gz):
     copystate_rd_cn_format_gz = get_copystate_per_variant(normal_revise_vcf_gz)
     copystate_per_variant_txt_gz = get_copystate_per_variant_2(copystate_rd_cn_format_gz)
     multi_cnvs_txt = find_multi_allelic_for_del(copystate_per_variant_txt_gz, int_bed_gz)
+    multi_cnvs_txt = find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_cnvs_txt)
     print(multi_cnvs_txt)
 
 
