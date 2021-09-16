@@ -16,13 +16,13 @@ def main():
     record_idx = 0
     current_shard = -1
     out_vcf = None
-    input_vcf = VariantFile(args.input_vcf, 'r')
+    input_vcf = VariantFile(args.input_vcf, 'r', threads=2)
     for record in input_vcf:
         shard = int(record_idx / records_per_shard)
         if shard != current_shard:
             if out_vcf is not None:
                 out_vcf.close()
-            out_vcf = VariantFile("{}.{:05d}.vcf.gz".format(args.shard_prefix, shard), 'w', header=input_vcf.header)
+            out_vcf = VariantFile("{}.{:05d}.vcf.gz".format(args.shard_prefix, shard), 'w', header=input_vcf.header, threads=2)
         current_shard = shard
         out_vcf.write(record)
         record_idx = record_idx + 1

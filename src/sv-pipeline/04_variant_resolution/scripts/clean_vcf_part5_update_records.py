@@ -22,7 +22,7 @@ def main():
 
     # load the revised lines and index by ID
     revised_lines_by_id = {}
-    with pysam.VariantFile(args.revise_vcf_lines) as revise_vcf:
+    with pysam.VariantFile(args.revise_vcf_lines, threads=2) as revise_vcf:
         header2 = revise_vcf.header
         for record in revise_vcf:
             revised_lines_by_id[record.id] = record
@@ -74,7 +74,7 @@ def main():
 
     print("reformatting records", file=sys.stderr)
     cleangq_filename = "cleanGQ.vcf.gz"
-    cleanqg_out = pysam.VariantFile(cleangq_filename, 'w', header=normal_vcf.header)
+    cleanqg_out = pysam.VariantFile(cleangq_filename, 'w', header=normal_vcf.header, threads=2)
 
     mulitallelic_filename = "multiallelic.vcf.gz"
     multiallelic_out = pysam.VariantFile(mulitallelic_filename, 'w', header=normal_vcf.header)
