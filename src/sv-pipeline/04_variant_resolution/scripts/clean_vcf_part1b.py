@@ -16,7 +16,7 @@ import gzip
 import os
 import sys
 import tempfile
-from subprocess import check_call
+from subprocess import check_call, Popen, PIPE, STDOUT
 
 
 VCF_DELIMITER = "\t"
@@ -376,10 +376,33 @@ def modify_vcf(int_vcf_gz, normal_revise_vcf_lines_txt):
                 l = "\t".join(sl) + "\n"
             out_file.write(l)
 
-    check_call(["bgzip", output.name])
-    output_name = output.name + ".gz"
+    sorted_output = output.name + "sorted"
+    cmd = f"cat {output.name} | vcf-sort > {sorted_output}"
+    ps = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+    ps.communicate()[0]
+    check_call(["bgzip", sorted_output])
+    output_name = sorted_output + ".gz"
     check_call(["bcftools", "index", output_name])
     return output_name
+
+
+def get_copystate_per_variant(normal_revise_vcf_gz):
+    tmp = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    with gzip.open(normal_revise_vcf_gz, "rt") as f, tmp as t:
+        for l in f:
+            if l.startswith("#"):
+                t.write(l)
+                continue
+            sline = l.strip().split("\t")
+            sline[0] = sline[2]
+            t.write("\t".join(sline) + "\n")
+
+    format_id = "RD_CN"
+    output = tempfile.NamedTemporaryFile(mode="w", delete=False)
+    check_call(["vcftools", "--vcf", tmp.name, "--extract-FORMAT-info", format_id, "--out", output.name])
+    output_name = output.name + "." + format_id + ".FORMAT"
+    check_call(["gzip", output_name])
+    return output_name + ".gz"
 
 
 def main(int_vcf_gz):
@@ -400,7 +423,8 @@ def main(int_vcf_gz):
     subset_vcf = get_subset_vcf(geno_normal_revise_txt, int_vcf_gz)
     normal_revise_vcf_lines_txt = pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt, subset_vcf, col_txt, cols)
     normal_revise_vcf_gz = modify_vcf(int_vcf_gz, normal_revise_vcf_lines_txt)
-    print(normal_revise_vcf_gz)
+    copystate_rd_cn_format_gz = get_copystate_per_variant(normal_revise_vcf_gz)
+    print(copystate_rd_cn_format_gz)
 
 
 if __name__ == '__main__':
