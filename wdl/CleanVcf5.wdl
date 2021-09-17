@@ -50,6 +50,8 @@ workflow CleanVcf5 {
         input:
             vcfs = CleanVcf5MakeCleanGQ.multiallelic_vcf,
             outfile_prefix="multiallelic",
+            generate_index=false,
+            allow_overlaps=true,
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_override
     }
