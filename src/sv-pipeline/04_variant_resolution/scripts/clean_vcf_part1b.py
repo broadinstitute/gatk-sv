@@ -14,9 +14,12 @@ within a real CNV
 import copy
 import gzip
 import os
+import pysam
 import shutil
 import sys
 import tempfile
+import time
+import svtk.utils as svu
 from subprocess import check_call, Popen, PIPE, STDOUT
 
 
@@ -33,37 +36,51 @@ def get_columns_headers(filename):
                 return line
 
 
-def get_filtered_vcf_in_bed(filename):
+def get_working_dir(base_dir="."):
+    while True:
+        working_dir = os.path.join(base_dir, "tmp_" + str(int(time.time())))
+        if not os.path.isdir(working_dir):
+            os.mkdir(working_dir)
+            return working_dir
+
+
+def get_tmp_file(working_dir):
+    return tempfile.NamedTemporaryFile(dir=working_dir, mode="w", delete=False)
+
+
+def get_filtered_vcf_in_bed(working_dir, int_vcf_gz):
     # TODO: This script uses intermediate files for multiple manipulations,
     #  can all manipulations implemented in a single pass?
-    int_bed = "./int.bed"
-    tmp_filtered_vcf = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    with gzip.open(filename, "rt") as f, tmp_filtered_vcf as tf:
+    int_bed = get_tmp_file(working_dir)
+    filtered_vcf = get_tmp_file(working_dir)
+    with gzip.open(int_vcf_gz, "rt") as f, filtered_vcf as tf:
         for line in f:
-            sline = line.split(VCF_DELIMITER)
-            if "#" in sline[0] or "DEL" in sline[4] or "DUP" in sline[4]:
+            columns = line.split(VCF_DELIMITER)
+            if "#" in columns[0] or "DEL" in columns[4] or "DUP" in columns[4]:
                 tf.write(line)
 
-    tmp_bed = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    check_call(["svtk", "vcf2bed", tmp_filtered_vcf.name, tmp_bed.name])
+    tmp_bed = get_tmp_file(working_dir)
+    check_call(["svtk", "vcf2bed", filtered_vcf.name, tmp_bed.name])
+    # with open(tmp_bed.name) as f:
+    #     f.writelines(svu.vcf2bedtool(filtered_vcf.name))
 
-    with open(tmp_bed.name, "r") as f, open(int_bed, "w") as m:
+    with open(tmp_bed.name, "r") as f, open(int_bed.name, "w") as m:
         for line in f:
-            sline = line.strip().split(BED_DELIMITER)
-            if len(sline) < 6:
+            columns = line.strip().split(BED_DELIMITER)
+            if len(columns) < 6:
                 # TODO: seems like we can ignore writing this line
                 #  as it is skipped downstream.
                 m.write(f"{line.strip()}{BED_DELIMITER}blanksample\n")
             else:
                 m.write(line)
 
-    check_call(["gzip", "--force", int_bed])
-    os.remove(tmp_filtered_vcf.name)
+    check_call(["gzip", "--force", int_bed.name])
+    os.remove(filtered_vcf.name)
     os.remove(tmp_bed.name)
-    return int_bed + ".gz"
+    return int_bed.name + ".gz"
 
 
-def get_normal_overlap(filename):
+def get_normal_overlap(int_bed_gz):
     """
     list of potential overlaps with a normal copy state variant
     (>5kb variants require depth but nested events could be missed;
@@ -76,7 +93,7 @@ def get_normal_overlap(filename):
     tmp2 = tempfile.NamedTemporaryFile(mode="w", delete=False)
     tmp3 = tempfile.NamedTemporaryFile(mode="w", delete=False)
     normaloverlap = tempfile.NamedTemporaryFile(mode="w", delete=False)
-    with gzip.open(filename, "rt") as f, tmp as t:
+    with gzip.open(int_bed_gz, "rt") as f, tmp as t:
         for line in f:
             # TODO: maybe skip writing header line in the first place.
             if line.startswith("#"):
@@ -465,6 +482,7 @@ def find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_c
 
 
 def main(int_vcf_gz):
+    working_dir = get_working_dir()
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
     col_txt = "col.txt"
@@ -473,7 +491,7 @@ def main(int_vcf_gz):
         for x in range(len(headers)):
             f.write(f"{x}\t{headers[x]}\n")
             cols[x] = [headers[x]]
-    int_bed_gz = get_filtered_vcf_in_bed(int_vcf_gz)
+    int_bed_gz = get_filtered_vcf_in_bed(working_dir, int_vcf_gz)
     normaloverlap_txt = get_normal_overlap(int_bed_gz)
     rd_cn_normalcheck_FORMAT_gz = get_depth_based_copy_number_variant(int_vcf_gz, normaloverlap_txt)
     ev_normalcheck_format_gz = get_evidence_supporting_each_normal_overlapping_variant(int_vcf_gz, normaloverlap_txt)
@@ -495,10 +513,15 @@ def main(int_vcf_gz):
     shutil.move(geno_normal_revise_txt, "/Users/vahid/Desktop/mine/geno_normal_revise_txt")
     shutil.move(subset_vcf, "/Users/vahid/Desktop/mine/subset_vcf")
     shutil.move(normal_revise_vcf_lines_txt, "/Users/vahid/Desktop/mine/normal_revise_vcf_lines_txt")
-    shutil.move(normal_revise_vcf_gz, "/Users/vahid/Desktop/mine/normal_revise_vcf.gz")
+    shutil.copy(normal_revise_vcf_gz, "/Users/vahid/Desktop/mine/normal_revise_vcf.gz")
     shutil.move(copystate_rd_cn_format_gz, "/Users/vahid/Desktop/mine/copystate_rd_cn_format.gz")
     shutil.move(copystate_per_variant_txt_gz, "/Users/vahid/Desktop/mine/copystate_per_variant_txt.gz")
-    shutil.move(multi_cnvs_txt, "/Users/vahid/Desktop/mine/multi_cnvs_txt")
+    shutil.copy(multi_cnvs_txt, "/Users/vahid/Desktop/mine/multi_cnvs_txt")
+
+    assert os.path.getsize(multi_cnvs_txt) == 5854
+    assert os.path.getsize(normal_revise_vcf_gz) == 5814655
+
+    return multi_cnvs_txt, normal_revise_vcf_gz, normal_revise_vcf_gz + "csi"
 
 
 if __name__ == '__main__':
