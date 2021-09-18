@@ -66,7 +66,7 @@ fi
 
 ###GENERATE PLOTS FOR EACH POPULATION
 for compdat in $( find ${OUTDIR}/data/ -name "*.overlaps.bed.gz" ); do
-  outprefix=$( basename "$bed" | sed 's/\.bed\.gz//g' )
+  outprefix=$( basename "$compdat" | sed 's/\.bed\.gz//g' )
   if [ -e ${compdat} ] && [ -s ${compdat} ]; then
     #Print status
     echo -e "$( date ) - VCF QC STATUS: Plotting benchmarking for ${outprefix} subset from ${PREFIX}"
