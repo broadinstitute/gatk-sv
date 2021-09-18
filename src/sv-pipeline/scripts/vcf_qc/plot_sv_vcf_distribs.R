@@ -112,26 +112,27 @@ plotSVCountBars <- function(dat,svtypes,title=NULL,ylab="SV Count"){
 }
 #Plot dot for fraction of total SV per chromosome
 plotDotsSVperChrom <- function(dat,svtypes,title=NULL,ylab="Fraction of SV Type"){
+  contigs <- sort(unique(dat$chr))
   #Compute table
   mat <- sapply(svtypes$svtype,function(svtype){
-    counts <- sapply(c(1:22,"X","Y"),function(contig){
+    counts <- sapply(contigs, function(contig){
       length(which(dat$chr==contig & dat$svtype==svtype))
     })
     if(sum(counts,na.rm=T)>0){
       return(counts/sum(counts))
     }else{
-      return(rep(0,24))
+      return(rep(0, length(contigs)))
     }
   })
   
   #Prep plotting area
   par(bty="n",mar=c(3,4.5,2.5,0.5))
-  plot(x=c(0,24),y=c(0,1.15*max(mat)),type="n",
+  plot(x=c(0, length(contigs)),y=c(0,1.15*max(mat)),type="n",
        xaxt="n",yaxt="n",xlab="",ylab="",xaxs="i",yaxs="i")
   
   #Add axes and title
-  sapply(1:24,function(i){
-    axis(1,at=i-0.5,tick=F,labels=c(1:22,"X","Y")[i],line=-0.8,cex.axis=0.7)
+  sapply(1:length(contigs),function(i){
+    axis(1,at=i-0.5,tick=F,labels=contigs[i],line=-0.8,cex.axis=0.7)
   })
   mtext(1,text="Chromosome",line=1.5)
   axis(2,at=axTicks(2),labels=NA)
@@ -142,7 +143,7 @@ plotDotsSVperChrom <- function(dat,svtypes,title=NULL,ylab="Fraction of SV Type"
   
   #Plot per-svtype information
   sapply(1:ncol(mat),function(i){
-    points(x=(1:24)-seq(0.8,0.2,by=-0.6/(nrow(svtypes)-1))[i],
+    points(x=(1:length(contigs))-seq(0.8,0.2,by=-0.6/(nrow(svtypes)-1))[i],
            y=mat[,i],type="l",lwd=0.5,col=adjustcolor(svtypes$color[i],alpha=0.5))
   })
   sapply(1:nrow(mat),function(i){
