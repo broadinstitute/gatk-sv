@@ -48,6 +48,14 @@ class Filter:
         self.ev_idx = None
         self.samples = {}
 
+    def _update_rd_cn_ev(self, variant):
+        rd_cn = []
+        ev = []
+        for k, v in variant.samples.items():
+            rd_cn.append(v.values()[self.rd_cn_idx])
+            ev.append(v.values()[self.ev_idx])
+        self.rd_cn[variant.id] = rd_cn
+        self.ev[variant.id] = ev
 
     def filter_variant_types(self, records: Iterable[pysam.VariantRecord], filter_types=None, min_interval_width=1) -> Iterator[Tuple]:
         # TODO: rename records to variants
@@ -58,22 +66,7 @@ class Filter:
             if record.stop - record.start < min_interval_width:
                 continue
 
-            rd_cn = []
-            ev = []
-            for k, v in record.samples.items():
-                # print("\n-----------")
-                # print(f"{k}\t{v}")
-                # print(v.values())
-                # print(self.rd_cn_idx)
-                # print(v.values()[self.rd_cn_idx])
-                # print(type(v.values()[self.rd_cn_idx]))
-                rd_cn.append(v.values()[self.rd_cn_idx])
-                ev.append(v.values()[self.ev_idx])
-            #     print(dir(v))
-            #     exit()
-            # exit()
-            self.rd_cn[record.id] = rd_cn
-            self.ev[record.id] = ev
+            self._update_rd_cn_ev(record)
 
             samples = ','.join(svu.get_called_samples(record))
             if len(samples) == 0:
@@ -100,6 +93,9 @@ class Filter:
             # print(dir(header.formats))
             formats = header.formats.keys()
 
+            # TODO: this should be re-checked with every line
+            #  since the lines can differ on this. This part
+            #  should be moved to where the variants are traversed.
             self.rd_cn_idx = formats.index("RD_CN")
             self.ev_idx = formats.index("EV")
             # print(rd_cn_idx)
@@ -183,7 +179,8 @@ class Filter:
 
     def modify_variants(self, int_vcf_gz, geno_normal_revise_dict, header):
         output_vcf = get_tmp_file(get_working_dir())
-        with pysam.VariantFile(int_vcf_gz, "r") as f_in, pysam.VariantFile(output_vcf.name, "w", header=header) as f_out:
+        multi_cnvs_txt = get_tmp_file(get_working_dir())
+        with pysam.VariantFile(int_vcf_gz, "r") as f_in, pysam.VariantFile(output_vcf.name, "w", header=header) as f_out, multi_cnvs_txt as multi_cnvs_f:
             variants = f_in.fetch()
             for variant in variants:
                 # TODO: minimize dict access here.
@@ -192,6 +189,17 @@ class Filter:
                         original_sample = variant.samples[sample_id]
                         original_sample.update({"GT": (0, 1)})
                         original_sample.update({"GQ": original_sample["RD_GQ"]})
+                        # TODO: double-check above with shell script & Harison.
+
+                if variant.stop - variant.start >= 1000:
+                    if variant.info[Keys.SVTYPE] == Keys.DEL or variant.info[Keys.SVTYPE] == Keys.DUP:
+                        is_del = variant.info[Keys.SVTYPE] == Keys.DEL
+                        for k, v in variant.samples.items():
+                            rd_cn_val = v.values()[self.rd_cn_idx]
+                            if (is_del and rd_cn_val > 3) or (not is_del and (rd_cn_val < 1 or rd_cn_val > 4)):
+                                multi_cnvs_f.write(variant.id + "\n")
+                                break
+
                 f_out.write(variant)
 
         # TODO: redo the following in a better way.
@@ -202,7 +210,7 @@ class Filter:
         check_call(["bgzip", sorted_output])
         output_name = sorted_output + ".gz"
         check_call(["bcftools", "index", output_name])
-        return output_name
+        return output_name, multi_cnvs_txt.name
 
 
 def get_columns_headers(filename):
@@ -655,7 +663,7 @@ def pull_out_and_revise_vcf_line_that_needs_to_be_edited(geno_normal_revise_txt,
 
         i = col_headers[_id[1]]
         tmp_cols[i][1] = "0/1"
-        tmp_cols[i][2] = tmp_cols[i][4]
+        tmp_cols[i][2] = tmp_cols[i][4]  # ??? should not be the value in the third column of _id? also are you sure to modify the 2nd item and not the one related to RD_CN or EV?
 
         for i in range(len(sline_txt)):
             if i < 9:
@@ -778,8 +786,9 @@ def main(int_vcf_gz):
 
     f = Filter()
     overlapping_variants_ids, overlap_test_text, geno_normal_revise_txt, geno_normal_revise_dict, header = f.get_overlapping_variants(int_vcf_gz)
-    new_normal_revise_vcf_gz = f.modify_variants(int_vcf_gz, geno_normal_revise_dict, header)
+    new_normal_revise_vcf_gz, multi_cnvs_txt = f.modify_variants(int_vcf_gz, geno_normal_revise_dict, header)
     print(f"new normal revise vcf:\t{new_normal_revise_vcf_gz}")
+    print(f"multi_cnvs_txt:\t{multi_cnvs_txt}")
     exit()
 
 
