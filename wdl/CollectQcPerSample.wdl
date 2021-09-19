@@ -4,13 +4,12 @@ version 1.0
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-# Workflow to gather lists of variant IDs per sample from an SV VCF
+# Workflow to gather lists of variant IDs per sample from one or more SV VCFs
 workflow CollectQcPerSample {
   input {
-    File vcf
+    Array[File] vcfs
     File samples_list
     String prefix
-    Int samples_per_shard
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -20,25 +19,15 @@ workflow CollectQcPerSample {
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_split_samples_list
-    RuntimeAttr? runtime_override_tar_shard_vid_lists
+    RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
   }
 
-  # Shard sample list
-  call MiniTasks.SplitUncompressed as SplitSamplesList {
-    input:
-      whole_file=samples_list,
-      lines_per_shard=samples_per_shard,
-      shard_prefix=prefix + ".list_shard.",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_override_split_samples_list
-  }
-
-  # Collect VCF-wide summary stats per sample list
-  scatter (sublist in SplitSamplesList.shards) {
+  # Collect VCF-wide summary stats per sample list per VCF
+  scatter ( vcf in vcfs ) {
     call CollectVidsPerSample {
       input:
         vcf=vcf,
-        samples_list=sublist,
+        samples_list=samples_list,
         prefix=prefix,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_vids_per_sample
@@ -46,18 +35,18 @@ workflow CollectQcPerSample {
   }
 
   # Merge all VID lists into single output directory and tar it
-  call TarShardVidLists {
+  call MergeShardedPerSampleVidLists {
     input:
-      in_tarballs=CollectVidsPerSample.vid_lists_tarball,
-      folder_name=prefix + "_perSample_VIDs_merged",
-      tarball_prefix=prefix + "_perSample_VIDs",
+      tarballs=CollectVidsPerSample.vid_lists_tarball,
+      samples_list=samples_list,
+      prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_tar_shard_vid_lists
+      runtime_attr_override=runtime_override_merge_sharded_per_sample_vid_lists
   }
 
   # Final output
   output {
-    File vid_lists = TarShardVidLists.tarball
+    File vid_lists = MergeShardedPerSampleVidLists.merged_tarball
   }
 }
 
@@ -131,26 +120,18 @@ task CollectVidsPerSample {
 }
 
 
-# Task to merge VID lists across shards
-task TarShardVidLists {
+# Merge multiple tarballs of per-sample VID lists
+task MergeShardedPerSampleVidLists {
   input {
-    Array[File] in_tarballs
-    String? folder_name
-    String? tarball_prefix
+    Array[File] tarballs
+    File samples_list
+    String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  String tar_folder_name = select_first([folder_name, "merged"])
-  String outfile_name = select_first([tarball_prefix, tar_folder_name]) + ".tar.gz"
-
-  # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
-  Float input_size = size(in_tarballs, "GB")
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    mem_gb: 3.75,
+    disk_gb: 20,
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -158,7 +139,7 @@ task TarShardVidLists {
   }
   RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
     disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
@@ -168,18 +149,32 @@ task TarShardVidLists {
   }
 
   command <<<
-    # Create final output directory
-    mkdir "~{tar_folder_name}"
+    set -eu -o pipefail
 
-    while read tarball_path; do
-      tar -xzvf "$tarball_path" --directory ~{tar_folder_name}/
-    done < ~{write_lines(in_tarballs)}
+    # Create final output directory
+    mkdir "~{prefix}_perSample_VID_lists"
+
+    # Extract each tarball into its own unique directory
+    mkdir shards
+    while read i tarball_path; do
+      mkdir "shards/shard_$i"
+      tar -xzvf "$tarball_path" --directory "shards/shard_$i"/
+    done < <( awk -v OFS="\t" '{ print NR, $1 }' ~{write_lines(tarballs)} )
+
+    # Merge all shards per sample and write to final directory
+    while read sample; do
+      find shards/ -name "$sample.VIDs_genotypes.txt.gz" \
+      | xargs -I {} zcat {} \
+      | sort -Vk1,1 -k2,2n -k3,3n \
+      | gzip -c \
+      > "~{prefix}_perSample_VID_lists/$sample.VIDs_genotypes.txt.gz"
+    done < ~{samples_list}
 
     # Compress final output directory
-    tar -czvf "~{outfile_name}" "~{tar_folder_name}"
+    tar -czvf "~{prefix}_perSample_VID_lists.tar.gz" "~{prefix}_perSample_VID_lists"
   >>>
 
   output {
-    File tarball = outfile_name
+    File merged_tarball = "~{prefix}_perSample_VID_lists.tar.gz"
   }
 }
