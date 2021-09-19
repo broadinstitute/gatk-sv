@@ -13,6 +13,7 @@ within a real CNV
 
 import copy
 import gzip
+import json
 import os
 import pybedtools
 import pysam
@@ -49,6 +50,7 @@ class Filter:
 
 
     def filter_variant_types(self, records: Iterable[pysam.VariantRecord], filter_types=None, min_interval_width=1) -> Iterator[Tuple]:
+        # TODO: rename records to variants
         for record in records:
             sv_type = record.info[Keys.SVTYPE]
             if filter_types and sv_type not in filter_types:
@@ -162,15 +164,46 @@ class Filter:
                         overlap_test_text[f"{narrower_var_id}@{x}"] = [f"{narrower_var_id}@{x}", wider_var_id, wider_var_type]
 
         geno_normal_revise_txt = []
+        geno_normal_revise_dict = {}
         for k, v in overlap_test_text.items():
             var_id = k.split("@")[0]
             sample_index = self.samples[k.split("@")[1]]
             if v[2] == "DUP" and self.rd_cn[var_id][sample_index] == 2 and self.rd_cn[v[1]][sample_index] == 3:
                 geno_normal_revise_txt.append(v[0].replace("@", "\t") + "\t" + "1" + "\n")
+                if var_id not in geno_normal_revise_dict:
+                    geno_normal_revise_dict[var_id] = {}
+                geno_normal_revise_dict[var_id][v[0].split("@")[1]] = 1
             elif v[2] == "DEL" and self.rd_cn[var_id][sample_index] == 2 and self.rd_cn[v[1]][sample_index] == 1:
                 geno_normal_revise_txt.append(v[0].replace("@", "\t") + "\t" + "3" + "\n")
+                if var_id not in geno_normal_revise_dict:
+                    geno_normal_revise_dict[var_id] = {}
+                geno_normal_revise_dict[var_id][v[0].split("@")[1]] = 3
 
-        return overlapping_variants_ids, overlap_test_text
+        return overlapping_variants_ids, overlap_test_text, geno_normal_revise_txt, geno_normal_revise_dict, header
+
+    def modify_variants(self, int_vcf_gz, geno_normal_revise_dict, header):
+        output_vcf = get_tmp_file(get_working_dir())
+        with pysam.VariantFile(int_vcf_gz, "r") as f_in, pysam.VariantFile(output_vcf.name, "w", header=header) as f_out:
+            variants = f_in.fetch()
+            for variant in variants:
+                # TODO: minimize dict access here.
+                if variant.id in geno_normal_revise_dict:
+                    for sample_id in geno_normal_revise_dict[variant.id]:
+                        original_sample = variant.samples[sample_id]
+                        original_sample.update({"GT": (0, 1)})
+                        original_sample.update({"GQ": original_sample["RD_GQ"]})
+                f_out.write(variant)
+
+        # TODO: redo the following in a better way.
+        sorted_output = output_vcf.name + "sorted"
+        cmd = f"cat {output_vcf.name} | vcf-sort > {sorted_output}"
+        ps = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
+        ps.communicate()[0]
+        check_call(["bgzip", sorted_output])
+        output_name = sorted_output + ".gz"
+        check_call(["bcftools", "index", output_name])
+        return output_name
+
 
 def get_columns_headers(filename):
     with gzip.open(filename, "rt") as f:
@@ -744,9 +777,10 @@ def main(int_vcf_gz):
     working_dir = get_working_dir()
 
     f = Filter()
-    f.get_overlapping_variants(int_vcf_gz)
-    # overlapping_variants_ids, overlap_test_text = get_overlapping_variants(int_vcf_gz)
-    # exit()
+    overlapping_variants_ids, overlap_test_text, geno_normal_revise_txt, geno_normal_revise_dict, header = f.get_overlapping_variants(int_vcf_gz)
+    new_normal_revise_vcf_gz = f.modify_variants(int_vcf_gz, geno_normal_revise_dict, header)
+    print(f"new normal revise vcf:\t{new_normal_revise_vcf_gz}")
+    exit()
 
 
 
