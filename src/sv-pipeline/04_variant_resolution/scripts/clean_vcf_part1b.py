@@ -14,6 +14,7 @@ within a real CNV
 import copy
 import gzip
 import os
+import pybedtools
 import pysam
 import shutil
 import sys
@@ -21,10 +22,21 @@ import tempfile
 import time
 import svtk.utils as svu
 from subprocess import check_call, Popen, PIPE, STDOUT
+from typing import Iterable, Iterator, Tuple
 
 
+DELIMITER = "\t"
 VCF_DELIMITER = "\t"
 BED_DELIMITER = "\t"
+
+
+class Keys:
+    SVTYPE = "SVTYPE"
+    DUP = "DUP"
+    DEL = "DEL"
+
+
+BLANK_SAMPLES = "Blank_Samples"
 
 
 def get_columns_headers(filename):
@@ -48,6 +60,87 @@ def get_tmp_file(working_dir):
     return tempfile.NamedTemporaryFile(dir=working_dir, mode="w", delete=False)
 
 
+def filter_variant_types(records: Iterable[pysam.VariantRecord], filter_types=None, min_interval_width=1) -> Iterator[Tuple]:
+    for record in records:
+        sv_type = record.info[Keys.SVTYPE]
+        if record.id == "1kgp_2batch_test_cohort.chr1_BND_chr1_1162":
+        if filter_types and sv_type not in filter_types:
+            continue
+        if record.stop - record.start < min_interval_width:
+            continue
+        samples = ','.join(svu.get_called_samples(record))
+        if len(samples) == 0:
+            samples = BLANK_SAMPLES
+        yield record.contig, record.start, record.stop, record.id, sv_type, samples
+
+
+def get_overlapping_variants(int_vcf_gz):
+    overlapping_variants_ids = set()
+    overlap_test_text = {}
+    overlap_test_text_test = set()
+    with pysam.VariantFile(int_vcf_gz, "r") as f:
+        # header = f.header
+        dels_and_dups = pybedtools.BedTool(filter_variant_types(f.fetch(), [Keys.DEL, Keys.DUP], 5000)).saveas()
+        overlapping_variants = dels_and_dups.intersect(dels_and_dups, wa=True, wb=True)
+        for interval in overlapping_variants.intervals:
+            # IDs are identical, hence it is the overlap
+            # of an interval with itself.
+            var_a_id = interval.fields[3]
+            var_b_id = interval.fields[9]
+            if var_a_id == var_b_id:
+                continue
+
+            # Variant types are identical.
+            if interval.fields[4] == interval.fields[10]:
+                continue
+
+            f = interval.fields
+            non_common_samples = []
+            if int(f[2]) - int(f[1]) >= int(f[8]) - int(f[7]):
+                if f[5] == BLANK_SAMPLES:
+                    continue
+                overlapping_variants_ids.add(var_a_id)
+                overlapping_variants_ids.add(var_b_id)
+                wider_var_id = f[3]
+                wider_var_interval = [int(f[1]), int(f[2])]
+                wider_var_type = f[4]
+                narrower_var_id = f[9]
+                narrower_var_interval = [int(f[7]), int(f[8])]
+                for x in interval.fields[5].split(","):
+                    if x not in interval.fields[11].split(","):
+                        non_common_samples.append(x)
+            else:
+                if f[11] == BLANK_SAMPLES:
+                    continue
+                overlapping_variants_ids.add(var_a_id)
+                overlapping_variants_ids.add(var_b_id)
+                narrower_var_id = f[3]
+                narrower_var_interval = [int(f[1]), int(f[2])]
+                wider_var_id = f[9]
+                wider_var_interval = [int(f[7]), int(f[8])]
+                wider_var_type = f[10]
+                for x in interval.fields[11].split(","):
+                    if x not in interval.fields[5].split(","):
+                        non_common_samples.append(x)
+
+            ss = narrower_var_interval[0]
+            se = narrower_var_interval[1]
+            ls = wider_var_interval[0]
+            le = wider_var_interval[1]
+
+            coverage_percentage = 0
+            if ls <= se and ss <= le:
+                intersection_size = min(se, le) - max(ss, ls)
+                coverage_percentage = intersection_size / (se-ss)
+
+            if coverage_percentage >= 0.5:
+                for x in non_common_samples:
+                    overlap_test_text[f"{narrower_var_id}@{x}"] = [f"{narrower_var_id}@{x}", wider_var_id, wider_var_type]
+                    overlap_test_text_test.add(f"{narrower_var_id}@{x}\t{wider_var_id}@{x}\t{wider_var_type}")
+
+    return overlapping_variants_ids, overlap_test_text, overlap_test_text_test
+
+
 def get_filtered_vcf_in_bed(working_dir, int_vcf_gz):
     # TODO: This script uses intermediate files for multiple manipulations,
     #  can all manipulations implemented in a single pass?
@@ -61,16 +154,14 @@ def get_filtered_vcf_in_bed(working_dir, int_vcf_gz):
 
     tmp_bed = get_tmp_file(working_dir)
     check_call(["svtk", "vcf2bed", filtered_vcf.name, tmp_bed.name])
-    # with open(tmp_bed.name) as f:
-    #     f.writelines(svu.vcf2bedtool(filtered_vcf.name))
 
     with open(tmp_bed.name, "r") as f, open(int_bed.name, "w") as m:
         for line in f:
-            columns = line.strip().split(BED_DELIMITER)
+            columns = line.strip().split(DELIMITER)
             if len(columns) < 6:
                 # TODO: seems like we can ignore writing this line
                 #  as it is skipped downstream.
-                m.write(f"{line.strip()}{BED_DELIMITER}blanksample\n")
+                m.write(f"{line.strip()}{DELIMITER}blanksample\n")
             else:
                 m.write(line)
 
@@ -98,7 +189,7 @@ def get_normal_overlap(int_bed_gz):
             # TODO: maybe skip writing header line in the first place.
             if line.startswith("#"):
                 continue
-            sline = line.split(BED_DELIMITER)
+            sline = line.split(DELIMITER)
             if int(sline[2]) - int(sline[1]) >= 5000:
                 t.write(line)
 
