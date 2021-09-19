@@ -39,6 +39,139 @@ class Keys:
 BLANK_SAMPLES = "Blank_Samples"
 
 
+class Filter:
+    def __init__(self):
+        self.rd_cn = {}
+        self.rd_cn_idx = None
+        self.ev = {}
+        self.ev_idx = None
+        self.samples = {}
+
+
+    def filter_variant_types(self, records: Iterable[pysam.VariantRecord], filter_types=None, min_interval_width=1) -> Iterator[Tuple]:
+        for record in records:
+            sv_type = record.info[Keys.SVTYPE]
+            if filter_types and sv_type not in filter_types:
+                continue
+            if record.stop - record.start < min_interval_width:
+                continue
+
+            rd_cn = []
+            ev = []
+            for k, v in record.samples.items():
+                # print("\n-----------")
+                # print(f"{k}\t{v}")
+                # print(v.values())
+                # print(self.rd_cn_idx)
+                # print(v.values()[self.rd_cn_idx])
+                # print(type(v.values()[self.rd_cn_idx]))
+                rd_cn.append(v.values()[self.rd_cn_idx])
+                ev.append(v.values()[self.ev_idx])
+            #     print(dir(v))
+            #     exit()
+            # exit()
+            self.rd_cn[record.id] = rd_cn
+            self.ev[record.id] = ev
+
+            samples = ','.join(svu.get_called_samples(record))
+            if len(samples) == 0:
+                samples = BLANK_SAMPLES
+            yield record.contig, record.start, record.stop, record.id, sv_type, samples
+
+    def get_overlapping_variants(self, int_vcf_gz):
+        overlapping_variants_ids = set()
+        overlap_test_text = {}
+        with pysam.VariantFile(int_vcf_gz, "r") as f:
+            header = f.header
+            # print(header)
+            # print("\n\n")
+            # print(dir(header))
+            # print("\n\n")
+            # print(len(header.samples))
+            # print(dir(header.samples))
+            i = -1
+            for sample in header.samples:
+                i += 1
+                self.samples[sample] = i
+                # SAMPLES.append(sample)
+            # print("\n\n----------")
+            # print(dir(header.formats))
+            formats = header.formats.keys()
+
+            self.rd_cn_idx = formats.index("RD_CN")
+            self.ev_idx = formats.index("EV")
+            # print(rd_cn_idx)
+            # print(header.formats.keys())
+            # print(header.formats.values())
+            # exit()
+            dels_and_dups = pybedtools.BedTool(self.filter_variant_types(f.fetch(), [Keys.DEL, Keys.DUP], 5000)).saveas()
+            overlapping_variants = dels_and_dups.intersect(dels_and_dups, wa=True, wb=True)
+            for interval in overlapping_variants.intervals:
+                # IDs are identical, hence it is the overlap
+                # of an interval with itself.
+                var_a_id = interval.fields[3]
+                var_b_id = interval.fields[9]
+                if var_a_id == var_b_id:
+                    continue
+
+                # Variant types are identical.
+                if interval.fields[4] == interval.fields[10]:
+                    continue
+
+                f = interval.fields
+                non_common_samples = []
+                if int(f[2]) - int(f[1]) >= int(f[8]) - int(f[7]):
+                    if f[5] == BLANK_SAMPLES:
+                        continue
+                    overlapping_variants_ids.add(var_a_id)
+                    overlapping_variants_ids.add(var_b_id)
+                    wider_var_id = f[3]
+                    wider_var_interval = [int(f[1]), int(f[2])]
+                    wider_var_type = f[4]
+                    narrower_var_id = f[9]
+                    narrower_var_interval = [int(f[7]), int(f[8])]
+                    for x in interval.fields[5].split(","):
+                        if x not in interval.fields[11].split(","):
+                            non_common_samples.append(x)
+                else:
+                    if f[11] == BLANK_SAMPLES:
+                        continue
+                    overlapping_variants_ids.add(var_a_id)
+                    overlapping_variants_ids.add(var_b_id)
+                    narrower_var_id = f[3]
+                    narrower_var_interval = [int(f[1]), int(f[2])]
+                    wider_var_id = f[9]
+                    wider_var_interval = [int(f[7]), int(f[8])]
+                    wider_var_type = f[10]
+                    for x in interval.fields[11].split(","):
+                        if x not in interval.fields[5].split(","):
+                            non_common_samples.append(x)
+
+                ss = narrower_var_interval[0]
+                se = narrower_var_interval[1]
+                ls = wider_var_interval[0]
+                le = wider_var_interval[1]
+
+                coverage_percentage = 0
+                if ls <= se and ss <= le:
+                    intersection_size = min(se, le) - max(ss, ls)
+                    coverage_percentage = intersection_size / (se-ss)
+
+                if coverage_percentage >= 0.5:
+                    for x in non_common_samples:
+                        overlap_test_text[f"{narrower_var_id}@{x}"] = [f"{narrower_var_id}@{x}", wider_var_id, wider_var_type]
+
+        geno_normal_revise_txt = []
+        for k, v in overlap_test_text.items():
+            var_id = k.split("@")[0]
+            sample_index = self.samples[k.split("@")[1]]
+            if v[2] == "DUP" and self.rd_cn[var_id][sample_index] == 2 and self.rd_cn[v[1]][sample_index] == 3:
+                geno_normal_revise_txt.append(v[0].replace("@", "\t") + "\t" + "1" + "\n")
+            elif v[2] == "DEL" and self.rd_cn[var_id][sample_index] == 2 and self.rd_cn[v[1]][sample_index] == 1:
+                geno_normal_revise_txt.append(v[0].replace("@", "\t") + "\t" + "3" + "\n")
+
+        return overlapping_variants_ids, overlap_test_text
+
 def get_columns_headers(filename):
     with gzip.open(filename, "rt") as f:
         for line in f:
@@ -63,23 +196,55 @@ def get_tmp_file(working_dir):
 def filter_variant_types(records: Iterable[pysam.VariantRecord], filter_types=None, min_interval_width=1) -> Iterator[Tuple]:
     for record in records:
         sv_type = record.info[Keys.SVTYPE]
-        if record.id == "1kgp_2batch_test_cohort.chr1_BND_chr1_1162":
         if filter_types and sv_type not in filter_types:
             continue
         if record.stop - record.start < min_interval_width:
             continue
+
+        rd_cn = []
+        for k, v in record.samples.items():
+            print("\n-----------")
+            print(f"{k}\t{v}")
+            print(v.values())
+            print(rd_cn_idx)
+            print(v.values()[rd_cn_idx])
+            print(dir(v))
+            exit()
+        exit()
+
         samples = ','.join(svu.get_called_samples(record))
         if len(samples) == 0:
             samples = BLANK_SAMPLES
+
+
         yield record.contig, record.start, record.stop, record.id, sv_type, samples
 
+RD_CN = {}
+rd_cn_idx = None
+SAMPLES = []
 
 def get_overlapping_variants(int_vcf_gz):
     overlapping_variants_ids = set()
     overlap_test_text = {}
-    overlap_test_text_test = set()
     with pysam.VariantFile(int_vcf_gz, "r") as f:
-        # header = f.header
+        header = f.header
+        # print(header)
+        # print("\n\n")
+        # print(dir(header))
+        # print("\n\n")
+        # print(len(header.samples))
+        # print(dir(header.samples))
+        for sample in header.samples:
+            SAMPLES.append(sample)
+        # print("\n\n----------")
+        # print(dir(header.formats))
+        formats = header.formats.keys()
+
+        rd_cn_idx = formats.index("RD_CN")
+        # print(rd_cn_idx)
+        # print(header.formats.keys())
+        # print(header.formats.values())
+        # exit()
         dels_and_dups = pybedtools.BedTool(filter_variant_types(f.fetch(), [Keys.DEL, Keys.DUP], 5000)).saveas()
         overlapping_variants = dels_and_dups.intersect(dels_and_dups, wa=True, wb=True)
         for interval in overlapping_variants.intervals:
@@ -136,9 +301,12 @@ def get_overlapping_variants(int_vcf_gz):
             if coverage_percentage >= 0.5:
                 for x in non_common_samples:
                     overlap_test_text[f"{narrower_var_id}@{x}"] = [f"{narrower_var_id}@{x}", wider_var_id, wider_var_type]
-                    overlap_test_text_test.add(f"{narrower_var_id}@{x}\t{wider_var_id}@{x}\t{wider_var_type}")
 
-    return overlapping_variants_ids, overlap_test_text, overlap_test_text_test
+    return overlapping_variants_ids, overlap_test_text
+
+
+def get_depth_based_copy_number_variant_2(vcf_gz, overlapping_variants_id):
+    pass
 
 
 def get_filtered_vcf_in_bed(working_dir, int_vcf_gz):
@@ -574,6 +742,14 @@ def find_multi_allelic_for_dup(copystate_per_variant_txt_gz, int_bed_gz, multi_c
 
 def main(int_vcf_gz):
     working_dir = get_working_dir()
+
+    f = Filter()
+    f.get_overlapping_variants(int_vcf_gz)
+    # overlapping_variants_ids, overlap_test_text = get_overlapping_variants(int_vcf_gz)
+    # exit()
+
+
+
     headers = get_columns_headers(int_vcf_gz)
     headers = headers.strip().split("\t")
     col_txt = "col.txt"
