@@ -787,8 +787,9 @@ def main(int_vcf_gz):
     f = Filter()
     overlapping_variants_ids, overlap_test_text, geno_normal_revise_txt, geno_normal_revise_dict, header = f.get_overlapping_variants(int_vcf_gz)
     new_normal_revise_vcf_gz, multi_cnvs_txt = f.modify_variants(int_vcf_gz, geno_normal_revise_dict, header)
-    print(f"new normal revise vcf:\t{new_normal_revise_vcf_gz}")
-    print(f"multi_cnvs_txt:\t{multi_cnvs_txt}")
+    shutil.move(new_normal_revise_vcf_gz, "./normal.revise.vcf.gz")
+    shutil.move(new_normal_revise_vcf_gz + ".csi", "./normal.revise.vcf.gz.csi")
+    shutil.move(multi_cnvs_txt, "./multi.cnvs.txt")
     exit()
 
 
