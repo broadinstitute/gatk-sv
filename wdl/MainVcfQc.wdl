@@ -243,6 +243,7 @@ workflow MasterVcfQc {
           random_seed=random_seed,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_override_benchmark_samples=runtime_override_benchmark_samples,
           runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
           runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
@@ -611,7 +612,7 @@ task PlotQcPerFamily {
       tar -xvzf ~{per_sample_tarball} \
         --directory tmp_untar/
       for FILE in $( find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" ); do
-        mv $FILE ~{prefix}_perSample/
+        mv -v $FILE ~{prefix}_perSample/
       done
 
       # Subset fam file, if optioned
@@ -620,22 +621,26 @@ task PlotQcPerFamily {
                               $3 != "0" && $3 != "." && \
                               $4 != "0" && $4 != ".") print $0 }' \
                  | wc -l )
+      echo -e "DETECTED $n_trios COMPLETE TRIOS"
       if [ $n_trios -gt ~{max_trios} ]; then
+        grep -E '^#' cleaned.fam > fam_header.txt
         grep -Ev "^#" cleaned.fam \
         | awk '{ if ($2 != "0" && $2 != "." && \
                      $3 != "0" && $3 != "." && \
                      $4 != "0" && $4 != ".") print $0 }' \
         | sort -R --random-source <( yes ~{random_seed} ) \
-        | head -n ~{max_trios} \
-        | cat <( grep -E '^#' cleaned.fam ) - \
+        > cleaned.shuffled.fam
+        awk -v max_trios="~{max_trios}" 'NR <= max_trios' cleaned.shuffled.fam \
+        | cat fam_header.txt - \
         > cleaned.subset.fam
-        echo -e "SUBSETTED TO $( cat cleaned.subset.fam | wc -l ) RANDOM FAMILIES"
+        echo -e "SUBSETTED TO $( cat cleaned.subset.fam | wc -l | awk '{ print $1-1 }' ) RANDOM FAMILIES"
       else
+        echo -e "NUMBER OF TRIOS DETECTED ( $n_trios ) LESS THAN MAX_TRIOS ( ~{max_trios} ); PROCEEDING WITHOUT DOWNSAMPLING"
         cp cleaned.fam cleaned.subset.fam
       fi
       
       # Run family analysis
-      echo  -e "STARTING FAMILY-BASED ANALYSIS"
+      echo -e "STARTING FAMILY-BASED ANALYSIS"
       /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
         -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
         ~{vcf_stats} \
@@ -701,10 +706,10 @@ task PlotQcPerSampleBenchmarking {
       --directory tmp_untar/
     mkdir results/
     find tmp_untar/ -name "*.sensitivity.bed.gz" | while read FILE; do
-      mv $FILE results/
+      mv -v $FILE results/
     done
     find tmp_untar/ -name "*.specificity.bed.gz" | while read FILE; do
-      mv $FILE results/
+      mv -v $FILE results/
     done
     
     # Plot per-sample benchmarking
