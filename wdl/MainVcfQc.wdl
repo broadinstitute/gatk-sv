@@ -407,7 +407,7 @@ task TarShardVidLists {
 
   # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
   Float input_size = size(in_tarballs, "GB")
-  Float base_disk_gb = 5.0
+  Float base_disk_gb = 10.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
     mem_gb: base_mem_gb,
@@ -564,6 +564,7 @@ task PlotQcPerFamily {
     File ped_file
     File per_sample_tarball
     Int max_trios
+    Int? random_seed = 2021
     String prefix
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
@@ -599,6 +600,7 @@ task PlotQcPerFamily {
 
     # Only run if any families remain after cleaning
     n_fams=$( grep -Ev "^#" cleaned.fam | wc -l )
+    echo -e "DETECTED $n_fams FAMILIES"
     if [ $n_fams -gt 0 ]; then
 
       # Make per-sample directory
@@ -608,7 +610,7 @@ task PlotQcPerFamily {
       mkdir tmp_untar/
       tar -xvzf ~{per_sample_tarball} \
         --directory tmp_untar/
-      find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" | while read FILE; do
+      for FILE in $( find tmp_untar/ -name "*.VIDs_genotypes.txt.gz" ); do
         mv $FILE ~{prefix}_perSample/
       done
 
@@ -623,13 +625,17 @@ task PlotQcPerFamily {
         | awk '{ if ($2 != "0" && $2 != "." && \
                      $3 != "0" && $3 != "." && \
                      $4 != "0" && $4 != ".") print $0 }' \
-        | shuf | head -n ~{max_trios} \
+        | sort -R --random-source <( yes ~{random_seed} ) \
+        | head -n ~{max_trios} \
+        | cat <( grep -E '^#' cleaned.fam ) - \
         > cleaned.subset.fam
+        echo -e "SUBSETTED TO $( cat cleaned.subset.fam | wc -l ) RANDOM FAMILIES"
       else
         cp cleaned.fam cleaned.subset.fam
       fi
       
       # Run family analysis
+      echo  -e "STARTING FAMILY-BASED ANALYSIS"
       /opt/sv-pipeline/scripts/vcf_qc/analyze_fams.R \
         -S /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
         ~{vcf_stats} \
@@ -644,6 +650,7 @@ task PlotQcPerFamily {
     fi
 
     # Prepare output
+    echo -e "COMPRESSING RESULTS AS A TARBALL"
     tar -czvf ~{prefix}.plotQC_perFamily.tar.gz \
       ~{prefix}_perFamily_plots
   >>>
