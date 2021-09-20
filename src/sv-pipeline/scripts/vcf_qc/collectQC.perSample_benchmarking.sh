@@ -152,7 +152,8 @@ tar -xzvf ${PERSAMPDIR_TAR} \
 mkdir ${OVRTMP}/SET1_calls/
 while read ID; do
   VIDlist=$( find ${OVRTMP}/persamp/ -name "${ID}.VIDs_genotypes.txt.gz" )
-  if [ -e ${VIDlist} ]; then
+  if [ ! -z ${VIDlist} ] && [ -s ${VIDlist} ]; then
+    echo $ID
     zcat ${VCFSTATS} | head -n1 > \
     ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     zcat ${VIDlist} | cut -f1 | fgrep -wf - <( zcat ${VCFSTATS} ) >> \
