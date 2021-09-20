@@ -1337,10 +1337,6 @@ if(!dir.exists(paste(OUTDIR,"/supporting_plots/sv_inheritance_plots/",sep=""))){
 
 ###Performs trio analyses, if any trios exist
 if(nrow(trios)>0){
-  #Downsample to 100 trios if necessary
-  if(nrow(trios)>100){
-    trios <- trios[sample(1:nrow(trios),100,replace=F),]
-  }
   #Read data
   trio.dat <- apply(trios[,2:4],1,function(IDs){
     IDs <- as.character(IDs)
