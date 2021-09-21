@@ -223,9 +223,9 @@ else
       ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
       ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz \
       ${CONTIGS}
-      bgzip -f ${OUTDIR}/${ID}.sensitivity.bed
-      rm ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
-         ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
+    bgzip -f ${OUTDIR}/${ID}.sensitivity.bed
+    rm ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
+       ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
 
     #Clean callsets for specificity analysis
     echo -e "#chr\tstart\tend\tsvtype\tlength\tAF" > \
@@ -249,9 +249,9 @@ else
       ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz \
       ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
       ${CONTIGS}
-      bgzip -f ${OUTDIR}/${ID}.specificity.bed
-      rm ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
-         ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz
+    bgzip -f ${OUTDIR}/${ID}.specificity.bed
+    rm ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
+       ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz
 
     #Report counter, if relevant
     i=$(( ${i} + 1 ))
