@@ -121,7 +121,8 @@ fi
 ###PREP INPUT FILES
 OVRTMP=`mktemp -d`
 #Unzip SET1, if gzipped, restrict to contigs in $CONTIGS, and automatically set SVs with size <1 to 1
-if [ $( file ${SET1} | fgrep " gzip " | wc -l ) -gt 0 ]; then
+if [ $( file ${SET1} | fgrep " gzip " | wc -l ) -gt 0 ] || \
+   [ $( echo ${SET1} | awk -v FS="." '{ if ($NF ~ /gz|bgz/) print "TRUE" }' ) ]; then
   zcat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
   zcat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
   grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
@@ -142,7 +143,8 @@ if [ ${CARRIER} == 1 ]; then
   mv ${OVRTMP}/set1.bed2 ${OVRTMP}/set1.bed
 fi
 #Unzip & format SET2, if gzipped
-if [ $( file ${SET2} | fgrep " gzip " | wc -l ) -gt 0 ]; then
+if [ $( file ${SET2} | fgrep " gzip " | wc -l ) -gt 0 ] || \
+   [ $( echo ${SET2} | awk -v FS="." '{ if ($NF ~ /gz|bgz/) print "TRUE" }' ) ]; then
   zcat ${SET2} | fgrep "#" | awk -v OFS="\t" \
   '{ print $1, $2, $3, "VID", $4, $5, $6 }' > ${OVRTMP}/set2.bed
   zcat ${SET2} | fgrep -v "#" | \
