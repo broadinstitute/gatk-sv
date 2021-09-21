@@ -18,11 +18,13 @@ def main():
     parser.add_argument('sexchr_revise')
     parser.add_argument('multi_geno_ids_txt')
     parser.add_argument('outlier_samples_list', type=argparse.FileType('r'))
+    parser.add_argument('out_prefix')
+    parser.add_argument('--threads_per_file', required=False, default=2, type=int)
     args = parser.parse_args()
 
     # load the revised lines and index by ID
     revised_lines_by_id = {}
-    with pysam.VariantFile(args.revise_vcf_lines, threads=2) as revise_vcf:
+    with pysam.VariantFile(args.revise_vcf_lines, threads=args.threads_per_file) as revise_vcf:
         header2 = revise_vcf.header
         revised_lines_by_id = {record.id: record for record in revise_vcf}
     print("loaded {} revised lines".format(len(revised_lines_by_id)), file=sys.stderr)
@@ -72,11 +74,11 @@ def main():
         biallelic_gts = {(1, 1), (0, 0), (0, 1), (None, None)}
 
         print("reformatting records", file=sys.stderr)
-        cleangq_filename = "cleanGQ.vcf.gz"
-        multiallelic_filename = "multiallelic.vcf.gz"
-        no_variant_samples_list_file = "no_called_samples.list"
+        cleangq_filename = args.out_prefix + ".cleanGQ.vcf.gz"
+        multiallelic_filename = args.out_prefix + ".multiallelic.vcf.gz"
+        no_variant_samples_list_file = args.out_prefix + ".no_called_samples.list"
 
-        with pysam.VariantFile(cleangq_filename, 'w', header=normal_vcf.header, threads=2) as cleanqg_out, \
+        with pysam.VariantFile(cleangq_filename, 'w', header=normal_vcf.header, threads=args.threads_per_file) as cleanqg_out, \
                 pysam.VariantFile(multiallelic_filename, 'w', header=normal_vcf.header) as multiallelic_out, \
                 open(no_variant_samples_list_file, 'w') as no_variant_samples_out:
             for idx, record in enumerate(normal_vcf):

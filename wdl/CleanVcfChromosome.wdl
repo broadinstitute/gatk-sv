@@ -19,6 +19,8 @@ workflow CleanVcfChromosome {
     File bothsides_pass_list
     Int min_records_per_shard_step1
     Int samples_per_step2_shard
+    Int clean_vcf5_records_per_shard
+    Int? clean_vcf5_threads_per_task
     File? outlier_samples_list
 
     String linux_docker
@@ -31,7 +33,10 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_clean_vcf_2
     RuntimeAttr? runtime_override_clean_vcf_3
     RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5
+    RuntimeAttr? runtime_override_clean_vcf_5_scatter
+    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
+    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
+    RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
 
@@ -43,6 +48,11 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
+    RuntimeAttr? runtime_override_clean_vcf_5_scatter
+    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
+    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
+    RuntimeAttr? runtime_override_clean_vcf_5_polish
+
   }
 
   call MiniTasks.SplitVcf as SplitVcfToClean {
@@ -165,9 +175,15 @@ workflow CleanVcfChromosome {
       sex_chr_revise=CombineStep1SexChrRevisions.outfile,
       multi_ids=CombineMultiIds4.outfile,
       outlier_samples_list=outlier_samples_list,
+      contig=contig,
+      prefix=prefix,
+      records_per_shard=clean_vcf5_records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_clean_vcf_5
+      runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
+      runtime_attr_override_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
+      runtime_attr_override_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
+      runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
   }
 
   call drc.DropRedundantCNVs {
