@@ -711,12 +711,23 @@ task PlotQcPerSampleBenchmarking {
     # Subset to max_samples
     find tmp_untar/ -name "*.sensitivity.bed.gz" \
     | xargs -I {} basename {} | sed 's/\.sensitivity\.bed\.gz//g' \
-    | sort -R --random-source <( yes ~{random_seed} ) \
-    | sed -n "1,~{max_samples}p" \
-    > samples.list
+    | sort -V \
+    > all_samples.list
+    n_samples_all=$( cat all_samples.list | wc -l )
+    echo -e "IDENTIFIED $n_samples_all TOTAL SAMPLES"
+    if [ $n_samples_all -gt ~{max_samples} ]; then
+      echo -e "SUBSETTING TO ~{max_samples} SAMPLES"
+      cat all_samples.list \
+      | sort -R --random-source <( yes ~{random_seed} ) \
+      | awk -v max_samples=~{max_samples} '{ if (NR<=max_samples) print }' \
+      > ~{prefix}.plotted_samples.list
+    else
+      cp all_samples.list ~{prefix}.plotted_samples.list
+    fi
+    
     while read ID; do
       find tmp_untar -name "$ID.*.bed.gz" | xargs -I {} mv {} results/
-    done
+    done < ~{prefix}.plotted_samples.list
     
     # Plot per-sample benchmarking
     /opt/sv-pipeline/scripts/vcf_qc/plot_perSample_benchmarking.R \
@@ -733,6 +744,7 @@ task PlotQcPerSampleBenchmarking {
 
   output {
     File perSample_plots_tarball = "~{prefix}.~{comparison_set_name}_perSample_benchmarking_plots.tar.gz"
+    File samples_plotted = "~{prefix}.plotted_samples.list"
   }
 }
 
