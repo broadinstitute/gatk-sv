@@ -166,6 +166,7 @@ fi
 ###RUN INTERSECTIONS
 # Check if any variants are left in set 2 (benchmarking set) after subsetting to contigs of interest
 if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
+
   #Intersect method 1 data
   bedtools intersect -loj -r -f 0.5 \
     -a <( awk -v small_cutoff=5000 -v OFS="\t" '{ if ($6>=small_cutoff) print $0 }' ${OVRTMP}/set2.bed ) \
