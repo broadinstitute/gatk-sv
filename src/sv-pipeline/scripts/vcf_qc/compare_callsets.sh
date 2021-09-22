@@ -160,83 +160,89 @@ fi
 
 
 ###RUN INTERSECTIONS
-#Intersect method 1 data
-bedtools intersect -loj -r -f 0.5 \
-  -a <( awk -v small_cutoff=5000 -v OFS="\t" '{ if ($6>=small_cutoff) print $0 }' ${OVRTMP}/set2.bed ) \
-  -b ${OVRTMP}/set1.bed > \
-  ${OVRTMP}/OVR1.raw.bed
-bedtools intersect -loj -r -f 0.1 \
-  -a <( awk -v small_cutoff=5000 -v OFS="\t" '{ if ($6<small_cutoff) print $0 }' ${OVRTMP}/set2.bed ) \
-  -b ${OVRTMP}/set1.bed >> \
-  ${OVRTMP}/OVR1.raw.bed
-#Intersect method 1a: 50% reciprocal overlap (10% for small SV), matching SV types
-awk -v FS="\t" -v OFS="\t" \
-'{ if ($5==$12 || $5=="DUP" && $12 ~ /"CNV"/ || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL") print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
-${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
-awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
-${OVRTMP}/OVR1a.raw.txt
-cut -f1 ${OVRTMP}/OVR1a.raw.txt | fgrep -wvf - ${OVRTMP}/OVR1.raw.bed | \
-awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
-${OVRTMP}/OVR1a.raw.txt
-sort -Vk1,1 -k2,2n ${OVRTMP}/OVR1a.raw.txt | uniq > ${OVRTMP}/OVR1a.raw.txt2
-mv ${OVRTMP}/OVR1a.raw.txt2 ${OVRTMP}/OVR1a.raw.txt
-#Intersect method 1b: 50% reciprocal overlap (10% for small SV), any SV types
-awk -v FS="\t" -v OFS="\t" \
-'{ if ($12==".") print $4, "NO_OVR"; else print $4, $NF }' \
-${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
-awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
-${OVRTMP}/OVR1b.raw.txt
-cut -f1 ${OVRTMP}/OVR1b.raw.txt | fgrep -wvf - ${OVRTMP}/OVR1.raw.bed | \
-awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
-${OVRTMP}/OVR1b.raw.txt
-sort -Vk1,1 -k2,2n ${OVRTMP}/OVR1b.raw.txt | uniq > ${OVRTMP}/OVR1b.raw.txt2
-mv ${OVRTMP}/OVR1b.raw.txt2 ${OVRTMP}/OVR1b.raw.txt
-#Intersect method 2 data
-bedtools intersect -loj -a ${OVRTMP}/set2.bed -b ${OVRTMP}/set1.bed > \
-${OVRTMP}/OVR2.raw.bed
-#Intersect method 2a: any overlap, breakpoints within $DIST, matching SV types
-awk -v FS="\t" -v OFS="\t" -v DIST=${DIST} \
-'{ if ($12!="." && ($2-$9<=DIST && $2-$9>=-DIST) && ($3-$10<=DIST && $3-$10>=-DIST) && ($5==$12 || $5=="DUP" && $12=="MCNV" || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL")) print $4, $NF }' \
-${OVRTMP}/OVR2.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
-awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
-${OVRTMP}/OVR2a.raw.txt
-cut -f1 ${OVRTMP}/OVR2a.raw.txt | sort | uniq | fgrep -wvf - ${OVRTMP}/OVR2.raw.bed | \
-awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
-${OVRTMP}/OVR2a.raw.txt
-sort -Vk1,1 -k2,2n ${OVRTMP}/OVR2a.raw.txt | uniq > ${OVRTMP}/OVR2a.raw.txt2
-mv ${OVRTMP}/OVR2a.raw.txt2 ${OVRTMP}/OVR2a.raw.txt
-#Intersect method 2b: any overlap, breakpoints within $DIST, any SV types
-awk -v FS="\t" -v OFS="\t" -v DIST=${DIST} \
-'{ if ($12!="." && ($2-$9<=DIST && $2-$9>=-DIST) && ($3-$10<=DIST && $3-$10>=-DIST)) print $4, $NF }' \
-${OVRTMP}/OVR2.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
-awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
-${OVRTMP}/OVR2b.raw.txt
-cut -f1 ${OVRTMP}/OVR2b.raw.txt | sort | uniq | fgrep -wvf - ${OVRTMP}/OVR2.raw.bed | \
-awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
-${OVRTMP}/OVR2b.raw.txt
-sort -Vk1,1 -k2,2n ${OVRTMP}/OVR2b.raw.txt | uniq > ${OVRTMP}/OVR2b.raw.txt2
-mv ${OVRTMP}/OVR2b.raw.txt2 ${OVRTMP}/OVR2b.raw.txt
-#Intersect method 3: any overlap, buffer ± $DIST, any svtype
-bedtools intersect -loj -a ${OVRTMP}/set2.bed \
--b <( awk -v OFS="\t" -v DIST=${DIST} '{ $2=$2-DIST; $3=$3+DIST; print }' \
-      ${OVRTMP}/set1.bed | awk -v OFS="\t" '{ if ($2<0) $2=0; print }' ) | \
-sort -Vk1,1 -k2,2n | uniq | awk -v FS="\t" -v OFS="\t" \
-'{ if ($12==".") print $4, "NO_OVR"; else print $4, $NF }' \
-| sort -Vk1,1 -k2,2n | uniq | \
-awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
-${OVRTMP}/OVR3.raw.txt
+# Check if any variants are left in set 2 (benchmarking set) after subsetting to contigs of interest
+if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
 
+  #Intersect method 1 data
+  bedtools intersect -loj -r -f 0.5 \
+    -a <( awk -v small_cutoff=5000 -v OFS="\t" '{ if ($6>=small_cutoff) print $0 }' ${OVRTMP}/set2.bed ) \
+    -b ${OVRTMP}/set1.bed > \
+    ${OVRTMP}/OVR1.raw.bed
+  bedtools intersect -loj -r -f 0.1 \
+    -a <( awk -v small_cutoff=5000 -v OFS="\t" '{ if ($6<small_cutoff) print $0 }' ${OVRTMP}/set2.bed ) \
+    -b ${OVRTMP}/set1.bed >> \
+    ${OVRTMP}/OVR1.raw.bed
+  #Intersect method 1a: 50% reciprocal overlap (10% for small SV), matching SV types
+  awk -v FS="\t" -v OFS="\t" \
+  '{ if ($5==$12 || $5=="DUP" && $12 ~ /"CNV"/ || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL") print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
+  ${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
+  awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
+  ${OVRTMP}/OVR1a.raw.txt
+  cut -f1 ${OVRTMP}/OVR1a.raw.txt | fgrep -wvf - ${OVRTMP}/OVR1.raw.bed | \
+  awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
+  ${OVRTMP}/OVR1a.raw.txt
+  sort -Vk1,1 -k2,2n ${OVRTMP}/OVR1a.raw.txt | uniq > ${OVRTMP}/OVR1a.raw.txt2
+  mv ${OVRTMP}/OVR1a.raw.txt2 ${OVRTMP}/OVR1a.raw.txt
+  #Intersect method 1b: 50% reciprocal overlap (10% for small SV), any SV types
+  awk -v FS="\t" -v OFS="\t" \
+  '{ if ($12==".") print $4, "NO_OVR"; else print $4, $NF }' \
+  ${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
+  awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
+  ${OVRTMP}/OVR1b.raw.txt
+  cut -f1 ${OVRTMP}/OVR1b.raw.txt | fgrep -wvf - ${OVRTMP}/OVR1.raw.bed | \
+  awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
+  ${OVRTMP}/OVR1b.raw.txt
+  sort -Vk1,1 -k2,2n ${OVRTMP}/OVR1b.raw.txt | uniq > ${OVRTMP}/OVR1b.raw.txt2
+  mv ${OVRTMP}/OVR1b.raw.txt2 ${OVRTMP}/OVR1b.raw.txt
+  #Intersect method 2 data
+  bedtools intersect -loj -a ${OVRTMP}/set2.bed -b ${OVRTMP}/set1.bed > \
+  ${OVRTMP}/OVR2.raw.bed
+  #Intersect method 2a: any overlap, breakpoints within $DIST, matching SV types
+  awk -v FS="\t" -v OFS="\t" -v DIST=${DIST} \
+  '{ if ($12!="." && ($2-$9<=DIST && $2-$9>=-DIST) && ($3-$10<=DIST && $3-$10>=-DIST) && ($5==$12 || $5=="DUP" && $12=="MCNV" || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL")) print $4, $NF }' \
+  ${OVRTMP}/OVR2.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
+  awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
+  ${OVRTMP}/OVR2a.raw.txt
+  cut -f1 ${OVRTMP}/OVR2a.raw.txt | sort | uniq | fgrep -wvf - ${OVRTMP}/OVR2.raw.bed | \
+  awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
+  ${OVRTMP}/OVR2a.raw.txt
+  sort -Vk1,1 -k2,2n ${OVRTMP}/OVR2a.raw.txt | uniq > ${OVRTMP}/OVR2a.raw.txt2
+  mv ${OVRTMP}/OVR2a.raw.txt2 ${OVRTMP}/OVR2a.raw.txt
+  #Intersect method 2b: any overlap, breakpoints within $DIST, any SV types
+  awk -v FS="\t" -v OFS="\t" -v DIST=${DIST} \
+  '{ if ($12!="." && ($2-$9<=DIST && $2-$9>=-DIST) && ($3-$10<=DIST && $3-$10>=-DIST)) print $4, $NF }' \
+  ${OVRTMP}/OVR2.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
+  awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
+  ${OVRTMP}/OVR2b.raw.txt
+  cut -f1 ${OVRTMP}/OVR2b.raw.txt | sort | uniq | fgrep -wvf - ${OVRTMP}/OVR2.raw.bed | \
+  awk -v OFS="\t" '{ print $4, "NO_OVR" }' | sort -Vk1,1 -k2,2n | uniq >> \
+  ${OVRTMP}/OVR2b.raw.txt
+  sort -Vk1,1 -k2,2n ${OVRTMP}/OVR2b.raw.txt | uniq > ${OVRTMP}/OVR2b.raw.txt2
+  mv ${OVRTMP}/OVR2b.raw.txt2 ${OVRTMP}/OVR2b.raw.txt
+  #Intersect method 3: any overlap, buffer ± $DIST, any svtype
+  bedtools intersect -loj -a ${OVRTMP}/set2.bed \
+  -b <( awk -v OFS="\t" -v DIST=${DIST} '{ $2=$2-DIST; $3=$3+DIST; print }' \
+        ${OVRTMP}/set1.bed | awk -v OFS="\t" '{ if ($2<0) $2=0; print }' ) | \
+  sort -Vk1,1 -k2,2n | uniq | awk -v FS="\t" -v OFS="\t" \
+  '{ if ($12==".") print $4, "NO_OVR"; else print $4, $NF }' \
+  | sort -Vk1,1 -k2,2n | uniq | \
+  awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
+  ${OVRTMP}/OVR3.raw.txt
 
-###CONVERT INTERSECTIONS TO FINAL TABLE
-${BIN}/compare_callsets_helper.R \
-  ${OVRTMP}/set2.bed \
-  ${OVRTMP}/OVR1a.raw.txt \
-  ${OVRTMP}/OVR1b.raw.txt \
-  ${OVRTMP}/OVR2a.raw.txt \
-  ${OVRTMP}/OVR2b.raw.txt \
-  ${OVRTMP}/OVR3.raw.txt \
-  ${OUTFILE}
+  ###CONVERT INTERSECTIONS TO FINAL TABLE
+  ${BIN}/compare_callsets_helper.R \
+    ${OVRTMP}/set2.bed \
+    ${OVRTMP}/OVR1a.raw.txt \
+    ${OVRTMP}/OVR1b.raw.txt \
+    ${OVRTMP}/OVR2a.raw.txt \
+    ${OVRTMP}/OVR2b.raw.txt \
+    ${OVRTMP}/OVR3.raw.txt \
+    ${OUTFILE}
 
+# If no variants remain in set 2 after subsetting to contigs of interest, output empty OUTFILE
+else
+  echo -e "#chr\tstart\tend\tVID\tsvtype\tlength\tAF\tovr1a\tovr1b\tovr2a\tovr2b\tovr3" > ${OUTFILE}
+fi
 
 ###CLEAN UP
 rm -rf ${QCTMP}
