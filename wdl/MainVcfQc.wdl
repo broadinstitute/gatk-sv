@@ -675,6 +675,8 @@ task PlotQcPerSampleBenchmarking {
     String comparison_set_name
     String prefix
     String sv_pipeline_qc_docker
+    Int? max_samples = 3000
+    Int? random_seed = 2021
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -705,11 +707,15 @@ task PlotQcPerSampleBenchmarking {
     tar -xvzf ~{per_sample_benchmarking_tarball} \
       --directory tmp_untar/
     mkdir results/
-    find tmp_untar/ -name "*.sensitivity.bed.gz" | while read FILE; do
-      mv -v $FILE results/
-    done
-    find tmp_untar/ -name "*.specificity.bed.gz" | while read FILE; do
-      mv -v $FILE results/
+
+    # Subset to max_samples
+    find tmp_untar/ -name "*.sensitivity.bed.gz" \
+    | xargs -I {} basename {} | sed 's/\.sensitivity\.bed\.gz//g' \
+    | sort -R --random-source <( yes ~{random_seed} ) \
+    | sed -n "1,~{max_samples}p" \
+    > samples.list
+    while read ID; do
+      find tmp_untar -name "$ID.*.bed.gz" | xargs -I {} mv {} results/
     done
     
     # Plot per-sample benchmarking
