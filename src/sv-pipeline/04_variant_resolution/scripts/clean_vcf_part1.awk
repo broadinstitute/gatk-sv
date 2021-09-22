@@ -13,17 +13,19 @@ BEGIN {while ( getline < allosomeFile )
 	 	{print "Can't determine the name of the Y chromosome from " allsomeFile > "/dev/stderr"; exit 1}}
 
 # read the sexes of the samples from the ped file
-BEGIN {while ( getline < pedFile )
-	{sexForSampleName[$2] = $5}}
+BEGIN {while ( getline < pedFile ) sexForSampleName[$2] = $5}
 
 # read the background file
-BEGIN {while ( getline < bgdFile )
-	{bgdEvent[$1]}}
+BEGIN {while ( getline < bgdFile ) bgdEvent[$1]}
+
+# read the both-sides file
+BEGIN {while ( getline < bothFile ) bothEvent[$NF]}
 
 # regexp for the #CHROM line with all the sample names
-/^#C/  {# add a couple of filters at the end of the metadata
+/^#C/  {# add filters at the end of the metadata
 	print "##FILTER=<ID=HIGH_SR_BACKGROUND,Description=\"High number of SR splits in background samples indicating messy region\">";
 	print "##FILTER=<ID=UNRESOLVED,Description=\"Variant is unresolved\">";
+	print "##FILTER=<ID=BOTHSIDES_SUPPORT,Description=\"Variant has read-level support for both sides of breakpoint\">";
 	# print the list of samples to includelist.txt
 	for ( i=10; i<=NF; i++ )
 		{print $i > "includelist.txt";
@@ -67,8 +69,9 @@ BEGIN {while ( getline < bgdFile )
 		 else if ( infoFld=="MULTIALLELIC" ) continue;
 		 $8=$8 sep infoFld; sep=";"}
 
-	# mark the background events
+	# mark the background and both-sides events
 	if ( $3 in bgdEvent ) $7=$7 ";HIGH_SR_BACKGROUND";
+	if ( $3 in bothEvent ) {if ( $7=="PASS" ) $7="BOTHSIDES_SUPPORT"; else $7=$7 ";BOTHSIDES_SUPPORT"}
 
 	# patch some genotypes on allosomes
 	if ( $1==xChr || $1==yChr )

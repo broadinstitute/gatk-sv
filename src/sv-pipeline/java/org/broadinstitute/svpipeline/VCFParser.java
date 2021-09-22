@@ -1,3 +1,5 @@
+package org.broadinstitute.svpipeline;
+
 import java.io.*;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
@@ -287,6 +289,8 @@ public class VCFParser implements Closeable {
 
     /** immutable sub-sequence of a byte[] */
     public static final class ByteSequence {
+        public static final ByteSequence EMPTY = new ByteSequence(new byte[0], 0, 0);
+
         private final byte[] buffer;
         private final int start;
         private final int end;
@@ -315,14 +319,81 @@ public class VCFParser implements Closeable {
             end = buffer.length;
         }
 
+        public ByteSequence( final ByteSequence... seqs ) {
+            int totalLen = 0;
+            for ( final ByteSequence seq : seqs ) {
+                totalLen += seq.length();
+            }
+            buffer = new byte[totalLen];
+            start = 0;
+            end = totalLen;
+            int curLen = 0;
+            for ( final ByteSequence seq : seqs ) {
+                final int len = seq.length();
+                System.arraycopy(seq.buffer, seq.start, buffer, curLen, len);
+                curLen += len;
+            }
+        }
+
+        public ByteSequence( final List<ByteSequence> pieces, final char delim ) {
+            final int nPieces = pieces.size();
+            int totalLen = 0;
+            if ( nPieces > 0 ) {
+                totalLen = nPieces - 1; // this many delimiters
+                for ( final ByteSequence piece : pieces ) {
+                    totalLen += piece.length();
+                }
+            }
+            buffer = new byte[totalLen];
+            start = 0;
+            end = totalLen;
+            if ( nPieces > 0 ) {
+                ByteSequence piece = pieces.get(0);
+                int destIdx = piece.length();
+                System.arraycopy(piece.buffer, piece.start, buffer, 0, destIdx);
+                for ( int pieceIdx = 1; pieceIdx < nPieces; ++pieceIdx ) {
+                    buffer[destIdx++] = (byte)delim;
+                    piece = pieces.get(pieceIdx);
+                    int len = piece.length();
+                    System.arraycopy(piece.buffer, piece.start, buffer, destIdx, len);
+                    destIdx += len;
+                }
+            }
+        }
+
         public int length() { return end - start; }
 
+        public boolean contains( final ByteSequence subSeq ) {
+            final int len = subSeq.length();
+            final int stop = end - len;
+            for ( int idx = start; idx <= stop; ++idx ) {
+                int idx1 = idx;
+                int idx2 = subSeq.start;
+                int nnn = len;
+                while ( nnn-- > 0 ) {
+                    if ( buffer[idx1++] != subSeq.buffer[idx2++] ) {
+                        break;
+                    }
+                }
+                if ( nnn < 0 ) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         public ByteSequence replace( final ByteSequence oldValue, final ByteSequence newValue ) {
-            if ( buffer != oldValue.buffer ) {
-                throw new IllegalStateException("oldValue not drawn from INFO field");
+            if ( buffer != oldValue.buffer || oldValue.start < start || oldValue.end > end ) {
+                throw new IllegalStateException("replaced value not within buffer");
+            }
+            final int oldLen = oldValue.length();
+            final int newLen = newValue.length();
+            if ( newLen == oldLen ) {
+                System.arraycopy(newValue.buffer, newValue.start, buffer, oldValue.start, newLen);
+                System.arraycopy(buffer, oldValue.end, buffer, oldValue.start + newLen, end - oldValue.end);
+                return this;
             }
             final int length = length();
-            final int newLen = newValue.length();
             final byte[] newBuf = new byte[length + newLen - oldValue.length()];
             final int len1 = oldValue.start - start;
             System.arraycopy(buffer, start, newBuf, 0, len1);
@@ -365,7 +436,7 @@ public class VCFParser implements Closeable {
                     mark = itr.mark();
                 }
             }
-            splits.add(itr.getSequenceNoDelim(mark));
+            splits.add(itr.getSequence(mark));
             return splits;
         }
 
@@ -392,7 +463,7 @@ public class VCFParser implements Closeable {
         }
 
         public boolean equals( final ByteSequence that ) {
-            if ( length() != that.length() ) return false;
+            if ( that == null || length() != that.length() ) return false;
             int idx2 = that.start;
             for ( int idx = start; idx < end; ++idx ) {
                 if ( buffer[idx] != that.buffer[idx2++] ) return false;
@@ -431,12 +502,14 @@ public class VCFParser implements Closeable {
             os.write('#');
             os.write('#');
             key.write(os);
-            os.write('=');
-            value.write(os);
+            if ( value != null ) {
+                os.write('=');
+                value.write(os);
+            }
             os.write('\n');
         }
 
-        @Override public String toString() { return "##" + key + "=" + value; }
+        @Override public String toString() { return key + "=" + value; }
     }
 
     public static final class KeyAttributes implements Metadata {
@@ -537,7 +610,9 @@ public class VCFParser implements Closeable {
 
         public ByteSequence getID() { return columns.get(2); }
         public ByteSequence getRef() { return columns.get(3); }
+        public void setRef( final ByteSequence val ) { columns.set(3, val); }
         public ByteSequence getAlt() { return columns.get(4); }
+        public void setAlt( final ByteSequence val ) { columns.set(4, val); }
 
         public int getQuality() {
             if ( quality == UNINITIALIZED ) {
@@ -545,8 +620,10 @@ public class VCFParser implements Closeable {
             }
             return quality;
         }
+        public void setQuality( final ByteSequence val ) { columns.set(5, val); }
 
         public ByteSequence getFilter() { return columns.get(6); }
+        public void setFilter( final ByteSequence val ) { columns.set(6, val); }
 
         public List<KeyValue> getInfo() {
             if ( infoKeyValues == null ) {
@@ -556,8 +633,8 @@ public class VCFParser implements Closeable {
         }
 
         public ByteSequence getInfoField( final ByteSequence key ) {
-            final List<KeyValue> infoKeyValues = getInfo();
-            for ( final KeyValue kv : infoKeyValues ) {
+            final List<KeyValue> kvs = getInfo();
+            for ( final KeyValue kv : kvs ) {
                 if ( key.equals(kv.getKey()) ) return kv.getValue();
             }
             return null;
@@ -568,6 +645,24 @@ public class VCFParser implements Closeable {
             columns.set(7, columns.get(7).replace(oldValue, newValue));
         }
 
+        public void removeInfoField( final ByteSequence key ) {
+            final List<KeyValue> kvs = getInfo();
+            for ( final KeyValue kv : kvs ) {
+                final ByteSequence kvKey = kv.getKey();
+                if ( key.equals(kvKey) ) {
+                    ByteSequence info = columns.get(7);
+                    int start = kvKey.start;
+                    final ByteSequence kvValue = kv.getValue();
+                    int end = kvValue == null ? kvKey.end : kvValue.end;
+                    if ( start > info.start ) start -= 1;
+                    else if ( end < info.end ) end += 1;
+                    columns.set(7, info.replace(new ByteSequence(info.buffer, start, end), ByteSequence.EMPTY));
+                    infoKeyValues = null;
+                    break;
+                }
+            }
+        }
+
         public Map<ByteSequence, ByteSequence> getInfoAsMap() {
             final List<KeyValue> infoList = getInfo();
             final Map<ByteSequence, ByteSequence> infoMap = new HashMap<>(infoList.size() * 2);
@@ -576,6 +671,18 @@ public class VCFParser implements Closeable {
         }
 
         public ByteSequence getFormat() { return columns.size() > 8 ? columns.get(8) : null; }
+        public int getFormatIndex( final ByteSequence val ) {
+            if ( columns.size() <= 8 ) return -1;
+            final List<ByteSequence> formats = columns.get(8).split(':');
+            final int nFormats = formats.size();
+            for ( int fmtIdx = 0; fmtIdx < nFormats; ++fmtIdx ) {
+                final ByteSequence fmt = formats.get(fmtIdx);
+                if ( fmt.equals(val) ) {
+                    return fmtIdx;
+                }
+            }
+            return -1;
+        }
 
         public List<ByteSequence> getGenotypes() {
             return columns.size() > 9 ? columns.subList(9, columns.size()) : Collections.emptyList();
@@ -612,12 +719,20 @@ public class VCFParser implements Closeable {
                     key = itr.getSequenceNoDelim(mark);
                     mark = itr.mark();
                 } else if ( nextByte == ';' ) {
-                    attributes.add(new KeyValue(key, itr.getSequenceNoDelim(mark)));
+                    if ( key == null ) {
+                        attributes.add(new KeyValue(itr.getSequenceNoDelim(mark), null));
+                    } else {
+                        attributes.add(new KeyValue(key, itr.getSequenceNoDelim(mark)));
+                    }
                     key = null;
                     mark = itr.mark();
                 }
             }
-            attributes.add(new KeyValue(key, itr.getSequence(mark)));
+            if ( key == null ) {
+                attributes.add(new KeyValue(itr.getSequence(mark), null));
+            } else {
+                attributes.add(new KeyValue(key, itr.getSequence(mark)));
+            }
             return attributes;
         }
     }
