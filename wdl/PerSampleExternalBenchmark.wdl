@@ -59,7 +59,7 @@ workflow PerSampleExternalBenchmark {
   call MergeTarballs as MergeTarredResults {
     input:
       in_tarballs=BenchmarkSamples.benchmarking_results,
-      folder_name=prefix,
+      folder_name=prefix + "_vs_" + comparison_set_name,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_and_tar_shard_benchmarks
   }
