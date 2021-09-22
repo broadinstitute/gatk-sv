@@ -259,6 +259,12 @@ else
       fi
     fi
   done < ${OVRTMP}/int_samples_and_paths.list
+  
+  # Report when complete
+  if [ ${QUIET} == 0 ]; then
+    echo -e "$( date ) - PER-SAMPLE COMPARISON STATUS: Finished comparisons for all ${nsamps} samples"
+  fi
+
 fi
 
 
