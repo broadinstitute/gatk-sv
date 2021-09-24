@@ -280,7 +280,7 @@ class VCFReviser:
                         is_del = variant.info[SVTYPE] == SVType.DEL
                         for k, v in variant.samples.items():
                             rd_cn = v[VariantFormatTypes.RD_CN]
-                            if not rd_cn:
+                            if rd_cn is None:
                                 continue
                             if (is_del and rd_cn > 3) or \
                                     (not is_del and (rd_cn < 1 or rd_cn > 4)):
