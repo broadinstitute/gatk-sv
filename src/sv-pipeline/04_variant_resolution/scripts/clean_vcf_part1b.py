@@ -315,8 +315,7 @@ def ensure_file(filename: str) -> str:
 
 def main(int_vcf_gz):
     reviser = VCFReviser()
-    revised_vcf = ensure_file("./normal.revise.vcf")
-    revised_vcf_zipped = ensure_file(revised_vcf + ".gz")
+    revised_vcf = ensure_file("./normal.revise.vcf.gz")
     multi_cnvs = ensure_file("./multi.cnvs.txt")
 
     reviser.revise(int_vcf_gz, revised_vcf, multi_cnvs)
@@ -327,8 +326,7 @@ def main(int_vcf_gz):
     # cmd = f"cat {revised_vcf} | vcf-sort > {sorted_output}"
     # ps = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
     # ps.communicate()[0]
-    check_call(["bgzip", revised_vcf])
-    check_call(["bcftools", "index", revised_vcf_zipped])
+    check_call(["bcftools", "index", revised_vcf])
 
 
 if __name__ == '__main__':
