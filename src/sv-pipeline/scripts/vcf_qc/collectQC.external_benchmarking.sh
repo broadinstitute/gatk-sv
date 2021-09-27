@@ -117,7 +117,7 @@ fi
 while read prefix bed; do
   #Print status
   if [ ${QUIET} == 0 ]; then
-    echo -e "$( date ) - VCF QC STATUS: Benchmarking ${pop} samples in ${COMPARATOR}"
+    echo -e "$( date ) - VCF QC STATUS: Benchmarking samples in ${prefix}"
   fi
   ${BIN}/compare_callsets.sh \
     -O ${QCTMP}/${prefix}.overlaps.bed \

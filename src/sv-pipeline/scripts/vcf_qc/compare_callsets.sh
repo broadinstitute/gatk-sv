@@ -120,23 +120,25 @@ fi
 
 ###PREP INPUT FILES
 OVRTMP=`mktemp -d`
-#Unzip SET1, if gzipped, restrict to contigs in $CONTIGS, and automatically set SVs with size <1 to 1
+#Unzip SET1, if gzipped, restrict to contigs in $CONTIGS, rewrite non-conventional SVTYPES, and automatically set SVs with size <1 to 1
 if [ $( file ${SET1} | fgrep " gzip " | wc -l ) -gt 0 ] || \
    [ $( echo ${SET1} | awk -v FS="." '{ if ($NF ~ /gz|bgz/) print "TRUE" }' ) ]; then
   zcat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
-  zcat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
-  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
-  sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
+  zcat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' \
+  | grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) \
+  | sed -e 's/MEI\|LINE1\|SVA\|ALU/INS/g' -e 's/MCNV/CNV/g' \
+  | sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
 else
   cat ${SET1} | fgrep "#" > ${OVRTMP}/set1.bed
-  cat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' | \
-  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
-  sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
+  cat ${SET1} | fgrep -v "#" | awk -v OFS="\t" '{ if ($3<$2) $3=$2; print }' \
+  | grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) \
+  | sed -e 's/MEI\|LINE1\|SVA\|ALU/INS/g' -e 's/MCNV/CNV/g' \
+  | sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set1.bed
 fi
 #Set carrierFrequency as final column, if optioned
 if [ ${CARRIER} == 1 ]; then
-  idx=$( head -n1 ${OVRTMP}/set1.bed | sed 's/\t/\n/g' | \
-         awk '{ if ($1=="carrierFreq") print NR }' )
+  idx=$( head -n1 ${OVRTMP}/set1.bed | sed 's/\t/\n/g' \
+         | awk '{ if ($1=="carrierFreq") print NR }' )
   awk -v FS="\t" -v OFS="\t" -v idx=${idx} \
   '{ print $0, $(idx) }' ${OVRTMP}/set1.bed > \
   ${OVRTMP}/set1.bed2
@@ -147,19 +149,21 @@ if [ $( file ${SET2} | fgrep " gzip " | wc -l ) -gt 0 ] || \
    [ $( echo ${SET2} | awk -v FS="." '{ if ($NF ~ /gz|bgz/) print "TRUE" }' ) ]; then
   zcat ${SET2} | fgrep "#" | awk -v OFS="\t" \
   '{ print $1, $2, $3, "VID", $4, $5, $6 }' > ${OVRTMP}/set2.bed
-  zcat ${SET2} | fgrep -v "#" | \
-  awk -v OFS="\t" -v PREFIX=${PREFIX} \
-  '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' | \
-  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
-  sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
+  zcat ${SET2} | fgrep -v "#" \
+  | awk -v OFS="\t" -v PREFIX=${PREFIX} \
+  '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' \
+  | grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) \
+  | sed -e 's/MEI\|LINE1\|SVA\|ALU/INS/g' -e 's/MCNV/CNV/g' \
+  | sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
 else
   cat ${SET2} | fgrep "#" | awk -v OFS="\t" \
   '{ print $1, $2, $3, "VID", $4, $5, $6 }' > ${OVRTMP}/set2.bed
   cat ${SET2} | fgrep -v "#" | \
   awk -v OFS="\t" -v PREFIX=${PREFIX} \
-  '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' | \
-  grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) | \
-  sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
+  '{ if ($3<$2) $3=$2; print $1, $2, $3, PREFIX"_"NR, $4, $5, $6 }' \
+  | grep -f <( awk '{ print "^"$1"\t" }' ${CONTIGS} ) \
+  | sed -e 's/MEI\|LINE1\|SVA\|ALU/INS/g' -e 's/MCNV/CNV/g' \
+  | sort -Vk1,1 -k2,2n -k3,3n | uniq >> ${OVRTMP}/set2.bed
 fi
 
 
@@ -178,7 +182,12 @@ if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
     ${OVRTMP}/OVR1.raw.bed
   #Intersect method 1a: 50% reciprocal overlap (10% for small SV), matching SV types
   awk -v FS="\t" -v OFS="\t" \
-  '{ if ($5==$12 || $5=="DUP" && $12 ~ /"CNV"/ || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL") print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
+  '{ if ($5==$12 \
+         || $5=="DEL" && $12=="CNV" \
+         || $5=="DUP" && $12=="CNV" || $12=="DUP" && $5=="INS" \
+         || $5=="INS" && $12=="DUP" || $5=="INS" && $12=="CNV" \
+         || $5=="INV" && $12=="CPX" || $5=="CPX" && $12=="INV") \
+     print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
   ${OVRTMP}/OVR1.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
   awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
   ${OVRTMP}/OVR1a.raw.txt
@@ -203,7 +212,12 @@ if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
   ${OVRTMP}/OVR2.raw.bed
   #Intersect method 2a: any overlap, breakpoints within $DIST, matching SV types
   awk -v FS="\t" -v OFS="\t" -v DIST=${DIST} \
-  '{ if ($12!="." && ($2-$9<=DIST && $2-$9>=-DIST) && ($3-$10<=DIST && $3-$10>=-DIST) && ($5==$12 || $5=="DUP" && $12=="MCNV" || $12=="DUP" && $5=="MCNV" || $5=="DEL" && $12=="MCNV" || $5=="MCNV" && $12=="DEL")) print $4, $NF }' \
+  '{ if ($5==$12 \
+         || $5=="DEL" && $12=="CNV" \
+         || $5=="DUP" && $12=="CNV" || $12=="DUP" && $5=="INS" \
+         || $5=="INS" && $12=="DUP" || $5=="INS" && $12=="CNV" \
+         || $5=="INV" && $12=="CPX" || $5=="CPX" && $12=="INV") \
+     print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
   ${OVRTMP}/OVR2.raw.bed | sort -Vk1,1 -k2,2n | uniq | \
   awk -v OFS="\t" '{ if ($2=="NA") $2="1"; print $1, $2 }' > \
   ${OVRTMP}/OVR2a.raw.txt
