@@ -11,75 +11,81 @@ defining/running Carrot tests without requiring domain-specific expertise.
 
 ## Organize Tests in Directories
 
-Consider a WDL that takes a set of BAM files as input, and it first
-computes short-tandem repeat (STR) profiles for each of the BAM files, and 
-then performs a comparative analysis on the determined STR profiles.
-Suppose we want to test computing STR profiles and performing comparative
-analysis separately using two cohorts: a small simulated cohort, and a 
-large real data cohort. In order to use `carrot_helper` to setup Carrot
-tests for this scenario, we need to create a directory structure as 
-the following: 
+Test cases for a WDL need to be organized in directories where each 
+contain separate subdirectories for test cohorts each containing 
+`carrot` resources. For instance, the `ExpansionHunterDenovo.wdl`
+performs case-control analysis and outlier detection on a set 
+of BAM files based on their short-tandem repeat (STR) profiles.
+In order to test this WDL for case-control analysis using a cohort
+of simulated data, `carrot` resources need to be organized as
+the following for the `carrot_helper` utility to automatically 
+setup, run, and track `carrot` tests. 
 
 ```shell
 ├── wdl
-│   └── STRAnalyzer.wdl
+│   └── ExpansionHunterDenovo.wdl
 └── wdl_test
-    └── STRAnalyzer
-        ├── comparative
-        │   ├── real_cohort
-        │   │   ├── eval_input.json
-        │   │   └── test_input.json
-        │   ├── simulated_cohort
-        │   │   ├── eval_input.json
-        │   │   └── test_input.json
-        │   ├── eval.wdl
-        │   ├── eval_input_defaults.json
-        │   └── test_input_defaults.json
-        └── compute_profiles
-            ├── real_cohort
-            │   ├── eval_input.json
-            │   └── test_input.json
-            ├── simulated_cohort
-            │   ├── eval_input.json
-            │   └── test_input.json
-            ├── eval.wdl
-            ├── eval_input_defaults.json
-            └── test_input_defaults.json
+   └── ExpansionHunterDenovo
+       └── casecontrol
+           ├── simulated_data
+           │   ├── eval_input.json
+           │   └── test_input.json
+           ├── eval.wdl
+           ├── eval_input_defaults.json
+           └── test_input_defaults.json
 ```
 
 Accordingly: 
 
 - Create a folder with the _same name_ as the WDL file containing the
-workflow you want to test (`STRAnalyzer` for `STRAnalyzer.wdl` in 
-this example).
+workflow you want to test (`ExpansionHunterDenovo` for 
+`ExpansionHunterDenovo.wdl` in this example).
 
 
 - Create a separate folder for every evaluation you want to perform (e.g., 
-in this example, the `compute_profiles` and `comparative` folders to evaluate
-`STRAnalyzer`'s STR profile computation and their comparative analysis, 
-respectively). While you can make all assertions as part of a single
-evaluation, it is generally a good practice to break assertions into smaller
-atomic evaluations. 
+the `casecontrol` folder to evaluate `ExpansionHunterDenovo.wdl`'s
+case-control analysis on the STR profiles of input BAM files). 
+While all assertions can be part of a single evaluation, it is generally 
+a good practice to break assertions into smaller atomic evaluations. 
 
 
 - Inside every evaluation directory, create three files: `eval.wdl`, 
 `eval_input_defaults.json`, and `test_input_defaults.json`. 
 The `eval.wdl` WDL receives outputs of the workflow you're testing and 
 asserts their values. The JSON files provide default inputs to the test
-(`STRAnalyzer.wdl` in the STR analysis scenario) and `eval.wdl` WDLs.
+(`ExpansionHunterDenovo.wdl`) and `eval.wdl` WDLs.
 
 
 - An evaluation can be performed using different set of inputs for the 
-workflow we're testing and the workflow making the assertions. For instance,
-in the STR analysis scenario, we want to pass `sample1.bam` and `sample2.bam`
-to the `STRAnalyzer` workflow, and pass `sample1_expected_str_profiles.json`
-and `sample2_expected_str_profiles.json` along with the `STRAnalyzer`'s 
-produced STR profiles to the `eval.wdl` to assert the equality of the 
-produced and expected STR profiles. We group different combinations of inputs
-to the test and evaluation workflows under different folders. In the 
-STR analysis scenario, the `simulated_cohort` and `real_cohort`. Inside
-this folder create two files: `eval_input.json` and `test_input.json`, 
-containing, the inputs to the eval and test workflows respectively.
+test and evaluation workflows. For instance, in the STR analysis scenario, 
+we pass 
+[seven BAM files](https://github.com/VJalili/gatk-sv/blob/89e67350ea7fec8edc687011ac7308e3e1db17ff/wdl_test/ExpansionHunterDenovo/casecontrol/simulated_data/test_input.json#L4-L12)
+to the `ExpansionHunterDenovo.wdl`, run the WDL, and pass 
+[its output](https://github.com/VJalili/gatk-sv/blob/89e67350ea7fec8edc687011ac7308e3e1db17ff/wdl_test/ExpansionHunterDenovo/casecontrol/simulated_data/eval_input.json#L2)
+along with the 
+[expected output](https://github.com/VJalili/gatk-sv/blob/89e67350ea7fec8edc687011ac7308e3e1db17ff/wdl_test/ExpansionHunterDenovo/casecontrol/simulated_data/eval_input.json#L3)
+to the evaluation WDL. Different combinations of inputs the test and 
+evaluation workflows are grouped under separate subdirectories (e.g., 
+the `simulated_data` subdirectory for `casecontrol` assertion of 
+`ExpansionHunterDenovo.wdl`). The inputs for test and evaluation
+WDLs are specified using two JSON files, `test_input.json` and 
+`eval_input.json`, containing inputs for the test and evaluation 
+WDLs respectively. The files should be located in the subdirectory of the 
+test cohort (e.g, `casecontrol/simulated_data/test_input.json`).
+
+
+- In order to pass any file to the WDLs via the JSON files, the files 
+need to be stored on a publicly accessible Google storage bucket.
+
+
+- In order to pass the output of test WDL as input to the evaluation WDL, 
+the value of the key should be prefixed with `test_output:` (see `carrot`'s 
+[documentation](https://github.com/broadinstitute/carrot/blob/0f616c0a9933a44bb92bc9ddbc90b81b0b532de6/UserGuide.md#-mapping-test-outputs-to-eval-inputs)).
+For instance:
+
+  ```json
+  "EvalCaseControlLocus.multisample_profile": "test_output:EHdnSTRAnalysis.multisample_profile",
+  ```
 
 
 ## Carrot Helper
@@ -100,7 +106,8 @@ included in the current latest release.
     pip install -r dev-requirements.txt
     pip install -e .
     ```
-    Make sure to configure `carrot_cli` and set your email address.
+    Make sure to configure `carrot_cli` and set your email address
+    (you may refer to `carrot_cli` [documentation](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-carrot-cli)).
     `carrot_cli` needs to be configured to access a
     [Carrot server](https://github.com/broadinstitute/carrot).
 
