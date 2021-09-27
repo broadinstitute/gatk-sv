@@ -263,7 +263,7 @@ task CleanVcf3 {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
-  Int max_samples_shard_ = select_first([max_samples_shard, 6000])
+  Int max_samples_shard_ = select_first([max_samples_shard, 7000])
   # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
   # generally assume working memory is ~3 * inputs
   Float input_size = size(rd_cn_revise, "GB")

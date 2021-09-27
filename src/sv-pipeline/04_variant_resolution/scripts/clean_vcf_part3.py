@@ -46,7 +46,7 @@ def main():
     parser.add_argument("combined_file", help="rd_cn_revise file with variant ID, sample ID, and CN columns")
     parser.add_argument("-s", "--max-samples",
                         help="Maximum number of variant x sample entries in a shard (default = 7,000)",
-                        default=7000)
+                        default=7000, type=int)
     args = parser.parse_args()
 
     variant_counts = count_variants(args.combined_file)
