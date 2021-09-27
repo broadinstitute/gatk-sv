@@ -181,6 +181,7 @@ if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
   '{ if ($5==$12 \
          || $5=="DEL" && $12=="CNV" \
          || $5=="DUP" && $12=="CNV" || $12=="DUP" && $5=="INS" \
+         || $5=="CNV" && $12=="DEL" || $5=="CNV" && $12=="DUP" || $5=="CNV" && $12=="INS" \
          || $5=="INS" && $12=="DUP" || $5=="INS" && $12=="CNV" \
          || $5=="INV" && $12=="CPX" || $5=="CPX" && $12=="INV") \
      print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
@@ -211,6 +212,7 @@ if [ $( cat ${OVRTMP}/set2.bed | fgrep -v "#" | wc -l ) -gt 0 ]; then
   '{ if ($5==$12 \
          || $5=="DEL" && $12=="CNV" \
          || $5=="DUP" && $12=="CNV" || $12=="DUP" && $5=="INS" \
+         || $5=="CNV" && $12=="DEL" || $5=="CNV" && $12=="DUP" || $5=="CNV" && $12=="INS" \
          || $5=="INS" && $12=="DUP" || $5=="INS" && $12=="CNV" \
          || $5=="INV" && $12=="CPX" || $5=="CPX" && $12=="INV") \
      print $4, $NF; else if ($12==".") print $4, "NO_OVR" }' \
