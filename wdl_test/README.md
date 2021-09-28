@@ -154,3 +154,25 @@ visualization. In general, this requires defining a template notebook
 defining a `report` in carrot and mapping a template to the report.
 Please refer to [Carrot documentation for details.](https://github.com/broadinstitute/carrot/blob/48c58446d4fb044cabbdafe8962b67ee511b483a/UserGuide.md#-2-define-a-report-in-carrot)
 The `carrot_helper` does not currently support defining `report`.
+
+
+### Current limitations
+
+Carrot is under active development and new functionalities emerge
+as new versions are released. There are a few functionalities that are
+under development and not yet released that impact the workflows that
+can be tested using `carrot`. Specifically, Carrot does not currently 
+support relative imports in WDL files (i.e., importing workflow via 
+a WDL file is provided via the `--imports` argument of `cromwell`). 
+A workaround to is to host required imports on a Google cloud storage 
+bucket and import using the object's URL. However, this would require 
+modifying all the WDLs of the GATK-SV pipeline. The carrot team is working 
+on supporting an `--imports`-like functionality in carrot. 
+
+Additionally, `carrot` do not currently support `Array` type outputs 
+(e.g., `Array[File]`). In other words, the array type outputs of a 
+test WDL cannot be passed to evaluation WDLs for assertions. A workaround 
+is to encapsulate array output in a zip archive, hence the test WDL outputs
+a single file, and extract the content of zip in the eval WDL. This workaround
+would require a significant modification to GATK-SV pipeline workflows, hence
+we currently do not assert array type outputs. 
