@@ -1360,7 +1360,7 @@ task CleanVcf1_23 {
   command <<<
     set -euxo pipefail
     cat <(zcat ~{cleanmale_vcf}|egrep "##") \
-      <(paste <(zcat ~{cleanmale_vcf}|egrep -v "##") <(zcat ~{cleanfemale_vcf}|cut -f10-|egrep -v "##") <(zcat ~{cleanother_vcf}|cut -f10-|egrep -v "##") ) \å
+      <(paste <(zcat ~{cleanmale_vcf}|egrep -v "##") <(zcat ~{cleanfemale_vcf}|cut -f10-|egrep -v "##") <(zcat ~{cleanother_vcf}|cut -f10-|egrep -v "##") ) \
       |bgzip \
       >combinedsex.vcf.gz
     tabix -p vcf combinedsex.vcf.gz
