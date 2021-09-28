@@ -843,7 +843,11 @@ def main():
     test_run_parser.add_argument("tests_dir", nargs="+")
     test_subparsers.add_parser("update_status")
 
-    subparsers.add_parser("prune", help="Deletes resources")
+    subparsers.add_parser("prune",
+                          help="Deletes Carrot pipeline and template created "
+                               "by the user. Note that Carrot does not "
+                               "currently deletes resources belonging to "
+                               "successful executions.")
 
     args = parser.parse_args()
 
