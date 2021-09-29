@@ -1,8 +1,8 @@
-This directory contains [Carrot](https://github.com/broadinstitute/carrot)
+This directory contains [carrot](https://github.com/broadinstitute/carrot)
 tests for the GAKT-SV pipeline's WDLs; the tests are organized in folders
-containing Carrot resources (e.g., evaluation WDL, default/test inputs).
+containing `carrot` resources (e.g., evaluation WDL, default/test inputs).
 Additionally, a utility script, `carrot_help.py`, is provided that 
-automates defining tests to Carrot, running, and checking their execution 
+automates defining tests to Carrot, and running and checking their execution 
 status. Generally, with tests organized in a particular folder hierarchy,
 with a single call to the utility script 
 (`python carrot_helper.py test run ./*`) every step from defining and 
@@ -53,7 +53,10 @@ a good practice to break assertions into smaller atomic evaluations.
 `eval_input_defaults.json`, and `test_input_defaults.json`. 
 The `eval.wdl` WDL receives outputs of the workflow you're testing and 
 asserts their values. The JSON files provide default inputs to the test
-(`ExpansionHunterDenovo.wdl`) and `eval.wdl` WDLs.
+(`ExpansionHunterDenovo.wdl`) and `eval.wdl` WDLs. For instance, if the 
+majority of the tests are running `eval.wdl` on a common docker image, 
+the image name can be set in the `eval_input_defaults.json`, which can be
+overridden in the tests that execute `eval.wdl` on a different docker image.
 
 
 - An evaluation can be performed using different set of inputs for the 
@@ -96,23 +99,44 @@ for `carrot_cli` or Carrot's API that have more expressive power,
 wider functionality, and generalization than `carrot_helper`. 
 
 ### Setup
-- Install and configure 
-[`carrot_cli`](https://github.com/broadinstitute/carrot_cli). Make sure to 
-install the `dev` version since `carrot_helper` leverages features not 
-included in the current latest release.
+
+1. Install `carrot_cli`:
+    - Install the `dev` version of [`carrot_cli`](https://github.com/broadinstitute/carrot_cli) 
+   as the following. We install the `dev` since `carrot_helper` leverages 
+   unreleased feature of `carrot_cli`. 
+    
+        ```shell
+        git clone https://github.com/broadinstitute/carrot_cli/
+        pip install -r dev-requirements.txt
+        pip install -e .
+        ```
+      
+    - [Configure `carrot_cli`]((https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-carrot-cli)):
+   configure it to access a [Carrot server](https://github.com/broadinstitute/carrot) 
+   and set your email address.
+
+
+2. Install latest version of 
+[`womtool`](https://github.com/broadinstitute/cromwell/releases).
+
+
+3. Setup `carrot_helper.py` by executing the following command providing
+values for its prompts:
 
     ```shell
-    git clone https://github.com/broadinstitute/carrot_cli/
-    pip install -r dev-requirements.txt
-    pip install -e .
+    $ cd gatk-sv/wdl_test
+    $ python carrot_helper.py config
     ```
-    Make sure to configure `carrot_cli` and set your email address
-    (you may refer to `carrot_cli` [documentation](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-carrot-cli)).
-    `carrot_cli` needs to be configured to access a
-    [Carrot server](https://github.com/broadinstitute/carrot).
-
-- Install latest version of 
-[`womtool`](https://github.com/broadinstitute/cromwell/releases).
+   
+    Carrot fetches the test and evaluation WDLs for every test from 
+a publicly accessible GitHub repository. Therefore, in order to define/update
+tests, `carrot_helper` requires to know the GitHub repository and the git 
+branch where the test and evaluation WDLs are available. If you want to run 
+existing tests, you may use `https://github.com/broadinstitute/gatk-sv` and
+`master` for repository and branch respectively. If you are developing 
+a carrot test for a WDL, then you may set the repository to your fork
+of `github.com/broadinstitute/gatk-sv` and set the branch to your feature
+branch.
 
 
 ### Run Carrot Helper
@@ -121,7 +145,7 @@ included in the current latest release.
 cd wdl_test
 python carrot_helper.py test run ./*
 ```
-_The script should be invoked from the `wdl_test` directory._
+_Note that the script should be invoked from the `wdl_test` directory._
 
 This above command will define every test (in the above-discussed directory
 structure) to Carrot, and will run them all. The information of the created 
@@ -145,6 +169,35 @@ To check for the status of the runs, you use the following command.
 ```shell
 python carrot_helper.py test update_status
 ```
+
+### Reusable Resources
+The `carrot_helper.py` persists any metadata about the carrot resources it
+creates (e.g., 
+[pipeline](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-pipeline),
+[template](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-template), 
+[test](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-test), 
+[result](https://github.com/broadinstitute/carrot/blob/master/UserGuide.md#-result)
+and any necessary mapping between them) in the `.carrot_pipelines.json`. 
+
+The `.carrot_pipelines.json` file tracked on git contains metadata belonging
+to the `carrot` resources defined for tests and WDLs available from the 
+`master` branch of the 
+[`github.com/broadinstitute/gatk-sv`](https://github.com/broadinstitute/gatk-sv) 
+repository on a `carrot` server maintained for internal use at the Broad 
+institute. You may use this file to run and updated (read the following)
+tests if you have access to Broad's VPN. Otherwise, you may remove or rename
+the `.carrot_pipelines.json` file, **without tracking the changes on git**,
+and let the `carrot_helper.py` create resources on the `carrot` server for
+the repository and branch [you have configured](#setup-carrot-helper). 
+
+`carrot_helper.py` automatically initializes and updates the 
+`.carrot_pipelines.json`. When `carrot_helper.py test run` is invoked, 
+the script traverses the `wdl_test` and initializes/updates `carrot` 
+resources if any of the test or evaluations WDLs or their inputs are 
+changed. Carrot reads test and evaluation WDLs from github; therefore, 
+make sure you commit and push changes to your branch when updating 
+test and evaluation WDLs. 
+
 
 ### Carrot Report
 Carrot can pass the output of an evaluation workflow to a Jupyter notebook,
