@@ -32,14 +32,14 @@ public class CleanVCFPart1 {
     private static final ByteSequence VARGQ_KEY = new ByteSequence("varGQ");
     private static final ByteSequence MULTIALLELIC_KEY = new ByteSequence("MULTIALLELIC");
     private static final ByteSequence UNRESOLVED_KEY = new ByteSequence("UNRESOLVED");
-    private static final ByteSequence UNRESOLVED_SUFFIX = new ByteSequence(";UNRESOLVED");
-    private static final ByteSequence HIGH_SR_BACKGROUND_SUFFIX = new ByteSequence(";HIGH_SR_BACKGROUND");
+    private static final ByteSequence HIGH_SR_BACKGROUND = new ByteSequence("HIGH_SR_BACKGROUND");
+    private static final ByteSequence PASS_VALUE = new ByteSequence("PASS");
+    private static final ByteSequence BOTHSIDES_VALUE = new ByteSequence("BOTHSIDES_SUPPORT");
     private static final ByteSequence DEL_VALUE = new ByteSequence("DEL");
     private static final ByteSequence DUP_VALUE = new ByteSequence("DUP");
     private static final ByteSequence RDCN_VALUE = new ByteSequence("RD_CN");
     private static final ByteSequence MISSING_VALUE = new ByteSequence(".");
     private static final ByteSequence MISSING_GENOTYPE = new ByteSequence("./.");
-    private static final ByteSequence MISSING_SUFFIX = new ByteSequence(":.");
     private static final ByteSequence GT_REF_REF = new ByteSequence("0/0");
     private static final ByteSequence GT_REF_ALT = new ByteSequence("0/1");
     private static final ByteSequence GT_ALT_ALT = new ByteSequence("1/1");
@@ -47,29 +47,42 @@ public class CleanVCFPart1 {
     private static final int MIN_ALLOSOME_EVENT_SIZE = 5000;
 
     public static void main( final String[] args ) {
-        if ( args.length != 5 ) {
-            System.err.println("Usage: java CleanVCFPart1 INVCFFILE PEDIGREES XCHR YCHR NOISYEVENTS");
+        if ( args.length != 8 ) {
+            System.err.println("Usage: java org.broadinstitute.svpipeline.CleanVCFPart1 " +
+                    "INPUTVCFFILE PEDIGREES XCHR YCHR NOISYEVENTS BOTHSIDES SAMPLESOUT REVISEDEVENTSOUT");
             System.exit(1);
         }
         final VCFParser parser = new VCFParser(args[0]);
         final ByteSequence xChrName = new ByteSequence(args[2]);
         final ByteSequence yChrName = new ByteSequence(args[3]);
         final Set<ByteSequence> noisyEvents = readNoisyEventsFile(args[4]);
+        final Set<ByteSequence> bothsidesSupportEvents = readBothSidesFile(args[5]);
         try ( final OutputStream os
-                      = new BufferedOutputStream(new FileOutputStream(FileDescriptor.out)) ) {
+                      = new BufferedOutputStream(new FileOutputStream(FileDescriptor.out));
+              final OutputStream osSamples = new BufferedOutputStream(new FileOutputStream(args[6]));
+              final OutputStream osRevEvents = new BufferedOutputStream(new FileOutputStream(args[7])) ) {
             int[] sexForSample = null;
             while ( parser.hasMetadata() ) {
                 final Metadata metadata = parser.nextMetaData();
-                if ( metadata instanceof Columns ) {
-                    final Columns cols = ((Columns)metadata);
+                if ( metadata instanceof ColumnHeaderMetadata ) {
+                    final ColumnHeaderMetadata cols = ((ColumnHeaderMetadata)metadata);
+                    final List<ByteSequence> colNames = cols.getValue();
+                    final int nCols = colNames.size();
+                    for ( int idx = 9; idx < nCols; ++idx ) {
+                        colNames.get(idx).write(osSamples);
+                        osSamples.write('\n');
+                    }
                     sexForSample = readPedFile(args[1], cols.getValue());
                     os.write(("##FILTER=<ID=HIGH_SR_BACKGROUND,Description=\"High number of "
                             + "SR splits in background samples indicating messy region\">\n")
                                 .getBytes(StandardCharsets.UTF_8));
                     os.write("##FILTER=<ID=UNRESOLVED,Description=\"Variant is unresolved\">\n"
                                 .getBytes(StandardCharsets.UTF_8));
-                } else if ( metadata instanceof KeyAttributes ) {
-                    final KeyAttributes keyAttrs = (KeyAttributes)metadata;
+                    os.write(("##FILTER=<ID=BOTHSIDES_SUPPORT,Description=\"Variant has " +
+                            "read-level support for both sides of breakpoint\">\n")
+                                .getBytes(StandardCharsets.UTF_8));
+                } else if ( metadata instanceof KeyAttributesMetadata ) {
+                    final KeyAttributesMetadata keyAttrs = (KeyAttributesMetadata)metadata;
                     if ( keyAttrs.getKey().equals(FORMAT_LINE) ) {
                         final List<KeyValue> kvs = keyAttrs.getValue();
                         final int nKVs = kvs.size();
@@ -97,21 +110,16 @@ public class CleanVCFPart1 {
                 final Record record = parser.nextRecord();
 
                 // replace the numeric EV value with a text value
-                final int fmtIdx = record.getFormatIndex(EV_VALUE);
-                if ( fmtIdx >= 0 ) {
-                    final List<ByteSequence> genotypes = record.getGenotypes();
-                    final int nGenotypes = genotypes.size();
-                    for ( int gIdx = 0; gIdx < nGenotypes; ++gIdx ) {
-                        final ByteSequence genotype = genotypes.get(gIdx);
-                        final List<ByteSequence> genotypeVals = genotype.split(':');
-                        final ByteSequence evVal = genotypeVals.get(fmtIdx);
-                        genotypes.set(gIdx, genotype.replace(evVal, EV_VALS[evVal.asInt()]));
+                final int evIdx = record.getFormat().indexOf(EV_VALUE);
+                if ( evIdx >= 0 ) {
+                    for ( final CompoundField genotypeVals : record.getGenotypes() ) {
+                        genotypeVals.set(evIdx, EV_VALS[genotypeVals.get(evIdx).asInt()]);
                     }
                 }
 
                 // move the SVTYPE to the ALT field (except for MEs)
-                Map<ByteSequence, ByteSequence> infoMap = record.getInfoAsMap();
-                final ByteSequence svType = infoMap.get(SVTYPE_KEY);
+                final InfoField info = record.getInfo();
+                final ByteSequence svType = info.get(SVTYPE_KEY);
                 if ( !record.getAlt().contains(ME_VALUE) ) {
                     if ( svType != null ) {
                         record.setAlt(new ByteSequence(LT_VALUE, svType, GT_VALUE));
@@ -120,84 +128,89 @@ public class CleanVCFPart1 {
                 record.setRef(N_VALUE);
 
                 // move varGQ info field to quality column
-                final ByteSequence varGQ = infoMap.get(VARGQ_KEY);
+                final ByteSequence varGQ = info.get(VARGQ_KEY);
                 if ( varGQ != null ) {
                     record.setQuality(varGQ);
-                    record.removeInfoField(VARGQ_KEY);
+                    info.remove(VARGQ_KEY);
                 }
 
-                // remove MULTIALLELIC and UNRESOLVED info flags
-                if ( infoMap.containsKey(MULTIALLELIC_KEY) ) {
-                    record.removeInfoField(MULTIALLELIC_KEY);
-                }
-                if ( infoMap.containsKey(UNRESOLVED_KEY) ) {
-                    record.setFilter(new ByteSequence(record.getFilter(), UNRESOLVED_SUFFIX));
-                    record.removeInfoField(UNRESOLVED_KEY);
+                // remove MULTIALLELIC flag, if present
+                info.remove(MULTIALLELIC_KEY);
+
+                // remove UNRESOLVED flag and add it as a filter
+                if ( info.containsKey(UNRESOLVED_KEY) ) {
+                    record.getFilter().add(UNRESOLVED_KEY);
+                    info.remove(UNRESOLVED_KEY);
                 }
 
                 // mark noisy events
                 if ( noisyEvents.contains(record.getID()) ) {
-                    record.setFilter(new ByteSequence(record.getFilter(), HIGH_SR_BACKGROUND_SUFFIX));
+                    record.getFilter().add(HIGH_SR_BACKGROUND);
+                }
+
+                // mark bothsides support
+                if ( bothsidesSupportEvents.contains(record.getID()) ) {
+                    final CompoundField filters = record.getFilter();
+                    if ( filters.size() == 1 && filters.get(0).equals(PASS_VALUE) ) {
+                        record.setFilter(BOTHSIDES_VALUE);
+                    } else {
+                        filters.add(BOTHSIDES_VALUE);
+                    }
                 }
 
                 // fix genotypes on allosomes
                 final boolean isY;
                 if ( (isY = yChrName.equals(record.getChromosome())) ||
                         xChrName.equals(record.getChromosome())) {
-                    final List<ByteSequence> genotypes = record.getGenotypes();
-                    final int nSamples = genotypes.size();
-                    final List<List<ByteSequence>> splitGenotypes = new ArrayList<>(nSamples);
-                    for ( final ByteSequence genotype : genotypes ) {
-                        splitGenotypes.add(genotype.split(':'));
-                    }
-                    final boolean isDel = DEL_VALUE.equals(svType);
-                    final ByteSequence end = infoMap.get(END_KEY);
-                    final int rdCNIndex = record.getFormatIndex(RDCN_VALUE);
+                    final List<CompoundField> genotypes = record.getGenotypes();
+                    final int rdCNIndex = record.getFormat().indexOf(RDCN_VALUE);
+                    final ByteSequence end = info.get(END_KEY);
                     boolean adjustMale = false;
-                    if ( (isDel || DUP_VALUE.equals(svType)) && rdCNIndex >= 0 && end != null &&
+                    final boolean isDel;
+                    if ( ((isDel = DEL_VALUE.equals(svType)) || DUP_VALUE.equals(svType)) && rdCNIndex >= 0 && end != null &&
                             end.asInt() + 1 - record.getPosition() > MIN_ALLOSOME_EVENT_SIZE ) {
-                        adjustMale = isRevisableEvent(splitGenotypes, rdCNIndex, sexForSample, isY);
+                        adjustMale = isRevisableEvent(genotypes, rdCNIndex, sexForSample, isY);
+                        if ( adjustMale ) {
+                            record.getID().write(osRevEvents);
+                            osRevEvents.write('\n');
+                        }
                     }
-                    ByteSequence emptyGenotype = null;
+                    CompoundField emptyGenotype = null;
+                    final int nSamples = genotypes.size();
                     for ( int sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx ) {
                         final int sampleSex = sexForSample[sampleIdx];
+                        final CompoundField genotype = genotypes.get(sampleIdx);
                         if ( sampleSex == 1 ) {
                             if ( adjustMale ) {
-                                final List<ByteSequence> genotypeFields = splitGenotypes.get(sampleIdx);
-                                final ByteSequence rdCN = genotypeFields.get(rdCNIndex);
+                                final ByteSequence rdCN = genotype.get(rdCNIndex);
                                 if ( rdCN.equals(MISSING_VALUE) ) {
                                     continue;
                                 }
                                 final int rdCNVal = rdCN.asInt();
-                                genotypeFields.set(rdCNIndex, new ByteSequence(Integer.toString(rdCNVal + 1)));
+                                genotype.set(rdCNIndex, new ByteSequence(Integer.toString(rdCNVal + 1)));
                                 if ( isDel ) {
-                                    if ( rdCNVal >= 1 ) genotypeFields.set(0, GT_REF_REF);
-                                    else if ( rdCNVal == 0 ) genotypeFields.set(0, GT_REF_ALT);
+                                    if ( rdCNVal >= 1 ) genotype.set(0, GT_REF_REF);
+                                    else if ( rdCNVal == 0 ) genotype.set(0, GT_REF_ALT);
                                 } else {
-                                    if ( rdCNVal <= 1 ) genotypeFields.set(0, GT_REF_REF);
-                                    else if ( rdCNVal == 2 ) genotypeFields.set(0, GT_REF_ALT);
-                                    else genotypeFields.set(0, GT_ALT_ALT);
+                                    if ( rdCNVal <= 1 ) genotype.set(0, GT_REF_REF);
+                                    else if ( rdCNVal == 2 ) genotype.set(0, GT_REF_ALT);
+                                    else genotype.set(0, GT_ALT_ALT);
                                 }
-                                genotypes.set(sampleIdx, new ByteSequence(genotypeFields, ':'));
                             }
                         } else if ( sampleSex == 2 ) {
                             if ( isY ) {
                                 if ( emptyGenotype == null ) {
-                                    emptyGenotype = MISSING_GENOTYPE;
-                                    int nFields = splitGenotypes.get(sampleIdx).size();
+                                    emptyGenotype = new CompoundField(MISSING_GENOTYPE, ':');
+                                    int nFields = genotype.size();
                                     while ( --nFields > 0 ) {
-                                        emptyGenotype = new ByteSequence(emptyGenotype, MISSING_SUFFIX);
+                                        emptyGenotype.add(MISSING_VALUE);
                                     }
+                                    emptyGenotype.getValue(); // performance hack to put the pieces together
                                 }
                                 genotypes.set(sampleIdx, emptyGenotype);
                             }
                         } else {
-                            final ByteSequence curGenotype = genotypes.get(sampleIdx);
-                            final ByteSequence curGenotypeField =
-                                    splitGenotypes.get(sampleIdx).get(0); // GT field is always first
-                            final ByteSequence newGenotype =
-                                    curGenotype.replace(curGenotypeField, MISSING_GENOTYPE);
-                            genotypes.set(sampleIdx, newGenotype);
+                            genotype.set(0, MISSING_GENOTYPE);
                         }
                     }
                 }
@@ -209,15 +222,15 @@ public class CleanVCFPart1 {
         }
     }
 
-    private static boolean isRevisableEvent( final List<List<ByteSequence>> splitGenotypes,
+    private static boolean isRevisableEvent( final List<CompoundField> genotypes,
                                              final int rdCNIndex,
                                              final int[] sexForColumn,
                                              final boolean isY ) {
         final int[] maleCounts = new int[4];
         final int[] femaleCounts = new int[4];
-        final int nSamples = splitGenotypes.size();
+        final int nSamples = genotypes.size();
         for ( int sampleIdx = 0; sampleIdx < nSamples; ++sampleIdx ) {
-            final ByteSequence rdCN = splitGenotypes.get(sampleIdx).get(rdCNIndex);
+            final ByteSequence rdCN = genotypes.get(sampleIdx).get(rdCNIndex);
             if ( MISSING_VALUE.equals(rdCN) ) {
                 continue;
             }
@@ -277,6 +290,22 @@ public class CleanVCFPart1 {
             throw new RuntimeException("can't read noisy events file " + filename);
         }
         return noisyEvents;
+    }
+
+    private static Set<ByteSequence> readBothSidesFile( final String filename ) {
+        final Set<ByteSequence> bothsidesEvents = new HashSet<>();
+        try {
+            final BufferedReader bsRdr =
+                    new BufferedReader(new InputStreamReader(new FileInputStream(filename)));
+            String line;
+            while ( (line = bsRdr.readLine()) != null ) {
+                final String lastCol = line.substring(line.lastIndexOf('\t') + 1);
+                bothsidesEvents.add(new ByteSequence(lastCol));
+            }
+        } catch ( final IOException ioe ) {
+            throw new RuntimeException("can't read bothsides support file " + filename);
+        }
+        return bothsidesEvents;
     }
 
     private static int[] readPedFile( final String pedFilename, List<ByteSequence> sampleNames ) {

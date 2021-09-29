@@ -2,6 +2,7 @@ package org.broadinstitute.svpipeline;
 
 import java.io.*;
 import java.util.*;
+import org.broadinstitute.svpipeline.VCFParser.*;
 
 /** Read a VCF, and try to stitch together adjacent copy-number variations.
  * Eligible Records (which we call "stitchable") must meet certain criteria as specified by the
@@ -10,8 +11,8 @@ import java.util.*;
  * replace the first one by adding on the interval covered by the second one.
  */
 public class StitchFragmentedCNVs {
-    private static final VCFParser.ByteSequence END = new VCFParser.ByteSequence("END");
-    private static final VCFParser.ByteSequence SVLEN = new VCFParser.ByteSequence("SVLEN");
+    private static final ByteSequence END = new ByteSequence("END");
+    private static final ByteSequence SVLEN = new ByteSequence("SVLEN");
 
     // These 3 values will always be overwritten, but are initialized to reasonable defaults as documentation
     private static double PAD_FACTOR = .2;
@@ -36,20 +37,20 @@ public class StitchFragmentedCNVs {
                     vcfParser.nextMetaData().write(os);
                 }
                 final StitchableIterator sItr = new StitchableIterator(vcfParser);
-                VCFParser.Record stitchableRecord;
+                Record stitchableRecord;
                 while ( (stitchableRecord = sItr.nextSubject(os)) != null ) {
                     findExtension(stitchableRecord, sItr);
                     stitchableRecord.write(os);
                 }
             }
         } catch ( final IOException ioe ) {
-            throw new VCFParser.MalformedVCFException("can't write to stdout", ioe);
+            throw new MalformedVCFException("can't write to stdout", ioe);
         }
     }
 
     /** Look for a stitchable downstream of the subject that can be joined to it to
      *  make a larger event. */
-    private static void findExtension( final VCFParser.Record stitchable,
+    private static void findExtension( final Record stitchable,
                                        final StitchableIterator sItr ) throws IOException {
         final PaddedInterval originalPaddedInterval = new PaddedInterval(stitchable);
         PaddedInterval paddedInterval = originalPaddedInterval;
@@ -57,10 +58,10 @@ public class StitchFragmentedCNVs {
         // sItr.hasNext returns false at EOF, or when the next record is too far away to
         // overlap the subject
         while ( sItr.hasNext() ) {
-            final VCFParser.Record record = sItr.next();
+            final Record record = sItr.next();
             final PaddedInterval paddedInterval2 = new PaddedInterval(record);
             if ( paddedInterval.canCoalesceWith(paddedInterval2) &&
-                    genotypesMatch(stitchable, record) ) {
+                    stitchable.getGenotypes().equals(record.getGenotypes()) ) {
                 paddedInterval = paddedInterval2;
                 sItr.remove();
             }
@@ -68,38 +69,11 @@ public class StitchFragmentedCNVs {
 
         if ( paddedInterval != originalPaddedInterval ) {
             final int endPos = paddedInterval.getVCFEnd();
-            // this won't be null -- it was checked in isStitchable
-            final VCFParser.ByteSequence endField = stitchable.getInfoField(END);
-            stitchable.setInfoField(endField, new VCFParser.ByteSequence(Integer.toString(endPos)));
-            final VCFParser.ByteSequence svLenField = stitchable.getInfoField(SVLEN);
-            if ( svLenField == null ) {
-                throw new VCFParser.MalformedVCFException(stitchable.getID().toString() + " has no SVLEN field");
-            }
+            final InfoField infos = stitchable.getInfo();
+            infos.put(END, new ByteSequence(Integer.toString(endPos)));
             final int svLength = endPos + 1 - stitchable.getPosition();
-            final VCFParser.ByteSequence svLenValue =
-                    new VCFParser.ByteSequence(Integer.toString(svLength));
-            stitchable.setInfoField(svLenField, svLenValue);
+            infos.put(SVLEN, new ByteSequence(Integer.toString(svLength)));
         }
-    }
-
-    private static boolean genotypesMatch( final VCFParser.Record rec1, final VCFParser.Record rec2 ) {
-        final List<VCFParser.ByteSequence> gt1 = rec1.getGenotypes();
-        final List<VCFParser.ByteSequence> gt2 = rec2.getGenotypes();
-        final int nGTs = gt1.size();
-        if ( gt2.size() != nGTs ) {
-            throw new IllegalStateException("two records have a different number of genotypes");
-        }
-        for ( int idx = 0; idx != nGTs; ++idx ) {
-            final VCFParser.ByteIterator itr1 = gt1.get(idx).iterator();
-            final VCFParser.ByteIterator itr2 = gt2.get(idx).iterator();
-            byte b1;
-            do {
-                b1 = itr1.hasNext() ? itr1.next() : -1;
-                final byte b2 = itr2.hasNext() ? itr2.next() : -1;
-                if ( b1 != b2 ) return false;
-            } while ( b1 != ':' );
-        }
-        return true;
     }
 
     private static void initCommandLineArgs( final String[] args ) {
@@ -143,11 +117,11 @@ public class StitchFragmentedCNVs {
         private final int padding;
         private final int maxOverlap;
 
-        public PaddedInterval( final VCFParser.Record record ) {
+        public PaddedInterval( final Record record ) {
             this.start = record.getPosition();
             // getInfoField can't return null -- it's been checked in isStitchable
             // + 1 because vcf has closed intervals, we use half-open
-            this.end = record.getInfoField(END).asInt() + 1;
+            this.end = record.getInfo().get(END).asInt() + 1;
             final int length = end - start;
             this.padding = Math.min(MAX_PAD, (int)(length * PAD_FACTOR));
             this.maxOverlap = (int)(length * MAX_OVERLAP_FACTOR);
@@ -171,17 +145,17 @@ public class StitchFragmentedCNVs {
     /** As we go through the VCF we create a new Chunk whenever we encounter a stitchable record.
      *  So, a Chunk consists of a mess of non-stitchables, and a trailing stitchable. */
     private final static class Chunk {
-        private final List<VCFParser.Record> nonStitchables;
-        private final VCFParser.Record stitchable;
+        private final List<Record> nonStitchables;
+        private final Record stitchable;
 
-        public Chunk( final List<VCFParser.Record> nonStitchables,
-                      final VCFParser.Record stitchable ) {
+        public Chunk( final List<Record> nonStitchables,
+                      final Record stitchable ) {
             this.nonStitchables = nonStitchables;
             this.stitchable = stitchable;
         }
 
-        public List<VCFParser.Record> getNonStitchables() { return nonStitchables; }
-        public VCFParser.Record getStitchable() { return stitchable; }
+        public List<Record> getNonStitchables() { return nonStitchables; }
+        public Record getStitchable() { return stitchable; }
     }
 
     /** Maintains a list of chunks so that the client just sees the stitchables, while making sure
@@ -193,24 +167,24 @@ public class StitchFragmentedCNVs {
      * (i.e., hasNext will return false) when we've read so far ahead that we can't possibly find
      * a stitchable that can be joined to the subject.
      */
-    private final static class StitchableIterator implements Iterator<VCFParser.Record> {
+    private final static class StitchableIterator implements Iterator<Record> {
         private final VCFParser vcfParser;
         private final List<Chunk> chunks;
         private int subjectIndex;
-        private VCFParser.ByteSequence subjectChromosome;
+        private ByteSequence subjectChromosome;
         private int subjectMinNoOverlapPosition; // far enough downstream that MAX_PAD will ensure there's no overlap
         private int iterationIndex;
-        private VCFParser.Record nextRecord; // this is a pushback for a record that's too far downstream
+        private Record nextRecord; // this is a pushback for a record that's too far downstream
 
-        private static final VCFParser.ByteSequence MULTIALLELIC = new VCFParser.ByteSequence("MULTIALLELIC");
-        private static final VCFParser.ByteSequence SVTYPE = new VCFParser.ByteSequence("SVTYPE");
-        private static final VCFParser.ByteSequence SVTYPE_DEL = new VCFParser.ByteSequence("DEL");
-        private static final VCFParser.ByteSequence SVTYPE_DUP = new VCFParser.ByteSequence("DUP");
-        private static final VCFParser.ByteSequence EVIDENCE = new VCFParser.ByteSequence("EVIDENCE");
-        private static final String EVIDENCE_RD = "RD";
-        private static final String EVIDENCE_SR = "SR";
-        private static final String EVIDENCE_PE = "PE";
-        private static final String EVIDENCE_BAF = "BAF";
+        private static final ByteSequence MULTIALLELIC = new ByteSequence("MULTIALLELIC");
+        private static final ByteSequence SVTYPE = new ByteSequence("SVTYPE");
+        private static final ByteSequence SVTYPE_DEL = new ByteSequence("DEL");
+        private static final ByteSequence SVTYPE_DUP = new ByteSequence("DUP");
+        private static final ByteSequence EVIDENCE = new ByteSequence("EVIDENCE");
+        private static final ByteSequence EVIDENCE_RD = new ByteSequence("RD");
+        private static final ByteSequence EVIDENCE_SR = new ByteSequence("SR");
+        private static final ByteSequence EVIDENCE_PE = new ByteSequence("PE");
+        private static final ByteSequence EVIDENCE_BAF = new ByteSequence("BAF");
 
         public StitchableIterator( final VCFParser vcfParser ) {
             this.vcfParser = vcfParser;
@@ -219,7 +193,7 @@ public class StitchFragmentedCNVs {
 
         /** write the non-stitchables that precede the first stitchable,
          *  and return the next stitchable */
-        public VCFParser.Record nextSubject( final OutputStream os ) throws IOException {
+        public Record nextSubject( final OutputStream os ) throws IOException {
             final int nChunks = chunks.size();
             while ( subjectIndex < nChunks ) {
                 final Chunk chunk = chunks.get(subjectIndex);
@@ -229,10 +203,10 @@ public class StitchFragmentedCNVs {
                 // collection ASAP to control memory use.
                 chunks.set(subjectIndex, null);
                 iterationIndex = ++subjectIndex;
-                for ( final VCFParser.Record rec : chunk.getNonStitchables() ) {
+                for ( final Record rec : chunk.getNonStitchables() ) {
                     rec.write(os);
                 }
-                final VCFParser.Record stitchable = chunk.getStitchable();
+                final Record stitchable = chunk.getStitchable();
                 if ( stitchable != null ) {
                     return setSubject(stitchable);
                 }
@@ -243,7 +217,7 @@ public class StitchFragmentedCNVs {
             subjectIndex = iterationIndex = 0;
 
             while ( nextRecord != null || vcfParser.hasRecord() ) {
-                final VCFParser.Record record = nextRecord != null ? nextRecord: vcfParser.nextRecord();
+                final Record record = nextRecord != null ? nextRecord: vcfParser.nextRecord();
                 nextRecord = null;
                 if ( isStitchable(record) ) {
                     return setSubject(record);
@@ -257,16 +231,16 @@ public class StitchFragmentedCNVs {
         @Override public boolean hasNext() {
             final int nChunks = chunks.size();
             while ( iterationIndex < nChunks ) {
-                final VCFParser.Record stitchable = chunks.get(iterationIndex).getStitchable();
+                final Record stitchable = chunks.get(iterationIndex).getStitchable();
                 if ( stitchable != null ) {
                     return true;
                 }
                 ++iterationIndex;
             }
             if ( nextRecord != null || vcfParser.hasRecord() ) {
-                List<VCFParser.Record> nonStitchables = null;
+                List<Record> nonStitchables = null;
                 do {
-                    final VCFParser.Record record =
+                    final Record record =
                             nextRecord != null ? nextRecord : vcfParser.nextRecord();
                     nextRecord = null;
                     if ( !record.getChromosome().equals(subjectChromosome) ||
@@ -294,7 +268,7 @@ public class StitchFragmentedCNVs {
             return false;
         }
 
-        @Override public VCFParser.Record next() {
+        @Override public Record next() {
             if ( !hasNext() ) {
                 throw new NoSuchElementException();
             }
@@ -306,26 +280,25 @@ public class StitchFragmentedCNVs {
             chunks.set(idx, new Chunk(chunks.get(idx).getNonStitchables(), null));
         }
 
-        private static boolean isStitchable( final VCFParser.Record record ) {
-            if ( MULTIALLELIC.equals(record.getFilter()) ) return false;
-            final Map<VCFParser.ByteSequence, VCFParser.ByteSequence> infoMap = record.getInfoAsMap();
-            final VCFParser.ByteSequence svType = infoMap.get(SVTYPE);
+        private static boolean isStitchable( final Record record ) {
+            if ( MULTIALLELIC.equals(record.getFilter().getValue()) ) return false;
+            final InfoField info = record.getInfo();
+            final ByteSequence svType = info.get(SVTYPE);
             if ( !SVTYPE_DEL.equals(svType) && !SVTYPE_DUP.equals(svType) ) return false;
             // you can't be a stitchable if you don't have an "END" info field.
             // code elsewhere assumes it can grab this value without checking for its existence
-            final VCFParser.ByteSequence end = infoMap.get(END);
-            if ( end == null || end.asInt() == VCFParser.ByteSequence.MISSING_VALUE ) return false;
-            final VCFParser.ByteSequence evidence = infoMap.get(EVIDENCE);
+            final ByteSequence end = info.get(END);
+            if ( end == null || end.asInt() == ByteSequence.MISSING_VALUE ) return false;
+            final ByteSequence evidence = info.get(EVIDENCE);
             if ( evidence == null ) return false;
-            final String evStr = evidence.toString();
-            return !evStr.contains(EVIDENCE_PE) && !evStr.contains(EVIDENCE_SR) &&
-                    (evStr.contains(EVIDENCE_RD) || evStr.contains(EVIDENCE_BAF));
+            return !evidence.contains(EVIDENCE_PE) && !evidence.contains(EVIDENCE_SR) &&
+                    (evidence.contains(EVIDENCE_RD) || evidence.contains(EVIDENCE_BAF));
         }
 
-        private VCFParser.Record setSubject( final VCFParser.Record record ) {
+        private Record setSubject( final Record record ) {
             subjectChromosome = record.getChromosome();
             final int start = record.getPosition();
-            final int end = record.getInfoField(END).asInt(); // can't be null -- checked in isStitchable
+            final int end = record.getInfo().get(END).asInt(); // can't be null -- checked in isStitchable
             subjectMinNoOverlapPosition =
                     end + Math.min(MAX_PAD, (int)(PAD_FACTOR * (end - start))) + MAX_PAD;
             return record;
