@@ -860,7 +860,7 @@ def main():
 
     # Currently we do not support invoking this script
     # from a directory other than the wdl_test dir.
-    wd = "."
+    wd = os.path.dirname(os.path.realpath(__file__))
     config = get_config()
 
     if args.commands == "test":
