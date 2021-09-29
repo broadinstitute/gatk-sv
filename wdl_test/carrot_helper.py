@@ -91,7 +91,7 @@ class CarrotHelper:
         """
         base_uri = self.repository.replace(
             "github.com", "raw.githubusercontent.com")
-        uri = f"{base_uri}/{self.branch}/{resource}"
+        uri = urllib.parse.urljoin(base_uri, self.branch, resource)
         try:
             urllib.request.urlopen(uri).getcode()
             return uri
