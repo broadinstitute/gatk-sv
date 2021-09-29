@@ -175,6 +175,7 @@ public class StitchFragmentedCNVs {
         private int subjectMinNoOverlapPosition; // far enough downstream that MAX_PAD will ensure there's no overlap
         private int iterationIndex;
         private Record nextRecord; // this is a pushback for a record that's too far downstream
+        private Record lastRecord; // the record most recently retrieved from the VCFParser
 
         private static final ByteSequence MULTIALLELIC = new ByteSequence("MULTIALLELIC");
         private static final ByteSequence SVTYPE = new ByteSequence("SVTYPE");
@@ -217,8 +218,7 @@ public class StitchFragmentedCNVs {
             subjectIndex = iterationIndex = 0;
 
             while ( nextRecord != null || vcfParser.hasRecord() ) {
-                final Record record = nextRecord != null ? nextRecord: vcfParser.nextRecord();
-                nextRecord = null;
+                final Record record = advance();
                 if ( isStitchable(record) ) {
                     return setSubject(record);
                 }
@@ -240,9 +240,7 @@ public class StitchFragmentedCNVs {
             if ( nextRecord != null || vcfParser.hasRecord() ) {
                 List<Record> nonStitchables = null;
                 do {
-                    final Record record =
-                            nextRecord != null ? nextRecord : vcfParser.nextRecord();
-                    nextRecord = null;
+                    final Record record = advance();
                     if ( !record.getChromosome().equals(subjectChromosome) ||
                             record.getPosition() >= subjectMinNoOverlapPosition ) {
                         nextRecord = record;
@@ -301,6 +299,24 @@ public class StitchFragmentedCNVs {
             final int end = record.getInfo().get(END).asInt(); // can't be null -- checked in isStitchable
             subjectMinNoOverlapPosition =
                     end + Math.min(MAX_PAD, (int)(PAD_FACTOR * (end - start))) + MAX_PAD;
+            return record;
+        }
+
+        private Record advance() {
+            final Record record;
+            if ( nextRecord != null ) {
+                record = nextRecord;
+                nextRecord = null;
+            } else {
+                record = vcfParser.nextRecord();
+                if ( lastRecord != null &&
+                        lastRecord.getChromosome().equals(record.getChromosome()) ) {
+                    if ( record.getPosition() < lastRecord.getPosition() ) {
+                        throw new MalformedVCFException("vcf is mis-sorted");
+                    }
+                }
+                lastRecord = record;
+            }
             return record;
         }
     }
