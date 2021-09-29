@@ -834,6 +834,13 @@ def main():
                     "setup, and run carrot tests.")
     subparsers = parser.add_subparsers(dest="commands", help="Commands")
 
+    subparsers.add_parser(
+        "config",
+        help="Configures communication with the carrot server for defining, "
+             "running, and tracking the tests by asking the user for the "
+             "github repository and the branch where the tests are available "
+             "from, and the path to a local installation of womtool.")
+
     test_parser = subparsers.add_parser(
         "test", help="Create, list, and run tests.")
     test_subparsers = test_parser.add_subparsers(
@@ -843,11 +850,11 @@ def main():
     test_run_parser.add_argument("tests_dir", nargs="+")
     test_subparsers.add_parser("update_status")
 
-    subparsers.add_parser("prune",
-                          help="Deletes Carrot pipeline and template created "
-                               "by the user. Note that Carrot does not "
-                               "currently deletes resources belonging to "
-                               "successful executions.")
+    subparsers.add_parser(
+        "prune",
+        help="Deletes Carrot pipeline and template created by the user. "
+             "Note that Carrot does not currently deletes resources "
+             "belonging to successful executions.")
 
     args = parser.parse_args()
 
@@ -882,6 +889,8 @@ def main():
                 break
             else:
                 print("Please respond with {`y`, `yes`, `n`, `no`}: ", end="")
+    elif args.commands == "config":
+        init_config()
 
 
 if __name__ == '__main__':
