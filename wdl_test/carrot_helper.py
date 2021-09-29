@@ -830,8 +830,9 @@ def get_config():
 def main():
     parser = argparse.ArgumentParser(
         prog=sys.argv[0],
-        description="Helper methods to create, "
-                    "setup, and run carrot tests.")
+        description="Helper methods to create, setup, and run carrot "
+                    "tests. Currently, we only support invoking this script "
+                    "from the `wdl_test` directory.")
     subparsers = parser.add_subparsers(dest="commands", help="Commands")
 
     subparsers.add_parser(
