@@ -103,7 +103,7 @@ def main():
     parser.add_argument("-j", "--womtool-jar", help="Path to womtool jar", required=True)
     parser.add_argument("-n", "--num-input-jsons",
                         help="Number of Terra input JSONs expected",
-                        required=False, default=16, type=int)
+                        required=False, default=19, type=int)
     parser.add_argument("--log-level",
                         help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
                         required=False, default="INFO")

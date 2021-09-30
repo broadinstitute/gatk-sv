@@ -1,7 +1,3 @@
-##########################
-## EXPERIMENTAL WORKFLOW
-##########################
-
 version 1.0 
 
 import "Structs.wdl"
@@ -55,7 +51,7 @@ workflow FilterOutlierSamplesPostMinGQ {
 
   # Get outliers
   if (PCRPLUS) {
-    call IdentifyOutliers as IdentifyPcrPlusOutliers {
+    call IdentifyOutliers as identify_PCRPLUS_outliers {
       input:
         svcounts=CombineCounts.summed_svcounts,
         n_iqr_cutoff=select_first([n_iqr_cutoff_pcrplus]),
@@ -64,7 +60,7 @@ workflow FilterOutlierSamplesPostMinGQ {
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
-  call IdentifyOutliers as IdentifyPcrMinusOutliers {
+  call IdentifyOutliers as identify_PCRMINUS_outliers {
     input:
       svcounts=CombineCounts.summed_svcounts,
       n_iqr_cutoff=n_iqr_cutoff_pcrminus,
@@ -78,8 +74,8 @@ workflow FilterOutlierSamplesPostMinGQ {
     input:
       vcf=vcf,
       vcf_idx=vcf_idx,
-      plus_outliers_list=IdentifyPcrPlusOutliers.outliers_list,
-      minus_outliers_list=IdentifyPcrMinusOutliers.outliers_list,
+      plus_outliers_list=identify_PCRPLUS_outliers.outliers_list,
+      minus_outliers_list=identify_PCRMINUS_outliers.outliers_list,
       outfile="~{prefix}.outliers_removed.vcf.gz",
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker
@@ -101,8 +97,8 @@ workflow FilterOutlierSamplesPostMinGQ {
     File nooutliers_samples_list = FilterSampleList.filtered_samples_list
     File excluded_samples_list = ExcludeOutliers.merged_outliers_list
     File svcounts_per_sample_data = CombineCounts.summed_svcounts
-    File? svcounts_per_sample_plots_PCRPLUS = IdentifyPcrPlusOutliers.svcount_distrib_plots
-    File svcounts_per_sample_plots_PCRMINUS = IdentifyPcrMinusOutliers.svcount_distrib_plots
+    File? svcounts_per_sample_plots_PCRPLUS = identify_PCRPLUS_outliers.svcount_distrib_plots
+    File svcounts_per_sample_plots_PCRMINUS = identify_PCRMINUS_outliers.svcount_distrib_plots
   }
 }
 

@@ -16,8 +16,8 @@ The following inputs must be provided for each sample in the cohort, via the sam
 |Input Type|Input Name|Description|
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier*|
-|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file|
-|`File`|`gvcf`|Path to the GCS location of an indexed GVCF produced by GATK HaplotypeCaller**|
+|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
+|`File`|`gvcf`|Path to the GCS location of an indexed GVCF produced by GATK HaplotypeCaller.** Index `.tbi` files are located implicitly so must be present in the same directory. |
 |`Boolean`|`requester_pays_cram`|Set to `true` if the case data is stored in a requester-pays GCS bucket|
 
 *See **Sample ID requirements** below for specifications. 
@@ -47,6 +47,8 @@ The following are the main pipeline outputs. For more information on the outputs
 
 ### Pipeline overview
 
+<img alt="pipeline_diagram" title="Pipeline diagram" src="https://github.com/broadinstitute/gatk-sv/blob/v0.18.1-beta/terra_pipeline_diagram.jpg?raw=true" width="1000">
+
 The following workflows are included in this workspace, to be executed in this order:
 
 1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
@@ -55,14 +57,19 @@ The following workflows are included in this workspace, to be executed in this o
 4. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 5. `05-ClusterBatch`: Per-batch variant clustering
 6. `06-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
-7. `07-FilterBatch`: Per-batch variant filtering; outlier exclusion
-8. (Skip for a single batch) `08-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
-9. `09-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `09-GenotypeBatch_SingleBatch` if you only have one batch.
-10. `10-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `10-RegenotypeCNVs_SingleBatch` if you only have one batch.
-11. `11-MakeCohortVcf`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `11-MakeCohortVcf_SingleBatch` if you only have one batch.
-12. `12-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `12-AnnotateVcf_SingleBatch` if you only have one batch.
+7. `07a-FilterBatchSites`: Per-batch variant filtering
+8. `07b-PlotSVCountsPerSample`: Plot SV counts per sample per SV type to enable choice of IQR cutoff for outlier filtration in `07c-FilterBatchSamples`
+9. `07c-FilterBatchSamples`: Per-batch outlier sample filtration
+10. (Skip for a single batch) `08-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+11. `09-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `09-GenotypeBatch_SingleBatch` if you only have one batch.
+12. `10-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `10-RegenotypeCNVs_SingleBatch` if you only have one batch.
+13. `11-MakeCohortVcf`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `11-MakeCohortVcf_SingleBatch` if you only have one batch.
+14. `12-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `12-AnnotateVcf_SingleBatch` if you only have one batch.
 
-Additional modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv).
+Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
+
+Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
+* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `07b-PlotSVCountsPerSample` beforehand (reconfigured with the single VCF you want to filter) to enable IQR cutoff choice.
 
 For detailed instructions on running the pipeline in Terra, see **Step-by-step instructions** below.
 
@@ -90,6 +97,7 @@ The following estimates pertain to the 1000 Genomes sample data in this workspac
 |--------------|--------|----------|----------|
 |312|~76 hours|~$675|~$2.16/sample|
 
+Please note that sample characteristics, cohort size, and level of filtering may influence pipeline compute costs, with average costs ranging between $2-$3 per sample. For instance, PCR+ samples and samples with a high percentage of improperly paired reads have been observed to cost more. Consider [excluding low-quality samples](https://github.com/broadinstitute/gatk-sv#sample-exclusion) prior to processing to keep costs low.
 
 ## Running GATK-SV on your data in Terra
 This section will cover how to run the pipeline on your own data in Terra.
@@ -132,10 +140,11 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 #### General recommendations
 
 * It is recommended to run each workflow first on one sample/batch to check that the method is properly configured before you attempt to process all of your data.
-* We recommend enabling call-caching (on by default in each workflow configuration), but be aware this will cause large intermediate data storage that can be tricky to clean up.
-* Managing storage in Terra can be difficult. Always exercise caution with file deletion as it is permanent. 
-	* One option is to manually delete large files, or directories containing failed workflow intermediates (after re-running the workflow successfully to take advantage of call-caching) with the command `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory (only after you are done with all the files!). 
-	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables. Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
+* We recommend enabling call-caching (on by default in each workflow configuration).
+* We recommend enabling automatic intermediate file deletion by checking the box labeled "Delete intermediate outputs" at the top of the workflow launch page every time you start a workflow. With this option enabled, intermediate files (those not present in the Terra data table, and not needed for any further GATK-SV processing) will be deleted automatically if the workflow succeeds. If the workflow fails, the outputs will be retained to enable a re-run to pick up where it left off with call-caching. However, call-caching will not be possible for workflows that have succeeded. For more information on this option, see [this article](https://terra.bio/delete-intermediates-option-now-available-for-workflows-in-terra/). For guidance on managing intermediate storage from failed workflows, or from workflows without the delete intermediates option enabled, see the next bullet point.
+* There are cases when you may need to manage storage in other ways: for workflows that failed (only delete files from a failed workflow after a version has succeeded, to avoid disabling call-caching), for workflows without intermediate file deletion enabled, or once you are done processing and want to delete files from earlier steps in the pipeline that you no longer need. 
+	* One option is to manually delete large files, or directories containing failed workflow intermediates (after re-running the workflow successfully to take advantage of call-caching) with the command `gsutil -m rm gs://path/to/workflow/directory/**file_extension_to_delete` to delete all files with the given extension for that workflow, or `gsutil -m rm -r gs://path/to/workflow/directory/` to delete an entire workflow directory (only after you are done with all the files!). Note that this can take a very long time for larger workflows, which may contain thousands of files.
+	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
 * If you only have one batch, you will need to skip `08-MergeBatchSites` and use the single-batch versions of all workflows after `09-GenotypeBatch`.
@@ -144,9 +153,11 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 
 Read the full GatherSampleEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-sample-evidence).
 * This workflow runs on a per-sample level, but you can launch many (a few hundred) samples at once, in arbitrary partitions. Make sure to try just one sample first though!
+* Refer to the [Data section of the README](https://github.com/broadinstitute/gatk-sv#data) for details on input files, sample exclusion, and sample IDs.
 * It is normal for a few samples in a cohort to run out of memory during Wham SV calling, so we recommend enabling auto-retry for out-of-memory errors for `01-GatherSampleEvidence` only. Before you launch the workflow, click the checkbox reading "Retry with more memory" and set the memory retry factor to 1.8. This action must be performed each time you launch a `01-GatherSampleEvidence` job.
-* Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `01-GatherSampleEvidence` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own docker image, share it with your Terra proxy account, enter it in the `melt_docker` input in the `01-GatherSampleEvidence` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `01-GatherSampleEvidence`.
-* Successful runs of `01-GatherSampleEvidence` will automatically delete any BAM files generated during the workflow, but BAM files will not be deleted if the run fails. Since BAM files are large, we recommend deleting them to save on storage costs, but only after fixing and re-running the failed workflow, so that it will call-cache.
+* Please note that most large published joint call sets produced by GATK-SV, including gnomAD-SV, included the tool MELT, a state-of-the-art mobile element insertion (MEI) detector, as part of the pipeline. Due to licensing restrictions, we cannot provide a public docker image for this algorithm. The `01-GatherSampleEvidence` workflow does not use MELT as one of the SV callers by default, which will result in less sensitivity to MEI calls. In order to use MELT, you will need to build your own private docker image (example Dockerfile [here](https://github.com/broadinstitute/gatk-sv/blob/master/dockerfiles/melt/Dockerfile)), share it with your Terra proxy account, enter it in the `melt_docker` input in the `01-GatherSampleEvidence` configuration (as a string, surrounded by double-quotes), and then click "Save". No further changes are necessary beyond `01-GatherSampleEvidence`. 
+	* Note that the version of MELT tested with GATK-SV is v2.0.5. If you use a different version to create your own docker image, we recommend testing your image by running one pilot sample through `01-GatherSampleEvidence` to check that it runs as expected, then running a small group of about 10 pilot samples through the pipeline until the end of `04-GatherBatchEvidence` to check that the outputs are compatible with GATK-SV.
+* If you enable "Delete intermediate outputs" whenever you launch this workflow (recommended), BAM files will be deleted for successful runs; but BAM files will not be deleted if the run fails or if intermediate file deletion is not enabled. Since BAM files are large, we recommend deleting them to save on storage costs, but only after fixing and re-running the failed workflow, so that it will call-cache.
 
 
 #### 02-EvidenceQC
@@ -167,6 +178,7 @@ Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/g
 Read the full GatherBatchEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-batch-evidence).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV`.
 * The default configuration for `04-GatherBatchEvidence` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf.gz", "gs://bucket/shard2.vcf.gz"]`. Alternatively, provide the input `snp_vcfs_shard_list`: a GCS path to a text file containing one SNP VCF shard path per line (this option is useful if the `Array[File]` of `snp_vcfs` shards is too long for Terra to handle).
+	* Refer to **Sample ID requirements** above for guidance on what to do if your SNP VCF has different sample IDs than the ones being used for GATK-SV processing.
 * If you are using GVCFs in a requester-pays bucket, you must provide the Terra billing project for the workspace to the `gvcf_gcs_project_for_requester_pays` argument as a string, surrounded by double-quotes.
 
 #### 05-ClusterBatch and 06-GenerateBatchMetrics
@@ -175,24 +187,26 @@ Read the full documentation for these modules [here](https://github.com/broadins
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` and `04-GatherBatchEvidence`.
 
 
-#### 07-FilterBatch
+#### 07a-FilterBatchSites, 07b-PlotSVCountsPerSample, 07c-FilterBatchSamples
 
-Read the full FilterBatch documentation [here](https://github.com/broadinstitute/gatk-sv#filter-batch).
+These three workflows make up FilterBatch; they are subdivided in this workspace to enable tuning of outlier filtration cutoffs. Read the full FilterBatch documentation [here](https://github.com/broadinstitute/gatk-sv#filter-batch).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `06-GenerateBatchMetrics`.
-* The default value for `outlier_cutoff_nIQR`, which is used to filter samples that have an abnormal number of SV calls, is 10000. This essentially means that no samples are filtered. You should adjust this value depending on your scientific needs.
+* `07a-FilterBatchSites` does not require user intervention
+* `07b-PlotSVCountsPerSample` produces SV count plots and files, as well as a preview of the outlier samples to be filtered, but it does not perform any filtering of the VCFs. The input `N_IQR_cutoff` is used to visualize filtration thresholds on the SV count plots and preview the samples to be filtered; the default value is set to 6. You can adjust this value depending on your needs, and you can re-run the workflow with new `N_IQR_cutoff` values until the plots and outlier sample lists suit the purposes of your study. Once you have chosen an IQR cutoff, provide it to the `N_IQR_cutoff` input in `07c-FilterBatchSamples` to filter the VCFs using the chosen cutoff. 
+* `07c-FilterBatchSamples` performs outlier sample filtration, removing samples with an abnormal number of SV calls of at least one SV type. To tune the filtering threshold to your needs, edit the `N_IQR_cutoff` input value based on the plots and outlier sample preview lists from `07b-PlotSVCountsPerSample`. The default value for `N_IQR_cutoff` in this step is 10000, which essentially means that no samples are filtered.
 
 #### 08-MergeBatchSites
 
 Read the full MergeBatchSites documentation [here](https://github.com/broadinstitute/gatk-sv#merge-batch-sites).
 * If you only have one batch, skip this workflow.
-* For a multi-batch cohort, `08-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `08-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `07-FilterBatch`), and give it a name that follows the **Sample ID requirements**. 
+* For a multi-batch cohort, `08-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `08-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `07c-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**. 
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
 #### 09-GenotypeBatch
 
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
-* Use the same `sample_set` definitions you used for `03-TrainGCNV` through `07-FilterBatch`.
+* Use the same `sample_set` definitions you used for `03-TrainGCNV` through `07c-FilterBatchSamples`.
 * If you only have one batch, use the `09-GenotypeBatch_SingleBatch` version of the workflow.
 
 #### 10-RegenotypeCNVs, 11-MakeCohortVcf, and 12-AnnotateVcf
@@ -201,3 +215,6 @@ Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitu
 * For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `08-MergeBatchSites`.
 * If you only have one batch, use the `[...]_SingleBatch` version of the workflow.
 
+#### Downstream steps
+
+Additional downstream steps are under development. Read about some of them on the README [here](https://github.com/broadinstitute/gatk-sv#module07). Please note that the VCF produced by `11-MakeCohortVcf` (and annotated by `12-AnnotateVcf`) prioritizes sensitivity, but additional downstream filtration is recommended to improve specificity. Filtration methods are under active development by the GATK-SV team; stay tuned for updates.

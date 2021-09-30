@@ -46,6 +46,9 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
 * Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
 
+#### <a name="sample-exclusion">Sample Exclusion</a>
+We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers prior to running [GatherSampleEvidence](#gather-sample-evidence). A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination. Artifactual improperly paired reads could cause incorrect SV calls, and these samples have been observed to have longer runtimes and higher compute costs for [GatherSampleEvidence](#gather-sample-evidence).
+
 #### <a name="sampleids">Sample ID requirements:</a>
 
 Sample IDs must:
@@ -206,7 +209,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample.
+Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. Delly can be enabled but is no longer officially supported. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -220,15 +223,14 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Discordant read pairs (PE) file
 * B-allele fraction (BAF) file
 
-
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*
 
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. The results from this module can be used for QC and batching.
 
-For large cohorts, we recommend dividing samples into smaller batches (~500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
+For large cohorts, this workflow can be run on arbitrary cohort partitions of up to about 500 samples. Afterwards, we recommend using the results to divide samples into smaller batches (~100-500 samples) with ~1:1 male:female ratio. Refer to the [Batching](#batching) section for further guidance on creating batches.
 
-We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file.
+We also recommend using sex assignments generated from the ploidy estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
@@ -278,7 +280,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [EvidenceQC](#evidence-qc) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
-* Per-sample GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
+* Per-sample indexed GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
 * Read count, BAF, PE, and SR files ([GatherSampleEvidence](#gather-sample-evidence))
 * Caller VCFs ([GatherSampleEvidence](#gather-sample-evidence))
 * Contig ploidy model and gCNV model files ([gCNV training](#gcnv-training))
@@ -329,7 +331,10 @@ Generates variant metrics for filtering.
 ## <a name="generate-batch-metrics">FilterBatch</a>
 *Formerly Module03*
 
-Filters poor quality variants and filters outlier samples.
+Filters poor quality variants and filters outlier samples. This workflow can be run all at once with the WDL at `wdl/FilterBatch.wdl`, or it can be run in three steps to enable tuning of outlier filtration cutoffs. The three subworkflows are:
+1. FilterBatchSites: Per-batch variant filtration
+2. PlotSVCountsPerSample: Visualize SV counts per sample per type to help choose an IQR cutoff for outlier filtering, and preview outlier samples for a given cutoff
+3. FilterBatchSamples: Per-batch outlier sample filtration; provide an appropriate `outlier_cutoff_nIQR` based on the SV count plots and outlier previews from step 2.
 
 #### Prerequisites:
 * [GenerateBatchMetrics](#generate-batch-metrics)
@@ -441,7 +446,7 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 ```
 
 * BatchEffect - remove variants that show significant discrepancies in allele frequencies across batches
-* FilterOutlierSamples - remove outlier samples with unusually high or low number of SVs
+* FilterOutlierSamplesPostMinGQ - remove outlier samples with unusually high or low number of SVs
 * FilterCleanupQualRecalibration - sanitize filter columns and recalibrate variant QUAL scores for easier interpretation
 
 ## <a name="annotate-vcf">AnnotateVcf</a> (in development)
@@ -474,3 +479,13 @@ Visualization methods include:
 },
 ```
 Note that a subset of the struct attributes can be specified. See `wdl/Structs.wdl` for available attributes.
+
+
+### Calculated read length causes error in MELT workflow
+
+Example error message from `GatherSampleEvidence.MELT.GetWgsMetrics`:
+```
+Exception in thread "main" java.lang.ArrayIndexOutOfBoundsException: The requested index 701766 is out of counter bounds. Possible cause of exception can be wrong READ_LENGTH parameter (much smaller than actual read length)
+```
+
+This error message was observed for a sample with an average read length of 117, but for which half the reads were of length 90 and half were of length 151. As a workaround, override the calculated read length by providing a `read_length` input of 151 (or the expected read length for the sample in question) to `GatherSampleEvidence`.

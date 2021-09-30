@@ -19,6 +19,7 @@ RF_cutoffs=$5
 whitelist=$6
 petrainfile=$7
 pegenotypes=$8
+batch=$9
 
 sr_pval=$( awk -F'\t' '{if ( $5=="SR_sum_log_pval") print $2}' $RF_cutoffs | head -n 1)
 sr_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $sr_pval)
@@ -234,3 +235,4 @@ echo -e "rare_single"'\t'$rare_single>>sr_metric_file.txt
 echo -e "rare_both"'\t'$rare_both>>sr_metric_file.txt
 echo -e "common_single"'\t'$common_single>>sr_metric_file.txt
 echo -e "common_both"'\t'$common_both>>sr_metric_file.txt
+mv sr_metric_file.txt "$batch.sr_metric_file.txt"

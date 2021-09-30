@@ -98,7 +98,7 @@ workflow GenotypeBatch {
 
   }
 
-  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
+  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(genotype_depth_pesr_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
   call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesPESR {
     input:
       batch_vcf = batch_pesr_vcf,

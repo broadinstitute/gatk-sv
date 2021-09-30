@@ -77,6 +77,7 @@ workflow TrainPEGenotyping {
       RD_genotypes = RD_genotypes,
       RD_melted_genotypes = RD_melted_genotypes,
       exclude_list = exclude_list,
+      batch = batch_ID,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_genotype
   }
@@ -134,6 +135,7 @@ task GenotypePEPart1 {
     File RD_genotypes
     File RD_melted_genotypes
     File exclude_list
+    String batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -149,10 +151,10 @@ task GenotypePEPart1 {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File PE_train = "pe.train.include.txt"
-    File PE_metrics = "pe_metric_file.txt"
-    File genotypes = "pe.geno.withquality.txt.gz"
-    File varGQ = "pe.variant.quality.final.txt.gz"
+    File PE_train = "~{batch}.pe.train.include.txt"
+    File PE_metrics = "~{batch}.pe_metric_file.txt"
+    File genotypes = "~{batch}.pe.geno.withquality.txt.gz"
+    File varGQ = "~{batch}.pe.variant.quality.final.txt.gz"
   }
   command <<<
 
@@ -163,7 +165,7 @@ task GenotypePEPart1 {
       ~{RD_melted_genotypes} \
       ~{RF_cutoffs} \
       ~{exclude_list} \
-      /opt/RdTest/generate_cutoff_PE.R 
+      ~{batch}
   
   >>>
   runtime {

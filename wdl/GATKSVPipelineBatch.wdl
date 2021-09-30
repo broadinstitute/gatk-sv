@@ -226,9 +226,9 @@ workflow GATKSVPipelineBatch {
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
     input:
-      batch_pesr_vcf=GATKSVPipelinePhase1.filtered_pesr_vcf,
+      batch_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       batch_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      cohort_pesr_vcf=GATKSVPipelinePhase1.filtered_pesr_vcf,
+      cohort_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       batch=batch,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
@@ -285,7 +285,6 @@ workflow GATKSVPipelineBatch {
       allosome_fai=allosome_file,
       ref_dict=reference_dict,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
-      disc_files_index=[GATKSVPipelinePhase1.merged_PE_index],
       bincov_files=[GATKSVPipelinePhase1.merged_bincov],
       cohort_name=batch,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],

@@ -1,0 +1,8 @@
+{
+  "PlotSVCountsPerSample.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  
+  "PlotSVCountsPerSample.N_IQR_cutoff": "6",
+
+  "PlotSVCountsPerSample.prefix": "${this.sample_set_id}",
+  "PlotSVCountsPerSample.vcfs" : "${[this.sites_filtered_manta_vcf, this.sites_filtered_delly_vcf, this.sites_filtered_wham_vcf, this.sites_filtered_melt_vcf, this.sites_filtered_depth_vcf]}"
+}

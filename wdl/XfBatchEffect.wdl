@@ -178,6 +178,7 @@ workflow XfBatchEffect {
   call MiniTasks.ConcatVcfs as merge_labeled_vcfs {
     input:
       vcfs=apply_labels_perContig.labeled_vcf,
+      naive=true,
       outfile_prefix="~{prefix}.batch_effects_labeled_merged",
       sv_base_mini_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_merge_labeled_vcfs
