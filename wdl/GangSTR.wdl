@@ -65,22 +65,13 @@ task CallGangSTR {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int cases_length = length(bams_or_crams)
-
   output {
   }
 
   command <<<
     set -euxo pipefail
 
-    function join_by
-    {
-      local d=${1-} f=${2-};
-      if shift 2; then printf %s "$f" "${@/#/$d}"; fi;
-    }
-
-    bams_arr=(~{sep=" " bams_or_crams})
-    joined_bams=$( join_by , "$bams_arr" )
+    joined_bams=(~{sep="," bams_or_crams})
 
     GangSTR \
       --bam $joined_bams \
