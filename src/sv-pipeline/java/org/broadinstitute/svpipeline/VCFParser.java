@@ -377,26 +377,6 @@ public class VCFParser implements Closeable {
             return false;
         }
 
-        public ByteSequence replace( final ByteSequence oldValue, final ByteSequence newValue ) {
-            if ( buffer != oldValue.buffer || oldValue.start < start || oldValue.end > end ) {
-                throw new IllegalStateException("replaced value not within buffer");
-            }
-            final int oldLen = oldValue.length();
-            final int newLen = newValue.length();
-            if ( newLen == oldLen ) {
-                System.arraycopy(newValue.buffer, newValue.start, buffer, oldValue.start, newLen);
-                System.arraycopy(buffer, oldValue.end, buffer, oldValue.start + newLen, end - oldValue.end);
-                return this;
-            }
-            final int length = length();
-            final byte[] newBuf = new byte[length + newLen - oldValue.length()];
-            final int len1 = oldValue.start - start;
-            System.arraycopy(buffer, start, newBuf, 0, len1);
-            System.arraycopy(newValue.buffer, newValue.start, newBuf, len1, newLen);
-            System.arraycopy(buffer, oldValue.end, newBuf, len1 + newLen, end - oldValue.end);
-            return new ByteSequence(newBuf, 0, newBuf.length);
-        }
-
         public int asInt() {
             final ByteIterator itr = iterator();
             if ( !itr.hasNext() || itr.peek() == '.' ) {
