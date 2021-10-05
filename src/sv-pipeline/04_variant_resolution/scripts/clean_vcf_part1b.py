@@ -182,21 +182,14 @@ def ensure_file(filename):
 
 
 def main(int_vcf_gz):
-    revised_vcf_filename = ensure_file("normal.revise.unsorted.vcf")
+    revised_vcf_filename = ensure_file("normal.revise.unsorted.vcf.gz")
     multi_cnvs_filename = ensure_file("multi.cnvs.txt")
 
     reviser = VCFReviser()
     reviser.modify_variants(
         int_vcf_gz, revised_vcf_filename, multi_cnvs_filename)
 
-    sorted_output = ensure_file("normal.revise.vcf")
-    cmd = f"cat {revised_vcf_filename} | vcf-sort > {sorted_output}"
-    ps = Popen(cmd, shell=True, stdout=PIPE, stderr=STDOUT)
-    ps.communicate()[0]
-    ensure_file("normal.revise.vcf.gz")
-    check_call(["bgzip", sorted_output])
-    output_name = sorted_output + ".gz"
-    check_call(["bcftools", "index", output_name])
+    check_call(["bcftools", "index", revised_vcf_filename])
 
 
 if __name__ == '__main__':
