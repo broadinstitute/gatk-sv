@@ -9,7 +9,7 @@ import pysam
 import svtk.utils as svu
 import sys
 from pathlib import Path
-from subprocess import check_call, Popen, PIPE, STDOUT
+from subprocess import check_call
 
 
 SVTYPE = "SVTYPE"
