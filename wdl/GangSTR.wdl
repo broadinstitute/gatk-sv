@@ -1,3 +1,7 @@
+## Workflow to run GangSTR (https://github.com/gymreklab/GangSTR), a tool
+## for computing genome-wide profile of short tandem repeats (STR) from
+## short reads.
+
 version 1.0
 
 import "Structs.wdl"
@@ -38,7 +42,12 @@ workflow GangSTR {
   File reference_fasta_index_ = select_first([
     reference_fasta_index, reference_fasta + ".fai"])
 
-
+    # Computes the STR profiles on multiple samples leveraging
+    # GangSTR's built-in functionality. If GangSTR does not performe
+    # any comparative assessment on the samples (i.e., process every
+    # sample independent from other samples) it would be better to
+    # put the call to CallGangSTR in the scatter for parallelization
+    # on different VMs.
     call CallGangSTR {
       input:
         bams_or_crams = bams_or_crams,
