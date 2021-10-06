@@ -6,14 +6,6 @@ version 1.0
 
 import "Structs.wdl"
 
-struct FilenamePostfixes {
-  String locus
-  String motif
-  String profile
-  String merged_profile
-  Int profile_len
-}
-
 workflow GangSTR {
 
   input {
@@ -42,24 +34,21 @@ workflow GangSTR {
   File reference_fasta_index_ = select_first([
     reference_fasta_index, reference_fasta + ".fai"])
 
-    # Computes the STR profiles on multiple samples leveraging
-    # GangSTR's built-in functionality. If GangSTR does not performe
-    # any comparative assessment on the samples (i.e., process every
-    # sample independent from other samples) it would be better to
-    # put the call to CallGangSTR in the scatter for parallelization
-    # on different VMs.
-    call CallGangSTR {
-      input:
-        bams_or_crams = bams_or_crams,
-        bams_or_crams_indexes = bams_or_crams_indexes_,
-        reference_fasta = reference_fasta,
-        reference_fasta_index = reference_fasta_index_,
-        regions = regions,
-        docker = docker,
-        runtime_attr_override = runtime_attr
-    }
+  call CallGangSTR {
+    input:
+      bams_or_crams = bams_or_crams,
+      bams_or_crams_indexes = bams_or_crams_indexes_,
+      reference_fasta = reference_fasta,
+      reference_fasta_index = reference_fasta_index_,
+      regions = regions,
+      docker = docker,
+      runtime_attr_override = runtime_attr
+  }
 
   output {
+    File output_vcf = CallGangSTR.output_vcf
+    File sample_stats = CallGangSTR.sample_stats
+    File insdata = CallGangSTR.insdata
   }
 }
 
@@ -75,6 +64,9 @@ task CallGangSTR {
   }
 
   output {
+    File output_vcf = "output.vcf"
+    File sample_stats = "output.samplestats.tab"
+    File insdata = "output.insdata.tab"
   }
 
   command <<<
