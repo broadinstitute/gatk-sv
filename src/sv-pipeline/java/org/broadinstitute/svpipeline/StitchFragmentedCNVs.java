@@ -11,13 +11,24 @@ import org.broadinstitute.svpipeline.VCFParser.*;
  * replace the first one by adding on the interval covered by the second one.
  */
 public class StitchFragmentedCNVs {
-    private static final ByteSequence END = new ByteSequence("END");
-    private static final ByteSequence SVLEN = new ByteSequence("SVLEN");
-
     // These 3 values will always be overwritten, but are initialized to reasonable defaults as documentation
     private static double PAD_FACTOR = .2;
     private static int MAX_PAD = 200000;
     private static double MAX_OVERLAP_FACTOR = .2;
+
+    // This class does its own integration testing.
+    // Set OP_MODE to 0 (or let it default) for production mode.
+    // Set OP_MODE to 1 to generate an annotated vcf.
+    //   In this mode the output vcf is annotated to indicate which modifications should be performed.
+    // Set OP_MODE to 2 for test mode.
+    //   In this mode the annotated vcf is checked to see that the annotated modifications remain accurate.
+    private static final int OP_MODE = Integer.parseInt(System.getProperty("OP_MODE", "0"));
+
+    private static final ByteSequence END = new ByteSequence("END");
+    private static final ByteSequence SVLEN = new ByteSequence("SVLEN");
+    private static final ByteSequence STITCH = new ByteSequence("STITCH");
+    private static final ByteSequence MISSING = new ByteSequence(".");
+    private static boolean foundErrorInTestMode = false;
 
     public static void main( final String[] args ) {
         if ( args.length != 4 ) {
@@ -46,14 +57,23 @@ public class StitchFragmentedCNVs {
         } catch ( final IOException ioe ) {
             throw new MalformedVCFException("can't write to stdout", ioe);
         }
+
+        if ( foundErrorInTestMode ) {
+            System.exit(2);
+        }
     }
 
     /** Look for a stitchable downstream of the subject that can be joined to it to
      *  make a larger event. */
     private static void findExtension( final Record stitchable,
                                        final StitchableIterator sItr ) throws IOException {
+        if ( OP_MODE != 0 && MISSING.equals(stitchable.getInfo().get(STITCH)) ) {
+            return;
+        }
+
         final PaddedInterval originalPaddedInterval = new PaddedInterval(stitchable);
         PaddedInterval paddedInterval = originalPaddedInterval;
+        List<ByteSequence> stitchedTo = null;
 
         // sItr.hasNext returns false at EOF, or when the next record is too far away to
         // overlap the subject
@@ -61,19 +81,72 @@ public class StitchFragmentedCNVs {
             final Record record = sItr.next();
             final PaddedInterval paddedInterval2 = new PaddedInterval(record);
             if ( paddedInterval.canCoalesceWith(paddedInterval2) &&
-                    stitchable.getGenotypes().equals(record.getGenotypes()) ) {
+                    genotypesMatch(stitchable.getGenotypes(), record.getGenotypes()) ) {
                 paddedInterval = paddedInterval2;
-                sItr.remove();
+                if ( OP_MODE == 0 ) {
+                    sItr.remove();
+                } else {
+                    if ( stitchedTo == null ) {
+                        stitchedTo = new ArrayList<>();
+                    }
+                    stitchedTo.add(record.getID());
+                    if ( OP_MODE == 1 ) {
+                        record.getInfo().put(STITCH, MISSING);
+                    } else {
+                        final ByteSequence oldValue = record.getInfo().get(STITCH);
+                        if ( !MISSING.equals(oldValue) ) {
+                            System.err.println(record.getID() + " was stitched to " +
+                                    (oldValue == null ? "nothing" : oldValue) +
+                                    " and is now stitched to " + stitchable.getID());
+                            foundErrorInTestMode = true;
+                        }
+                    }
+                }
             }
         }
 
-        if ( paddedInterval != originalPaddedInterval ) {
+        if ( OP_MODE != 0 ) {
+            ByteSequence value = null;
+            if ( stitchedTo != null ) {
+                value = new ByteSequence(stitchedTo, ',');
+            }
+            if ( OP_MODE == 1 ) {
+                stitchable.getInfo().put(STITCH, value);
+            } else {
+                final ByteSequence oldValue = stitchable.getInfo().get(STITCH);
+                if ( !Objects.equals(value, oldValue) ) {
+                    System.err.println(stitchable.getID() + " was stitched to " +
+                            (oldValue == null ? "nothing" : oldValue) +
+                            " and is now stitched to " + (value == null ? "nothing" : value));
+                    foundErrorInTestMode = true;
+                }
+            }
+        } else if ( paddedInterval != originalPaddedInterval ) {
             final int endPos = paddedInterval.getVCFEnd();
             final InfoField infos = stitchable.getInfo();
             infos.put(END, new ByteSequence(Integer.toString(endPos)));
             final int svLength = endPos + 1 - stitchable.getPosition();
             infos.put(SVLEN, new ByteSequence(Integer.toString(svLength)));
         }
+    }
+
+    private static boolean genotypesMatch( final List<CompoundField> genotypes1,
+                                           final List<CompoundField> genotypes2 ) {
+        final int nGTs = genotypes1.size();
+        if ( genotypes2.size() != nGTs ) {
+            throw new IllegalStateException("records have a different number of genotypes");
+        }
+        for ( int idx = 0; idx != nGTs; ++idx ) {
+            final VCFParser.ByteIterator itr1 = genotypes1.get(idx).getValue().iterator();
+            final VCFParser.ByteIterator itr2 = genotypes2.get(idx).getValue().iterator();
+            byte b1;
+            do {
+                b1 = itr1.hasNext() ? itr1.next() : (byte)':';
+                final byte b2 = itr2.hasNext() ? itr2.next() : (byte)':';
+                if ( b1 != b2 ) return false;
+            } while ( b1 != ':' );
+        }
+        return true;
     }
 
     private static void initCommandLineArgs( final String[] args ) {
@@ -313,6 +386,23 @@ public class StitchFragmentedCNVs {
                         lastRecord.getChromosome().equals(record.getChromosome()) ) {
                     if ( record.getPosition() < lastRecord.getPosition() ) {
                         throw new MalformedVCFException("vcf is mis-sorted");
+                    }
+                }
+                if ( OP_MODE != 0 ) {
+                    if ( OP_MODE == 1 ) {
+                        record.getInfo().remove(STITCH);
+                    } else {
+                        if ( record.getInfo().containsKey(STITCH) ) {
+                            if ( !isStitchable(record) ) {
+                                System.err.println(record.getID() + " became unstitchable");
+                                foundErrorInTestMode = true;
+                            }
+                        } else {
+                            if ( isStitchable(record) ) {
+                                System.err.println(record.getID() + " became stitchable");
+                                foundErrorInTestMode = true;
+                            }
+                        }
                     }
                 }
                 lastRecord = record;
