@@ -33,6 +33,7 @@ class VCFReviser:
         self.rd_cn = {}
         self.ev = {}
         self.samples = {}
+        self.tmp_dir = os.path.abspath(os.path.expanduser("/tmp"))
 
     def _update_rd_cn_ev(self, variant):
         rd_cn = []
@@ -90,6 +91,7 @@ class VCFReviser:
                 i += 1
                 self.samples[sample] = i
 
+            pybedtools.set_tempdir(self.tmp_dir)
             dels_and_dups = pybedtools.BedTool(
                 self.filter_variant_types(
                     f.fetch(), [SVType.DEL, SVType.DUP], 5000)).saveas()
