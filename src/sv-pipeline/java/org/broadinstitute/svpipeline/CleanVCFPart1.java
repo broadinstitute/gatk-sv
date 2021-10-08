@@ -226,6 +226,9 @@ public class CleanVCFPart1 {
                                              final int rdCNIndex,
                                              final int[] sexForColumn,
                                              final boolean isY ) {
+        // We're going to calculate the median rdCN values for males and females.
+        // We only care if the median is 0, 1, 2, or something larger, so we'll use 4 bins to
+        // sum up the counts:  all values >2 go into the last bucket.
         final int[] maleCounts = new int[4];
         final int[] femaleCounts = new int[4];
         final int nSamples = genotypes.size();
@@ -245,36 +248,27 @@ public class CleanVCFPart1 {
                 femaleCounts[rdCNVal] += 1;
             }
         }
-        final double maleTarget =
-                (maleCounts[0] + maleCounts[1] + maleCounts[2] + maleCounts[3])/2.;
-        double maleMedian = 0.;
-        int counts = 0;
+        final double maleMedian = calcMedian(maleCounts);
+        double femaleMedian = calcMedian(femaleCounts);
+        return maleMedian == 1. && (isY ? femaleMedian == 0. : femaleMedian == 2.);
+    }
+
+    // visible for testing
+    static double calcMedian( final int[] counts ) {
+        final double target = (counts[0] + counts[1] + counts[2] + counts[3]) / 2.;
+        if ( target == 0. ) {
+            return Double.NaN;
+        }
+        int total = 0;
         for ( int iii = 0; iii < 4; ++iii ) {
-            counts += maleCounts[iii];
-            if ( counts == maleTarget ) {
-                maleMedian = iii + .5;
-                break;
-            } else if ( counts > maleTarget ) {
-                maleMedian = iii;
-                break;
+            total += counts[iii];
+            if ( total == target ) {
+                return iii + .5;
+            } else if ( total > target ) {
+                return (double)iii;
             }
         }
-        final double femaleTarget =
-                (femaleCounts[0] + femaleCounts[1] + femaleCounts[2] + femaleCounts[3])/2.;
-        double femaleMedian = 0.;
-        counts = 0;
-        for ( int iii = 0; iii < 4; ++iii ) {
-            counts += femaleCounts[iii];
-            if ( counts == femaleTarget ) {
-                femaleMedian = iii + .5;
-                break;
-            } else if ( counts > femaleTarget ) {
-                femaleMedian = iii;
-                break;
-            }
-        }
-        return (!isY && maleMedian==1. && femaleMedian==2.) ||
-                (isY && maleMedian==1. && femaleMedian==0.);
+        throw new IllegalStateException("we should never reach this statement");
     }
 
     private static Set<ByteSequence> readNoisyEventsFile( final String filename ) {
