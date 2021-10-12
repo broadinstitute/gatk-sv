@@ -1,4 +1,5 @@
 version 1.0
+import "Structs.wdl"
 
 task CatMetrics {
   input {
@@ -7,8 +8,18 @@ task CatMetrics {
     String? search_string
     String? replace_string
     String linux_docker
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.metrics.tsv"
@@ -23,15 +34,14 @@ task CatMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "1 GiB"
-    disks: "local-disk 10 HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: linux_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task StandardizeVCF {
@@ -42,11 +52,17 @@ task StandardizeVCF {
     File contig_index
     Int min_size
     String sv_pipeline_base_docker
-    Float mem_gib = 1
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
-
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   output {
     File out = "~{sample_id}.~{caller}.std.vcf.gz"
   }
@@ -58,15 +74,14 @@ task StandardizeVCF {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task VCFMetrics {
@@ -78,12 +93,20 @@ task VCFMetrics {
     String prefix
     File contig_list
     String sv_pipeline_base_docker
-    Float mem_gib = 3.75
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.vcf.tsv"
@@ -101,15 +124,14 @@ task VCFMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task BAFMetrics {
@@ -117,13 +139,21 @@ task BAFMetrics {
     File baf_file
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 3.75
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   String prefix = if length(samples) > 1 then "merged" else samples[0]
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.baf-file.tsv"
@@ -134,15 +164,14 @@ task BAFMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task SRMetrics {
@@ -150,13 +179,21 @@ task SRMetrics {
     File sr_file
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 3.75
-    Int disk_gb = 25
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   String prefix = if length(samples) > 1 then "merged" else samples[0]
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 25,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.sr-file.tsv"
@@ -167,15 +204,14 @@ task SRMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task PEMetrics {
@@ -183,13 +219,21 @@ task PEMetrics {
     File pe_file
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 3.75
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   String prefix = if length(samples) > 1 then "merged" else samples[0]
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.pe-file.tsv"
@@ -200,15 +244,14 @@ task PEMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task CountsMetrics {
@@ -216,8 +259,18 @@ task CountsMetrics {
     File counts_file
     String sample_id
     String sv_pipeline_base_docker
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{sample_id}.raw-counts.tsv"
@@ -228,15 +281,14 @@ task CountsMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "3.75 GiB"
-    disks: "local-disk 10 HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task BincovMetrics {
@@ -244,13 +296,21 @@ task BincovMetrics {
     File bincov_matrix
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 15
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   File samples_list = write_lines(samples)
   String low_mem_mode_arg = if length(samples) > 10 then "--low-mem-mode" else ""
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 15.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "bincov-matrix.tsv"
@@ -261,15 +321,14 @@ task BincovMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task MedcovMetrics {
@@ -278,10 +337,20 @@ task MedcovMetrics {
     Array[String] samples
     File? baseline_medcov_file
     String sv_pipeline_base_docker
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "medcov.tsv"
@@ -296,15 +365,14 @@ task MedcovMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "1 GiB"
-    disks: "local-disk 10 HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task MergedDepthMetricsWithBaseline {
@@ -314,8 +382,18 @@ task MergedDepthMetricsWithBaseline {
     String type
     File contig_list
     String sv_pipeline_base_docker
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{type}.merged-depth.tsv"
@@ -336,15 +414,14 @@ task MergedDepthMetricsWithBaseline {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "3.75 GiB"
-    disks: "local-disk 10 HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task MergedDepthMetricsWithoutBaseline {
@@ -353,8 +430,18 @@ task MergedDepthMetricsWithoutBaseline {
     String type
     File contig_list
     String sv_pipeline_base_docker
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{type}.merged-depth.tsv"
@@ -365,15 +452,14 @@ task MergedDepthMetricsWithoutBaseline {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "3.75 GiB"
-    disks: "local-disk 10 HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task MetricsFileMetrics {
@@ -383,12 +469,20 @@ task MetricsFileMetrics {
     Boolean common
     String prefix
     String sv_pipeline_base_docker
-    Float mem_gib = 3.75
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   String common_arg = if common then "--common" else ""
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "~{prefix}.metrics.tsv"
@@ -399,15 +493,14 @@ task MetricsFileMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task CutoffAndOutlierMetrics {
@@ -417,12 +510,20 @@ task CutoffAndOutlierMetrics {
     File filtered_ped_file
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 1.0
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   File samples_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File out = "rf_cutoff.metrics.tsv"
@@ -436,15 +537,14 @@ task CutoffAndOutlierMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task GenotypingCutoffMetrics {
@@ -452,11 +552,17 @@ task GenotypingCutoffMetrics {
     File cutoffs
     String name
     String sv_pipeline_base_docker
-    Float mem_gib = 1.0
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
-
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   output {
     File out = "cutoffs.~{name}.metrics.tsv"
   }
@@ -466,15 +572,14 @@ task GenotypingCutoffMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task IdListMetrics {
@@ -482,11 +587,17 @@ task IdListMetrics {
     File id_list
     String name
     String linux_docker
-    Float mem_gib = 1.0
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
-
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   output {
     File out = "~{name}.id_list_metrics.tsv"
   }
@@ -498,15 +609,14 @@ task IdListMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: linux_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }
 
 task PlotMetrics {
@@ -516,12 +626,20 @@ task PlotMetrics {
     File base_metrics
     Array[String] samples
     String sv_pipeline_base_docker
-    Float mem_gib = 1.0
-    Int disk_gb = 10
-    Int preemptible_attempts = 3
+    RuntimeAttr? runtime_attr_override
   }
 
   File sample_list = write_lines(samples)
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 1.0,
+    disk_gb: 10,
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
   output {
     File metrics_plot_pdf = "~{name}.plot_metrics.pdf"
@@ -533,13 +651,12 @@ task PlotMetrics {
 
   >>>
   runtime {
-    cpu: 1
-    memory: "~{mem_gib} GiB"
-    disks: "local-disk ~{disk_gb} HDD"
-    bootDiskSizeGb: 10
+    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_base_docker
-    preemptible: preemptible_attempts
-    maxRetries: 1
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
 }

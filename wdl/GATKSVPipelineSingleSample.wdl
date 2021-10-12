@@ -16,7 +16,6 @@ import "GermlineCNVCase.wdl" as gcnv
 import "SingleSampleFiltering.wdl" as SingleSampleFiltering
 import "GATKSVPipelineSingleSampleMetrics.wdl" as SingleSampleMetrics
 import "Utils.wdl" as utils
-import "TestUtils.wdl" as tu
 import "Structs.wdl"
 
 # GATK SV Pipeline single sample mode

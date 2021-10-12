@@ -30,6 +30,19 @@ workflow GatherBatchEvidenceMetrics {
     String sv_pipeline_base_docker
     String linux_docker
 
+    RuntimeAttr? runtime_attr_delly_metrics
+    RuntimeAttr? runtime_attr_manta_metrics
+    RuntimeAttr? runtime_attr_melt_metrics
+    RuntimeAttr? runtime_attr_wham_metrics
+    RuntimeAttr? runtime_attr_baf_metrics = {"mem_gb": 30, "disk_gb": 100}
+    RuntimeAttr? runtime_attr_sr_metrics = {"mem_gb": 30, "disk_gb": 100, "preemptible_tries": 0}
+    RuntimeAttr? runtime_attr_pe_metrics = {"mem_gb": 15, "disk_gb": 100, "preemptible_tries": 0}
+    RuntimeAttr? runtime_attr_bincov_metrics
+    RuntimeAttr? runtime_attr_medcov_metrics
+    RuntimeAttr? runtime_attr_merged_del
+    RuntimeAttr? runtime_attr_merged_dup
+    RuntimeAttr? runtime_attr_cat_metrics
+
     # Do not use
     File? FILE_NONE_
   }
@@ -48,7 +61,8 @@ workflow GatherBatchEvidenceMetrics {
           prefix = "delly_std_" + samples[i],
           types = "DEL,DUP,INS,INV,BND",
           contig_list = contig_list,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_delly_metrics
       }
     }
     if (defined(std_manta_vcf)) {
@@ -60,7 +74,8 @@ workflow GatherBatchEvidenceMetrics {
           prefix = "manta_std_" + samples[i],
           types = "DEL,DUP,INS,INV,BND",
           contig_list = contig_list,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_manta_metrics
       }
     }
     if (defined(std_melt_vcf)) {
@@ -72,7 +87,8 @@ workflow GatherBatchEvidenceMetrics {
           prefix = "melt_std_" + samples[i],
           types = "INS",
           contig_list = contig_list,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_melt_metrics
       }
     }
     if (defined(std_wham_vcf)) {
@@ -84,7 +100,8 @@ workflow GatherBatchEvidenceMetrics {
           prefix = "wham_std_" + samples[i],
           types = "DEL,DUP",
           contig_list = contig_list,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_wham_metrics
       }
     }
     Array[File] sample_metric_files_ = select_all([Delly_Std_Metrics.out, Manta_Std_Metrics.out, Melt_Std_Metrics.out, Wham_Std_Metrics.out])
@@ -96,39 +113,36 @@ workflow GatherBatchEvidenceMetrics {
       baf_file = merged_BAF,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      mem_gib = 30,
-      disk_gb = 100
+      runtime_attr_override = runtime_attr_baf_metrics
   }
   call tu.SRMetrics {
     input:
       sr_file = merged_SR,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      mem_gib = 30,
-      disk_gb = 100,
-      preemptible_attempts = 0
+      runtime_attr_override = runtime_attr_sr_metrics
   }
   call tu.PEMetrics {
     input:
       pe_file = merged_PE,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      mem_gib = 15,
-      disk_gb = 100,
-      preemptible_attempts = 0
+      runtime_attr_override = runtime_attr_pe_metrics
   }
   call tu.BincovMetrics {
     input:
       bincov_matrix = merged_bincov,
       samples = samples,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_bincov_metrics
   }
   call tu.MedcovMetrics {
     input:
       medcov_file = median_cov,
       samples = samples,
       baseline_medcov_file = baseline_median_cov,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_medcov_metrics
   }
   if (defined(baseline_merged_dels)) {
     call tu.MergedDepthMetricsWithBaseline as MergedDelWithBaseline {
@@ -137,7 +151,8 @@ workflow GatherBatchEvidenceMetrics {
         baseline_bed = select_first([baseline_merged_dels]),
         type = "DEL",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_merged_del
     }
   }
   if (!defined(baseline_merged_dels)) { # else
@@ -146,7 +161,8 @@ workflow GatherBatchEvidenceMetrics {
         bed = merged_dels,
         type = "DEL",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_merged_del
     }
   }
   if (defined(baseline_merged_dups)) {
@@ -156,7 +172,8 @@ workflow GatherBatchEvidenceMetrics {
         baseline_bed = select_first([baseline_merged_dups]),
         type = "DUP",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_merged_dup
     }
   }
   if (!defined(baseline_merged_dups)) { # else
@@ -165,7 +182,8 @@ workflow GatherBatchEvidenceMetrics {
         bed = merged_dups,
         type = "DUP",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_merged_dup
     }
   }
 
@@ -176,7 +194,8 @@ workflow GatherBatchEvidenceMetrics {
     input:
       prefix = "GatherBatchEvidence." + name,
       metric_files = flatten([sample_metric_files, [BAFMetrics.out, SRMetrics.out, PEMetrics.out, BincovMetrics.out, MedcovMetrics.out, del_metrics, dup_metrics]]),
-      linux_docker = linux_docker
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_cat_metrics
   }
 
   output {

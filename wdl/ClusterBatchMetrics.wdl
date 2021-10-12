@@ -24,13 +24,22 @@ workflow ClusterBatchMetrics {
     String? sv_base_mini_docker  # required if not providing samples array
     String sv_pipeline_base_docker
     String linux_docker
+
+    RuntimeAttr? runtime_attr_sample_ids_from_vcf
+    RuntimeAttr? runtime_attr_depth_metrics
+    RuntimeAttr? runtime_attr_delly_metrics
+    RuntimeAttr? runtime_attr_manta_metrics
+    RuntimeAttr? runtime_attr_melt_metrics
+    RuntimeAttr? runtime_attr_wham_metrics
+    RuntimeAttr? runtime_attr_cat_metrics
   }
 
   if (!defined(samples)) {
     call util.GetSampleIdsFromVcf {
       input:
         vcf = depth_vcf,
-        sv_base_mini_docker = select_first([sv_base_mini_docker])
+        sv_base_mini_docker = select_first([sv_base_mini_docker]),
+        runtime_attr_override = runtime_attr_sample_ids_from_vcf
     }
   }
 
@@ -42,7 +51,8 @@ workflow ClusterBatchMetrics {
       prefix = "depth_clustered",
       types = "DEL,DUP",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_depth_metrics
   }
   if (defined(delly_vcf)) {
     call tu.VCFMetrics as delly_metrics {
@@ -53,7 +63,8 @@ workflow ClusterBatchMetrics {
         prefix = "delly_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_delly_metrics
     }
   }
   if (defined(manta_vcf)) {
@@ -65,7 +76,8 @@ workflow ClusterBatchMetrics {
         prefix = "manta_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_manta_metrics
     }
   }
   if (defined(melt_vcf)) {
@@ -77,7 +89,8 @@ workflow ClusterBatchMetrics {
         prefix = "melt_clustered",
         types = "INS",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_melt_metrics
     }
   }
   if (defined(wham_vcf)) {
@@ -89,7 +102,8 @@ workflow ClusterBatchMetrics {
         prefix = "wham_clustered",
         types = "DEL,DUP",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_wham_metrics
     }
   }
 
@@ -97,7 +111,8 @@ workflow ClusterBatchMetrics {
     input:
       prefix = "ClusterBatch." + name,
       metric_files = select_all([depth_metrics.out, delly_metrics.out, manta_metrics.out, melt_metrics.out, wham_metrics.out]),
-      linux_docker = linux_docker
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_cat_metrics
   }
 
   output {
