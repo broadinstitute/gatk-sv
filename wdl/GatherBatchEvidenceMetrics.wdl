@@ -34,9 +34,9 @@ workflow GatherBatchEvidenceMetrics {
     RuntimeAttr? runtime_attr_manta_metrics
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_wham_metrics
-    RuntimeAttr? runtime_attr_baf_metrics = {"mem_gb": 30, "disk_gb": 100}
-    RuntimeAttr? runtime_attr_sr_metrics = {"mem_gb": 30, "disk_gb": 100, "preemptible_tries": 0}
-    RuntimeAttr? runtime_attr_pe_metrics = {"mem_gb": 15, "disk_gb": 100, "preemptible_tries": 0}
+    RuntimeAttr? runtime_attr_baf_metrics
+    RuntimeAttr? runtime_attr_sr_metrics
+    RuntimeAttr? runtime_attr_pe_metrics
     RuntimeAttr? runtime_attr_bincov_metrics
     RuntimeAttr? runtime_attr_medcov_metrics
     RuntimeAttr? runtime_attr_merged_del
@@ -113,21 +113,21 @@ workflow GatherBatchEvidenceMetrics {
       baf_file = merged_BAF,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_baf_metrics
+      runtime_attr_override = select_first([runtime_attr_baf_metrics, {"mem_gb": 30, "disk_gb": 100}])
   }
   call tu.SRMetrics {
     input:
       sr_file = merged_SR,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_sr_metrics
+      runtime_attr_override = select_first([runtime_attr_sr_metrics, {"mem_gb": 30, "disk_gb": 100, "preemptible_tries": 0}])
   }
   call tu.PEMetrics {
     input:
       pe_file = merged_PE,
       samples = samples,
       sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_pe_metrics
+      runtime_attr_override = select_first([runtime_attr_pe_metrics, {"mem_gb": 15, "disk_gb": 100, "preemptible_tries": 0}])
   }
   call tu.BincovMetrics {
     input:
