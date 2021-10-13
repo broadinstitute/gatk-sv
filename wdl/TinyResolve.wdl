@@ -1,7 +1,9 @@
 version 1.0
 
 import "Structs.wdl"
-# Does perlim translocation resolve from raw manta calls
+import "GetShardInputs.wdl"
+
+# Does prelim translocation resolve from raw manta calls
 workflow TinyResolve {
   input {
     Array[String] samples         # Sample ID
@@ -26,28 +28,47 @@ workflow TinyResolve {
   Int num_shards = ceil(num_samples_float / samples_per_shard)
 
   scatter (i in range(num_shards)) {
-    call GetShardInputs {
+    call GetShardInputs.GetShardInputs as GetShardSamples {
       input:
-        samples_per_shard = samples_per_shard,
+        items_per_shard = samples_per_shard,
         shard_number = i,
-        num_samples = num_samples,
-        all_samples = samples,
-        all_discfiles = discfile,
-        all_discfile_idxs = discfile_idx,
-        all_vcfs = manta_vcfs,
-        python_docker = python_docker,
-        runtime_attr_override = runtime_attr_shard
+        num_items = num_samples,
+        all_items = samples
+    }
+
+    call GetShardInputs.GetShardInputs as GetShardDiscfiles {
+      input:
+        items_per_shard = samples_per_shard,
+        shard_number = i,
+        num_items = num_samples,
+        all_items = discfile
+    }
+
+    call GetShardInputs.GetShardInputs as GetShardDiscfileIndexes {
+      input:
+        items_per_shard = samples_per_shard,
+        shard_number = i,
+        num_items = num_samples,
+        all_items = discfile_idx
+    }
+
+    call GetShardInputs.GetShardInputs as GetShardVcfs {
+      input:
+        items_per_shard = samples_per_shard,
+        shard_number = i,
+        num_items = num_samples,
+        all_items = manta_vcfs
     }
 
     call ResolveManta {
       input:
-        raw_vcfs=GetShardInputs.shard_vcfs,
-        samples=GetShardInputs.shard_samples,
+        raw_vcfs=GetShardVcfs.shard_items,
+        samples=GetShardSamples.shard_items,
         sv_pipeline_docker = sv_pipeline_docker,
         cytoband=cytoband,
         cytoband_idx=cytoband_idx,
-        discfile=GetShardInputs.shard_discfiles,
-        discfile_idx=GetShardInputs.shard_discfiles_idx,
+        discfile=GetShardDiscfiles.shard_items,
+        discfile_idx=GetShardDiscfileIndexes.shard_items,
         mei_bed=mei_bed,
         runtime_attr_override=runtime_attr
     }
@@ -58,60 +79,6 @@ workflow TinyResolve {
   }
 }
 
-task GetShardInputs {
-  input {
-    Int samples_per_shard
-    Int shard_number
-    Int num_samples
-    Array[String] all_samples
-    Array[String] all_discfiles
-    Array[String] all_discfile_idxs
-    Array[String] all_vcfs
-    String? python_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  String python_docker_ = select_first([python_docker, "python:3.7.12-bullseye"])
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<<
-    set -euo pipefail
-    python3 <<CODE
-    all_samples = ['~{sep = "','" all_samples}']
-    all_discfiles = ['~{sep = "','" all_discfiles}']
-    all_discfile_idxs = ['~{sep = "','" all_discfile_idxs}']
-    all_vcfs = ['~{sep = "','" all_vcfs}']
-    start = ~{shard_number} * ~{samples_per_shard}
-    end = min(start + ~{samples_per_shard}, ~{num_samples})
-    with open("shard_discfiles.txt", 'w') as disc, open("shard_samples.txt", 'w') as samp, open("shard_disc_idx.txt", 'w') as idxs, open("shard_vcfs.txt", 'w') as vcfs:
-      disc.write("\n".join(all_discfiles[start:end]))
-      idxs.write("\n".join(all_discfile_idxs[start:end]))
-      samp.write("\n".join(all_samples[start:end]))
-      vcfs.write("\n".join(all_vcfs[start:end]))
-    CODE
-  >>>
-  output {
-    Array[String] shard_discfiles = read_lines("shard_discfiles.txt")
-    Array[String] shard_discfiles_idx = read_lines("shard_disc_idx.txt")
-    Array[String] shard_vcfs = read_lines("shard_vcfs.txt")
-    Array[String] shard_samples = read_lines("shard_samples.txt")
-  }
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: python_docker_
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
 
 task ResolveManta {
   input {
