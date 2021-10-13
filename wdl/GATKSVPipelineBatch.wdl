@@ -103,6 +103,10 @@ workflow GATKSVPipelineBatch {
     String? wham_docker
     String cloud_sdk_docker
 
+    # Batch metrics
+    RuntimeAttr? runtime_attr_cat_metrics
+    RuntimeAttr? runtime_attr_plot_metrics
+
     # Do not use
     Array[File]? NONE_ARRAY_
     String? NONE_STRING_
@@ -305,7 +309,8 @@ workflow GATKSVPipelineBatch {
       input:
         prefix = "batch_sv." + batch,
         metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, MakeCohortVcf.metrics_file_makecohortvcf]),
-        linux_docker = linux_docker
+        linux_docker = linux_docker,
+        runtime_attr_override = runtime_attr_cat_metrics
     }
 
   Array[File] defined_baseline_metrics = select_all([baseline_sampleevidence_metrics, baseline_batchevidence_metrics, baseline_clusterbatch_metrics, baseline_batchmetrics_metrics, baseline_filterbatch_metrics, baseline_genotypebatch_metrics, baseline_makecohortvcf_metrics])
@@ -314,7 +319,8 @@ workflow GATKSVPipelineBatch {
       input:
         prefix = "baseline." + batch,
         metric_files = defined_baseline_metrics,
-        linux_docker = linux_docker
+        linux_docker = linux_docker,
+        runtime_attr_override = runtime_attr_cat_metrics
     }
     call tu.PlotMetrics {
       input:
@@ -322,7 +328,8 @@ workflow GATKSVPipelineBatch {
         samples = sample_ids,
         test_metrics = CatBatchMetrics.out,
         base_metrics = CatBaselineMetrics.out,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_plot_metrics
     }
   }
 

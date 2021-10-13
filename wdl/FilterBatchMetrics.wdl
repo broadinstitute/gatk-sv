@@ -25,6 +25,10 @@ workflow FilterBatchMetrics {
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_subset_ped
+    RuntimeAttr? runtime_attr_pesr_vcf_metrics
+    RuntimeAttr? runtime_attr_depth_vcf_metrics
+    RuntimeAttr? runtime_attr_cutoff_outlier_metrics
+    RuntimeAttr? runtime_attr_cat_metrics
   }
 
   Array[String] samples_post_filtering = read_lines(samples_post_filtering_file)
@@ -37,7 +41,8 @@ workflow FilterBatchMetrics {
       prefix = "filtered_pesr",
       types = "DEL,DUP,INS,INV,BND",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_pesr_vcf_metrics
   }
 
   call tu.VCFMetrics as Depth_VCF_Metrics {
@@ -48,7 +53,8 @@ workflow FilterBatchMetrics {
       prefix = "filtered_depth",
       types = "DEL,DUP",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_depth_vcf_metrics
   }
 
   call util.SubsetPedFile {
@@ -66,14 +72,16 @@ workflow FilterBatchMetrics {
       outlier_list = outlier_list,
       filtered_ped_file = SubsetPedFile.ped_subset_file,
       samples = samples,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_cutoff_outlier_metrics
   }
 
   call tu.CatMetrics {
     input:
       prefix = "FilterBatch." + name,
       metric_files = [PESR_VCF_Metrics.out, Depth_VCF_Metrics.out, CutoffAndOutlierMetrics.out],
-      linux_docker = linux_docker
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_cat_metrics
   }
 
   output {

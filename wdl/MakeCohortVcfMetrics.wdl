@@ -23,6 +23,10 @@ workflow MakeCohortVcfMetrics {
     String sv_pipeline_base_docker
     String? sv_base_mini_docker  # required if not providing samples array
 
+    RuntimeAttr? runtime_attr_sample_ids_from_vcf
+    RuntimeAttr? runtime_attr_vcf_metrics
+    RuntimeAttr? runtime_attr_cat_metrics
+
     # Do not use
     Array[File]? NONE_FILE_ARRAY_
   }
@@ -31,7 +35,8 @@ workflow MakeCohortVcfMetrics {
     call util.GetSampleIdsFromVcf {
       input:
         vcf = cleaned_vcf,
-        sv_base_mini_docker = select_first([sv_base_mini_docker])
+        sv_base_mini_docker = select_first([sv_base_mini_docker]),
+        runtime_attr_override = runtime_attr_sample_ids_from_vcf
     }
   }
 
@@ -44,7 +49,8 @@ workflow MakeCohortVcfMetrics {
         prefix = "cluster",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
 
@@ -57,12 +63,13 @@ workflow MakeCohortVcfMetrics {
         prefix = "cpx_resolve",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
 
   if (defined(complex_genotype_vcf)) {
-    call tu.VCFMetrics as ComplesGenotypeMetrics {
+    call tu.VCFMetrics as ComplexGenotypeMetrics {
       input:
         vcf = select_first([complex_genotype_vcf]),
         baseline_vcf = baseline_complex_genotype_vcf,
@@ -70,7 +77,8 @@ workflow MakeCohortVcfMetrics {
         prefix = "cpx_genotype",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
 
@@ -82,14 +90,16 @@ workflow MakeCohortVcfMetrics {
       prefix = "cleaned",
       types = "DEL,DUP,INS,INV,CTX,CPX,BND,CNV",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_vcf_metrics
   }
 
   call tu.CatMetrics {
     input:
       prefix = "MakeCohortVcf." + name,
-      metric_files = select_all([ClusterMetrics.out, ComplexResolveMetrics.out, ComplesGenotypeMetrics.out, CleanedMetrics.out]),
-      linux_docker = linux_docker
+      metric_files = select_all([ClusterMetrics.out, ComplexResolveMetrics.out, ComplexGenotypeMetrics.out, CleanedMetrics.out]),
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_cat_metrics
   }
 
   output {

@@ -100,6 +100,7 @@ workflow GatherSampleEvidenceBatch {
     RuntimeAttr? runtime_attr_wham_include_list
     RuntimeAttr? runtime_attr_ReviseBaseInBam
     RuntimeAttr? runtime_attr_ConcatBam
+    RuntimeAttr? runtime_attr_cat_metrics
 
     File? NONE_FILE_
     String? NONE_STRING_
@@ -184,7 +185,8 @@ workflow GatherSampleEvidenceBatch {
       input:
         prefix = "GatherSampleEvidence." + select_first([batch]),
         metric_files = flatten(sample_metrics_files_),
-        linux_docker = select_first([linux_docker])
+        linux_docker = select_first([linux_docker]),
+        runtime_attr_override = runtime_attr_cat_metrics
     }
   }
 

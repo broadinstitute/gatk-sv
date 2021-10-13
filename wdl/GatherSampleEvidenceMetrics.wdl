@@ -22,6 +22,18 @@ workflow GatherSampleEvidenceMetrics {
     File contig_index
     Int min_size = 50
     String sv_pipeline_base_docker
+
+    RuntimeAttr? runtime_attr_delly_std
+    RuntimeAttr? runtime_attr_delly_metrics
+    RuntimeAttr? runtime_attr_manta_std
+    RuntimeAttr? runtime_attr_manta_metrics
+    RuntimeAttr? runtime_attr_melt_std
+    RuntimeAttr? runtime_attr_melt_metrics
+    RuntimeAttr? runtime_attr_wham_std
+    RuntimeAttr? runtime_attr_wham_metrics
+    RuntimeAttr? runtime_attr_sr_metrics
+    RuntimeAttr? runtime_attr_pe_metrics
+    RuntimeAttr? runtime_attr_counts_metrics
   }
 
   if (defined(delly_vcf)) {
@@ -32,7 +44,8 @@ workflow GatherSampleEvidenceMetrics {
         caller = "delly",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_delly_std
     }
     if (defined(baseline_delly_vcf)) {
       call tu.StandardizeVCF as Delly_Std_Base {
@@ -42,7 +55,8 @@ workflow GatherSampleEvidenceMetrics {
           caller = "delly",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_delly_std
       }
     }
     call tu.VCFMetrics as Delly_Metrics {
@@ -53,7 +67,8 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "delly_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_delly_metrics
     }
   }
   if (defined(manta_vcf)) {
@@ -64,7 +79,8 @@ workflow GatherSampleEvidenceMetrics {
         caller = "manta",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_manta_std
     }
     if (defined(baseline_manta_vcf)) {
       call tu.StandardizeVCF as Manta_Std_Base {
@@ -74,7 +90,8 @@ workflow GatherSampleEvidenceMetrics {
           caller = "manta",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_manta_std
       }
     }
     call tu.VCFMetrics as Manta_Metrics {
@@ -85,7 +102,8 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "manta_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_manta_metrics
     }
   }
   if (defined(melt_vcf)) {
@@ -96,7 +114,8 @@ workflow GatherSampleEvidenceMetrics {
         caller = "melt",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_melt_std
     }
     if (defined(baseline_melt_vcf)) {
       call tu.StandardizeVCF as Melt_Std_Base {
@@ -106,7 +125,8 @@ workflow GatherSampleEvidenceMetrics {
           caller = "melt",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_melt_std
       }
     }
     call tu.VCFMetrics as Melt_Metrics {
@@ -117,7 +137,8 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "melt_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_melt_metrics
     }
   }
   if (defined(wham_vcf)) {
@@ -128,7 +149,8 @@ workflow GatherSampleEvidenceMetrics {
         caller = "wham",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_wham_std
     }
     if (defined(baseline_wham_vcf)) {
       call tu.StandardizeVCF as Wham_Std_Base {
@@ -138,7 +160,8 @@ workflow GatherSampleEvidenceMetrics {
           caller = "wham",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          runtime_attr_override = runtime_attr_wham_std
       }
     }
     call tu.VCFMetrics as Wham_Metrics {
@@ -149,7 +172,8 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "wham_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_wham_metrics
     }
   }
   if (defined(pesr_split)) {
@@ -157,7 +181,8 @@ workflow GatherSampleEvidenceMetrics {
       input:
         sr_file = select_first([pesr_split]),
         samples = [sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_sr_metrics
     }
   }
   if (defined(pesr_disc)) {
@@ -165,7 +190,8 @@ workflow GatherSampleEvidenceMetrics {
       input:
         pe_file = select_first([pesr_disc]),
         samples = [sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_pe_metrics
     }
   }
   if (defined(coverage_counts)) {
@@ -173,7 +199,8 @@ workflow GatherSampleEvidenceMetrics {
       input:
         counts_file = select_first([coverage_counts]),
         sample_id = sample,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_counts_metrics
     }
   }
 
