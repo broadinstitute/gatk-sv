@@ -13,9 +13,7 @@ workflow TinyResolve {
     File mei_bed
     Int samples_per_shard = 25
     String sv_pipeline_docker
-    String? python_docker
     RuntimeAttr? runtime_attr
-    RuntimeAttr? runtime_attr_shard
   }
 
   scatter (disc in discfile) {

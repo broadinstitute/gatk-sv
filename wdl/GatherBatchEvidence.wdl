@@ -170,7 +170,6 @@ workflow GatherBatchEvidence {
     String gatk_docker
     String? gcnv_gatk_docker
     String cnmops_docker
-    String? python_docker
 
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
@@ -197,7 +196,6 @@ workflow GatherBatchEvidence {
     RuntimeAttr? add_sample_to_ped_runtime_attr
     RuntimeAttr? condense_counts_runtime_attr
     RuntimeAttr? preprocess_calls_runtime_attr
-    RuntimeAttr? runtime_attr_tiny_shard
     RuntimeAttr? depth_merge_set_runtime_attr
     RuntimeAttr? depth_merge_sample_runtime_attr
     RuntimeAttr? cnmops_ped_runtime_attr
@@ -488,9 +486,7 @@ workflow GatherBatchEvidence {
           discfile=PE_files,
           mei_bed=mei_bed,
           sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr = preprocess_calls_runtime_attr,
-          runtime_attr_shard = runtime_attr_tiny_shard,
-          python_docker = python_docker
+          runtime_attr = preprocess_calls_runtime_attr
       }
   }
   File? baf_out = if defined(EvidenceMerging.merged_BAF) then EvidenceMerging.merged_BAF else BAFFromGVCFs.out
