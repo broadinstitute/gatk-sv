@@ -80,7 +80,7 @@ workflow PETestChromosome {
           chrom = chrom,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_merge_allo,
-          male_only_expr = "females.log_pval.isnull()"
+          male_only_expr = "females.log_pval == 0"
       }
     }
     if (!allosome) {
