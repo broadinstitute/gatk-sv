@@ -9,8 +9,8 @@ import "Structs.wdl"
 workflow GangSTR {
 
   input {
-    Array[File] bams_or_crams
-    Array[File]? bams_or_crams_indexes
+    File bam_or_cram
+    File? bam_or_cram_index
     File reference_fasta
     File? reference_fasta_index
     File regions
@@ -18,26 +18,22 @@ workflow GangSTR {
     RuntimeAttr? runtime_attr
   }
 
-  scatter (i in range(length(bams_or_crams))) {
-    File bam_or_cram_ = bams_or_crams[i]
-    Boolean is_bam =
-      basename(bam_or_cram_, ".bam") + ".bam" == basename(bam_or_cram_)
+  Boolean is_bam =
+    basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
 
-    File bam_or_cram_index_ =
-      if defined(bams_or_crams_indexes) then
-        select_first([bams_or_crams_indexes])[i]
-      else
-        bam_or_cram_ + if is_bam then ".bai" else ".crai"
-  }
-  Array[File] bams_or_crams_indexes_ = select_all(bam_or_cram_index_)
+  File bam_or_cram_index_ =
+    if defined(bam_or_cram_index) then
+      select_first([bam_or_cram_index])
+    else
+      bam_or_cram + if is_bam then ".bai" else ".crai"
 
   File reference_fasta_index_ = select_first([
     reference_fasta_index, reference_fasta + ".fai"])
 
   call CallGangSTR {
     input:
-      bams_or_crams = bams_or_crams,
-      bams_or_crams_indexes = bams_or_crams_indexes_,
+      bam_or_cram = bam_or_cram,
+      bam_or_cram_index = bam_or_cram_index,
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index_,
       regions = regions,
@@ -54,8 +50,8 @@ workflow GangSTR {
 
 task CallGangSTR {
   input {
-    Array[File] bams_or_crams
-    Array[File] bams_or_crams_indexes
+    Array[File] bam_or_cram
+    Array[File] bam_or_cram_index
     File reference_fasta
     File reference_fasta_index
     File regions
@@ -72,10 +68,8 @@ task CallGangSTR {
   command <<<
     set -euxo pipefail
 
-    joined_bams=(~{sep="," bams_or_crams})
-
     GangSTR \
-      --bam $joined_bams \
+      --bam ~{bam_or_cram} \
       --ref ~{reference_fasta} \
       --regions ~{regions} \
       --out output
@@ -88,8 +82,7 @@ task CallGangSTR {
     preemptible_tries: 3,
     max_retries: 1,
     disk_gb: 10 + ceil(size([
-      bams_or_crams,
-      bams_or_crams_indexes,
+      bam_or_cram,
       reference_fasta,
       reference_fasta_index], "GiB"))
   }
