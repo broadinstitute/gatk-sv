@@ -41,9 +41,9 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_RELEASE}
 RUN pip install Cython==0.29.24 numpy==1.21.2 pybedtools==0.8.2 scipy==1.7.1
 
 # Install samtools (needed to index reference fasta files)
-RUN wget -O samtools-1.9.tar.bz2 https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2 && \
-    tar -xjf samtools-1.9.tar.bz2 && \
-    cd samtools-1.9 && \
+RUN wget -O samtools-1.13.tar.bz2 https://github.com/samtools/samtools/releases/download/1.13/samtools-1.13.tar.bz2 && \
+    tar -xjf samtools-1.13.tar.bz2 && \
+    cd samtools-1.13 && \
     ./configure --without-curses && make && make install && \
     cd ..
 
