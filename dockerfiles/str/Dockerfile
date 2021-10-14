@@ -7,7 +7,6 @@
 FROM ubuntu:20.04
 ARG DEBIAN_FRONTEND=noninteractive
 ENV PATH="/root/miniconda3/bin:${PATH}"
-ARG PATH="/root/miniconda3/bin:${PATH}"
 ARG CONDA_RELEASE="4.6.14"
 ARG CONDA_INSTALL_DIR="/opt/conda"
 ARG CONDA_BIN=${CONDA_INSTALL_DIR}/bin
@@ -33,18 +32,13 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl4-openssl-dev \
     libssl-dev
 
-#RUN #pip3 install pybedtools==0.8.2 pyvcf==0.6.8 scipy==1.7.1 numpy==1.21.1
-
 # Install and configure conda
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_RELEASE}-Linux-x86_64.sh -O /tmp/miniconda.sh && \
     bash /tmp/miniconda.sh -b -p ${CONDA_INSTALL_DIR} && \
     ${CONDA_CMD} init bash && \
     bash -c "source ${HOME}/.bashrc"
-#    pip3 install pybedtools==0.8.2 pyvcf==0.6.8 scipy==1.7.1 numpy==1.21.1
 
 RUN pip install Cython==0.29.24 numpy==1.21.2 pybedtools==0.8.2 scipy==1.7.1
-
-#ARG PYTHON_PKGS="setuptools=52.0.0 wheel=0.34.2 bzip2=1.0.8 cython=0.29.14 numpy=1.18.1 pandas=0.25.3 scikit-learn=0.22.1 scipy=1.4.1 intervaltree=3.0.2 matplotlib=3.1.3 natsort=7.0.1 bedtools=2.27.0 pybedtools=0.8.1 pysam=0.14.1=py36_htslib1.7_0"
 
 # Install samtools (needed to index reference fasta files)
 RUN wget -O samtools-1.9.tar.bz2 https://github.com/samtools/samtools/releases/download/1.9/samtools-1.9.tar.bz2 && \
@@ -66,6 +60,7 @@ WORKDIR ..
 # Download and install TRTools
 RUN git clone https://github.com/gymreklab/TRTools && \
     cd TRTools && \
+    git checkout tags/v4.0.0 -b v4.0.0-branch && \
     pip install -r requirements.txt && \
     python3 setup.py install && \
     cd ..
@@ -80,3 +75,8 @@ ENV PATH="/ExpansionHunter/bin/:$PATH"
 # Install GangSTR
 RUN conda install -c bioconda -c conda-forge gangstr
 
+# Clean up
+RUN rm -rf /tmp/* \
+    /var/tmp/* \
+    /var/cache/apt/* \
+    /var/lib/apt/lists/* \
