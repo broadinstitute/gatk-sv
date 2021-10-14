@@ -81,7 +81,7 @@ workflow SRTestChromosome {
           chrom = chrom,
           runtime_attr_override = runtime_attr_merge_allo,
           sv_pipeline_docker = sv_pipeline_docker,
-          male_only_expr = "females.log_pval.isnull()"
+          male_only_expr = "females.log_pval == 0"
       }
     } 
 
