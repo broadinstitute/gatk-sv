@@ -33,7 +33,7 @@ workflow GangSTR {
   call CallGangSTR {
     input:
       bam_or_cram = bam_or_cram,
-      bam_or_cram_index = bam_or_cram_index,
+      bam_or_cram_index = bam_or_cram_index_,
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index_,
       regions = regions,
@@ -50,8 +50,8 @@ workflow GangSTR {
 
 task CallGangSTR {
   input {
-    Array[File] bam_or_cram
-    Array[File] bam_or_cram_index
+    File bam_or_cram
+    File bam_or_cram_index
     File reference_fasta
     File reference_fasta_index
     File regions
