@@ -14,7 +14,7 @@ workflow GangSTR {
     File reference_fasta
     File? reference_fasta_index
     File regions
-    String docker
+    String str_docker
     RuntimeAttr? runtime_attr
   }
 
@@ -37,7 +37,7 @@ workflow GangSTR {
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index_,
       regions = regions,
-      docker = docker,
+      str_docker = str_docker,
       runtime_attr_override = runtime_attr
   }
 
@@ -55,7 +55,7 @@ task CallGangSTR {
     File reference_fasta
     File reference_fasta_index
     File regions
-    String docker
+    String str_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -91,7 +91,7 @@ task CallGangSTR {
     runtime_attr_str_profile_default])
 
   runtime {
-    docker: docker
+    docker: str_docker
     cpu: runtime_attr.cpu_cores
     memory: runtime_attr.mem_gb + " GiB"
     disks: "local-disk " + runtime_attr.disk_gb + " HDD"

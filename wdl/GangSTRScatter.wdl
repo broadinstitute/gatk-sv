@@ -11,7 +11,7 @@ workflow GangSTRScatter {
     File reference_fasta
     File? reference_fasta_index
     File regions
-    String docker
+    String str_docker
     RuntimeAttr? runtime_attr
   }
 
@@ -34,7 +34,7 @@ workflow GangSTRScatter {
         reference_fasta=reference_fasta,
         reference_fasta_index=reference_fasta_index_,
         regions=regions,
-        docker=docker,
+        str_docker=str_docker,
         runtime_attr=runtime_attr
     }
   }
