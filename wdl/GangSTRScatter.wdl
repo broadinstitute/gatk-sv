@@ -10,7 +10,7 @@ workflow GangSTRScatter {
     Array[File]? bams_or_crams_indexes
     File reference_fasta
     File? reference_fasta_index
-    File regions
+    File target_tr_loci_regions_bed
     String str_docker
     RuntimeAttr? runtime_attr
   }
@@ -33,7 +33,7 @@ workflow GangSTRScatter {
         bam_or_cram_index=bam_or_cram_index_,
         reference_fasta=reference_fasta,
         reference_fasta_index=reference_fasta_index_,
-        regions=regions,
+        target_tr_loci_regions_bed=target_tr_loci_regions_bed,
         str_docker=str_docker,
         runtime_attr=runtime_attr
     }
