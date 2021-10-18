@@ -14,6 +14,7 @@ workflow GangSTR {
     File reference_fasta
     File? reference_fasta_index
     File target_tr_loci_regions_bed
+    String? output_prefix
     String str_docker
     RuntimeAttr? runtime_attr
   }
@@ -24,6 +25,7 @@ workflow GangSTR {
     reference_fasta: "Sets the path to the reference in fasta format."
     reference_fasta_index: "[Optional] Sets the path to the index of reference file."
     target_tr_loci_regions_bed: "Reference set of regions to genotype represented in bed-like format; see GangSTR documentation for the file structure at: https://github.com/gymreklab/GangSTR#tr-regions---regions"
+    output_prefix: "[Optional] Set an string to be used as a prefix to the output files. Defaults to the bam_or_cram filename."
     str_docker: "Sets the STR docker image."
     runtime_attr: "[Optional] Override the default runtime attributes for the GangSTR workflow."
   }
@@ -40,6 +42,15 @@ workflow GangSTR {
   File reference_fasta_index_ = select_first([
     reference_fasta_index, reference_fasta + ".fai"])
 
+  String output_prefix_ =
+    if defined(output_prefix) then
+      select_first([output_prefix])
+    else
+      if is_bam then
+        basename(bam_or_cram, ".bam")
+      else
+        basename(bam_or_cram, ".cram")
+
   call CallGangSTR {
     input:
       bam_or_cram = bam_or_cram,
@@ -47,6 +58,7 @@ workflow GangSTR {
       reference_fasta = reference_fasta,
       reference_fasta_index = reference_fasta_index_,
       target_tr_loci_regions_bed = target_tr_loci_regions_bed,
+      output_prefix = output_prefix_,
       str_docker = str_docker,
       runtime_attr_override = runtime_attr
   }
@@ -65,14 +77,15 @@ task CallGangSTR {
     File reference_fasta
     File reference_fasta_index
     File target_tr_loci_regions_bed
+    String output_prefix
     String str_docker
     RuntimeAttr? runtime_attr_override
   }
 
   output {
-    File output_vcf = "output.vcf"
-    File sample_stats = "output.samplestats.tab"
-    File insdata = "output.insdata.tab"
+    File output_vcf = "${output_prefix}.vcf"
+    File sample_stats = "${output_prefix}.samplestats.tab"
+    File insdata = "${output_prefix}.insdata.tab"
   }
 
   command <<<
@@ -82,7 +95,7 @@ task CallGangSTR {
       --bam ~{bam_or_cram} \
       --ref ~{reference_fasta} \
       --regions ~{target_tr_loci_regions_bed} \
-      --out output
+      --out ~{output_prefix}
   >>>
 
   RuntimeAttr runtime_attr_str_profile_default = object {
