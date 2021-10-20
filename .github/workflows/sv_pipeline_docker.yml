@@ -56,11 +56,9 @@ jobs:
           # The commit SHA of the base branch which this PR targets;
           # ideally broadinstitute/gatk-sv:master.
           BASE_COMMIT_SHA=$(echo "$GITHUB_CONTEXT"| jq -r '.event.pull_request.base.sha')
-          echo "::debug::BASE_COMMIT_SHA: $BASE_COMMIT_SHA"
 
           # The commit SHA of the commit that triggered the action.
           COMMIT_SHA=${{ github.event.pull_request.head.sha }}
-          echo "::debug::COMMIT_SHA: $COMMIT_SHA"
 
           # A list of all the files changed between the current commit & base.
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT_SHA $COMMIT_SHA)
@@ -73,6 +71,12 @@ jobs:
           }
           for i in "${CHANGED_FILES[@]}"
           do
+            if [[ $i == *".github/workflows/sv_pipeline_docker.yml" ]]; then
+              # A change to this file may impact how images are built,
+              # hence all the images are rebuilt.
+              try_add_target "all"
+              break
+            fi
             if [[ $i == *"src/svtk"* ||
                   $i == *"src/sv-pipeline"* ||
                   $i == *"src/svtest"* ||
