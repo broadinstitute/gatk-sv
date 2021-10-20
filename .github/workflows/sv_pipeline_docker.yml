@@ -89,6 +89,24 @@ jobs:
             if [[ $i == *"scripts/docker/resources.Dockerfile"* ]]; then
               try_add_target "gatksv-pipeline-v1-resources"
             fi
+            if [[ $i == *"dockerfiles/delly/Dockerfile" ]]; then
+              try_add_target "delly"
+            fi
+            if [[ $i == *"dockerfiles/manta/Dockerfile" ]]; then
+              try_add_target "manta"
+            fi
+            if [[ $i == *"dockerfiles/wham/Dockerfile" ]]; then
+              try_add_target "wham"
+            fi
+            if [[ $i == *"dockerfiles/sv-base-mini/Dockerfile" ]]; then
+              try_add_target "sv-base-mini"
+            fi
+            if [[ $i == *"dockerfiles/sv-base/Dockerfile" ]]; then
+              try_add_target "sv-base"
+            fi
+            if [[ $i == *"dockerfiles/samtools-cloud/Dockerfile" ]]; then
+              try_add_target "samtools-cloud"
+            fi
           done
 
           # Join the determined targets in a space-delimited string.
