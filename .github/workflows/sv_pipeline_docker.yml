@@ -117,8 +117,8 @@ jobs:
 
           # Join the determined targets in a space-delimited string.
           TARGETS=$(IFS=' '; echo "${TARGETS[*]}")
-          echo "::debug::Docker images to rebuild: $TARGETS"
           echo "::set-output name=TARGETS::$TARGETS"
+          echo "::debug::Docker images to rebuild: $TARGETS"
 
       - name: Run build_docker.py [Pull Request]
         if: github.event_name == 'pull_request'
