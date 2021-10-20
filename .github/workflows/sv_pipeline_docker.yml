@@ -56,9 +56,11 @@ jobs:
           # The commit SHA of the base branch which this PR targets;
           # ideally broadinstitute/gatk-sv:master.
           BASE_COMMIT_SHA=$(echo "$GITHUB_CONTEXT"| jq -r '.event.pull_request.base.sha')
+          echo "::debug::BASE_COMMIT_SHA: $BASE_COMMIT_SHA"
 
           # The commit SHA of the commit that triggered the action.
           COMMIT_SHA=${{ github.event.pull_request.head.sha }}
+          echo "::debug::COMMIT_SHA: $COMMIT_SHA"
 
           # A list of all the files changed between the current commit & base.
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT_SHA $COMMIT_SHA)
@@ -111,8 +113,8 @@ jobs:
 
           # Join the determined targets in a space-delimited string.
           TARGETS=$(IFS=' '; echo "${TARGETS[*]}")
-          echo "::set-output name=TARGETS::$TARGETS"
           echo "::debug::Docker images to rebuild: $TARGETS"
+          echo "::set-output name=TARGETS::$TARGETS"
 
       - name: Run build_docker.py [Pull Request]
         if: github.event_name == 'pull_request'
