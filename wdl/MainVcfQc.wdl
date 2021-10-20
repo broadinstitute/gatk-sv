@@ -17,6 +17,7 @@ workflow MasterVcfQc {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
+    Boolean vcf_format_has_cn = true
     File? ped_file
     File? list_of_samples_to_include
     Int max_trios = 1000
@@ -179,6 +180,7 @@ workflow MasterVcfQc {
     call CollectQcPerSample.CollectQcPerSample as CollectPerSampleVidLists {
       input:
         vcfs=vcfs,
+        vcf_format_has_cn=vcf_format_has_cn,
         samples_list=shard,
         prefix=prefix,
         sv_base_mini_docker=sv_base_mini_docker,
