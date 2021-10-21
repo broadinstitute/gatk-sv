@@ -52,73 +52,89 @@ jobs:
 
       - name: Determine Target Images
         id: target_images
+        # This step determines the target images to be rebuilt based
+        # on the files changed between the HEAD and BASE commits, where
+        # HEAD is the commit that its push triggered running this action and
+        # BASE is the commit the PR is targeting. For instance, if the
+        # commit changes the `dockerfiles/sv-base/Dockerfile`, then the
+        # `sv-base` docker image (and all its dependencies) are rebuilt.
+        #
+        # This step first gets the HEAD and BASE commit SHAs from the
+        # $GITHUB_CONTEXT environment variable. Then uses `git diff` to
+        # determine the files changed between the commits. Based on the
+        # changed files, it determines a list of docker images to be rebuilt.
+        # Finally, it stores the determined docker images in $TARGETS
+        # variable that can be accessed in other steps.
         run: |
           # The commit SHA of the base branch which this PR targets;
           # ideally broadinstitute/gatk-sv:master.
-          BASE_COMMIT_SHA=$(echo "$GITHUB_CONTEXT"| jq -r '.event.pull_request.base.sha')
+          BASE_SHA=$(echo "$GITHUB_CONTEXT"| jq -r '.event.pull_request.base.sha')
 
           # The commit SHA of the commit that triggered the action.
-          COMMIT_SHA=${{ github.event.pull_request.head.sha }}
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
 
-          # A list of all the files changed between the current commit & base.
-          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT_SHA $COMMIT_SHA)
+          # A list of all the files changed in HEAD commit w.r.t BASE commit.
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA)
 
+          # Add a given target image name to the TARGETS
+          # array if it is not already in the array.
           TARGETS=()
           try_add_target() {
             if [[ ! " ${TARGETS[*]} " =~ $1 ]]; then
               TARGETS+=($1)
             fi
           }
+
           for i in "${CHANGED_FILES[@]}"
           do
-            if [[ $i == *".github/workflows/sv_pipeline_docker.yml" ]]; then
+            if [[ $i == *".github/workflows/sv_pipeline_docker.yml"* ]]; then
               # A change to this file may impact how images are built,
-              # hence all the images are rebuilt.
+              # hence, if this file is changed, all the images are rebuilt.
               try_add_target "all"
               break
-            fi
-            if [[ $i == *"src/svtk"* ||
+            elif [[ $i == *"src/svtk"* ||
                   $i == *"src/sv-pipeline"* ||
                   $i == *"src/svtest"* ||
                   $i == *"src/svqc"* ]]; then
               try_add_target "sv-pipeline"
               try_add_target "sv-pipeline-base"
               try_add_target "sv-pipeline-children-r"
-            fi
-            if [[ $i == *"src/RdTest"* ]]; then
+            elif [[ $i == *"src/RdTest"* ]]; then
               try_add_target "sv-pipeline-rdtest"
-            fi
-            if [[ $i == *"src/WGD"* ]]; then
+            elif [[ $i == *"src/WGD"* ]]; then
               try_add_target "sv-pipeline-qc"
               try_add_target "cnmops"
-            fi
-            if [[ $i == *"scripts/docker/resources.Dockerfile"* ]]; then
+            elif [[ $i == *"scripts/docker/resources.Dockerfile"* ]]; then
               try_add_target "gatksv-pipeline-v1-resources"
             fi
-            if [[ $i == *"dockerfiles/delly/Dockerfile" ]]; then
-              try_add_target "delly"
-            fi
-            if [[ $i == *"dockerfiles/manta/Dockerfile" ]]; then
-              try_add_target "manta"
-            fi
-            if [[ $i == *"dockerfiles/wham/Dockerfile" ]]; then
-              try_add_target "wham"
-            fi
-            if [[ $i == *"dockerfiles/sv-base-mini/Dockerfile" ]]; then
-              try_add_target "sv-base-mini"
-            fi
-            if [[ $i == *"dockerfiles/sv-base/Dockerfile" ]]; then
-              try_add_target "sv-base"
-            fi
-            if [[ $i == *"dockerfiles/samtools-cloud/Dockerfile" ]]; then
-              try_add_target "samtools-cloud"
+
+            # Rebuild the docker image of the Dockerfiles specified in
+            # the `D` array. Use regular expression to extract the target
+            # image from the file path. For instance, if
+            # i = dockerfiles/delly/Dockerfile, then M="delly".
+            if [[ $i =~ (dockerfiles/)([^,]*)(/Dockerfile) ]]; then
+              M="${BASH_REMATCH[2]}"
+              D=("delly" "manta" "wham" "sv-base-mini" "sv-base" "samtools-cloud")
+              if [[ " ${D[*]} " =~ $M ]]; then
+                try_add_target $M
+              fi
             fi
           done
 
           # Join the determined targets in a space-delimited string.
           TARGETS=$(IFS=' '; echo "${TARGETS[*]}")
-          echo "::set-output name=TARGETS::$TARGETS"
+
+          # Print some debugging information.
+          echo "::debug::BASE_SHA: $BASE_SHA"
+          echo "::debug::HEAD_SHA: $HEAD_SHA"
           echo "::debug::Docker images to rebuild: $TARGETS"
+          echo "::debug::Changed files:"
+          for f in "${CHANGED_FILES[@]}"; do
+            echo "::debug::    $f"
+          done
+
+          # Set the output of this step so it can be accessed in other steps.
+          echo "::set-output name=TARGETS::$TARGETS"
 
       - name: Run build_docker.py [Pull Request]
         if: github.event_name == 'pull_request'
