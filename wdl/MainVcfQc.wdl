@@ -36,7 +36,6 @@ workflow MasterVcfQc {
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
-    RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_site_level_benchmark_plot
     RuntimeAttr? runtime_override_custom_external
     RuntimeAttr? runtime_override_plot_qc_per_sample
@@ -55,6 +54,10 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_split_vcf_to_qc
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
     RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
+
+    # overrides for ShardedCohortBenchmarking
+    RuntimeAttr? runtime_override_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_site_level_benchmark
 
     # overrides for CollectQcPerSample
     RuntimeAttr? runtime_override_collect_vids_per_sample
@@ -151,7 +154,9 @@ workflow MasterVcfQc {
           benchmarking_bucket=comparison_dataset_info[1],
           comparator=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-          runtime_override_site_level_benchmark=runtime_override_site_level_benchmark
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
+          runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark
       }
 
       # Plot site-level benchmarking results
