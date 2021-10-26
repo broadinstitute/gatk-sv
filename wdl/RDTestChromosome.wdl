@@ -108,7 +108,7 @@ workflow RDTestChromosome {
 
   Array[File?] stats = if allosome then MergeAllosomes.merged_test else RDTestAutosome.stats
 
-  call tasksbatchmetrics.MergeStats as MergeStats {
+  call MergeRDSplits {
     input:
       stats = select_all(stats),
       prefix = "${batch}.${algorithm}.${chrom}",
@@ -117,7 +117,7 @@ workflow RDTestChromosome {
   }
 
   output {
-    File out_stats = MergeStats.merged_stats
+    File out_stats = MergeRDSplits.merged_stats
   }
 }
 
@@ -233,19 +233,19 @@ task SplitRDVcf {
     set -euo pipefail
     tabix -p vcf ~{vcf};
     tabix -h ~{vcf} ~{chrom} \
-      | svtk vcf2bed --no-header stdin stdout \
-      | fgrep -e "DEL" -e "DUP" \
-      | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
-      | awk '($3-$2>=10000)' \
-      > ~{batch}.~{algorithm}.split.gt10kb;
-    tabix -h ~{vcf} ~{chrom} \
-      | svtk vcf2bed --no-header stdin stdout \
-      | fgrep -e "DEL" -e "DUP" \
-      | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
-      | awk '($3-$2<10000)' \
-      | sort -k1,1V -k2,2n \
-      | split -a ~{suffix_len} -d -l ~{split_size} - ~{batch}.~{algorithm}.split.
-  
+      | svtk vcf2bed --no-header stdin stdout > all.bed
+    if fgrep -q -e "DEL" -e "DUP" < all.bed; then
+      fgrep -e "DEL" -e "DUP" < all.bed \
+        | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
+        | awk '($3-$2>=10000)' \
+        > ~{batch}.~{algorithm}.split.gt10kb
+      fgrep -e "DEL" -e "DUP" < all.bed \
+        | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
+        | awk '($3-$2<10000)' \
+        | sort -k1,1V -k2,2n \
+        | split -a ~{suffix_len} -d -l ~{split_size} - ~{batch}.~{algorithm}.split.
+    fi
+ 
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -258,3 +258,46 @@ task SplitRDVcf {
   }
 }
 
+task MergeRDSplits {
+  input {
+    Array[File] stats
+    String prefix
+    String linux_docker
+    Int disk_gb_baseline = 10
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_gb = disk_gb_baseline + ceil(2 * size(stats, "GiB"))
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: disk_gb,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File merged_stats = "${prefix}.stats"
+  }
+  command <<<
+
+    set -eu
+    echo 'chr	Start	End	CNVID	SampleIDs	Type	Median_Power	P	2ndMaxP	Model	Median_Rank	Median_Separation' > ~{prefix}.stats
+    while read split; do
+      sed 1d $split;
+    done < ~{write_lines(stats)} >> ~{prefix}.stats
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+}

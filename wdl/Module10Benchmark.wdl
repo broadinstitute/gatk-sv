@@ -174,7 +174,6 @@ workflow BenchmarkAnnotation {
   call MiniTasks.ConcatVcfs as ConcatVcfsPB{
     input:
       vcfs=Bcf2VcfPB.vcf,
-      merge_sort=true,
       outfile_prefix="~{prefix}.PB",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs
@@ -183,7 +182,6 @@ workflow BenchmarkAnnotation {
   call MiniTasks.ConcatVcfs as ConcatVcfsIL{
     input:
       vcfs=Bcf2VcfIL.vcf,
-      merge_sort=true,
       outfile_prefix="~{prefix}.PB",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs

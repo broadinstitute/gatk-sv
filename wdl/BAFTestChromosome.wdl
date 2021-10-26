@@ -220,18 +220,18 @@ task SplitBafVcf {
     tabix -p vcf ~{vcf}
     #TODO : split -a parameter should be scaled properly (using suffix_len does not always work)
     tabix -h ~{vcf} ~{chrom} \
-      | svtk vcf2bed --no-header stdin stdout \
-      | fgrep -e "DEL" -e "DUP" \
-      | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
-      | awk '($3-$2>=10000 && $3-$2<10000000)' \
-      | split -a ~{suffix_len} -d -l 300 - ~{batch}.~{algorithm}.split.gt10kb.
-    tabix -h ~{vcf} ~{chrom} \
-      | svtk vcf2bed --no-header stdin stdout \
-      | fgrep -e "DEL" -e "DUP" \
-      | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
-      | awk '($3-$2<10000)' \
-      | sort -k1,1V -k2,2n \
-      | split -a ~{suffix_len} -d -l ~{split_size} - ~{batch}.~{algorithm}.split.
+      | svtk vcf2bed --no-header stdin stdout > all.bed
+    if fgrep -q -e "DEL" -e "DUP" < all.bed; then
+      fgrep -e "DEL" -e "DUP" < all.bed \
+        | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
+        | awk '($3-$2>=10000 && $3-$2<10000000)' \
+        | split -a ~{suffix_len} -d -l 300 - ~{batch}.~{algorithm}.split.gt10kb.
+      fgrep -e "DEL" -e "DUP" < all.bed \
+        | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
+        | awk '($3-$2<10000)' \
+        | sort -k1,1V -k2,2n \
+        | split -a ~{suffix_len} -d -l ~{split_size} - ~{batch}.~{algorithm}.split.
+    fi
   
   >>>
   runtime {

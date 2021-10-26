@@ -75,7 +75,6 @@ workflow Duphold {
   call MiniTasks.ConcatVcfs as ConcatVcfs{
     input:
       vcfs=Bcf2Vcf.vcf,
-      merge_sort=true,
       outfile_prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatVcfs

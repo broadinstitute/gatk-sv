@@ -7,6 +7,7 @@ import "CramToBam.ReviseBase.wdl" as ctb_revise
 import "Delly.wdl" as delly
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
+import "Scramble.wdl" as scramble
 import "GatherSampleEvidenceMetrics.wdl" as metrics
 import "PESRCollection.wdl" as pesr
 import "Whamg.wdl" as wham
@@ -81,6 +82,7 @@ workflow GatherSampleEvidence {
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
+    File? baseline_scramble_vcf
 
     # Docker
     String sv_pipeline_docker
@@ -89,6 +91,7 @@ workflow GatherSampleEvidence {
     String? delly_docker
     String? manta_docker
     String? melt_docker
+    String? scramble_docker
     String? wham_docker
     String gatk_docker
     String? gatk_docker_pesr_override
@@ -105,6 +108,7 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
+    RuntimeAttr? runtime_attr_scramble
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
     RuntimeAttr? runtime_attr_wham_include_list
@@ -120,6 +124,7 @@ workflow GatherSampleEvidence {
   Boolean run_delly = defined(delly_docker)
   Boolean run_manta = defined(manta_docker)
   Boolean run_melt = defined(melt_docker)
+  Boolean run_scramble = defined(scramble_docker)
   Boolean run_wham = defined(wham_docker)
 
   Boolean is_bam_ = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
@@ -252,6 +257,19 @@ workflow GatherSampleEvidence {
     }
   }
 
+  if (run_scramble) {
+    call scramble.Scramble {
+      input:
+        bam_or_cram_file = bam_file_,
+        bam_or_cram_index = bam_index_,
+        sample_name = sample_id,
+        reference_fasta = reference_fasta,
+        detect_deletions = false,
+        scramble_docker = select_first([scramble_docker]),
+        runtime_attr_scramble = runtime_attr_scramble
+    }
+  }
+
   if (run_wham) {
     call wham.Whamg {
       input:
@@ -272,7 +290,7 @@ workflow GatherSampleEvidence {
   # Avoid storage costs
   if (!is_bam_) {
     if (delete_intermediate_bam) {
-      Array[File] ctb_dummy = select_all([CollectCounts.counts, Delly.vcf, Manta.vcf, PESRCollection.disc_out, PESRCollection.split_out, MELT.vcf, Whamg.vcf])
+      Array[File] ctb_dummy = select_all([CollectCounts.counts, Delly.vcf, Manta.vcf, PESRCollection.disc_out, PESRCollection.split_out, MELT.vcf, Scramble.vcf, Whamg.vcf])
       call DeleteIntermediateFiles {
         input:
           intermediates = select_all([CramToBam.bam_file, MELT.filtered_bam]),
@@ -293,10 +311,12 @@ workflow GatherSampleEvidence {
         delly_vcf = Delly.vcf,
         manta_vcf = Manta.vcf,
         melt_vcf = MELT.vcf,
+        scramble_vcf = Scramble.vcf,
         wham_vcf = Whamg.vcf,
         baseline_delly_vcf = baseline_delly_vcf,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_melt_vcf = baseline_melt_vcf,
+        baseline_scramble_vcf = baseline_scramble_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
         contig_list = primary_contigs_list,
         contig_index = select_first([primary_contigs_fai]),
@@ -318,6 +338,9 @@ workflow GatherSampleEvidence {
     Float? melt_coverage = MELT.coverage_out
     Int? melt_read_length = MELT.read_length_out
     Float? melt_insert_size = MELT.insert_size_out
+
+    File? scramble_vcf = Scramble.vcf
+    File? scramble_index = Scramble.index
 
     File? pesr_disc = PESRCollection.disc_out
     File? pesr_disc_index = PESRCollection.disc_out_index

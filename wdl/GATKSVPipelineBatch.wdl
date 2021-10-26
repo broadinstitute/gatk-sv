@@ -33,12 +33,14 @@ workflow GATKSVPipelineBatch {
     Array[File]? delly_vcfs_input
     Array[File]? manta_vcfs_input
     Array[File]? melt_vcfs_input
+    Array[File]? scramble_vcfs_input
     Array[File]? wham_vcfs_input
 
     # Enable different callers
     Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
+    Boolean use_scramble = true
     Boolean use_wham = true
 
     # BAF Generation (if baf_files unavailable)
@@ -110,6 +112,7 @@ workflow GATKSVPipelineBatch {
     String? delly_docker
     String? manta_docker
     String? melt_docker
+    String? scramble_docker
     String? wham_docker
     String cloud_sdk_docker
 
@@ -128,9 +131,10 @@ workflow GATKSVPipelineBatch {
   String? delly_docker_ = if (!defined(delly_vcfs_input) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(manta_vcfs_input) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(melt_vcfs_input) && use_melt) then melt_docker else NONE_STRING_
+  String? scramble_docker_ = if (!defined(scramble_vcfs_input) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs_input) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidenceBatch {
@@ -152,10 +156,11 @@ workflow GATKSVPipelineBatch {
         linux_docker = linux_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        delly_docker=delly_docker,
-        manta_docker=manta_docker,
-        melt_docker=melt_docker,
-        wham_docker=wham_docker,
+        delly_docker=delly_docker_,
+        manta_docker=manta_docker_,
+        melt_docker=melt_docker_,
+        scramble_docker=scramble_docker_,
+        wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
         gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
@@ -176,6 +181,9 @@ workflow GATKSVPipelineBatch {
   }
   if (use_melt) {
     Array[File] melt_vcfs_ = if defined(melt_vcfs_input) then select_first([melt_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.melt_vcf]))
+  }
+  if (use_scramble) {
+    Array[File] scramble_vcfs_ = if defined(scramble_vcfs_input) then select_first([scramble_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.scramble_vcf]))
   }
   if (use_wham) {
     Array[File] wham_vcfs_ = if defined(wham_vcfs_input) then select_first([wham_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
@@ -215,6 +223,7 @@ workflow GATKSVPipelineBatch {
       delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
+      scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
       gvcfs=gvcfs,
       snp_vcfs=snp_vcfs,
@@ -416,6 +425,7 @@ workflow GATKSVPipelineBatch {
     File dup_bed_index = GATKSVPipelinePhase1.merged_dups + ".tbi"
     Array[File]? std_manta_vcfs = GATKSVPipelinePhase1.std_manta_vcf
     Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
+    Array[File]? std_scramble_vcfs = GATKSVPipelinePhase1.std_scramble_vcf
     Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
 
     File merged_depth_vcf = GATKSVPipelinePhase1.depth_vcf

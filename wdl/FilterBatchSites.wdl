@@ -9,6 +9,7 @@ workflow FilterBatchSites {
     File? delly_vcf
     File? wham_vcf
     File? melt_vcf
+    File? scramble_vcf
     File? depth_vcf
     File evidence_metrics
     File evidence_metrics_common
@@ -21,8 +22,8 @@ workflow FilterBatchSites {
     
   }
 
-  Array[String] algorithms = ["manta", "delly", "wham", "melt", "depth"]
-  Array[File?] vcfs_array = [manta_vcf, delly_vcf, wham_vcf, melt_vcf, depth_vcf]
+  Array[String] algorithms = ["manta", "delly", "wham", "melt", "scramble", "depth"]
+  Array[File?] vcfs_array = [manta_vcf, delly_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
   Int num_algorithms = length(algorithms)
 
   call AdjudicateSV {
@@ -63,7 +64,8 @@ workflow FilterBatchSites {
     File? sites_filtered_delly_vcf = FilterAnnotateVcf.annotated_vcf[1]
     File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[2]
     File? sites_filtered_melt_vcf = FilterAnnotateVcf.annotated_vcf[3]
-    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[4]
+    File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[4]
+    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[5]
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files

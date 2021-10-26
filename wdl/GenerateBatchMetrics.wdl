@@ -14,6 +14,7 @@ workflow GenerateBatchMetrics {
 
     File? depth_vcf
     File? melt_vcf
+    File? scramble_vcf
     File? delly_vcf
     File? wham_vcf
     File? manta_vcf
@@ -69,8 +70,8 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_get_male_only
   }
 
-  Array[String] algorithms = ["depth", "melt", "delly", "wham", "manta"]
-  Array[File?] vcfs = [depth_vcf, melt_vcf, delly_vcf, wham_vcf, manta_vcf]
+  Array[String] algorithms = ["depth", "melt", "scramble", "delly", "wham", "manta"]
+  Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, delly_vcf, wham_vcf, manta_vcf]
 
   call util.GetSampleIdsFromVcf {
     input:
@@ -113,7 +114,7 @@ workflow GenerateBatchMetrics {
           runtime_attr_override = runtime_attr_get_male_only
       }
 
-      if (algorithm != "melt") {
+      if (algorithm != "melt" && algorithm != "scramble") {
         call rdt.RDTest as RDTest {
           input:
             coveragefile = coveragefile,
@@ -188,7 +189,7 @@ workflow GenerateBatchMetrics {
         }
       }
 
-      if (algorithm != "depth" && algorithm != "melt") {
+      if (algorithm != "depth" && algorithm != "melt" && algorithm != "scramble") {
         call pet.PETest as PETest {
           input:
             discfile = discfile,

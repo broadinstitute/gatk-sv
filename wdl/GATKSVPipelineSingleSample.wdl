@@ -37,12 +37,14 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
+    Boolean use_scramble = true
     Boolean use_wham = true
 
     # If GatherSampleEvidence outputs already prepared
     File? case_delly_vcf
     File? case_manta_vcf
     File? case_melt_vcf
+    File? case_scramble_vcf
     File? case_wham_vcf
     File? case_counts_file
     File? case_pe_file
@@ -83,6 +85,7 @@ workflow GATKSVPipelineSingleSample {
     String? delly_docker
     String? manta_docker
     String? melt_docker
+    String? scramble_docker
     String? wham_docker
 
     ############################################################
@@ -134,6 +137,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
+    RuntimeAttr? runtime_attr_scramble
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
     RuntimeAttr? runtime_attr_wham_include_list
@@ -261,6 +265,7 @@ workflow GATKSVPipelineSingleSample {
     Array[File] ref_std_manta_vcfs
     Array[File] ref_std_wham_vcfs
     Array[File]? ref_std_melt_vcfs
+    Array[File]? ref_std_scramble_vcfs
     File ref_panel_del_bed
     File ref_panel_dup_bed
 
@@ -589,12 +594,13 @@ workflow GATKSVPipelineSingleSample {
   String? delly_docker_ = if (!defined(case_delly_vcf) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(case_manta_vcf) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(case_melt_vcf) && use_melt) then melt_docker else NONE_STRING_
+  String? scramble_docker_ = if (!defined(case_scramble_vcf) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(case_wham_vcf) && use_wham) then wham_docker else NONE_STRING_
 
   Boolean collect_coverage = !defined(case_counts_file)
   Boolean collect_pesr = !defined(case_pe_file) || !defined(case_sr_file)
 
-  Boolean run_sampleevidence = defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
+  Boolean run_sampleevidence = defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidence as GatherSampleEvidence {
@@ -631,6 +637,7 @@ workflow GATKSVPipelineSingleSample {
         delly_docker=delly_docker_,
         manta_docker=manta_docker_,
         melt_docker=melt_docker_,
+        scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
         gatk_docker_pesr_override = gatk_docker_pesr_override,
@@ -642,6 +649,7 @@ workflow GATKSVPipelineSingleSample {
         runtime_attr_melt_coverage=runtime_attr_melt_coverage,
         runtime_attr_melt_metrics=runtime_attr_melt_metrics,
         runtime_attr_melt=runtime_attr_melt,
+        runtime_attr_scramble=runtime_attr_scramble,
         runtime_attr_pesr=runtime_attr_pesr,
         runtime_attr_wham=runtime_attr_wham,
         runtime_attr_wham_include_list=runtime_attr_wham_include_list,
@@ -679,6 +687,9 @@ workflow GATKSVPipelineSingleSample {
   }
   if (use_melt) {
     Array[File] melt_vcfs_ = [select_first([case_melt_vcf, GatherSampleEvidence.melt_vcf])]
+  }
+  if (use_scramble) {
+    Array[File] scramble_vcfs_ = [select_first([case_scramble_vcf, GatherSampleEvidence.scramble_vcf])]
   }
   if (use_wham) {
     Array[File] wham_vcfs_ = [select_first([case_wham_vcf, GatherSampleEvidence.wham_vcf])]
@@ -746,6 +757,7 @@ workflow GATKSVPipelineSingleSample {
       delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
+      scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
       min_svsize=min_svsize,
       cnmops_chrom_file=autosome_file,
@@ -799,6 +811,9 @@ workflow GATKSVPipelineSingleSample {
   if (defined(GatherBatchEvidence.std_melt_vcf)) {
     Array[File]? merged_melt_vcfs_array = flatten([select_first([GatherBatchEvidence.std_melt_vcf]), select_first([ref_std_melt_vcfs])])
   }
+  if (defined(GatherBatchEvidence.std_scramble_vcf)) {
+    Array[File]? merged_scramble_vcfs_array = flatten([select_first([GatherBatchEvidence.std_scramble_vcf]), select_first([ref_std_scramble_vcfs])])
+  }
 
   call dpn.MergeSet as MergeSetDel {
     input:
@@ -822,6 +837,7 @@ workflow GATKSVPipelineSingleSample {
       manta_vcfs=merged_manta_vcfs_array,
       wham_vcfs=merged_wham_vcfs_array,
       melt_vcfs=merged_melt_vcfs_array,
+      scramble_vcfs=merged_scramble_vcfs_array,
       del_bed=MergeSetDel.out,
       dup_bed=MergeSetDup.out,
       batch=batch,
@@ -877,6 +893,16 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
+  if (use_scramble) {
+    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterScramble {
+        input :
+            vcf_gz=select_first([ClusterBatch.clustered_scramble_vcf]),
+            sample_id=sample_id,
+            evidence="RD,PE,SR",
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_filter_vcf_by_id
+    }
+  }
   if (use_delly) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
         input :
@@ -902,6 +928,7 @@ workflow GATKSVPipelineSingleSample {
       manta_vcf=FilterManta.out,
       wham_vcf=FilterWham.out,
       melt_vcf=FilterMelt.out,
+      scramble_vcf=FilterScramble.out,
       delly_vcf=FilterDelly.out,
       batch=batch,
       sv_base_mini_docker=sv_base_mini_docker,
