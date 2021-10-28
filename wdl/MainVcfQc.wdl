@@ -53,7 +53,6 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_split_vcf_to_qc
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
-    RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
 
     # overrides for ShardedCohortBenchmarking
     RuntimeAttr? runtime_override_site_level_benchmark
@@ -107,7 +106,7 @@ workflow MasterVcfQc {
         runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
         runtime_override_split_vcf_to_qc=runtime_override_split_vcf_to_qc,
         runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
-        runtime_override_merge_svtk_vcf_2_bed=runtime_override_merge_svtk_vcf_2_bed
+        runtime_override_merge_svtk_vcf_2_bed=runtime_override_merge_vcf_2_bed
     }
   }
 
