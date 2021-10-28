@@ -12,7 +12,7 @@ set -e
 usage(){
 cat <<EOF
 
-usage: compare_callsets_perSample.sh [options] SET1.tar.gz SET2.tar.gz SAMPLES OUTDIR
+usage: compare_callsets_perSample.sh [options] SET1.tar.gz SET2.tar.gz SAMPLES CONTIGS OUTDIR
 
 Helper tool to compare the sensitivity of one SV callset vs another
 
@@ -20,6 +20,7 @@ Positional arguments:
   SET1.tar.gz            SV callset to be benchmarked
   SET2.tar.gz            Ground truth SV callset to use for benchmarking
   SAMPLES                List of samples to be considered
+  CONTIGS                List of contigs to evaluate
   OUTDIR                 Output directory for per-sample comparison results
 
 Optional arguments:
@@ -69,7 +70,8 @@ shift $(( ${OPTIND} - 1))
 SET1=$1
 SET2=$2
 SAMPLES=$3
-OUTDIR=$4
+CONTIGS=$4
+OUTDIR=$5
 
 
 ###SET BIN
@@ -104,6 +106,16 @@ if [ -z ${SAMPLES} ]; then
   exit 1
 elif ! [ -s ${SAMPLES} ]; then
   echo -e "\ncompare_callsets_perSample.sh ERROR: input sample list either empty or not found\n"
+  usage
+  exit 1
+fi
+#Check for required list of contigs
+if [ -z ${CONTIGS} ]; then
+  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list not specified\n"
+  usage
+  exit 1
+elif ! [ -s ${CONTIGS} ]; then
+  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list either empty or not found\n"
   usage
   exit 1
 fi
@@ -209,10 +221,11 @@ else
       -p ${ID}_${PREFIX}_sensitivity \
       -O ${OUTDIR}/${ID}.sensitivity.bed \
       ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
-      ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
-      bgzip -f ${OUTDIR}/${ID}.sensitivity.bed
-      rm ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
-         ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
+      ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz \
+      ${CONTIGS}
+    bgzip -f ${OUTDIR}/${ID}.sensitivity.bed
+    rm ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz \
+       ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
 
     #Clean callsets for specificity analysis
     echo -e "#chr\tstart\tend\tsvtype\tlength\tAF" > \
@@ -234,10 +247,11 @@ else
       -p ${ID}_${PREFIX}_specificity \
       -O ${OUTDIR}/${ID}.specificity.bed \
       ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz \
-      ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz
-      bgzip -f ${OUTDIR}/${ID}.specificity.bed
-      rm ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
-         ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz
+      ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
+      ${CONTIGS}
+    bgzip -f ${OUTDIR}/${ID}.specificity.bed
+    rm ${OVRTMP}/${ID}.SET1.spec.cleaned.bed.gz \
+       ${OVRTMP}/${ID}.SET2.spec.cleaned.bed.gz
 
     #Report counter, if relevant
     i=$(( ${i} + 1 ))
@@ -249,6 +263,12 @@ else
       fi
     fi
   done < ${OVRTMP}/int_samples_and_paths.list
+  
+  # Report when complete
+  if [ ${QUIET} == 0 ]; then
+    echo -e "$( date ) - PER-SAMPLE COMPARISON STATUS: Finished comparisons for all ${nsamps} samples"
+  fi
+
 fi
 
 

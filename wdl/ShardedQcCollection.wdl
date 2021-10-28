@@ -2,18 +2,17 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-# Workflow to gather SV VCF summary stats for an input VCF
+# Workflow to gather SV VCF summary stats for one or more input VCFs
 
 import "Tasks0506.wdl" as MiniTasks
 
 workflow ShardedQcCollection {
   input {
-    File vcf
+    Array[File] vcfs
+    Array[File] vcf_idxs
     String contig
     Int sv_per_shard
     String prefix
-
-    File? vcf_idx
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -28,20 +27,23 @@ workflow ShardedQcCollection {
     RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
   }
 
-  # Tabix to chromosome of interest, and shard input VCF for stats collection
-  call MiniTasks.SplitVcf as SplitVcfToQc {
-    input:
-      vcf=vcf,
-      vcf_idx=vcf_idx,
-      contig=contig,
-      min_vars_per_shard=sv_per_shard,
-      prefix="vcf.shard.",
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_override_split_vcf_to_qc
+  # Tabix each VCF to chromosome of interest, and shard input VCF for stats collection
+  scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
+    call MiniTasks.SplitVcf as SplitVcfToQc {
+      input:
+        vcf=vcf_info.left,
+        vcf_idx=vcf_info.right,
+        contig=contig,
+        min_vars_per_shard=sv_per_shard,
+        prefix="vcf.shard.",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_split_vcf_to_qc
+    }
   }
+  Array[File] vcf_shards = flatten(SplitVcfToQc.vcf_shards)
 
   # Scatter over VCF shards
-  scatter (shard in SplitVcfToQc.vcf_shards) {
+  scatter (shard in vcf_shards) {
     # Collect VCF-wide summary stats
     call CollectShardedVcfStats {
       input:
@@ -100,14 +102,14 @@ task CollectShardedVcfStats {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcf, "GiB")
-  Float compression_factor = 5.0
+  Float compression_factor = 2.0
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
+  Float base_mem_gb = 3.75
   RuntimeAttr runtime_default = object {
     mem_gb: base_mem_gb + compression_factor * input_size,
     disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -171,7 +173,7 @@ task SvtkVcf2bed {
     mem_gb: base_mem_gb,
     disk_gb: ceil(base_disk_gb + input_size * 2.0),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
