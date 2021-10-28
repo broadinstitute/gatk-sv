@@ -37,7 +37,6 @@ workflow ShardedCohortBenchmarking {
   call MergeContigBenchmarks as MergeBenchmarking {
     input:
       in_tarballs=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
-      prefix=prefix,
       comparator=comparator,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_site_level_benchmark
@@ -110,7 +109,6 @@ task VcfExternalBenchmarkSingleChrom {
 task MergeContigBenchmarks {
   input {
     Array[File] in_tarballs
-    String prefix
     String comparator
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -142,7 +140,8 @@ task MergeContigBenchmarks {
     done < ~{write_lines(in_tarballs)}
 
     # Create final output directory
-    mkdir ~{prefix}.collectQC_benchmarking_~{comparator}_output
+    mkdir collectQC_benchmarking_~{comparator}_output
+    mkdir collectQC_benchmarking_~{comparator}_output/data
 
     # Merge each unique BED
     find sharded_results/ -name "*.bed.gz" | xargs -I {} basename {} | sort -V | uniq > bed_filenames.list
@@ -151,17 +150,17 @@ task MergeContigBenchmarks {
       sed -n '1p' matching_beds.list | xargs -I {} zcat {} | sed -n '1p' > header.bed
       cat matching_beds.list | xargs -I {} zcat {} | fgrep -v "#" \
       | sort -Vk1,1 -k2,2n -k3,3n | cat header.bed - | bgzip -c \
-      > ~{prefix}.collectQC_benchmarking_~{comparator}_output/$fname
-      tabix -f ~{prefix}.collectQC_benchmarking_~{comparator}_output/$fname
+      > collectQC_benchmarking_~{comparator}_output/data/$fname
+      tabix -f collectQC_benchmarking_~{comparator}_output/data/$fname
     done < bed_filenames.list
 
     # Compress final output directory
     tar -czvf \
-      ~{prefix}.collectQC_benchmarking_~{comparator}_output.tar.gz \
-      ~{prefix}.collectQC_benchmarking_~{comparator}_output
+      collectQC_benchmarking_~{comparator}_output.tar.gz \
+      collectQC_benchmarking_~{comparator}_output
   >>>
 
   output {
-    File merged_results_tarball = "~{prefix}.collectQC_benchmarking_~{comparator}_output.tar.gz"
+    File merged_results_tarball = "collectQC_benchmarking_~{comparator}_output.tar.gz"
   }
 }
