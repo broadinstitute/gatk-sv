@@ -2,10 +2,6 @@
 #
 # sub_rdtest_splits.sh
 #
-# 
-#
-# Copyright (C) 2017 Xuefang Zhao <xzhao12@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 set -e
 

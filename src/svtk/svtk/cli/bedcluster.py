@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2016 Matthew Stone <mstone5@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 """
 Cluster a bed of structural variants based on reciprocal overlap.

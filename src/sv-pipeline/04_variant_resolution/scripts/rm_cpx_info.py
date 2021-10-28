@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2018 Ryan collins <rlcollins@g.harvard>
-# Distributed under terms of the MIT license.
 
 """
 Strip CPX INFO fields from non-CPX variants

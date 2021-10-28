@@ -1,8 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 # Helper script to count median # of filtered variants per trio
 # for minGQ optimization filtering workflow

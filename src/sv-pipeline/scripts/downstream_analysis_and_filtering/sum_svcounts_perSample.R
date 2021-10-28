@@ -1,8 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 # Helper script to merge outputs from count_svtypes task
 # in final_outlier_sample_filter.wdl

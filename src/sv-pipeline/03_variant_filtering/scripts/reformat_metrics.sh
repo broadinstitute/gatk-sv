@@ -4,8 +4,6 @@
 #
 # TODO: do this as part of metric aggregation
 #
-# Copyright (C) 2017 Matthew Stone <mstone5@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 set -e
 

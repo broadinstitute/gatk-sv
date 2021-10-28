@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2017 Matthew Stone <mstone5@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 """
 Resolve complex SV from inversion/translocation breakpoints and CNV intervals.

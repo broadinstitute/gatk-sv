@@ -2,10 +2,6 @@
 #
 # clean_VCF.sh
 #
-# 
-#
-# Copyright (C) 2018 Harrison Brand<hbrand1@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 ##requires >= vcftools/0.1.15 ##
 

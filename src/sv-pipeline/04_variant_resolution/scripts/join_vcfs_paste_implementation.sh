@@ -4,8 +4,6 @@
 #
 # Join VCFs which contain the same set of variants in different samples 
 #
-# Copyright (C) 2018 Matthew Stone <mstone5@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 set -e
 

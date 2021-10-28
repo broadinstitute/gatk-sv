@@ -2,10 +2,6 @@
 #
 # Complex_Inversion_Integration.sh
 #
-# 
-#
-# Copyright (C) 2018 Harrison Brand<hbrand1@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 set -euo pipefail
 

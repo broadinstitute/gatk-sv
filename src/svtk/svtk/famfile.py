@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2018 Matthew Stone <mstone5@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 """
 Simple classes for parsing and interpreting .fam files

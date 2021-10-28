@@ -1,8 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 # Generates a UMAP plot based on a GRM
 

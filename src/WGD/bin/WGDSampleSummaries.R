@@ -1,8 +1,5 @@
 #! /usr/bin/env Rscript
 
-# Copyright (c) 2017 Ryan L. Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Wrapper for WGD R companion library (WGDR) function
 # WGD.sample.summaryplots.R to generate WGD summary plots
 # for a set of libraries in a given coverage matrix

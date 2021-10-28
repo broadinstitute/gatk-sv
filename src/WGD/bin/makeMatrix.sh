@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2017 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Wrapper for bedtools unionbedg to create a multi-sample coverage
 # matrix from the output of binCov.py
 

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 # Wrapper for PESR + depth merging in module 04b
 

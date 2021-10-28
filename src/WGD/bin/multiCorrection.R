@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2017 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Script to correct for multiple sequence features across a list of binCov files
 # Note: Designed to be run on 24 chromosome-split files from the same library
 

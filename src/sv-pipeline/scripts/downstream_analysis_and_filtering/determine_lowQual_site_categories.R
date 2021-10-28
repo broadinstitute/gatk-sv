@@ -1,8 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 # Helper script to determine categories of SV that
 # don't meet a minimum Mendelian violation rate (MVR)

@@ -4,8 +4,6 @@
 #
 # Script to check raw manta calls## 
 #
-# Copyright (C) 2018 Harrison Brand<hbrand1@mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 ##standardized manta vcf##
 std_vcf=$1

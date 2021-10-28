@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2017 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Batch script to iterate binCov over a supplied list of contigs
 
 set -e

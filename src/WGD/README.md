@@ -3,8 +3,6 @@
 
 **Contact:** Ryan Collins (rlcollins@g.harvard.edu)
 
-All code copyright (c) 2018 Ryan Collins and is distributed under terms of the MIT license.  
-
 ---  
 ## Table of Contents  
 #### Examples  
