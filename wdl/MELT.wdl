@@ -562,6 +562,7 @@ task RunMELT {
   Float mem_offset = 6.833
   Float mem_size_gb =
     mem_offset + mem_per_pct_chimeras * pct_chimeras + mem_per_improper_pairs * pf_reads_improper_pairs
+  Float java_mem_fraction = 0.85
 
 
   # Ensure there's sufficient disk space. Estimate using extra metrics
@@ -590,6 +591,8 @@ task RunMELT {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Int java_mem_mb = round(select_first([runtime_attr.mem_gb, default_attr.mem_gb]) * java_mem_fraction * 1024)
+
   output {
     File vcf = "${sample_id}.melt.vcf.gz"
     File index = "${sample_id}.melt.vcf.gz.tbi"
@@ -609,6 +612,8 @@ task RunMELT {
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
     MELT_SCRIPT=$(ls "$MELT_DIR/run_MELT"*.sh)
+
+    JVM_MAX_MEM="~{java_mem_mb}m"
 
     # call MELT
     "$MELT_SCRIPT" \
