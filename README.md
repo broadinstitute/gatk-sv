@@ -221,7 +221,6 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file
-* B-allele fraction (BAF) file
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*
