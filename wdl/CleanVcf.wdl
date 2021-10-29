@@ -2,6 +2,7 @@ version 1.0
 
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "Utils.wdl" as util
 
 workflow CleanVcf {
   input {
@@ -43,6 +44,23 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
+    RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_ped
+  }
+
+  call util.GetSampleIdsFromVcf {
+    input:
+      vcf = complex_genotype_vcfs[0],
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_ids_from_vcf
+  }
+  call util.SubsetPedFile {
+    input:
+      ped_file = merged_ped_file,
+      sample_list = GetSampleIdsFromVcf.out_file,
+      subset_name = "vcf_samples",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_subset_ped
   }
 
   #Scatter per chromosome
@@ -55,7 +73,7 @@ workflow CleanVcf {
         vcf=complex_genotype_vcfs[i],
         contig=contig,
         background_list=complex_resolve_background_fail_lists[i],
-        ped_file=merged_ped_file,
+        ped_file=SubsetPedFile.ped_subset_file,
         bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
         allosome_fai=allosome_fai,
         prefix=cohort_name,
