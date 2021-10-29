@@ -562,6 +562,7 @@ task RunMELT {
   Float mem_offset = 6.833
   Float mem_size_gb =
     mem_offset + mem_per_pct_chimeras * pct_chimeras + mem_per_improper_pairs * pf_reads_improper_pairs
+  Float java_mem_fraction = 0.85
 
 
   # Ensure there's sufficient disk space. Estimate using extra metrics
@@ -609,6 +610,19 @@ task RunMELT {
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
     MELT_SCRIPT=$(ls "$MELT_DIR/run_MELT"*.sh)
+
+    function getJavaMem() {
+        # get JVM memory in GiB by getting total memory from /proc/meminfo
+        # and multiplying by java_mem_fraction
+        cat /proc/meminfo \
+            | awk -v MEM_FIELD="$1" '{
+                f[substr($1, 1, length($1)-1)] = $2
+            } END {
+                printf "%.2fG", f[MEM_FIELD] * ~{java_mem_fraction} / 1048576
+            }'     
+    }
+    JVM_MAX_MEM=$(getJavaMem MemTotal)
+    echo "JVM memory: $JVM_MAX_MEM"
 
     # call MELT
     "$MELT_SCRIPT" \
