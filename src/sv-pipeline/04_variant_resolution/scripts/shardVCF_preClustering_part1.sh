@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Intelligently shards a VCF prior to complex resolution (for parallelization)
 

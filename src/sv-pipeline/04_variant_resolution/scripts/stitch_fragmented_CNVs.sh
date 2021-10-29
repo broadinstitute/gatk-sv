@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Stitch fragmented CNVs present in a VCF
 

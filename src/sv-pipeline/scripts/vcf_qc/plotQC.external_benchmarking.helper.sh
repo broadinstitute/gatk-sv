@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Wrapper to manage external SV benchmarking plotting from output tarball
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Parse KING output to assign relatedness
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Cleans fam file to only include samples present in an input list
 

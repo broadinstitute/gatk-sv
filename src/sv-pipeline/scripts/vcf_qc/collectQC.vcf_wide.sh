@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Collects QC data for SV VCF output by SV pipeline
 # Summary, VCF-wide statistics only

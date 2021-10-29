@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Helper script to plot VCF summary stats output from clean_vcf2bed_output.R
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Performs ROC curve analysis to determine optimal GQ threshold
 

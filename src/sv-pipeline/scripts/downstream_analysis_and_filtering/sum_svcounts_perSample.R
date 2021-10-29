@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan Collins
 
 # Helper script to merge outputs from count_svtypes task
 # in final_outlier_sample_filter.wdl

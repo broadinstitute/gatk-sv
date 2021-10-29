@@ -1,7 +1,7 @@
 # WGD
 **W**hole-**G**enome **D**osage: a suite of tools to evaluate dosage in whole-genome sequencing libraries
 
-**Contact:** Ryan Collins (rlcollins@g.harvard.edu)
+**Original author:** Ryan Collins
 
 ---  
 ## Table of Contents  

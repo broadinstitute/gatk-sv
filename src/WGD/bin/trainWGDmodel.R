@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
+# Original author: Ryan L. Collins
 
 # Script to train WGD dosage bias scoring model
 
