@@ -613,7 +613,18 @@ task RunMELT {
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
     MELT_SCRIPT=$(ls "$MELT_DIR/run_MELT"*.sh)
 
-    JVM_MAX_MEM="~{java_mem_mb}m"
+    function getJavaMem() {
+        # get JVM memory in GiB by getting total memory from /proc/meminfo
+        # and multiplying by java_mem_fraction
+        cat /proc/meminfo \
+            | awk -v MEM_FIELD="$1" '{
+                f[substr($1, 1, length($1)-1)] = $2
+            } END {
+                printf "%.2fG", f[MEM_FIELD] * ~{java_mem_fraction} / 1048576
+            }'     
+    }
+    JVM_MAX_MEM=$(getJavaMem MemTotal)
+    echo "JVM memory: $JVM_MAX_MEM"
 
     # call MELT
     "$MELT_SCRIPT" \
