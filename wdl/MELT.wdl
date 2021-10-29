@@ -591,8 +591,6 @@ task RunMELT {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  Int java_mem_mb = round(select_first([runtime_attr.mem_gb, default_attr.mem_gb]) * java_mem_fraction * 1024)
-
   output {
     File vcf = "${sample_id}.melt.vcf.gz"
     File index = "${sample_id}.melt.vcf.gz.tbi"
