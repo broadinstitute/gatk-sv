@@ -35,80 +35,86 @@ workflow PETest {
   Array[Array[String]] allosomes = read_tsv(allosome_contigs)
 
   scatter (autosome in autosomes) {
-    call pec.PETestChromosome as PETestAutosome {
-      input:
-        medianfile = medianfile,
-        algorithm = algorithm,
-        vcf = vcf,
-        chrom = autosome[0],
-        ped_file = ped_file,
-        split_size = split_size,
-        batch = batch,
-        discfile = discfile,
-        samples = samples,
-        male_samples = male_samples,
-        female_samples = female_samples,
-        male_only_variant_ids = male_only_variant_ids,
-        allosome = false,
-        ref_dict = ref_dict,
-        common_cnv_size_cutoff = common_cnv_size_cutoff,
-        sv_base_mini_docker = sv_base_mini_docker,
-        linux_docker = linux_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_split_vcf = runtime_attr_split_vcf,
-        runtime_attr_petest = runtime_attr_petest,
-        runtime_attr_merge_allo = runtime_attr_merge_allo,
-        runtime_attr_merge_stats = runtime_attr_merge_stats
+    if (autosome[0] != "") {
+      call pec.PETestChromosome as PETestAutosome {
+        input:
+          medianfile = medianfile,
+          algorithm = algorithm,
+          vcf = vcf,
+          chrom = autosome[0],
+          ped_file = ped_file,
+          split_size = split_size,
+          batch = batch,
+          discfile = discfile,
+          samples = samples,
+          male_samples = male_samples,
+          female_samples = female_samples,
+          male_only_variant_ids = male_only_variant_ids,
+          allosome = false,
+          ref_dict = ref_dict,
+          common_cnv_size_cutoff = common_cnv_size_cutoff,
+          sv_base_mini_docker = sv_base_mini_docker,
+          linux_docker = linux_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_split_vcf = runtime_attr_split_vcf,
+          runtime_attr_petest = runtime_attr_petest,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
+      }
     }
-
   }
 
   scatter (allosome in allosomes) {
-    call pec.PETestChromosome as PETestAllosome {
-      input:
-        medianfile = medianfile,
-        algorithm = algorithm,
-        vcf = vcf,
-        chrom = allosome[0],
-        split_size = split_size,
-        batch = batch,
-        ped_file = ped_file,
-        discfile = discfile,
-        samples = samples,
-        male_samples = male_samples,
-        female_samples = female_samples,
-        male_only_variant_ids = male_only_variant_ids,
-        allosome = true,
-        ref_dict = ref_dict,
-        common_cnv_size_cutoff = common_cnv_size_cutoff,
-        sv_base_mini_docker = sv_base_mini_docker,
-        linux_docker = linux_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_split_vcf = runtime_attr_split_vcf,
-        runtime_attr_petest = runtime_attr_petest,
-        runtime_attr_merge_allo = runtime_attr_merge_allo,
-        runtime_attr_merge_stats = runtime_attr_merge_stats
+    if (allosome[0] != "") {
+      call pec.PETestChromosome as PETestAllosome {
+        input:
+          medianfile = medianfile,
+          algorithm = algorithm,
+          vcf = vcf,
+          chrom = allosome[0],
+          split_size = split_size,
+          batch = batch,
+          ped_file = ped_file,
+          discfile = discfile,
+          samples = samples,
+          male_samples = male_samples,
+          female_samples = female_samples,
+          male_only_variant_ids = male_only_variant_ids,
+          allosome = true,
+          ref_dict = ref_dict,
+          common_cnv_size_cutoff = common_cnv_size_cutoff,
+          sv_base_mini_docker = sv_base_mini_docker,
+          linux_docker = linux_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_split_vcf = runtime_attr_split_vcf,
+          runtime_attr_petest = runtime_attr_petest,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
+      }
     }
   }
 
   call tasksbatchmetrics.MergeStats as MergeStats {
     input:
-      stats = flatten([PETestAutosome.stats, PETestAllosome.stats]),
+      stats = select_all(flatten([PETestAutosome.stats, PETestAllosome.stats])),
       prefix = "${batch}.${algorithm}",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_merge_stats
   }
 
-  call tasksbatchmetrics.MergeStats as MergeStatsCommon {
-    input:
-      stats = select_all(PETestAutosome.stats_common),
-      prefix = "${batch}.${algorithm}.common",
-      linux_docker = linux_docker,
-      runtime_attr_override = runtime_attr_merge_stats
+  Array[File] common_stats = select_all(PETestAutosome.stats_common)
+  if (length(common_stats) > 0) {
+    call tasksbatchmetrics.MergeStats as MergeStatsCommon {
+      input:
+        stats = common_stats,
+        prefix = "${batch}.${algorithm}.common",
+        linux_docker = linux_docker,
+        runtime_attr_override = runtime_attr_merge_stats
+    }
   }
 
   output {
     File petest = MergeStats.merged_stats
-    File petest_common = MergeStatsCommon.merged_stats
+    File? petest_common = MergeStatsCommon.merged_stats
   }
 }
