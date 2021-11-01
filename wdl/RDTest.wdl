@@ -34,64 +34,68 @@ workflow RDTest {
   Array[Array[String]] allosomes = read_tsv(allosome_contigs)
 
   scatter (autosome in autosomes) {
-    call rdc.RDTestChromosome as RDTestAutosome {
-      input:
-        batch = batch,
-        medianfile = medianfile,
-        coveragefile = coveragefile,
-        flags = flags,
-        vcf = vcf,
-        chrom = autosome[0],
-        split_size = split_size,
-        algorithm = algorithm,
-        ped_file = ped_file,
-        samples = samples,
-        male_samples = male_samples,
-        female_samples = female_samples,
-        male_only_variant_ids = male_only_variant_ids,
-        allosome = false,
-        ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-        linux_docker = linux_docker,
-        runtime_attr_rdtest = runtime_attr_rdtest,
-        runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
-        runtime_attr_merge_allo = runtime_attr_merge_allo,
-        runtime_attr_merge_stats = runtime_attr_merge_stats
+    if (autosome[0] != "") {
+      call rdc.RDTestChromosome as RDTestAutosome {
+        input:
+          batch = batch,
+          medianfile = medianfile,
+          coveragefile = coveragefile,
+          flags = flags,
+          vcf = vcf,
+          chrom = autosome[0],
+          split_size = split_size,
+          algorithm = algorithm,
+          ped_file = ped_file,
+          samples = samples,
+          male_samples = male_samples,
+          female_samples = female_samples,
+          male_only_variant_ids = male_only_variant_ids,
+          allosome = false,
+          ref_dict = ref_dict,
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          linux_docker = linux_docker,
+          runtime_attr_rdtest = runtime_attr_rdtest,
+          runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
+      }
     }
   }
 
   scatter (allosome in allosomes) {
-    call rdc.RDTestChromosome as RDTestAllosome {
-      input:
-        batch = batch,
-        medianfile = medianfile,
-        coveragefile = coveragefile,
-        flags = flags,
-        vcf = vcf,
-        chrom = allosome[0],
-        split_size = split_size,
-        algorithm = algorithm,
-        ped_file = ped_file,
-        samples = samples,
-        male_samples = male_samples,
-        female_samples = female_samples,
-        male_only_variant_ids = male_only_variant_ids,
-        allosome = true,
-        ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-        linux_docker = linux_docker,
-        runtime_attr_rdtest = runtime_attr_rdtest,
-        runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
-        runtime_attr_merge_allo = runtime_attr_merge_allo,
-        runtime_attr_merge_stats = runtime_attr_merge_stats
+    if (allosome[0] != "") {
+      call rdc.RDTestChromosome as RDTestAllosome {
+        input:
+          batch = batch,
+          medianfile = medianfile,
+          coveragefile = coveragefile,
+          flags = flags,
+          vcf = vcf,
+          chrom = allosome[0],
+          split_size = split_size,
+          algorithm = algorithm,
+          ped_file = ped_file,
+          samples = samples,
+          male_samples = male_samples,
+          female_samples = female_samples,
+          male_only_variant_ids = male_only_variant_ids,
+          allosome = true,
+          ref_dict = ref_dict,
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          linux_docker = linux_docker,
+          runtime_attr_rdtest = runtime_attr_rdtest,
+          runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
+          runtime_attr_merge_allo = runtime_attr_merge_allo,
+          runtime_attr_merge_stats = runtime_attr_merge_stats
+      }
     }
   }
 
   call tasksbatchmetrics.MergeStats as MergeStats {
     input:
-      stats = flatten([RDTestAutosome.out_stats, RDTestAllosome.out_stats]),
+      stats = select_all(flatten([RDTestAutosome.out_stats, RDTestAllosome.out_stats])),
       prefix = "${batch}.${algorithm}",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_merge_stats
