@@ -1,7 +1,5 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 # Note: this WDL has been customized specifically for the gnomAD-SV v3 callset
 # Some components of this WDL will not be generalizable for most cohorts
 
