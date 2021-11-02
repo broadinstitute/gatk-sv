@@ -1,6 +1,6 @@
 version 1.0
 
-import "MasterVcfQc.wdl" as vcf_qc
+import "MainVcfQc.wdl" as vcf_qc
 import "Utils.wdl" as util
 
 workflow FilterBatchQc {
@@ -91,7 +91,7 @@ workflow FilterBatchQc {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
-      call vcf_qc.MasterVcfQc as VcfQc {
+      call vcf_qc.MainVcfQc as VcfQc {
         input:
           vcf = select_first([vcfs_array[i]]),
           ped_file=SubsetPedFile.ped_subset_file,

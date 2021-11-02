@@ -11,7 +11,7 @@
 
 version 1.0
 
-import "MasterVcfQc.wdl" as QC
+import "MainVcfQc.wdl" as QC
 
 
 workflow MinGQStep2MergePcrStatus {
@@ -78,7 +78,7 @@ workflow MinGQStep2MergePcrStatus {
 
 
   # Run QC on filtered VCF
-  call QC.MasterVcfQc as filtered_VCF_QC {
+  call QC.MainVcfQc as filtered_VCF_QC {
     input:
       vcf=combine_vcfs.vcf,
       vcf_idx=combine_vcfs.vcf_idx,

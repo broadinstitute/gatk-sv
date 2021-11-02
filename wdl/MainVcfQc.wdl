@@ -14,7 +14,7 @@ import "Utils.wdl" as Utils
 
 # Main workflow to perform comprehensive quality control (QC) on
 # an SV VCF output by GATK-SV
-workflow MasterVcfQc {
+workflow MainVcfQc {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
