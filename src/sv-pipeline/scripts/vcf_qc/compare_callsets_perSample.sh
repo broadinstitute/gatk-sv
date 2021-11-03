@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Compares per-sample concordance between two SV callsets
 
 set -e

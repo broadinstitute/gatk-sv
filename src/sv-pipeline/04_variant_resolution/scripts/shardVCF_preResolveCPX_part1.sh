@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Intelligently shards a VCF prior to complex resolution (for parallelization)
 
 # Subsetted to first half, to just output lists of which variants should go in each shard

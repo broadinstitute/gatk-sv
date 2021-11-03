@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Intelligently shards a VCF prior to complex resolution (for parallelization)
 
 # Version modified for inv-only sharding (RO 10%, no restriction on breakpoint distance)

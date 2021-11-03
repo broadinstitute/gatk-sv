@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Gather relevant complex SV intervals for testing
 
 set -e

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Stitch fragmented CNVs present in a VCF, without subsetting with regard to PE/SR evidence
 
 

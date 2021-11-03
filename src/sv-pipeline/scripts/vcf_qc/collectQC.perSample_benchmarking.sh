@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Collects QC data for SV VCF output by SV pipeline
 # Per-sample benchmarking comparisons to external dataset
 

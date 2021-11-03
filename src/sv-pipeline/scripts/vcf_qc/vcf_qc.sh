@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Master wrapper to collect QC data & generate plots for SV VCF output by SV pipeline
 
 set -e

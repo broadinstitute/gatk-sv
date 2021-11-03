@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to plot per-sample VCF stats output from collectQC.sh
 
 

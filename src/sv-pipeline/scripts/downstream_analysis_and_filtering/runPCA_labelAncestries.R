@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Performs PCA based on an input VCF
 
 

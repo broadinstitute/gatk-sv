@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to create final minGQ tree from
 # combined outputs of ROC analysis at individual
 # filter conditions

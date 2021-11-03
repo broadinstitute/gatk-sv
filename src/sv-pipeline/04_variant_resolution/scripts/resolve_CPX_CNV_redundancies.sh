@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Resolve redundancies between simple CNVs and unbalanced complex SV in mod04b
 
 # TODO : Missing pipefail

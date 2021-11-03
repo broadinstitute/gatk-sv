@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Performs ROC analysis on de novo rate to determine optimal 
 # GQ threshold for a single condition in the v2 ROC workflow
 

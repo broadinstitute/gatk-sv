@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Talkowski SV pipeline downstream analysis helper script
 
 # Compute & plot AF correlation coefficient

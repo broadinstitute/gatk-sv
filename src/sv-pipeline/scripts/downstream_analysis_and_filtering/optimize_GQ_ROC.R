@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Performs ROC curve analysis to determine optimal GQ threshold
 
 

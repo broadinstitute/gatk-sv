@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Reassign variant labels based on depth regenotyping in mod04b
 
 set -exo pipefail

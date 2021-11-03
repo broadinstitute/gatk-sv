@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Shard VCF into sequential, evenly-sized splits
 
 

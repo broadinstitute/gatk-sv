@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Benchmarks the sensitivity of one SV callset against another
 
 set -e

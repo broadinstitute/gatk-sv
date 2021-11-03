@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to clean final table of vcf vs vcf comparisons
 
 ###Set parameters

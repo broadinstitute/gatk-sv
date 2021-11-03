@@ -1,6 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan L. Collins
 # gnomAD project credits available at http://gnomad.broadinstitute.org/
 
 # Code to perform module 00 (matrix creation) QC across all batches for gnomAD v2

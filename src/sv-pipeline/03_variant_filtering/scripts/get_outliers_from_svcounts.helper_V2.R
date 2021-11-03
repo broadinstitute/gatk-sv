@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to return list of outlier samples from an svcounts.txt file
 # an example of svcounts.txt these columns: svtype count
 # CutoffFile should include these columns: algorithm       svtype  lower_cff       higher_cff

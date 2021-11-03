@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Intelligently shards a VCF prior to complex resolution (for parallelization)
 
 set -euo pipefail

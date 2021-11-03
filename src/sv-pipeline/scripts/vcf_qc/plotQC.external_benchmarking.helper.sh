@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Wrapper to manage external SV benchmarking plotting from output tarball
 
 set -e

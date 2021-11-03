@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Simple helper script to iterate over a file containing 
 # pipeline-formatted genotype columns and returning the 
 # best non-reference genotype

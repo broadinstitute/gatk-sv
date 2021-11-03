@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan L. Collins
-
 # Script to run cn.MOPS on a coverage matrix as output by makeMatrix.sh
 
 ####Load optparse

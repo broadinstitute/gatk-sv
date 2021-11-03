@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to titrate proband variants & de novo rate given a minimum GQ
 
 

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Wrapper for PESR + depth merging in module 04b
 
 set -e

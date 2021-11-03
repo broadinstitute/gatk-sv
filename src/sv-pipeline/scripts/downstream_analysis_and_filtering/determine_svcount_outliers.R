@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to return list of outlier samples from an svcounts.txt file,
 # their reasons for being outliers, and one plot for each SVTYPE
 

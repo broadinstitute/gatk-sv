@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Original author: Ryan Collins
-
 # Cleans fam file to only include samples present in an input list
 
 set -e

@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to count median # of filtered variants per trio
 # for minGQ optimization filtering workflow
 

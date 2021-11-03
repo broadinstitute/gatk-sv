@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to determine categories of SV that
 # don't meet a minimum Mendelian violation rate (MVR)
 

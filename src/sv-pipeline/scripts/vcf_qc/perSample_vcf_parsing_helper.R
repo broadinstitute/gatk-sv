@@ -1,7 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Original author: Ryan Collins
-
 # Helper script to write list of variant IDs, genotypes, and GQs per sample
 
 ###Set parameters

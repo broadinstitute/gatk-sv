@@ -4,7 +4,6 @@
 #    gnomAD SV Discovery    #
 #############################
 
-# Original author: Ryan L. Collins
 # gnomAD credits: http://gnomad.broadinstitute.org/
 
 # Wrapper to run MELT (Gardner et al., Unpublished)
