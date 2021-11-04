@@ -41,7 +41,8 @@ SHELL ["/bin/bash", "--login", "-c"]
 # Install PanGenie
 # Without setting `PKG_CONFIG_PATH`, cmake/make cannot resolve
 # jellyfish dependency.
-RUN conda install -y jellyfish && \
+# The jellyfish version is pinned to its current latest release.
+RUN conda install -y jellyfish=2.2.10 -c bioconda && \
     export PKG_CONFIG_PATH="/opt/conda/envs/pangenie/lib/pkgconfig/" && \
     cd pangenie && \
     mkdir build && \
