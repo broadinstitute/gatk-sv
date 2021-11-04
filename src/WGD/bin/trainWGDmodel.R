@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Code copyright (c) 2018 Ryan L. Collins
-# Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
-
 # Script to train WGD dosage bias scoring model
 
 # Requires:

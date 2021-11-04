@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2017-2020 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Script to analyze a matrix of coverage (binCov) values per contig per sample.
 # Performs the following:
 # 1) copy number estimation per contig per sample (with visualization options)

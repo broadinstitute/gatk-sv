@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2017 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Script to calculate median bin coverage per sample for all samples in a bincov
 # matrix
 

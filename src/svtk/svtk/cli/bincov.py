@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-# Copyright (c) 2016 Ryan Collins <rcollins@chgr.mgh.harvard.edu>
-# Distributed under terms of the MIT license.
 
 """
 Calculates non-duplicate primary-aligned binned coverage

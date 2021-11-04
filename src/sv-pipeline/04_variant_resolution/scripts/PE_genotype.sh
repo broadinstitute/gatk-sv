@@ -1,9 +1,5 @@
 #!/bin/bash
 #
-# 
-#
-# Copyright (C) 2018 Harrison Brand
-# Distributed under terms of the MIT license.
 
 set -euo pipefail
 

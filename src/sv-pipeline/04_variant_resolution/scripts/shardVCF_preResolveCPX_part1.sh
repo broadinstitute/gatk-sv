@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Intelligently shards a VCF prior to complex resolution (for parallelization)
 
 # Subsetted to first half, to just output lists of which variants should go in each shard

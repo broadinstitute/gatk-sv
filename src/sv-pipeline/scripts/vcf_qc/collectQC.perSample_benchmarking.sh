@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Collects QC data for SV VCF output by SV pipeline
 # Per-sample benchmarking comparisons to external dataset
 

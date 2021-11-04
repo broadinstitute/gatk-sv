@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Helper script to return list of outlier samples from an svcounts.txt file
 # an example of svcounts.txt these columns: svtype count
 # CutoffFile should include these columns: algorithm       svtype  lower_cff       higher_cff

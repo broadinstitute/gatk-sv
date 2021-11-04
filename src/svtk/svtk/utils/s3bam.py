@@ -2,9 +2,6 @@
 # -*- coding: utf-8 -*-
 # vim:fenc=utf-8
 #
-# Copyright © 2017 ec2-user <mstone5@mgh.harvard.edu>
-#
-# Distributed under terms of the MIT license.
 
 """
 Load S3-hosted bam into pysam.AlignmentFile

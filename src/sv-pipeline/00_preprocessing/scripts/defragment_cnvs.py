@@ -1,9 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2019 Ryan L. Collins <rlcollins@g.harvard.edu>
-# and the Talkowski Laboratory
-# Distributed under terms of the MIT license.
 
 # Retrieved from https://raw.githubusercontent.com/talkowski-lab/rCNV2/a8849b880e2c1e1d2c51f055d85fec07384886a2/data_curation/CNV/defragment_cnvs.py
 # on May 14, 2020 and adapted for gatksv pipeline

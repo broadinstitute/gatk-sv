@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Helper script to filter trio-based SV data to meet
 # a set of conditions for minGQ parameterization
 

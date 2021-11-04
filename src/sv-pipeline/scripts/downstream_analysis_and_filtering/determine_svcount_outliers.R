@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Helper script to return list of outlier samples from an svcounts.txt file,
 # their reasons for being outliers, and one plot for each SVTYPE
 

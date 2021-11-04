@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Talkowski SV pipeline downstream analysis helper script
 
 # Make reclassification table for batch effect variants

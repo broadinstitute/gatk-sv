@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 
-# Copyright (c) 2017 Ryan Collins <rcollins@chgr.mgh.harvard.edu>
-# Distributed under terms of the MIT license.
-
 """
 Calculates non-duplicate primary-aligned binned coverage
 of a chromosome from an input BAM file

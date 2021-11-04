@@ -1,9 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Stitch fragmented CNVs present in a VCF, without subsetting with regard to PE/SR evidence
 
 

@@ -1,8 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 
 # evenSplitter: helper script for splitting tab-delimited files
 

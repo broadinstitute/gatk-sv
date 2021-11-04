@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Copyright (c) 2017 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Simple script to split cn.MOPS calls by sample and copy state and merge
 # across multiple runs (e.g. at different resolutions)
 

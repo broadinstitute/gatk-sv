@@ -1,9 +1,5 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
-# Contact: Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
-
 # Performs ROC analysis on de novo rate to determine optimal 
 # GQ threshold for a single condition in the v2 ROC workflow
 

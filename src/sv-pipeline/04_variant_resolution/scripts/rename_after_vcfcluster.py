@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2018 Ryan Collins <rlcollins@g.harvard.edu>
-# Distributed under terms of the MIT license.
 
 """
 Rename variants after vcfcluster
