@@ -8,7 +8,16 @@
 
 version 1.0
 
-import "Structs.wdl"
+#import "Structs.wdl"
+# Carrot currently does not support imports.
+struct RuntimeAttr {
+  Float? mem_gb
+  Int? cpu_cores
+  Int? disk_gb
+  Int? boot_disk_gb
+  Int? preemptible_tries
+  Int? max_retries
+}
 
 struct FilenamePostfixes {
   String locus
