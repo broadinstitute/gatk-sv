@@ -29,6 +29,9 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
 
 RUN git clone https://jana_ebler@bitbucket.org/jana_ebler/pangenie.git && \
     cd pangenie && \
+    # Since no releases on bitbucket, pinning this to it current latest
+    # commit on the master branch.
+    git checkout 7c9a8b7eb9c5ff03cbf8a7ef128e86241d259a76 && \
     conda env create -f environment.yml
 
 # Make RUN commands use the new environment:
