@@ -17,7 +17,7 @@
 # 'continuumio/miniconda3' as base image.
 #   https://pythonspeed.com/articles/activate-conda-dockerfile/
 
-FROM continuumio/miniconda3
+FROM continuumio/miniconda3:4.10.3p0
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
     build-essential \
