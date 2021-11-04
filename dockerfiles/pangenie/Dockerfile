@@ -50,3 +50,11 @@ RUN conda install -y jellyfish=2.2.10 -c bioconda && \
     cmake .. && \
     make
 ENV PATH="/pangenie/build/src/:$PATH"
+
+RUN apt-get -qqy clean && \
+    rm -rf  /tmp/* \
+            /var/tmp/* \
+            /var/cache/apt/* \
+            /var/lib/apt/lists/* \
+            /usr/share/man/?? \
+            /usr/share/man/??_*
