@@ -423,8 +423,8 @@ workflow GATKSVPipelineSingleSample {
     Int clean_vcf5_records_per_shard
     Int clean_vcf1b_records_per_shard
 
-    String? chr_x
-    String? chr_y
+    String chr_x
+    String chr_y
 
     Int? clean_vcf_random_seed
 
@@ -1041,8 +1041,8 @@ workflow GATKSVPipelineSingleSample {
   call batchmetrics.GetMaleOnlyVariantIDs {
     input:
       vcf = ClusterBatch.clustered_depth_vcf,
-      female_samples = SamplesList.female_samples,
-      male_samples = SamplesList.male_samples,
+      female_samples = SamplesList.female_list,
+      male_samples = SamplesList.male_list,
       contig = select_first([chr_x, "chrX"]),
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_get_male_only
@@ -1061,8 +1061,8 @@ workflow GATKSVPipelineSingleSample {
       allosome_contigs = allosome_file,
       batch = batch,
       samples = SamplesList.samples_file,
-      male_samples = SamplesList.male_samples,
-      female_samples = SamplesList.female_samples,
+      male_samples = SamplesList.male_list,
+      female_samples = SamplesList.female_list,
       male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
       run_common = false,
       sv_base_mini_docker = sv_base_mini_docker,
@@ -1074,7 +1074,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_attr_merge_stats = runtime_attr_merge_stats
   }
 
-  call batchmetrics.AggregateTests as AggregateTests {
+  call batchmetrics.AggregateTests {
     input:
       vcf=FilterLargePESRCallsWithoutRawDepthSupport.out,
       srtest=SRTest.srtest,
@@ -1086,7 +1086,7 @@ workflow GATKSVPipelineSingleSample {
   call SingleSampleFiltering.RewriteSRCoords as RewriteSRCoords {
     input:
       vcf = FilterLargePESRCallsWithoutRawDepthSupport.out,
-      metrics = AggregateTests.metrics,
+      metrics = AggregateTests.out,
       cutoffs = cutoffs,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -1197,8 +1197,8 @@ workflow GATKSVPipelineSingleSample {
       clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
 
-      chr_x=select_first([chr_x, "chrX"]),
-      chr_y=select_first([chr_y, "chrY"]),
+      chr_x=chr_x,
+      chr_y=chr_y,
 
       random_seed=clean_vcf_random_seed,
 

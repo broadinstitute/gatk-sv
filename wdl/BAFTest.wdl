@@ -9,7 +9,7 @@ workflow BAFTest {
     File vcf
     File baf_metrics
     String batch
-    Array[String] samples
+    File samples_list
     String algorithm
     Int split_size
     File autosome_contigs
@@ -30,7 +30,7 @@ workflow BAFTest {
     call bafc.BAFTestChromosome as BAFTestAutosome {
       input:
         batch = batch,
-        samples = samples,
+        samples_list = samples_list,
         baf_metrics = baf_metrics,
         algorithm = algorithm,
         vcf = vcf,

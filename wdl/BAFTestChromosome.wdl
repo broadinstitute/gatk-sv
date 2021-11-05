@@ -5,7 +5,7 @@ import "Structs.wdl"
 workflow BAFTestChromosome {
   input {
     File vcf
-    Array[String] samples
+    File samples_list
     String chrom
     File baf_metrics
     String batch
@@ -43,7 +43,7 @@ workflow BAFTestChromosome {
         baf_metrics = baf_metrics,
         baf_metrics_idx = baf_metrics_idx,
         ref_dict = ref_dict,
-        samples = samples,
+        samples_list = samples_list,
         prefix = basename(split),
         batch = batch,
         outlier_sample_ids = outlier_sample_ids,
@@ -71,7 +71,7 @@ task BAFTest {
     File baf_metrics
     File baf_metrics_idx
     File ref_dict
-    Array[String] samples
+    File samples_list
     String prefix
     String batch
     File? outlier_sample_ids
@@ -106,7 +106,7 @@ task BAFTest {
     set -euo pipefail
 
     echo -e "sample\tgroup\tbatch" > batch.key
-    awk -v batch=~{batch} -v OFS="\t" '{print $1, $1, batch}' ~{write_lines(samples)} >> batch.key
+    awk -v batch=~{batch} -v OFS="\t" '{print $1, $1, batch}' ~{samples_list} >> batch.key
 
     if [ -s ~{bed} ]; then
       set +o pipefail

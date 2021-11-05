@@ -14,10 +14,10 @@ from sklearn.metrics import roc_curve
 
 
 def rf_classify(metrics, trainable, testable, features, labeler, cutoffs, name,
-                clean_cutoffs=False):
+                clean_cutoffs=False, trim_probs=True):
     """Wrapper to run random forest and assign probabilities"""
     rf = RandomForest(trainable, testable, features, cutoffs, labeler, name,
-                      clean_cutoffs)
+                      clean_cutoffs, trim_probs)
     rf.run()
     metrics.loc[rf.testable.index, name] = rf.probs
     cutoffs = rf.cutoffs.copy()
@@ -35,7 +35,7 @@ def rf_classify(metrics, trainable, testable, features, labeler, cutoffs, name,
 
 class RandomForest:
     def __init__(self, trainable, testable, features, cutoffs, labeler, name,
-                 clean_cutoffs=False, max_train_size=100000):
+                 clean_cutoffs=False, trim_probs=True, max_train_size=100000):
         def has_null_features(df):
             return df[features].isnull().any(axis=1)
 
@@ -52,6 +52,7 @@ class RandomForest:
 
         self.name = name
         self.clean_cutoffs = clean_cutoffs
+        self.trim_probs = trim_probs
         self.cutoff_features = cutoffs
         self.cutoffs = None
         self.max_train_size = max_train_size
@@ -65,8 +66,9 @@ class RandomForest:
         self.learn_probs()
         sys.stderr.write('Learning cutoffs...\n')
         self.learn_cutoffs()
-        sys.stderr.write('Trimming probabilities...\n')
-        self.cutoff_probs()
+        if self.trim_probs:
+            sys.stderr.write('Trimming probabilities...\n')
+            self.cutoff_probs()
 
     def label_training_data(self):
         self.clean['label'] = self.labeler.label(self.clean)

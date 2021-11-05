@@ -36,7 +36,7 @@ fi
 bash scripts/inputs/clean_default_inputs.sh -d ${BASE_DIR}
 
 echo "########## Building ref_panel_1kg test ##########"
-scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/ref_panel_1kg/test \
+scripts/inputs/build_inputs.py --log-info ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/ref_panel_1kg/test \
   -a '{ "test_batch" : "ref_panel_1kg" }'
 
 echo "########## Building ref_panel_1kg cohort Terra workspace ##########"

@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+"""
+svgenotyper: models for SV genotyping
+
+usage: svgenotyper [-h] <subcommand> [options]
+
+subcommands:
+    cnv-train     train depth model
+    cnv-infer     run inference on depth model
+"""
+
+import argparse
+import sys
+import svgenotyper
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        usage=argparse.SUPPRESS,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('subcommand', help=argparse.SUPPRESS)
+
+    if len(sys.argv) < 2:
+        parser.print_help()
+        sys.exit(1)
+
+    args = parser.parse_args(sys.argv[1:2])
+    command = args.subcommand.replace('-', '_')
+
+    print(svgenotyper)
+    if not hasattr(svgenotyper, command):
+        print('Unrecognized command: {0}'.format(args.subcommand))
+        parser.print_help()
+        sys.exit(1)
+
+    getattr(svgenotyper, command)(sys.argv[2:])
+
+
+if __name__ == '__main__':
+    main()
