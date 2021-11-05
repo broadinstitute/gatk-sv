@@ -1,9 +1,8 @@
 {
-  "GATKSVPipelineBatch.use_delly": "false",
   "GATKSVPipelineBatch.use_manta": "true",
   "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "false",
-  "GATKSVPipelineBatch.use_scramble": "true",
+  "GATKSVPipelineBatch.use_melt": "true",
+  "GATKSVPipelineBatch.use_scramble": "false",
 
   "GATKSVPipelineBatch.name": {{ test_batch.name | tojson }},
   "GATKSVPipelineBatch.ped_file": {{ test_batch.ped_file | tojson }},
@@ -44,6 +43,8 @@
   "GATKSVPipelineBatch.primary_contigs_list" : {{ reference_resources.primary_contigs_list | tojson }},
   "GATKSVPipelineBatch.primary_contigs_fai" : {{ reference_resources.primary_contigs_fai | tojson }},
   "GATKSVPipelineBatch.genome_file" : {{ reference_resources.genome_file | tojson }},
+  "GATKSVPipelineBatch.chr_x": {{ reference_resources.chr_x | tojson }},
+  "GATKSVPipelineBatch.chr_y": {{ reference_resources.chr_y | tojson }},
 
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
@@ -87,15 +88,14 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.gcnv_log_emission_sampling_median_rel_error": "0.001",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.gcnv_qs_cutoff": "30",
 
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_flags": "--merge-coordinates",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_frac": "0.8",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_svsize": "0",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_frac": "0.1",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_flags": "--preserve-ids",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_distance": "300",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_exclude_list_frac_max": "0.5",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_exclude_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_interval_overlap": "0.1",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_breakend_window": "300",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.pesr_clustering_algorithm": "SINGLE_LINKAGE",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_exclude_intervals": {{ reference_resources.depth_exclude_list | tojson }},
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_exclude_overlap_fraction": "0.5",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.BAF_split_size": "10000",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.RD_split_size": "10000",
@@ -117,9 +117,6 @@
 
   "GATKSVPipelineBatch.RegenotypeCNVs.n_RdTest_bins": "100000",
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",
-
-  "GATKSVPipelineBatch.MakeCohortVcf.chr_x": {{ reference_resources.chr_x | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.chr_y": {{ reference_resources.chr_y | tojson }},
 
   "GATKSVPipelineBatch.MakeCohortVcf.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.empty_file" : {{ reference_resources.empty_file | tojson }},

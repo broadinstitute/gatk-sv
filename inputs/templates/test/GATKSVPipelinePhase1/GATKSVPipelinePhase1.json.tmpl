@@ -22,13 +22,16 @@
   "GATKSVPipelinePhase1.min_svsize": "50",
   "GATKSVPipelinePhase1.run_matrix_qc": "true",
 
-  "GATKSVPipelinePhase1.depth_flags": "--merge-coordinates",
-  "GATKSVPipelinePhase1.depth_frac": "0.8",
-  "GATKSVPipelinePhase1.pesr_svsize": "0",
-  "GATKSVPipelinePhase1.pesr_frac": "0.1",
-  "GATKSVPipelinePhase1.pesr_flags": "--preserve-ids",
-  "GATKSVPipelinePhase1.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelinePhase1.pesr_distance": "300",
+  "GATKSVPipelinePhase1.chr_x": {{ reference_resources.chr_x | tojson }},
+  "GATKSVPipelinePhase1.chr_y": {{ reference_resources.chr_y | tojson }},
+  "GATKSVPipelinePhase1.pesr_exclude_intervals": {{ reference_resources.pesr_exclude_list | tojson }},
+  "GATKSVPipelinePhase1.pesr_interval_overlap": "0.1",
+  "GATKSVPipelinePhase1.pesr_breakend_window": "300",
+  "GATKSVPipelinePhase1.pesr_clustering_algorithm": "SINGLE_LINKAGE",
+  "GATKSVPipelinePhase1.depth_exclude_intervals": {{ reference_resources.depth_exclude_list | tojson }},
+  "GATKSVPipelinePhase1.depth_exclude_overlap_fraction": "0.5",
+  "GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
+  "GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
   "GATKSVPipelinePhase1.BAF_split_size": "10000",
   "GATKSVPipelinePhase1.RD_split_size": "10000",
@@ -69,6 +72,8 @@
 
 
   "GATKSVPipelinePhase1.sd_locs_vcf" : {{ reference_resources.sd_locs_vcf | tojson }},
+  "GATKSVPipelinePhase1.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "GATKSVPipelinePhase1.reference_index": {{ reference_resources.reference_index | tojson }},
   "GATKSVPipelinePhase1.reference_dict": {{ reference_resources.reference_dict | tojson }},
 
   "GATKSVPipelinePhase1.batch": {{ test_batch.name | tojson }},

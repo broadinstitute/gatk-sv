@@ -2,18 +2,21 @@ version 1.0
 
 import "Structs.wdl"
 import "GetShardInputs.wdl"
+import "Utils.wdl" as util
 
 # Does prelim translocation resolve from raw manta calls
 workflow TinyResolve {
   input {
     Array[String] samples         # Sample ID
-    Array[File] manta_vcfs        # Manta VCF
+    File manta_vcf_tar           # tarballed Manta VCFs
     File cytoband
     Array[File] discfile
     File mei_bed
     Int samples_per_shard = 25
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr
+    String linux_docker
+    RuntimeAttr? runtime_attr_resolve
+    RuntimeAttr? runtime_attr_untar
   }
 
   scatter (disc in discfile) {
@@ -24,6 +27,14 @@ workflow TinyResolve {
   Int num_samples = length(samples)
   Float num_samples_float = num_samples
   Int num_shards = ceil(num_samples_float / samples_per_shard)
+
+  call util.UntarFiles {
+    input:
+      tar = manta_vcf_tar,
+      glob_suffix = ".vcf.gz",
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_attr_untar
+  }
 
   scatter (i in range(num_shards)) {
     call GetShardInputs.GetShardInputs as GetShardSamples {
@@ -55,7 +66,7 @@ workflow TinyResolve {
         items_per_shard = samples_per_shard,
         shard_number = i,
         num_items = num_samples,
-        all_items = manta_vcfs
+        all_items = UntarFiles.out
     }
 
     call ResolveManta {
@@ -68,7 +79,7 @@ workflow TinyResolve {
         discfile=GetShardDiscfiles.shard_items,
         discfile_idx=GetShardDiscfileIndexes.shard_items,
         mei_bed=mei_bed,
-        runtime_attr_override=runtime_attr
+        runtime_attr_override=runtime_attr_resolve
     }
   }
 

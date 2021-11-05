@@ -20,6 +20,8 @@ workflow GATKSVPipelinePhase1 {
     File ped_file
     File genome_file
     File contigs          # .fai file of included contigs
+    File reference_fasta
+    File reference_index
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
 
     String sv_base_mini_docker
@@ -94,7 +96,6 @@ workflow GATKSVPipelinePhase1 {
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
-    Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
@@ -146,24 +147,45 @@ workflow GATKSVPipelinePhase1 {
     ############################################################
     ## ClusterBatch
     ############################################################
+    String? chr_x
+    String? chr_y
 
-    Int pesr_svsize
-    Float pesr_frac
-    String pesr_flags
-    Int pesr_distance
-    File pesr_exclude_list
-    String depth_flags
-    Float depth_frac
+    Int? depth_records_per_bed_shard_cluster_batch
+    File depth_exclude_intervals
+    Float depth_exclude_overlap_fraction
+    Float depth_interval_overlap
+    String? depth_clustering_algorithm
 
-    File? depth_exclude_list
-    Float? depth_exclude_list_frac_max
+    Int? pesr_min_size
+    File pesr_exclude_intervals
+    Float pesr_interval_overlap
+    Int pesr_breakend_window
+    String? pesr_clustering_algorithm
 
-    RuntimeAttr? runtime_attr_pesr_cluster
-    RuntimeAttr? runtime_attr_pesr_concat
-    RuntimeAttr? runtime_attr_depth_cluster
-    RuntimeAttr? runtime_attr_depth_concat
-    RuntimeAttr? runtime_attr_depth_vcf
-    RuntimeAttr? runtime_attr_rdtest_bed
+    File? baseline_depth_vcf_cluster_batch
+    File? baseline_manta_vcf_cluster_batch
+    File? baseline_wham_vcf_cluster_batch
+    File? baseline_melt_vcf_cluster_batch
+
+    Float? java_mem_fraction_cluster_batch
+
+    RuntimeAttr? runtime_attr_ids_from_vcf_list_cluster_batch
+    RuntimeAttr? runtime_attr_create_ploidy_cluster_batch
+    RuntimeAttr? runtime_attr_prepare_pesr_vcfs_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_manta_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_melt_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_wham_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
+    RuntimeAttr? runtime_override_concat_vcfs_pesr_cluster_batch
+    RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch
+    RuntimeAttr? runtime_attr_scatter_bed_cluster_batch
+    RuntimeAttr? runtime_attr_cnv_bed_to_gatk_vcf_cluster_batch
+    RuntimeAttr? runtime_attr_exclude_intervals_depth_cluster_batch
+    RuntimeAttr? runtime_attr_svcluster_depth_cluster_batch
+    RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch
+    RuntimeAttr? runtime_override_concat_vcfs_depth_cluster_batch
+    RuntimeAttr? runtime_attr_exclude_intervals_pesr_cluster_batch
 
     ############################################################
     ## GenerateBatchMetrics
@@ -273,7 +295,6 @@ workflow GATKSVPipelinePhase1 {
       allosomal_contigs = allosomal_contigs,
       gcnv_qs_cutoff=gcnv_qs_cutoff,
       manta_vcfs=manta_vcfs,
-      delly_vcfs=delly_vcfs,
       melt_vcfs=melt_vcfs,
       scramble_vcfs=scramble_vcfs,
       wham_vcfs=wham_vcfs,
@@ -318,36 +339,58 @@ workflow GATKSVPipelinePhase1 {
 
   call clusterbatch.ClusterBatch as ClusterBatch {
     input:
-      manta_vcfs=GatherBatchEvidence.std_manta_vcf,
-      delly_vcfs=GatherBatchEvidence.std_delly_vcf,
-      wham_vcfs=GatherBatchEvidence.std_wham_vcf,
-      melt_vcfs=GatherBatchEvidence.std_melt_vcf,
-      scramble_vcfs=GatherBatchEvidence.std_scramble_vcf,
+      manta_vcf_tar=GatherBatchEvidence.std_manta_vcf_tar,
+      wham_vcf_tar=GatherBatchEvidence.std_wham_vcf_tar,
+      scramble_vcf_tar=GatherBatchEvidence.std_scramble_vcf_tar,
+      melt_vcf_tar=GatherBatchEvidence.std_melt_vcf_tar,
       del_bed=GatherBatchEvidence.merged_dels,
       dup_bed=GatherBatchEvidence.merged_dups,
       batch=batch,
-      pesr_svsize=pesr_svsize,
-      pesr_frac=pesr_frac,
-      pesr_flags=pesr_flags,
-      pesr_distance=pesr_distance,
-      pesr_exclude_list=pesr_exclude_list,
-      depth_flags=depth_flags,
-      depth_frac=depth_frac,
-      contigs=contigs,
-      depth_exclude_list=depth_exclude_list,
-      depth_exclude_list_frac_max=depth_exclude_list_frac_max,
+      ped_file=ped_file,
+      contig_list=contigs,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_index,
+      reference_dict=reference_dict,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      depth_records_per_bed_shard=depth_records_per_bed_shard_cluster_batch,
+      depth_exclude_intervals=depth_exclude_intervals,
+      depth_exclude_overlap_fraction=depth_exclude_overlap_fraction,
+      depth_interval_overlap=depth_interval_overlap,
+      depth_clustering_algorithm=depth_clustering_algorithm,
+      pesr_min_size=pesr_min_size,
+      pesr_exclude_intervals=pesr_exclude_intervals,
+      pesr_interval_overlap=pesr_interval_overlap,
+      pesr_breakend_window=pesr_breakend_window,
+      pesr_clustering_algorithm=pesr_clustering_algorithm,
+      run_module_metrics=run_clusterbatch_metrics,
+      linux_docker=linux_docker,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+      baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
+      baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
+      baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
+      baseline_melt_vcf=baseline_melt_vcf_cluster_batch,
+      gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_pesr_cluster=runtime_attr_pesr_cluster,
-      runtime_attr_pesr_concat=runtime_attr_pesr_concat,
-      runtime_attr_depth_cluster=runtime_attr_depth_cluster,
-      runtime_attr_depth_concat=runtime_attr_depth_concat,
-      runtime_attr_depth_vcf=runtime_attr_depth_vcf,
-      runtime_attr_rdtest_bed=runtime_attr_rdtest_bed,
-      run_module_metrics = run_clusterbatch_metrics,
-      primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker, 
-      linux_docker = linux_docker
+      java_mem_fraction=java_mem_fraction_cluster_batch,
+      runtime_attr_ids_from_vcf_list=runtime_attr_ids_from_vcf_list_cluster_batch,
+      runtime_attr_create_ploidy=runtime_attr_create_ploidy_cluster_batch,
+      runtime_attr_prepare_pesr_vcfs=runtime_attr_prepare_pesr_vcfs_cluster_batch,
+      runtime_attr_svcluster_manta=runtime_attr_svcluster_manta_cluster_batch,
+      runtime_attr_svcluster_melt=runtime_attr_svcluster_melt_cluster_batch,
+      runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
+      runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
+      runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
+      runtime_override_concat_vcfs_pesr=runtime_override_concat_vcfs_pesr_cluster_batch,
+      runtime_attr_gatk_to_svtk_vcf_pesr=runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch,
+      runtime_attr_scatter_bed=runtime_attr_scatter_bed_cluster_batch,
+      runtime_attr_cnv_bed_to_gatk_vcf=runtime_attr_cnv_bed_to_gatk_vcf_cluster_batch,
+      runtime_attr_exclude_intervals_depth=runtime_attr_exclude_intervals_depth_cluster_batch,
+      runtime_attr_svcluster_depth=runtime_attr_svcluster_depth_cluster_batch,
+      runtime_attr_gatk_to_svtk_vcf_depth=runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch,
+      runtime_override_concat_vcfs_depth=runtime_override_concat_vcfs_depth_cluster_batch,
+      runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch
   }
 
   call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
@@ -356,7 +399,6 @@ workflow GATKSVPipelinePhase1 {
       depth_vcf=ClusterBatch.clustered_depth_vcf,
       melt_vcf=ClusterBatch.clustered_melt_vcf,
       scramble_vcf=ClusterBatch.clustered_scramble_vcf,
-      delly_vcf=ClusterBatch.clustered_delly_vcf,
       wham_vcf=ClusterBatch.clustered_wham_vcf,
       manta_vcf=ClusterBatch.clustered_manta_vcf,
       baf_metrics=GatherBatchEvidence.merged_BAF,
@@ -400,7 +442,6 @@ workflow GATKSVPipelinePhase1 {
     input:
       batch=batch,
       manta_vcf=ClusterBatch.clustered_manta_vcf,
-      delly_vcf=ClusterBatch.clustered_delly_vcf,
       wham_vcf=ClusterBatch.clustered_wham_vcf,
       melt_vcf=ClusterBatch.clustered_melt_vcf,
       scramble_vcf=ClusterBatch.clustered_scramble_vcf,
@@ -447,11 +488,10 @@ workflow GATKSVPipelinePhase1 {
     File merged_dels = GatherBatchEvidence.merged_dels
     File merged_dups = GatherBatchEvidence.merged_dups
 
-    Array[File]? std_manta_vcf = GatherBatchEvidence.std_manta_vcf
-    Array[File]? std_delly_vcf = GatherBatchEvidence.std_delly_vcf
-    Array[File]? std_melt_vcf = GatherBatchEvidence.std_melt_vcf
-    Array[File]? std_scramble_vcf = GatherBatchEvidence.std_scramble_vcf
-    Array[File]? std_wham_vcf = GatherBatchEvidence.std_wham_vcf
+    File? std_manta_vcf_tar = GatherBatchEvidence.std_manta_vcf_tar
+    File? std_melt_vcf_tar = GatherBatchEvidence.std_melt_vcf_tar
+    File? std_scramble_vcf_tar = GatherBatchEvidence.std_scramble_vcf_tar
+    File? std_wham_vcf_tar = GatherBatchEvidence.std_wham_vcf_tar
 
     File? metrics_file_batchevidence = GatherBatchEvidence.metrics_file_batchevidence
 
@@ -460,8 +500,6 @@ workflow GATKSVPipelinePhase1 {
     File depth_vcf_index = ClusterBatch.clustered_depth_vcf_index
     File? manta_vcf = ClusterBatch.clustered_manta_vcf
     File? manta_vcf_index = ClusterBatch.clustered_manta_vcf_index
-    File? delly_vcf = ClusterBatch.clustered_delly_vcf
-    File? delly_vcf_index = ClusterBatch.clustered_delly_vcf_index
     File? wham_vcf = ClusterBatch.clustered_wham_vcf
     File? wham_vcf_index = ClusterBatch.clustered_wham_vcf_index
     File? melt_vcf = ClusterBatch.clustered_melt_vcf
@@ -479,7 +517,6 @@ workflow GATKSVPipelinePhase1 {
 
     # FilterBatch
     File? filtered_manta_vcf = FilterBatch.filtered_manta_vcf
-    File? filtered_delly_vcf = FilterBatch.filtered_delly_vcf
     File? filtered_wham_vcf = FilterBatch.filtered_wham_vcf
     File? filtered_melt_vcf = FilterBatch.filtered_melt_vcf
     File? filtered_scramble_vcf = FilterBatch.filtered_scramble_vcf
