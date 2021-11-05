@@ -5,14 +5,13 @@ import "RDTestChromosome.wdl" as rdc
 
 workflow RDTest {
   input {
-    String batch
+    String prefix
     File medianfile
     File autosome_contigs
     File coveragefile
     String flags
     File vcf
     Int split_size
-    String algorithm
     File allosome_contigs
     File ped_file
     File male_samples
@@ -36,14 +35,13 @@ workflow RDTest {
   scatter (autosome in autosomes) {
     call rdc.RDTestChromosome as RDTestAutosome {
       input:
-        batch = batch,
+        prefix = prefix,
         medianfile = medianfile,
         coveragefile = coveragefile,
         flags = flags,
         vcf = vcf,
         chrom = autosome[0],
         split_size = split_size,
-        algorithm = algorithm,
         ped_file = ped_file,
         samples = samples,
         male_samples = male_samples,
@@ -64,14 +62,13 @@ workflow RDTest {
   scatter (allosome in allosomes) {
     call rdc.RDTestChromosome as RDTestAllosome {
       input:
-        batch = batch,
+        prefix = prefix,
         medianfile = medianfile,
         coveragefile = coveragefile,
         flags = flags,
         vcf = vcf,
         chrom = allosome[0],
         split_size = split_size,
-        algorithm = algorithm,
         ped_file = ped_file,
         samples = samples,
         male_samples = male_samples,
@@ -92,7 +89,7 @@ workflow RDTest {
   call tasksbatchmetrics.MergeStats as MergeStats {
     input:
       stats = flatten([RDTestAutosome.out_stats, RDTestAllosome.out_stats]),
-      prefix = "${batch}.${algorithm}",
+      prefix = "~{prefix}.merged_stats",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_merge_stats
   }

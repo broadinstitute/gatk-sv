@@ -5,10 +5,9 @@ import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 workflow RDTestChromosome {
   input {
     File vcf
-    String algorithm
+    String prefix
     File ped_file
     String chrom
-    String batch
     File coveragefile
     Int split_size
     File medianfile
@@ -35,8 +34,7 @@ workflow RDTestChromosome {
   call SplitRDVcf {
     input:
       vcf = vcf,
-      batch = batch,
-      algorithm = algorithm,
+      prefix = prefix,
       chrom = chrom,
       split_size = split_size,
       suffix_len = select_first([suffix_len, 4]),
@@ -114,7 +112,7 @@ workflow RDTestChromosome {
   call MergeRDSplits {
     input:
       stats = select_all(stats),
-      prefix = "${batch}.${algorithm}.${chrom}",
+      prefix = "~{prefix}.~{chrom}",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_merge_stats
   }
@@ -211,8 +209,7 @@ task RDTest {
 task SplitRDVcf {
   input {
     File vcf
-    String batch
-    String algorithm
+    String prefix
     String chrom
     Int split_size
     Int suffix_len
@@ -231,7 +228,7 @@ task SplitRDVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    Array[File] split_beds = glob("${batch}.${algorithm}.split.*")
+    Array[File] split_beds = glob("~{prefix}.split.*")
   }
   command <<<
 
@@ -243,12 +240,12 @@ task SplitRDVcf {
       fgrep -e "DEL" -e "DUP" < all.bed \
         | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
         | awk '($3-$2>=10000)' \
-        > ~{batch}.~{algorithm}.split.gt10kb
+        > ~{prefix}.split.gt10kb
       fgrep -e "DEL" -e "DUP" < all.bed \
         | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
         | awk '($3-$2<10000)' \
         | sort -k1,1V -k2,2n \
-        | split -a ~{suffix_len} -d -l ~{split_size} - ~{batch}.~{algorithm}.split.
+        | split -a ~{suffix_len} -d -l ~{split_size} - ~{prefix}.split.
     fi
  
   >>>

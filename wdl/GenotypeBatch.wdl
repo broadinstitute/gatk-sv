@@ -125,12 +125,13 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
 
+  Array[String] samples = read_lines(GetSampleIdsFromVcf.out_file)
 
   if (!single_sample_mode) {
     call gp1.GenotypePESRPart1 as GenotypePESRPart1 {
       input:
         bin_exclude=bin_exclude,
-        samples = GetSampleIdsFromVcf.out_array,
+        samples = samples,
         pesr_exclude_list = select_first([pesr_exclude_list]),
         discfile = discfile,
         discfile_index = discfile_index,
@@ -171,7 +172,7 @@ workflow GenotypeBatch {
   call gp2.GenotypePESRPart2 as GenotypePESRPart2 {
     input:
       bin_exclude=bin_exclude,
-      samples = GetSampleIdsFromVcf.out_array,
+      samples = samples,
       discfile = discfile,
       discfile_index = discfile_index,
       PE_metrics = select_first([PE_metrics, GenotypePESRPart1.PE_metrics]),
@@ -211,7 +212,7 @@ workflow GenotypeBatch {
     call gd1.GenotypeDepthPart1 as GenotypeDepthPart1 {
       input:
         bin_exclude=bin_exclude,
-        samples = GetSampleIdsFromVcf.out_array,
+        samples = samples,
         n_RD_genotype_bins = n_RD_genotype_bins,
         batch_vcf = batch_depth_vcf,
         seed_cutoffs = select_first([seed_cutoffs]),
@@ -237,7 +238,7 @@ workflow GenotypeBatch {
   call gd2.GenotypeDepthPart2 as GenotypeDepthPart2 {
     input:
       bin_exclude=bin_exclude,
-      samples = GetSampleIdsFromVcf.out_array,
+      samples = samples,
       n_RdTest_bins = n_RD_genotype_bins,
       medianfile = medianfile,
       cohort_vcf = AddBatchSamplesDepth.updated_vcf,
@@ -264,7 +265,7 @@ workflow GenotypeBatch {
     call metrics.GenotypeBatchMetrics {
       input:
         name = batch,
-        samples = GetSampleIdsFromVcf.out_array,
+        samples = samples,
         genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf,
         genotyped_depth_vcf = GenotypeDepthPart2.genotyped_vcf,
         cutoffs_pesr_pesr = select_first([GenotypePESRPart1.RD_pesr_sepcutoff]),

@@ -18,7 +18,7 @@ pegenotypes=$8
 batch=$9
 
 sr_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
-          {if ( $col["metric"]=="SR_sum_log_pval") print $col["cutoff"]}' $RF_cutoffs | head -n 1)
+          {if ( $col["metric"]=="SRQ") print $col["cutoff"]}' $RF_cutoffs | head -n 1)
 sr_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $sr_pval)
 
 #Require both sides to have at least half of sr_count for training purposes

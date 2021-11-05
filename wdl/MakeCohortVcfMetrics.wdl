@@ -5,7 +5,7 @@ import "Utils.wdl" as util
 
 workflow MakeCohortVcfMetrics {
   input {
-    Array[String]? samples
+    File? samples_list
     String name
 
     File? cluster_vcf
@@ -31,7 +31,7 @@ workflow MakeCohortVcfMetrics {
     Array[File]? NONE_FILE_ARRAY_
   }
 
-  if (!defined(samples)) {
+  if (!defined(samples_list)) {
     call util.GetSampleIdsFromVcf {
       input:
         vcf = cleaned_vcf,
@@ -39,13 +39,14 @@ workflow MakeCohortVcfMetrics {
         runtime_attr_override = runtime_attr_sample_ids_from_vcf
     }
   }
+  Array[String] samples = read_lines(select_first([samples_list, GetSampleIdsFromVcf.out_file]))
 
   if (defined(cluster_vcf)) {
     call tu.VCFMetrics as ClusterMetrics {
       input:
         vcf = select_first([cluster_vcf]),
         baseline_vcf = baseline_cluster_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples,
         prefix = "cluster",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -59,7 +60,7 @@ workflow MakeCohortVcfMetrics {
       input:
         vcf = select_first([complex_resolve_vcf]),
         baseline_vcf = baseline_complex_resolve_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples,
         prefix = "cpx_resolve",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -73,7 +74,7 @@ workflow MakeCohortVcfMetrics {
       input:
         vcf = select_first([complex_genotype_vcf]),
         baseline_vcf = baseline_complex_genotype_vcf,
-        samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+        samples = samples,
         prefix = "cpx_genotype",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
@@ -86,7 +87,7 @@ workflow MakeCohortVcfMetrics {
     input:
       vcf = cleaned_vcf,
       baseline_vcf = baseline_cleaned_vcf,
-      samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
+      samples = samples,
       prefix = "cleaned",
       types = "DEL,DUP,INS,INV,CTX,CPX,BND,CNV",
       contig_list = contig_list,
