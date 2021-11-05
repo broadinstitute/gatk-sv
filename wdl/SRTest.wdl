@@ -16,6 +16,7 @@ workflow SRTest {
     String algorithm
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     Boolean run_common
     Int? common_cnv_size_cutoff  # Required if run_common is true
@@ -49,6 +50,7 @@ workflow SRTest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = false,
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
@@ -78,6 +80,7 @@ workflow SRTest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = true,
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
