@@ -65,6 +65,7 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_merge_allo
     RuntimeAttr? runtime_attr_merge_baf
     RuntimeAttr? runtime_attr_merge_stats
+    RuntimeAttr? runtime_attr_get_male_only
   }
 
   Array[String] algorithms = ["depth", "melt", "delly", "wham", "manta"]
@@ -101,6 +102,15 @@ workflow GenerateBatchMetrics {
       String algorithm = algorithms[i]
       File vcf = select_first([vcfs[i]])
 
+      call GetMaleOnlyVariantIDs {
+        input:
+          vcf = vcf,
+          female_samples = GetSampleLists.female_samples,
+          male_samples = GetSampleLists.male_samples,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_get_male_only
+      }
+
       if (algorithm != "melt") {
         call rdt.RDTest as RDTest {
           input:
@@ -118,6 +128,7 @@ workflow GenerateBatchMetrics {
             samples = GetSampleLists.samples_file,
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
+            male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             sv_pipeline_docker = sv_pipeline_docker,
             sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
             linux_docker = linux_docker,
@@ -162,6 +173,7 @@ workflow GenerateBatchMetrics {
             samples = GetSampleLists.samples_file,
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
+            male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             run_common = true,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
             sv_base_mini_docker = sv_base_mini_docker,
@@ -190,6 +202,7 @@ workflow GenerateBatchMetrics {
             samples = GetSampleLists.samples_file,
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
+            male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
@@ -330,6 +343,46 @@ task GetSampleLists {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task GetMaleOnlyVariantIDs {
+  input {
+    File vcf
+    File female_samples
+    File male_samples
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File male_only_variant_ids = "male_only_variant_ids.txt"
+  }
+  command <<<
+    bcftools view -S ~{male_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_males.txt
+    bcftools view -S ~{female_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_females.txt
+    awk 'NR==FNR{a[$0];next} !($0 in a)' variant_ids_in_females.txt variant_ids_in_males.txt > male_only_variant_ids.txt
+    
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task AggregateTests {
   input {

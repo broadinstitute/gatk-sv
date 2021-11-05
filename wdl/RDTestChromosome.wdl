@@ -16,6 +16,7 @@ workflow RDTestChromosome {
     Int? suffix_len
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     Boolean allosome
     File ref_dict
@@ -79,10 +80,11 @@ workflow RDTestChromosome {
         input:
           male_test = RDTestMale.stats,
           female_test = RDTestFemale.stats,
+          male_only_ids_list = male_only_variant_ids,
           chrom = chrom,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_merge_allo,
-          male_only_expr = "females.P.astype(str) == 'No_samples_for_analysis'"
+          male_only_expr = "females.CNVID.isin(male_only_ids)"
       }
     }
 

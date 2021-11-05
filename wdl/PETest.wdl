@@ -17,6 +17,7 @@ workflow PETest {
     File ped_file
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     Int common_cnv_size_cutoff
 
@@ -47,6 +48,7 @@ workflow PETest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = false,
         ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
@@ -75,6 +77,7 @@ workflow PETest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = true,
         ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,

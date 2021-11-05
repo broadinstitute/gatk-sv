@@ -223,6 +223,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_exclude_outliers
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
+    RuntimeAttr? runtime_attr_get_male_only
 
     ############################################################
     ## Module metrics parameters for GatherBatchEvidence, ClusterBatch, GenerateBatchMetrics, FilterBatch metrics

@@ -16,6 +16,7 @@ workflow PETestChromosome {
     Int? suffix_len
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     Boolean allosome
     Int common_cnv_size_cutoff
@@ -77,10 +78,11 @@ workflow PETestChromosome {
         input:
           male_test = PETestMale.stats,
           female_test = PETestFemale.stats,
+          male_only_ids_list = male_only_variant_ids,
           chrom = chrom,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_merge_allo,
-          male_only_expr = "females.log_pval == 0"
+          male_only_expr = "females.name.isin(male_only_ids)"
       }
     }
     if (!allosome) {

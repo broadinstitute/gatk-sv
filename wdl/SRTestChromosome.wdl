@@ -15,6 +15,7 @@ workflow SRTestChromosome {
     Int? suffix_len
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     File ref_dict
     Boolean allosome
@@ -78,10 +79,11 @@ workflow SRTestChromosome {
         input:
           male_test = SRTestMale.stats,
           female_test = SRTestFemale.stats,
+          male_only_ids_list = male_only_variant_ids,
           chrom = chrom,
           runtime_attr_override = runtime_attr_merge_allo,
           sv_pipeline_docker = sv_pipeline_docker,
-          male_only_expr = "females.log_pval == 0"
+          male_only_expr = "females.name.isin(male_only_ids)"
       }
     } 
 

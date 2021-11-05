@@ -17,6 +17,7 @@ workflow RDTest {
     File ped_file
     File male_samples
     File female_samples
+    File male_only_variant_ids
     File samples
     File ref_dict
 
@@ -47,6 +48,7 @@ workflow RDTest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = false,
         ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -74,6 +76,7 @@ workflow RDTest {
         samples = samples,
         male_samples = male_samples,
         female_samples = female_samples,
+        male_only_variant_ids = male_only_variant_ids,
         allosome = true,
         ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,

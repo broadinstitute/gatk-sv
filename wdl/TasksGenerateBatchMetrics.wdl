@@ -117,6 +117,7 @@ task MergeAllosomes {
   input {
     File male_test
     File female_test
+    File male_only_ids_list
     String chrom
     String male_only_expr
     String sv_pipeline_docker
@@ -143,6 +144,10 @@ task MergeAllosomes {
     import pandas as pd
     males = pd.read_table("~{male_test}")
     females = pd.read_table("~{female_test}")
+    male_only_ids = set()
+    with open("~{male_only_ids_list}", 'r') as male_only_file:
+      for line in male_only_file:
+        male_only_ids.add(line.strip())
     if "~{chrom}" == 'Y' or "~{chrom}" == 'chrY':
       males.to_csv("~{basename(male_test)}.merged.csv", sep='\t', index=False, na_rep='NA')
     else:
