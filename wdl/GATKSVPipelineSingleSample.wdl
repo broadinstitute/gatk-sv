@@ -394,8 +394,8 @@ workflow GATKSVPipelineSingleSample {
     Int clean_vcf5_records_per_shard
     Int clean_vcf1b_records_per_shard
 
-    String? chr_x
-    String? chr_y
+    String chr_x
+    String chr_y
 
     Int? clean_vcf_random_seed
 
@@ -1150,8 +1150,8 @@ workflow GATKSVPipelineSingleSample {
       clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
 
-      chr_x=select_first([chr_x, "chrX"]),
-      chr_y=select_first([chr_y, "chrY"]),
+      chr_x=chr_x,
+      chr_y=chr_y,
 
       random_seed=clean_vcf_random_seed,
 

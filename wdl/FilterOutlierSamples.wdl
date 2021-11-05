@@ -43,7 +43,7 @@ workflow FilterOutlierSamples {
     input:
       vcf = vcf,
       list_of_samples = IdentifyOutlierSamples.outlier_samples_file,
-      outfile_name = "${name}.outliers_removed.vcf.gz",
+      outfile_name = "~{name}.outliers_removed.vcf.gz",
       remove_samples = true,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_subset_vcf
@@ -59,8 +59,8 @@ workflow FilterOutlierSamples {
   # Write new list of samples without outliers
   call FilterSampleList {
     input:
-      original_samples = GetSampleIdsFromVcf.out_array,
-      outlier_samples = IdentifyOutlierSamples.outlier_samples_list,
+      original_samples = GetSampleIdsFromVcf.out_file,
+      outlier_samples = IdentifyOutlierSamples.outlier_samples_file,
       batch = name,
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_filter_samples
@@ -70,18 +70,16 @@ workflow FilterOutlierSamples {
     File outlier_filtered_vcf = SubsetVcfBySamplesList.vcf_subset
     Array[String] filtered_samples_list = FilterSampleList.filtered_samples_list
     File filtered_samples_file = FilterSampleList.filtered_samples_file
-    Array[String] outlier_samples_excluded = IdentifyOutlierSamples.outlier_samples_list
     File outlier_samples_excluded_file = IdentifyOutlierSamples.outlier_samples_file
     File sv_counts_file = IdentifyOutlierSamples.sv_counts_file
   }
 }
 
-
 # Write new list of samples per batch after outlier filtering
 task FilterSampleList {
   input {
-    Array[String] original_samples
-    Array[String] outlier_samples
+    File original_samples
+    File outlier_samples
     String batch
     String linux_docker
     RuntimeAttr? runtime_attr_override
@@ -103,7 +101,7 @@ task FilterSampleList {
   }
   command <<<
 
-    fgrep -wvf ~{write_lines(outlier_samples)} ~{write_lines(original_samples)} > ~{batch}.outliers_excluded.samples.list
+    fgrep -wvf ~{outlier_samples} ~{original_samples} > ~{batch}.outliers_excluded.samples.list
   
   >>>
   runtime {
