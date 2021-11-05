@@ -1,9 +1,7 @@
 version 1.0
 
 import "PETest.wdl" as pet
-import "RDTest.wdl" as rdt
 import "SRTest.wdl" as srt
-import "BAFTest.wdl" as baft
 import "TasksGenerateBatchMetrics.wdl" as tasksbatchmetrics
 import "Utils.wdl" as util
 import "GenerateBatchMetricsMetrics.wdl" as metrics
@@ -11,6 +9,8 @@ import "GenerateBatchMetricsMetrics.wdl" as metrics
 workflow GenerateBatchMetrics {
   input {
     String batch
+
+    File original_metrics
 
     File? depth_vcf
     File? melt_vcf
@@ -53,20 +53,15 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_sample_list
-    RuntimeAttr? runtime_attr_baf_samples
     RuntimeAttr? runtime_attr_aggregate_tests
     RuntimeAttr? runtime_attr_aggregate_callers
     RuntimeAttr? runtime_attr_petest
     RuntimeAttr? runtime_attr_srtest
-    RuntimeAttr? runtime_attr_rdtest
-    RuntimeAttr? runtime_attr_baftest
     RuntimeAttr? runtime_attr_split_vcf
-    RuntimeAttr? runtime_attr_split_rd_vcf
-    RuntimeAttr? runtime_attr_split_baf_vcf
     RuntimeAttr? runtime_attr_merge_allo
-    RuntimeAttr? runtime_attr_merge_baf
     RuntimeAttr? runtime_attr_merge_stats
     RuntimeAttr? runtime_attr_get_male_only
+    RuntimeAttr? runtime_attr_update_metrics
   }
 
   Array[String] algorithms = ["depth", "melt", "delly", "wham", "manta"]
@@ -113,52 +108,6 @@ workflow GenerateBatchMetrics {
           runtime_attr_override = runtime_attr_get_male_only
       }
 
-      if (algorithm != "melt") {
-        call rdt.RDTest as RDTest {
-          input:
-            coveragefile = coveragefile,
-            medianfile = medianfile,
-            ped_file = SubsetPedFile.ped_subset_file,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            split_size = RD_split_size,
-            flags = "",
-            algorithm = algorithm,
-            allosome_contigs = allosome_contigs,
-            ref_dict = ref_dict,
-            batch = batch,
-            samples = GetSampleLists.samples_file,
-            male_samples = GetSampleLists.male_samples,
-            female_samples = GetSampleLists.female_samples,
-            male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
-            sv_pipeline_docker = sv_pipeline_docker,
-            sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-            linux_docker = linux_docker,
-            runtime_attr_rdtest = runtime_attr_rdtest,
-            runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
-            runtime_attr_merge_allo = runtime_attr_merge_allo,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-
-        call baft.BAFTest as BAFTest {
-          input:
-            baf_metrics = baf_metrics,
-            vcf = vcf,
-            autosome_contigs = autosome_contigs,
-            ref_dict = ref_dict,
-            split_size = BAF_split_size,
-            algorithm = algorithm,
-            batch = batch,
-            samples = GetSampleIdsFromVcf.out_array,
-            linux_docker = linux_docker,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_baftest = runtime_attr_baftest,
-            runtime_attr_split_baf_vcf = runtime_attr_split_baf_vcf,
-            runtime_attr_merge_baf = runtime_attr_merge_baf,
-            runtime_attr_merge_stats = runtime_attr_merge_stats
-        }
-      }
-
       if (algorithm != "depth") {
         call srt.SRTest as SRTest {
           input:
@@ -176,7 +125,7 @@ workflow GenerateBatchMetrics {
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
-            run_common = true,
+            run_common = false,
             common_cnv_size_cutoff = common_cnv_size_cutoff,
             sv_base_mini_docker = sv_base_mini_docker,
             linux_docker = linux_docker,
@@ -221,27 +170,6 @@ workflow GenerateBatchMetrics {
           vcf = vcf,
           petest = PETest.petest,
           srtest = SRTest.srtest,
-          rdtest = RDTest.rdtest,
-          baftest = BAFTest.baftest,
-          segdups = segdups,
-          rmsk = rmsk,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_aggregate_tests
-      }
-
-      call tasksbatchmetrics.GetCommonVCF {
-        input:
-          vcf = vcf,
-          cnv_size_cutoff = common_cnv_size_cutoff,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_split_vcf
-      }
-
-      call AggregateTests as AggregateTestsCommon {
-        input:
-          vcf = GetCommonVCF.common_vcf,
-          petest = PETest.petest_common,
-          srtest = SRTest.srtest_common,
           segdups = segdups,
           rmsk = rmsk,
           sv_pipeline_docker = sv_pipeline_docker,
@@ -259,34 +187,76 @@ workflow GenerateBatchMetrics {
       runtime_attr_override = runtime_attr_aggregate_callers
   }
 
-  call AggregateCallers as AggregateCallersCommon {
+  call UpdateMetrics {
     input:
-      batch = batch,
-      input_metrics = select_all(AggregateTestsCommon.metrics),
-      common = true,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
-      runtime_attr_override = runtime_attr_aggregate_callers
-  }
-
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
-  if (run_module_metrics_) {
-    call metrics.GenerateBatchMetricsMetrics {
-      input:
-        name = batch,
-        metrics = AggregateCallers.metrics,
-        metrics_common = AggregateCallersCommon.metrics,
-        contig_list = select_first([primary_contigs_list]),
-        linux_docker = linux_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
-    }
+      old_metrics = original_metrics,
+      new_metrics = AggregateCallers.metrics,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_update_metrics
   }
 
   output {
-    File metrics = AggregateCallers.metrics
-    File metrics_common = AggregateCallersCommon.metrics
-
-    File? metrics_file_batchmetrics = GenerateBatchMetricsMetrics.metrics_file
+    File metrics = UpdateMetrics.updated_metrics
   }
+}
+
+task UpdateMetrics {
+  input {
+    File old_metrics
+    File new_metrics
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String metrics_basename = basename(old_metrics, ".metrics")
+  output {
+    File updated_metrics = "~{metrics_basename}.updated.metrics"
+  }
+  command <<<
+
+    set -euo pipefail
+    python3 <<CODE
+    update_cols = "PE_log_pval PE_called_median PE_bg_median PE_bg_frac SR_posA_log_pval SR_posB_log_pval SR_sum_log_pval SR_posA_called_median SR_posB_called_median SR_sum_called_median SR_posA_bg_median SR_posB_bg_median SR_sum_bg_median SR_posA_bg_frac SR_posB_bg_frac SR_sum_bg_frac SR_posA_pos SR_posB_pos PESR_log_pval PESR_called_median PESR_bg_median PESR_bg_frac".split()
+    with open("~{old_metrics}", 'r') as old, open("~{new_metrics}", 'r') as new, open("~{metrics_basename}.updated.metrics", 'w') as out:
+      header = None
+      for line_old, line_new in zip(old, new):
+        if line_old.startswith("name\tchrom\tsvtype"):
+          header = line_old.strip().split('\t')
+          out.write(line_old) # write header unchanged
+          continue
+        # non-header lines from here
+        fields_old = dict(zip(header, line_old.split('\t')))
+        fields_new = dict(zip(header, line_new.split('\t')))
+        # check variant ID to ensure files are in same order
+        if fields_old["name"] != fields_new["name"]:
+          print(f"Variant ID mismatch! Old: {fields_old['name']}, new: {fields_new['name']}")
+          exit(1)
+        if fields_old["chrom"] == "chrX":
+          for col in update_cols:
+            fields_old[col] = fields_new[col]
+          out.write("\t".join([fields_old[field].strip() for field in header]) + "\n")
+        else:
+          out.write(line_old) # if not chrX, do not update - write out unchanged
+    CODE
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
 }
 
 task GetSampleLists {
@@ -357,7 +327,7 @@ task GetMaleOnlyVariantIDs {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
