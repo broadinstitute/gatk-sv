@@ -43,6 +43,10 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_modify_vcf
     RuntimeAttr? runtime_override_combine_vcfs
     RuntimeAttr? runtime_override_split_vcf
+    RuntimeAttr? runtime_attr_split_ref_bed
+    RuntimeAttr? runtime_attr_split_query_vcf
+    RuntimeAttr? runtime_attr_bedtools_closest
+    RuntimeAttr? runtime_attr_select_matched_svs
   }
 
   call ann.ScatterAnnotateVcfByChrom as ScatterAnnotateVcfByChrom {
@@ -98,7 +102,11 @@ workflow AnnotateVcf {
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_modify_vcf = runtime_attr_modify_vcf,
         runtime_override_split_vcf = runtime_override_split_vcf,
-        runtime_override_combine_vcfs = runtime_override_combine_vcfs
+        runtime_override_combine_vcfs = runtime_override_combine_vcfs,
+        runtime_attr_split_ref_bed = runtime_attr_split_ref_bed,
+        runtime_attr_split_query_vcf = runtime_attr_split_query_vcf,
+        runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
     }
   }
 

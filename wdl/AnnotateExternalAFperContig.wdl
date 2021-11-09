@@ -35,91 +35,103 @@ workflow AnnotateExternalAFperContig {
         RuntimeAttr? runtime_attr_modify_vcf
         RuntimeAttr? runtime_override_split_vcf
         RuntimeAttr? runtime_override_combine_vcfs
+        RuntimeAttr? runtime_attr_bedtools_closest
+        RuntimeAttr? runtime_attr_select_matched_svs
     }
 
-    call BedtoolsClosest as compare_del{
+    call BedtoolsClosest as compare_del {
         input:
             bed_a = split_query_vcf_del,
             bed_b = split_ref_bed_del,
             svtype = "del",
             contig = contig,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    call BedtoolsClosest as compare_dup{
+    call BedtoolsClosest as compare_dup {
         input:
             bed_a = split_query_vcf_dup,
             bed_b = split_ref_bed_dup,
             svtype = "dup",
             contig = contig,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    call BedtoolsClosest as compare_ins{
+    call BedtoolsClosest as compare_ins {
         input:
             bed_a = split_query_vcf_ins,
             bed_b = split_ref_bed_ins,
             svtype = "ins",
             contig = contig,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    call BedtoolsClosest as compare_inv{
+    call BedtoolsClosest as compare_inv {
         input:
             bed_a = split_query_vcf_inv,
             bed_b = split_ref_bed_inv,
             svtype = "inv",
             contig = contig,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    call BedtoolsClosest as compare_bnd{
+    call BedtoolsClosest as compare_bnd {
         input:
             bed_a = split_query_vcf_bnd,
             bed_b = split_ref_bed_bnd,
             svtype = "bnd",
             contig = contig,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    call SelectMatchedSVs as calcu_del{
+    call SelectMatchedSVs as calcu_del {
         input:
             svtype = "del",
             input_bed = compare_del.output_bed,
             population = population,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
     }
 
-    call SelectMatchedSVs as calcu_dup{
+    call SelectMatchedSVs as calcu_dup {
         input:
             input_bed=compare_dup.output_bed,
             svtype="dup",
             population = population,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
     }
 
-    call SelectMatchedINSs as calcu_ins{
+    call SelectMatchedINSs as calcu_ins {
         input:
             input_bed = compare_ins.output_bed,
             svtype = "ins",
             population = population,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
     }
 
-    call SelectMatchedSVs as calcu_inv{
+    call SelectMatchedSVs as calcu_inv {
         input:
             input_bed = compare_inv.output_bed,
             svtype = "inv",
             population = population,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
     }
 
-    call SelectMatchedINSs as calcu_bnd{
+    call SelectMatchedINSs as calcu_bnd {
         input:
             input_bed = compare_bnd.output_bed,
             svtype = "bnd",
             population = population,
-            sv_pipeline_docker = sv_pipeline_docker
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
     }
 
     call MiniTasks.SplitVcf as SplitVcf {
@@ -160,15 +172,15 @@ workflow AnnotateExternalAFperContig {
         runtime_attr_override = runtime_override_combine_vcfs
     }
 
-    output{
+    output {
         File annotated_vcf = CombineVcfStep1.concat_vcf
         File annotated_vcf_tbi = CombineVcfStep1.concat_vcf_idx
     }
 
 }
 
-task SplitBed{
-    input{
+task SplitBed {
+    input {
         File bed
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
@@ -206,7 +218,7 @@ task SplitBed{
         cat header <(zcat ~{bed} | awk '{if ($6=="BND" || $6=="CTX") print}' ) > ~{prefix}.BND_CTX.bed
     >>>
 
-    output{
+    output {
         File del = "~{prefix}.DEL.bed"
         File dup = "~{prefix}.DUP.bed"
         File ins = "~{prefix}.INS.bed"
@@ -215,8 +227,8 @@ task SplitBed{
     }    
 }
 
-task SplitVcf{
-    input{
+task SplitVcf {
+    input {
         File vcf
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -256,7 +268,7 @@ task SplitVcf{
         cat header <(awk '{if ($5=="BND" || $5=="CTX") print}' ~{prefix}.bed )> ~{prefix}.BND_CTX.bed
     >>>
 
-    output{
+    output {
         File bed = "~{prefix}.bed"
         File del = "~{prefix}.DEL.bed"
         File dup = "~{prefix}.DUP.bed"
@@ -266,8 +278,8 @@ task SplitVcf{
     }
 }
 
-task BedtoolsClosest{
-    input{
+task BedtoolsClosest {
+    input {
         File bed_a
         File bed_b
         String svtype
@@ -306,13 +318,13 @@ task BedtoolsClosest{
         bedtools closest -wo -a <(sort -k1,1 -k2,2n filea.bed) -b <(sort -k1,1 -k2,2n fileb.bed) >> ~{svtype}.bed
     >>>
 
-    output{
+    output {
         File output_bed = "~{svtype}.bed"
     }
 }
 
-task SelectMatchedSVs{
-    input{
+task SelectMatchedSVs {
+    input {
         File input_bed
         String svtype
         Array[String] population
@@ -351,13 +363,13 @@ task SelectMatchedSVs{
             -p ~{pop_list}
     >>>
 
-    output{
+    output {
         File output_comp = "~{prefix}.comparison"
     }    
 }
 
-task SelectMatchedINSs{
-    input{
+task SelectMatchedINSs {
+    input {
         File input_bed
         String svtype
         Array[String] population
@@ -396,13 +408,13 @@ task SelectMatchedINSs{
             -p ~{pop_list}
     >>>
 
-    output{
+    output {
         File output_comp = "~{prefix}.comparison"
     }
 }
 
-task ModifyVcf{
-    input{
+task ModifyVcf {
+    input {
         File labeled_del
         File labeled_dup
         File labeled_ins
@@ -489,7 +501,7 @@ task ModifyVcf{
         tabix ~{prefix}.annotated.vcf.gz
     >>>
 
-    output{
+    output {
         File annotated_vcf = "~{prefix}.annotated.vcf.gz"
         File annotated_vcf_tbi = "~{prefix}.annotated.vcf.gz.tbi"
     }        
