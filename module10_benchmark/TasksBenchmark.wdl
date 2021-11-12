@@ -167,13 +167,13 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix -p vcf -f "~{outfile_name}"
+    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output ~{outfile_name}
+    tabix -p vcf ~{outfile_name}
   >>>
 
   output {
-    File concat_vcf = outfile_name
-    File concat_vcf_idx = outfile_name + ".tbi"
+    File concat_vcf = "~{outfile_name}"
+    File concat_vcf_idx = "~{outfile_name}.tbi"
   }
   }
 
@@ -661,7 +661,7 @@ task LocalizeCram{
 
   output{
     File local_bam = "~{contig}.bam"
-    #File local_bai = "~{contig}.bam.bai"
+    File local_bai = "~{contig}.bam.bai"
   }
 
   command <<<

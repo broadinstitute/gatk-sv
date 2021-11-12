@@ -98,12 +98,10 @@ workflow Module10AnnoILFeatures{
                 raw_algorithms = ["manta","wham","melt"],
 
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-                vapor_docker = vapor_docker,
                 duphold_docker = duphold_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
 
-                runtime_attr_Vapor = runtime_attr_Vapor,
                 runtime_attr_duphold = runtime_attr_duphold,
                 runtime_attr_rdpesr = runtime_attr_rdpesr,
                 runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,

@@ -24,22 +24,22 @@ import "TasksBenchmark.wdl" as mini_tasks
 workflow RdPeSrAnno{
   input{
     String prefix
-    String bam_or_cram_file
-    String bam_or_cram_index
     File vcf_file
     File ref_fasta
     File ref_fai
     File ref_dict
     File contig_list
     File pe_metrics
+    File pe_indexes
     File sr_metrics
+    File sr_indexes
     File rd_metrics
+    File rd_indexes
     String pesrrd_annotation_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_rdpesr
     RuntimeAttr? runtime_attr_bcf2vcf
-    RuntimeAttr? runtime_attr_LocalizeCram
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_SplitVcf
     RuntimeAttr? runtime_attr_ConcatBeds
@@ -48,17 +48,6 @@ workflow RdPeSrAnno{
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    call mini_tasks.LocalizeCram as LocalizeCram{
-      input:
-        contig = contig,
-        ref_fasta=ref_fasta,
-        ref_fai=ref_fai,
-        ref_dict=ref_dict,
-        bam_or_cram_file=bam_or_cram_file,
-        bam_or_cram_index=bam_or_cram_index,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_LocalizeCram
-      }
 
     call mini_tasks.SplitVcf as SplitVcf{
       input:
@@ -80,12 +69,13 @@ workflow RdPeSrAnno{
       input:
         prefix = prefix,
         contig = contig,
-        bam_or_cram_file=LocalizeCram.local_bam,
-        bam_or_cram_index=LocalizeCram.local_bai,
         bed = vcf2bed.bed,
         pe_metrics = pe_metrics,
+        pe_indexes = pe_indexes,
         sr_metrics = sr_metrics,
+        sr_indexes = sr_indexes,
         rd_metrics = rd_metrics,
+        rd_indexes = rd_indexes,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict=ref_dict,
@@ -135,17 +125,17 @@ workflow RdPeSrAnno{
     }
   }
 
-
 task RunRdPeSrAnnotation{
   input{
     String prefix
     String contig
-    File bam_or_cram_file
-    File bam_or_cram_index
     File bed
     File pe_metrics
+    File pe_indexes
     File sr_metrics
+    File sr_indexes
     File rd_metrics
+    File rd_indexes
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -175,14 +165,19 @@ task RunRdPeSrAnnotation{
   command <<<
 
     set -Eeuo pipefail
-    Rscript /src/modify_bed_for_PE_SR_RD_labeling.R -i ~{bed}
+    Rscript /src/modify_bed_for_PE_SR_RD_labeling.R \
+      -i ~{bed} \
+      --le_bp ~{bed}.le_bp\
+      --ri_bp ~{bed}.ri_bp \
+      --le_flank ~{bed}.le_flank \
+      --ri_flank ~{bed}.ri_flank
 
-    python3 /src/add_SR_PE_to_PB_INS.V2.py ~{bed} ~{pe_metrics} ~{sr_metrics} 
+    python3 /src/add_SR_PE_to_PB_INS.V2.py ~{bed} ~{pe_metrics} ~{sr_metrics} ~{bed}.pesr
 
     zcat ~{rd_metrics} | grep -v '@' | grep -v CONTIG |bgzip >  bincov.tsv.gz
     Rscript /src/bincov_to_normCov.R -i bincov.tsv.gz
     bgzip normCov.tsv
-    tabix normCov.tsv.gz
+    tabix -p bed normCov.tsv.gz
 
     python3 /src/add_RD_to_SVs.py ~{bed} normCov.tsv.gz
     python3 /src/add_RD_to_SVs.py ~{filename}.ri_flank normCov.tsv.gz

@@ -22,7 +22,6 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
 
-import "VaPoR.wdl" as vapor
 import "Duphold.wdl" as duphold
 import "RdPeSrAnno.wdl" as rdpesr
 
@@ -52,13 +51,19 @@ workflow AnnoILFeatures{
         Array[File] raw_vcfs
         Array[String] raw_algorithms
 
+        Boolean requester_pays_crams = false
+        Boolean run_genomic_context_anno = false
+        Boolean run_extract_algo_evi = false
+        Boolean run_duphold = false
+        Boolean run_extract_gt_gq = true
+        Boolean run_versus_raw_vcf = true
+        Boolean run_rdpesr_anno = true
+
         String rdpesr_benchmark_docker
-        String vapor_docker
         String duphold_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
 
-        RuntimeAttr? runtime_attr_Vapor 
         RuntimeAttr? runtime_attr_duphold
         RuntimeAttr? runtime_attr_rdpesr
         RuntimeAttr? runtime_attr_bcf2vcf
@@ -69,6 +74,8 @@ workflow AnnoILFeatures{
         RuntimeAttr? runtime_attr_ConcatVcfs
     }
 
+    Array[String] contigs = transpose(read_tsv(contig_list))[0]
+
     call vcf2bed{
         input:
             vcf = vcf_file,
@@ -77,210 +84,212 @@ workflow AnnoILFeatures{
             runtime_attr_override = runtime_attr_vcf2bed
     }
 
-    call RunGenomicContextAnnotation{
-        input:
-            bed = vcf2bed.bed,
-            prefix = prefix,
-            ref_SegDup = ref_SegDup,
-            ref_SimpRep = ref_SimpRep,
-            ref_RepMask = ref_RepMask,
-            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-            runtime_attr_override = runtime_attr_rdpesr
-    }
-
-    call Bed2QueryAndRef{
-        input:
-            bed = vcf2bed.bed,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    call ExtracGTGQ{
-      input:
-        prefix = prefix,
-        vcf_file = vcf_file,
-        sv_pipeline_docker = sv_pipeline_docker
-    }
-
-    scatter (i in range(length(raw_vcfs))){
-
-        call vcf2bed as vcf2bed_raw{
+    if(run_genomic_context_anno){
+        call RunGenomicContextAnnotation{
             input:
-                vcf = raw_vcfs[i],
-                prefix = "${prefix}.${raw_algorithms[i]}",
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_vcf2bed
+                bed = vcf2bed.bed,
+                prefix = prefix,
+                ref_SegDup = ref_SegDup,
+                ref_SimpRep = ref_SimpRep,
+                ref_RepMask = ref_RepMask,
+                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_rdpesr
         }
+    }
 
+    if(run_extract_gt_gq){
+        call ExtracGTGQ{
+          input:
+            prefix = prefix,
+            vcf_file = vcf_file,
+            sv_pipeline_docker = sv_pipeline_docker
+        }
+    }
 
-        call Bed2QueryAndRef as Bed2QueryAndRef_Raw{
+    if(run_versus_raw_vcf){
+        call Bed2QueryAndRef{
             input:
-                bed = vcf2bed_raw.bed,
+                bed = vcf2bed.bed,
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
-        call BedComparison as BedComparison_vs_raw{
+        scatter (i in range(length(raw_vcfs))){
+
+            call vcf2bed as vcf2bed_raw{
+                input:
+                    vcf = raw_vcfs[i],
+                    prefix = "${prefix}.${raw_algorithms[i]}",
+                    sv_pipeline_docker = sv_pipeline_docker,
+                    runtime_attr_override = runtime_attr_vcf2bed
+            }
+
+
+            call Bed2QueryAndRef as Bed2QueryAndRef_Raw{
+                input:
+                    bed = vcf2bed_raw.bed,
+                    sv_base_mini_docker = sv_base_mini_docker
+            }
+
+            call BedComparison as BedComparison_vs_raw{
+                input:
+                    query = Bed2QueryAndRef_Raw.query,
+                    ref = Bed2QueryAndRef.ref,
+                    prefix = "${prefix}.vs.${raw_algorithms[i]}",
+                    sv_pipeline_docker=sv_pipeline_docker
+            }
+        }
+    }
+
+    if(run_extract_algo_evi){
+        call ExtracAlgorithmEvidenceFilter{
             input:
-                query = Bed2QueryAndRef_Raw.query,
-                ref = Bed2QueryAndRef.ref,
-                prefix = "${prefix}.vs.${raw_algorithms[i]}",
+                prefix = prefix,
+                vcf_file = vcf_file,
                 sv_pipeline_docker=sv_pipeline_docker
         }
     }
 
-    call ExtracAlgorithmEvidenceFilter{
-        input:
-            prefix = prefix,
-            vcf_file = vcf_file,
-            sv_pipeline_docker=sv_pipeline_docker
-    }
-
-    call vcf2bed as vcf2bed_all{
-        input:
-            vcf = vcf_file,
-            prefix = prefix,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_vcf2bed
-    }
-
-    call RunRdPeSrAnnotation{
-        input:
-            prefix = prefix,
-            bed = vcf2bed_all.bed,
-            pe_matrix = pe_matrix,
-            pe_index = pe_index,
-            sr_matrix = sr_matrix,
-            sr_index = sr_index,
-            rd_matrix = rd_matrix,
-            rd_index = rd_index,
-            ref_fasta = ref_fasta,
-            ref_fai = ref_fai,
-            ref_dict=ref_dict,
-            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-            runtime_attr_override = runtime_attr_rdpesr
-    }
-    
-    Array[String] contigs = transpose(read_tsv(contig_list))[0]
-    scatter ( contig in contigs ) {
-        call mini_tasks.SplitVcf as SplitVcf{
-            input:
-                contig = contig,
-                vcf_file = vcf_file,
-                sv_pipeline_docker=sv_pipeline_docker,
-                runtime_attr_override=runtime_attr_SplitVcf
-            }
-
-        call mini_tasks.LocalizeCramRequestPay as LocalizeCramIL{
-            input:
-                contig = contig,
-                ref_fasta=ref_fasta,
-                ref_fai=ref_fai,
-                ref_dict=ref_dict,
-                project_id="talkowski-sv-gnomad",
-                bam_or_cram_file=il_bam,
-                bam_or_cram_index=il_bam_bai,
-                sv_pipeline_docker=sv_pipeline_docker,
-                runtime_attr_override=runtime_attr_LocalizeCram
-            }
-
-        call ShiftVcfForDuphold{
-            input:
-                prefix = contig,
-                vcf_file = SplitVcf.contig_vcf,
-                vcf_index = SplitVcf.contig_vcf_index,
-                ref_fai = ref_fai,
-                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-                runtime_attr_override = runtime_attr_duphold
-            } 
-
-        call RunDupholdPerContig as RunDupholdPerContigIL{
+    if(run_rdpesr_anno){
+        call RunRdPeSrAnnotation{
             input:
                 prefix = prefix,
-                contig = contig,
-                bam_or_cram_file=LocalizeCramIL.local_bam,
-                bam_or_cram_index=LocalizeCramIL.local_bai,
-                vcf_file = SplitVcf.contig_vcf,
-                vcf_index = SplitVcf.contig_vcf_index,
-                vcf_le_file = ShiftVcfForDuphold.le_flank,
-                vcf_le_index = ShiftVcfForDuphold.le_flank_index,
-                vcf_ri_file = ShiftVcfForDuphold.ri_flank,
-                vcf_ri_index = ShiftVcfForDuphold.ri_flank_index,
+                bed = vcf2bed.bed,
+                pe_matrix = pe_matrix,
+                pe_index = pe_index,
+                sr_matrix = sr_matrix,
+                sr_index = sr_index,
+                rd_matrix = rd_matrix,
+                rd_index = rd_index,
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
-                ref_dict = ref_dict,
-                rdpesr_benchmark_docker = duphold_docker,
-                runtime_attr_override = runtime_attr_duphold
-            }
-
-        call Bcf2Vcf as Bcf2VcfIL{
-            input:
-                prefix = prefix,
-                contig = contig,
-                bcf = RunDupholdPerContigIL.bcf,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_bcf2vcf
-            }
-
-        call Bcf2Vcf as Bcf2VcfIL_le_flank{
-            input:
-                prefix = prefix,
-                contig = contig,
-                bcf = RunDupholdPerContigIL.bcf_le,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_bcf2vcf
-            }
-
-        call Bcf2Vcf as Bcf2VcfIL_ri_flank{
-            input:
-                prefix = prefix,
-                contig = contig,
-                bcf = RunDupholdPerContigIL.bcf_ri,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_bcf2vcf
-            }
-   
+                ref_dict=ref_dict,
+                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_rdpesr
+        }
     }
+    
+    if(run_duphold){
+        scatter ( contig in contigs ) {
+            call mini_tasks.SplitVcf as SplitVcf{
+                input:
+                    contig = contig,
+                    vcf_file = vcf_file,
+                    sv_pipeline_docker=sv_pipeline_docker,
+                    runtime_attr_override=runtime_attr_SplitVcf
+                }
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL{
-        input:
-            vcfs=Bcf2VcfIL.vcf,
-            merge_sort=true,
-            outfile_prefix="~{prefix}.IL",
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_attr_ConcatVcfs
-    }
+            call mini_tasks.LocalizeCramRequestPay as LocalizeCramIL{
+                input:
+                    contig = contig,
+                    ref_fasta=ref_fasta,
+                    ref_fai=ref_fai,
+                    ref_dict=ref_dict,
+                    project_id="talkowski-sv-gnomad",
+                    bam_or_cram_file=il_bam,
+                    bam_or_cram_index=il_bam_bai,
+                    sv_pipeline_docker=sv_pipeline_docker,
+                    runtime_attr_override=runtime_attr_LocalizeCram
+                }
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL_le_flank{
-        input:
-            vcfs=Bcf2VcfIL_le_flank.vcf,
-            merge_sort=true,
-            outfile_prefix="~{prefix}.IL_le_flank",
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_attr_ConcatVcfs
-    }
+            call ShiftVcfForDuphold{
+                input:
+                    prefix = contig,
+                    vcf_file = SplitVcf.contig_vcf,
+                    vcf_index = SplitVcf.contig_vcf_index,
+                    ref_fai = ref_fai,
+                    rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                    runtime_attr_override = runtime_attr_duphold
+                } 
 
-    call mini_tasks.ConcatVcfs as ConcatVcfsIL_ri_flank{
-        input:
-            vcfs=Bcf2VcfIL_ri_flank.vcf,
-            merge_sort=true,
-            outfile_prefix="~{prefix}.IL_ri_flank",
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_attr_ConcatVcfs
+            call RunDupholdPerContig as RunDupholdPerContigIL{
+                input:
+                    prefix = prefix,
+                    contig = contig,
+                    bam_or_cram_file=LocalizeCramIL.local_bam,
+                    bam_or_cram_index=LocalizeCramIL.local_bai,
+                    vcf_file = SplitVcf.contig_vcf,
+                    vcf_index = SplitVcf.contig_vcf_index,
+                    vcf_le_file = ShiftVcfForDuphold.le_flank,
+                    vcf_le_index = ShiftVcfForDuphold.le_flank_index,
+                    vcf_ri_file = ShiftVcfForDuphold.ri_flank,
+                    vcf_ri_index = ShiftVcfForDuphold.ri_flank_index,
+                    ref_fasta = ref_fasta,
+                    ref_fai = ref_fai,
+                    ref_dict = ref_dict,
+                    rdpesr_benchmark_docker = duphold_docker,
+                    runtime_attr_override = runtime_attr_duphold
+                }
+
+            call Bcf2Vcf as Bcf2VcfIL{
+                input:
+                    prefix = prefix,
+                    contig = contig,
+                    bcf = RunDupholdPerContigIL.bcf,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_attr_bcf2vcf
+                }
+
+            call Bcf2Vcf as Bcf2VcfIL_le_flank{
+                input:
+                    prefix = prefix,
+                    contig = contig,
+                    bcf = RunDupholdPerContigIL.bcf_le,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_attr_bcf2vcf
+                }
+
+            call Bcf2Vcf as Bcf2VcfIL_ri_flank{
+                input:
+                    prefix = prefix,
+                    contig = contig,
+                    bcf = RunDupholdPerContigIL.bcf_ri,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_attr_bcf2vcf
+                }   
+        }
+
+        call mini_tasks.ConcatVcfs as ConcatVcfsIL{
+            input:
+                vcfs=Bcf2VcfIL.vcf,
+                merge_sort=true,
+                outfile_prefix="~{prefix}.IL",
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_attr_ConcatVcfs
+        }
+
+        call mini_tasks.ConcatVcfs as ConcatVcfsIL_le_flank{
+            input:
+                vcfs=Bcf2VcfIL_le_flank.vcf,
+                merge_sort=true,
+                outfile_prefix="~{prefix}.IL_le_flank",
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_attr_ConcatVcfs
+        }
+
+        call mini_tasks.ConcatVcfs as ConcatVcfsIL_ri_flank{
+            input:
+                vcfs=Bcf2VcfIL_ri_flank.vcf,
+                merge_sort=true,
+                outfile_prefix="~{prefix}.IL_ri_flank",
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_attr_ConcatVcfs
+        }
     }
 
     output{
-            File duphold_vcf_il = ConcatVcfsIL.concat_vcf
-            File duphold_vcf_il_le = ConcatVcfsIL_le_flank.concat_vcf
-            File duphold_vcf_il_ri = ConcatVcfsIL_ri_flank.concat_vcf
+            File? duphold_vcf_il = ConcatVcfsIL.concat_vcf
+            File? duphold_vcf_il_le = ConcatVcfsIL_le_flank.concat_vcf
+            File? duphold_vcf_il_ri = ConcatVcfsIL_ri_flank.concat_vcf
 
-            File PesrAnno  = RunRdPeSrAnnotation.pesr_anno
-            File RdAnno    = RunRdPeSrAnnotation.cov
-            File RdAnno_le = RunRdPeSrAnnotation.cov_le_flank 
-            File RdAnno_ri = RunRdPeSrAnnotation.cov_ri_flank
+            File? PesrAnno  = RunRdPeSrAnnotation.pesr_anno
+            File? RdAnno    = RunRdPeSrAnnotation.cov
+            File? RdAnno_le = RunRdPeSrAnnotation.cov_le_flank 
+            File? RdAnno_ri = RunRdPeSrAnnotation.cov_ri_flank
 
-            File GCAnno = RunGenomicContextAnnotation.anno_bed
-            File GTGQ = ExtracGTGQ.GQ_GT
-            File vcf_info = ExtracAlgorithmEvidenceFilter.vcf_info
-            Array[File] vs_raw = BedComparison_vs_raw.comparison
+            File? GCAnno = RunGenomicContextAnnotation.anno_bed
+            File? GTGQ = ExtracGTGQ.GQ_GT
+            File? vcf_info = ExtracAlgorithmEvidenceFilter.vcf_info
+            Array[File]? vs_raw = BedComparison_vs_raw.comparison
         }
     }
  
@@ -366,7 +375,7 @@ task vcf2bed{
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
         mem_gb: 3.75, 
-        disk_gb: 10,
+        disk_gb: 15,
         boot_disk_gb: 2,
         preemptible_tries: 1,
         max_retries: 1
@@ -615,61 +624,6 @@ task RunDuphold{
         -o ~{prefix}.bcf
     >>>
 
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: rdpesr_benchmark_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task RunVaPoR{
-    input{
-        String prefix
-        String contig
-        File bam_or_cram_file
-        File bam_or_cram_index
-        File bed
-        File ref_fasta
-        File ref_fai
-        File ref_dict
-        String rdpesr_benchmark_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output {
-        File vapor = "~{bed}.vapor"
-        File vapor_plot = "~{prefix}.~{contig}.tar.gz"
-    }
-
-    command <<<
-
-        set -Eeuo pipefail
-
-        mkdir ~{prefix}.~{contig}
-    
-        vapor bed \
-        --sv-input ~{bed} \
-        --output-path ~{prefix}.~{contig} \
-        --reference ~{ref_fasta} \
-        --pacbio-input ~{bam_or_cram_index} \
-
-        tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
-    >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
