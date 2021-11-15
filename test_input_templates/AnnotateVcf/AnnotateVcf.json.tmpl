@@ -1,6 +1,6 @@
 {
-  "AnnotateVcf.vcf" :   {{ test_batch.baseline_cleaned_vcf | tojson }},
-  "AnnotateVcf.vcf_idx" : {{ test_batch.baseline_cleaned_vcf_idx | tojson }},
+  "AnnotateVcf.vcf" :   {{ test_batch.clean_vcf | tojson }},
+  "AnnotateVcf.vcf_idx" : {{ test_batch.clean_vcf_idx | tojson }},
 
   "AnnotateVcf.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "AnnotateVcf.linc_rna_gtf" :       {{ reference_resources.linc_rna_gtf | tojson }},

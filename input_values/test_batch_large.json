@@ -877,6 +877,8 @@
     "gs://gatk-sv-resources/test/module00a/large/outputs/wham_vcf/TCGA-W9-A837-10A-01D-A706-36.wham.vcf.gz"
   ],
   "batch_name" : "test_large",
+  "clean_vcf": "gs://gatk-sv-resources/test/module0506/large/output/test_large.20211115.cleaned.vcf.gz",
+  "clean_vcf_idx": "gs://gatk-sv-resources/test/module0506/large/output/test_large.20211115.cleaned.vcf.gz.tbi",
   "cluster_combined_bed" : "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/cluster.combined.bed",
   "cohort_combined_bed" : "gs://talkowskicromwellresults/M04/MergeCohortVcfs/190da1da-75b8-485e-82fc-b2c5ff07a8e6/call-MergeDepthVcfs/master_cluster_dups.bed",
   "cohort_samplelist" : "gs://gatk-sv-resources/test/module04b/large/inputs/samplelist.txt",
