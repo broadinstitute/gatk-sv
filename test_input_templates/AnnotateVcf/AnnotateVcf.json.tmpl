@@ -1,6 +1,6 @@
 {
-  "AnnotateVcf.vcf" :     "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/61a7ce7c-3b3c-4716-977a-ffb6e34464b6/minGQ_filter_workflow_v2/d841eeb6-90c3-4ff2-8b99-7a793c85cfea/call-combine_vcfs/Talkowski_SV_PCR-free_WGS_144.minGQ_filtered.vcf.gz",
-  "AnnotateVcf.vcf_idx" : "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/61a7ce7c-3b3c-4716-977a-ffb6e34464b6/minGQ_filter_workflow_v2/d841eeb6-90c3-4ff2-8b99-7a793c85cfea/call-combine_vcfs/Talkowski_SV_PCR-free_WGS_144.minGQ_filtered.vcf.gz.tbi",
+  "AnnotateVcf.vcf" :   {{ test_batch.clean_vcf | tojson }},
+  "AnnotateVcf.vcf_idx" : {{ test_batch.clean_vcf_idx | tojson }},
 
   "AnnotateVcf.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "AnnotateVcf.linc_rna_gtf" :       {{ reference_resources.linc_rna_gtf | tojson }},
@@ -12,7 +12,7 @@
 
 
   "AnnotateVcf.contig_list" :  {{ reference_resources.primary_contigs_list | tojson }},
-  "AnnotateVcf.ped_file":      "gs://fc-fae972fb-9dbf-41c7-926f-f419a767a1ab/FINAL_full_prenatal_dosage_sex.ped",
+  "AnnotateVcf.ped_file":      {{ test_batch.ped_file | tojson }},
   "AnnotateVcf.sv_per_shard" : "5000",
   "AnnotateVcf.max_shards_per_chrom_step1" : 200,
   "AnnotateVcf.min_records_per_shard_step1" :  5000,
