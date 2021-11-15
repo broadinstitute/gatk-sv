@@ -71,7 +71,7 @@ workflow AnnotateExternalAF {
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_override_split_vcf = runtime_override_split_vcf,
-                runtime_attr_modify_vcf = runtime_attr_modify_vcf
+                runtime_attr_modify_vcf = runtime_attr_modify_vcf,
                 runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
                 runtime_attr_bedtools_closest = runtime_attr_bedtools_closest
         }
