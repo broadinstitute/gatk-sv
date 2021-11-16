@@ -374,9 +374,9 @@ task vcf2bed{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 15,
-        boot_disk_gb: 2,
+        mem_gb: 6,
+        disk_gb: 25,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -688,10 +688,11 @@ task RunRdPeSrAnnotation{
         bgzip normCov.tsv
         tabix -b 2 -e 2 normCov.tsv.gz
 
-        python3 /src/add_RD_to_SVs.py ~{bed} normCov.tsv.gz ~{filebase}.bed.Rd
+        cut -f1-4,7,8 ~{bed} > ~{bed}.info
+        python3 /src/add_RD_to_SVs.py ~{bed}.info normCov.tsv.gz ~{filebase}.bed.Rd
         python3 /src/add_RD_to_SVs.py ~{bed}.ri_flank normCov.tsv.gz ~{filebase}.ri_flank.Rd
         python3 /src/add_RD_to_SVs.py ~{bed}.le_flank normCov.tsv.gz ~{filebase}.le_flank.Rd
-        python3 /src/add_SR_PE_to_PB_INS.V2.py ~{bed} ~{pe_matrix} ~{sr_matrix} ~{filebase}.bed.PeSr
+        python3 /src/add_SR_PE_to_PB_INS.V2.py ~{bed}.info ~{pe_matrix} ~{sr_matrix} ~{filebase}.bed.PeSr
 
         bgzip ~{filebase}.bed.Rd
         bgzip ~{filebase}.ri_flank.Rd
@@ -779,7 +780,7 @@ task ExtracGTGQ{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
+        mem_gb: 7.5, 
         disk_gb: 10,
         boot_disk_gb: 10,
         preemptible_tries: 1,
