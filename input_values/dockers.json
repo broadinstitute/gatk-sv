@@ -20,5 +20,6 @@
   "igv_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/igv:mw-xz-fixes-2-b1be6a9",
   "duphold_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/duphold:mw-xz-fixes-2-b1be6a9",
   "vapor_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/vapor:mw-xz-fixes-2-b1be6a9",
-  "cloud_sdk_docker" : "google/cloud-sdk"
+  "cloud_sdk_docker" : "google/cloud-sdk",
+  "pangenie": "us.gcr.io/broad-dsde-methods/vjalili/pangenie:vj-127571f"
 }
