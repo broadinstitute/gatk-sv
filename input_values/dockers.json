@@ -8,7 +8,7 @@
   "genomes_in_the_cloud_docker" : "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker" : "marketplace.gcr.io/google/ubuntu1804",
   "manta_docker" : "us.gcr.io/broad-dsde-methods/manta:8645aa",
-  "melt_docker" : "us.gcr.io/broad-dsde-methods/vjalili/melt:lint-24b9cda",
+  "melt_docker" : "us.gcr.io/talkowski-sv-gnomad/melt:vj-4ff9de9f",
   "samtools_cloud_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:mw-gnomad-02-6a66c96",
   "sv_base_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df",
   "sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
