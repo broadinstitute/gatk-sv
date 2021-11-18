@@ -8,14 +8,12 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow IGVTrio {
+workflow IGV_trio {
     input{
         File varfile
         File Fasta
         File Fasta_idx
         File Fasta_dict
-        File ped_file
-        File sample_cram
         String pb
         String fa
         String mo
@@ -28,14 +26,12 @@ workflow IGVTrio {
         String igv_docker
     }
 
-    call RunIGVWholeGeome{
+    call runIGV_whole_genome{
         input:
             varfile = varfile,
             fasta = Fasta,
             fasta_dict = Fasta_dict,
             fasta_idx = Fasta_idx,
-            ped_file = ped_file,
-            cram_list = sample_cram,
             fa = fa,
             mo = mo,
             pb = pb,
@@ -49,18 +45,16 @@ workflow IGVTrio {
     }
 
     output{
-        File tar_gz_pe = RunIGVWholeGeome.pe_plots
+        File tar_gz_pe = runIGV_whole_genome.pe_plots
     }
 }
 
-task RunIGVWholeGeome{
+task runIGV_whole_genome{
     input{
         File varfile
         File fasta
         File fasta_idx
         File fasta_dict
-        File ped_file
-        File cram_list
         String pb
         String fa
         String mo

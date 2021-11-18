@@ -36,7 +36,7 @@ task runIGV{
       docker: "talkowski/igv:latest"
       preemptible: 3
       memory: "10 GB"
-      disks: "local-disk 50 SSD"
+      disks: "local-disk 50 HDD"
   }
   output{
       File pe_plots="pe_screenshots.tar.gz"

@@ -55,7 +55,7 @@ task localize_cram{
     docker: "broadinstitute/gatk:4.1.3.0"
     preemptible: 3
     memory: "10 GB"
-    disks: "local-disk 50 SSD"
+    disks: "local-disk 50 HDD"
   }
   output{
     File local_cram = '${sample}_${chromosome}.bam'
@@ -91,7 +91,7 @@ task runIGV{
       docker: "talkowski/igv_gatk:latest"
       preemptible: 3
       memory: "10 GB"
-      disks: "local-disk 50 SSD"
+      disks: "local-disk 50 HDD"
   }
   output{
       File pe_plots="pe_screenshots.tar.gz"
