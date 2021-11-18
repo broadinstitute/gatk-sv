@@ -292,6 +292,7 @@ workflow GATKSVPipelineSingleSample {
 
     File rmsk
     File segdups
+    String? chr_x
 
     Int? min_large_pesr_call_size_for_filtering
     Float? min_large_pesr_depth_overlap_fraction
@@ -779,6 +780,7 @@ workflow GATKSVPipelineSingleSample {
       vcf = ClusterBatch.depth_vcf,
       female_samples = SamplesList.female_samples,
       male_samples = SamplesList.male_samples,
+      contig = select_first([chr_x, "chrX"]),
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_get_male_only
   }
