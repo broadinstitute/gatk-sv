@@ -314,8 +314,6 @@ def __parse_arguments(args_list):
                                                'built image(s) will not be push to GCR.')
     docker_remote_args_group.add_argument('--update-latest', action='store_true',
                                           help='also update \"latest\" tag in remote docker repo(s)')
-    docker_remote_args_group.add_argument('--no-push', action='store_true',
-                                          help='after building images, do not push to remote docker repo(s)')
     # flag to turn off git protection (default mode is refusing to build when there are untracked files and/or
     # uncommitted changes)
     parser.add_argument(
