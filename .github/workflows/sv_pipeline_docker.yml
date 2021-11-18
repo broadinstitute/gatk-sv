@@ -32,6 +32,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # By default, this checks out only the current commit;
+          # however, since a diff between the current commit and
+          # the base commit is required to determined which docker
+          # images to rebuild, we use the following to check out
+          # the complete git history.
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v2
@@ -43,6 +50,92 @@ jobs:
           python -m pip install --upgrade pip
           pip install termcolor
 
+      - name: Determine Target Images
+        id: target_images
+        # This step determines the target images to be rebuilt based
+        # on the files changed between the HEAD and BASE commits, where
+        # HEAD is the commit that its push triggered running this action and
+        # BASE is the commit the PR is targeting. For instance, if the
+        # commit changes the `dockerfiles/sv-base/Dockerfile`, then the
+        # `sv-base` docker image (and all its dependencies) are rebuilt.
+        #
+        # This step first gets the HEAD and BASE commit SHAs from the
+        # $GITHUB_CONTEXT environment variable. Then uses `git diff` to
+        # determine the files changed between the commits. Based on the
+        # changed files, it determines a list of docker images to be rebuilt.
+        # Finally, it stores the determined docker images in $TARGETS
+        # variable that can be accessed in other steps.
+        run: |
+          # The commit SHA of the base branch which this PR targets;
+          # ideally broadinstitute/gatk-sv:master.
+          BASE_SHA=$(echo "$GITHUB_CONTEXT"| jq -r '.event.pull_request.base.sha')
+
+          # The commit SHA of the commit that triggered the action.
+          HEAD_SHA=${{ github.event.pull_request.head.sha }}
+
+          # A list of all the files changed in HEAD commit w.r.t BASE commit.
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA)
+
+          # Add a given target image name to the TARGETS
+          # array if it is not already in the array.
+          TARGETS=()
+          try_add_target() {
+            if [[ ! " ${TARGETS[*]} " =~ $1 ]]; then
+              TARGETS+=($1)
+            fi
+          }
+
+          for i in "${CHANGED_FILES[@]}"
+          do
+            if [[ $i == *".github/workflows/sv_pipeline_docker.yml"* ]]; then
+              # A change to this file may impact how images are built,
+              # hence, if this file is changed, all the images are rebuilt.
+              TARGETS=("all")
+              break
+            elif [[ $i == *"src/svtk"* ||
+                  $i == *"src/sv-pipeline"* ||
+                  $i == *"src/svtest"* ||
+                  $i == *"src/svqc"* ]]; then
+              try_add_target "sv-pipeline"
+              try_add_target "sv-pipeline-base"
+              try_add_target "sv-pipeline-children-r"
+            elif [[ $i == *"src/RdTest"* ]]; then
+              try_add_target "sv-pipeline-rdtest"
+            elif [[ $i == *"src/WGD"* ]]; then
+              try_add_target "sv-pipeline-qc"
+              try_add_target "cnmops"
+            elif [[ $i == *"scripts/docker/resources.Dockerfile"* ]]; then
+              try_add_target "gatksv-pipeline-v1-resources"
+            fi
+
+            # Rebuild the docker image of the Dockerfiles specified in
+            # the `D` array. Use regular expression to extract the target
+            # image from the file path. For instance, if
+            # i = dockerfiles/delly/Dockerfile, then M="delly".
+            if [[ $i =~ (dockerfiles/)([^,]*)(/Dockerfile) ]]; then
+              M="${BASH_REMATCH[2]}"
+              D=("delly" "manta" "wham" "sv-base-mini" "sv-base" "samtools-cloud")
+              if [[ " ${D[*]} " =~ $M ]]; then
+                try_add_target $M
+              fi
+            fi
+          done
+
+          # Join the determined targets in a space-delimited string.
+          TARGETS=$(IFS=' '; echo "${TARGETS[*]}")
+
+          # Print some debugging information.
+          echo "::debug::BASE_SHA: $BASE_SHA"
+          echo "::debug::HEAD_SHA: $HEAD_SHA"
+          echo "::debug::Docker images to rebuild: $TARGETS"
+          echo "::debug::Changed files:"
+          for f in "${CHANGED_FILES[@]}"; do
+            echo "::debug::    $f"
+          done
+
+          # Set the output of this step so it can be accessed in other steps.
+          echo "::set-output name=TARGETS::$TARGETS"
+
       - name: Run build_docker.py [Pull Request]
         if: github.event_name == 'pull_request'
         run: |
@@ -51,7 +144,7 @@ jobs:
           IMAGE_TAG=${PR_NUM}-${COMMIT_SHA::8}
           echo "::debug::Image tag: $IMAGE_TAG"
           cd ./scripts/docker/
-          python build_docker.py --targets all --image-tag $IMAGE_TAG
+          python build_docker.py --targets ${{ steps.target_images.outputs.TARGETS }} --image-tag $IMAGE_TAG
 
       - name: Run build_docker.py [Push]
         if: github.event_name == 'push'
@@ -70,4 +163,4 @@ jobs:
           echo "::debug::Image tag: $IMAGE_TAG"
 
           cd ./scripts/docker/
-          python build_docker.py --targets all --image-tag $IMAGE_TAG
+          python build_docker.py --targets ${{ steps.target_images.outputs.TARGETS }} --image-tag $IMAGE_TAG
