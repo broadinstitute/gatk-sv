@@ -16,7 +16,10 @@ import subprocess
 this_script_path = os.path.dirname(os.path.abspath(__file__))
 
 
-class ProjectBuilder:  # class to track dependencies, control build and push of entire job
+class ProjectBuilder:
+    """
+    class to track dependencies, control build and push of entire job
+    """
     github_org = 'broadinstitute'
     github_repo = 'gatk-sv'
     # mapping from target to its dependencies
@@ -154,7 +157,7 @@ class ProjectBuilder:  # class to track dependencies, control build and push of 
             os.system("open --background -a Docker && while ! docker system info > /dev/null 2>&1; do sleep 1; done")
             self.build()
             self.push()
-            print(colored('BUILD PROCESS SUCCESS!', 'red'))
+            print(colored('BUILD PROCESS SUCCESS!', 'green'))
         finally:
             if not self.project_arguments.skip_cleanup:
                 self.cleanup(possible_tmp_dir_path)
