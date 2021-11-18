@@ -17,5 +17,8 @@
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-xz-fixes-7cbffee",
   "sv_pipeline_rdtest_docker" : "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-rdtest:mw-gnomad-02-6a66c96",
   "wham_docker" : "us.gcr.io/broad-dsde-methods/wham:8645aa",
+  "vapor_docker": "talkowski/vapor:20210525",
+  "igv_docker": "talkowski/igv_gatk:20210305",
+  "duphold_docker": "talkowski/duphold",
   "cloud_sdk_docker" : "google/cloud-sdk"
 }
