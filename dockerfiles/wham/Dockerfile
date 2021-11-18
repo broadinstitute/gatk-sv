@@ -18,4 +18,4 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/?? \
            /usr/share/man/??_*
 
-ADD whamg /bin/
+ADD dockerfiles/wham/whamg /bin/

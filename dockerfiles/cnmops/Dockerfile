@@ -1,13 +1,6 @@
 # IMPORTANT: these arguments must be specified at the begining to take advantage of multi-stage build AND runtime specification of base images
-ARG GATKSV_PIPELINE_V1_RESOURCES_IMAGE=gatksv-pipeline-v1-resources:latest
 ARG SVBASE_IMAGE=gatksv/sv-base:latest
 
-### stage 1
-FROM ${GATKSV_PIPELINE_V1_RESOURCES_IMAGE}
-RUN mkdir -p /opt/ && \
-    mv ${RESOURCES}WGD /opt/WGD
-
-### stage 2
 # Start from base with most R/Python dependencies included
 FROM ${SVBASE_IMAGE}
 
@@ -40,5 +33,5 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/??_*
 
 # Add WGD
-COPY --from=0 /opt/WGD /opt/WGD
+COPY src/WGD /opt/WGD
 ENV PATH="/opt/WGD/bin:${PATH}"

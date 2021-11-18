@@ -1,6 +1,6 @@
-wdl/
-scripts/
-test/
-inputs/
-README.md
-issue_template.md
+# Ignore everything
+**
+# Allow src
+!/src/**
+# Allow dockers
+!/dockerfiles/**
