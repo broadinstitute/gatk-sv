@@ -141,8 +141,6 @@ class ProjectBuilder:
             print(colored('#################################################', 'magenta'))
 
     def push(self):
-        if self.project_arguments.no_push:
-            return
         for image in self.built_images:
             ImageBuilder(image, self).push()
 
