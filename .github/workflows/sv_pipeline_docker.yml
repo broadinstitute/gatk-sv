@@ -90,7 +90,7 @@ jobs:
             if [[ $i == *".github/workflows/sv_pipeline_docker.yml"* ]]; then
               # A change to this file may impact how images are built,
               # hence, if this file is changed, all the images are rebuilt.
-              try_add_target "all"
+              TARGETS=("all")
               break
             elif [[ $i == *"src/svtk"* ||
                   $i == *"src/sv-pipeline"* ||
