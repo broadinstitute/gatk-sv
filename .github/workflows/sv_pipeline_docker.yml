@@ -8,7 +8,6 @@ on:
       - 'src/**'
       - 'dockerfiles/**'
       - 'scripts/docker/build_docker.py'
-      - 'scripts/docker/resources.Dockerfile'
       - '.github/workflows/sv_pipeline_docker.yml'
   pull_request:
     branches:
@@ -17,7 +16,6 @@ on:
       - 'src/**'
       - 'dockerfiles/**'
       - 'scripts/docker/build_docker.py'
-      - 'scripts/docker/resources.Dockerfile'
       - '.github/workflows/sv_pipeline_docker.yml'
 
 jobs:
@@ -164,8 +162,6 @@ jobs:
             elif [[ $i == *"src/WGD"* ]]; then
               try_add_target "sv-pipeline-qc"
               try_add_target "cnmops"
-            elif [[ $i == *"scripts/docker/resources.Dockerfile"* ]]; then
-              try_add_target "gatksv-pipeline-v1-resources"
             fi
 
             # Rebuild the docker image of the Dockerfiles specified in
