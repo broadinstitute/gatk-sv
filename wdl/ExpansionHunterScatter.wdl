@@ -11,7 +11,7 @@ workflow ExpansionHunterScatter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
-        String eh_docker
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr
     }
 
@@ -34,7 +34,7 @@ workflow ExpansionHunterScatter {
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
                 variant_catalog=variant_catalog,
-                docker_file=eh_docker,
+                expansion_hunter_docker=expansion_hunter_docker,
                 runtime_attr=runtime_attr
         }
     }

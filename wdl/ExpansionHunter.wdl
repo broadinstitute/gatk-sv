@@ -21,7 +21,7 @@ workflow ExpansionHunter {
         File? reference_fasta_index
         File variant_catalog
         File? output_prefix
-        String docker_file
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr
     }
 
@@ -53,7 +53,7 @@ workflow ExpansionHunter {
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
             output_prefix = output_prefix_,
-            docker_file = docker_file,
+            expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
     }
 
@@ -72,7 +72,7 @@ task RunExpansionHunter {
         File reference_fasta_index
         File variant_catalog
         String output_prefix
-        String docker_file
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -109,7 +109,7 @@ task RunExpansionHunter {
         runtime_attr_str_profile_default])
 
     runtime {
-        docker: docker_file
+        docker: expansion_hunter_docker
         cpu: runtime_attr.cpu_cores
         memory: runtime_attr.mem_gb + " GiB"
         disks: "local-disk " + runtime_attr.disk_gb + " HDD"
