@@ -36,6 +36,7 @@ workflow GenerateBatchMetrics {
     File autosome_contigs
     File allosome_contigs
     File ref_dict
+    String? chr_x
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
@@ -107,6 +108,7 @@ workflow GenerateBatchMetrics {
           vcf = vcf,
           female_samples = GetSampleLists.female_samples,
           male_samples = GetSampleLists.male_samples,
+          contig = select_first([chr_x, "chrX"]),
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_get_male_only
       }
@@ -349,6 +351,7 @@ task GetMaleOnlyVariantIDs {
     File vcf
     File female_samples
     File male_samples
+    String contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -367,8 +370,8 @@ task GetMaleOnlyVariantIDs {
     File male_only_variant_ids = "male_only_variant_ids.txt"
   }
   command <<<
-    bcftools view -S ~{male_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_males.txt
-    bcftools view -S ~{female_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_females.txt
+    bcftools view -t ~{contig} -S ~{male_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_males.txt
+    bcftools view -t ~{contig} -S ~{female_samples} ~{vcf} | bcftools view --min-ac 1 | bcftools query -f '%ID\n' > variant_ids_in_females.txt
     awk 'NR==FNR{a[$0];next} !($0 in a)' variant_ids_in_females.txt variant_ids_in_males.txt > male_only_variant_ids.txt
     
   >>>
