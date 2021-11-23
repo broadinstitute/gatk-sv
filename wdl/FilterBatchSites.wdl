@@ -186,8 +186,8 @@ task FilterAnnotateVcf {
 
     set -euo pipefail
     cat \
-      <(sed -e '1d' ~{scores} | fgrep -e DEL -e DUP | awk '($3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf})) \
-      <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
+    <(sed -e '1d' ~{scores} | fgrep -e DEL -e DUP | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf})) \
+    <(sed -e '1d' ~{scores} | fgrep -e INV -e BND -e INS | awk '($3!="NA" && $3>=0.5)' | cut -f1 | fgrep -w -f - <(zcat ~{vcf}) | sed -e 's/SVTYPE=DEL/SVTYPE=BND/' -e 's/SVTYPE=DUP/SVTYPE=BND/' -e 's/<DEL>/<BND>/' -e 's/<DUP>/<BND>/') \
       | cat <(sed -n -e '/^#/p' <(zcat ~{vcf})) - \
       | vcf-sort -c \
       | bgzip -c \
