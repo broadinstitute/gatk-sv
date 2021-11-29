@@ -20,7 +20,8 @@ workflow ExpansionHunter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
-        String docker_file
+        File? output_prefix
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr
     }
 
@@ -35,6 +36,15 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
+    String output_prefix_ =
+        if defined(output_prefix) then
+            select_first([output_prefix])
+        else
+            if is_bam then
+                basename(bam_or_cram, ".bam")
+            else
+                basename(bam_or_cram, ".cram")
+
     call RunExpansionHunter {
         input:
             bam_or_cram = bam_or_cram,
@@ -42,7 +52,8 @@ workflow ExpansionHunter {
             reference_fasta = reference_fasta,
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
-            docker_file = docker_file,
+            output_prefix = output_prefix_,
+            expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
     }
 
@@ -60,11 +71,10 @@ task RunExpansionHunter {
         File reference_fasta
         File reference_fasta_index
         File variant_catalog
-        String docker_file
+        String output_prefix
+        String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
     }
-
-    String output_prefix = "output"
 
     output {
         File json = "${output_prefix}.json"
@@ -99,7 +109,7 @@ task RunExpansionHunter {
         runtime_attr_str_profile_default])
 
     runtime {
-        docker: docker_file
+        docker: expansion_hunter_docker
         cpu: runtime_attr.cpu_cores
         memory: runtime_attr.mem_gb + " GiB"
         disks: "local-disk " + runtime_attr.disk_gb + " HDD"
