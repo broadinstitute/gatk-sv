@@ -205,7 +205,7 @@ jobs:
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag --image-tag ${{ needs.build_args_job.outputs.images_tag }}
+          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args_job.outputs.images_tag }}
 
   publish_job:
     # This job first configures gcloud with the authentication of a
