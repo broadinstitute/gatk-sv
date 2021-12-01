@@ -1,4 +1,4 @@
-name: Build Docker Images
+name: Docker Images
 
 on:
   push:
@@ -19,14 +19,14 @@ on:
       - '.github/workflows/sv_pipeline_docker.yml'
 
 jobs:
-  test_build:
+  build_args_job:
     runs-on: ubuntu-20.04
-    name: Build GATK-SV Pipeline Docker Images
+    name: Determine Build Args
     env:
       GITHUB_CONTEXT: ${{ toJson(github) }}
-    strategy:
-      matrix:
-        python-version: ['3.8']
+    outputs:
+      target_images: ${{ steps.target_images.outputs.TARGETS }}
+      images_tag: ${{ steps.image_tag.outputs.IMAGE_TAG }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -37,16 +37,6 @@ jobs:
           # images to rebuild, we use the following to check out
           # the complete git history.
           fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install termcolor
 
       - name: Determine Commit SHAs
         id: commit_sha
@@ -189,7 +179,90 @@ jobs:
 
           # Set the output of this step so it can be accessed in other steps.
           echo "::set-output name=TARGETS::$TARGETS"
+
+  build_job:
+    runs-on: ubuntu-20.04
+    name: Test Images Build
+    if: github.event_name == 'pull_request'
+    needs: build_args_job
+    strategy:
+      matrix:
+        python-version: ['3.8']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install termcolor
+
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets ${{ steps.target_images.outputs.TARGETS }} --image-tag ${{ steps.image_tag.outputs.IMAGE_TAG }}
+          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag --image-tag ${{ needs.build_args_job.outputs.images_tag }}
+
+  publish_job:
+    # This job first configures gcloud with the authentication of a
+    # service account. It then uses gcloud to configure the docker
+    # credentials. Finally, it rebuilds the docker images (targets are
+    # determined by the `build_args_job`) and pushes them to GCR.
+    name: Publish
+    runs-on: ubuntu-20.04
+    environment: Deploy
+    if: github.event_name == 'push'
+    needs: build_args_job
+    strategy:
+      matrix:
+        python-version: ['3.8']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install termcolor
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_GCR_SA_KEY }}
+          # Exports the path to Default Application Credentials
+          # as the environment variable GOOGLE_APPLICATION_CREDENTIALS
+          # to be available in later steps. Google Cloud services
+          # automatically use this environment variable to find credentials.
+          # xref: https://github.com/google-github-actions/setup-gcloud#inputs
+          export_default_credentials: true
+
+      - name: Configure Docker using gcloud
+        # This step uses gcloud to configure docker credentials to access GCR
+        # using a service account.
+        # See: https://cloud.google.com/container-registry/docs/advanced-authentication
+        #
+        # The build_docker.py uses the `--squash` flag when building the
+        # images to be pushed to GCR. This flag is only available when
+        # experimental features are enabled, hence the features are enabled
+        # in this flag.
+        run: |
+          gcloud auth configure-docker
+          tmp=$(mktemp)
+          sudo jq '.+{experimental:true}' /etc/docker/daemon.json > "$tmp"
+          sudo mv "$tmp" /etc/docker/daemon.json
+          sudo systemctl restart docker.service
+
+      - name: Build and Publish Docker Images
+        run: |
+          cd ./scripts/docker/
+          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}
