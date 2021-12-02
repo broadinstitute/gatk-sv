@@ -308,7 +308,6 @@ task GetFreqTable {
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.allPops.txt.gz"
-    bgzip "~{prefix}.frequencies.txt"
   >>>
 
   output {
