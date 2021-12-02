@@ -466,6 +466,13 @@ Visualization methods include:
 * IGV Visualization - generate IGV plots of each SV for individual sample, ideal for visualizing de novo small SVs.
 * Module09.visualize.wdl - generate RD plots and IGV plots, and combine them for easy review.
 
+## CI/CD
+This repository is maintained following the norms of 
+continuous integration (CI) and continuous delivery (CD). 
+The GATK-SV CI/CD pipeline is developed on Github Actions,
+and the workflows are available under the `.github/workflows`
+directory. Please refer to the [workflow's README](.github/workflows/README.md) 
+for their current coverage and setup. 
 
 ## <a name="troubleshooting">Troubleshooting</a>
 
