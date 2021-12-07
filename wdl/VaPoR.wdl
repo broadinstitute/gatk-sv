@@ -37,7 +37,7 @@ workflow VaPoR{
         String vapor_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_Vapor 
+        RuntimeAttr? runtime_attr_vapor 
         RuntimeAttr? runtime_attr_bcf2vcf
         RuntimeAttr? runtime_attr_vcf2bed
         RuntimeAttr? runtime_attr_SplitVcf
@@ -58,7 +58,7 @@ workflow VaPoR{
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_Vapor    = runtime_attr_Vapor,
+                runtime_attr_vapor    = runtime_attr_vapor,
                 runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
                 runtime_attr_vcf2bed = runtime_attr_vcf2bed,
                 runtime_attr_SplitVcf = runtime_attr_SplitVcf,
@@ -80,7 +80,7 @@ workflow VaPoR{
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_Vapor    = runtime_attr_Vapor,
+                runtime_attr_vapor    = runtime_attr_vapor,
                 runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
                 runtime_attr_vcf2bed = runtime_attr_vcf2bed,
                 runtime_attr_SplitVcf = runtime_attr_SplitVcf,
@@ -88,10 +88,10 @@ workflow VaPoR{
         }
     }
     output{
-            File? vcf_out = VaPoR_vcf.bed
-            File? bed_out = VaPoR_bed.bed
-            File? vcf_plots = VaPoR_vcf.plots
-            File? bed_plots = VaPoR_bed.plots
+        File vcf_out = select_first([VaPoR_vcf.bed, VaPoR_bed.bed])
+        File bed_out = select_first([VaPoR_vcf.bed, VaPoR_bed.bed])
+        File vcf_plots = select_first([VaPoR_vcf.plots, VaPoR_bed.plots])
+        File bed_plots = select_first([VaPoR_vcf.plots, VaPoR_bed.plots])
     }
 }
 

@@ -34,7 +34,7 @@ workflow VaPoRVcf{
     String vapor_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_Vapor 
+    RuntimeAttr? runtime_attr_vapor 
     RuntimeAttr? runtime_attr_bcf2vcf
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_SplitVcf
@@ -72,7 +72,7 @@ workflow VaPoRVcf{
           ref_fai = ref_fai,
           ref_dict = ref_dict,
           vapor_docker = vapor_docker,
-          runtime_attr_override = runtime_attr_Vapor
+          runtime_attr_override = runtime_attr_vapor
       }
   }
 

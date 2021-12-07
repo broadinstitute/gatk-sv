@@ -122,18 +122,19 @@ task CatUncompressedFiles {
   }
 }
 
-  # Combine multiple VCFs
+# Combine multiple sorted VCFs
 task ConcatVcfs {
   input {
     Array[File] vcfs
+    Array[File]? vcfs_idx
+    Boolean merge_sort = false
     String? outfile_prefix
-    Boolean? index_output
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String outfile_name = outfile_prefix + ".vcf.gz"
-  Boolean call_tabix = select_first([index_output, true])
+  String merge_flag = if merge_sort then "--allow-overlaps" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -161,18 +162,13 @@ task ConcatVcfs {
   }
 
   command <<<
-    set -eu -o pipefail
-
-    vcf-concat -f ~{write_lines(vcfs)} \
-      | vcf-sort -c \
-      | bgzip -c \
-      > "~{outfile_name}"
-
-    if ~{call_tabix}; then
-      tabix -p vcf -f "~{outfile_name}"
-    else
-      touch "~{outfile_name}.tbi"
+    set -euo pipefail
+    VCFS="~{write_lines(vcfs)}"
+    if ~{!defined(vcfs_idx)}; then
+      cat ${VCFS} | xargs -n1 tabix
     fi
+    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    tabix -p vcf -f "~{outfile_name}"
   >>>
 
   output {
@@ -180,7 +176,6 @@ task ConcatVcfs {
     File concat_vcf_idx = outfile_name + ".tbi"
   }
 }
-
 
 # Merge shards after VCF stats collection
 task ConcatBeds {

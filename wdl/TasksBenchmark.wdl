@@ -167,13 +167,13 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    tabix -p vcf -f "~{outfile_name}"
+    bcftools concat -a ~{merge_flag} --output-type z --file-list ${VCFS} --output ~{outfile_name}
+    tabix -p vcf ~{outfile_name}
   >>>
 
   output {
-    File concat_vcf = outfile_name
-    File concat_vcf_idx = outfile_name + ".tbi"
+    File concat_vcf = "~{outfile_name}"
+    File concat_vcf_idx = "~{outfile_name}.tbi"
   }
   }
 
@@ -307,10 +307,13 @@ task ConcatVaPoR {
     fi
 
     mkdir ~{prefix}.plots
+    mkdir ~{prefix}.tmp_plots
+
     while read SPLIT; do
-      tar zxvf $SPLIT -C ~{prefix}.plots/
+      tar zxvf $SPLIT -C ~{prefix}.tmp_plots/
     done < ~{write_lines(shard_plots)}
 
+    mv ~{prefix}.tmp_plots/*/*  ~{prefix}.plots/
     tar -czf ~{prefix}.plots.tar.gz ~{prefix}.plots/
   >>>
 
@@ -661,7 +664,7 @@ task LocalizeCram{
 
   output{
     File local_bam = "~{contig}.bam"
-    #File local_bai = "~{contig}.bam.bai"
+    File local_bai = "~{contig}.bam.bai"
   }
 
   command <<<
@@ -694,8 +697,8 @@ task LocalizeCramRequestPay{
     File ref_fai
     File ref_dict
     String project_id
-    String bam_or_cram_file
-    String bam_or_cram_index
+    String? bam_or_cram_file
+    String? bam_or_cram_index
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
