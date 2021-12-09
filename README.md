@@ -26,6 +26,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [AnnotateVcf](#annotate-vcf) - Annotation
     * [Module 09](#module09) - QC and Visualization
     * Additional modules - Mosaic and de novo
+* [CI/CD](#cicd)
 * [Troubleshooting](#troubleshooting)
 
 
