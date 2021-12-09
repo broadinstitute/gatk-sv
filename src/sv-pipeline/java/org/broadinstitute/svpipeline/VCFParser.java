@@ -578,6 +578,12 @@ public class VCFParser implements Closeable {
             subFields = null;
         }
 
+        public CompoundField( final List<ByteSequence> vals, final char delim ) {
+            this.value = null;
+            this.delim = delim;
+            this.subFields = vals;
+        }
+
         public ByteSequence getValue() {
             if ( value == null ) {
                 value = new ByteSequence(subFields, delim);
@@ -785,6 +791,9 @@ public class VCFParser implements Closeable {
             }
             return position;
         }
+        public void setPosition( final int pos ) {
+            setPosition(new ByteSequence(Integer.toString(pos)));
+        }
         public void setPosition( final ByteSequence val ) {
             simpleFields.set(1, val);
             position = UNINITIALIZED;
@@ -813,6 +822,9 @@ public class VCFParser implements Closeable {
         public CompoundField getFilter() { return filters; }
         public void setFilter( final ByteSequence val ) {
             filters = new CompoundField(val, ';');
+        }
+        public void setFilter( final List<ByteSequence> vals ) {
+            filters = new CompoundField(vals, ';');
         }
 
         public InfoField getInfo() {

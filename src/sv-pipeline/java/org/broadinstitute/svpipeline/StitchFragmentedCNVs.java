@@ -13,25 +13,25 @@ import org.broadinstitute.svpipeline.VCFParser.*;
 public class StitchFragmentedCNVs {
     // These 3 values will always be overwritten, but are initialized to reasonable defaults as documentation
     private static double PAD_FACTOR = .2;
-    private static int MAX_PAD = 200000;
+    static int MAX_PAD = 200000; // visible for testing
     private static double MAX_OVERLAP_FACTOR = .2;
 
     // A new "end position" for the disposition map signalling that the record is to be removed because it was combined
     // with another record.
     private static final int ENDPOS_REMOVED_RECORD = -1;
 
-    // relevant INFO field keys and values
-    private static final ByteSequence END = new ByteSequence("END");
-    private static final ByteSequence SVLEN = new ByteSequence("SVLEN");
-    private static final ByteSequence SVTYPE = new ByteSequence("SVTYPE");
-    private static final ByteSequence SVTYPE_DEL = new ByteSequence("DEL");
-    private static final ByteSequence SVTYPE_DUP = new ByteSequence("DUP");
-    private static final ByteSequence MULTIALLELIC = new ByteSequence("MULTIALLELIC");
-    private static final ByteSequence EVIDENCE = new ByteSequence("EVIDENCE");
-    private static final ByteSequence EVIDENCE_RD = new ByteSequence("RD");
-    private static final ByteSequence EVIDENCE_SR = new ByteSequence("SR");
-    private static final ByteSequence EVIDENCE_PE = new ByteSequence("PE");
-    private static final ByteSequence EVIDENCE_BAF = new ByteSequence("BAF");
+    // relevant INFO field keys and values--these are visible for testing
+    static final ByteSequence END = new ByteSequence("END");
+    static final ByteSequence SVLEN = new ByteSequence("SVLEN");
+    static final ByteSequence SVTYPE = new ByteSequence("SVTYPE");
+    static final ByteSequence SVTYPE_DEL = new ByteSequence("DEL");
+    static final ByteSequence SVTYPE_DUP = new ByteSequence("DUP");
+    static final ByteSequence MULTIALLELIC = new ByteSequence("MULTIALLELIC");
+    static final ByteSequence EVIDENCE = new ByteSequence("EVIDENCE");
+    static final ByteSequence EVIDENCE_RD = new ByteSequence("RD");
+    static final ByteSequence EVIDENCE_SR = new ByteSequence("SR");
+    static final ByteSequence EVIDENCE_PE = new ByteSequence("PE");
+    static final ByteSequence EVIDENCE_BAF = new ByteSequence("BAF");
 
     public static void main( final String[] args ) {
         if ( args.length != 4 ) {
@@ -68,7 +68,7 @@ public class StitchFragmentedCNVs {
                     while ( previousIntervals.hasNext() ) {
                         final PaddedInterval previousInterval = previousIntervals.next();
                         final PaddedInterval revisedInterval;
-                        if ( previousInterval.tooFarUpstream(currentInterval) ) {
+                        if ( previousInterval.doneStitching(currentInterval) ) {
                             previousIntervals.remove();
                         } else if ( (revisedInterval = previousInterval.stitchTo(currentInterval)) != null ) {
                             previousIntervals.set(revisedInterval);
@@ -144,7 +144,8 @@ public class StitchFragmentedCNVs {
         }
     }
 
-    private static boolean isStitchable( final Record record ) {
+    // VisibleForTesting
+    static boolean isStitchable( final Record record ) {
         final CompoundField filterField = record.getFilter();
         for ( final ByteSequence filter : filterField ) {
             if ( MULTIALLELIC.equals(filter) ) {
@@ -175,7 +176,7 @@ public class StitchFragmentedCNVs {
 
     /** A little helper class to do padding and overlap calculations
      *  Note: this class uses half-open intervals, unlike a vcf */
-    private final static class PaddedInterval {
+    final static class PaddedInterval { // visible for testing
         private final Record record;
         private final int start;
         private final int end;
@@ -202,10 +203,18 @@ public class StitchFragmentedCNVs {
             this.eventType = upstream.eventType;
         }
 
+        public int getPaddedStart() { return start - padding; }
+        public int getPaddedEnd() { return end + padding; }
         public Record getRecord() { return record; }
 
-        public boolean tooFarUpstream( final PaddedInterval downstreamInterval ) {
-            return end + padding < downstreamInterval.start - MAX_PAD;
+        /** Returns true if we're done trying to stitch this interval.  Criterion is that the
+         * padded end of this interval more than MAX_PAD bases away from the start of the
+         * currentInterval.  So this one is definitely disjoint (regardless of its length), and that
+         * will also be true of all subsequent intervals (since they're in sorted order on the
+         * starting interval.
+         */
+        public boolean doneStitching( final PaddedInterval currentInterval ) {
+            return getPaddedEnd() < currentInterval.start - MAX_PAD;
         }
 
         /** Returns an expanded interval if possible, otherwise null. */
@@ -217,7 +226,7 @@ public class StitchFragmentedCNVs {
             // Check that the padded intervals overlap.
             // Only have to check one end, because we know the downstream interval starts as late
             // or later than this one.
-            if ( end + padding <= downstreamInterval.start - downstreamInterval.padding ) {
+            if ( getPaddedEnd() <= downstreamInterval.getPaddedStart() ) {
                 return null;
             }
 
