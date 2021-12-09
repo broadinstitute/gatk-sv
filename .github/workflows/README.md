@@ -71,7 +71,7 @@ by the `Publish` job and is intended for the edification of repository admins.
 
 An SA is used to authorize DIW to access GCR. (A future extension may 
 adopt an [OpenID Connect [OIDC]-based](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
-authentication and authorization.) In order to assume the SA, the `Publish`
+authentication and authorization). In order to assume the SA, the `Publish`
 job needs the SA secrets (e.g., `private key` and `client email`) and 
 `project name`. This information is defined in a [GitHub environment](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment),
 and is exposed to the `Publish` job as encrypted environment secrets.
