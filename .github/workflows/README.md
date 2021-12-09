@@ -30,7 +30,7 @@ and published to Google Cloud Platform (GCP) Container Registry
 
 ### Workflow Layout
 
-The _Docker Images workflow_ (DIW) consists of three [_jobs_](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobs):
+The DIW consists of three [_jobs_](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobs):
 1. `Determine Build Args`.
 This job determines the arguments to be used by the `build_docker.py` script,
 specifically:
