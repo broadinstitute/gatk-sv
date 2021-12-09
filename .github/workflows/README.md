@@ -22,7 +22,7 @@ the [`build_docker.py`](/scripts/docker/build_docker.py), which
 is documented at [this README](/scripts/docker/README.md) and can be
 executed locally.
 
-The [`Docker Images workflow`](sv_pipeline_docker.yml) automates the
+The [`Docker Images workflow`](sv_pipeline_docker.yml) (DIW) automates the
 test, build, and publication of GATK-SV Docker images using `build_docker.py`,
 such that, the images are built when a PR is issued against the repository,
 and published to Google Cloud Platform (GCP) Container Registry 
