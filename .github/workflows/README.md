@@ -145,7 +145,7 @@ message:
 
 > Waiting for review: Deploy needs approval to start deploying changes.
 
-The individuals listed in the `Required reviewers` section, see the following
+If enabled, any `Required reviewers` will see the following
 additional link that they can click to approve or reject running the 
 job.
 
