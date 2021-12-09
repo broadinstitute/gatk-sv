@@ -67,10 +67,7 @@ specifically:
 
 ### Setup the `Deploy` Environment
 _This section describes configuring the `Deploy` environment to be used
-by the `Publish` job; it is intended for the use of the maintainers the
-`broadinstitute/gatk-sv`, and the admins of those forks of the repository 
-who would like to publish GATK-SV Docker images to their own registry
-via the CI/CD pipeline._
+by the `Publish` job and is intended for the edification of repository admins.
 
 An SA is used to authorize DIW to access GCR. (A future extension may 
 adopt an [OpenID Connect [OIDC]-based](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
