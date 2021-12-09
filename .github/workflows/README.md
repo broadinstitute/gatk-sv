@@ -127,7 +127,6 @@ In order to set up the `Deploy` environment, you may take the following steps:
    environment's configuration page, you may check the `Required reviewers`
    checkbox and assign maintainers who can approve the execution of the 
    instances of the jobs that require access to the `Deploy` environment. 
-   This setting is enabled for `broadinstitute/gatk-sv`.
 
 
 ### Review pending deployments
