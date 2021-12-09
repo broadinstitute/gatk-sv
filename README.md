@@ -469,8 +469,8 @@ Visualization methods include:
 ## CI/CD
 This repository is maintained following the norms of 
 continuous integration (CI) and continuous delivery (CD). 
-The GATK-SV CI/CD pipeline is developed on Github Actions,
-and the workflows are available under the `.github/workflows`
+GATK-SV CI/CD is developed as a set of Github Actions
+workflows that are available under the `.github/workflows`
 directory. Please refer to the [workflow's README](.github/workflows/README.md) 
 for their current coverage and setup. 
 
