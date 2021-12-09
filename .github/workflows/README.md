@@ -32,7 +32,7 @@ and published to Google Cloud Platform (GCP) Container Registry
 
 The _Docker Images workflow_ (DIW) consists of three [_jobs_](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobs):
 1. `Determine Build Args`.
-This job determines the arguments to be used by the `build_docker.py` script;
+This job determines the arguments to be used by the `build_docker.py` script,
 specifically:
    - Given the size and the number of GATK-SV Docker images, DIW builds and 
      publishes only the Docker images affected by the changes introduced in 
