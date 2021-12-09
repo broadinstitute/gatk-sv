@@ -62,7 +62,7 @@ specifically:
   to GCR. To authorize access to GCR, this job assumes a GCP service 
   account (SA) with read and write access to the GCR registry. The secrets 
   related to the SA are defined as 
-  [encrypted environment secretes](docs.github.com/en/actions/security-guides/encrypted-secrets).
+  [encrypted environment secrets](docs.github.com/en/actions/security-guides/encrypted-secrets).
 
 
 ### Setup the `Deploy` Environment
