@@ -64,8 +64,6 @@ specifically:
   related to the SA are defined as 
   [encrypted environment secretes](docs.github.com/en/actions/security-guides/encrypted-secrets).
 
-    Note that ***under `broadinstitute/gatk-sv`, this job runs only 
-    after it is approved by one of the maintainers.***
 
 ### Setup the `Deploy` Environment
 _This section describes configuring the `Deploy` environment to be used
