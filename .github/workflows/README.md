@@ -109,7 +109,7 @@ In order to set up the `Deploy` environment, you may take the following steps:
    openssl base64 -in service-account.json -out service-account.txt
    ```
 
-5. Create an environment following [these steps](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#creating-an-environment);
+5. Create an environment following [these steps](https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#creating-an-environment)
    *and name the environment `Deploy`*. 
 
 
