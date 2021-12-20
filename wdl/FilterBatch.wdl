@@ -118,7 +118,6 @@ workflow FilterBatch {
     File batch_samples_postOutlierExclusion_file = FilterBatchSamples.filtered_batch_samples_file
     File cutoffs = FilterBatchSites.cutoffs
     File scores = FilterBatchSites.scores
-    File scores_num_diff_lines = FilterBatchSites.scores_num_diff_lines
     File RF_intermediate_files = FilterBatchSites.RF_intermediate_files
   }
 }

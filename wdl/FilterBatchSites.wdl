@@ -46,14 +46,6 @@ workflow FilterBatchSites {
       runtime_attr_override = runtime_attr_rewrite_scores
   }
 
-  call CheckScores {
-    input:
-      original_scores = original_scores,
-      updated_scores = RewriteScores.updated_scores,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_check_scores
-  }
-
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
       call FilterAnnotateVcf {
@@ -78,7 +70,6 @@ workflow FilterBatchSites {
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
-    File scores_num_diff_lines = CheckScores.num_diff_lines_scores
   }
 }
 
