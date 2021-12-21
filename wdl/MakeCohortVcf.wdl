@@ -328,7 +328,9 @@ workflow MakeCohortVcf {
       runtime_override_split_include_list=runtime_override_split_include_list,
       runtime_override_combine_clean_vcf_2=runtime_override_combine_clean_vcf_2,
       runtime_override_combine_revised_4=runtime_override_combine_revised_4,
-      runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4
+      runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
+      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf,
+      runtime_attr_subset_ped=runtime_attr_subset_ped
   }
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
