@@ -7,6 +7,7 @@ import "GenotypeDepthPart2.wdl" as gd2
 import "GenotypeBatchMetrics.wdl" as metrics
 import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
 import "Utils.wdl" as util
+import "MergeBatchSites.wdl" as merge
 
 workflow GenotypeBatch {
   input {
@@ -15,6 +16,11 @@ workflow GenotypeBatch {
     File cohort_pesr_vcf
     File cohort_depth_vcf
     String batch
+
+    File original_batch_depth_vcf
+    File original_batch_depth_vcf_index
+    File original_batch_pesr_vcf
+    File original_batch_pesr_vcf_index
 
     Int n_per_split
     File coveragefile        # batch coverage file
@@ -95,6 +101,9 @@ workflow GenotypeBatch {
     # Depth part 2
     RuntimeAttr? runtime_attr_integrate_depth_gq
     RuntimeAttr? runtime_attr_merge_regeno_cov_med
+
+    RuntimeAttr? runtime_attr_update_batch_depth_vcf
+    RuntimeAttr? runtime_attr_update_batch_pesr_vcf
 
   }
 
@@ -294,6 +303,28 @@ workflow GenotypeBatch {
     }
   }
 
+  call merge.UpdateChromosomeX as UpdateBatchDepthVcf {
+    input:
+      original_vcf = original_batch_depth_vcf,
+      original_vcf_index = original_batch_depth_vcf_index,
+      chrx_vcf = GenotypeDepthPart2.genotyped_vcf,
+      prefix = batch + ".chrX_rerun.full.genotyped.depth",
+      create_index = true,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_update_batch_depth_vcf
+  }
+
+  call merge.UpdateChromosomeX as UpdateBatchPesrVcf {
+    input:
+      original_vcf = original_batch_pesr_vcf,
+      original_vcf_index = original_batch_pesr_vcf_index,
+      chrx_vcf = GenotypePESRPart2.genotyped_vcf,
+      prefix = batch + ".chrX_rerun.full.genotyped.depth",
+      create_index = true,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_update_batch_pesr_vcf
+  }
+
   output {
     File sr_bothside_pass = GenotypePESRPart2.bothside_pass
     File sr_background_fail = GenotypePESRPart2.background_fail
@@ -311,6 +342,11 @@ workflow GenotypeBatch {
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
     File regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
+
+    File full_genotyped_depth_vcf = UpdateBatchDepthVcf.updated_vcf
+    File? full_genotyped_depth_vcf_index = UpdateBatchDepthVcf.updated_vcf_index
+    File full_genotyped_pesr_vcf = UpdateBatchPesrVcf.updated_vcf
+    File? full_genotyped_pesr_vcf_index = UpdateBatchPesrVcf.updated_vcf_index
 
     File? metrics_file_genotypebatch = GenotypeBatchMetrics.metrics_file
   }

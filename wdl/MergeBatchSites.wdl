@@ -74,11 +74,15 @@ workflow MergeBatchSites {
 task UpdateChromosomeX {
   input {
     File original_vcf
+    File? original_vcf_index
     File chrx_vcf
     String prefix
     String sv_pipeline_docker
+    Boolean? create_index
     RuntimeAttr? runtime_attr_override
   }
+
+  Boolean create_index_ = if (defined(create_index)) then create_index else false
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -92,11 +96,21 @@ task UpdateChromosomeX {
 
   output {
     File updated_vcf = "~{prefix}.vcf.gz"
+    File updated_vcf_index = "~{prefix}.vcf.gz.tbi"
   }
   command <<<
-    bcftools view -t ^chrX,chrY ~{original_vcf} > before.vcf
-    bcftools view -t chrY ~{original_vcf} > after.vcf
-    vcf-concat before.vcf ~{chrx_vcf} after.vcf | bgzip -c > "~{prefix}.vcf.gz"
+    set -euxo pipefail
+    if [ -z ~{original_vcf_index} ]; then
+      tabix -p vcf ~{original_vcf}
+    fi
+    bcftools view -r chr1,chr2,chr3,chr4,chr5,chr6,chr7,chr8,chr9,chr10,chr11,chr12,chr13,chr14,chr15,chr16,chr17,chr18,chr19,chr20,chr21,chr22 ~{original_vcf} | bgzip -c > before.vcf.gz
+    bcftools view -r chrY ~{original_vcf} | bgzip -c > after.vcf.gz
+    bcftools concat --naive before.vcf.gz ~{chrx_vcf} after.vcf.gz > "~{prefix}.vcf.gz"
+    if [ ~{create_index_} == "true" ]; then
+      tabix -p vcf ~{prefix}.vcf.gz
+    else
+      touch ~{prefix}.vcf.gz.tbi
+    fi
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -134,6 +148,7 @@ task SubsetVcfToContig {
     File subset_vcf = "~{vcf_basename}.~{contig}.vcf.gz"
   }
   command <<<
+    set -euo pipefail
     bcftools view -t ~{contig} ~{vcf} | bgzip -c > "~{vcf_basename}.~{contig}.vcf.gz"
     
   >>>
