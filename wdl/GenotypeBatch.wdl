@@ -21,6 +21,7 @@ workflow GenotypeBatch {
     File original_batch_depth_vcf_index
     File original_batch_pesr_vcf
     File original_batch_pesr_vcf_index
+    File original_regeno_coverage_medians
 
     Int n_per_split
     File coveragefile        # batch coverage file
@@ -104,6 +105,7 @@ workflow GenotypeBatch {
 
     RuntimeAttr? runtime_attr_update_batch_depth_vcf
     RuntimeAttr? runtime_attr_update_batch_pesr_vcf
+    RuntimeAttr? runtime_attr_update_regeno_cov_med
 
   }
 
@@ -314,15 +316,13 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_update_batch_depth_vcf
   }
 
-  call merge.UpdateChromosomeX as UpdateBatchPesrVcf {
+  call UpdateRegenoCoverageMedians {
     input:
-      original_vcf = original_batch_pesr_vcf,
-      original_vcf_index = original_batch_pesr_vcf_index,
-      chrx_vcf = GenotypePESRPart2.genotyped_vcf,
-      prefix = batch + ".chrX_rerun.full.genotyped.depth",
-      create_index = true,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_update_batch_pesr_vcf
+      original_regeno_coverage_medians = original_regeno_coverage_medians,
+      chrx_regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians,
+      batch = batch,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_update_regeno_cov_med
   }
 
   output {
@@ -341,14 +341,52 @@ workflow GenotypeBatch {
     File genotyped_depth_vcf_index = GenotypeDepthPart2.genotyped_vcf_index
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
-    File regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians
+    File regeno_coverage_medians = UpdateRegenoCoverageMedians.updated_regeno_coverage_medians
 
     File full_genotyped_depth_vcf = UpdateBatchDepthVcf.updated_vcf
-    File? full_genotyped_depth_vcf_index = UpdateBatchDepthVcf.updated_vcf_index
-    File full_genotyped_pesr_vcf = UpdateBatchPesrVcf.updated_vcf
-    File? full_genotyped_pesr_vcf_index = UpdateBatchPesrVcf.updated_vcf_index
-
+    File full_genotyped_depth_vcf_index = UpdateBatchDepthVcf.updated_vcf_index
+    
     File? metrics_file_genotypebatch = GenotypeBatchMetrics.metrics_file
+  }
+}
+
+
+task UpdateRegenoCoverageMedians {
+  input {
+    File original_regeno_coverage_medians
+    File chrx_regeno_coverage_medians
+    String batch
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: 30,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File updated_regeno_coverage_medians = "~{batch}.updated.regeno_coverage_medians.bed"
+  }
+  command <<<
+    set -euxo pipefail
+    grep -v ^chrX ~{original_regeno_coverage_medians} | grep -v ^chrY > before.bed
+    grep ^chrY ~{original_regeno_coverage_medians} > after.bed
+    cat before.bed ~{chrx_regeno_coverage_medians} after.bed > "~{batch}.updated.regeno_coverage_medians.bed"
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 

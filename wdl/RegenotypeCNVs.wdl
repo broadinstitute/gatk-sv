@@ -3,6 +3,7 @@ version 1.0
 import "Genotype_2.wdl" as g2
 import "CombineReassess.wdl" as creassess
 import "Utils.wdl" as util
+import "MergeBatchSites.wdl" as merge
 
 workflow RegenotypeCNVs {
   input {
@@ -28,6 +29,8 @@ workflow RegenotypeCNVs {
     Int regeno_allele_count_threshold = 3 # Rare variant filter for regenotyping candidates: must be < AF threshold (above) or <= AC threshold (this parameter)
     Int min_var_per_sample_outlier_threshold = 3 # Threshold below which regeno SV count per sample should not be considered an outlier (need when counts are sparse)
     Float regeno_sample_overlap = 0.7 # Minimum sample overlap required between raw and regenotyped calls
+
+    Array[File] original_batch_depth_vcfs
 
     RuntimeAttr? runtime_attr_cluster_merged_depth_beds
     RuntimeAttr? runtime_attr_regeno_raw_combined_depth
@@ -58,6 +61,20 @@ workflow RegenotypeCNVs {
     #CombineReassess
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list_creassess 
+
+    RuntimeAttr? runtime_attr_subset_to_chrx
+    RuntimeAttr? runtime_attr_update_chrx_batch_vcf
+  }
+
+  scatter (i in range(length(batches))) {
+    call merge.UpdateChromosomeX as UpdateBatchDepthVcfs {
+      input:
+        original_vcf = original_batch_depth_vcfs[i],
+        chrx_vcf = batch_depth_vcfs[i],
+        prefix = batches[i] + ".chrX_rerun_full_updated.filtered_depth",
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_update_chrx_batch_vcf
+    }
   }
 
   call ClusterMergedDepthBeds {
@@ -70,7 +87,7 @@ workflow RegenotypeCNVs {
   
   call MakeRawCombinedBed {
     input:
-      vcfs = batch_depth_vcfs,
+      vcfs = UpdateBatchDepthVcfs.updated_vcf,
       cohort = cohort,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_regeno_raw_combined_depth
@@ -180,7 +197,7 @@ workflow RegenotypeCNVs {
           depth_vcf=depth_vcfs[i],
           regeno_bed= MergeList.master_regeno,
           cohort_depth_vcf=cohort_depth_vcf,
-          batch_depth_vcf=batch_depth_vcfs[i],
+          batch_depth_vcf=UpdateBatchDepthVcfs.updated_vcf[i],
           coveragefile=coveragefiles[i],
           coveragefile_idx=coveragefile_idxs[i],
           medianfile=medianfiles[i],
@@ -231,10 +248,22 @@ workflow RegenotypeCNVs {
         }
       }
     }
+
+    scatter (i in range(length(depth_vcfs))) {
+      call merge.SubsetVcfToContig {
+        input:
+          vcf = if defined(ConcatRegenotypedVcfs.genotyped_vcf) then select_first([ConcatRegenotypedVcfs.genotyped_vcf])[i] else depth_vcfs[i],
+          contig = "chrX",
+          sv_pipeline_docker = sv_pipeline_docker,
+          create_index = true,
+          runtime_attr_override = runtime_attr_subset_to_chrx
+      }
+    }
+    
   }
   output {
-    Array[File] regenotyped_depth_vcfs = select_first([ConcatRegenotypedVcfs.genotyped_vcf, depth_vcfs])
-    Array[File] regenotyped_depth_vcf_indexes = select_first([ConcatRegenotypedVcfs.genotyped_vcf_idx, depth_vcf_indexes_])
+    Array[File] regenotyped_depth_vcfs = select_first([SubsetVcfToContig.subset_vcf, depth_vcfs])
+    Array[File] regenotyped_depth_vcf_indexes = select_first([SubsetVcfToContig.subset_vcf_index, depth_vcf_indexes_])
     File number_regenotyped_file = MergeList.num_regeno_file
     File number_regenotyped_filtered_file = select_first([CombineReassess.num_regeno_filtered_file, MergeList.num_regeno_file])
   }

@@ -129,10 +129,12 @@ task SubsetVcfToContig {
     File vcf
     String contig
     String sv_pipeline_docker
+    Boolean? create_index
     RuntimeAttr? runtime_attr_override
   }
 
   String vcf_basename = basename(vcf, ".vcf.gz")
+  Boolean create_index_ = if (defined(create_index)) then create_index else false
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -146,10 +148,16 @@ task SubsetVcfToContig {
 
   output {
     File subset_vcf = "~{vcf_basename}.~{contig}.vcf.gz"
+    File subset_vcf_index = "~{vcf_basename}.~{contig}.vcf.gz.tbi"
   }
   command <<<
     set -euo pipefail
     bcftools view -t ~{contig} ~{vcf} | bgzip -c > "~{vcf_basename}.~{contig}.vcf.gz"
+    if [ ~{create_index_} == "true" ]; then
+      tabix -p vcf ~{vcf_basename}.~{contig}.vcf.gz
+    else
+      touch ~{vcf_basename}.~{contig}.vcf.gz.tbi
+    fi
     
   >>>
   runtime {
