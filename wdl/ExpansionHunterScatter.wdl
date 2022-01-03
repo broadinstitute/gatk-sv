@@ -54,5 +54,6 @@ workflow ExpansionHunterScatter {
         Array[File] jsons = expanionHunter.json
         Array[File] vcfs = expanionHunter.vcf
         Array[File] overlapping_reads = expanionHunter.overlapping_reads
+        Array[File] timing = expanionHunter.timing
     }
 }
