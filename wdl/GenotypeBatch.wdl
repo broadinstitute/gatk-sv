@@ -104,7 +104,6 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_merge_regeno_cov_med
 
     RuntimeAttr? runtime_attr_update_batch_depth_vcf
-    RuntimeAttr? runtime_attr_update_batch_pesr_vcf
     RuntimeAttr? runtime_attr_update_regeno_cov_med
 
   }
