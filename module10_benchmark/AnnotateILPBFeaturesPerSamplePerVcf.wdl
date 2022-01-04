@@ -43,6 +43,7 @@ workflow AnnotateILPBFeaturesPerSamplePerVcf{
         File ref_fai
         File ref_dict
         File contig_list
+        Int min_shard_size
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -140,6 +141,7 @@ workflow AnnotateILPBFeaturesPerSamplePerVcf{
     call vapor.VaPoR as vapor{
         input:
             prefix = sample,
+            sample = sample,
             bam_or_cram_file = pacbio_seq,
             bam_or_cram_index = pacbio_index,
             vcf_file = split_per_sample_vcf.vcf_file,
@@ -147,6 +149,7 @@ workflow AnnotateILPBFeaturesPerSamplePerVcf{
             ref_fai = ref_fai,
             ref_dict = ref_dict,
             contigs = contigs,
+            min_shard_size = min_shard_size,
             vapor_docker = vapor_docker,
             sv_base_mini_docker = sv_base_mini_docker,
             sv_pipeline_docker = sv_pipeline_docker,
@@ -242,15 +245,16 @@ task IntegrateAnno{
             --raw_wham ~{raw_wham} \
             --raw_melt ~{raw_melt} \
             ~{"--gt " + gt_anno} \
-            ~{"--vs_pacbio" + vs_pacbio} \
-            ~{"--vs_bionano" + vs_bionano} \
-            ~{"--vs_array" + vs_array} \
+            ~{"--vs_pacbio " + vs_pacbio} \
+            ~{"--vs_bionano " + vs_bionano} \
+            ~{"--vs_array " + vs_array} \
             ~{"--gc_anno " + gc_anno} \
             ~{"--duphold_il " + duphold_il} \
             ~{"--duphold_il_le " + duphold_il_le} \
             ~{"--duphold_il_ri " + duphold_il_ri} \
             ~{"--rd_le " + rd_le_anno} \
             ~{"--rd_ri " + rd_ri_anno} \
+            ~{"--vapor " + vapor_info} \
             ~{"--denovo " + denovo}
 
         bgzip ~{prefix}.anno.bed

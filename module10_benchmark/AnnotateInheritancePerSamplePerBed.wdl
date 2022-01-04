@@ -64,7 +64,7 @@ workflow AnnotateInheritancePerSamplePerBed{
             runtime_attr_override = runtime_attr_split_vcf
     }
 
-    call InheritanceComparison as Inheritance_proband_vs_father {
+    call mini_tasks.InheritanceComparison as Inheritance_proband_vs_father {
         input:
             query_bed = split_father.bed_file,
             ref_bed = split_proband.bed_file,
@@ -72,7 +72,7 @@ workflow AnnotateInheritancePerSamplePerBed{
             sv_pipeline_docker=sv_pipeline_docker
     }
 
-    call InheritanceComparison as Inheritance_proband_vs_mother {
+    call mini_tasks.InheritanceComparison as Inheritance_proband_vs_mother {
         input:
             query_bed = split_mother.bed_file,
             ref_bed = split_proband.bed_file,
@@ -95,64 +95,6 @@ workflow AnnotateInheritancePerSamplePerBed{
 }
 
 
-task InheritanceComparison{
-    input{
-        File? query_bed
-        File? ref_bed
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File comparison = "~{prefix}.bed"
-    }
-
-    command <<<
-
-        #for SVs other than DEL, DUP, CNV, require exact match between query and ref:
-        zcat ~{ref_bed} | awk '{if ($5!="DEL" && $5!="DUP" && $5!="CNV" ) print}' > SVs_other_than_CNVs.bed
-        grep -wf <(zcat ~{query_bed} | cut -f4 ) SVs_other_than_CNVs.bed > SVs_other_than_CNVs.match.bed
-
-        #for CNVs under 5Kb, require exact match between query and ref:
-        zcat ~{ref_bed} | awk '{if ($5=="DEL" || $5=="DUP" || $5=="CNV" ) print}' | awk '{if ($3-$2<5000) print}' > CNVs_under_5Kb.bed
-        grep -wf <(zcat ~{query_bed} | cut -f4 ) CNVs_under_5Kb.bed > CNVs_under_5Kb.match.bed
-
-        #for CNVs under 5Kb, require over50% reciprocal overlap with matched SV type
-        zcat ~{ref_bed} | awk '{if ($5=="DEL" || $5=="DUP" || $5=="CNV" ) print}' | awk '{if (!$3-$2<5000) print}' > CNVs_over_5Kb.bed
-
-        bedtools intersect -r -f .5 -wo -a CNVs_over_5Kb -b ~{query_bed} | awk '{if ($5==$11) print}' > bedtools_comparison_over5Kb.RO05.bed
-        bedtools intersect -r -f .5 -wo -a CNVs_over_5Kb -b ~{query_bed} | awk '{if ($5=="CNV" && $11=="DEL") print}' >> bedtools_comparison_over5Kb.RO05.bed
-        bedtools intersect -r -f .5 -wo -a CNVs_over_5Kb -b ~{query_bed} | awk '{if ($5=="CNV" && $11=="DUP") print}' >> bedtools_comparison_over5Kb.RO05.bed
-        bedtools intersect -r -f .5 -wo -a CNVs_over_5Kb -b ~{query_bed} | awk '{if ($5=="DEL" && $11=="CNV") print}' >> bedtools_comparison_over5Kb.RO05.bed
-        bedtools intersect -r -f .5 -wo -a CNVs_over_5Kb -b ~{query_bed} | awk '{if ($5=="DUP" && $11=="CNV") print}' >> bedtools_comparison_over5Kb.RO05.bed
-
-        cat SVs_other_than_CNVs.match.bed CNVs_under_5Kb.match.bed bedtools_comparison_over5Kb.RO05.bed | cut -f1-5 > ~{prefix}.bed
-
-    >>>
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_pipeline_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
 task IntegrateInheritance{
     input{
         File proband_bed
@@ -165,9 +107,9 @@ task IntegrateInheritance{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
+        mem_gb: 7.5, 
+        disk_gb: 15,
+        boot_disk_gb: 15,
         preemptible_tries: 1,
         max_retries: 1
     }

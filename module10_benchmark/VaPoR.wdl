@@ -26,6 +26,7 @@ import "VaPoRVcf.wdl" as vapor_vcf
 workflow VaPoR{
     input{
         String prefix
+        String sample
         String bam_or_cram_file
         String bam_or_cram_index
         File? vcf_file
@@ -34,6 +35,7 @@ workflow VaPoR{
         File ref_fai
         File ref_dict
         Array[String] contigs
+        Int min_shard_size
         String vapor_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
@@ -48,6 +50,7 @@ workflow VaPoR{
         call vapor_vcf.VaPoRVcf as VaPoR_vcf{
             input:
                 prefix = prefix,
+                sample =  sample,
                 bam_or_cram_file = bam_or_cram_file,
                 bam_or_cram_index = bam_or_cram_index,
                 vcf_file = vcf_file,
@@ -55,6 +58,7 @@ workflow VaPoR{
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
                 contigs = contigs,
+                min_shard_size = min_shard_size,
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
@@ -70,6 +74,7 @@ workflow VaPoR{
         call vapor_bed.VaPoRBed as VaPoR_bed{
             input:
                 prefix = prefix,
+                sample = sample,
                 bam_or_cram_file = bam_or_cram_file,
                 bam_or_cram_index = bam_or_cram_index,
                 bed_file = bed_file,
@@ -77,6 +82,7 @@ workflow VaPoR{
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
                 contigs = contigs,
+                min_shard_size = min_shard_size,
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,

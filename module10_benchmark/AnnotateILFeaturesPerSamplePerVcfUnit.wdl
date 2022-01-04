@@ -123,7 +123,7 @@ workflow AnnoILFeaturesPerSample{
                 query = pacbio_query,
                 ref = Bed2QueryAndRef.ref,
                 prefix = "${sample}.vs.pacbio",
-                sv_pipeline_docker=sv_pipeline_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker
         }
     }
     
@@ -133,7 +133,7 @@ workflow AnnoILFeaturesPerSample{
                 query = bionano_query,
                 ref = Bed2QueryAndRef.ref,
                 prefix = "${sample}.vs.bionano",
-                sv_pipeline_docker=sv_pipeline_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker
         }
     }
 
@@ -143,7 +143,7 @@ workflow AnnoILFeaturesPerSample{
                 query = array_query,
                 ref = Bed2QueryAndRef.ref,
                 prefix = "${sample}.vs.array",
-                sv_pipeline_docker=sv_pipeline_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker
         }
     }
 
@@ -163,7 +163,7 @@ workflow AnnoILFeaturesPerSample{
     }
 
     if(run_extract_gt_gq){
-        call ExtracGTGQ{
+        call mini_tasks.ExtracGTGQ{
           input:
             prefix = sample,
             vcf_file = vcf_file,
@@ -195,7 +195,7 @@ workflow AnnoILFeaturesPerSample{
                 query = Bed2QueryAndRef_Raw.query,
                 ref = Bed2QueryAndRef.ref,
                 prefix = "${sample}.vs.${raw_algorithms[i]}",
-                sv_pipeline_docker=sv_pipeline_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker
         }
     }
 
@@ -279,7 +279,7 @@ workflow AnnoILFeaturesPerSample{
                     runtime_attr_override = runtime_attr_duphold
                 }
 
-            call Bcf2Vcf as Bcf2VcfIL{
+            call mini_tasks.Bcf2Vcf as Bcf2VcfIL{
                 input:
                     prefix = sample,
                     contig = contig,
@@ -288,7 +288,7 @@ workflow AnnoILFeaturesPerSample{
                     runtime_attr_override = runtime_attr_bcf2vcf
                 }
 
-            call Bcf2Vcf as Bcf2VcfIL_le_flank{
+            call mini_tasks.Bcf2Vcf as Bcf2VcfIL_le_flank{
                 input:
                     prefix = sample,
                     contig = contig,
@@ -297,7 +297,7 @@ workflow AnnoILFeaturesPerSample{
                     runtime_attr_override = runtime_attr_bcf2vcf
                 }
 
-            call Bcf2Vcf as Bcf2VcfIL_ri_flank{
+            call mini_tasks.Bcf2Vcf as Bcf2VcfIL_ri_flank{
                 input:
                     prefix = sample,
                     contig = contig,
@@ -423,178 +423,6 @@ task RunDupholdPerContig{
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
         docker: rdpesr_benchmark_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task vcf2bed{
-    input{
-        String prefix
-        File vcf
-        File? vcf_index
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 6,
-        disk_gb: 25,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-    String filename = basename(vcf, ".vcf.gz")
-
-    output {
-        File bed = "~{prefix}.bed"
-    }
-
-    command <<<
-
-        set -Eeuo pipefail
-        
-        gsutil cp ~{vcf} ./tmp.vcf.gz
-        tabix -p vcf ./tmp.vcf.gz
-        svtk vcf2bed -i SVTYPE -i SVLEN tmp.vcf.gz ~{prefix}.bed
-        
-    >>>
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_pipeline_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task Bed2QueryAndRef{
-    input{
-        File bed
-        String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 7.5, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File query = "${filebase}.query.gz"
-        File ref = "${filebase}.ref.gz"
-    }
-
-    String filebase=basename(bed,".bed")
-    command <<<
-        echo "#chroms tart end name SVTYPE SVLEN" | sed -e 's/ /\t/g' > ~{filebase}.query
-        echo "#chrom start end VID svtype length AF samples" | sed -e 's/ /\t/g' > ~{filebase}.ref
-
-        cut -f1-4,7,8 ~{bed} | grep -v "#" >> ~{filebase}.query
-        cut -f1-4,7,8 ~{bed} | sed -e "s/$/\t0\t~{filebase}/" | grep -v "#" >> ~{filebase}.ref
-
-        bgzip ~{filebase}.query
-        bgzip ~{filebase}.ref
-
-    >>>
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task BedComparison{
-    input{
-        File? query
-        File? ref
-        String prefix
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File comparison = "~{prefix}.bed"
-    }
-
-    command <<<
-        bash /opt/sv-pipeline/scripts/vcf_qc/compare_callsets_V2.sh \
-            -O ~{prefix}.bed -p ~{prefix} ~{query} ~{ref}
-    >>>
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_pipeline_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task Bcf2Vcf{
-    input{
-        String prefix
-        String contig
-        File bcf
-        String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File vcf = "~{prefix}.~{contig}.duphold.vcf.gz"
-    }
-
-    command <<<
-            set -Eeuo pipefail
-            bcftools view ~{bcf} | bgzip > ~{prefix}.~{contig}.duphold.vcf.gz
-    >>>
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -835,68 +663,6 @@ task RunGenomicContextAnnotation{
     }
 }
 
-task ExtracGTGQ{
-    input{
-        String prefix
-        File vcf_file
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 7.5, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-  
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File GQ_GT = "~{prefix}.SVID_gt.tsv"
-    }
-
-    command <<<
-        zcat ~{vcf_file} | grep -v '#' > ~{prefix}.SVID_gt
-
-        python <<CODE
-        import os
-        fin=open("~{prefix}.SVID_gt")
-        svid_gt={}
-        for line in fin:
-          pin=line.strip().split()
-          svid_gt[pin[2]]=[pin[9].split(':')[pin[8].split(':').index('GT')], 
-                          pin[9].split(':')[pin[8].split(':').index('GQ')], 
-                          pin[9].split(':')[pin[8].split(':').index('RD_CN')], 
-                          pin[9].split(':')[pin[8].split(':').index('RD_GQ')], 
-                          pin[9].split(':')[pin[8].split(':').index('PE_GT')], 
-                          pin[9].split(':')[pin[8].split(':').index('PE_GQ')], 
-                          pin[9].split(':')[pin[8].split(':').index('SR_GT')], 
-                          pin[9].split(':')[pin[8].split(':').index('SR_GQ')]]
-        fin.close()
-
-        fo=open("~{prefix}.SVID_gt.tsv", 'w')
-        print('\t'.join(['SVID','GT','GQ','RD_CN','RD_GQ','PE_GT','PE_GQ','SR_GT','SR_GQ']), file=fo)
-        for i in svid_gt.keys():
-          print('\t'.join([i]+svid_gt[i]), file=fo)
-        fo.close()
-        CODE
-
-    >>>
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_pipeline_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
 task ExtracAlgorithmEvidenceFilter{
   input{
     String prefix
@@ -985,6 +751,4 @@ task VaporValidation{
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
-
-
 }

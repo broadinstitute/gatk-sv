@@ -20,24 +20,41 @@
 version 1.0
 
 import "Structs.wdl"
+import "AnnotateILFeaturesPerSample.wdl" as anno_il
 import "TasksBenchmark.wdl" as mini_tasks
 import "VaPoR.wdl" as vapor
-import "AnnotateILPBFeaturesPerSamplePerVcf.wdl" as annotate_il_pb_featuers_per_sample_per_vcf
+import "AnnotateILPBFeaturesPerSampleBed.wdl" as annotate_il_pb_featuers_per_sample
 
-workflow AnnotateILPBFeaturesPerSample{
+workflow AnnotateILPBFeatures{
     input{
-        Array[File] cleanVcfs
+        Array[File] cleanBeds
         Array[String] prefixes
 
-        String sample
-        File raw_manta
-        File raw_wham
-        File raw_melt
-        File pacbio_seq
-        File pacbio_index
+        Array[String] samples
+        #Array[String?] il_bams
+        #Array[String?] il_bam_bais
+        
+        #Array[File?] pe_metrics
+        #Array[File?] pe_indexes
+        #Array[File?] sr_metrics
+        #Array[File?] sr_indexes
+        #Array[File?] rd_metrics
+        #Array[File?] rd_indexes
+        
+        #Array[File?] ref_SegDups
+        #Array[File?] ref_SimpReps
+        #Array[File?] ref_RepMasks
 
-        File pacbio_query
-        File bionano_query
+
+        Array[File] raw_mantas
+        Array[File] raw_whams
+        Array[File] raw_melts
+
+        Array[File] pacbio_seqs
+        Array[File] pacbio_indexes
+
+        Array[File] pacbio_queries
+        Array[File] bionano_queries
 
         File ref_fasta
         File ref_fai
@@ -73,29 +90,27 @@ workflow AnnotateILPBFeaturesPerSample{
         RuntimeAttr? runtime_attr_split_vcf
     }
 
-
-    scatter (i in range(length(cleanVcfs))){
-
-        call annotate_il_pb_featuers_per_sample_per_vcf.AnnotateILPBFeaturesPerSamplePerVcf as AnnotateILPBFeaturesPerSamplePerVcf{
+    scatter (i in range(length(samples))){
+        call annotate_il_pb_featuers_per_sample.AnnotateILPBFeaturesPerSampleBed as AnnotateILPBFeaturesPerSampleBed{
             input:
-                cleanVcf = cleanVcfs[i],
-                prefix = prefixes[i],
+                cleanBeds = cleanBeds,
+                prefixes = prefixes,
 
-                sample = sample,
-                raw_manta = raw_manta,
-                raw_wham = raw_wham,
-                raw_melt = raw_melt,
+                sample = samples[i],
+                raw_manta = raw_mantas[i],
+                raw_wham = raw_whams[i],
+                raw_melt = raw_melts[i],
 
-                pacbio_seq = pacbio_seq,
-                pacbio_index = pacbio_index,
+                pacbio_seq = pacbio_seqs[i],
+                pacbio_index = pacbio_indexes[i],
 
-                pacbio_query = pacbio_query,
-                bionano_query = bionano_query,
+                pacbio_query = pacbio_queries[i],
+                bionano_query = bionano_queries[i],
 
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
-                contig_list = contig_lists[i],
+                contig_lists = contig_lists,
                 min_shard_size = min_shard_size,
 
                 requester_pays_crams = requester_pays_crams,
@@ -124,29 +139,14 @@ workflow AnnotateILPBFeaturesPerSample{
                 runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
                 runtime_inte_anno = runtime_inte_anno,
                 runtime_attr_split_vcf = runtime_attr_split_vcf
+
         }
     }
-
-    call mini_tasks.ConcatBeds as concat_anno{
-        input:
-            shard_bed_files = AnnotateILPBFeaturesPerSamplePerVcf.integrated_file,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    call mini_tasks.ConcatVaPoR as concat_vapor{
-        input:
-            shard_plots = AnnotateILPBFeaturesPerSamplePerVcf.vapor_plots,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
     output{
-        File annotated_file = concat_anno.merged_bed_file
-        File vapor_plot = concat_vapor.merged_bed_plot
+        Array[File] annotated_files = AnnotateILPBFeaturesPerSampleBed.annotated_file
+        Array[File] vapor_plots = AnnotateILPBFeaturesPerSampleBed.vapor_plot
     }
 }
-
 
 task IntegrateAnno{
     input{

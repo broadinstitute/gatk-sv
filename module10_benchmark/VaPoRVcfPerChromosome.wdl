@@ -21,9 +21,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
-import "VaPoRVcfPerChromosome.wdl" as vapor_vcf_per_chromosome
-
-workflow VaPoRVcf{
+workflow VaPoRVcfPerChromosome{
   input{
     String prefix
     String sample
@@ -33,7 +31,7 @@ workflow VaPoRVcf{
     File ref_fasta
     File ref_fai
     File ref_dict
-    Array[String] contigs
+    String contig
     Int min_shard_size
     String vapor_docker
     String sv_base_mini_docker
@@ -45,47 +43,56 @@ workflow VaPoRVcf{
     RuntimeAttr? runtime_attr_ConcatBeds
   }
 
-  scatter ( contig in contigs ) {
-    call vapor_vcf_per_chromosome.VaPoRVcfPerChromosome as VaPoRVcfPerChromosome{
+  call mini_tasks.SplitVcf as SplitVcf{
+    input:
+      contig = contig,
+      vcf_file = vcf_file,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_SplitVcf
+  }
+
+  call mini_tasks.vcf2vapor as vcf2vapor{
+    input:
+      prefix = prefix,
+      sample = sample,
+      vcf = SplitVcf.contig_vcf,
+      vcf_index = SplitVcf.contig_vcf_index,
+      min_shard_size = min_shard_size,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_vcf2bed
+  }
+
+  scatter (contig_bed in vcf2vapor.vapor_beds){
+    call RunVaPoRWithCram as RunVaPoR{
       input:
         prefix = prefix,
-        sample = sample,
-        bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
-        vcf_file = vcf_file,
+        contig = contig,
+        bam_or_cram_file=bam_or_cram_file,
+        bam_or_cram_index=bam_or_cram_index,
+        bed = contig_bed,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
-        contig = contig,
-        min_shard_size = min_shard_size,
         vapor_docker = vapor_docker,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_vapor = runtime_attr_vapor,
-        runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
-        runtime_attr_vcf2bed = runtime_attr_vcf2bed,
-        runtime_attr_SplitVcf = runtime_attr_SplitVcf,
-        runtime_attr_ConcatBeds = runtime_attr_ConcatBeds
+        runtime_attr_override = runtime_attr_vapor
     }
   }
 
   call mini_tasks.ConcatVaPoR as concat_vapor{
     input:
-      shard_plots = VaPoRVcfPerChromosome.plots,
+      shard_plots = RunVaPoR.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
-      }
+  }
 
   call mini_tasks.ConcatBeds as concat_beds{
     input:
-      shard_bed_files=VaPoRVcfPerChromosome.bed,
+      shard_bed_files=RunVaPoR.vapor,
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
   }
-
-
 
   output{
       File bed = concat_beds.merged_bed_file
@@ -93,63 +100,6 @@ workflow VaPoRVcf{
     }
   }
 
-
-task RunVaPoR{
-  input{
-    String prefix
-    String contig
-    File bam_or_cram_file
-    File bam_or_cram_index
-    File bed
-    File ref_fasta
-    File ref_fai
-    File ref_dict
-    String vapor_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 5,
-    boot_disk_gb: 10,
-    preemptible_tries: 0,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File vapor = "~{prefix}.~{contig}.vapor.gz"
-    File vapor_plot = "~{prefix}.~{contig}.tar.gz"
-  }
-
-  command <<<
-
-    set -Eeuo pipefail
-
-    mkdir ~{prefix}.~{contig}
-  
-    vapor bed \
-    --sv-input ~{bed} \
-    --output-path ~{prefix}.~{contig} \
-    --output-file ~{prefix}.~{contig}.vapor \
-    --reference ~{ref_fasta} \
-    --pacbio-input ~{bam_or_cram_file}
-
-    tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
-    bgzip  ~{prefix}.~{contig}.vapor
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: vapor_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
 
 task RunVaPoRWithCram{
   input{
@@ -189,18 +139,23 @@ task RunVaPoRWithCram{
 
     #localize cram files
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`   
-    samtools view -h -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
+
+    start=$(head -1 ~{bed} | awk '{print $2-1000}')
+    end=$(tail -1 ~{bed} | awk '{print $3+1000}')
+
+    samtools view -h -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}:${start}-${end}
     samtools index ~{contig}.bam
   
     #run vapor
+
     mkdir ~{prefix}.~{contig}
 
     vapor bed \
-    --sv-input ~{bed} \
-    --output-path ~{prefix}.~{contig} \
-    --output-file ~{prefix}.~{contig}.vapor \
-    --reference ~{ref_fasta} \
-    --pacbio-input ~{contig}.bam
+      --sv-input ~{bed} \
+      --output-path ~{prefix}.~{contig} \
+      --output-file ~{prefix}.~{contig}.vapor \
+      --reference ~{ref_fasta} \
+      --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
     bgzip  ~{prefix}.~{contig}.vapor

@@ -20,14 +20,14 @@
 version 1.0
 
 import "Structs.wdl"
+import "AnnotateILFeaturesPerSamplePerBedUnit.wdl" as anno_il
 import "TasksBenchmark.wdl" as mini_tasks
 import "VaPoR.wdl" as vapor
-import "AnnotateILPBFeaturesPerSamplePerVcf.wdl" as annotate_il_pb_featuers_per_sample_per_vcf
 
-workflow AnnotateILPBFeaturesPerSample{
+workflow AnnotateILPBFeaturesPerSamplePerBed{
     input{
-        Array[File] cleanVcfs
-        Array[String] prefixes
+        File cleanBed
+        String prefix
 
         String sample
         File raw_manta
@@ -42,7 +42,7 @@ workflow AnnotateILPBFeaturesPerSample{
         File ref_fasta
         File ref_fai
         File ref_dict
-        Array[File] contig_lists
+        File contig_list
         Int min_shard_size
 
         Boolean requester_pays_crams = false
@@ -73,77 +73,102 @@ workflow AnnotateILPBFeaturesPerSample{
         RuntimeAttr? runtime_attr_split_vcf
     }
 
+    Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
-    scatter (i in range(length(cleanVcfs))){
-
-        call annotate_il_pb_featuers_per_sample_per_vcf.AnnotateILPBFeaturesPerSamplePerVcf as AnnotateILPBFeaturesPerSamplePerVcf{
-            input:
-                cleanVcf = cleanVcfs[i],
-                prefix = prefixes[i],
-
-                sample = sample,
-                raw_manta = raw_manta,
-                raw_wham = raw_wham,
-                raw_melt = raw_melt,
-
-                pacbio_seq = pacbio_seq,
-                pacbio_index = pacbio_index,
-
-                pacbio_query = pacbio_query,
-                bionano_query = bionano_query,
-
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                ref_dict = ref_dict,
-                contig_list = contig_lists[i],
-                min_shard_size = min_shard_size,
-
-                requester_pays_crams = requester_pays_crams,
-                run_genomic_context_anno = run_genomic_context_anno,
-                run_extract_algo_evi = run_extract_algo_evi,
-                run_duphold = run_duphold,
-                run_extract_gt_gq = run_extract_gt_gq,
-                run_versus_raw_vcf = run_versus_raw_vcf,
-                run_rdpesr_anno = run_rdpesr_anno,
-                run_vapor = run_vapor,
-
-                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-                vapor_docker = vapor_docker, 
-                duphold_docker = duphold_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_docker = sv_pipeline_docker,
-
-                runtime_attr_vapor = runtime_attr_vapor,
-                runtime_attr_duphold = runtime_attr_duphold, 
-                runtime_attr_rdpesr = runtime_attr_rdpesr,
-                runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
-                runtime_attr_LocalizeCram = runtime_attr_LocalizeCram,
-                runtime_attr_vcf2bed = runtime_attr_vcf2bed,
-                runtime_attr_SplitVcf = runtime_attr_SplitVcf,
-                runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
-                runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
-                runtime_inte_anno = runtime_inte_anno,
-                runtime_attr_split_vcf = runtime_attr_split_vcf
-        }
+    call mini_tasks.split_per_sample_bed as split_per_sample_bed{
+        input:
+            bed = cleanBed,
+            sample = sample,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_split_vcf
     }
 
-    call mini_tasks.ConcatBeds as concat_anno{
+    call anno_il.AnnoILFeaturesPerSample as anno_il_features{
         input:
-            shard_bed_files = AnnotateILPBFeaturesPerSamplePerVcf.integrated_file,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
+            sample = sample,
+            bed_file = split_per_sample_bed.bed_file,
+
+            ref_fasta = ref_fasta,
+            ref_fai = ref_fai,
+            ref_dict = ref_dict,
+            contig_list = contig_list,
+
+            raw_vcfs = [raw_manta,raw_wham,raw_melt],
+            raw_algorithms = ["manta","wham","melt"],
+
+            pacbio_query = pacbio_query,
+            bionano_query = bionano_query,
+
+            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+            duphold_docker = duphold_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
+            vapor_docker = vapor_docker,
+
+            requester_pays_crams = requester_pays_crams,
+            run_genomic_context_anno = run_genomic_context_anno,
+            run_extract_algo_evi = run_extract_algo_evi,
+            run_duphold = run_duphold,
+            run_extract_gt_gq = run_extract_gt_gq,
+            run_versus_raw_vcf = run_versus_raw_vcf,
+            run_rdpesr_anno = run_rdpesr_anno,
+
+            runtime_attr_duphold = runtime_attr_duphold,
+            runtime_attr_rdpesr = runtime_attr_rdpesr,
+            runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
+            runtime_attr_vapor = runtime_attr_vapor,
+            runtime_attr_LocalizeCram = runtime_attr_LocalizeCram,
+            runtime_attr_vcf2bed = runtime_attr_vcf2bed,
+            runtime_attr_SplitVcf = runtime_attr_SplitVcf,
+            runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
+            runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs
     }
 
-    call mini_tasks.ConcatVaPoR as concat_vapor{
+    call vapor.VaPoR as vapor{
         input:
-            shard_plots = AnnotateILPBFeaturesPerSamplePerVcf.vapor_plots,
             prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
+            sample = sample,
+            bam_or_cram_file = pacbio_seq,
+            bam_or_cram_index = pacbio_index,
+            bed_file = split_per_sample_bed.bed_file,
+            ref_fasta = ref_fasta,
+            ref_fai = ref_fai,
+            ref_dict = ref_dict,
+            contigs = contigs,
+            min_shard_size = min_shard_size,
+            vapor_docker = vapor_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_vapor = runtime_attr_vapor,
+            runtime_attr_vcf2bed = runtime_attr_vcf2bed,
+            runtime_attr_SplitVcf = runtime_attr_SplitVcf,
+            runtime_attr_ConcatBeds = runtime_attr_ConcatBeds
+    }
+
+    call IntegrateAnno{
+        input:
+            prefix = "~{sample}.~{prefix}",
+            sample = sample,
+            bed           = anno_il_features.bed,
+            gc_anno       = anno_il_features.GCAnno,
+            pesr_anno     = anno_il_features.PesrAnno,
+            rd_anno       = anno_il_features.RdAnno,
+            rd_le_anno    = anno_il_features.RdAnno_le,
+            rd_ri_anno    = anno_il_features.RdAnno_ri,
+            raw_manta     = anno_il_features.vs_raw[0],
+            raw_wham      = anno_il_features.vs_raw[1],
+            raw_melt      = anno_il_features.vs_raw[2],
+            vs_pacbio     = anno_il_features.vs_pacbio,
+            vs_bionano    = anno_il_features.vs_bionano,
+            vs_array      = anno_il_features.vs_array,
+            vapor_info    = vapor.vcf_out,
+            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+            runtime_attr_override = runtime_inte_anno
     }
 
     output{
-        File annotated_file = concat_anno.merged_bed_file
-        File vapor_plot = concat_vapor.merged_bed_plot
+        File integrated_file = IntegrateAnno.anno_file
+        File vapor_plots = vapor.vcf_plots
     }
 }
 
@@ -200,19 +225,19 @@ task IntegrateAnno{
             --raw_manta ~{raw_manta} \
             --raw_wham ~{raw_wham} \
             --raw_melt ~{raw_melt} \
-            ~{"--vs_pacbio" + vs_pacbio} \
-            ~{"--vs_bionano" + vs_bionano} \
-            ~{"--vs_array" + vs_array} \
+            ~{"--gt " + gt_anno} \
+            ~{"--vs_pacbio " + vs_pacbio} \
+            ~{"--vs_bionano " + vs_bionano} \
+            ~{"--vs_array " + vs_array} \
             ~{"--gc_anno " + gc_anno} \
             ~{"--duphold_il " + duphold_il} \
             ~{"--duphold_il_le " + duphold_il_le} \
             ~{"--duphold_il_ri " + duphold_il_ri} \
             ~{"--rd_le " + rd_le_anno} \
             ~{"--rd_ri " + rd_ri_anno} \
-            #~{"--rd " + sample}.rd_anno \
-            #~{"--pesr " + sample}.pesr_anno \
-            ~{"--denovo " + denovo} \
-            ~{"--gt " + gt_anno} 
+            ~{"--vapor " + vapor_info} \
+            ~{"--denovo " + denovo}
+
         bgzip ~{prefix}.anno.bed
     >>>
     runtime {

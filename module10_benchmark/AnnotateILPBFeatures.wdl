@@ -60,6 +60,7 @@ workflow AnnotateILPBFeatures{
         File ref_fai
         File ref_dict
         Array[File] contig_lists
+        Int min_shard_size
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -110,6 +111,7 @@ workflow AnnotateILPBFeatures{
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
                 contig_lists = contig_lists,
+                min_shard_size = min_shard_size,
 
                 requester_pays_crams = requester_pays_crams,
                 run_genomic_context_anno = run_genomic_context_anno,

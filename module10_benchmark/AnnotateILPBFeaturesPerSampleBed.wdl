@@ -22,11 +22,11 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
 import "VaPoR.wdl" as vapor
-import "AnnotateILPBFeaturesPerSamplePerVcf.wdl" as annotate_il_pb_featuers_per_sample_per_vcf
+import "AnnotateILPBFeaturesPerSamplePerBed.wdl" as annotate_il_pb_featuers_per_sample_per_bed
 
-workflow AnnotateILPBFeaturesPerSample{
+workflow AnnotateILPBFeaturesPerSampleBed{
     input{
-        Array[File] cleanVcfs
+        Array[File] cleanBeds
         Array[String] prefixes
 
         String sample
@@ -74,11 +74,11 @@ workflow AnnotateILPBFeaturesPerSample{
     }
 
 
-    scatter (i in range(length(cleanVcfs))){
+    scatter (i in range(length(cleanBeds))){
 
-        call annotate_il_pb_featuers_per_sample_per_vcf.AnnotateILPBFeaturesPerSamplePerVcf as AnnotateILPBFeaturesPerSamplePerVcf{
+        call annotate_il_pb_featuers_per_sample_per_bed.AnnotateILPBFeaturesPerSamplePerBed as AnnotateILPBFeaturesPerSamplePerBed{
             input:
-                cleanVcf = cleanVcfs[i],
+                cleanBed = cleanBeds[i],
                 prefix = prefixes[i],
 
                 sample = sample,
@@ -129,14 +129,14 @@ workflow AnnotateILPBFeaturesPerSample{
 
     call mini_tasks.ConcatBeds as concat_anno{
         input:
-            shard_bed_files = AnnotateILPBFeaturesPerSamplePerVcf.integrated_file,
+            shard_bed_files = AnnotateILPBFeaturesPerSamplePerBed.integrated_file,
             prefix = sample,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
     call mini_tasks.ConcatVaPoR as concat_vapor{
         input:
-            shard_plots = AnnotateILPBFeaturesPerSamplePerVcf.vapor_plots,
+            shard_plots = AnnotateILPBFeaturesPerSamplePerBed.vapor_plots,
             prefix = sample,
             sv_base_mini_docker = sv_base_mini_docker
     }
