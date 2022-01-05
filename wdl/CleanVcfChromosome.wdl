@@ -4,7 +4,6 @@ import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "CleanVcf1b.wdl" as c1b
 import "CleanVcf5.wdl" as c5
-import "DropRedundantCNVs.wdl" as drc
 import "HailMerge.wdl" as HailMerge
 
 workflow CleanVcfChromosome {
@@ -28,12 +27,13 @@ workflow CleanVcfChromosome {
     String chr_x
     String chr_y
 
-    File hail_script
-    String project
+    Boolean use_hail
+    String? gcs_project
 
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     String sv_pipeline_updates_docker
 
     # overrides for local tasks
@@ -74,6 +74,8 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
     RuntimeAttr? runtime_override_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_combine_step_1_vcfs
+    RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 
   }
 
@@ -104,16 +106,31 @@ workflow CleanVcfChromosome {
     }
   }
 
-  call HailMerge.HailMerge as CombineStep1Vcfs {
-    input:
-      vcfs=CleanVcf1a.intermediate_vcf,
-      prefix="~{prefix}.combine_step_1_vcfs",
-      hail_script=hail_script,
-      project=project,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_override_preconcat=runtime_override_preconcat_step1,
-      runtime_override_hail_merge=runtime_override_hail_merge_step1,
-      runtime_override_fix_header=runtime_override_fix_header_step1
+  if (use_hail) {
+    call HailMerge.HailMerge as CombineStep1VcfsHail {
+      input:
+        vcfs=CleanVcf1a.intermediate_vcf,
+        prefix="~{prefix}.combine_step_1_vcfs",
+        gcs_project=gcs_project,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+        runtime_override_preconcat=runtime_override_preconcat_step1,
+        runtime_override_hail_merge=runtime_override_hail_merge_step1,
+        runtime_override_fix_header=runtime_override_fix_header_step1
+    }
+  }
+  if (!use_hail) {
+    call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
+      input:
+        vcfs=CleanVcf1a.intermediate_vcf,
+        vcfs_idx=CleanVcf1a.intermediate_vcf_idx,
+        naive=true,
+        generate_index=false,
+        outfile_prefix="~{prefix}.combine_step_1_vcfs",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_combine_step_1_vcfs
+    }
   }
 
   call MiniTasks.CatUncompressedFiles as CombineStep1SexChrRevisions {
@@ -126,7 +143,7 @@ workflow CleanVcfChromosome {
 
   call c1b.CleanVcf1b {
     input:
-      intermediate_vcf=CombineStep1Vcfs.merged_vcf,
+      intermediate_vcf=select_first([CombineStep1Vcfs.concat_vcf, CombineStep1VcfsHail.merged_vcf]),
       prefix="~{prefix}.clean_vcf_1b",
       records_per_shard=clean_vcf1b_records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -235,21 +252,34 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_drop_redundant_cnvs
   }
 
-  call HailMerge.HailMerge as SortDropRedundantCnvs {
-    input:
-      vcfs=[DropRedundantCnvs.out],
-      prefix="~{prefix}.drop_redundant_cnvs.sorted",
-      hail_script=hail_script,
-      project=project,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_override_preconcat=runtime_override_preconcat_drc,
-      runtime_override_hail_merge=runtime_override_hail_merge_drc,
-      runtime_override_fix_header=runtime_override_fix_header_drc
+  if (use_hail) {
+    call HailMerge.HailMerge as SortDropRedundantCnvsHail {
+      input:
+        vcfs=[DropRedundantCnvs.out],
+        prefix="~{prefix}.drop_redundant_cnvs.sorted",
+        gcs_project=gcs_project,
+        reset_cnv_gts=true,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+        runtime_override_preconcat=runtime_override_preconcat_drc,
+        runtime_override_hail_merge=runtime_override_hail_merge_drc,
+        runtime_override_fix_header=runtime_override_fix_header_drc
+    }
+  }
+  if (!use_hail) {
+    call MiniTasks.SortVcf as SortDropRedundantCnvs {
+      input:
+        vcf=DropRedundantCnvs.out,
+        outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
+    }
   }
 
   call StitchFragmentedCnvs {
     input:
-      vcf=SortDropRedundantCnvs.merged_vcf,
+      vcf=select_first([SortDropRedundantCnvs.out, SortDropRedundantCnvsHail.merged_vcf]),
       prefix="~{prefix}.stitch_fragmented_cnvs",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
@@ -697,7 +727,6 @@ task FinalCleanup {
       --prefix ~{prefix} \
       ~{vcf} stdout \
       | fgrep -v "##INFO=<ID=HIGH_SR_BACKGROUND" \
-      | /opt/sv-pipeline/04_variant_resolution/scripts/sanitize_filter_field.py stdin stdout \
       | fgrep -v "##INFO=<ID=MEMBERS,Number=.,Type=String," \
       | bgzip -c \
       > ~{prefix}.vcf.gz

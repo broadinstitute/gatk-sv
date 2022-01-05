@@ -22,10 +22,11 @@ workflow ResolveComplexSv {
     Int precluster_distance
     Float precluster_overlap_frac
 
-    File hail_script
-    String project
+    Boolean use_hail
+    String? gcs_project
 
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for local tasks
@@ -35,7 +36,6 @@ workflow ResolveComplexSv {
     RuntimeAttr? runtime_override_resolve_prep
     RuntimeAttr? runtime_override_resolve_cpx_per_shard
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
-    RuntimeAttr? runtime_override_merge_resolve_inner
     RuntimeAttr? runtime_override_concat_resolved_per_shard
     RuntimeAttr? runtime_override_pull_vcf_shard
 
@@ -136,22 +136,36 @@ workflow ResolveComplexSv {
     }
 
     #Merge across shards
-    call HailMerge.HailMerge as ConcatResolvedPerShard {
-      input:
-        vcfs=RestoreUnresolvedCnv.res,
-        prefix="~{prefix}.resolved",
-        hail_script=hail_script,
-        project=project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_override_preconcat=runtime_override_preconcat,
-        runtime_override_hail_merge=runtime_override_hail_merge,
-        runtime_override_fix_header=runtime_override_fix_header
+    if (use_hail) {
+      call HailMerge.HailMerge as ConcatResolvedPerShardHail {
+        input:
+          vcfs=RestoreUnresolvedCnv.res,
+          prefix="~{prefix}.resolved",
+          gcs_project=gcs_project,
+          sv_base_mini_docker=sv_base_mini_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
+          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+          runtime_override_preconcat=runtime_override_preconcat,
+          runtime_override_hail_merge=runtime_override_hail_merge,
+          runtime_override_fix_header=runtime_override_fix_header
+      }
+    }
+    if (!use_hail) {
+      call MiniTasks.ConcatVcfs as ConcatResolvedPerShard {
+        input:
+          vcfs=RestoreUnresolvedCnv.res,
+          vcfs_idx=RestoreUnresolvedCnv.res_idx,
+          allow_overlaps=true,
+          outfile_prefix="~{prefix}.resolved",
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_attr_override=runtime_override_concat_resolved_per_shard
+      }
     }
   }
 
   output {
-    File resolved_vcf_merged = select_first([ConcatResolvedPerShard.merged_vcf, vcf])
-    File resolved_vcf_merged_idx = select_first([ConcatResolvedPerShard.merged_vcf_index, vcf_idx])
+    File resolved_vcf_merged = select_first([ConcatResolvedPerShard.concat_vcf, ConcatResolvedPerShardHail.merged_vcf, vcf])
+    File resolved_vcf_merged_idx = select_first([ConcatResolvedPerShard.concat_vcf_idx, ConcatResolvedPerShardHail.merged_vcf_index, vcf_idx])
   }
 }
 

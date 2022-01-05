@@ -28,10 +28,11 @@ workflow VcfClusterSingleChrom {
     File background_fail
     File empty_file
 
-    File hail_script
-    String project
+    Boolean use_hail
+    String? gcs_project
 
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for local tasks
@@ -132,9 +133,10 @@ workflow VcfClusterSingleChrom {
       sv_size=sv_size,
       sv_types=sv_types,
       empty_file=empty_file,
-      hail_script=hail_script,
-      project=project,
+      use_hail=use_hail,
+      gcs_project=gcs_project,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_override_subset_sv_type=runtime_override_subset_sv_type,
       runtime_override_shard_clusters=runtime_override_shard_clusters,

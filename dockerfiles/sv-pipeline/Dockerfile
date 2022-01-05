@@ -95,3 +95,4 @@ RUN cd /opt/sv-pipeline/java && \
     java -enableassertions -jar $CLEAN_VCF_PART_1_UNIT_TEST_JAR && \
     rm -r build/classes $CLEAN_VCF_PART_1_UNIT_TEST_JAR && \
     rm -rf /tmp/* /var/tmp/*
+

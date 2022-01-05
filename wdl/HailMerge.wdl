@@ -6,10 +6,12 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow HailMerge {
   input {
     Array[File] vcfs
-    File hail_script
     String prefix
-    String project
+    String? gcs_project  # REQUIRED
+    Boolean? reset_cnv_gts
     String sv_base_mini_docker
+    String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     RuntimeAttr? runtime_override_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
@@ -31,9 +33,9 @@ workflow HailMerge {
   call HailMerge {
     input:
       vcfs = [select_first([Preconcat.concat_vcf, vcfs[0]])],
-      hail_script = hail_script,
       prefix = prefix,
-      project = project,
+      gcs_project = select_first([gcs_project]),
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       runtime_attr_override=runtime_override_hail_merge
   }
 
@@ -42,7 +44,8 @@ workflow HailMerge {
       merged_vcf = HailMerge.merged_vcf,
       example_vcf = vcfs[0],
       prefix = prefix + ".reheadered",
-      sv_base_mini_docker = sv_base_mini_docker,
+      reset_cnv_gts = select_first([reset_cnv_gts, false]),
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override=runtime_override_fix_header
   }
 
@@ -56,9 +59,9 @@ task HailMerge {
   input {
     Array[File] vcfs
     String prefix
-    String project
-    File hail_script
+    String gcs_project
     String region = "us-central1"
+    String sv_pipeline_hail_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -85,7 +88,7 @@ task HailMerge {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: "us.gcr.io/broad-dsde-methods/cwhelan/sv-pipeline-hail:0.2.71"
+    docker: sv_pipeline_hail_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -101,18 +104,19 @@ import uuid
 from google.cloud import dataproc_v1 as dataproc
 
 cluster_name = "gatk-sv-hail-{}".format(uuid.uuid4())
+script_path = "/opt/sv-pipeline/scripts/hailmerge.py"
 
 try:
-  print(os.popen("hailctl dataproc start --num-workers 8 --region {} --project {} --num-master-local-ssds 1 --num-worker-local-ssds 1 --max-idle=60m --max-age=1440m {}".format("~{region}", "~{project}", cluster_name)).read())
+  print(os.popen("hailctl dataproc start --num-workers 4 --region {} --project {} --num-master-local-ssds 1 --num-worker-local-ssds 1 --max-idle=60m --max-age=1440m {}".format("~{region}", "~{gcs_project}", cluster_name)).read())
 
   cluster_client = dataproc.ClusterControllerClient(
         client_options={"api_endpoint": f"~{region}-dataproc.googleapis.com:443"}
   )
 
-  for cluster in cluster_client.list_clusters(request={"project_id": "~{project}", "region": "~{region}"}):
+  for cluster in cluster_client.list_clusters(request={"project_id": "~{gcs_project}", "region": "~{region}"}):
     if cluster.cluster_name == cluster_name:
       cluster_staging_bucket = cluster.config.temp_bucket
-      os.popen("gcloud dataproc jobs submit pyspark {} --cluster={} --project {} --files=files.list --region={} --driver-log-levels root=WARN -- {} {}".format("~{hail_script}", cluster_name, "~{project}", "~{region}", cluster_staging_bucket, cluster_name)).read()
+      os.popen("gcloud dataproc jobs submit pyspark {} --cluster={} --project {} --files=files.list --region={} --driver-log-levels root=WARN -- {} {}".format(script_path, cluster_name, "~{gcs_project}", "~{region}", cluster_staging_bucket, cluster_name)).read()
       os.popen("gsutil cp -r gs://{}/{}/merged.vcf.bgz .".format(cluster_staging_bucket, cluster_name)).read()
       break
 
@@ -120,7 +124,7 @@ except Exception as e:
   print(e)
   raise
 finally:
-  os.popen("gcloud dataproc clusters delete --project {} --region {} {}".format("~{project}", "~{region}", cluster_name)).read()
+  os.popen("gcloud dataproc clusters delete --project {} --region {} {}".format("~{gcs_project}", "~{region}", cluster_name)).read()
 CODE
 
   mv merged.vcf.bgz ~{prefix}.vcf.gz
@@ -138,7 +142,8 @@ task FixHeader {
     File merged_vcf
     File example_vcf
     String prefix
-    String sv_base_mini_docker
+    Boolean reset_cnv_gts
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -157,18 +162,20 @@ task FixHeader {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -euxo pipefail
 
-    # Insert source line
-    bcftools view --no-version -h ~{merged_vcf} | grep -v ^#CHROM | grep -v ^##source > header
-    bcftools view -h ~{example_vcf} | { grep ^##source || true; } >> header
-    bcftools view -h ~{merged_vcf} | grep ^#CHROM >> header
-    bcftools reheader -h header ~{merged_vcf} > ~{prefix}.vcf.gz
+    # Reset to original header
+    bcftools view --no-version -h ~{merged_vcf}  | grep -v ^#CHROM > header
+    bcftools view --no-version -h ~{example_vcf} | grep -e "^##source" -e "^##ALT" -e "^##CPX_TYPE" >> header
+    bcftools view --no-version -h ~{merged_vcf}  | grep ^#CHROM >> header
+    bcftools reheader -h header ~{merged_vcf} \
+      ~{if reset_cnv_gts then "| gunzip | python /opt/sv-pipeline/04_variant_resolution/scripts/reset_cnv_gts.py stdin stdout | bgzip" else ""} \
+      > ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 

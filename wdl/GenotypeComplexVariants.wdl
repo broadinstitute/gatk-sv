@@ -26,13 +26,14 @@ workflow GenotypeComplexVariants {
     File contig_list
     File ref_dict
 
-    File hail_script
-    String project
+    Boolean use_hail = false
+    String? gcs_project
 
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_updates_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
     String sv_pipeline_rdtest_docker
 
     # overrides for mini tasks
@@ -91,16 +92,17 @@ workflow GenotypeComplexVariants {
         n_per_split_small=2500,
         n_per_split_large=250,
         n_rd_test_bins=100000,
-        prefix=cohort_name,
+        prefix="~{cohort_name}.~{contig}",
         contig=contig,
         ped_files=SubsetPedFile.ped_subset_file,
         ref_dict=ref_dict,
-        hail_script=hail_script,
-        project=project,
+        use_hail=use_hail,
+        gcs_project=gcs_project,
         linux_docker=linux_docker,
         sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,

@@ -55,8 +55,8 @@ public class CleanVCFPart1 {
         final VCFParser parser = new VCFParser(args[0]);
         final ByteSequence xChrName = new ByteSequence(args[2]);
         final ByteSequence yChrName = new ByteSequence(args[3]);
-        final Set<ByteSequence> noisyEvents = readNoisyEventsFile(args[4]);
-        final Set<ByteSequence> bothsidesSupportEvents = readBothSidesFile(args[5]);
+        final Set<ByteSequence> noisyEvents = readLastColumn(args[4]);
+        final Set<ByteSequence> bothsidesSupportEvents = readLastColumn(args[5]);
         try ( final OutputStream os
                       = new BufferedOutputStream(new FileOutputStream(FileDescriptor.out));
               final OutputStream osSamples = new BufferedOutputStream(new FileOutputStream(args[6]));
@@ -271,35 +271,20 @@ public class CleanVCFPart1 {
         throw new IllegalStateException("we should never reach this statement");
     }
 
-    private static Set<ByteSequence> readNoisyEventsFile( final String filename ) {
-        final Set<ByteSequence> noisyEvents = new HashSet<>();
+    private static Set<ByteSequence> readLastColumn( final String filename ) {
+        final Set<ByteSequence> values = new HashSet<>();
         try {
             final BufferedReader neRdr =
                     new BufferedReader(new InputStreamReader(new FileInputStream(filename)));
             String line;
             while ( (line = neRdr.readLine()) != null ) {
-                noisyEvents.add(new ByteSequence(line));
-            }
-        } catch ( final IOException ioe ) {
-            throw new RuntimeException("can't read noisy events file " + filename);
-        }
-        return noisyEvents;
-    }
-
-    private static Set<ByteSequence> readBothSidesFile( final String filename ) {
-        final Set<ByteSequence> bothsidesEvents = new HashSet<>();
-        try {
-            final BufferedReader bsRdr =
-                    new BufferedReader(new InputStreamReader(new FileInputStream(filename)));
-            String line;
-            while ( (line = bsRdr.readLine()) != null ) {
                 final String lastCol = line.substring(line.lastIndexOf('\t') + 1);
-                bothsidesEvents.add(new ByteSequence(lastCol));
+                values.add(new ByteSequence(lastCol));
             }
         } catch ( final IOException ioe ) {
-            throw new RuntimeException("can't read bothsides support file " + filename);
+            throw new RuntimeException("can't read table file " + filename);
         }
-        return bothsidesEvents;
+        return values;
     }
 
     private static int[] readPedFile( final String pedFilename, List<ByteSequence> sampleNames ) {

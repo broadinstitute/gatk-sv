@@ -2,6 +2,8 @@
   "name" : "resources_hg38",
   "allosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
   "allosomal_contigs" : ["chrX", "chrY"],
+  "chr_x" : "chrX",
+  "chr_y" : "chrY",
   "asc_tarballs" : [
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.ALL.bed.gz",
     "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling/ASC_Werling.SV.EUR.bed.gz",

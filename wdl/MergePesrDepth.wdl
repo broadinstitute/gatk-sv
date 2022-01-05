@@ -18,10 +18,11 @@ workflow MergePesrDepth {
         String contig
         Float merging_shard_scale_factor = 30000000
 
-        File hail_script
-        String project
+        Boolean use_hail = false
+        String? gcs_project
 
         String sv_pipeline_docker
+        String sv_pipeline_hail_docker
         String sv_base_mini_docker
 
         # overrides for local tasks
@@ -35,6 +36,8 @@ workflow MergePesrDepth {
         RuntimeAttr? runtime_override_subset_small
         RuntimeAttr? runtime_override_subset_large
         RuntimeAttr? runtime_override_make_sites_only
+        RuntimeAttr? runtime_override_concat_large_pesr_depth
+        RuntimeAttr? runtime_override_concat_shards
 
         RuntimeAttr? runtime_override_preconcat_large_pesr_depth
         RuntimeAttr? runtime_override_hail_merge_large_pesr_depth
@@ -68,22 +71,36 @@ workflow MergePesrDepth {
             runtime_attr_override=runtime_override_subset_large
     }
 
-    call HailMerge.HailMerge as ConcatLargePesrDepth {
-        input:
-            vcfs=[SubsetLarge.filtered_vcf, subtyped_depth_vcf],
-            prefix="~{prefix}.large_pesr_depth",
-            hail_script=hail_script,
-            project=project,
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_override_preconcat=runtime_override_preconcat_large_pesr_depth,
-            runtime_override_hail_merge=runtime_override_hail_merge_large_pesr_depth,
-            runtime_override_fix_header=runtime_override_fix_header_large_pesr_depth
+    if (use_hail) {
+        call HailMerge.HailMerge as ConcatLargePesrDepthHail {
+            input:
+                vcfs=[SubsetLarge.filtered_vcf, subtyped_depth_vcf],
+                prefix="~{prefix}.large_pesr_depth",
+                gcs_project=gcs_project,
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
+                sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+                runtime_override_preconcat=runtime_override_preconcat_large_pesr_depth,
+                runtime_override_hail_merge=runtime_override_hail_merge_large_pesr_depth,
+                runtime_override_fix_header=runtime_override_fix_header_large_pesr_depth
+        }
+    }
+    if (!use_hail) {
+        call MiniTasks.ConcatVcfs as ConcatLargePesrDepth {
+            input:
+                vcfs=[SubsetLarge.filtered_vcf, subtyped_depth_vcf],
+                vcfs_idx=[SubsetLarge.filtered_vcf + ".tbi", subtyped_depth_vcf + ".tbi"],
+                allow_overlaps=true,
+                outfile_prefix="~{prefix}.large_pesr_depth",
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_override_concat_large_pesr_depth
+        }
     }
 
     call MiniTasks.MakeSitesOnlyVcf {
         input:
-            vcf=ConcatLargePesrDepth.merged_vcf,
-            vcf_index=ConcatLargePesrDepth.merged_vcf_index,
+            vcf=select_first([ConcatLargePesrDepth.concat_vcf, ConcatLargePesrDepthHail.merged_vcf]),
+            vcf_index=select_first([ConcatLargePesrDepth.concat_vcf_idx, ConcatLargePesrDepthHail.merged_vcf_index]),
             prefix="~{prefix}.large_pesr_depth.sites_only",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_override_make_sites_only
@@ -115,7 +132,7 @@ workflow MergePesrDepth {
     scatter (i in range(length(ShardVidsForClustering.out))) {
         call MiniTasks.PullVcfShard {
             input:
-                vcf=ConcatLargePesrDepth.merged_vcf,
+                vcf=select_first([ConcatLargePesrDepth.concat_vcf, ConcatLargePesrDepthHail.merged_vcf]),
                 vids=ShardVidsForClustering.out[i],
                 prefix="~{prefix}.unclustered.shard_${i}",
                 sv_base_mini_docker=sv_base_mini_docker,
@@ -139,21 +156,35 @@ workflow MergePesrDepth {
         }
     }
 
-    call HailMerge.HailMerge as ConcatShards {
-        input:
-            vcfs=flatten([[SubsetSmall.filtered_vcf], SortVcf.out]),
-            prefix="~{prefix}.concat_shards",
-            hail_script=hail_script,
-            project=project,
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_override_preconcat=runtime_override_preconcat_pesr_depth_shards,
-            runtime_override_hail_merge=runtime_override_hail_merge_pesr_depth_shards,
-            runtime_override_fix_header=runtime_override_fix_header_pesr_depth_shards
+    if (use_hail) {
+        call HailMerge.HailMerge as ConcatShardsHail {
+            input:
+                vcfs=flatten([[SubsetSmall.filtered_vcf], SortVcf.out]),
+                prefix="~{prefix}.concat_shards",
+                gcs_project=gcs_project,
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
+                sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+                runtime_override_preconcat=runtime_override_preconcat_pesr_depth_shards,
+                runtime_override_hail_merge=runtime_override_hail_merge_pesr_depth_shards,
+                runtime_override_fix_header=runtime_override_fix_header_pesr_depth_shards
+        }
+    }
+    if (!use_hail) {
+        call MiniTasks.ConcatVcfs as ConcatShards {
+            input:
+                vcfs=flatten([[SubsetSmall.filtered_vcf], SortVcf.out]),
+                vcfs_idx=flatten([[SubsetSmall.filtered_vcf_idx], SortVcf.out_index]),
+                allow_overlaps=true,
+                outfile_prefix="~{prefix}.concat_shards",
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_override_concat_shards
+        }
     }
 
     output {
-        File out = ConcatShards.merged_vcf
-        File out_index = ConcatShards.merged_vcf_index
+        File out = select_first([ConcatShards.concat_vcf, ConcatShardsHail.merged_vcf])
+        File out_index = select_first([ConcatShards.concat_vcf_idx, ConcatShardsHail.merged_vcf_index])
     }
 }
 
