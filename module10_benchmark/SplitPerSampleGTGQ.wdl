@@ -21,35 +21,36 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
+import "SplitPerSampleGTGQPerVcf.wdl" as split_per_sample_gtgq_per_vcf
 
 
 workflow SplitPerSampleGTGQ{
     input{
         Array[File] cleanVcfs
         Array[File] cleanVcfIdxes
+
+        Array[File] SampleLists
         Array[String] prefixes
 
-        Array[String] samples
-
-        String sv_pipeline_docker
+        String rdpesr_benchmark_docker
 
         RuntimeAttr? runtime_split_per_sample_gtgq
     }
 
     scatter(i in range(length(cleanVcfs))){
-        call mini_tasks.split_per_sample_gtgq{
+        call split_per_sample_gtgq_per_vcf.SplitPerSampleGTGQPerVcf as SplitPerSampleGTGQPerVcf{
             input:
-                clean_vcf = cleanVcfs[i],
-                clean_vcf_idx = cleanVcfIdxes[i],
-                samples = samples,
+                cleanVcf = cleanVcfs[i],
+                cleanVcfIdx = cleanVcfIdxes[i],
+                SampleLists = SampleLists,
                 prefix = prefixes[i],
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_split_per_sample_gtgq
+                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                runtime_split_per_sample_gtgq = runtime_split_per_sample_gtgq
         }
     }
 
     output{
-        Array[Array[File]] gtgq = split_per_sample_gtgq.gtgq_file
+        Array[Array[Array[File]]] gtgq = SplitPerSampleGTGQPerVcf.gtgq
     }
 }
 
