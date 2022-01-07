@@ -140,7 +140,7 @@ def main():
         description="For a given Docker image tag, this script checks "
                     "if any of the Docker images listed in the provided JSON "
                     "file (e.g., `dockers.json`) are pushed to the container "
-                    "registry (e.g., Google Container Registry ) with that "
+                    "registry (e.g., Google Container Registry) with that "
                     "tag.\n\n"
                     "If the given tag is different from the tag in the "
                     "provided JSON file, and an image with the given tag "
