@@ -54,7 +54,7 @@ def pprint_log(msg: str, status=Status.NO_MARK, line_break=True):
     print(msg, end="\n" if line_break else "", flush=True)
 
 
-def check_image_exist(image: str) -> (bool, str):
+def check_image_exist(image: str) -> (bool, Optional[str]):
     """
     Checks if a given image exists; implemented based on the
     following SO answer: https://stackoverflow.com/a/52077346/947889
