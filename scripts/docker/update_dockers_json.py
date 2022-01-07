@@ -195,7 +195,7 @@ def main():
         raise OSError(f"Unable to write to updated dockers folder {os.path.dirname(updated_dockers_json)}")
 
     updated_images = get_updated_images(images, args.image_tag)
-    with open(updated_dockers_json, "w+") as f:
+    with open(updated_dockers_json, "w") as f:
         json.dump(updated_images, f, indent=2)
 
 
