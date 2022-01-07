@@ -154,7 +154,7 @@ def main():
                     "Docker images using the `build_docker.py` script, "
                     "however, you're not sure which images are updated "
                     "(since `build_docker.py` may rebuild and push additional "
-                    "images to the specified images, e.g., its dependencies). "
+                    "images to the specified images, e.g. its dependencies). "
                     "This script is predominantly developed for the Github "
                     "actions, and is a temporary solution until the "
                     "`build_docker.py` is re-written to provide this "
