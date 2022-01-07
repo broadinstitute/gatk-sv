@@ -180,7 +180,8 @@ def main():
     args = parser.parse_args()
 
     # Checks if the file exists, if not, errors-out.
-    os.path.isfile(args.dockers_json)
+    if not os.path.isfile(args.dockers_json):
+        raise ValueError(f"dockers_json {args.dockers_json} is not a file")
 
     # Loads the JSON object from `args.dockers_json`.
     # Errors-out if an invalid JSON is provide.
