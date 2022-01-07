@@ -191,18 +191,8 @@ def main():
     updated_dockers_json = args.updated_dockers_json \
         if args.updated_dockers_json else args.dockers_json
 
-    # This ensures that the script can write to the path
-    # of the provided JSON file; hence can early break
-    # before running all the Docker assertions if it does
-    # not have write access to the output path.
-    path_parts = Path(updated_dockers_json).parts
-    tmp = Path(*path_parts[:-1], f"tmp_{path_parts[-1]}")
-    # or the following; however, pathlib.Path is more portable
-    # than os.path and is a newer alternative.
-    # tmp = os.path.join(os.path.dirname(updated_dockers_json), "tmp")
-    with open(tmp, "w+") as f:
-        json.dump({}, f)
-    os.remove(tmp)
+    if not os.access(os.path.dirname(updated_dockers_json), os.W_OK):
+        raise OSError(f"Unable to write to updated dockers folder {os.path.dirname(updated_dockers_json)}")
 
     updated_images = get_updated_images(images, args.image_tag)
     with open(updated_dockers_json, "w+") as f:
