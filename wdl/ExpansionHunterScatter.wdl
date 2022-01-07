@@ -41,16 +41,18 @@ workflow ExpansionHunterScatter {
         File reference_fasta_index_ = select_first([
             reference_fasta_index, reference_fasta + ".fai"])
 
-        String output_prefix =
-            if defined(sample_ids) then
-                select_first([sample_ids])[i]
-            else
-                if is_bam then
-                    basename(bam_or_cram_, ".bam")
-                else
-                    basename(bam_or_cram_, ".cram")
-
         scatter (j in range(length(SplitVariantCatalog.catalogs_json))) {
+            String output_prefix_ =
+                if defined(sample_ids) then
+                    select_first([sample_ids])[i]
+                else
+                    if is_bam then
+                        basename(bam_or_cram_, ".bam")
+                    else
+                        basename(bam_or_cram_, ".cram")
+
+            String output_prefix = output_prefix_ + "_catalog_shard_" + j
+
             File variant_catalog_split = SplitVariantCatalog.catalogs_json[j]
             call ExpansionHunter.ExpansionHunter as expanionHunter {
                 input:
