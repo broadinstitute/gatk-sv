@@ -21,11 +21,12 @@ import json
 import os
 from enum import Enum
 from subprocess import Popen, PIPE
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 
 COLOR_RED = "\033[91m"
 COLOR_GREEN = "\033[92m"
+COLOR_YELLOW = "\033[93m"
 COLOR_ENDC = "\033[0m"
 
 
@@ -34,6 +35,7 @@ class Status(Enum):
     NEUTRAL = 1
     SUCCESS = 2
     FAILED = 3
+    SKIPPED = 4
 
 
 def pprint_log(msg: str, status=Status.NO_MARK, line_break=True):
@@ -44,12 +46,19 @@ def pprint_log(msg: str, status=Status.NO_MARK, line_break=True):
             mark = "\N{black star}"
         elif status == Status.SUCCESS:
             mark = "\N{heavy check mark}"
+        elif status == status.SKIPPED:
+            mark = "\N{em dash}"
         else:
             mark = "\N{heavy ballot x}"
         msg = f"{mark}\t{msg}"
 
-    if status in [Status.SUCCESS, Status.FAILED]:
-        txt_color = COLOR_GREEN if status == status.SUCCESS else COLOR_RED
+    if status in [Status.SUCCESS, Status.FAILED, Status.SKIPPED]:
+        if status == status.SUCCESS:
+            txt_color = COLOR_GREEN
+        elif status == status.FAILED:
+            txt_color = COLOR_RED
+        else:
+            txt_color = COLOR_YELLOW
         msg = f"{txt_color}{msg}{COLOR_ENDC}"
     print(msg, end="\n" if line_break else "", flush=True)
 
@@ -75,7 +84,9 @@ def check_image_exist(image: str) -> (bool, Optional[str]):
         return False, error
 
 
-def get_updated_images(images: Dict[str, str], tag: str) -> Dict[str, str]:
+def get_updated_images(
+        images: Dict[str, str], tag: str,
+        exclude_images: List[str]) -> Dict[str, str]:
     # not modifying the original in case any
     # ref to the original comes in handy.
     updated_images = copy.deepcopy(images)
@@ -103,6 +114,9 @@ def get_updated_images(images: Dict[str, str], tag: str) -> Dict[str, str]:
     pprint_log("There was an error querying the image "
                "from the image registry.\n",
                status=Status.FAILED, line_break=True)
+    pprint_log("The image is skipped as specified by the "
+               "`--exclude-images` argument.\n",
+               status=Status.SKIPPED, line_break=True)
 
     for name, image in updated_images.items():
         if name == "name":
@@ -110,6 +124,11 @@ def get_updated_images(images: Dict[str, str], tag: str) -> Dict[str, str]:
 
         c += 1
         pprint_log(f"[{c}/{keys_count}]\t", Status.NO_MARK, line_break=False)
+
+        if name in exclude_images:
+            pprint_log(name, Status.SKIPPED)
+            continue
+
         image_base = image.split(":")[0]
         expected_image = f"{image_base}:{tag}"
         if expected_image == image:
@@ -166,7 +185,7 @@ def parse_arguments():
                     "actions, and is a temporary solution until the "
                     "`build_docker.py` is re-written to provide this "
                     "functionality.",
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
         "image_tag",
@@ -175,16 +194,24 @@ def parse_arguments():
     parser.add_argument(
         "-i", "--input-json",
         default="../../input_values/dockers.json",
-        help="[Optional] A JSON file containing Docker images to check; "
-             "defaults to `/inputs_values/dockers.json`.")
+        help="A JSON file containing Docker images to check.")
 
     parser.add_argument(
         "-o", "--output-json",
-        help="[Optional] A JSON file to persist a list of the "
-             "updated Docker images. Defaults to the input "
-             "`--input-json`. Note that if the given file exists, "
-             "this script will replace it."
+        help="A JSON file to persist a list of the updated Docker images. "
+             "Defaults to the input `--input-json`. Note that if the given "
+             "file exists, this script will replace it."
     )
+
+    parser.add_argument(
+        "-e", "--exclude-images",
+        required=False,
+        nargs='+',
+        default=["gatk_docker", "gatk_docker_pesr_override",
+                 "genomes_in_the_cloud_docker", "linux_docker",
+                 "cloud_sdk_docker"],
+        help="Sets a list of docker images to be ignored. Defaults to the "
+             "list of docker images not currently built by `build_docker.py`.")
 
     return parser.parse_args()
 
@@ -205,9 +232,11 @@ def main():
         if args.output_json else args.input_json
 
     if not os.access(os.path.dirname(ouput_json), os.W_OK):
-        raise OSError(f"Unable to write to updated dockers folder {os.path.dirname(ouput_json)}")
+        raise OSError(f"Unable to write to updated dockers folder "
+                      f"{os.path.dirname(ouput_json)}")
 
-    updated_images = get_updated_images(images, args.image_tag)
+    updated_images = get_updated_images(
+        images, args.image_tag, args.exclude_images)
     with open(ouput_json, "w") as f:
         json.dump(updated_images, f, indent=2)
 
