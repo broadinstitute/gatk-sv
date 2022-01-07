@@ -139,7 +139,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="For a given Docker image tag, this script checks "
                     "if any of the Docker images listed in the provided JSON "
-                    "file (e.g., `dockers.json`) are pushed to the container "
+                    "file (e.g., `input_values/dockers.json`) are pushed to the container "
                     "registry (e.g., Google Container Registry) with that "
                     "tag.\n\n"
                     "If the given tag is different from the tag in the "
