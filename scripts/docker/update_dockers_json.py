@@ -75,7 +75,7 @@ def check_image_exist(image: str) -> (bool, str):
         return False, error
 
 
-def get_updated_images(images: dict, tag: str) -> dict:
+def get_updated_images(images: Dict[str, str], tag: str) -> Dict[str, str]:
     # not modifying the original in case any
     # ref to the original comes in handy.
     updated_images = copy.deepcopy(images)
