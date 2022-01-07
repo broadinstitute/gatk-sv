@@ -172,8 +172,8 @@ def main():
     parser.add_argument(
         "-u", "--updated_dockers_json",
         help="[Optional] A JSON file to persist a list of the "
-             "updated Docker images. Defaults to a filename as the "
-             "input `dockers_json`. Note that if the given file exists, "
+             "updated Docker images. Defaults to the input "
+             "`dockers_json`. Note that if the given file exists, "
              "this script will replace it."
     )
 
