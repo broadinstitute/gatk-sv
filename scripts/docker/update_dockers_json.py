@@ -135,13 +135,13 @@ def get_updated_images(images: Dict[str, str], tag: str) -> Dict[str, str]:
     return updated_images
 
 
-def main():
+def parse_arguments():
     parser = argparse.ArgumentParser(
         description="For a given Docker image tag, this script checks "
                     "if any of the Docker images listed in the provided JSON "
-                    "file (e.g., `input_values/dockers.json`) are pushed to the container "
-                    "registry (e.g., Google Container Registry) with that "
-                    "tag.\n\n"
+                    "file (e.g., `input_values/dockers.json`) are pushed to "
+                    "the container registry (e.g., Google Container "
+                    "Registry) with that tag.\n\n"
                     "If the given tag is different from the tag in the "
                     "provided JSON file, and an image with the given tag "
                     "exists in the registry, the script updates the "
@@ -162,40 +162,46 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter)
 
     parser.add_argument(
-        "dockers_json",
-        help="A JSON file containing Docker images to check. ")
-
-    parser.add_argument(
         "image_tag",
         help="Docker image tag.")
 
     parser.add_argument(
-        "-u", "--updated_dockers_json",
+        "-i", "--input-json",
+        default="../../input_values/dockers.json",
+        help="[Optional] A JSON file containing Docker images to check; "
+             "defaults to `/inputs_values/dockers.json`.")
+
+    parser.add_argument(
+        "-o", "--output-json",
         help="[Optional] A JSON file to persist a list of the "
              "updated Docker images. Defaults to the input "
-             "`dockers_json`. Note that if the given file exists, "
+             "`--input-json`. Note that if the given file exists, "
              "this script will replace it."
     )
 
-    args = parser.parse_args()
+    return parser.parse_args()
+
+
+def main():
+    args = parse_arguments()
 
     # Checks if the file exists, if not, errors-out.
-    if not os.path.isfile(args.dockers_json):
-        raise ValueError(f"dockers_json {args.dockers_json} is not a file")
+    if not os.path.isfile(args.input_json):
+        raise ValueError(f"dockers_json {args.input_json} is not a file")
 
     # Loads the JSON object from `args.dockers_json`.
     # Errors-out if an invalid JSON is provide.
-    with open(args.dockers_json, "r") as f:
+    with open(args.input_json, "r") as f:
         images = json.load(f)
 
-    updated_dockers_json = args.updated_dockers_json \
-        if args.updated_dockers_json else args.dockers_json
+    ouput_json = args.output_json \
+        if args.output_json else args.input_json
 
-    if not os.access(os.path.dirname(updated_dockers_json), os.W_OK):
-        raise OSError(f"Unable to write to updated dockers folder {os.path.dirname(updated_dockers_json)}")
+    if not os.access(os.path.dirname(ouput_json), os.W_OK):
+        raise OSError(f"Unable to write to updated dockers folder {os.path.dirname(ouput_json)}")
 
     updated_images = get_updated_images(images, args.image_tag)
-    with open(updated_dockers_json, "w") as f:
+    with open(ouput_json, "w") as f:
         json.dump(updated_images, f, indent=2)
 
 
