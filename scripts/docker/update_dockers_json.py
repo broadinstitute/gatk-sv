@@ -21,7 +21,7 @@ import json
 import os
 from enum import Enum
 from subprocess import Popen, PIPE
-from typing import Dict
+from typing import Dict, Optional
 
 
 COLOR_RED = "\033[91m"
