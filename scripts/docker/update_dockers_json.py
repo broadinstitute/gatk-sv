@@ -86,7 +86,7 @@ def check_image_exist(image: str) -> (bool, Optional[str]):
 
 
 def get_updated_images(
-        images: Dict[str, str], tag: str,
+        images: Dict[str, str], tag: str, repo: str,
         exclude_images: List[str]) -> Dict[str, str]:
     # not modifying the original in case any
     # ref to the original comes in handy.
@@ -136,22 +136,31 @@ def get_updated_images(
             pprint_log(name, Status.NEUTRAL)
             continue
 
-        exists, error = check_image_exist(expected_image)
-        if exists:
+        def update_existing_image():
             updated_images[name] = expected_image
             pprint_log(name, Status.SUCCESS)
+
+        exists, error = check_image_exist(expected_image)
+        if exists:
+            update_existing_image()
         else:
-            # There might be authentication issues checking if the image
-            # exist; hence checking for the original image's existence;
-            # if this fails too, then there are issues unrelated to the
-            # given tag, else we can assume an image with the given tag
-            # does not exist (in other words, the image is not updated).
-            e, _ = check_image_exist(image)
-            if not e:
-                pprint_log(f"{name}\t{error}", Status.FAILED)
+            image_name = image_base.split("/")[-1]
+            expected_image = f"{repo}/{image_name}:{tag}"
+            exists, error = check_image_exist(expected_image)
+            if exists:
+                update_existing_image()
             else:
-                pprint_log(name, Status.NEUTRAL)
-                continue
+                # There might be authentication issues checking if the image
+                # exist; hence checking for the original image's existence;
+                # if this fails too, then there are issues unrelated to the
+                # given tag, else we can assume an image with the given tag
+                # does not exist (in other words, the image is not updated).
+                e, _ = check_image_exist(image)
+                if not e:
+                    pprint_log(f"{name}\t{error}", Status.FAILED)
+                else:
+                    pprint_log(name, Status.NEUTRAL)
+                    continue
     return updated_images
 
 
@@ -191,6 +200,13 @@ def parse_arguments():
     parser.add_argument(
         "image_tag",
         help="Docker image tag.")
+
+    parser.add_argument(
+        "repo",
+        help="Sets the repository expected to contain "
+             "the images with the given tag. The repository should be fully "
+             "quantifying; e.g., `us.gcr.io/broad-dsde-methods/gatk-sv`."
+    )
 
     parser.add_argument(
         "-i", "--input-json",
@@ -238,7 +254,7 @@ def main():
                       f"{os.path.dirname(ouput_json)}")
 
     updated_images = get_updated_images(
-        images, args.image_tag, args.exclude_images)
+        images, args.image_tag, args.repo.strip("/"), args.exclude_images)
     with open(ouput_json, "w") as f:
         json.dump(updated_images, f, indent=2)
 
