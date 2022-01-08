@@ -20,6 +20,7 @@ import copy
 import json
 import os
 from enum import Enum
+from os.path import dirname, abspath, join
 from subprocess import Popen, PIPE
 from typing import Dict, Optional, List
 
@@ -193,7 +194,8 @@ def parse_arguments():
 
     parser.add_argument(
         "-i", "--input-json",
-        default="../../input_values/dockers.json",
+        default=join(dirname(dirname(dirname(abspath(__file__)))),
+                     "input_values/dockers.json"),
         help="A JSON file containing Docker images to check.")
 
     parser.add_argument(
