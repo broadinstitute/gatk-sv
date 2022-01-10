@@ -202,7 +202,7 @@ def parse_arguments():
         help="Docker image tag.")
 
     parser.add_argument(
-        "repo",
+        "docker_repo",
         help="Sets the repository expected to contain "
              "the images with the given tag. The repository should be fully "
              "quantifying; e.g., `us.gcr.io/broad-dsde-methods/gatk-sv`."
@@ -254,7 +254,8 @@ def main():
                       f"{os.path.dirname(ouput_json)}")
 
     updated_images = get_updated_images(
-        images, args.image_tag, args.repo.strip("/"), args.exclude_images)
+        images, args.image_tag, args.docker_repo.strip("/"),
+        args.exclude_images)
     with open(ouput_json, "w") as f:
         json.dump(updated_images, f, indent=2)
 
