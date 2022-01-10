@@ -21,7 +21,7 @@ workflow ExpansionHunter {
         File? reference_fasta_index
         File variant_catalog
         String? individual_id
-        File? ped_filename
+        File? ped_file
         File? output_prefix
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr
