@@ -27,6 +27,11 @@ workflow ExpansionHunter {
         RuntimeAttr? runtime_attr
     }
 
+    parameter_meta {
+        ped_file: "This file is used to extract the sex of the bam_or_cram file. If provided, sample_id also needs to be provided."
+        sample_id: "If provided, ped_file needs to be provided as well. The ID must match the sample ID given in the second column (`Individual ID` column) of the given PED file. This ID will also be used for as output prefix."
+    }
+
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
     File bam_or_cram_index_ =
         if defined(bam_or_cram_index) then

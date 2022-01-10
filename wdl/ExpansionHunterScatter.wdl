@@ -17,6 +17,11 @@ workflow ExpansionHunterScatter {
         RuntimeAttr? runtime_attr
     }
 
+    parameter_meta {
+        ped_file: "This file is used to extract the sex of the BAM/CRAM files."
+        sample_ids: "One ID per sample, in the same order as the files in bams_or_crams. These IDs must match the ID given in the second column (`Individual ID` column) of the given PED file. These IDs will also be used for as output prefix."
+    }
+
     scatter (i in range(length(bams_or_crams))) {
         File bam_or_cram_ = bams_or_crams[i]
         Boolean is_bam =
