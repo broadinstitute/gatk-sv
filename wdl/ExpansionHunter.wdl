@@ -20,7 +20,7 @@ workflow ExpansionHunter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
-        String? individual_id
+        String? sample_id
         File? ped_file
         File? output_prefix
         String expansion_hunter_docker
