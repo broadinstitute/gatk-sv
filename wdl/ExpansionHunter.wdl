@@ -77,7 +77,7 @@ task RunExpansionHunter {
         File reference_fasta_index
         File variant_catalog
         String? individual_id
-        File? ped_filename
+        File? ped_file
         String output_prefix
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
