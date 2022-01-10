@@ -215,4 +215,8 @@ workflow GatherSampleEvidenceBatch {
 
     File? metrics_file_sampleevidence = CatMetrics.out
   }
+  
+  meta {
+    allowNestedInputs: true
+  }
 }
