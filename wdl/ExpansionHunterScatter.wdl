@@ -38,7 +38,7 @@ workflow ExpansionHunterScatter {
                 else
                     basename(bam_or_cram_, ".cram")
 
-        String individual_id =
+        String sample_id =
             if defined(sample_ids) then
                 select_first([sample_ids])[i]
             else
