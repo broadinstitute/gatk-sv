@@ -9,7 +9,7 @@ workflow ExpansionHunterScatter {
         Array[File] bams_or_crams
         Array[File]? bams_or_crams_indexes
         Array[String]? sample_ids
-        File? ped_filename
+        File? ped_file
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
