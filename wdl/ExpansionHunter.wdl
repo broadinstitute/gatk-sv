@@ -20,6 +20,8 @@ workflow ExpansionHunter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
+        String? individual_id
+        File? ped_filename
         File? output_prefix
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr
@@ -52,6 +54,8 @@ workflow ExpansionHunter {
             reference_fasta = reference_fasta,
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
+            individual_id = individual_id,
+            ped_filename = ped_filename,
             output_prefix = output_prefix_,
             expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
@@ -72,6 +76,8 @@ task RunExpansionHunter {
         File reference_fasta
         File reference_fasta_index
         File variant_catalog
+        String? individual_id
+        File? ped_filename
         String output_prefix
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
@@ -87,13 +93,22 @@ task RunExpansionHunter {
     command <<<
         set -euxo pipefail
 
+        sex=""
+        if [ ! -z "~{ped_filename}" -a "~{ped_filename}" != " " ]; then
+            if [ -e "~{ped_filename}" ]; then
+                sex=$(awk -F '\t' '{if ($2 == "~{individual_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0} else {exit 1}}}' < ~{ped_filename} )
+            fi
+        fi
+        echo $sex
+
         ExpansionHunter \
             --reads ~{bam_or_cram} \
             --reference ~{reference_fasta} \
             --variant-catalog ~{variant_catalog} \
             --output-prefix ~{output_prefix} \
             --cache-mates \
-            --record-timing
+            --record-timing \
+            $sex
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
