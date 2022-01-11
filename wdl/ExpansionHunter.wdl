@@ -20,9 +20,15 @@ workflow ExpansionHunter {
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
-        File? output_prefix
+        String sample_id
+        File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr
+    }
+
+    parameter_meta {
+        ped_file: "This file is used to extract the sex of the bam_or_cram file."
+        sample_id: "The ped_file needs to be provided as well to determine sample sex. The ID must match the sample ID given in the second column (`Individual ID` column) of the given PED file. This ID will also be used as an output prefix."
     }
 
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
@@ -36,15 +42,6 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
-    String output_prefix_ =
-        if defined(output_prefix) then
-            select_first([output_prefix])
-        else
-            if is_bam then
-                basename(bam_or_cram, ".bam")
-            else
-                basename(bam_or_cram, ".cram")
-
     call RunExpansionHunter {
         input:
             bam_or_cram = bam_or_cram,
@@ -52,7 +49,8 @@ workflow ExpansionHunter {
             reference_fasta = reference_fasta,
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
-            output_prefix = output_prefix_,
+            sample_id = sample_id,
+            ped_file = ped_file,
             expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
     }
@@ -72,28 +70,39 @@ task RunExpansionHunter {
         File reference_fasta
         File reference_fasta_index
         File variant_catalog
-        String output_prefix
+        String sample_id
+        File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
     }
 
     output {
-        File json = "${output_prefix}.json"
-        File vcf = "${output_prefix}.vcf"
-        File overlapping_reads = "${output_prefix}_realigned.bam"
-        File timing = "${output_prefix}_timing.tsv"
+        File json = "${sample_id}.json"
+        File vcf = "${sample_id}.vcf"
+        File overlapping_reads = "${sample_id}_realigned.bam"
+        File timing = "${sample_id}_timing.tsv"
     }
 
     command <<<
         set -euxo pipefail
 
+        sex=""
+        if ~{defined(ped_file)}; then
+            sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0}}}' < ~{ped_file} )
+            if [ "$sex" = "" ]; then
+                echo "The Sex of the sample defined in the PED file is other than male or female. ExpansionHunter only supports male or female samples."
+                exit 1
+            fi
+        fi
+
         ExpansionHunter \
             --reads ~{bam_or_cram} \
             --reference ~{reference_fasta} \
             --variant-catalog ~{variant_catalog} \
-            --output-prefix ~{output_prefix} \
+            --output-prefix ~{sample_id} \
             --cache-mates \
-            --record-timing
+            --record-timing \
+            $sex
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
