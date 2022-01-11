@@ -100,10 +100,14 @@ task RunExpansionHunter {
 
         sex=""
         if ~{defined(ped_file)} && ~{defined(sample_id)}; then
-            sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0} else {exit 1}}}' < ~{ped_file} )
+            sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0}}}' < ~{ped_file} )
+            if [ "$sex" = "" ]; then
+                echo "The Sex of the sample defined in the PED file is other than male or female. ExpansionHunter only supports male or female samples."
+                exit 1
+            fi
         elif ~{defined(ped_file)} || ~{defined(sample_id)}; then
             echo "PED file and sample_id should be either both defined or neither."
-            exit(1)
+            exit 1
         fi
 
         ExpansionHunter \
