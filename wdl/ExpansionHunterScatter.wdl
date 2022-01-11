@@ -8,7 +8,7 @@ workflow ExpansionHunterScatter {
     input {
         Array[File] bams_or_crams
         Array[File]? bams_or_crams_indexes
-        Array[String]? sample_ids
+        Array[String] sample_ids
         File? ped_file
         File reference_fasta
         File? reference_fasta_index
@@ -34,20 +34,7 @@ workflow ExpansionHunterScatter {
         File reference_fasta_index_ = select_first([
             reference_fasta_index, reference_fasta + ".fai"])
 
-        String output_prefix =
-            if defined(sample_ids) then
-                select_first([sample_ids])[i]
-            else
-                if is_bam then
-                    basename(bam_or_cram_, ".bam")
-                else
-                    basename(bam_or_cram_, ".cram")
-
-        String sample_id =
-            if defined(sample_ids) then
-                select_first([sample_ids])[i]
-            else
-                output_prefix
+        String sample_id = sample_ids[i]
 
         call ExpansionHunter.ExpansionHunter as expanionHunter {
             input:
@@ -58,7 +45,6 @@ workflow ExpansionHunterScatter {
                 variant_catalog=variant_catalog,
                 sample_id=sample_id,
                 ped_file=ped_file,
-                output_prefix=output_prefix,
                 expansion_hunter_docker=expansion_hunter_docker,
                 runtime_attr=runtime_attr
         }
