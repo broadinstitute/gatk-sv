@@ -59,8 +59,8 @@ workflow ExpansionHunter {
             reference_fasta = reference_fasta,
             reference_fasta_index = reference_fasta_index_,
             variant_catalog = variant_catalog,
-            individual_id = individual_id,
-            ped_filename = ped_filename,
+            sample_id = sample_id,
+            ped_file = ped_file,
             output_prefix = output_prefix_,
             expansion_hunter_docker = expansion_hunter_docker,
             runtime_attr_override = runtime_attr,
@@ -81,7 +81,7 @@ task RunExpansionHunter {
         File reference_fasta
         File reference_fasta_index
         File variant_catalog
-        String? individual_id
+        String? sample_id
         File? ped_file
         String output_prefix
         String expansion_hunter_docker
@@ -99,12 +99,12 @@ task RunExpansionHunter {
         set -euxo pipefail
 
         sex=""
-        if [ ! -z "~{ped_filename}" -a "~{ped_filename}" != " " ]; then
-            if [ -e "~{ped_filename}" ]; then
-                sex=$(awk -F '\t' '{if ($2 == "~{individual_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0} else {exit 1}}}' < ~{ped_filename} )
-            fi
+        if ~{defined(ped_file)} && ~{defined(sample_id)}; then
+            sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0} else {exit 1}}}' < ~{ped_file} )
+        elif ~{defined(ped_file)} || ~{defined(sample_id)}; then
+            echo "PED file and sample_id should be either both defined or neither."
+            exit(1)
         fi
-        echo $sex
 
         ExpansionHunter \
             --reads ~{bam_or_cram} \

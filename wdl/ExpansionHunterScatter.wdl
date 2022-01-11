@@ -56,8 +56,8 @@ workflow ExpansionHunterScatter {
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
                 variant_catalog=variant_catalog,
-                individual_id=individual_id,
-                ped_filename=ped_filename,
+                sample_id=sample_id,
+                ped_file=ped_file,
                 output_prefix=output_prefix,
                 expansion_hunter_docker=expansion_hunter_docker,
                 runtime_attr=runtime_attr
