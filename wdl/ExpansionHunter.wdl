@@ -86,6 +86,17 @@ task RunExpansionHunter {
     command <<<
         set -euxo pipefail
 
+        BAM_OR_CRAM_DIR="$(dirname "~{bam_or_cram}")"
+        BAM_OR_CRAM_INDEX_FILENAME="$(basename "~{bam_or_cram_index}")"
+        DEST="$BAM_OR_CRAM_DIR/$BAM_OR_CRAM_INDEX_FILENAME"
+        if [ $DEST != ~{bam_or_cram_index} ]; then
+            mv ~{bam_or_cram_index} $DEST
+        fi
+
+        REF="$(basename "~{reference_fasta}")"
+        mv ~{reference_fasta} $REF
+        mv ~{reference_fasta_index} $REF.fai
+
         sex=""
         if ~{defined(ped_file)}; then
             sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0}}}' < ~{ped_file} )
@@ -97,7 +108,7 @@ task RunExpansionHunter {
 
         ExpansionHunter \
             --reads ~{bam_or_cram} \
-            --reference ~{reference_fasta} \
+            --reference $REF \
             --variant-catalog ~{variant_catalog} \
             --output-prefix ~{sample_id} \
             --cache-mates \
