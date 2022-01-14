@@ -284,7 +284,6 @@ workflow MasterVcfQc {
       vcf_stats_idx=MergeVcfwideStatShards.merged_bed_idx,
       plot_qc_vcfwide_tarball=PlotQcVcfWide.plots_tarball,
       plot_qc_site_level_external_benchmarking_tarballs=PlotSiteLevelBenchmarking.tarball_wPlots,
-      collect_qc_per_sample_tarball=TarShardVidLists.vid_lists,
       plot_qc_per_sample_tarball=PlotQcPerSample.perSample_plots_tarball,
       plot_qc_per_family_tarball=PlotQcPerFamily.perFamily_plots_tarball,
       cleaned_fam_file=PlotQcPerFamily.cleaned_fam_file,
@@ -719,7 +718,6 @@ task SanitizeOutputs {
     File vcf_stats_idx
     File plot_qc_vcfwide_tarball
     Array[File]? plot_qc_site_level_external_benchmarking_tarballs
-    File collect_qc_per_sample_tarball
     File plot_qc_per_sample_tarball
     File? plot_qc_per_family_tarball
     File? cleaned_fam_file
@@ -728,17 +726,13 @@ task SanitizeOutputs {
     RuntimeAttr? runtime_attr_override
   }
 
-  # simple compress + tar workf
-  Float input_size = size(
-    flatten([[ vcf_stats, samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball,
-               plot_qc_site_level_external_benchmarking_tarballs, 
-               collect_qc_per_sample_tarball, plot_qc_per_sample_tarball, 
-               plot_qc_per_family_tarball, cleaned_fam_file ],
-             select_first([plot_qc_site_level_external_benchmarking_tarballs, []]),
-             select_first([plot_qc_per_sample_external_benchmarking_tarballs, []])]),
-    "GiB"
-  )
-  Float compression_factor = 5.0
+  # simple compress + tar workflow
+  Float isize_1 = size([samples_list, vcf_stats, vcf_stats_idx, plot_qc_vcfwide_tarball, plot_qc_per_sample_tarball], "GiB")
+  Float isize_2 = size(select_first([plot_qc_site_level_external_benchmarking_tarballs, []]), "GiB")
+  Float isize_3 = size(select_first([plot_qc_per_family_tarball, []]), "GiB")
+  Float isize_4 = size(select_first([plot_qc_per_sample_external_benchmarking_tarballs, []]), "GiB")
+  Float input_size = isize_1 + isize_2 + isize_3 + isize_4
+  Float compression_factor = 3.0
   Float base_disk_gb = 5.0
   Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
@@ -766,12 +760,10 @@ task SanitizeOutputs {
     # Prep output directory tree
     mkdir ~{prefix}_SV_VCF_QC_output/
     mkdir ~{prefix}_SV_VCF_QC_output/data/
-    mkdir ~{prefix}_SV_VCF_QC_output/data/variant_info_per_sample/
     mkdir ~{prefix}_SV_VCF_QC_output/plots/
     mkdir ~{prefix}_SV_VCF_QC_output/plots/main_plots/
     mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/
     mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/vcf_summary_plots/
-    mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/external_benchmarking_tarballs/
     for tarball_fname in ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs}; do
       dname="$( basename -s '.tar.gz' $tarball_fname )_site_level_benchmarking_plots/"
       mkdir ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname
@@ -800,16 +792,19 @@ task SanitizeOutputs {
 
     # Process site-level external benchmarking plots
     if ~{defined(plot_qc_site_level_external_benchmarking_tarballs)}; then
-      # For now, just dump them all into a tmp holding directory
-      # TODO: clean this up so it appropriately relocates all files & plots
-      cp ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs} \
-        ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/external_benchmarking_tarballs/
+      for tarball_fname in ~{sep=" " plot_qc_site_level_external_benchmarking_tarballs}; do
+        bname="$( basename -s '.tar.gz' $tarball_fname \
+                  | sed -e 's/^~{prefix}\.//g' -e 's/\.wPlots$//g' )"
+        dname="$( basename -s '.tar.gz' $tarball_fname )_site_level_benchmarking_plots/"
+        tar -xzvf $tarball_fname
+        cp $bname/data/* \
+          ~{prefix}_SV_VCF_QC_output/data/ || true
+        cp $bname/plots/*.ALL/main_plots/*.callset_benchmarking.png \
+          ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
+        cp -r $bname/plots/* \
+          ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname || true
+      done
     fi
-
-    # Process per-sample stats
-    tar -xzvf ~{collect_qc_per_sample_tarball}
-    cp ~{prefix}_perSample_VIDs_merged/*.VIDs_genotypes.txt.gz \
-      ~{prefix}_SV_VCF_QC_output/data/variant_info_per_sample/
 
     # Process per-sample plots
     tar -xzvf ~{plot_qc_per_sample_tarball}
@@ -829,16 +824,21 @@ task SanitizeOutputs {
 
     # Process per-sample external benchmarking plots
     if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
-      # For now, just dump them all into a tmp holding directory
-      # TODO: clean this up so it appropriately relocates all files & plots
-      cp ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs} \
-        ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/external_benchmarking_tarballs/
+      for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
+        bname="$( basename -s '.tar.gz' $tarball_fname )" 
+        dname="$basename""_per_sample_benchmarking_plots/"
+        tar -xzvf $tarball_fname
+        cp $bname/main_plots/* \
+          ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
+        cp $bname/supporting_plots/* \
+          ~{prefix}_SV_VCF_QC_output/plots/supplementary_plots/$dname || true
+      done
     fi
 
     # Process misc files
     if ~{defined(cleaned_fam_file)}; then
       cp ~{cleaned_fam_file} \
-        ~{prefix}_SV_VCF_QC_output/data/~{prefix}.cleaned_trios.fam
+        ~{prefix}_SV_VCF_QC_output/data/~{prefix}.cleaned_trios.fam || true
     fi
     cp ~{samples_list} \
       ~{prefix}_SV_VCF_QC_output/data/~{prefix}.samples_analyzed.list
