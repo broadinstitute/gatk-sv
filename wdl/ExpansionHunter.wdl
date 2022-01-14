@@ -3,6 +3,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 struct FilenamePostfixes {
     String locus
@@ -22,8 +23,10 @@ workflow ExpansionHunter {
         File variant_catalog
         File? output_prefix
         String expansion_hunter_docker
+        String sv_base_mini_docker
         Int variant_catalog_batch_size
         RuntimeAttr? runtime_attr
+        RuntimeAttr? runtime_override_concat
     }
 
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
