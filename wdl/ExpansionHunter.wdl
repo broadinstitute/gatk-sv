@@ -22,7 +22,6 @@ workflow ExpansionHunter {
         File variant_catalog
         File? output_prefix
         String expansion_hunter_docker
-        String sv_base_mini_docker
         Int variant_catalog_batch_size
         RuntimeAttr? runtime_attr
         RuntimeAttr? runtime_override_concat

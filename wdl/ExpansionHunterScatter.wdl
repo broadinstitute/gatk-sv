@@ -14,7 +14,6 @@ workflow ExpansionHunterScatter {
         File variant_catalog
         Int? variant_catalog_batch_size
         String expansion_hunter_docker
-        String sv_base_mini_docker
         RuntimeAttr? runtime_attr
     }
 
@@ -53,7 +52,6 @@ workflow ExpansionHunterScatter {
                 reference_fasta_index=reference_fasta_index_,
                 variant_catalog=variant_catalog,
                 output_prefix=output_prefix,
-                sv_base_mini_docker=sv_base_mini_docker,
                 expansion_hunter_docker=expansion_hunter_docker,
                 variant_catalog_batch_size=variant_catalog_batch_size_
         }
