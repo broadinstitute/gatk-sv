@@ -3,7 +3,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 struct FilenamePostfixes {
     String locus
@@ -70,11 +69,21 @@ workflow ExpansionHunter {
         }
     }
 
+    call ConcatEHOutputs {
+        input:
+            vcfs_gz = RunExpansionHunter.vcf_gz,
+            jsons = RunExpansionHunter.json,
+            overlapping_reads = RunExpansionHunter.overlapping_reads,
+            timings = RunExpansionHunter.timing,
+            output_prefix = output_prefix_,
+            expansion_hunter_docker = expansion_hunter_docker
+    }
+
     output {
-        Array[File] json = RunExpansionHunter.json
-        Array[File] vcf = RunExpansionHunter.vcf
-        Array[File] overlapping_reads = RunExpansionHunter.overlapping_reads
-        Array[File] timing = RunExpansionHunter.timing
+        File json = ConcatEHOutputs.json
+        File vcf_gz = ConcatEHOutputs.vcf_gz
+        File overlapping_reads = ConcatEHOutputs.overlapping_reads
+        File timing = ConcatEHOutputs.timing
     }
 }
 
@@ -92,7 +101,7 @@ task RunExpansionHunter {
 
     output {
         File json = "${output_prefix}.json"
-        File vcf = "${output_prefix}.vcf"
+        File vcf_gz = "${output_prefix}.vcf.gz"
         File overlapping_reads = "${output_prefix}_realigned.bam"
         File timing = "${output_prefix}_timing.tsv"
     }
@@ -107,6 +116,8 @@ task RunExpansionHunter {
             --output-prefix ~{output_prefix} \
             --cache-mates \
             --record-timing
+
+        bgzip ~{output_prefix}.vcf
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
@@ -211,6 +222,64 @@ task SplitVariantCatalog {
 
     runtime {
         docker: split_variant_catalog_docker_
+        cpu: runtime_attr.cpu_cores
+        memory: runtime_attr.mem_gb + " GiB"
+        disks: "local-disk " + runtime_attr.disk_gb + " HDD"
+        bootDiskSizeGb: runtime_attr.boot_disk_gb
+        preemptible: runtime_attr.preemptible_tries
+        maxRetries: runtime_attr.max_retries
+    }
+}
+
+task ConcatEHOutputs {
+    input {
+        Array[File] vcfs_gz
+        Array[File] jsons
+        Array[File] overlapping_reads
+        Array[File] timings
+        String? output_prefix
+        String expansion_hunter_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    output {
+        File json = "${output_prefix}.json"
+        File vcf_gz = "${output_prefix}.vcf.gz"
+        File overlapping_reads = "${output_prefix}.bam"
+        File timing = "${output_prefix}_timing.tsv"
+    }
+
+    command <<<
+        set -euxo pipefail
+
+        jq -s 'reduce .[] as $item ({}; . * $item)' ~{sep=" " jsons} > ~{output_prefix}.json
+
+        VCFS="~{write_lines(vcfs_gz)}"
+        bcftools concat --no-version --naive --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
+
+        BAMS="~{write_lines(overlapping_reads)}"
+        samtools merge ~{output_prefix}.bam -b ${BAMS}
+
+        TIMINGS=(~{sep=" " timings})
+        FIRST_TIMING=${TIMINGS[0]}
+        head -1 ${FIRST_TIMING} > ~{output_prefix}_timing.tsv
+        tail -n +2 -q ~{sep=" " timings} >> ~{output_prefix}_timing.tsv
+    >>>
+
+    RuntimeAttr runtime_attr_str_profile_default = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        boot_disk_gb: 10,
+        preemptible_tries: 3,
+        max_retries: 1,
+        disk_gb: 10
+    }
+    RuntimeAttr runtime_attr = select_first([
+        runtime_attr_override,
+        runtime_attr_str_profile_default])
+
+    runtime {
+        docker: expansion_hunter_docker
         cpu: runtime_attr.cpu_cores
         memory: runtime_attr.mem_gb + " GiB"
         disks: "local-disk " + runtime_attr.disk_gb + " HDD"

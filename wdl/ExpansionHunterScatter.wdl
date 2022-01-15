@@ -60,9 +60,9 @@ workflow ExpansionHunterScatter {
     }
 
     output {
-        Array[Array[File]] jsons = expanionHunter.json
-        Array[Array[File]] vcfs = expanionHunter.vcf
-        Array[Array[File]] overlapping_reads = expanionHunter.overlapping_reads
-        Array[Array[File]] timing = expanionHunter.timing
+        Array[File] jsons = expanionHunter.json
+        Array[File] vcfs_gz = expanionHunter.vcf_gz
+        Array[File] overlapping_reads = expanionHunter.overlapping_reads
+        Array[File] timing = expanionHunter.timing
     }
 }
