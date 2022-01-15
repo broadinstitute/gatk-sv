@@ -175,7 +175,6 @@ task ConcatVcfs {
     Array[File]? vcfs_idx
     Boolean allow_overlaps = false
     Boolean naive = false
-    Boolean force_naive = false
     Boolean generate_index = true
     String? outfile_prefix
     String sv_base_mini_docker
@@ -185,7 +184,6 @@ task ConcatVcfs {
   String outfile_name = outfile_prefix + ".vcf.gz"
   String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
   String naive_flag = if naive then "--naive" else ""
-  String force_naive_flag = if force_naive then "--naive-force" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -214,7 +212,7 @@ task ConcatVcfs {
     if ~{!defined(vcfs_idx)}; then
       cat ${VCFS} | xargs -n1 tabix
     fi
-    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} ~{force_naive_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
+    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
     if ~{generate_index}; then
       tabix "~{outfile_name}"
     else
