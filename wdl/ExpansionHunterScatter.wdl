@@ -8,13 +8,19 @@ workflow ExpansionHunterScatter {
     input {
         Array[File] bams_or_crams
         Array[File]? bams_or_crams_indexes
-        Array[String]? sample_ids
+        Array[String] sample_ids
+        File? ped_file
         File reference_fasta
         File? reference_fasta_index
         File variant_catalog
         Int? variant_catalog_batch_size
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr
+    }
+
+    parameter_meta {
+        ped_file: "This file is used to extract the sex of the BAM/CRAM files."
+        sample_ids: "One ID per sample, in the same order as the files in bams_or_crams. These IDs must match the ID given in the second column (`Individual ID` column) of the given PED file. These IDs will also be used as an output prefix."
     }
 
     String variant_catalog_batch_size_ =
@@ -35,14 +41,7 @@ workflow ExpansionHunterScatter {
         File reference_fasta_index_ = select_first([
             reference_fasta_index, reference_fasta + ".fai"])
 
-        String output_prefix =
-            if defined(sample_ids) then
-                select_first([sample_ids])[i]
-            else
-                if is_bam then
-                    basename(bam_or_cram_, ".bam")
-                else
-                    basename(bam_or_cram_, ".cram")
+        String sample_id = sample_ids[i]
 
         call ExpansionHunter.ExpansionHunter as expanionHunter {
             input:
@@ -51,7 +50,8 @@ workflow ExpansionHunterScatter {
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
                 variant_catalog=variant_catalog,
-                output_prefix=output_prefix,
+                sample_id=sample_id,
+                ped_file=ped_file,
                 expansion_hunter_docker=expansion_hunter_docker,
                 variant_catalog_batch_size=variant_catalog_batch_size_
         }

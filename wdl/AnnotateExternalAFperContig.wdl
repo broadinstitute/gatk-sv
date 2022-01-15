@@ -6,7 +6,7 @@ import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow AnnotateExternalAFperContig {
-    input{
+    input {
         File vcf
         File vcf_idx
         File ref_bed
@@ -148,7 +148,7 @@ workflow AnnotateExternalAFperContig {
 
 
     scatter (vcf_shard in SplitVcf.vcf_shards) {
-        call ModifyVcf{
+        call ModifyVcf {
             input:
                 labeled_del = calcu_del.output_comp,
                 labeled_dup = calcu_dup.output_comp,
@@ -468,7 +468,7 @@ task ModifyVcf {
             else:
                 body[pin[2]]=pin
                 SVID_key.append(pin[2])
-        header.append(['##INFO=<ID='+"~{ref_prefix}"+'_SVID'+',Number=1,Type=Float,Description="Allele frequency (for biallelic sites) or copy-state frequency (for multiallelic sites) of an overlapping event in gnomad.">'])
+        header.append(['##INFO=<ID='+"~{ref_prefix}"+'_SVID'+',Number=1,Type=String,Description="SVID of an overlapping event in gnomad used for external allele frequency annotation.">'])
 
         fin.close()
         fin=open('labeled.bed')
