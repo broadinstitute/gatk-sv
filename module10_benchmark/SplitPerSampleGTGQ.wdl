@@ -22,7 +22,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
 import "SplitPerSampleGTGQPerVcf.wdl" as split_per_sample_gtgq_per_vcf
-
+import "SplitPerSampleGTGQPerSampleList.wdl" as split_per_sample_gtgq_per_samplelist
 
 workflow SplitPerSampleGTGQ{
     input{
@@ -33,24 +33,28 @@ workflow SplitPerSampleGTGQ{
         Array[String] prefixes
 
         String rdpesr_benchmark_docker
+        String sv_base_mini_docker
 
         RuntimeAttr? runtime_split_per_sample_gtgq
     }
 
-    scatter(i in range(length(cleanVcfs))){
-        call split_per_sample_gtgq_per_vcf.SplitPerSampleGTGQPerVcf as SplitPerSampleGTGQPerVcf{
+    scatter(SampleList in SampleLists){
+        call split_per_sample_gtgq_per_samplelist.SplitPerSampleGTGQPerSampleList as SplitPerSampleGTGQPerSampleList{
             input:
-                cleanVcf = cleanVcfs[i],
-                cleanVcfIdx = cleanVcfIdxes[i],
-                SampleLists = SampleLists,
-                prefix = prefixes[i],
+                cleanVcfs = cleanVcfs,
+                cleanVcfIdxes = cleanVcfIdxes,
+                SampleList = SampleList,
+                prefixes = prefixes,
+
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                sv_base_mini_docker = sv_base_mini_docker,
+
                 runtime_split_per_sample_gtgq = runtime_split_per_sample_gtgq
         }
     }
 
     output{
-        Array[Array[Array[File]]] gtgq = SplitPerSampleGTGQPerVcf.gtgq
+        Array[Array[File]] gtgq = SplitPerSampleGTGQPerSampleList.out
     }
 }
 

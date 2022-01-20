@@ -169,7 +169,7 @@ task IntegrateAnno{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
+        mem_gb: 1.5, 
         disk_gb: 10,
         boot_disk_gb: 10,
         preemptible_tries: 1,
@@ -187,7 +187,9 @@ task IntegrateAnno{
         ~{if defined(rd_anno) then "zcat ~{rd_anno} | grep ~{sample}  > ~{sample}.rd_anno"  else ""}
         ~{if defined(pesr_anno) then "zcat ~{pesr_anno} | grep ~{sample} > ~{sample}.pesr_anno"  else ""}
 
-        Rscript /src/integrate_annotations.R --bed ~{bed} \
+        zcat ~{bed} | cut -f1-5,7- > tmp.bed
+        Rscript /src/integrate_annotations.R \
+            --bed tmp.bed \
             --output ~{prefix}.anno.bed \
             --raw_manta ~{raw_manta} \
             --raw_wham ~{raw_wham} \

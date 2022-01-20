@@ -21,35 +21,44 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
+import "MergeGTGQ.wdl" as merge_gtgq
 
-
-workflow SplitPerSampleGTGQPerVcf{
+workflow SplitPerSampleGTGQPerSampleList{
     input{
-        File cleanVcf
-        File cleanVcfIdx
+        Array[File] cleanVcfs
+        Array[File] cleanVcfIdxes
 
-        Array[File] SampleLists
-        String prefix
+        File SampleList
+        Array[String] prefixes
 
         String rdpesr_benchmark_docker
+        String sv_base_mini_docker
 
         RuntimeAttr? runtime_split_per_sample_gtgq
     }
 
-    scatter (SampleList in SampleLists){
+    scatter(i in range(length(cleanVcfs))){
         call split_per_sample_gtgq{
             input:
-                vcf = cleanVcf,
-                vcf_idx = cleanVcfIdx,
+                vcf = cleanVcfs[i],
+                vcf_idx = cleanVcfIdxes[i],
                 sample_list = SampleList,
-                chr = prefix,
+                chr = prefixes[i],
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
                 runtime_attr_override = runtime_split_per_sample_gtgq
         }
     }
 
+    call merge_gtgq.MergeGTGQ as MergeGTGQ{
+        input:
+            shards_chr_sample = split_per_sample_gtgq.gtgq_file,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
+
+
+
     output{
-        Array[Array[File]] gtgq = split_per_sample_gtgq.gtgq_file
+        Array[File] out = MergeGTGQ.gtgq
     }
 }
 
@@ -96,4 +105,5 @@ task split_per_sample_gtgq {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
 

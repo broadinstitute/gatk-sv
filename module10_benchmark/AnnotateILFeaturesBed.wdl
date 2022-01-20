@@ -48,12 +48,13 @@ workflow AnnotateILFeatures{
         Array[File] raw_mantas
         Array[File] raw_whams
         Array[File] raw_melts
-        Array[File?] array_queries
+        Array[File] raw_depths
+        Array[File] gtgqs
+        #Array[File?] array_queries
 
         File ref_fasta
         File ref_fai
         File ref_dict
-        File contig_list
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -90,12 +91,13 @@ workflow AnnotateILFeatures{
                 raw_manta = raw_mantas[i],
                 raw_wham = raw_whams[i],
                 raw_melt = raw_melts[i],
-                array_query = array_queries[i],
+                raw_depth = raw_depths[i],
+                gtgq  = gtgqs[i],
+                #array_query = array_queries[i],
 
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai, 
                 ref_dict = ref_dict,
-                contig_list = contig_list,
 
                 requester_pays_crams = requester_pays_crams,
                 run_genomic_context_anno = run_genomic_context_anno,

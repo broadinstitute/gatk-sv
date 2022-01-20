@@ -1,9 +1,5 @@
 ##########################################################################################
 
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
 ## Copyright Broad Institute, 2020
 ## 
 ## This WDL pipeline implements Duphold 
@@ -20,50 +16,26 @@
 version 1.0
 
 import "Structs.wdl"
-import "AnnotateILFeaturesPerSample.wdl" as anno_il
 import "TasksBenchmark.wdl" as mini_tasks
-import "VaPoR.wdl" as vapor
-import "AnnotateILPBFeaturesPerSampleBed.wdl" as annotate_il_pb_featuers_per_sample
+import "AnnotateILFeaturesPerSamplePerBed.wdl" as annotate_il_features_per_sample_per_bed
 
-workflow AnnotateILPBFeatures{
+workflow AnnotateILFeaturesPerSample{
     input{
         Array[File] cleanBeds
         Array[String] prefixes
 
-        Array[String] samples
-        #Array[String?] il_bams
-        #Array[String?] il_bam_bais
-        
-        #Array[File?] pe_metrics
-        #Array[File?] pe_indexes
-        #Array[File?] sr_metrics
-        #Array[File?] sr_indexes
-        #Array[File?] rd_metrics
-        #Array[File?] rd_indexes
-        
-        #Array[File?] ref_SegDups
-        #Array[File?] ref_SimpReps
-        #Array[File?] ref_RepMasks
+        String sample
 
-
-        Array[File] raw_mantas
-        Array[File] raw_whams
-        Array[File] raw_melts
-        Array[File] raw_depths
-        Array[File] gtgqs
-
-        Array[File] pacbio_seqs
-        Array[File] pacbio_indexes
-
-        Array[File] hgsv_queries
-        Array[File] pacbio_queries
-        Array[File] bionano_queries
+        File raw_manta
+        File raw_wham
+        File raw_melt
+        File? raw_depth
+        File? gtgq
+        File? array_query
 
         File ref_fasta
         File ref_fai
         File ref_dict
-        Array[File] contig_lists
-        Int min_shard_size
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -72,15 +44,12 @@ workflow AnnotateILPBFeatures{
         Boolean run_extract_gt_gq = true
         Boolean run_versus_raw_vcf = true
         Boolean run_rdpesr_anno = true
-        Boolean run_vapor = true
 
         String rdpesr_benchmark_docker
-        String vapor_docker
         String duphold_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
 
-        RuntimeAttr? runtime_attr_vapor 
         RuntimeAttr? runtime_attr_duphold
         RuntimeAttr? runtime_attr_rdpesr
         RuntimeAttr? runtime_attr_bcf2vcf
@@ -93,31 +62,23 @@ workflow AnnotateILPBFeatures{
         RuntimeAttr? runtime_attr_split_vcf
     }
 
-    scatter (i in range(length(samples))){
-        call annotate_il_pb_featuers_per_sample.AnnotateILPBFeaturesPerSampleBed as AnnotateILPBFeaturesPerSampleBed{
+    scatter (i in range(length(cleanBeds))){
+        call annotate_il_features_per_sample_per_bed.AnnotateILFeaturesPerSamplePerBed as AnnotateILFeaturesPerSamplePerBed{
             input:
-                cleanBeds = cleanBeds,
-                prefixes = prefixes,
+                cleanBed = cleanBeds[i],
+                prefix = prefixes[i],
+                sample = sample,
 
-                sample = samples[i],
-                raw_manta = raw_mantas[i],
-                raw_wham = raw_whams[i],
-                raw_melt = raw_melts[i],
-                raw_depth = raw_depths[i],
-                gtgq  = gtgqs[i],
-
-                pacbio_seq = pacbio_seqs[i],
-                pacbio_index = pacbio_indexes[i],
-
-                hgsv_query = hgsv_queries[i],
-                pacbio_query = pacbio_queries[i],
-                bionano_query = bionano_queries[i],
+                raw_manta = raw_manta,
+                raw_wham = raw_wham,
+                raw_melt = raw_melt,
+                raw_depth = raw_depth,
+                gtgq = gtgq,
+                array_query = array_query,
 
                 ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
+                ref_fai = ref_fai, 
                 ref_dict = ref_dict,
-                contig_lists = contig_lists,
-                min_shard_size = min_shard_size,
 
                 requester_pays_crams = requester_pays_crams,
                 run_genomic_context_anno = run_genomic_context_anno,
@@ -126,16 +87,13 @@ workflow AnnotateILPBFeatures{
                 run_extract_gt_gq = run_extract_gt_gq,
                 run_versus_raw_vcf = run_versus_raw_vcf,
                 run_rdpesr_anno = run_rdpesr_anno,
-                run_vapor = run_vapor,
 
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-                vapor_docker = vapor_docker, 
                 duphold_docker = duphold_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
 
-                runtime_attr_vapor = runtime_attr_vapor,
-                runtime_attr_duphold = runtime_attr_duphold, 
+                runtime_attr_duphold = runtime_attr_duphold,
                 runtime_attr_rdpesr = runtime_attr_rdpesr,
                 runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
                 runtime_attr_LocalizeCram = runtime_attr_LocalizeCram,
@@ -145,11 +103,19 @@ workflow AnnotateILPBFeatures{
                 runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
                 runtime_inte_anno = runtime_inte_anno,
                 runtime_attr_split_vcf = runtime_attr_split_vcf
-
         }
     }
+
+    call mini_tasks.ConcatBeds as concat_il_feature{
+        input:
+            shard_bed_files = AnnotateILFeaturesPerSamplePerBed.annotated_file,
+            prefix = sample,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
+
     output{
-        Array[File] annotated_files = AnnotateILPBFeaturesPerSampleBed.annotated_file
-        Array[File] vapor_plots = AnnotateILPBFeaturesPerSampleBed.vapor_plot
+        File annotated_file = concat_il_feature.merged_bed_file
     }
 }
+
+

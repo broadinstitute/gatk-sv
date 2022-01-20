@@ -247,6 +247,59 @@ task ConcatBeds {
   }
   }
 
+task ConcatGTGQs {
+    input {
+        Array[File] files
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    String sample = basename(files[0], ".gtgq.gz")
+
+    # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
+    # be held in memory or disk while working, potentially in a form that takes up more space)
+    Float input_size = size(files, "GB")
+    Float compression_factor = 5.0
+    Float base_disk_gb = 5.0
+    Float base_mem_gb = 2.0
+    RuntimeAttr runtime_default = object {
+      mem_gb: base_mem_gb + compression_factor * input_size,
+      disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+      cpu_cores: 1,
+      preemptible_tries: 3,
+      max_retries: 1,
+      boot_disk_gb: 10
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+      memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+      disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+      cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+      preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+      maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+      docker: sv_base_mini_docker
+      bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    command <<<
+        set -eu
+        zcat ~{files[0]} | head -1 > header.txt
+
+        set -euo pipefail
+
+        while read file; do
+          zcat $file | tail -n+2
+        done < ~{write_lines(files)} \
+          | cat header.txt - \
+          | bgzip \
+        > ~{sample}.all_chr.gtgq.gz
+
+    >>>
+    output {
+        File merged_gtgq_file = "~{sample}.all_chr.gtgq.gz"
+    }
+}
+
 # Merge shards after VaPoR
 task ConcatVaPoR {
   input {
@@ -298,7 +351,13 @@ task ConcatVaPoR {
 
     while read SPLIT; do
       tar zxvf $SPLIT -C ~{prefix}.tmp_plots/
-      ls ~{prefix}.tmp_plots/*/* | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      find -type f -name '~{prefix}.tmp_plots/*/*DEL.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      find -type f -name '~{prefix}.tmp_plots/*/*INS.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      find -type f -name '~{prefix}.tmp_plots/*/*.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
+
+      #ls ~{prefix}.tmp_plots/*/*DEL.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      #ls ~{prefix}.tmp_plots/*/*INS.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      #ls ~{prefix}.tmp_plots/*/*.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
       rm -r ~{prefix}.tmp_plots/*
     done < ~{write_lines(shard_plots)}
 
@@ -987,10 +1046,13 @@ task split_per_sample_bed{
         RuntimeAttr? runtime_attr_override
         }
 
+    Float input_size = size(bed, 'GB')
+    Float base_disk_gb = 5.0
+
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
+        mem_gb: 1, 
+        disk_gb: ceil(base_disk_gb + input_size*2),
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -1008,7 +1070,7 @@ task split_per_sample_bed{
         
         cat <(zcat ~{bed} | head -1) \
         <(zcat ~{bed} | grep ~{sample}) \
-        | bgzip > ~{sample}.bed.gz
+        | cut -f1-5,7- | bgzip > ~{sample}.bed.gz
 
     >>>
     runtime {
@@ -1126,7 +1188,7 @@ task Bed2QueryAndRef{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 7.5, 
+        mem_gb: 3, 
         disk_gb: 10,
         boot_disk_gb: 10,
         preemptible_tries: 1,
@@ -1145,8 +1207,8 @@ task Bed2QueryAndRef{
         echo "#chroms tart end name SVTYPE SVLEN" | sed -e 's/ /\t/g' > ~{filebase}.query
         echo "#chrom start end VID svtype length AF samples" | sed -e 's/ /\t/g' > ~{filebase}.ref
 
-        zcat ~{bed} | cut -f1-4,7,8 | grep -v "#" >> ~{filebase}.query
-        zcat ~{bed} | cut -f1-4,7,8 | sed -e "s/$/\t0\t~{filebase}/" | grep -v "#" >> ~{filebase}.ref
+        zcat ~{bed} | cut -f1-4,6,7 | grep -v "#" >> ~{filebase}.query
+        zcat ~{bed} | cut -f1-4,6,7 | sed -e "s/$/\t0\t~{filebase}/" | grep -v "#" >> ~{filebase}.ref
 
         bgzip ~{filebase}.query
         bgzip ~{filebase}.ref
@@ -1215,7 +1277,7 @@ task InheritanceComparison{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 3.75, 
+        mem_gb: 1, 
         disk_gb: 20,
         boot_disk_gb: 20,
         preemptible_tries: 1,
@@ -1326,8 +1388,8 @@ task bed2vapor{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 6,
-        disk_gb: 25,
+        mem_gb: 3,
+        disk_gb: 15,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -1346,7 +1408,7 @@ task bed2vapor{
          
         gsutil cp ~{bed_file} ./~{prefix}.bed.gz
         gunzip ~{prefix}.bed.gz
-        grep ~{sample} ~{prefix}.bed | grep -v "BND" | grep -v "CNV" | sed -e 's/CPX/INV/' | cut -f1-4,7,8 | sed -e 's/INS\t/INS_/' | cut -f1-5 >> ~{prefix}.vapor.bed
+        grep -v "BND" ~{prefix}.bed | grep -v "CNV" | sed -e 's/CPX/INV/' | cut -f1-4,6,7 | sed -e 's/INS\t/INS_/' | cut -f1-5 >> ~{prefix}.vapor.bed
         split -l ~{min_shard_size} ~{prefix}.vapor.bed -a 6 ~{prefix}.vapor.split.
 
        

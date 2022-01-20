@@ -20,7 +20,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "AnnotateILFeaturesPerSamplePerBedUnit.wdl" as anno_il
+import "AnnotateILPBFeaturesPerSamplePerBedUnit.wdl" as anno_il
 import "TasksBenchmark.wdl" as mini_tasks
 import "VaPoR.wdl" as vapor
 
@@ -33,9 +33,13 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
         File raw_manta
         File raw_wham
         File raw_melt
+        File raw_depth
+        File gtgq
+
         File pacbio_seq
         File pacbio_index
 
+        File hgsv_query
         File pacbio_query
         File bionano_query
 
@@ -91,11 +95,13 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
             ref_dict = ref_dict,
-            contig_list = contig_list,
 
-            raw_vcfs = [raw_manta,raw_wham,raw_melt],
-            raw_algorithms = ["manta","wham","melt"],
+            raw_manta = raw_manta,
+            raw_wham = raw_wham,
+            raw_melt = raw_melt,
+            raw_depth = raw_depth,
 
+            hgsv_query = hgsv_query,
             pacbio_query = pacbio_query,
             bionano_query = bionano_query,
 
@@ -150,14 +156,16 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
             prefix = "~{sample}.~{prefix}",
             sample = sample,
             bed           = anno_il_features.bed,
-            gc_anno       = anno_il_features.GCAnno,
+            gt_anno       = gtgq,
             pesr_anno     = anno_il_features.PesrAnno,
             rd_anno       = anno_il_features.RdAnno,
             rd_le_anno    = anno_il_features.RdAnno_le,
             rd_ri_anno    = anno_il_features.RdAnno_ri,
-            raw_manta     = anno_il_features.vs_raw[0],
-            raw_wham      = anno_il_features.vs_raw[1],
-            raw_melt      = anno_il_features.vs_raw[2],
+            raw_manta     = anno_il_features.vs_manta,
+            raw_wham      = anno_il_features.vs_wham,
+            raw_melt      = anno_il_features.vs_melt,
+            raw_depth     = anno_il_features.vs_depth,
+            vs_hgsv       = anno_il_features.vs_hgsv,
             vs_pacbio     = anno_il_features.vs_pacbio,
             vs_bionano    = anno_il_features.vs_bionano,
             vs_array      = anno_il_features.vs_array,
@@ -186,9 +194,11 @@ task IntegrateAnno{
         File? pesr_anno
         File? info_anno
         File? gt_anno
-        File raw_manta
-        File raw_wham
-        File raw_melt
+        File? raw_manta
+        File? raw_wham
+        File? raw_melt
+        File? raw_depth
+        File? vs_hgsv
         File? vs_pacbio
         File? vs_bionano
         File? vs_array
@@ -220,12 +230,15 @@ task IntegrateAnno{
         ~{if defined(rd_anno) then "zcat ~{rd_anno} | grep ~{sample}  > ~{sample}.rd_anno"  else ""}
         ~{if defined(pesr_anno) then "zcat ~{pesr_anno} | grep ~{sample} > ~{sample}.pesr_anno"  else ""}
 
-        Rscript /src/integrate_annotations.R --bed ~{bed} \
+        Rscript /src/integrate_annotations.R \
+            --bed ~{bed} \
             --output ~{prefix}.anno.bed \
-            --raw_manta ~{raw_manta} \
-            --raw_wham ~{raw_wham} \
-            --raw_melt ~{raw_melt} \
             ~{"--gt " + gt_anno} \
+            ~{"--raw_manta " + raw_manta} \
+            ~{"--raw_wham " + raw_wham} \
+            ~{"--raw_melt " + raw_melt} \
+            ~{"--raw_depth " + raw_depth} \
+            ~{"--vs_hgsv " + vs_hgsv} \
             ~{"--vs_pacbio " + vs_pacbio} \
             ~{"--vs_bionano " + vs_bionano} \
             ~{"--vs_array " + vs_array} \

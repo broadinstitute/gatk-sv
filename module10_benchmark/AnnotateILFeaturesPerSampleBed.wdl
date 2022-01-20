@@ -17,7 +17,8 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
-import "AnnotateILFeaturesPerSamplePerBed.wdl" as annotate_il_features_per_sample_per_bed
+import "AnnotateILFeaturesPerSamplePerBedUnit.wdl" as anno_il
+
 
 workflow AnnotateILFeaturesPerSample{
     input{
@@ -29,12 +30,13 @@ workflow AnnotateILFeaturesPerSample{
         File raw_manta
         File raw_wham
         File raw_melt
+        File raw_depth
+        File? gtgq
         File? array_query
 
         File ref_fasta
         File ref_fai
         File ref_dict
-        File contig_list
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -61,59 +63,168 @@ workflow AnnotateILFeaturesPerSample{
         RuntimeAttr? runtime_attr_split_vcf
     }
 
-    scatter (i in range(length(cleanBeds))){
-        call annotate_il_features_per_sample_per_bed.AnnotateILFeaturesPerSamplePerBed as AnnotateILFeaturesPerSamplePerBed{
+
+    scatter (cleanBed in cleanBeds){
+        call mini_tasks.split_per_sample_bed as split_per_sample_bed{
             input:
-                cleanBed = cleanBeds[i],
-                prefix = prefixes[i],
+                bed = cleanBed,
                 sample = sample,
-
-                raw_manta = raw_manta,
-                raw_wham = raw_wham,
-                raw_melt = raw_melt,
-                array_query = array_query,
-
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai, 
-                ref_dict = ref_dict,
-                contig_list = contig_list,
-
-                requester_pays_crams = requester_pays_crams,
-                run_genomic_context_anno = run_genomic_context_anno,
-                run_extract_algo_evi = run_extract_algo_evi,
-                run_duphold = run_duphold,
-                run_extract_gt_gq = run_extract_gt_gq,
-                run_versus_raw_vcf = run_versus_raw_vcf,
-                run_rdpesr_anno = run_rdpesr_anno,
-
-                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
-                duphold_docker = duphold_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
-
-                runtime_attr_duphold = runtime_attr_duphold,
-                runtime_attr_rdpesr = runtime_attr_rdpesr,
-                runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
-                runtime_attr_LocalizeCram = runtime_attr_LocalizeCram,
-                runtime_attr_vcf2bed = runtime_attr_vcf2bed,
-                runtime_attr_SplitVcf = runtime_attr_SplitVcf,
-                runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
-                runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
-                runtime_inte_anno = runtime_inte_anno,
-                runtime_attr_split_vcf = runtime_attr_split_vcf
+                runtime_attr_override = runtime_attr_split_vcf
         }
     }
 
-    call mini_tasks.ConcatBeds as concat_il_feature{
+    call mini_tasks.ConcatBeds as concat_bed{
         input:
-            shard_bed_files = AnnotateILFeaturesPerSamplePerBed.annotated_file,
+            shard_bed_files = split_per_sample_bed.bed_file,
             prefix = sample,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
+
+    call anno_il.AnnoILFeaturesPerSample as anno_il_features{
+        input:
+            sample = sample,
+            bed_file = concat_bed.merged_bed_file,
+
+            ref_fasta = ref_fasta,
+            ref_fai = ref_fai,
+            ref_dict = ref_dict,
+
+            raw_depth = raw_depth,
+            raw_manta = raw_manta,
+            raw_wham = raw_wham,
+            raw_melt = raw_melt,
+
+            array_query = array_query,
+
+            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+            duphold_docker = duphold_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
+
+            requester_pays_crams = requester_pays_crams,
+            run_genomic_context_anno = run_genomic_context_anno,
+            run_extract_algo_evi = run_extract_algo_evi,
+            run_duphold = run_duphold,
+            run_extract_gt_gq = run_extract_gt_gq,
+            run_versus_raw_vcf = run_versus_raw_vcf,
+            run_rdpesr_anno = run_rdpesr_anno,
+
+            runtime_attr_duphold = runtime_attr_duphold,
+            runtime_attr_rdpesr = runtime_attr_rdpesr,
+            runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
+            runtime_attr_LocalizeCram = runtime_attr_LocalizeCram,
+            runtime_attr_vcf2bed = runtime_attr_vcf2bed,
+            runtime_attr_SplitVcf = runtime_attr_SplitVcf,
+            runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
+            runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs
+    }
+
+    call IntegrateAnno{
+        input:
+            prefix = sample,
+            sample = sample,
+            bed           = concat_bed.merged_bed_file,
+            gt_anno       = gtgq,
+            pesr_anno     = anno_il_features.PesrAnno,
+            rd_anno       = anno_il_features.RdAnno,
+            rd_le_anno    = anno_il_features.RdAnno_le,
+            rd_ri_anno    = anno_il_features.RdAnno_ri,
+            raw_manta     = anno_il_features.vs_manta,
+            raw_wham      = anno_il_features.vs_wham,
+            raw_melt      = anno_il_features.vs_melt,
+            raw_depth     = anno_il_features.vs_depth,
+            vs_array      = anno_il_features.vs_array,
+            rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+            runtime_attr_override = runtime_inte_anno
+    }
+
+
     output{
-        File annotated_file = concat_il_feature.merged_bed_file
+        File annotated_file = IntegrateAnno.anno_file
     }
 }
+
+
+
+task IntegrateAnno{
+    input{
+        File bed
+        File? gc_anno
+        File? duphold_il
+        File? duphold_il_le
+        File? duphold_il_ri
+        File? rd_anno
+        File? rd_le_anno
+        File? rd_ri_anno
+        File? pesr_anno
+        File? info_anno
+        File? gt_anno
+        File? raw_manta
+        File? raw_wham
+        File? raw_melt
+        File? raw_depth
+        File? vs_pacbio
+        File? vs_bionano
+        File? vs_array
+        File? denovo
+        String prefix
+        String sample
+        String rdpesr_benchmark_docker
+        RuntimeAttr? runtime_attr_override
+        }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 1.5, 
+        disk_gb: 10,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+    
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File anno_file = "~{prefix}.anno.bed.gz"
+    }
+    
+    command <<<
+        
+        ~{if defined(rd_anno) then "zcat ~{rd_anno} | grep ~{sample}  > ~{sample}.rd_anno"  else ""}
+        ~{if defined(pesr_anno) then "zcat ~{pesr_anno} | grep ~{sample} > ~{sample}.pesr_anno"  else ""}
+
+        Rscript /src/integrate_annotations.R \
+            --bed ~{bed} \
+            --output ~{prefix}.anno.bed \
+            ~{"--raw_manta " + raw_manta} \
+            ~{"--raw_wham " + raw_wham} \
+            ~{"--raw_melt " + raw_melt} \
+            ~{"--gt " + gt_anno} \
+            ~{"--vs_pacbio " + vs_pacbio} \
+            ~{"--vs_bionano " + vs_bionano} \
+            ~{"--vs_array " + vs_array} \
+            ~{"--gc_anno " + gc_anno} \
+            ~{"--duphold_il " + duphold_il} \
+            ~{"--duphold_il_le " + duphold_il_le} \
+            ~{"--duphold_il_ri " + duphold_il_ri} \
+            ~{"--rd_le " + rd_le_anno} \
+            ~{"--rd_ri " + rd_ri_anno} \
+            ~{"--denovo " + denovo} 
+
+        bgzip ~{prefix}.anno.bed
+    >>>
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: rdpesr_benchmark_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
 
 
