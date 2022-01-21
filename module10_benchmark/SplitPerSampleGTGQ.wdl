@@ -28,6 +28,7 @@ workflow SplitPerSampleGTGQ{
     input{
         Array[File] cleanVcfs
         Array[File] cleanVcfIdxes
+        Array[File] cleanBeds
 
         Array[File] SampleLists
         Array[String] prefixes
@@ -43,6 +44,7 @@ workflow SplitPerSampleGTGQ{
             input:
                 cleanVcfs = cleanVcfs,
                 cleanVcfIdxes = cleanVcfIdxes,
+                cleanBeds = cleanBeds,
                 SampleList = SampleList,
                 prefixes = prefixes,
 
@@ -54,7 +56,8 @@ workflow SplitPerSampleGTGQ{
     }
 
     output{
-        Array[Array[File]] gtgq = SplitPerSampleGTGQPerSampleList.out
+        Array[Array[File]] gtgq = SplitPerSampleGTGQPerSampleList.gtgq_out
+        Array[Array[File]] bed = SplitPerSampleGTGQPerSampleList.bed_out
     }
 }
 

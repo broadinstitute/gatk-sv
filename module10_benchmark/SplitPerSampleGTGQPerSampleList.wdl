@@ -27,6 +27,7 @@ workflow SplitPerSampleGTGQPerSampleList{
     input{
         Array[File] cleanVcfs
         Array[File] cleanVcfIdxes
+        Array[File] cleanBeds
 
         File SampleList
         Array[String] prefixes
@@ -49,16 +50,29 @@ workflow SplitPerSampleGTGQPerSampleList{
         }
     }
 
+    scatter(i in range(length(cleanBeds))){
+        call split_per_sample_bed{
+            input:
+                bed = cleanBeds[i],
+                sample_list = SampleList,
+                chr = prefixes[i],
+                rdpesr_benchmark_docker = rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_split_per_sample_gtgq
+        }
+    }
+
     call merge_gtgq.MergeGTGQ as MergeGTGQ{
         input:
-            shards_chr_sample = split_per_sample_gtgq.gtgq_file,
+            gtgq_shards_chr_sample = split_per_sample_gtgq.gtgq_file,
+            bed_shards_chr_sample = split_per_sample_bed.bed_file
             sv_base_mini_docker = sv_base_mini_docker
     }
 
 
 
     output{
-        Array[File] out = MergeGTGQ.gtgq
+        Array[File] gtgq_out = MergeGTGQ.gtgq
+        Array[File] bed_out = MergeGTGQ.bed
     }
 }
 
@@ -75,7 +89,7 @@ task split_per_sample_gtgq {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 1.5, 
+    mem_gb: 2, 
     disk_gb: ceil(2.0 +  size(vcf, "GB")),
     boot_disk_gb: 30,
     preemptible_tries: 1,
@@ -93,6 +107,49 @@ task split_per_sample_gtgq {
 
   output {
     Array[File] gtgq_file =  glob("per_sample_GTGQ/*~{chr}.gtgq.gz")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: rdpesr_benchmark_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task split_per_sample_bed {
+  input {
+    File bed
+    File sample_list
+    String chr
+    String rdpesr_benchmark_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2, 
+    disk_gb: ceil(2.0 +  size(bed, "GB")),
+    boot_disk_gb: 30,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    mkdir per_sample_bed/
+    python  /src/split_bed_per_sample.py ~{sample_list} ~{bed} ~{chr}
+
+
+  >>>
+
+  output {
+    Array[File] bed_file =  glob("per_sample_bed/*~{chr}.bed.gz")
   }
   
   runtime {
