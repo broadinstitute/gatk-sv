@@ -90,30 +90,11 @@ workflow AnnoILFeaturesPerSample{
     }
 
 
-    call mini_tasks.Bed2QueryAndRef{
-        input:
-            bed = bed_file,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    if(run_vapor){
-        call VaporValidation{
-            input:
-                bed = bed_file,
-                prefix = sample,
-                pacbio_seq = pacbio_seq,
-                ref_fasta = ref_fasta,
-                ref_fai = ref_fai,
-                vapor_docker = vapor_docker,
-                runtime_attr_override = runtime_attr_vapor        
-        }
-    }
-
     if (defined(hgsv_query)){
         call mini_tasks.BedComparison as BedComparison_vs_hgsv{
             input:
                 query = hgsv_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.hgsv",
                 sv_pipeline_docker=rdpesr_benchmark_docker
         }
@@ -123,7 +104,7 @@ workflow AnnoILFeaturesPerSample{
         call mini_tasks.BedComparison as BedComparison_vs_pacbio{
             input:
                 query = pacbio_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.pacbio",
                 sv_pipeline_docker=rdpesr_benchmark_docker
         }
@@ -133,7 +114,7 @@ workflow AnnoILFeaturesPerSample{
         call mini_tasks.BedComparison as BedComparison_vs_bionano{
             input:
                 query = bionano_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.bionano",
                 sv_pipeline_docker=rdpesr_benchmark_docker
         }
@@ -143,7 +124,7 @@ workflow AnnoILFeaturesPerSample{
         call mini_tasks.BedComparison as BedComparison_vs_array{
             input:
                 query = array_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.array",
                 sv_pipeline_docker=rdpesr_benchmark_docker
         }
@@ -168,7 +149,7 @@ workflow AnnoILFeaturesPerSample{
             raw_wham = raw_wham,
             raw_melt = raw_melt,
             raw_depth = raw_depth,
-            ref = Bed2QueryAndRef.ref,
+            ref = bed_file,
             prefix = "${sample}.vs",
             sv_pipeline_docker=rdpesr_benchmark_docker
     }
@@ -204,7 +185,6 @@ workflow AnnoILFeaturesPerSample{
 
         File? GCAnno = RunGenomicContextAnnotation.anno_bed
 
-        File? vapor_info = VaporValidation.vapor_info
         File? vs_hgsv = BedComparison_vs_hgsv.comparison
         File? vs_pacbio = BedComparison_vs_pacbio.comparison
         File? vs_bionano = BedComparison_vs_bionano.comparison
@@ -435,50 +415,3 @@ task RunDuphold{
     }
 }
 
-task VaporValidation{
-    input{
-        File bed
-        String prefix
-        File? pacbio_seq
-        File ref_fasta
-        File ref_fai   
-        String? vapor_docker 
-        RuntimeAttr? runtime_attr_override
-    }
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 3.75, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-  
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output{
-        File vapor_info = "~{prefix}.vapor"
-    }
-    command <<<
-        zcat ~{bed} | cut -f1-4,7  | grep -v INS > ~{prefix}.vapor_run.bed
-        zcat ~{bed} |cut -f1-4,7,8 | grep INS | sed -e 's/INS\t/INS_/' >> ~{prefix}.vapor_run.bed
-        mkdir ~{prefix}.vapor_figures/
-
-        vapor bed \
-        --sv-input  ~{prefix}.vapor_run.bed \
-        --output-path ~{prefix}.vapor_figures/ \
-        --reference ~{ref_fasta} \
-        --pacbio-input ~{pacbio_seq} \
-        --output-file ~{prefix}.vapor
-
-    >>>
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: vapor_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}

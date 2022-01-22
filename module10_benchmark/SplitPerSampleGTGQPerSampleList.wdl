@@ -63,16 +63,19 @@ workflow SplitPerSampleGTGQPerSampleList{
 
     call merge_gtgq.MergeGTGQ as MergeGTGQ{
         input:
-            gtgq_shards_chr_sample = split_per_sample_gtgq.gtgq_file,
-            bed_shards_chr_sample = split_per_sample_bed.bed_file
+            shards_chr_sample = split_per_sample_gtgq.gtgq_file,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
-
+    call merge_gtgq.MergeGTGQ as MergeBED{
+        input:
+            shards_chr_sample = split_per_sample_bed.bed_file,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
 
     output{
         Array[File] gtgq_out = MergeGTGQ.gtgq
-        Array[File] bed_out = MergeGTGQ.bed
+        Array[File] bed_out = MergeBED.gtgq
     }
 }
 

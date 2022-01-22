@@ -249,12 +249,11 @@ task ConcatBeds {
 
 task ConcatGTGQs {
     input {
-        Array[File] files
+        Array[Array[File]] files
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
-    String sample = basename(files[0], ".gtgq.gz")
 
     # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
     # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -283,20 +282,27 @@ task ConcatGTGQs {
 
     command <<<
         set -eu
-        zcat ~{files[0]} | head -1 > header.txt
+        zcat ~{files[0][0]} | head -1 > header.txt
 
         set -euo pipefail
 
-        while read file; do
-          zcat $file | tail -n+2
-        done < ~{write_lines(files)} \
-          | cat header.txt - \
-          | bgzip \
-        > ~{sample}.all_chr.gtgq.gz
+        i=0
+        while read line; do
+          IFS=$'\t' read -r -a files <<< "$line"
+          SAMPLE=$(basename "${files[0]}")
+          for file in "${files[@]}"; do
+            zcat $file | sed -1d
+          done \
+            | cat header.txt - \
+            | bgzip \
+          > $(printf "%06d" $i).${SAMPLE}.all_chr.gz
+          i=$((i+1))
+        done < ~{write_tsv(files)}
+
 
     >>>
     output {
-        File merged_gtgq_file = "~{sample}.all_chr.gtgq.gz"
+        Array[File] merged_gtgq_files = glob("*.all_chr.gz")
     }
 }
 
@@ -1409,9 +1415,12 @@ task bed2vapor{
         gsutil cp ~{bed_file} ./~{prefix}.bed.gz
         gunzip ~{prefix}.bed.gz
         grep -v "BND" ~{prefix}.bed | grep -v "CNV" | sed -e 's/CPX/INV/' | cut -f1-4,6,7 | sed -e 's/INS\t/INS_/' | cut -f1-5 >> ~{prefix}.vapor.bed
-        split -l ~{min_shard_size} ~{prefix}.vapor.bed -a 6 ~{prefix}.vapor.split.
 
-       
+        if [ $( cat ~{prefix}.vapor.bed | wc -l ) -lt 1 ]; then
+          touch ~{prefix}.vapor.split.0
+        else
+          split -l ~{min_shard_size} ~{prefix}.vapor.bed -a 6 ~{prefix}.vapor.split.
+        fi 
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

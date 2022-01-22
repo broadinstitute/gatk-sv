@@ -27,6 +27,7 @@ workflow AnnotateILFeaturesPerSample{
 
         String sample
 
+        File bed
         File raw_manta
         File raw_wham
         File raw_melt
@@ -64,28 +65,11 @@ workflow AnnotateILFeaturesPerSample{
     }
 
 
-    scatter (cleanBed in cleanBeds){
-        call mini_tasks.split_per_sample_bed as split_per_sample_bed{
-            input:
-                bed = cleanBed,
-                sample = sample,
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_split_vcf
-        }
-    }
-
-    call mini_tasks.ConcatBeds as concat_bed{
-        input:
-            shard_bed_files = split_per_sample_bed.bed_file,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
 
     call anno_il.AnnoILFeaturesPerSample as anno_il_features{
         input:
             sample = sample,
-            bed_file = concat_bed.merged_bed_file,
+            bed_file = bed,
 
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
@@ -125,7 +109,7 @@ workflow AnnotateILFeaturesPerSample{
         input:
             prefix = sample,
             sample = sample,
-            bed           = concat_bed.merged_bed_file,
+            bed           = bed,
             gt_anno       = gtgq,
             pesr_anno     = anno_il_features.PesrAnno,
             rd_anno       = anno_il_features.RdAnno,

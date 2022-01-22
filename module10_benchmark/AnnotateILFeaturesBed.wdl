@@ -50,6 +50,7 @@ workflow AnnotateILFeatures{
         Array[File] raw_melts
         Array[File] raw_depths
         Array[File] gtgqs
+        Array[File] beds
         #Array[File?] array_queries
 
         File ref_fasta
@@ -93,6 +94,7 @@ workflow AnnotateILFeatures{
                 raw_melt = raw_melts[i],
                 raw_depth = raw_depths[i],
                 gtgq  = gtgqs[i],
+                bed = beds[i],
                 #array_query = array_queries[i],
 
                 ref_fasta = ref_fasta,
