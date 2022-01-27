@@ -1,0 +1,10 @@
+{
+  "PlotSVCountsPerSample.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  
+  "PlotSVCountsPerSample.N_IQR_cutoff": "6",
+
+  "PlotSVCountsPerSample.prefix": {{ test_batch.name | tojson }},
+  "PlotSVCountsPerSample.vcfs" : [ 
+    {{ test_batch.clean_vcf | tojson }}
+  ]
+}

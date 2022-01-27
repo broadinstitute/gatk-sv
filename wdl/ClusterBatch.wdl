@@ -170,10 +170,15 @@ workflow ClusterBatch {
 
   output {
     File depth_vcf = ClusterDepth.clustered_vcf
+    File depth_vcf_index = ClusterDepth.clustered_vcf_index
     File? manta_vcf = ClusterPESR_manta.clustered_vcf
+    File? manta_vcf_index = ClusterPESR_manta.clustered_vcf_index
     File? delly_vcf = ClusterPESR_delly.clustered_vcf
+    File? delly_vcf_index = ClusterPESR_delly.clustered_vcf_index
     File? wham_vcf = ClusterPESR_wham.clustered_vcf
+    File? wham_vcf_index = ClusterPESR_wham.clustered_vcf_index
     File? melt_vcf = ClusterPESR_melt.clustered_vcf
+    File? melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
 
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }

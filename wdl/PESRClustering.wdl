@@ -51,6 +51,7 @@ workflow ClusterPESR {
 
   output {
     File clustered_vcf = ConcatVCFs.vcf
+    File clustered_vcf_index = ConcatVCFs.vcf_index
   }
 }
 
@@ -135,7 +136,7 @@ task ConcatVCFs {
 
   output {
     File vcf = "${batch}.${algorithm}.vcf.gz"
-    File idx = "${batch}.${algorithm}.vcf.gz.tbi"
+    File vcf_index = "${batch}.${algorithm}.vcf.gz.tbi"
   }
   command <<<
 

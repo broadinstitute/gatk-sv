@@ -12,7 +12,7 @@ from jinja2 import Environment, FileSystemLoader, Undefined
 # potentially tsv files for Terra import) based on the input templates in the repository and the
 # set of specified input values.
 #
-# Any json files in the input_values directory are read into maps corresponding to the file name. The input json files
+# Any json files in the values directory are read into maps corresponding to the file name. The input json files
 # should consist of single dictionaries. If an input dictionary contains a "name" key, its value will be used to report
 # missing value accesses.
 #
@@ -20,7 +20,7 @@ from jinja2 import Environment, FileSystemLoader, Undefined
 # is aliased to "reference_resources", a template accessing the "reference_resources" bundle will pull values from the
 # "resources_hg38.json" input values file.
 #
-# Values can be referred to by their resource bundle name + "." + attribute. For example, if the input_values
+# Values can be referred to by their resource bundle name + "." + attribute. For example, if the values
 # directory contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
 # and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template
 # the string {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
@@ -28,7 +28,7 @@ from jinja2 import Environment, FileSystemLoader, Undefined
 # By default the following resource bundle aliases are applied:
 #
 #   dockers -> dockers
-#   ref_panel -> ref_panel_v1b
+#   ref_panel -> ref_panel_1kg
 #   reference_resources -> resources_hg38
 #   test_batch -> empty
 #
@@ -98,13 +98,15 @@ def main():
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[
         0]: json.load(open(input_file, "r")) for input_file in input_files}
+    raw_input_bundles['ref_panel_empty'] = {}
+    raw_input_bundles['ref_panel_empty']['name'] = 'ref_panel'
     raw_input_bundles['test_batch_empty'] = {}
     raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
     raw_input_bundles['single_sample_none'] = {}
     raw_input_bundles['single_sample_none']['name'] = 'single_sample'
 
     default_aliases = {'dockers': 'dockers',
-                       'ref_panel': 'ref_panel_v1b',
+                       'ref_panel': 'ref_panel_empty',
                        'reference_resources': 'resources_hg38',
                        'test_batch': 'test_batch_empty',
                        'single_sample': 'single_sample_none'}

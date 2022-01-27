@@ -485,11 +485,16 @@ workflow GATKSVPipelinePhase1 {
     File? metrics_file_batchevidence = GatherBatchEvidence.metrics_file_batchevidence
 
     # ClusterBatch
-    File? depth_vcf = ClusterBatch.depth_vcf
+    File depth_vcf = ClusterBatch.depth_vcf
+    File depth_vcf_index = ClusterBatch.depth_vcf_index
     File? manta_vcf = ClusterBatch.manta_vcf
+    File? manta_vcf_index = ClusterBatch.manta_vcf_index
     File? delly_vcf = ClusterBatch.delly_vcf
+    File? delly_vcf_index = ClusterBatch.delly_vcf_index
     File? wham_vcf = ClusterBatch.wham_vcf
+    File? wham_vcf_index = ClusterBatch.wham_vcf_index
     File? melt_vcf = ClusterBatch.melt_vcf
+    File? melt_vcf_index = ClusterBatch.melt_vcf_index
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 
@@ -513,6 +518,11 @@ workflow GATKSVPipelinePhase1 {
     Array[String] batch_samples_postOutlierExclusion = FilterBatch.batch_samples_postOutlierExclusion
     File outlier_samples_excluded_file = FilterBatch.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatch.batch_samples_postOutlierExclusion_file
+
+    File? sites_filtered_manta_vcf = FilterBatch.sites_filtered_manta_vcf
+    File? sites_filtered_wham_vcf = FilterBatch.sites_filtered_wham_vcf
+    File? sites_filtered_melt_vcf = FilterBatch.sites_filtered_melt_vcf
+    File? sites_filtered_depth_vcf = FilterBatch.sites_filtered_depth_vcf
 
     File? metrics_file_filterbatch = FilterBatch.metrics_file_filterbatch
   }

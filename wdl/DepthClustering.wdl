@@ -92,6 +92,7 @@ workflow ClusterDepth {
 
   output {
     File clustered_vcf = MakeDepthVCF.vcf
+    File clustered_vcf_index = MakeDepthVCF.vcf_index
   }
 }
 
@@ -159,12 +160,13 @@ task MakeDepthVCF {
 
   output {
     File vcf = "${batch}.depth.vcf.gz"
+    File vcf_index = "${batch}.depth.vcf.gz.tbi"
   }
   command <<<
 
     set -euo pipefail
-    cut -f5 ~{bed} | sed -e '1d' -e 's/,/\n/g' | sort -u > samples.list;
-    svtk rdtest2vcf --contigs ~{contigs} ~{bed} samples.list ~{batch}.depth.vcf.gz;
+    cut -f5 ~{bed} | sed -e '1d' -e 's/,/\n/g' | sort -u > samples.list
+    svtk rdtest2vcf --contigs ~{contigs} ~{bed} samples.list ~{batch}.depth.vcf.gz
   
   >>>
   runtime {

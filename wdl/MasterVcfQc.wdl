@@ -17,9 +17,9 @@ workflow MasterVcfQc {
     String prefix
     Int sv_per_shard
     Int samples_per_shard
-    Array[File]? thousand_genomes_tarballs
-    Array[File]? hgsv_tarballs
-    Array[File]? asc_tarballs
+    Array[File]? thousand_genomes_benchmark_calls
+    Array[File]? hgsv_benchmark_calls
+    Array[File]? asc_benchmark_calls
     File? sanders_2015_tarball
     File? collins_2017_tarball
     File? werling_2018_tarball
@@ -176,12 +176,12 @@ workflow MasterVcfQc {
   }
 
   # Collect external benchmarking vs 1000G
-  if (defined(thousand_genomes_tarballs)) {
+  if (defined(thousand_genomes_benchmark_calls)) {
     call VcfExternalBenchmark as ThousandGBenchmark {
       input:
         vcf_stats=MergeVcfwideStatShards.merged_bed_file,
         prefix=prefix,
-        benchmarking_archives=select_first([thousand_genomes_tarballs]),
+        benchmarking_archives=select_first([thousand_genomes_benchmark_calls]),
         comparator="1000G_Sudmant",
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_thousand_g_benchmark
@@ -199,12 +199,12 @@ workflow MasterVcfQc {
   }
   
   # Collect external benchmarking vs ASC
-  if (defined(hgsv_tarballs)) {
+  if (defined(asc_benchmark_calls)) {
     call VcfExternalBenchmark as AscBenchmark {
       input:
         vcf_stats=MergeVcfwideStatShards.merged_bed_file,
         prefix=prefix,
-        benchmarking_archives=select_first([asc_tarballs]),
+        benchmarking_archives=select_first([asc_benchmark_calls]),
         comparator="ASC_Werling",
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_asc_benchmark
@@ -222,12 +222,12 @@ workflow MasterVcfQc {
   }
   
   # Collect external benchmarking vs HGSV
-  if (defined(hgsv_tarballs)) {
+  if (defined(hgsv_benchmark_calls)) {
     call VcfExternalBenchmark as HgsvBenchmark {
       input:
         vcf_stats=MergeVcfwideStatShards.merged_bed_file,
         prefix=prefix,
-        benchmarking_archives=select_first([hgsv_tarballs]),
+        benchmarking_archives=select_first([hgsv_benchmark_calls]),
         comparator="HGSV_Chaisson",
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_hgsv_benchmark

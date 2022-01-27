@@ -30,13 +30,20 @@ if [[ ! -d "$BASE_DIR" ]]; then
    exit 1
 fi
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/input_templates ${BASE_DIR}/inputs \
-  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg_v2"}'
+# Clean any existing outputs
+bash scripts/inputs/clean_default_inputs.sh -d ${BASE_DIR}
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/small \
-  -a '{"test_batch" : "test_batch_small"}'
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/large \
-  -a '{"test_batch" : "test_batch_large"}'
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/ref_panel_1kg/test \
+  -a '{ "test_batch" : "ref_panel_1kg" }'
 
-scripts/inputs/build_inputs.py ${BASE_DIR}/input_values ${BASE_DIR}/test_input_templates ${BASE_DIR}/test_inputs/single_sample \
-  -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_v1b" }'
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/terra_workspaces/cohort_mode ${BASE_DIR}/inputs/build/ref_panel_1kg/terra \
+  -a '{ "test_batch" : "ref_panel_1kg" }'
+
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
+  -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "ref_panel_1kg" }'
+
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/terra_workspaces/single_sample ${BASE_DIR}/inputs/build/NA12878/terra \
+  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg" }'
+
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA12878/test \
+  -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "ref_panel_1kg" }'

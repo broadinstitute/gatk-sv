@@ -142,6 +142,12 @@ workflow FilterBatch {
     File outlier_samples_excluded_file = FilterBatchSamples.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatchSamples.filtered_batch_samples_file
 
+    File? sites_filtered_manta_vcf = FilterBatchSites.sites_filtered_manta_vcf
+    File? sites_filtered_delly_vcf = FilterBatchSites.sites_filtered_delly_vcf
+    File? sites_filtered_wham_vcf = FilterBatchSites.sites_filtered_wham_vcf
+    File? sites_filtered_melt_vcf = FilterBatchSites.sites_filtered_melt_vcf
+    File? sites_filtered_depth_vcf = FilterBatchSites.sites_filtered_depth_vcf
+
     File? metrics_file_filterbatch = FilterBatchMetrics.metrics_file
   }
 }
