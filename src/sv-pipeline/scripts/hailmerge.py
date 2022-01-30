@@ -69,7 +69,7 @@ ref = hl.ReferenceGenome(name="hg38", contigs=contigs, lengths=lengths, x_contig
 all_datasets = hl.import_vcf(files, reference_genome=ref, force_bgz=True)
 
 # union_rows approach causes ClassTooLargeException
-#mt = hl.MatrixTable.union_rows(*all_datasets)
+# mt = hl.MatrixTable.union_rows(*all_datasets)
 mt = all_datasets
 # rest the qual to missing because hail by default populates it with -1.00e+01
 merged_reset_qual = mt.annotate_rows(qual=hl.missing('float64'))

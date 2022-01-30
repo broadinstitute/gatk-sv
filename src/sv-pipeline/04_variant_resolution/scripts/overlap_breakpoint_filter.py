@@ -18,6 +18,7 @@ if len(sys.argv) >= 6:
 else:
     DEBUG_OUTPUT_PATH = None
 
+
 # Sorts list xs by specified attributes
 def multisort(xs, specs):
     for key, reverse in reversed(specs):

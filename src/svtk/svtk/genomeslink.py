@@ -171,10 +171,10 @@ class GenomeSLINK(object):
         if first.chrB == second.chrB:
             if self.single_end:
                 return abs(first.posA - second.posA) < self.dist or \
-                        abs(first.posB - second.posB) < self.dist
+                    abs(first.posB - second.posB) < self.dist
             else:
                 return abs(first.posA - second.posA) < self.dist and \
-                        abs(first.posB - second.posB) < self.dist
+                    abs(first.posB - second.posB) < self.dist
         else:
             return False
 

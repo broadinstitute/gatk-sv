@@ -12,8 +12,7 @@ import sys
 from pathlib import Path
 import string
 
-ALPHABET = string.ascii_uppercase + string.ascii_lowercase + \
-           string.digits
+ALPHABET = string.ascii_uppercase + string.ascii_lowercase + string.digits
 ALPHABET_REVERSE = dict((c, i) for (i, c) in enumerate(ALPHABET))
 BASE = len(ALPHABET)
 
@@ -38,7 +37,8 @@ def num_encode(n):
     while True:
         n, r = divmod(n, BASE)
         s.append(ALPHABET[r])
-        if n == 0: break
+        if n == 0:
+            break
     return ''.join(reversed(s))
 
 
@@ -150,8 +150,6 @@ class VCFReviser:
                         overlap_test_text[f"{narrower[3]}@{x}"] = \
                             [f"{narrower[3]}@{x}", wider[3], wider[4]]
 
-
-
         logging.info('Generating geno_normal_revise_dict')
         geno_normal_revise_dict = {}
         for k, v in overlap_test_text.items():
@@ -222,6 +220,7 @@ def main(args):
     reviser.set_temp_dir(args[2])
     reviser.modify_variants(args[1], multi_cnvs_filename)
     logging.info('Done')
+
 
 if __name__ == '__main__':
     main(sys.argv)
