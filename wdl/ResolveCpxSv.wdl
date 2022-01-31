@@ -42,7 +42,7 @@ workflow ResolveComplexSv {
   File pe_exclude_list_idx = pe_exclude_list + ".tbi"
   File cytobands_idx = cytobands + ".tbi"
   scatter (i in range(length(disc_files))) {
-    File disc_files_idx = disc_files[i]
+    File disc_files_idx = disc_files[i] + ".tbi"
   }
 
   # Get SR count cutoff from RF metrics to use in single-ender rescan procedure
