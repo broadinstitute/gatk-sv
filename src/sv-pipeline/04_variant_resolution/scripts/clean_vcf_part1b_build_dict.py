@@ -38,6 +38,10 @@ class VCFReviser:
 
     @staticmethod
     def get_wider(f):
+        # f[1] : first interval start
+        # f[2] : first interval end
+        # f[7] : second interval start
+        # f[8] : second interval end
         if int(f[2]) - int(f[1]) >= int(f[8]) - int(f[7]):
             return f[0:6], f[6:12]
         else:
@@ -70,6 +74,13 @@ class VCFReviser:
             bed = pybedtools.BedTool(bed_file)
             for interval in bed.intervals:
                 wider, narrower = self.get_wider(interval.fields)
+                # wider and narrower are lists/tuples with the following fields:
+                # [0] : contig
+                # [1] : start position
+                # [2] : end position
+                # [3] : variant ID
+                # [4] : SV type
+                # [5] : comma-delimited sample lists, or BLANK_SAMPLES if none
                 if wider[5] == BLANK_SAMPLES:
                     continue
 
@@ -88,6 +99,8 @@ class VCFReviser:
             revise_vids = defaultdict(set)
             for var_id, samples_dict in overlap_test_text.items():
                 for sample_index, v in samples_dict.items():
+                    # v[0] : variant ID
+                    # v[1] : SV type
                     if v[1] == SVType.DUP or v[1] == SVType.DEL:
                         revise_vids[var_id].add(sample_index)
                         revise_vids[v[0]].add(sample_index)
@@ -102,6 +115,8 @@ class VCFReviser:
         geno_normal_revise_dict = {}
         for var_id, samples_dict in overlap_test_text.items():
             for sample_index, v in samples_dict.items():
+                # v[0] : variant ID
+                # v[1] : SV type
                 new_val = None
                 if sample_index not in revise_vids[v[0]]:
                     sys.stderr.write("{} {}\n".format(sample_index, v[0]))

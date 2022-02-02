@@ -27,6 +27,13 @@ def main():
     multiallelic_bed = svu.vcf2bedtool(args.multiallelic_filename, include_filters=True)
 
     redundant_multiallelics = set()
+    # feature fields:
+    #   [1] : first interval start
+    #   [2] : first interval end
+    #   [3] : first interval variant ID
+    #   [8] : second interval start
+    #   [9] : second interval end
+    #   [10] : second interval variant ID
     self_inter = multiallelic_bed.intersect(multiallelic_bed, wo=True)\
         .filter(lambda feature: feature[3] != feature[10]) \
         .filter(lambda feature: (int(feature[2]) - int(feature[1])) >= (int(feature[9]) - int(feature[8]))) \

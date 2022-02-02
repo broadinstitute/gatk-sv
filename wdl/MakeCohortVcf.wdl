@@ -98,7 +98,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
 
     # overrides for mini tasks
-    RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
     RuntimeAttr? runtime_override_subset_inversions
@@ -176,8 +175,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcfContig
-    RuntimeAttr? runtime_attr_ids_from_vcf_clean
-    RuntimeAttr? runtime_attr_subset_ped_clean
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
@@ -408,8 +405,6 @@ workflow MakeCohortVcf {
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_updates_docker=sv_pipeline_updates_docker,
-      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf_clean,
-      runtime_attr_subset_ped=runtime_attr_subset_ped_clean,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,

@@ -33,6 +33,7 @@ class ProjectBuilder:
         'sv-pipeline': {'sv-pipeline-base': "SV_PIPELINE_BASE_IMAGE"},
         'sv-pipeline-children-r': {'sv-pipeline-base': "SV_PIPELINE_BASE_IMAGE"},
         'sv-pipeline-hail': {'sv-pipeline': "SV_PIPELINE_IMAGE"},
+        'sv-pipeline-updates': {'sv-pipeline': "SV_PIPELINE_IMAGE"},
         'sv-pipeline-rdtest': {'sv-pipeline-children-r': "SV_PIPELINE_BASE_R_IMAGE"},
         'sv-pipeline-qc': {'sv-pipeline-children-r': "SV_PIPELINE_BASE_R_IMAGE"}
     }

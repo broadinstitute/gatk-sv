@@ -3,7 +3,6 @@ version 1.0
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
-import "Utils.wdl" as util
 
 workflow CleanVcf {
   input {
@@ -38,8 +37,6 @@ workflow CleanVcf {
     String sv_pipeline_updates_docker
 
     # overrides for mini tasks
-    RuntimeAttr? runtime_attr_ids_from_vcf
-    RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
@@ -86,21 +83,6 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
   }
 
-  call util.GetSampleIdsFromVcf {
-    input:
-      vcf = complex_genotype_vcfs[0],
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_ids_from_vcf
-  }
-  call util.SubsetPedFile {
-    input:
-      ped_file = merged_ped_file,
-      sample_list = GetSampleIdsFromVcf.out_file,
-      subset_name = "vcf_samples",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_subset_ped
-  }
-
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -111,7 +93,7 @@ workflow CleanVcf {
         vcf=complex_genotype_vcfs[i],
         contig=contig,
         background_list=complex_resolve_background_fail_lists[i],
-        ped_file=SubsetPedFile.ped_subset_file,
+        ped_file=merged_ped_file,
         bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
         allosome_fai=allosome_fai,
         prefix="~{cohort_name}.~{contig}",
