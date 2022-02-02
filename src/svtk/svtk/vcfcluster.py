@@ -29,7 +29,8 @@ class VCFCluster(GenomeSLINK):
                  preserve_genotypes=False, sample_overlap=0.0,
                  preserve_header=False,
                  do_cluster=True,
-                 do_merge=True):
+                 do_merge=True,
+                 single_end=False):
         """
         Clustering of VCF records.
 
@@ -71,6 +72,8 @@ class VCFCluster(GenomeSLINK):
             specified, all svtypes will be clustered.
         sample_overlap : float, optional
             Minimum fraction of samples to overlap to cluster variants
+        single_end : bool, optional
+            Require only one end to be within min dist.
         """
 
         if (not do_cluster) and (not do_merge):
@@ -115,7 +118,7 @@ class VCFCluster(GenomeSLINK):
         self.sources = sorted(sources)
         self.header = self.make_vcf_header()
 
-        super().__init__(nodes, dist, 1, blacklist)
+        super().__init__(nodes, dist, 1, blacklist, single_end)
 
     def clusters_with(self, first, second):
         """

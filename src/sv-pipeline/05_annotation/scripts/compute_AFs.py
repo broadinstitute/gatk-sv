@@ -82,7 +82,7 @@ def update_sex_freqs(record, pop=None):
     return record
 
 
-def gather_allele_freqs(record, all_samples, males, females, parbt, pop_dict, pops,
+def gather_allele_freqs(record, samples, males_set, females_set, parbt, pop_dict, pops,
                         sex_chroms, no_combos=False):
     """
     Wrapper to compute allele frequencies for all sex & population pairings
@@ -99,40 +99,40 @@ def gather_allele_freqs(record, all_samples, males, females, parbt, pop_dict, po
         rec_in_par = False
 
     # Get allele frequencies for all populations
-    calc_allele_freq(record, all_samples)
-    if len(males) > 0:
+    calc_allele_freq(record, samples)
+    if len(males_set) > 0:
         if record.chrom in sex_chroms and not rec_in_par:
-            calc_allele_freq(record, males, prefix='MALE', hemi=True)
+            calc_allele_freq(record, males_set, prefix='MALE', hemi=True)
         else:
-            calc_allele_freq(record, males, prefix='MALE')
-    if len(females) > 0:
-        calc_allele_freq(record, females, prefix='FEMALE')
+            calc_allele_freq(record, males_set, prefix='MALE')
+    if len(females_set) > 0:
+        calc_allele_freq(record, females_set, prefix='FEMALE')
 
     # Adjust global allele frequencies on sex chromosomes, if famfile provided
     if record.chrom in sex_chroms and not rec_in_par \
-            and svu.is_biallelic(record) and len(males) + len(females) > 0:
+            and svu.is_biallelic(record) and len(males_set) + len(females_set) > 0:
         update_sex_freqs(record)
 
     # Get allele frequencies per population
     if len(pops) > 0:
         for pop in pops:
             pop_samps = [
-                s for s in all_samples if pop_dict.get(s, None) == pop]
+                s for s in samples if pop_dict.get(s, None) == pop]
             calc_allele_freq(record, pop_samps, prefix=pop)
-            if len(males) > 0 and not no_combos:
+            if len(males_set) > 0 and not no_combos:
                 if record.chrom in sex_chroms and not rec_in_par:
-                    calc_allele_freq(record, [s for s in pop_samps if s in males],
+                    calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
                                      prefix=pop + '_MALE', hemi=True)
                 else:
-                    calc_allele_freq(record, [s for s in pop_samps if s in males],
+                    calc_allele_freq(record, list([s for s in pop_samps if s in males_set]),
                                      prefix=pop + '_MALE')
-            if len(females) > 0 and not no_combos:
-                calc_allele_freq(record, [s for s in pop_samps if s in females],
+            if len(females_set) > 0 and not no_combos:
+                calc_allele_freq(record, list([s for s in pop_samps if s in females_set]),
                                  prefix=pop + '_FEMALE')
 
             # Adjust per-pop allele frequencies on sex chromosomes, if famfile provided
             if record.chrom in sex_chroms and not rec_in_par \
-                    and svu.is_biallelic(record) and len(males) + len(females) > 0:
+                    and svu.is_biallelic(record) and len(males_set) + len(females_set) > 0:
                 update_sex_freqs(record, pop=pop)
 
         # Get POPMAX AF biallelic sites only
@@ -154,7 +154,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
     if svu.is_biallelic(record):
 
         # Get all sample GTs
-        GTs = [s['GT'] for s in record.samples.values() if s.name in samples]
+        GTs = [record.samples[s]['GT'] for s in samples]
 
         # Count alleles & genotypes
         AC = 0
@@ -237,8 +237,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
     else:
 
         # Get all sample CNs and remove Nones
-        CNs_wNones = [s['CN']
-                      for s in record.samples.values() if s.name in samples]
+        CNs_wNones = [record.samples[s]['CN'] for s in samples]
         CNs = [c for c in CNs_wNones if c is not None and c not in '. NA'.split()]
 
         if len(CNs) == 0:
@@ -306,24 +305,26 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
 
     # Get list of all samples in vcf
-    all_samples = list(vcf.header.samples)
+    samples_list = list(vcf.header.samples)
 
     # Get lists of males and females
     parbt = pbt.BedTool('', from_string=True)
     if args.famfile is not None:
         famfile = [line.rstrip('\n') for line in open(args.famfile)]
-        males = [line.split('\t')[1]
-                 for line in famfile if line.split('\t')[4] == '1']
-        females = [line.split('\t')[1]
-                   for line in famfile if line.split('\t')[4] == '2']
+        males_set = set([line.split('\t')[1]
+                 for line in famfile if line.split('\t')[4] == '1'])
+        males_set = set(s for s in samples_list if s in males_set)
+        females_set = set([line.split('\t')[1]
+                   for line in famfile if line.split('\t')[4] == '2'])
+        females_set = set(s for s in samples_list if s in females_set)
         sexes = 'MALE FEMALE'.split()
         if args.par is not None:
             parbt = pbt.BedTool(args.par)
 
     else:
-        males = []
-        females = []
-        sexes = []
+        males_set = set()
+        females_set = set()
+        sexes = list()
 
     # Get dictionary of populations
     if args.popfile is not None:
@@ -334,6 +335,7 @@ def main():
     else:
         pop_dict = {}
         pops = []
+
 
     # Get list of sex chromosomes, if optioned
     if args.allosomes_list is not None:
@@ -491,7 +493,7 @@ def main():
 
     # Get allele frequencies for each record & write to new VCF
     for r in vcf.fetch():
-        newrec = gather_allele_freqs(r, all_samples, males, females, parbt, pop_dict,
+        newrec = gather_allele_freqs(r, samples_list, males_set, females_set, parbt, pop_dict,
                                      pops, sex_chroms, args.no_combos)
         fout.write(newrec)
 

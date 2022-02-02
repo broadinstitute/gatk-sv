@@ -2,7 +2,7 @@
 
 # Reassign variant labels based on depth regenotyping in mod04b
 
-set -exo pipefail
+set -eo pipefail
 ###USAGE
 usage(){
 cat <<EOF
@@ -23,19 +23,19 @@ Optional arguments:
   -h  HELP                 Show this help message and exit
   -s  MINSIZE              Minimum size (in bp) of CNV interval to be considered
                            during variant reclassification [default: 1000]
-  -d  MINDIFF              Minimum difference in non-ref CNV genotype frequency 
-                           between predicted carriers and noncarriers to consider 
-                           a CNV interval to have adequate depth support 
+  -d  MINDIFF              Minimum difference in non-ref CNV genotype frequency
+                           between predicted carriers and noncarriers to consider
+                           a CNV interval to have adequate depth support
                            [default: 0.4]
-  -D  <integer>            Minimum insertion site size (in bp) to be considered for 
+  -D  <integer>            Minimum insertion site size (in bp) to be considered for
                            distinguishing insertion site deletions [default: 150 bp]
   -T  <integer>            Minimum size (in bp) at which to prioritize an inverted
                            dDUP classification over a dupINV or INVdup classification
                            [default: 1000000 bp]
-  -R  <path>               Path to table containing the final reclassification 
-                           decision made per variant. [default: no table output] 
+  -R  <path>               Path to table containing the final reclassification
+                           decision made per variant. [default: no table output]
   -G  <path>               Path to table containing the raw genotype counts table
-                           per interval per variant. [default: no table output] 
+                           per interval per variant. [default: no table output]
 
 
 Notes:
@@ -221,9 +221,9 @@ while read chr start end VID samps trash; do
     unset medCN
 
     ###Get list of samples & reference CN to consider, dependent on chr of call
-    #ChrX: use only diploid females if possible, otherwise use haploid males 
+    #ChrX: use only diploid females if possible, otherwise use haploid males
     if [ ${chr} == "X" ] || [ ${chr} == "chrX" ]; then
-      
+
       #Try to get female carrier samples
       echo -e "${samps}" | sed 's/,/\n/g' \
         | fgrep -wf - ${GTDIR}/female.samples.list \
@@ -323,7 +323,7 @@ while read chr start end VID samps trash; do
     fi
 
 
-    #For predicted carriers, count number of genotypes lower than, 
+    #For predicted carriers, count number of genotypes lower than,
     # equal to, and greater than the overall median
     if [ $( cat ${GTDIR}/carrier_samples.tmp | wc -l ) -gt 0 ]; then
       fgrep -wf ${GTDIR}/carrier_samples.tmp \
@@ -338,8 +338,8 @@ while read chr start end VID samps trash; do
     else
       echo -e "0\n0\n0"
     fi
-    
-    #For predicted non-carriers, count number of genotypes lower than, 
+
+    #For predicted non-carriers, count number of genotypes lower than,
     # equal to, and greater than the overall median
     if [ $( cat ${GTDIR}/control_samples.tmp | wc -l ) -gt 0 ]; then
       fgrep -wf ${GTDIR}/control_samples.tmp \
@@ -432,7 +432,7 @@ awk -v ENDidx=${ENDidx} -v OFS="\t" '{ $3=$ENDidx; print }' \
   ${GTDIR}/inv_se_vcf2bed.precut.bed \
   | fgrep -v "#" || true \
   >> ${GTDIR}/variants_to_reclassify.vcf2bed.bed
-  
+
 
 ###MAKE FINAL ASSESSMENT FOR EACH VARIANT
 #Print header
@@ -994,14 +994,25 @@ while read VID MOD REASON svtype cpxtype cpxintervals SVLEN SOURCE START END; do
       #Modify info as needed
       INFO=$( fgrep -w ${VID} ${GTDIR}/variants_to_be_reassessed.vcf \
                 | cut -f8 \
-                | sed -r -e "s/END=[^;]*;/END=$END;/" \
+                | sed -r -e "s/^END=[^;]*;/END=$END;/" \
+                | sed -r -e "s/;END=[^;]*;/;END=$END;/" \
+                | sed -r -e "s/;END=[^;]*$/;END=$END/" \
+                | sed -r -e "s/^SVTYPE=[^;]*;/SVTYPE=$svtype;/" \
                 | sed -r -e "s/;SVTYPE=[^;]*;/;SVTYPE=$svtype;/" \
+                | sed -r -e "s/;SVTYPE=[^;]*$/;SVTYPE=$svtype/" \
+                | sed -r -e "s/^SVLEN=[^;]*;/SVLEN=$SVLEN;/" \
                 | sed -r -e "s/;SVLEN=[^;]*;/;SVLEN=$SVLEN;/" \
-                | sed -r -e "s/;CPX_TYPE=[^;]*$/;CPX_TYPE=${cpxtype}/" \
+                | sed -r -e "s/;SVLEN=[^;]*$/;SVLEN=$SVLEN/" \
+                | sed -r -e "s/^CPX_TYPE=[^;]*;/CPX_TYPE=${cpxtype};/" \
                 | sed -r -e "s/;CPX_TYPE=[^;]*;/;CPX_TYPE=${cpxtype};/" \
+                | sed -r -e "s/;CPX_TYPE=[^;]*$/;CPX_TYPE=${cpxtype}/" \
+                | sed -r -e 's/^UNRESOLVED;//' \
                 | sed -r -e 's/;UNRESOLVED;/;/' \
+                | sed -r -e 's/;UNRESOLVED$//' \
+                | sed -r -e 's/^UNRESOLVED_TYPE=[^;]*;//' \
                 | sed -r -e 's/;UNRESOLVED_TYPE=[^;]*;/;/' \
                 | sed -r -e 's/;UNRESOLVED_TYPE=[^;]*$//' \
+                | sed -r -e 's/^EVENT=[^;]*;//' \
                 | sed -r -e 's/;EVENT=[^;]*;/;/' \
                 | sed -r -e 's/;EVENT=[^;]*$//' )
       #Add/remove/modify CPX_TYPE, if needed

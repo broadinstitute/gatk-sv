@@ -302,7 +302,7 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
                     chrom = record.chrom
                     start = max([0, int(record.pos) - 1])
                     end = record.pos
-                    entry.format(**locals())
+                    yield entry.format(**locals())
 
             # elif (record.info.get('SVTYPE', None) == 'CPX' and
             #       'CPX_TYPE' in record.info.keys()):

@@ -132,7 +132,7 @@ task SortVcf {
 
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 +  size(vcf, "GB") * 20),
+                                  disk_gb: ceil(10.0 +  size(vcf, "GB") * 40),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -176,14 +176,12 @@ task ConcatVcfs {
     Boolean allow_overlaps = false
     Boolean naive = false
     Boolean generate_index = true
+    Boolean sites_only = false
+    Boolean sort_vcf_list = false
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  String outfile_name = outfile_prefix + ".vcf.gz"
-  String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
-  String naive_flag = if naive then "--naive" else ""
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -206,18 +204,25 @@ task ConcatVcfs {
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
+  String outfile_name = outfile_prefix + ".vcf.gz"
+  String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
+  String naive_flag = if naive then "--naive" else ""
+  String concat_output_type = if (sites_only) then "v" else "z"
+  String sites_only_command = if (sites_only) then "| bcftools view --no-version -G -Oz" else ""
+  String generate_index_command = if (generate_index) then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
+
   command <<<
     set -euo pipefail
     VCFS="~{write_lines(vcfs)}"
-    if ~{!defined(vcfs_idx)}; then
-      cat ${VCFS} | xargs -n1 tabix
-    fi
-    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} --output-type z --file-list ${VCFS} --output "~{outfile_name}"
-    if ~{generate_index}; then
-      tabix "~{outfile_name}"
+    if ~{sort_vcf_list}; then
+      cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs.list
     else
-      touch ~{outfile_name}.tbi
+      cp $VCFS vcfs.list
     fi
+    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} -O~{concat_output_type} --file-list vcfs.list \
+      ~{sites_only_command} \
+      > ~{outfile_name}
+    ~{generate_index_command}
   >>>
 
   output {
@@ -444,53 +449,6 @@ task FilterVcf {
   }
 }
 
-# Find intersection of Variant IDs from vid_list with those present in vcf, return as filtered_vid_list
-task SubsetVariantList {
-  input {
-    File vid_list
-    File vcf
-    String outfile_name
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float vid_list_size = size(vid_list, "GB")
-  Float vcf_size = size(vcf, "GB")
-  RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
-    disk_gb: ceil(10.0 + vcf_size + vid_list_size * 2.0),
-    cpu_cores: 1,
-    preemptible_tries: 3,
-    max_retries: 1,
-    boot_disk_gb: 10
-  }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-  runtime {
-    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-  }
-
-  command <<<
-    set -eu -o pipefail
-    #Get list of variant IDs present in VCF
-    zcat ~{vcf} | (grep -vE "^#" || printf "") | cut -f3 > valid_vids.list
-    #Restrict input variant ID list to valid VIDs
-    (fgrep -wf valid_vids.list ~{vid_list} || printf "") > "~{outfile_name}"
-  >>>
-
-  output {
-    File filtered_vid_list = outfile_name
-  }
-}
-
-
 # evenly split text file into even chunks
 #   if shuffle_file is set to true, shuffle the file before splitting (default = false)
 task SplitUncompressed {
@@ -687,15 +645,10 @@ task UpdateSrList {
     RuntimeAttr? runtime_attr_override
   }
 
-  # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
-  # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size([vcf, original_list], "GiB")
-  Float compression_factor = 5.0
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    disk_gb: ceil(10.0 + size(original_list, "GiB") * 3 + size(vcf, "GiB")),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -715,17 +668,19 @@ task UpdateSrList {
   command <<<
     set -euxo pipefail
 
-    ##append new ids to original list##
-    svtk vcf2bed ~{vcf} int.bed -i MEMBERS
+    # append new ids to original list
+    svtk vcf2bed ~{vcf} int.bed -i MEMBERS --no-samples --no-header
 
-    ##remove header and match id one per line##
-    awk '{if (NR>1) print $4 "\t" $NF}' int.bed \
-      | awk -F'[,\t]' '{for(i=2; i<=NF; ++i) print $i "\t" $1 }' \
-      | sort -k1,1\
-      > newidlist.txt
-
-    join -j 1 -t $'\t' <(awk '{print $NF "\t" $0}' ~{original_list} | sort -k1,1) newidlist.txt \
-      | cut -f2-  \
+    # match id one per line
+    # if an id is not found in the vcf, use previous id (in case vcf is a shard/subset)
+    # also sort by first column, which is support fraction for a bothside pass list
+    awk -F'[,\t]' -v OFS='\t' \
+      '{ \
+        if (ARGIND==1) for(i=6; i<=NF; ++i) MAP[$i]=$4; \
+        else if ($NF in MAP) print $0,MAP[$NF]; \
+        else print $0,$NF; \
+      }' int.bed ~{original_list} \
+      | sort -k1,1n \
       > ~{outfile}
   >>>
 
@@ -735,7 +690,7 @@ task UpdateSrList {
 }
 
   
-task ShardVids {
+task ShardVidsForClustering {
   input {
     File clustered_vcf
     String prefix
@@ -785,7 +740,7 @@ task ShardVids {
       print("empty vcf - no shards will be produced")
       sys.exit(0)
     vcf.reset()
-
+    
     current_cluster = None
     current_cluster_vids = []
     current_shard = 0
@@ -831,5 +786,233 @@ task ShardVids {
 
   output {
     Array[File] out = glob("~{prefix}.vids.shard_*.list")
+  }
+}
+
+task MakeSitesOnlyVcf {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 1.2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    bcftools view --no-version -G ~{vcf} -Oz -o ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
+  }
+}
+
+
+task ReheaderVcf {
+  input {
+    File vcf
+    File vcf_index
+    File header
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euxo pipefail
+    bcftools reheader -h ~{header} ~{vcf} > ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
+  }
+}
+
+task PullVcfShard {
+  input {
+    File vcf
+    File vids
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String output_prefix = "~{prefix}"
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    bcftools view --no-version --include ID=@~{vids} ~{vcf} -O z -o ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
+    wc -l < ~{vids} > count.txt
+  >>>
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+    Int count = read_int("count.txt")
+  }
+}
+
+task RenameVariantIds {
+  input {
+    File vcf
+    File? vcf_index
+    String vid_prefix
+    String file_prefix
+    Boolean? use_ssd
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String disk_type = if (defined(use_ssd) && select_first([use_ssd])) then "SSD" else "HDD"
+  Float input_size = size(vcf, "GiB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 2.0,
+                                  disk_gb: ceil(10.0 + input_size * 2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} ~{disk_type}"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    zcat ~{vcf} \
+      | awk -F'\t' -v OFS='\t' -v i=0 '{if ($0~/^#/) {print; next} $3="prefix_"(i++); print}' \
+      | bgzip \
+      > ~{file_prefix}.vcf.gz
+    if ~{defined(vcf_index)}; then
+      tabix ~{file_prefix}.vcf.gz
+    else
+      touch ~{file_prefix}.vcf.gz
+    fi
+  >>>
+
+  output {
+    File out = "~{file_prefix}.vcf.gz"
+    File out_index = "~{file_prefix}.vcf.gz.tbi"
+  }
+}
+
+# Note: requires docker with updated bcftools
+task ScatterVcf {
+  input {
+    File vcf
+    String prefix
+    Int records_per_shard
+    Int? threads = 1
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GB")
+  Float base_disk_gb = 10.0
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(base_disk_gb + input_size * 5.0),
+                                  cpu_cores: 2,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    # in case the file is empty create an empty shard
+    bcftools view -h ~{vcf} | bgzip -c > ~{prefix}.0.vcf.gz
+    bcftools +scatter ~{vcf} -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard}
+
+    ls ~{prefix}.*.vcf.gz | sort -k1,1V > vcfs.list
+    i=0
+    while read vcf; do
+      shard_no=`printf %06d $i`
+      mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
+      i=$((i+1))
+    done < vcfs.list
+  >>>
+  output {
+    Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
   }
 }

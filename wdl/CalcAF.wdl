@@ -1,15 +1,16 @@
 version 1.0
 
 import "Structs.wdl"
+import "CleanVcf5.wdl" as cleanvcf5
 
 workflow CalcAF {
   input{
     File vcf
     File vcf_idx
-    String contig
     Int sv_per_shard
     String prefix
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
@@ -20,23 +21,22 @@ workflow CalcAF {
 
 
   # Tabix to chromosome of interest, and shard input VCF for stats collection
-  call ShardVcf {
+  call cleanvcf5.ScatterVcf {
     input:
       vcf=vcf,
-      vcf_idx=vcf_idx,
-      contig=contig,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_per_shard=sv_per_shard
+      prefix=prefix,
+      sv_pipeline_docker=sv_pipeline_updates_docker,
+      records_per_shard=sv_per_shard
   }
 
   # Scatter over VCF shards
-  scatter ( shard in ShardVcf.shard_vcfs ) {
+  scatter ( shard in ScatterVcf.shards ) {
     # Collect AF summary stats
     call ComputeShardAFs {
       input:
         vcf=shard,
         sv_pipeline_docker=sv_pipeline_docker,
-        prefix="~{prefix}.~{contig}",
+        prefix=prefix,
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
         par_bed=par_bed,
@@ -49,7 +49,7 @@ workflow CalcAF {
     input:
       vcfs=ComputeShardAFs.shard_wAFs,
       sv_pipeline_docker=sv_pipeline_docker,
-      prefix="~{prefix}.~{contig}",
+      prefix=prefix,
       drop_empty_records=drop_empty_records
   }
 
@@ -59,53 +59,6 @@ workflow CalcAF {
     File vcf_wAFs_idx = CombineShardedVcfs.vcf_out_idx
   }
 }
-
-
-# Shard VCF into fixed size chunks
-task ShardVcf {
-  input{
-    File vcf
-    File vcf_idx
-    String contig
-    Int sv_per_shard
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command {
-    #Tabix chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
-    #Then shard VCF
-    /opt/sv-pipeline/scripts/shard_VCF.sh \
-      ~{contig}.vcf.gz \
-      ~{sv_per_shard} \
-      "vcf.shard."
-  }
-
-  output {
-    Array[File] shard_vcfs = glob("vcf.shard.*.vcf.gz")
-  }
-  
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 
 # Subset a vcf to a single chromosome, and add global AF information (no subpop)
 task ComputeShardAFs {
@@ -121,8 +74,8 @@ task ComputeShardAFs {
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 20,
+    mem_gb: 1.5,
+    disk_gb: 20 + size(vcf, "GB") * 2,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

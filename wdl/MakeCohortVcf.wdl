@@ -14,6 +14,7 @@ workflow MakeCohortVcf {
     File ped_file # cohort ped file
 
     # Merge contig vcfs at each stage for QC
+    # Not recommended for very large cohorts
     Boolean merge_cluster_vcfs = false
     Boolean merge_complex_resolve_vcfs = false
     Boolean merge_complex_genotype_vcfs = false
@@ -29,6 +30,12 @@ workflow MakeCohortVcf {
     Array[File] median_coverage_files
     Array[File] rf_cutoff_files
 
+    # Enables use of Hail for merging and sorting VCFs
+    # Recommended for cohorts of 10,000 samples or more
+    # Requires that DataProc be enabled in the GCP project
+    Boolean use_hail = false
+    String? gcs_project
+
     File bin_exclude
     File contig_list
     File allosome_fai
@@ -41,8 +48,15 @@ workflow MakeCohortVcf {
     Int max_shard_size_resolve
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
+    Int clean_vcf1b_records_per_shard
     Int samples_per_clean_vcf_step2_shard
+    Int clean_vcf5_records_per_shard
+    Int? clean_vcf5_threads_per_task
     Float min_sr_background_fail_batches
+    Int? max_samples_per_shard_clean_vcf_step3
+
+    String chr_x
+    String chr_y
 
     File empty_file
     File? outlier_samples_list
@@ -68,6 +82,8 @@ workflow MakeCohortVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_hail_docker
+    String sv_pipeline_updates_docker
     String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
 
@@ -82,8 +98,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
 
     # overrides for mini tasks
-    RuntimeAttr? runtime_override_ids_from_vcf
-    RuntimeAttr? runtime_override_clean_bothside_pass
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
     RuntimeAttr? runtime_override_subset_inversions
@@ -96,7 +110,8 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_subset_bothside_pass
     RuntimeAttr? runtime_override_subset_background_fail
     RuntimeAttr? runtime_override_subset_sv_type
-    RuntimeAttr? runtime_override_shard_vcf_precluster
+    RuntimeAttr? runtime_override_shard_clusters
+    RuntimeAttr? runtime_override_shard_vids
     RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_svtk_vcf_cluster
     RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
@@ -104,27 +119,44 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_concat_vcf_cluster
     RuntimeAttr? runtime_override_concat_svtypes
     RuntimeAttr? runtime_override_concat_sharded_cluster
+    RuntimeAttr? runtime_override_make_sites_only
+    RuntimeAttr? runtime_override_preconcat_sharded_cluster
+    RuntimeAttr? runtime_override_hail_merge_sharded_cluster
+    RuntimeAttr? runtime_override_fix_header_sharded_cluster
+    RuntimeAttr? runtime_override_concat_large_pesr_depth
 
-    # overrides for ResolveComplexContig
+    # overrides for ResolveComplexVariants
     RuntimeAttr? runtime_override_update_sr_list_pass
     RuntimeAttr? runtime_override_update_sr_list_fail
+    RuntimeAttr? runtime_override_integrate_resolved_vcfs
+    RuntimeAttr? runtime_override_rename_variants
+    RuntimeAttr? runtime_override_breakpoint_overlap_filter
+    RuntimeAttr? runtime_override_subset_inversions
+    RuntimeAttr? runtime_override_concat_resolve
+
     RuntimeAttr? runtime_override_get_se_cutoff
     RuntimeAttr? runtime_override_shard_vcf_cpx
+    RuntimeAttr? runtime_override_shard_vids_resolve
     RuntimeAttr? runtime_override_resolve_prep
     RuntimeAttr? runtime_override_resolve_cpx_per_shard
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
     RuntimeAttr? runtime_override_concat_resolved_per_shard
-    RuntimeAttr? runtime_override_complex_resolve_merge
-    RuntimeAttr? runtime_override_merge_resolve_inner
+    RuntimeAttr? runtime_override_pull_vcf_shard
+    RuntimeAttr? runtime_override_preconcat_resolve
+    RuntimeAttr? runtime_override_hail_merge_resolve
+    RuntimeAttr? runtime_override_fix_header_resolve
 
     RuntimeAttr? runtime_override_get_se_cutoff_inv
     RuntimeAttr? runtime_override_shard_vcf_cpx_inv
-    RuntimeAttr? runtime_override_shard_vids_inv
+    RuntimeAttr? runtime_override_shard_vids_resolve_inv
     RuntimeAttr? runtime_override_resolve_prep_inv
     RuntimeAttr? runtime_override_resolve_cpx_per_shard_inv
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard_inv
     RuntimeAttr? runtime_override_concat_resolved_per_shard_inv
-    RuntimeAttr? runtime_override_merge_resolve_inner_inv
+    RuntimeAttr? runtime_override_pull_vcf_shard_inv
+    RuntimeAttr? runtime_override_preconcat_resolve_inv
+    RuntimeAttr? runtime_override_hail_merge_resolve_inv
+    RuntimeAttr? runtime_override_fix_header_resolve_inv
 
     # overrides for GenotypeComplexContig
     RuntimeAttr? runtime_override_ids_from_median
@@ -136,27 +168,55 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
-    RuntimeAttr? runtime_override_complex_genotype_merge
-    RuntimeAttr? runtime_attr_ids_from_vcf
-    RuntimeAttr? runtime_attr_subset_ped
+    RuntimeAttr? runtime_attr_ids_from_vcf_regeno
+    RuntimeAttr? runtime_attr_subset_ped_regeno
+    RuntimeAttr? runtime_override_preconcat_regeno
+    RuntimeAttr? runtime_override_hail_merge_regeno
+    RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcfContig
+    RuntimeAttr? runtime_override_preconcat_clean_final
+    RuntimeAttr? runtime_override_hail_merge_clean_final
+    RuntimeAttr? runtime_override_fix_header_clean_final
+    RuntimeAttr? runtime_override_concat_cleaned_vcfs
+
     RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_1b
     RuntimeAttr? runtime_override_clean_vcf_2
     RuntimeAttr? runtime_override_clean_vcf_3
     RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5
-    RuntimeAttr? runtime_override_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_clean_vcf_5_scatter
+    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
+    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
+    RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+
+    RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
+    RuntimeAttr? runtime_attr_override_sort_bed_1b
+    RuntimeAttr? runtime_attr_override_intersect_bed_1b
+    RuntimeAttr? runtime_attr_override_build_dict_1b
+    RuntimeAttr? runtime_attr_override_scatter_1b
+    RuntimeAttr? runtime_attr_override_filter_vcf_1b
+    RuntimeAttr? runtime_override_concat_vcfs_1b
+    RuntimeAttr? runtime_override_cat_multi_cnvs_1b
+
+    RuntimeAttr? runtime_override_preconcat_step1
+    RuntimeAttr? runtime_override_hail_merge_step1
+    RuntimeAttr? runtime_override_fix_header_step1
+
+    RuntimeAttr? runtime_override_preconcat_drc
+    RuntimeAttr? runtime_override_hail_merge_drc
+    RuntimeAttr? runtime_override_fix_header_drc
+
     RuntimeAttr? runtime_override_split_vcf_to_clean
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_combine_step_1_sex_chr_revisions
     RuntimeAttr? runtime_override_split_include_list
     RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_combine_revised_4
     RuntimeAttr? runtime_override_combine_multi_ids_4
+    RuntimeAttr? runtime_override_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_combine_step_1_vcfs
+    RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 
     # overrides for VcfQc
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
@@ -202,24 +262,32 @@ workflow MakeCohortVcf {
       depth_exclude_list=depth_exclude_list,
       min_sr_background_fail_batches=min_sr_background_fail_batches,
       empty_file=empty_file,
+      use_hail=use_hail,
+      gcs_project=gcs_project,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list=runtime_override_update_sr_list_cluster,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
-      runtime_override_clean_bothside_pass=runtime_override_clean_bothside_pass,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_override_concat=runtime_override_cluster_merge,
       runtime_override_join_vcfs=runtime_override_join_vcfs,
       runtime_override_subset_bothside_pass=runtime_override_subset_bothside_pass,
       runtime_override_subset_background_fail=runtime_override_subset_background_fail,
       runtime_override_subset_sv_type=runtime_override_subset_sv_type,
-      runtime_override_shard_vcf_precluster=runtime_override_shard_vcf_precluster,
+      runtime_override_shard_clusters=runtime_override_shard_clusters,
+      runtime_override_shard_vids=runtime_override_shard_vids,
       runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
       runtime_override_svtk_vcf_cluster=runtime_override_svtk_vcf_cluster,
       runtime_override_get_vcf_header_with_members_info_line=runtime_override_get_vcf_header_with_members_info_line,
       runtime_override_concat_vcf_cluster=runtime_override_concat_vcf_cluster,
       runtime_override_concat_svtypes=runtime_override_concat_svtypes,
-      runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster
+      runtime_override_concat_sharded_cluster=runtime_override_concat_sharded_cluster,
+      runtime_override_make_sites_only=runtime_override_make_sites_only,
+      runtime_override_preconcat_sharded_cluster=runtime_override_preconcat_sharded_cluster,
+      runtime_override_hail_merge_sharded_cluster=runtime_override_hail_merge_sharded_cluster,
+      runtime_override_fix_header_sharded_cluster=runtime_override_fix_header_sharded_cluster,
+      runtime_override_concat_large_pesr_depth=runtime_override_concat_large_pesr_depth
   }
 
   call ComplexResolve.ResolveComplexVariants {
@@ -236,32 +304,43 @@ workflow MakeCohortVcf {
       mei_bed=mei_bed,
       pe_exclude_list=pe_exclude_list,
       ref_dict=ref_dict,
+      use_hail=use_hail,
+      gcs_project=gcs_project,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       max_shard_size=max_shard_size_resolve,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
-      runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
       runtime_override_rename_variants=runtime_override_rename_variants,
+      runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
-      runtime_override_concat=runtime_override_complex_resolve_merge,
+      runtime_override_concat=runtime_override_concat_resolve,
+
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
       runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
+      runtime_override_shard_vids=runtime_override_shard_vids_resolve,
       runtime_override_resolve_prep=runtime_override_resolve_prep,
       runtime_override_resolve_cpx_per_shard=runtime_override_resolve_cpx_per_shard,
       runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard,
       runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
-      runtime_override_merge_resolve_inner=runtime_override_merge_resolve_inner,
+      runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
+      runtime_override_preconcat=runtime_override_preconcat_resolve,
+      runtime_override_hail_merge=runtime_override_hail_merge_resolve,
+      runtime_override_fix_header=runtime_override_fix_header_resolve,
 
-      runtime_override_get_se_cutoff_inv=runtime_override_get_se_cutoff_inv,
-      runtime_override_shard_vcf_cpx_inv=runtime_override_shard_vcf_cpx_inv,
-      runtime_override_shard_vids_inv=runtime_override_shard_vids_inv,
-      runtime_override_resolve_prep_inv=runtime_override_resolve_prep_inv,
-      runtime_override_resolve_cpx_per_shard_inv=runtime_override_resolve_cpx_per_shard_inv,
-      runtime_override_restore_unresolved_cnv_per_shard_inv=runtime_override_restore_unresolved_cnv_per_shard_inv,
-      runtime_override_concat_resolved_per_shard_inv=runtime_override_concat_resolved_per_shard_inv,
-      runtime_override_merge_resolve_inner_inv=runtime_override_merge_resolve_inner_inv
+      runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
+      runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx_inv,
+      runtime_override_shard_vids=runtime_override_shard_vids_resolve_inv,
+      runtime_override_resolve_prep=runtime_override_resolve_prep_inv,
+      runtime_override_resolve_cpx_per_shard=runtime_override_resolve_cpx_per_shard_inv,
+      runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard_inv,
+      runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard_inv,
+      runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_inv,
+      runtime_override_preconcat=runtime_override_preconcat_resolve_inv,
+      runtime_override_hail_merge=runtime_override_hail_merge_resolve_inv,
+      runtime_override_fix_header=runtime_override_fix_header_resolve_inv
   }
 
   call ComplexGenotype.GenotypeComplexVariants {
@@ -281,9 +360,10 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
-      runtime_override_concat=runtime_override_complex_genotype_merge,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
       runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -293,8 +373,11 @@ workflow MakeCohortVcf {
       runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
       runtime_override_rd_genotype=runtime_override_rd_genotype,
       runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
-      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf,
-      runtime_attr_subset_ped=runtime_attr_subset_ped
+      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf_regeno,
+      runtime_attr_subset_ped=runtime_attr_subset_ped_regeno,
+      runtime_override_preconcat=runtime_override_preconcat_regeno,
+      runtime_override_hail_merge=runtime_override_hail_merge_regeno,
+      runtime_override_fix_header=runtime_override_fix_header_regeno
   }
 
   call Clean.CleanVcf {
@@ -306,31 +389,59 @@ workflow MakeCohortVcf {
       merged_ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
-      max_shards_per_chrom_clean_vcf_step1=max_shards_per_chrom_clean_vcf_step1,
-      min_records_per_shard_clean_vcf_step1=min_records_per_shard_clean_vcf_step1,
-      samples_per_clean_vcf_step2_shard=samples_per_clean_vcf_step2_shard,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
+      min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
+      clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
+      samples_per_step2_shard=samples_per_clean_vcf_step2_shard,
+      max_samples_per_shard_step3=max_samples_per_shard_clean_vcf_step3,
+      clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
       outlier_samples_list=outlier_samples_list,
+      use_hail=use_hail,
+      gcs_project=gcs_project,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+      runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
+      runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
+      runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
       runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
       runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
-      runtime_override_clean_vcf_1b=runtime_override_clean_vcf_1b,
       runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
       runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
       runtime_override_clean_vcf_4=runtime_override_clean_vcf_4,
-      runtime_override_clean_vcf_5=runtime_override_clean_vcf_5,
+      runtime_override_clean_vcf_5_scatter=runtime_override_clean_vcf_5_scatter,
+      runtime_override_clean_vcf_5_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
+      runtime_override_clean_vcf_5_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
+      runtime_override_clean_vcf_5_polish=runtime_override_clean_vcf_5_polish,
       runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
       runtime_override_final_cleanup=runtime_override_final_cleanup,
+      runtime_attr_override_subset_large_cnvs_1b=runtime_attr_override_subset_large_cnvs_1b,
+      runtime_attr_override_sort_bed_1b=runtime_attr_override_sort_bed_1b,
+      runtime_attr_override_intersect_bed_1b=runtime_attr_override_intersect_bed_1b,
+      runtime_attr_override_build_dict_1b=runtime_attr_override_build_dict_1b,
+      runtime_attr_override_scatter_1b=runtime_attr_override_scatter_1b,
+      runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
+      runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
+      runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
+      runtime_override_preconcat_step1=runtime_override_preconcat_step1,
+      runtime_override_hail_merge_step1=runtime_override_hail_merge_step1,
+      runtime_override_fix_header_step1=runtime_override_fix_header_step1,
+      runtime_override_preconcat_drc=runtime_override_preconcat_drc,
+      runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
+      runtime_override_fix_header_drc=runtime_override_fix_header_drc,
       runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
-      runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_combine_step_1_sex_chr_revisions=runtime_override_combine_step_1_sex_chr_revisions,
       runtime_override_split_include_list=runtime_override_split_include_list,
       runtime_override_combine_clean_vcf_2=runtime_override_combine_clean_vcf_2,
       runtime_override_combine_revised_4=runtime_override_combine_revised_4,
       runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
-      runtime_attr_ids_from_vcf=runtime_attr_ids_from_vcf,
-      runtime_attr_subset_ped=runtime_attr_subset_ped
+      runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
+      runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
+      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs
   }
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]

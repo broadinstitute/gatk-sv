@@ -1,3 +1,5 @@
+package org.broadinstitute.svpipeline;
+
 import java.io.*;
 import java.util.*;
 import java.util.zip.GZIPInputStream;
@@ -22,21 +24,27 @@ public class VCFParser implements Closeable {
     public VCFParser( final String pathName ) {
         if ( pathName == null || "-".equals(pathName) ) {
             this.pathName = "stdin";
-            this.is = System.in instanceof BufferedInputStream ?
-                    System.in :
-                    new BufferedInputStream(System.in);
+            this.is = new BufferedInputStream(new FileInputStream(FileDescriptor.in), BUFFER_SIZE);
         } else {
             this.pathName = pathName;
             try {
                 final BufferedInputStream bis =
-                        new BufferedInputStream(new FileInputStream(pathName));
-                this.is = pathName.endsWith(GZ) ? new GZIPInputStream(bis) : bis;
+                        new BufferedInputStream(new FileInputStream(pathName), BUFFER_SIZE);
+                this.is = pathName.endsWith(GZ) ? new GZIPInputStream(bis, BUFFER_SIZE) : bis;
             } catch ( final IOException ioe ) {
                 throw new MalformedVCFException("can't open " + pathName, ioe);
             }
         }
         if ( !readBuffer() ) {
             throw new MalformedVCFException(this.pathName + " is empty");
+        }
+    }
+
+    public VCFParser( final InputStream is ) {
+        this.pathName = "input VCF";
+        this.is = is;
+        if ( !readBuffer() ) {
+            throw new MalformedVCFException("input VCF is empty");
         }
     }
 
@@ -68,7 +76,7 @@ public class VCFParser implements Closeable {
         // it's the only metadata line that doesn't start with "##" but goes:
         // #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT   (sample names)
         if ( bufferIterator.peek() != '#' ) {
-            return new Columns(captureColumns());
+            return new ColumnHeaderMetadata(captureColumns());
         }
         bufferIterator.skip();
         // get the key part of the metadata, e.g., INFO in ##INFO=, or contig in ##contig=
@@ -80,11 +88,11 @@ public class VCFParser implements Closeable {
         if ( bufferIterator.peek() != '<' ) {
             // nope, simple value.  just grab the rest of the line
             final ByteSequence value = capture('\n');
-            return new KeyValue(key, value);
+            return new KeyValueMetadata(key, value);
         }
         bufferIterator.skip();
         // yup.  multiple values. tokenize them.
-        return new KeyAttributes(key, captureAttributes());
+        return new KeyAttributesMetadata(key, captureAttributes());
     }
 
     /** once we've had hasMetadata return false (line doesn't start with '#')
@@ -126,18 +134,6 @@ public class VCFParser implements Closeable {
             throw new MalformedVCFException("can't read " + pathName);
         }
         return bufferIterator.hasNext();
-    }
-
-    private void expect( final String expect ) {
-        final int expectLen = expect.length();
-        for ( int iii = 0; iii < expectLen; ++iii ) {
-            needData();
-            final byte nextByte = bufferIterator.next();
-            if ( expect.charAt(iii) != nextByte ) {
-                throw new MalformedVCFException("expected " + expect + " but found " +
-                        expect.substring(0, iii) + (char)nextByte + "...");
-            }
-        }
     }
 
     /** grab the sequence of bytes up to the specified delimiter */
@@ -191,7 +187,10 @@ public class VCFParser implements Closeable {
                     (bs == null ? prefix : new ByteSequence(prefix, bs));
             attributes.add(new KeyValue(key, value));
         } while ( finalByte != '>' );
-        expect("\n");
+        needData();
+        if ( bufferIterator.next() != '\n' ) {
+            throw new MalformedVCFException("unexpected characters at end of metadata line");
+        }
         return attributes;
     }
 
@@ -315,20 +314,67 @@ public class VCFParser implements Closeable {
             end = buffer.length;
         }
 
+        public ByteSequence( final ByteSequence... seqs ) {
+            int totalLen = 0;
+            for ( final ByteSequence seq : seqs ) {
+                totalLen += seq.length();
+            }
+            buffer = new byte[totalLen];
+            start = 0;
+            end = totalLen;
+            int curLen = 0;
+            for ( final ByteSequence seq : seqs ) {
+                final int len = seq.length();
+                System.arraycopy(seq.buffer, seq.start, buffer, curLen, len);
+                curLen += len;
+            }
+        }
+
+        public ByteSequence( final List<ByteSequence> pieces, final char delim ) {
+            final int nPieces = pieces.size();
+            int totalLen = 0;
+            if ( nPieces > 0 ) {
+                totalLen = nPieces - 1; // this many delimiters
+                for ( final ByteSequence piece : pieces ) {
+                    totalLen += piece.length();
+                }
+            }
+            buffer = new byte[totalLen];
+            start = 0;
+            end = totalLen;
+            if ( nPieces > 0 ) {
+                ByteSequence piece = pieces.get(0);
+                int destIdx = piece.length();
+                System.arraycopy(piece.buffer, piece.start, buffer, 0, destIdx);
+                for ( int pieceIdx = 1; pieceIdx < nPieces; ++pieceIdx ) {
+                    buffer[destIdx++] = (byte)delim;
+                    piece = pieces.get(pieceIdx);
+                    int len = piece.length();
+                    System.arraycopy(piece.buffer, piece.start, buffer, destIdx, len);
+                    destIdx += len;
+                }
+            }
+        }
+
         public int length() { return end - start; }
 
-        public ByteSequence replace( final ByteSequence oldValue, final ByteSequence newValue ) {
-            if ( buffer != oldValue.buffer ) {
-                throw new IllegalStateException("oldValue not drawn from INFO field");
+        public boolean contains( final ByteSequence subSeq ) {
+            final int len = subSeq.length();
+            final int stop = end - len;
+            for ( int idx = start; idx <= stop; ++idx ) {
+                int idx1 = idx;
+                int idx2 = subSeq.start;
+                int nnn = len;
+                while ( nnn-- > 0 ) {
+                    if ( buffer[idx1++] != subSeq.buffer[idx2++] ) {
+                        break;
+                    }
+                }
+                if ( nnn < 0 ) {
+                    return true;
+                }
             }
-            final int length = length();
-            final int newLen = newValue.length();
-            final byte[] newBuf = new byte[length + newLen - oldValue.length()];
-            final int len1 = oldValue.start - start;
-            System.arraycopy(buffer, start, newBuf, 0, len1);
-            System.arraycopy(newValue.buffer, newValue.start, newBuf, len1, newLen);
-            System.arraycopy(buffer, oldValue.end, newBuf, len1 + newLen, end - oldValue.end);
-            return new ByteSequence(newBuf, 0, newBuf.length);
+            return false;
         }
 
         public int asInt() {
@@ -365,7 +411,7 @@ public class VCFParser implements Closeable {
                     mark = itr.mark();
                 }
             }
-            splits.add(itr.getSequenceNoDelim(mark));
+            splits.add(itr.getSequence(mark));
             return splits;
         }
 
@@ -392,7 +438,7 @@ public class VCFParser implements Closeable {
         }
 
         public boolean equals( final ByteSequence that ) {
-            if ( length() != that.length() ) return false;
+            if ( that == null || length() != that.length() ) return false;
             int idx2 = that.start;
             for ( int idx = start; idx < end; ++idx ) {
                 if ( buffer[idx] != that.buffer[idx2++] ) return false;
@@ -401,20 +447,13 @@ public class VCFParser implements Closeable {
         }
     }
 
-    enum MetadataType {
-        KeyValue,
-        KeyAttributes,
-        Columns
-    }
-
     public interface Metadata {
-        MetadataType getType();
         ByteSequence getKey();
         Object getValue();
         void write( OutputStream os ) throws IOException;
     }
 
-    public static final class KeyValue implements Metadata {
+    public static final class KeyValue {
         private final ByteSequence key;
         private final ByteSequence value;
 
@@ -423,32 +462,49 @@ public class VCFParser implements Closeable {
             this.value = value;
         }
 
-        @Override public MetadataType getType() { return MetadataType.KeyValue; }
-        @Override public ByteSequence getKey() { return key; }
-        @Override public ByteSequence getValue() { return value; }
+        public ByteSequence getKey() { return key; }
+        public ByteSequence getValue() { return value; }
+
+        public void write( final OutputStream os ) throws IOException {
+            key.write(os);
+            if ( value != null ) {
+                os.write('=');
+                value.write(os);
+            }
+        }
+
+        @Override public String toString() { return key + "=" + value; }
+    }
+
+    public static final class KeyValueMetadata implements Metadata {
+        private final KeyValue keyValue;
+
+        public KeyValueMetadata( final ByteSequence key, final ByteSequence value ) {
+            keyValue = new KeyValue(key, value);
+        }
+
+        @Override public ByteSequence getKey() { return keyValue.getKey(); }
+        @Override public ByteSequence getValue() { return keyValue.getValue(); }
 
         @Override public void write( final OutputStream os ) throws IOException {
             os.write('#');
             os.write('#');
-            key.write(os);
-            os.write('=');
-            value.write(os);
+            keyValue.write(os);
             os.write('\n');
         }
 
-        @Override public String toString() { return "##" + key + "=" + value; }
+        @Override public String toString() { return keyValue.toString(); }
     }
 
-    public static final class KeyAttributes implements Metadata {
+    public static final class KeyAttributesMetadata implements Metadata {
         private final ByteSequence key;
         private final List<KeyValue> values;
 
-        public KeyAttributes( final ByteSequence key, final List<KeyValue> values ) {
+        public KeyAttributesMetadata( final ByteSequence key, final List<KeyValue> values ) {
             this.key = key;
             this.values = values;
         }
 
-        @Override public MetadataType getType() { return MetadataType.KeyAttributes; }
         @Override public ByteSequence getKey() { return key; }
         @Override public List<KeyValue> getValue() { return values; }
 
@@ -460,9 +516,7 @@ public class VCFParser implements Closeable {
             int prefix = '<';
             for ( final KeyValue kv : values ) {
                 os.write(prefix);
-                kv.getKey().write(os);
-                os.write('=');
-                kv.getValue().write(os);
+                kv.write(os);
                 prefix = ',';
             }
             os.write('>');
@@ -471,7 +525,7 @@ public class VCFParser implements Closeable {
 
         @Override public String toString() {
             final StringBuilder sb = new StringBuilder();
-            sb.append("##").append(key).append("=");
+            sb.append(key).append("=");
             char prefix = '<';
             for ( final KeyValue kv : values ) {
                 sb.append(prefix).append(kv.getKey()).append('=').append(kv.getValue());
@@ -481,14 +535,13 @@ public class VCFParser implements Closeable {
         }
     }
 
-    public static final class Columns implements Metadata {
+    public static final class ColumnHeaderMetadata implements Metadata {
         private final List<ByteSequence> columns;
 
-        public Columns( final List<ByteSequence> columns ) {
+        public ColumnHeaderMetadata( final List<ByteSequence> columns ) {
             this.columns = columns;
         }
 
-        @Override public MetadataType getType() { return MetadataType.Columns; }
         @Override public ByteSequence getKey() { return EMPTY_SEQUENCE; }
         @Override public List<ByteSequence> getValue() { return columns; }
 
@@ -513,112 +566,315 @@ public class VCFParser implements Closeable {
         }
     }
 
+    /** a field like format and genotype with delimited subfields */
+    public static final class CompoundField extends AbstractList<ByteSequence> {
+        private ByteSequence value;
+        private final char delim;
+        private List<ByteSequence> subFields;
+
+        public CompoundField( final ByteSequence value, final char delim ) {
+            this.value = value;
+            this.delim = delim;
+            subFields = null;
+        }
+
+        public CompoundField( final List<ByteSequence> vals, final char delim ) {
+            this.value = null;
+            this.delim = delim;
+            this.subFields = vals;
+        }
+
+        public ByteSequence getValue() {
+            if ( value == null ) {
+                value = new ByteSequence(subFields, delim);
+            }
+            return value;
+        }
+
+        public void write( final OutputStream os ) throws IOException {
+            if ( value != null ) value.write(os);
+            else {
+                int len = subFields.size();
+                if ( len <= 0 ) {
+                    os.write('.');
+                } else {
+                    subFields.get(0).write(os);
+                    for ( int idx = 1; idx < len; ++idx ) {
+                        os.write(delim);
+                        subFields.get(idx).write(os);
+                    }
+                }
+            }
+        }
+
+        @Override public int size() {
+            populateSubFields();
+            return subFields.size();
+        }
+
+        @Override public ByteSequence get( final int index ) {
+            populateSubFields();
+            return subFields.get(index);
+        }
+
+        @Override public ByteSequence set( final int index, final ByteSequence val ) {
+            populateSubFields();
+            value = null;
+            return subFields.set(index, val);
+        }
+
+        @Override public void add( final int index, final ByteSequence val ) {
+            populateSubFields();
+            value = null;
+            subFields.add(index, val);
+        }
+
+        @Override public ByteSequence remove( final int index ) {
+            populateSubFields();
+            value = null;
+            return subFields.remove(index);
+        }
+
+        @Override public boolean equals( final Object obj ) {
+            if ( this == obj ) return true;
+            if ( !(obj instanceof CompoundField) ) return false;
+            return getValue().equals(((CompoundField)obj).getValue());
+        }
+        @Override public int hashCode() {
+            return getValue().hashCode();
+        }
+        @Override public String toString() { return getValue().toString(); }
+
+        private void populateSubFields() {
+            if ( subFields == null ) {
+                subFields = value.split(delim);
+            }
+        }
+    }
+
+    /** the info subfields are semicolon delimited and contain key/value pairs */
+    public static final class InfoField extends AbstractMap<ByteSequence, ByteSequence> {
+        private ByteSequence value;
+        private LinkedHashMap<ByteSequence, ByteSequence> subFields;
+
+        public InfoField( final ByteSequence value ) {
+            this.value = value;
+            subFields = null;
+        }
+
+        public ByteSequence getValue() {
+            if ( value == null ) {
+                final ByteArrayOutputStream os = new ByteArrayOutputStream();
+                try {
+                    write(os);
+                } catch ( final IOException ioe ) {
+                    throw new IllegalStateException("IOException when writing to ByteArrayOutputStream!?");
+                }
+                final byte[] buffer = os.toByteArray();
+                value = new ByteSequence(buffer, 0, buffer.length);
+            }
+            return value;
+        }
+
+        public void write( final OutputStream os ) throws IOException {
+            if ( value != null ) {
+                value.write(os);
+            } else if ( subFields.isEmpty() ) {
+                os.write('.');
+            } else {
+                boolean needSep = false;
+                for ( final Map.Entry<ByteSequence, ByteSequence> entry : subFields.entrySet() ) {
+                    if ( needSep ) {
+                        os.write(';');
+                    }
+                    needSep = true;
+                    entry.getKey().write(os);
+                    final ByteSequence value = entry.getValue();
+                    if ( value != null ) {
+                        os.write('=');
+                        value.write(os);
+                    }
+                }
+            }
+        }
+
+        @Override public Set<Entry<ByteSequence, ByteSequence>> entrySet() {
+            populateSubFields();
+            return subFields.entrySet();
+        }
+
+        @Override public boolean containsKey( final Object key ) {
+            populateSubFields();
+            return subFields.containsKey(key);
+        }
+
+        @Override public ByteSequence get( final Object key ) {
+            populateSubFields();
+            return subFields.get(key);
+        }
+
+        @Override public ByteSequence put( final ByteSequence key, final ByteSequence val ) {
+            populateSubFields();
+            value = null;
+            return subFields.put(key, val);
+        }
+
+        @Override public ByteSequence remove( final Object key ) {
+            populateSubFields();
+            if ( containsKey(key) ) {
+                value = null;
+            }
+            return subFields.remove(key);
+        }
+
+        private void populateSubFields() {
+            if ( subFields == null ) {
+                subFields = new LinkedHashMap<>();
+                final ByteIterator itr = value.iterator();
+                int mark = itr.mark();
+                ByteSequence key = null;
+                while ( itr.hasNext() ) {
+                    byte nextByte = itr.next();
+                    if ( nextByte == '=' ) {
+                        key = itr.getSequenceNoDelim(mark);
+                        mark = itr.mark();
+                    } else if ( nextByte == ';' ) {
+                        if ( key == null ) {
+                            subFields.put(itr.getSequenceNoDelim(mark), null);
+                        } else {
+                            subFields.put(key, itr.getSequenceNoDelim(mark));
+                        }
+                        key = null;
+                        mark = itr.mark();
+                    }
+                }
+                if ( key == null ) {
+                    subFields.put(itr.getSequence(mark), null);
+                } else {
+                    subFields.put(key, itr.getSequence(mark));
+                }
+            }
+        }
+    }
+
     /** a line of data from the VCF */
     public static final class Record {
         private static final int UNINITIALIZED = -1;
 
-        private final List<ByteSequence> columns;
-        private List<KeyValue> infoKeyValues = null;
+        private final List<ByteSequence> simpleFields;
+        private CompoundField filters;
+        private InfoField infos;
+        private CompoundField formats;
+        private final List<CompoundField> genotypes;
+
         private int position = UNINITIALIZED;
         private int quality = UNINITIALIZED;
 
-        public Record( final List<ByteSequence> columns ) {
-            this.columns = columns;
+        public Record( final List<ByteSequence> vals ) {
+            simpleFields = new ArrayList<>(vals.subList(0, 6));
+            filters = new CompoundField(vals.get(6), ';');
+            infos = new InfoField(vals.get(7));
+            final int nVals = vals.size();
+            formats = nVals > 8 ? new CompoundField(vals.get(8), ':') : null;
+            genotypes = new ArrayList<>(Math.max(0, nVals - 9));
+            for ( int idx = 9; idx < nVals; ++idx ) {
+                genotypes.add(new CompoundField(vals.get(idx), ':'));
+            }
         }
 
-        public ByteSequence getChromosome() { return columns.get(0); }
+        public ByteSequence getChromosome() { return simpleFields.get(0); }
+        public void setChromosome( final ByteSequence val ) { simpleFields.set(0, val); }
 
         public int getPosition() {
             if ( position == UNINITIALIZED ) {
-                position = columns.get(1).asInt();
+                position = simpleFields.get(1).asInt();
             }
             return position;
         }
+        public void setPosition( final int pos ) {
+            setPosition(new ByteSequence(Integer.toString(pos)));
+        }
+        public void setPosition( final ByteSequence val ) {
+            simpleFields.set(1, val);
+            position = UNINITIALIZED;
+        }
 
-        public ByteSequence getID() { return columns.get(2); }
-        public ByteSequence getRef() { return columns.get(3); }
-        public ByteSequence getAlt() { return columns.get(4); }
+        public ByteSequence getID() { return simpleFields.get(2); }
+        public void setID( final ByteSequence val ) { simpleFields.set(2, val); }
+
+        public ByteSequence getRef() { return simpleFields.get(3); }
+        public void setRef( final ByteSequence val ) { simpleFields.set(3, val); }
+
+        public ByteSequence getAlt() { return simpleFields.get(4); }
+        public void setAlt( final ByteSequence val ) { simpleFields.set(4, val); }
 
         public int getQuality() {
             if ( quality == UNINITIALIZED ) {
-                quality = columns.get(5).asInt();
+                quality = simpleFields.get(5).asInt();
             }
             return quality;
         }
+        public void setQuality( final ByteSequence val ) {
+            simpleFields.set(5, val);
+            quality = UNINITIALIZED;
+        }
 
-        public ByteSequence getFilter() { return columns.get(6); }
+        public CompoundField getFilter() { return filters; }
+        public void setFilter( final ByteSequence val ) {
+            filters = new CompoundField(val, ';');
+        }
+        public void setFilter( final List<ByteSequence> vals ) {
+            filters = new CompoundField(vals, ';');
+        }
 
-        public List<KeyValue> getInfo() {
-            if ( infoKeyValues == null ) {
-                infoKeyValues = parseKVs(columns.get(7));
+        public InfoField getInfo() {
+            return infos;
+        }
+        public void setInfo( final ByteSequence val ) { infos = new InfoField(val); }
+
+        public CompoundField getFormat() { return formats; }
+        public void setFormat( final ByteSequence val ) {
+            formats = new CompoundField(val, ':');
+        }
+
+        public List<CompoundField> getGenotypes() { return genotypes; }
+        public void setGenotypes( final List<ByteSequence> vals ) {
+            genotypes.clear();
+            for ( final ByteSequence val : vals ) {
+                genotypes.add(new CompoundField(val, ':'));
             }
-            return infoKeyValues;
-        }
-
-        public ByteSequence getInfoField( final ByteSequence key ) {
-            final List<KeyValue> infoKeyValues = getInfo();
-            for ( final KeyValue kv : infoKeyValues ) {
-                if ( key.equals(kv.getKey()) ) return kv.getValue();
-            }
-            return null;
-        }
-
-        public void setInfoField( final ByteSequence oldValue, final ByteSequence newValue ) {
-            infoKeyValues = null;
-            columns.set(7, columns.get(7).replace(oldValue, newValue));
-        }
-
-        public Map<ByteSequence, ByteSequence> getInfoAsMap() {
-            final List<KeyValue> infoList = getInfo();
-            final Map<ByteSequence, ByteSequence> infoMap = new HashMap<>(infoList.size() * 2);
-            infoList.forEach(kv -> infoMap.put(kv.getKey(), kv.getValue()));
-            return infoMap;
-        }
-
-        public ByteSequence getFormat() { return columns.size() > 8 ? columns.get(8) : null; }
-
-        public List<ByteSequence> getGenotypes() {
-            return columns.size() > 9 ? columns.subList(9, columns.size()) : Collections.emptyList();
         }
 
         public void write( final OutputStream os ) throws IOException {
-            final int nCols = columns.size();
-            columns.get(0).write(os);
-            for ( int iii = 1; iii < nCols; ++iii ) {
+            simpleFields.get(0).write(os);
+            for ( int idx = 1; idx < 6; ++idx ) {
                 os.write('\t');
-                columns.get(iii).write(os);
+                simpleFields.get(idx).write(os);
+            }
+            os.write('\t');
+            filters.write(os);
+            os.write('\t');
+            infos.write(os);
+            if ( formats != null ) {
+                os.write('\t');
+                formats.write(os);
+                for ( final CompoundField genotype : genotypes ) {
+                    os.write('\t');
+                    genotype.write(os);
+                }
             }
             os.write('\n');
         }
 
-        @Override public String toString() {
+        @Override
+        public String toString() {
             final StringBuilder sb = new StringBuilder();
             String prefix = "";
-            for ( final ByteSequence col : columns ) {
-                sb.append(prefix).append(col);
+            for ( final ByteSequence field : simpleFields ) {
+                sb.append(prefix).append(field.toString());
                 prefix = "\t";
             }
             return sb.toString();
-        }
-
-        private static List<KeyValue> parseKVs( final ByteSequence bs ) {
-            final List<KeyValue> attributes = new ArrayList<>();
-            final ByteIterator itr = bs.iterator();
-            int mark = itr.mark();
-            ByteSequence key = null;
-            while ( itr.hasNext() ) {
-                byte nextByte = itr.next();
-                if ( nextByte == '=' ) {
-                    key = itr.getSequenceNoDelim(mark);
-                    mark = itr.mark();
-                } else if ( nextByte == ';' ) {
-                    attributes.add(new KeyValue(key, itr.getSequenceNoDelim(mark)));
-                    key = null;
-                    mark = itr.mark();
-                }
-            }
-            attributes.add(new KeyValue(key, itr.getSequence(mark)));
-            return attributes;
         }
     }
 }

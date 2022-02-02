@@ -14,18 +14,25 @@
   "MakeCohortVcf.min_sr_background_fail_batches": 0.5,
   "MakeCohortVcf.max_shards_per_chrom_clean_vcf_step1": 200,
   "MakeCohortVcf.min_records_per_shard_clean_vcf_step1": 5000,
+  "MakeCohortVcf.clean_vcf1b_records_per_shard": 10000,
+  "MakeCohortVcf.clean_vcf5_records_per_shard": 5000,
   "MakeCohortVcf.samples_per_clean_vcf_step2_shard": 100,
   "MakeCohortVcf.random_seed": 0,
   "MakeCohortVcf.max_shard_size_resolve": 500,
 
   "MakeCohortVcf.linux_docker": "${workspace.linux_docker}",
   "MakeCohortVcf.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "MakeCohortVcf.sv_pipeline_hail_docker": "${workspace.sv_pipeline_hail_docker}",
+  "MakeCohortVcf.sv_pipeline_updates_docker": "${workspace.sv_pipeline_updates_docker}",
   "MakeCohortVcf.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "MakeCohortVcf.sv_pipeline_rdtest_docker": "${workspace.sv_pipeline_rdtest_docker}",
   "MakeCohortVcf.sv_pipeline_qc_docker": "${workspace.sv_pipeline_qc_docker}",
 
   "MakeCohortVcf.primary_contigs_list": "${workspace.primary_contigs_list}",
   "MakeCohortVcf.sv_pipeline_base_docker": "${workspace.sv_pipeline_base_docker}",
+
+  "MakeCohortVcf.chr_x": "${workspace.chr_x}",
+  "MakeCohortVcf.chr_y": "${workspace.chr_y}",
 
   "MakeCohortVcf.cohort_name": "${this.sample_set_set_id}",
   "MakeCohortVcf.batches": "${this.sample_sets.sample_set_id}",

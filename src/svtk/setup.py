@@ -28,7 +28,6 @@ setup(
         'pybedtools',
         'cython',
         'natsort',
-        'boto3<=1.9.224',
         'pandas',
     ]
 )

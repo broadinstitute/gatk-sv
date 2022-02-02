@@ -7,8 +7,14 @@ Useful utilities for working with pysam variant objects
 
 def get_info_field(record, name):
     if name not in record.info:
-        raise ValueError("%s info field not found: %s" %
-                         (name, record.info.keys()))
+        if name == 'SVLEN':
+            if record.info['SVTYPE'] in ['DEL', 'DUP', 'INV']:
+                record.info['SVLEN'] = record.stop - record.pos
+            else:
+                record.info['SVLEN'] = -1
+        else:
+            raise ValueError("%s info field not found: %s" %
+                             (name, record.info.keys()))
     return record.info[name]
 
 
