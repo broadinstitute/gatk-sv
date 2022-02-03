@@ -396,7 +396,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
 
     # overrides for mini tasks
-    RuntimeAttr? runtime_override_ids_from_vcf
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
     RuntimeAttr? runtime_override_subset_inversions
@@ -474,8 +473,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_fix_header_regeno
 
     # overrides for CleanVcfContig
-    RuntimeAttr? runtime_attr_ids_from_vcf_clean
-    RuntimeAttr? runtime_attr_subset_ped_clean
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
@@ -1109,7 +1106,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_rename_variants=runtime_override_rename_variants,
       runtime_override_rename_cleaned_samples=runtime_override_rename_cleaned_samples,
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
-      runtime_override_ids_from_vcf=runtime_override_ids_from_vcf,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_override_make_cpx_cnv_input_file=runtime_override_make_cpx_cnv_input_file,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
@@ -1177,8 +1173,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_regeno=runtime_override_preconcat_regeno,
       runtime_override_hail_merge_regeno=runtime_override_hail_merge_regeno,
       runtime_override_fix_header_regeno=runtime_override_fix_header_regeno,
-      runtime_attr_ids_from_vcf_clean=runtime_attr_ids_from_vcf_clean,
-      runtime_attr_subset_ped_clean=runtime_attr_subset_ped_clean,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
