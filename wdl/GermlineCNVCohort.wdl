@@ -364,7 +364,7 @@ task DetermineGermlineContigPloidyCohortMode {
         export OMP_NUM_THREADS=~{cpu}
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip -k -f
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 
@@ -489,7 +489,7 @@ task GermlineCNVCallerCohortMode {
 
         # prepare read-count files and compose gatk argument file
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip -k -f
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 
