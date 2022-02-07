@@ -1,5 +1,9 @@
 # this repository provies scripts to extract per site level characters for boost model  from cleanvcf
 
+### Latest updates:
+Site-level annotation has been prepared for each chromosome, including allosomes. The data can be found here: gs://talkowski-sv-gnomad-output/zero/CleanVcf/site_level_anno/
+
+
 **all rest scripts should be run on erisone**
 
 **recommended working directory on erisone: /data/talkowski/xuefang/data/gnomad_V3/module07/cleanvcf/**
