@@ -1,3 +1,7 @@
+version 1.0
+
+import "Structs.wdl"
+
 # Get lists of PCRPLUS and PCRMINUS samples present in input VCF
 task GetSampleLists {
   input{

@@ -67,12 +67,13 @@ workflow Module07MinGQPart1 {
 
   # collect variants on a specific chromosome, and scatter them into smaller shards
   call MiniTasks.SplitVcf as SplitVcfStep1{
-    vcf = ReviseSVtypeMEI.updated_vcf,
-    vcf_idx = ReviseSVtypeMEI.updated_vcf_idx,
-    prefix = prefix,
-    min_vars_per_shard = min_records_per_shard_step1,
-    sv_base_mini_docker = sv_base_mini_docker,
-    runtime_attr_override = runtime_attr_SplitVcfPerContig
+    input:
+      vcf = ReviseSVtypeMEI.updated_vcf,
+      vcf_idx = ReviseSVtypeMEI.updated_vcf_idx,
+      prefix = prefix,
+      min_vars_per_shard = min_records_per_shard_step1,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_SplitVcfPerContig
   }
 
   scatter (i in range(length(SplitVcfStep1.vcf_shards))) {
@@ -91,7 +92,7 @@ workflow Module07MinGQPart1 {
     call minGQTasks.SplitPcrVcf {
       input:
         vcf=getAFs.vcf_wAFs,
-        prefix="~{prefix}.~{contig[0]}",
+        prefix=prefix,
         pcrplus_samples_list=pcrplus_samples_list,
         sv_base_mini_docker=sv_base_mini_docker
     }
@@ -106,7 +107,7 @@ workflow Module07MinGQPart1 {
         vcf     = SplitPcrVcf.PCRMINUS_vcf,
         vcf_idx = SplitPcrVcf.PCRMINUS_vcf_idx,
         sv_per_shard=1000,
-        prefix="~{prefix}.~{contig[0]}",
+        prefix=prefix,
         sample_pop_assignments=GetSampleLists.sample_PCR_labels,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_updates_docker=sv_pipeline_updates_docker
@@ -117,7 +118,7 @@ workflow Module07MinGQPart1 {
         vcf=getAFs_byPCR.vcf_wAFs,
         pcrplus_samples_list=pcrplus_samples_list,
         vcf_idx=getAFs_byPCR.vcf_wAFs_idx,
-        prefix="~{prefix}.~{contig[0]}",
+        prefix=prefix,
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
@@ -224,9 +225,9 @@ workflow Module07MinGQPart1 {
     File? AF_table_preMinGQ_PCRMINUS = cat_AF_table_PCRMINUS.merged_file
     File? AF_table_preMinGQ_PCRPLUS = cat_AF_table_PCRPLUS.merged_file
 
-    File PCRMINUS_trio_tarball = GatherTrioData_PCRMINUS.tarball
+    File? PCRMINUS_trio_tarball = GatherTrioData_PCRMINUS.tarball
     File? PCRPLUS_trio_tarball = GatherTrioData_PCRPLUS.tarball
-    File PCRMINUS_cleaned_trios_famfile = SplitFamfile_PCRMINUS.cleaned_trios_famfile
+    File? PCRMINUS_cleaned_trios_famfile = SplitFamfile_PCRMINUS.cleaned_trios_famfile
     File? PCRPLUS_cleaned_trios_famfile = SplitFamfile_PCRPLUS.cleaned_trios_famfile
   }
 

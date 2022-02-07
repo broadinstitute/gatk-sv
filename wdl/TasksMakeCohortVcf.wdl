@@ -621,17 +621,20 @@ task SplitVcf {
             | bgzip -c \
             > $VCF_RECORD.vcf.gz
           rm $VCF_RECORD
+          tabix -p vcf $VCF_RECORD.vcf.gz
         done
       else
         # just one chunk, so use full records.vcf. add header, compress, and name like a chunk
         # use records.vcf in case vcf_idx not defined and uncompressed.vcf not result of tabix call
         cat header.vcf records.vcf | bgzip -c > "~{prefix}1.vcf.gz"
+        tabix -p vcf "~{prefix}1.vcf.gz"
       fi
     fi
   >>>
 
   output {
     Array[File] vcf_shards = glob("~{prefix}*.vcf.gz")
+    Array[File] vcf_shards_idx = glob("~{prefix}*.vcf.gz.tbi")
   }
 }
 

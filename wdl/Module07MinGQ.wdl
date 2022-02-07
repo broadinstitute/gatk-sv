@@ -43,14 +43,12 @@ workflow Module07MinGQ {
     File? werling_2018_tarball
     File? pcrplus_samples_list
     File? pcrminus_filter_lookup_table
-    File? pcrplus_filter_lookup_table
     Boolean MingqTraining=! defined(pcrminus_filter_lookup_table)
 
     # overrides for local tasks
     RuntimeAttr? runtime_attr_CombineVcfs
     RuntimeAttr? runtime_attr_GatherTrioData
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_split_vcf_to_clean
   }
 
@@ -68,8 +66,7 @@ workflow Module07MinGQ {
       max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
       min_records_per_shard_step1 = min_records_per_shard_step1,
       runtime_attr_ReviseSVtypeMEI = runtime_attr_ReviseSVtypeMEI,
-      runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
-      runtime_override_combine_step_1_vcfs = runtime_override_combine_step_1_vcfs
+      runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean
   }
 
   # Get list of PCRMINUS samples
@@ -90,34 +87,39 @@ workflow Module07MinGQ {
         vcf=ReviseSVtypeMEI.updated_vcf,
         vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
         sv_per_shard=1000,
-        prefix=prefix,
+        prefix="~{prefix}.~{contig[0]}",
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_updates_docker=sv_pipeline_updates_docker
     }
 
-    call SplitPcrVcf {
-      input:
-        vcf=getAFs.vcf_wAFs,
-        prefix="~{prefix}.~{contig[0]}",
-        pcrplus_samples_list=pcrplus_samples_list,
-        sv_base_mini_docker=sv_base_mini_docker
+    if (defined(pcrplus_samples_list)) {
+      call SplitPcrVcf {
+        input:
+          vcf=getAFs.vcf_wAFs,
+          prefix="~{prefix}.~{contig[0]}",
+          pcrplus_samples_list=pcrplus_samples_list,
+          sv_base_mini_docker=sv_base_mini_docker
+      }
     }
-  
+
+    File pcr_minus_vcf = select_first([SplitPcrVcf.PCRMINUS_vcf, getAFs.vcf_wAFs])
+
     # Dev note Feb 18 2021: the output from cat_AF_table_PCRMINUS is a required
     # input to Module07XfBatchEffect.wdl, so the subsequent three tasks always 
     # need to be generated (even if passing a precomputed minGQ cutoff table)
 
-    # Annotate PCR- specific AFs
+    # Annotate PCR-specific AFs
     call calcAF.CalcAF as getAFs_byPCR {
       input:
-        vcf     = SplitPcrVcf.PCRMINUS_vcf,
-        vcf_idx = SplitPcrVcf.PCRMINUS_vcf_idx,
+        vcf=ReviseSVtypeMEI.updated_vcf,
+        vcf_idx=ReviseSVtypeMEI.updated_vcf_idx,
         sv_per_shard=1000,
         prefix="~{prefix}.~{contig[0]}",
         sample_pop_assignments=GetSampleLists.sample_PCR_labels,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_updates_docker=sv_pipeline_updates_docker
     }
+
     # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
     call GetAfTables {
       input:
@@ -138,36 +140,15 @@ workflow Module07MinGQ {
 
   call MiniTasks.ConcatVcfs as CombineVcfs_PCRMINUS {
     input:
-      vcfs=SplitPcrVcf.PCRMINUS_vcf,
+      vcfs=pcr_minus_vcf,
       naive=true,
       outfile_prefix="~{prefix}.PCRMINUS",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_CombineVcfs
   }
 
-  if (defined(pcrplus_samples_list)){
-    call CombineRocOptResults as cat_AF_table_PCRPLUS {
-      input:
-        shards=GetAfTables.PCRPLUS_AF_table,
-        outfile="~{prefix}.PCRPLUS.AF_preMinGQ.txt",
-        sv_base_mini_docker=sv_base_mini_docker,
-    }
-
-    call MiniTasks.ConcatVcfs as CombineVcfs_PCRPLUS {
-      input:
-        vcfs=SplitPcrVcf.PCRPLUS_vcf,
-        naive=true,
-        outfile_prefix="~{prefix}.PCRPLUS",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_CombineVcfs
-    }
-  }
-
-
-
-
   if (MingqTraining) {
-    ### PCRMINUS
+    ###PCRMINUS
     call SplitFamfile as SplitFamfile_PCRMINUS {
       input:
         vcf=CombineVcfs_PCRMINUS.concat_vcf,
@@ -180,7 +161,7 @@ workflow Module07MinGQ {
     scatter ( fam in SplitFamfile_PCRMINUS.famfile_shards ) {
       call CollectTrioSVdat as CollectTrioSVdat_PCRMINUS {
         input:
-          vcf_shards=SplitPcrVcf.PCRMINUS_vcf,
+          vcf_shards=pcr_minus_vcf,
           famfile=fam,
           sv_pipeline_docker=sv_pipeline_docker
       }
@@ -192,6 +173,8 @@ workflow Module07MinGQ {
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_GatherTrioData
     }
+
+
     # Get table of all conditions to evaluate
     call EnumerateConditions {
       input:
@@ -208,6 +191,8 @@ workflow Module07MinGQ {
         optimize_excludeEV=optimize_excludeEV,
         sv_pipeline_docker=sv_pipeline_docker
     }
+
+
     # Scatter over each shard of conditions and send the trio data for ROC optimization
     scatter ( shard in EnumerateConditions.minGQ_conditions_table_noHeader_shards ) {
       ### PCRMINUS
@@ -227,6 +212,8 @@ workflow Module07MinGQ {
           sv_pipeline_docker=sv_pipeline_docker
       }
     }
+
+
     # Merge ROC results to build minGQ filtering lookup tree
     ###PCRMINUS
     call CombineRocOptResults as combine_roc_optimal_PCRMINUS {
@@ -241,6 +228,8 @@ workflow Module07MinGQ {
         outfile="~{prefix}.minGQ_condition_distrib_stats.txt",
         sv_base_mini_docker=sv_base_mini_docker
     }
+
+
     # Create final minGQ filtering tree
     ###PCRMINUS
     call BuildFilterTree as build_tree_PCRMINUS {
@@ -251,128 +240,31 @@ workflow Module07MinGQ {
         prefix="~{prefix}.PCRMINUS",
         sv_pipeline_docker=sv_pipeline_docker
     }
-
-    ### PCRPLUS
-    if (defined(pcrplus_samples_list)){
-      call SplitFamfile as SplitFamfile_PCRPLUS {
-        input:
-          vcf=CombineVcfs_PCRPLUS.concat_vcf,
-          vcf_idx=CombineVcfs_PCRPLUS.concat_vcf_idx,
-          famfile=trios_famfile,
-          fams_per_shard=1,
-          prefix="~{prefix}.PCRPLUS",
-          sv_base_mini_docker=sv_base_mini_docker
-      }
-      scatter ( fam in SplitFamfile_PCRPLUS.famfile_shards ) {
-        call CollectTrioSVdat as CollectTrioSVdat_PCRPLUS {
-          input:
-            vcf_shards=SplitPcrVcf.PCRPLUS_vcf,
-            famfile=fam,
-            sv_pipeline_docker=sv_pipeline_docker
-        }
-      }
-      call GatherTrioData as GatherTrioData_PCRPLUS {
-        input:
-          files=CollectTrioSVdat_PCRPLUS.trio_SVdata,
-          prefix="~{prefix}.PCRPLUS",
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_attr_GatherTrioData
-      }
-      # Get table of all conditions to evaluate
-
-      # Scatter over each shard of conditions and send the trio data for ROC optimization
-      scatter ( shard in EnumerateConditions.minGQ_conditions_table_noHeader_shards ) {
-        ### PCRPLUS
-        call roc_opt_sub.MinGQRocOpt as roc_opt_PCRPLUS {
-          input:
-            trio_tarball=GatherTrioData_PCRPLUS.tarball,
-            prefix="~{prefix}.PCRPLUS",
-            trios_list=SplitFamfile_PCRPLUS.cleaned_trios_famfile,
-            conditions_table=shard,
-            maxSVperTrio=optimize_maxSVperTrio,
-            roc_max_fdr=roc_max_fdr_PCRPLUS,
-            roc_min_gq=roc_min_gq,
-            roc_max_gq=roc_max_gq,
-             roc_step_gq=roc_step_gq,
-            min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
-            sv_base_mini_docker=sv_base_mini_docker,
-            sv_pipeline_docker=sv_pipeline_docker
-        }
-      }
-      # Merge ROC results to build minGQ filtering lookup tree
-      ###PCRPLUS
-      call CombineRocOptResults as combine_roc_optimal_PCRPLUS {
-        input:
-          shards=roc_opt_PCRPLUS.roc_optimal_merged,
-          outfile="~{prefix}.PCRPLUS.minGQ_condition_opts.txt",
-          sv_base_mini_docker=sv_base_mini_docker
-      }
-      call CombineRocOptResults as combine_roc_stats_PCRPLUS {
-        input:
-          shards=roc_opt_PCRPLUS.distrib_stats_merged,
-          outfile="~{prefix}.minGQ_condition_distrib_stats.txt",
-          sv_base_mini_docker=sv_base_mini_docker
-      }
-      # Create final minGQ filtering tree
-      ###PCRPLUS
-      call BuildFilterTree as build_tree_PCRPLUS {
-        input:
-          conditions_table=EnumerateConditions.minGQ_conditions_table,
-          condition_optimizations=combine_roc_optimal_PCRPLUS.merged_file,
-          condition_distrib_stats=combine_roc_stats_PCRPLUS.merged_file,
-          prefix="~{prefix}.PCRPLUS",
-          sv_pipeline_docker=sv_pipeline_docker
-      }    
-    }
   }
 
   # Apply filter per chromosome
-    scatter (i in range(length(contigs))){
-      ### PCRMINUS
-      call ApplyMinGQFilter as apply_filter_PCRMINUS {
-        input:
-          vcf=SplitPcrVcf.PCRMINUS_vcf[i],
-          minGQ_lookup_table=select_first([pcrminus_filter_lookup_table,build_tree_PCRMINUS.filter_lookup_table]),
-          prefix="~{prefix}.PCRMINUS",
-          PCR_status="PCRMINUS",
-          maxNCR=max_noCallRate,
-          global_minGQ=global_minGQ,
-          sv_pipeline_docker=sv_pipeline_docker
-      }
-      if (defined(pcrplus_samples_list)){
-      ### PCRPLUS
-        call ApplyMinGQFilter as apply_filter_PCRPLUS {
-          input:
-            vcf=SplitPcrVcf.PCRPLUS_vcf[i],
-            minGQ_lookup_table=select_first([pcrplus_filter_lookup_table,build_tree_PCRPLUS.filter_lookup_table]),
-            prefix="~{prefix}.PCRPLUS",
-            PCR_status="PCRPLUS",
-            maxNCR=max_noCallRate,
-            global_minGQ=global_minGQ,
-            sv_pipeline_docker=sv_pipeline_docker
-        }
-
-        call MergePcrVCFs as merge_PCR_VCFs {
-          input:
-            PCRPLUS_vcf=apply_filter_PCRPLUS.filtered_vcf,
-            PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf,
-            prefix=prefix, 
-            sv_pipeline_docker = sv_pipeline_docker
-        }
-      }
-
-      File filtered_vcf_shards = select_first([apply_filter_PCRMINUS.filtered_vcf, merge_PCR_VCFs.merged_vcf ])
-    }
-
-    call MiniTasks.ConcatVcfs as CombineVcfs {
+  ###PCRMINUS
+  scatter ( vcf_shard in SplitPcrVcf.PCRMINUS_vcf ) {
+    call ApplyMinGQFilter as apply_filter_PCRMINUS {
       input:
-        vcfs=filtered_vcf_shards,
-        naive=true,
-        outfile_prefix=prefix,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_CombineVcfs
+        vcf=vcf_shard,
+        minGQ_lookup_table=select_first([pcrminus_filter_lookup_table,build_tree_PCRMINUS.filter_lookup_table]),
+        prefix="~{prefix}.PCRMINUS",
+        PCR_status="PCRMINUS",
+        maxNCR=max_noCallRate,
+        global_minGQ=global_minGQ,
+        sv_pipeline_docker=sv_pipeline_docker
     }
+  }
 
+  call MiniTasks.ConcatVcfs as CombineVcfs {
+    input:
+      vcfs=apply_filter_PCRMINUS.filtered_vcf,
+      naive=true,
+      outfile_prefix=prefix,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_CombineVcfs
+  }
 
   # Final output
   output {
@@ -432,7 +324,6 @@ task GetSampleLists {
 
 
 # Split a VCF into two parts, corresponding to PCR+ and PCR-
-# Split a VCF into two parts, corresponding to PCR+ and PCR-
 task SplitPcrVcf {
   input{
     File vcf
@@ -444,7 +335,7 @@ task SplitPcrVcf {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 50,
+    disk_gb: ceil(10 + size(vcf, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -452,34 +343,14 @@ task SplitPcrVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    if [ ! -z "~{pcrplus_samples_list}" ] && [ $( cat "~{pcrplus_samples_list}" | wc -l ) -gt 0 ]; then
-      #Get index of PCR+ samples
-      PCRPLUS_idxs=$( zcat ~{vcf} | sed -n '1,500p' | fgrep "#" | fgrep -v "##" \
-                      | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print NR, $1 }' \
-                      | fgrep -wf ~{pcrplus_samples_list} | cut -f1 | paste -s -d, )
-      #Get PCR+ VCF
-      zcat ~{vcf} \
-      | cut -f1-9,"$PCRPLUS_idxs" \
-      | bgzip -c \
-      > "~{prefix}.PCRPLUS.vcf.gz"
-      tabix -f -p vcf "~{prefix}.PCRPLUS.vcf.gz"
-      #Get PCR- VCF
-      zcat ~{vcf} \
-      | cut --complement -f"$PCRPLUS_idxs" \
-      | bgzip -c \
-      > "~{prefix}.PCRMINUS.vcf.gz"
-      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
-    else
-      cp ~{vcf} ~{prefix}.PCRMINUS.vcf.gz
-      tabix -f -p vcf "~{prefix}.PCRMINUS.vcf.gz"
-      touch ~{prefix}.PCRPLUS.vcf.gz
-      touch ~{prefix}.PCRPLUS.vcf.gz.tbi
-    fi
+    bcftools query -l ~{vcf} > all_samples.list
+    awk 'ARGIND==1{inFileA[$1]; next} !($1 in inFileA)' ~{pcrplus_samples_list} all_samples.list \
+      > pcrminus_samples.list
+    bcftools reheader -s pcrminus_samples.list ~{vcf} -o ~{prefix}.PCRMINUS.vcf.gz
+    tabix -p vcf ~{prefix}.PCRMINUS.vcf.gz
   >>>
 
   output {
-    File PCRPLUS_vcf = "~{prefix}.PCRPLUS.vcf.gz"
-    File PCRPLUS_vcf_idx = "~{prefix}.PCRPLUS.vcf.gz.tbi"
     File PCRMINUS_vcf = "~{prefix}.PCRMINUS.vcf.gz"
     File PCRMINUS_vcf_idx = "~{prefix}.PCRMINUS.vcf.gz.tbi"
   }
@@ -575,8 +446,8 @@ task GetAfTables {
 # Shard a trio famfile to keep only trios that are all represented in the vcf header
 task SplitFamfile {
   input{
-    File? vcf
-    File? vcf_idx
+    File vcf
+    File vcf_idx
     File famfile
     String prefix
     String sv_base_mini_docker
@@ -912,7 +783,7 @@ task BuildFilterTree {
 # Apply minGQ filter to VCF
 task ApplyMinGQFilter {
   input{
-    File vcf
+    File? vcf
     File minGQ_lookup_table
     String prefix
     String PCR_status
@@ -1053,4 +924,3 @@ task MergePcrVCFs {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
