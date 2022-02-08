@@ -228,8 +228,9 @@ task SplitFamfile {
       fi
     done < ~{famfile} \
     > "~{prefix}.cleaned_trios.fam"
+    sort ~{prefix}.cleaned_trios.fam |  uniq > ~{prefix}.cleaned_trios.uniq.fam
 
-    split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
+    split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.uniq.fam famfile_shard_
   >>>
 
   output {
