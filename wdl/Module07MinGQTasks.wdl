@@ -203,6 +203,7 @@ task SplitFamfile {
     Int fams_per_shard
     RuntimeAttr? runtime_attr_override
   }
+
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
@@ -216,21 +217,34 @@ task SplitFamfile {
   command <<<
     set -euo pipefail
     #Get list of sample IDs & column numbers from VCF header
-    tabix -H ~{vcf} | fgrep -v "##" | sed 's/\t/\n/g' \
-      | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
-    #Iterate over families & subset VCF
-    while read famID pro fa mo prosex pheno; do
-      pro_idx=$( awk -v ID=$pro '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
-      fa_idx=$( awk -v ID=$fa '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
-      mo_idx=$( awk -v ID=$mo '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
-      if ! [ -z $pro_idx ] && ! [ -z $fa_idx ] && ! [ -z $mo_idx ]; then
-        fgrep -w "$famID" ~{famfile} || true
-      fi
-    done < ~{famfile} \
-    > "~{prefix}.cleaned_trios.fam"
-    sort ~{prefix}.cleaned_trios.fam |  uniq > ~{prefix}.cleaned_trios.uniq.fam
+    python3 <<CODE 
+      import random
+      import sys
+      random.seed(928483)
+      SAMPLES_PATH=~{samples_list}
+      PED_PATH=~{famfile}
+      SHARD_SIZE=int(~{fams_per_shard})
+      MAX_SHARDS=int(~{max_count_famfile_shards})
 
-    split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.uniq.fam famfile_shard_
+      with open(SAMPLES_PATH) as f:
+        samples = set([line.strip() for line in f])
+
+      with open(PED_PATH) as f:
+        ped = []
+        for line in f:
+          family = line.strip().split('\t') 
+          if family[1] in samples and family[2] in samples and family[3] in samples:
+            ped.append(family)
+
+      if len(ped) > SHARD_SIZE * MAX_SHARDS:
+        random.shuffle(ped)
+        ped = ped[:SHARD_SIZE * MAX_SHARDS]
+
+      for family in ped:
+        sys.stdout.write("\t".join(family) + "\n")
+    CODE
+
+    split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
   >>>
 
   output {
