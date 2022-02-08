@@ -66,22 +66,21 @@ workflow Module07MinGQPart1 {
 
 
   # collect variants on a specific chromosome, and scatter them into smaller shards
-  call MiniTasks.SplitVcf as SplitVcfStep1{
+  call MiniTasks.ScatterVcf as SplitVcfStep1{
     input:
       vcf = ReviseSVtypeMEI.updated_vcf,
-      vcf_idx = ReviseSVtypeMEI.updated_vcf_idx,
       prefix = prefix,
-      min_vars_per_shard = min_records_per_shard_step1,
-      sv_base_mini_docker = sv_base_mini_docker,
+      records_per_shard = min_records_per_shard_step1,
+      sv_pipeline_docker = sv_pipeline_updates_docker,
       runtime_attr_override = runtime_attr_SplitVcfPerContig
   }
 
-  scatter (i in range(length(SplitVcfStep1.vcf_shards))) {
+  scatter (i in range(length(SplitVcfStep1.shards))) {
     # Shard VCF per-chromosome and add AF annotation
     call calcAF.CalcAF as getAFs {
       input:
-        vcf     = SplitVcfStep1.vcf_shards[i],
-        vcf_idx = SplitVcfStep1.vcf_shards_idx[i],
+        vcf     = SplitVcfStep1.shards[i],
+        vcf_idx = SplitVcfStep1.shards_idx[i],
         sv_per_shard=1000,
         prefix=prefix,
         sv_pipeline_docker=sv_pipeline_docker,

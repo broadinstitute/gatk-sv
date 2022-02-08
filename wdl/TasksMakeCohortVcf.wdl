@@ -1012,10 +1012,12 @@ task ScatterVcf {
     while read vcf; do
       shard_no=`printf %06d $i`
       mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
+      tabix -p vcf ~{prefix}.shard_${shard_no}.vcf.gz
       i=$((i+1))
     done < vcfs.list
   >>>
   output {
     Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
+    Array[File] shards_idx = glob("~{prefix}.shard_*.vcf.gz.tbi")
   }
 }
