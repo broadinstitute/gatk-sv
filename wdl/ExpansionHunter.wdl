@@ -49,6 +49,7 @@ workflow ExpansionHunter {
         input:
             variant_catalog = variant_catalog,
             batch_size = variant_catalog_batch_size,
+            output_prefix = sample_id,
             python_docker = python_docker
     }
 
@@ -172,20 +173,14 @@ task SplitVariantCatalog {
     input {
         File variant_catalog
         Int batch_size
+        String output_prefix
         String python_docker
-        String? output_prefix
         RuntimeAttr? runtime_attr_override
     }
 
     output {
-        Array[File] catalogs_json = glob("${output_prefix_}*.json")
+        Array[File] catalogs_json = glob("${output_prefix}*.json")
     }
-
-    String output_prefix_ =
-        if defined(output_prefix) then
-            select_first([output_prefix])
-        else
-            "output_"
 
     command <<<
         set -euxo pipefail
@@ -198,7 +193,7 @@ task SplitVariantCatalog {
 
         filename = "~{variant_catalog}"
         filename_without_ext = Path(filename).stem
-        output_prefix = "~{output_prefix_}"
+        output_prefix = "~{output_prefix}"
         i = 0
         subset_counter = 0
 
