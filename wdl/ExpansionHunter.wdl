@@ -23,6 +23,7 @@ workflow ExpansionHunter {
         String sample_id
         File? ped_file
         String expansion_hunter_docker
+        String python_docker
         Int variant_catalog_batch_size
         RuntimeAttr? runtime_attr
         RuntimeAttr? runtime_override_concat
@@ -47,7 +48,8 @@ workflow ExpansionHunter {
     call SplitVariantCatalog {
         input:
             variant_catalog = variant_catalog,
-            batch_size = variant_catalog_batch_size
+            batch_size = variant_catalog_batch_size,
+            python_docker = python_docker
     }
 
     scatter(i in range(length(SplitVariantCatalog.catalogs_json))) {
@@ -139,7 +141,7 @@ task RunExpansionHunter {
         bgzip ~{sample_id}.vcf
     >>>
 
-    RuntimeAttr runtime_attr_str_profile_default = object {
+    RuntimeAttr default_runtime_ = object {
         cpu_cores: 1,
         mem_gb: 4,
         boot_disk_gb: 10,
@@ -153,7 +155,7 @@ task RunExpansionHunter {
     }
     RuntimeAttr runtime_attr = select_first([
         runtime_attr_override,
-        runtime_attr_str_profile_default])
+        default_runtime_])
 
     runtime {
         docker: expansion_hunter_docker
@@ -170,7 +172,7 @@ task SplitVariantCatalog {
     input {
         File variant_catalog
         Int batch_size
-        String? split_variant_catalog_docker
+        String python_docker
         String? output_prefix
         RuntimeAttr? runtime_attr_override
     }
@@ -184,12 +186,6 @@ task SplitVariantCatalog {
             select_first([output_prefix])
         else
             "output_"
-
-    String split_variant_catalog_docker_ =
-        if defined(split_variant_catalog_docker) then
-            select_first([split_variant_catalog_docker])
-        else
-            "python:slim-buster"
 
     command <<<
         set -euxo pipefail
@@ -240,7 +236,7 @@ task SplitVariantCatalog {
         runtime_attr_str_profile_default])
 
     runtime {
-        docker: split_variant_catalog_docker_
+        docker: python_docker
         cpu: runtime_attr.cpu_cores
         memory: runtime_attr.mem_gb + " GiB"
         disks: "local-disk " + runtime_attr.disk_gb + " HDD"

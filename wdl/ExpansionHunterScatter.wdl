@@ -15,6 +15,7 @@ workflow ExpansionHunterScatter {
         File variant_catalog
         Int? variant_catalog_batch_size
         String expansion_hunter_docker
+        String python_docker
         RuntimeAttr? runtime_attr
     }
 
@@ -53,6 +54,7 @@ workflow ExpansionHunterScatter {
                 sample_id=sample_id,
                 ped_file=ped_file,
                 expansion_hunter_docker=expansion_hunter_docker,
+                python_docker=python_docker,
                 variant_catalog_batch_size=variant_catalog_batch_size_
         }
     }
