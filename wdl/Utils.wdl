@@ -218,6 +218,62 @@ task RandomSubsampleStringArray {
   }
 }
 
+task GetSubsampledIndices {
+  input {
+    Array[String] all_strings
+    Array[String] subset_strings
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String subsample_indices_filename = "~{prefix}.subsample_indices.list"
+  String subsampled_strings_filename = "~{prefix}.subsampled_strings.list"
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+    python3 <<CODE
+    all_strings = ['~{sep="','" all_strings}']
+    subset_strings = {'~{sep="','" subset_strings}'}
+    if not subset_strings.issubset(set(all_strings)):
+      raise ValueError("Subset list must be a subset of full list")
+    with open("~{subsample_indices_filename}", 'w') as indices, open("~{subsampled_strings_filename}", 'w') as strings:
+      for i, string in enumerate(all_strings):
+        if string in subset_strings:
+          indices.write(f"{i}\n")
+          strings.write(string + "\n")  # also write sample IDs to ensure the subset order matches the overall order
+    CODE
+
+  >>>
+
+  output {
+    Array[Int] subsample_indices_array = read_lines(subsample_indices_filename)
+    Array[String] subsampled_strings_array = read_lines(subsampled_strings_filename)
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
 task SubsetPedFile {
   input {
     File ped_file

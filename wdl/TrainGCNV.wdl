@@ -18,8 +18,12 @@ workflow TrainGCNV {
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
 
+    # Options for subsetting samples for training. Both options require providing sv_pipeline_base_docker
+    # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
+    # Subset of full sample list on which to train the gCNV model. Overrides n_samples_subsample if both provided
+    Array[String]? sample_ids_training_subset
 
     # Condense read counts
     Int? condense_num_bins
@@ -85,7 +89,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
-    String? sv_pipeline_base_docker # required if using n_samples_subsample to select samples
+    String? sv_pipeline_base_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr
@@ -100,7 +104,17 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  if (defined(n_samples_subsample)) {
+  if (defined(sample_ids_training_subset)) {
+    call util.GetSubsampledIndices {
+      input:
+        all_strings = samples,
+        subset_strings = select_first([sample_ids_training_subset]),
+        prefix = cohort,
+        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+    }
+  }
+
+  if (defined(n_samples_subsample) && !defined(sample_ids_training_subset)) {
     call util.RandomSubsampleStringArray {
       input:
         strings = samples,
@@ -111,7 +125,8 @@ workflow TrainGCNV {
     }
   }
 
-  Array[Int] sample_indices = select_first([RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+  Array[Int] sample_indices = select_first([GetSubsampledIndices.subsample_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+  Array[String] sample_ids = select_first([GetSubsampledIndices.subsampled_strings_array, RandomSubsampleStringArray.subsampled_strings_array, samples])
 
   scatter (i in sample_indices) {
     call cov.CondenseReadCounts as CondenseReadCounts {
@@ -138,7 +153,7 @@ workflow TrainGCNV {
       preprocessed_intervals = CountsToIntervals.out,
       filter_intervals = filter_intervals,
       counts = CondenseReadCounts.out,
-      count_entity_ids = select_first([RandomSubsampleStringArray.subsampled_strings_array, samples]),
+      count_entity_ids = sample_ids,
       cohort_entity_id = cohort,
       contig_ploidy_priors = contig_ploidy_priors,
       num_intervals_per_scatter = num_intervals_per_scatter,
