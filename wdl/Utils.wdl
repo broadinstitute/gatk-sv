@@ -159,7 +159,7 @@ task RunQC {
 
 task RandomSubsampleStringArray {
   input {
-    Array[String] strings
+    File strings
     Int seed
     Int subset_size
     String prefix
@@ -172,7 +172,7 @@ task RandomSubsampleStringArray {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 3.75,
+    mem_gb: 1,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -185,7 +185,7 @@ task RandomSubsampleStringArray {
     set -euo pipefail
     python3 <<CODE
     import random
-    string_array = ['~{sep="','" strings}']
+    string_array = [line.rstrip() for line in open("~{strings}", 'r')]
     array_len = len(string_array)
     if ~{subset_size} > array_len:
       raise ValueError("Subsample quantity ~{subset_size} cannot > array length %d" % array_len)
@@ -220,19 +220,18 @@ task RandomSubsampleStringArray {
 
 task GetSubsampledIndices {
   input {
-    Array[String] all_strings
-    Array[String] subset_strings
+    File all_strings
+    File subset_strings
     String prefix
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
 
   String subsample_indices_filename = "~{prefix}.subsample_indices.list"
-  String subsampled_strings_filename = "~{prefix}.subsampled_strings.list"
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 3.75,
+    mem_gb: 1,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -244,22 +243,20 @@ task GetSubsampledIndices {
 
     set -euo pipefail
     python3 <<CODE
-    all_strings = ['~{sep="','" all_strings}']
-    subset_strings = {'~{sep="','" subset_strings}'}
+    all_strings = [line.rstrip() for line in open("~{all_strings}", 'r')]
+    subset_strings = {line.rstrip() for line in open("~{subset_strings}", 'r')}
     if not subset_strings.issubset(set(all_strings)):
       raise ValueError("Subset list must be a subset of full list")
-    with open("~{subsample_indices_filename}", 'w') as indices, open("~{subsampled_strings_filename}", 'w') as strings:
+    with open("~{subsample_indices_filename}", 'w') as indices:
       for i, string in enumerate(all_strings):
         if string in subset_strings:
           indices.write(f"{i}\n")
-          strings.write(string + "\n")  # also write sample IDs to ensure the subset order matches the overall order
     CODE
 
   >>>
 
   output {
     Array[Int] subsample_indices_array = read_lines(subsample_indices_filename)
-    Array[String] subsampled_strings_array = read_lines(subsampled_strings_filename)
   }
 
   runtime {

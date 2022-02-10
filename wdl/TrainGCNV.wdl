@@ -107,8 +107,8 @@ workflow TrainGCNV {
   if (defined(sample_ids_training_subset)) {
     call util.GetSubsampledIndices {
       input:
-        all_strings = samples,
-        subset_strings = select_first([sample_ids_training_subset]),
+        all_strings = write_lines(samples),
+        subset_strings = write_lines(select_first([sample_ids_training_subset])),
         prefix = cohort,
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
     }
@@ -117,7 +117,7 @@ workflow TrainGCNV {
   if (defined(n_samples_subsample) && !defined(sample_ids_training_subset)) {
     call util.RandomSubsampleStringArray {
       input:
-        strings = samples,
+        strings = write_lines(samples),
         seed = subsample_seed,
         subset_size = select_first([n_samples_subsample]),
         prefix = cohort,
@@ -126,9 +126,9 @@ workflow TrainGCNV {
   }
 
   Array[Int] sample_indices = select_first([GetSubsampledIndices.subsample_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
-  Array[String] sample_ids = select_first([GetSubsampledIndices.subsampled_strings_array, RandomSubsampleStringArray.subsampled_strings_array, samples])
 
   scatter (i in sample_indices) {
+    String sample_ids_ = samples[i]
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
         counts = count_files[i],
@@ -153,7 +153,7 @@ workflow TrainGCNV {
       preprocessed_intervals = CountsToIntervals.out,
       filter_intervals = filter_intervals,
       counts = CondenseReadCounts.out,
-      count_entity_ids = sample_ids,
+      count_entity_ids = sample_ids_,
       cohort_entity_id = cohort,
       contig_ploidy_priors = contig_ploidy_priors,
       num_intervals_per_scatter = num_intervals_per_scatter,
