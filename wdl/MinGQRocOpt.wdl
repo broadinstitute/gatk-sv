@@ -4,9 +4,9 @@ import "Structs.wdl"
 
 workflow MinGQRocOpt {
   input{
-    File trio_tarball
+    File? trio_tarball
     String prefix
-    File trios_list
+    File? trios_list
     File conditions_table
     Int maxSVperTrio
     Float roc_max_fdr
@@ -70,9 +70,9 @@ workflow MinGQRocOpt {
 # and run ROC if condition has enough variants per sample
 task FilterMergeVariantsWithROC {
   input{
-    File trio_tarball
+    File? trio_tarball
     String prefix
-    File trios_list
+    File? trios_list
     String condition_id
     String minSVLEN
     String maxSVLEN

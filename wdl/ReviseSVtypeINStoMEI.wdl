@@ -16,6 +16,7 @@ workflow ReviseSVtypeINStoMEI {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
@@ -33,6 +34,7 @@ workflow ReviseSVtypeINStoMEI {
         max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
         min_records_per_shard_step1 = min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_updates_docker = sv_pipeline_updates_docker,
         runtime_override_split_vcf_to_clean = runtime_override_split_vcf_to_clean,
         runtime_attr_ReviseSVtypeMEI = runtime_attr_ReviseSVtypeMEI,
         runtime_override_combine_step_1_vcfs = runtime_override_combine_step_1_vcfs

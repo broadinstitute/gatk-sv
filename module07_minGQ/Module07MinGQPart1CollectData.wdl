@@ -44,6 +44,7 @@ workflow Module07MinGQPart1 {
       vcf_idx = vcf_idx,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
+      sv_pipeline_updates_docker = sv_pipeline_updates_docker,
       prefix = prefix,
       contiglist = contiglist,
       max_shards_per_chrom_step1 = max_shards_per_chrom_step1,

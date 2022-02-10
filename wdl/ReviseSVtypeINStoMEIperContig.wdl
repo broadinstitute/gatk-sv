@@ -15,6 +15,7 @@ workflow ReviseSVtypeINStoMEIperContig {
     Int min_records_per_shard_step1
 
     String sv_base_mini_docker
+    String sv_pipeline_updates_docker
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
@@ -22,18 +23,16 @@ workflow ReviseSVtypeINStoMEIperContig {
   }
 
 
-  call MiniTasks.SplitVcf as SplitVcfReviseSVtypeMEI {
+  call MiniTasks.ScatterVcf as SplitVcfReviseSVtypeMEI {
       input:
         vcf=vcf,
-        contig=contig,
         prefix="~{prefix}.~{contig}.shard_",
-        n_shards=max_shards_per_chrom_step1,
-        min_vars_per_shard=min_records_per_shard_step1,
-        sv_base_mini_docker=sv_base_mini_docker,
+        records_per_shard=max_shards_per_chrom_step1,
+        sv_pipeline_docker=sv_pipeline_updates_docker,
         runtime_attr_override=runtime_override_split_vcf_to_clean
   }
 
-  scatter (vcf_shard in SplitVcfReviseSVtypeMEI.vcf_shards) {
+  scatter (vcf_shard in SplitVcfReviseSVtypeMEI.shards) {
       call ReviseSVtypeMEI{
         input:
           vcf = vcf_shard,
