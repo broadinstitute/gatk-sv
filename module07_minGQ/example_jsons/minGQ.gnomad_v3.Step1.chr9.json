@@ -1,0 +1,16 @@
+{
+    "Module07MinGQPart1.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-gnomad-superscale-dev-7be58fb",
+    "Module07MinGQPart1.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
+    "Module07MinGQPart1.sv_pipeline_updates_docker": "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-updates:mw-gnomad-0506-superscale-dev-304ffa1",
+    "Module07MinGQPart1.trios_famfile" : "gs://talkowski-sv-gnomad-output/zero/ped/gnomAD-SV_v3.complete_trios.raw.fam",
+    "Module07MinGQPart1.pcrplus_samples_list": "gs://talkowski-sv-gnomad-output/zero/sample_list/gnomAD-SV_v3.master_sample_metadata.pre_00c_qc.pcr_plus_samples",
+    "Module07MinGQPart1.max_shards_per_chrom_step1" : 1000,
+    "Module07MinGQPart1.min_records_per_shard_step1" :  1000,
+    "Module07MinGQPart1.runtime_override_split_vcf_to_clean": {"disk_gb" : 750},
+    "Module07MinGQPart1.runtime_attr_SplitVcfPerContig": {"disk_gb": 800},
+    "Module07MinGQPart1.runtime_override_combine_step_1_vcfs": {"disk_gb": 1200},
+    "Module07MinGQPart1.vcf": "gs://talkowski-sv-gnomad-output/zero/CleanVcfChromosomeLastTwoSteps/173a229d-47c4-4466-8218-ecaf7dd602fc/call-FinalCleanup/gnomad-sv-v3.chr9.final_cleanup.vcf.gz",
+    "Module07MinGQPart1.vcf_idx": "gs://talkowski-sv-gnomad-output/zero/CleanVcfChromosomeLastTwoSteps/173a229d-47c4-4466-8218-ecaf7dd602fc/call-FinalCleanup/gnomad-sv-v3.chr9.final_cleanup.vcf.gz.tbi",
+    "Module07MinGQPart1.prefix": "gnomad-sv-v3.chr9",
+    "Module07MinGQPart1.contiglist" : "gs://talkowski-sv-gnomad-resources/module0506_stress_test/contig_chr9_only.fai"
+}
