@@ -68,11 +68,10 @@ task CollectVidsPerSample {
   
   # Must scale disk proportionally to size of input VCF
   Float input_size = size([vcf, samples_list], "GiB")
-  Float disk_scaling_factor = 1.5
+  Float disk_scaling_factor = 1.0
   Float base_disk_gb = 10.0
-  Float base_mem_gb = 3.75
   RuntimeAttr runtime_default = object {
-    mem_gb: 3.75,
+    mem_gb: 2.0,
     disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
     cpu_cores: 1,
     preemptible_tries: 1,
