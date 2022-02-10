@@ -816,7 +816,7 @@ task SanitizeOutputs {
     if ~{defined(plot_qc_per_sample_external_benchmarking_tarballs)}; then
       for tarball_fname in ~{sep=" " plot_qc_per_sample_external_benchmarking_tarballs}; do
         bname="$( basename -s '.tar.gz' $tarball_fname )" 
-        dname="$basename""_per_sample_benchmarking_plots/"
+        dname="$bname""_per_sample_benchmarking_plots/"
         tar -xzvf $tarball_fname
         cp $bname/main_plots/* \
           ~{prefix}_SV_VCF_QC_output/plots/main_plots/ || true
