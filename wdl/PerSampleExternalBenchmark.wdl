@@ -91,7 +91,6 @@ task BenchmarkSamples {
   Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
   Float compression_factor = 3.5
   Float base_disk_gb = 5.0
-
   RuntimeAttr runtime_default = object {
     mem_gb: 3.5,
     disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
