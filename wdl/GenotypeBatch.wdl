@@ -12,16 +12,11 @@ import "MergeBatchSites.wdl" as merge
 workflow GenotypeBatch {
   input {
     File batch_pesr_vcf
-    File batch_depth_vcf
     File cohort_pesr_vcf
-    File cohort_depth_vcf
     String batch
 
-    File original_batch_depth_vcf
-    File original_batch_depth_vcf_index
     File original_batch_pesr_vcf
     File original_batch_pesr_vcf_index
-    File original_regeno_coverage_medians
 
     Int n_per_split
     File coveragefile        # batch coverage file
@@ -42,18 +37,8 @@ workflow GenotypeBatch {
     # If all specified, training will be skipped (for single sample pipeline)
     File? genotype_pesr_pesr_sepcutoff
     File? genotype_pesr_depth_sepcutoff
-    File? genotype_depth_pesr_sepcutoff
-    File? genotype_depth_depth_sepcutoff
     File? SR_metrics
     File? PE_metrics
-
-    # Module metrics parameters
-    # Run module metrics workflow at the end - on by default
-    Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
-    File? primary_contigs_list  # required if run_module_metrics = true
-    File? baseline_genotyped_depth_vcf  # baseline files are optional for metrics workflow
-    File? baseline_genotyped_pesr_vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -67,7 +52,6 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_make_subset_vcf
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_add_genotypes
-    RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
     RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
 
     # Master
@@ -99,30 +83,14 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_integrate_pesr_gq
     RuntimeAttr? runtime_attr_triple_stream_cat
 
-    # Depth part 2
-    RuntimeAttr? runtime_attr_integrate_depth_gq
-    RuntimeAttr? runtime_attr_merge_regeno_cov_med
-
-    RuntimeAttr? runtime_attr_update_batch_depth_vcf
-    RuntimeAttr? runtime_attr_update_regeno_cov_med
-
   }
 
-  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(genotype_depth_depth_sepcutoff) && defined(genotype_depth_pesr_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
+  Boolean single_sample_mode = defined(genotype_pesr_pesr_sepcutoff) && defined(genotype_pesr_depth_sepcutoff) && defined(SR_metrics) && defined(PE_metrics)
   call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesPESR {
     input:
       batch_vcf = batch_pesr_vcf,
       cohort_vcf = cohort_pesr_vcf,
       prefix = "${batch}.pesr",
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_add_batch
-  }
-
-  call tasksgenotypebatch.AddBatchSamples as AddBatchSamplesDepth {
-    input:
-      batch_vcf = batch_depth_vcf,
-      cohort_vcf = cohort_depth_vcf,
-      prefix = "${batch}.depth",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_add_batch
   }
@@ -226,103 +194,6 @@ workflow GenotypeBatch {
       runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs
   }
 
-  if (!single_sample_mode) {
-    call gd1.GenotypeDepthPart1 as GenotypeDepthPart1 {
-      input:
-        bin_exclude=bin_exclude,
-        samples = GetSampleIdsFromVcf.out_array,
-        n_RD_genotype_bins = n_RD_genotype_bins,
-        batch_vcf = batch_depth_vcf,
-        seed_cutoffs = select_first([seed_cutoffs]),
-        medianfile = medianfile,
-        batch = batch,
-        rf_cutoffs = select_first([rf_cutoffs]),
-        coveragefile = coveragefile,
-        coveragefile_index = coveragefile_index,
-        reference_build = select_first([reference_build]),
-        famfile = SubsetPedFile.ped_subset_file,
-        n_per_RD_split = n_per_split,
-        ref_dict = ref_dict,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-        runtime_attr_training_bed = runtime_attr_training_bed,
-        runtime_attr_genotype_train = runtime_attr_genotype_train,
-        runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,
-        runtime_attr_update_cutoff = runtime_attr_update_cutoff,
-        runtime_attr_split_variants = runtime_attr_split_variants,
-        runtime_attr_rdtest_genotype = runtime_attr_rdtest_genotype,
-        runtime_attr_merge_genotypes = runtime_attr_merge_genotypes
-    }
-  }
-  call gd2.GenotypeDepthPart2 as GenotypeDepthPart2 {
-    input:
-      bin_exclude=bin_exclude,
-      samples = GetSampleIdsFromVcf.out_array,
-      n_RdTest_bins = n_RD_genotype_bins,
-      medianfile = medianfile,
-      cohort_vcf = AddBatchSamplesDepth.updated_vcf,
-      batch = batch,
-      RD_depth_sepcutoff = select_first([genotype_depth_depth_sepcutoff, GenotypeDepthPart1.RD_depth_sepcutoff]),
-      RD_pesr_sepcutoff = select_first([genotype_depth_pesr_sepcutoff, GenotypeDepthPart1.RD_pesr_sepcutoff]),
-      coveragefile = coveragefile,
-      coveragefile_index = coveragefile_index,
-      n_per_split = n_per_split,
-      famfile = SubsetPedFile.ped_subset_file,
-      ref_dict = ref_dict,
-      sv_base_mini_docker = sv_base_mini_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-      runtime_attr_split_variants = runtime_attr_split_variants,
-      runtime_attr_rdtest_genotype = runtime_attr_rdtest_genotype,
-      runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
-      runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
-      runtime_attr_add_genotypes = runtime_attr_add_genotypes,
-      runtime_attr_concat_vcfs = runtime_attr_genotype_depths_concat_vcfs,
-      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
-  }
-
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
-  if (run_module_metrics_) {
-    call metrics.GenotypeBatchMetrics {
-      input:
-        name = batch,
-        samples = GetSampleIdsFromVcf.out_array,
-        genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf,
-        genotyped_depth_vcf = GenotypeDepthPart2.genotyped_vcf,
-        cutoffs_pesr_pesr = select_first([GenotypePESRPart1.RD_pesr_sepcutoff]),
-        cutoffs_pesr_depth = select_first([GenotypePESRPart1.RD_depth_sepcutoff]),
-        cutoffs_depth_pesr = select_first([GenotypeDepthPart1.RD_pesr_sepcutoff]),
-        cutoffs_depth_depth = select_first([GenotypeDepthPart1.RD_depth_sepcutoff]),
-        sr_bothside_pass = GenotypePESRPart2.bothside_pass,
-        sr_background_fail = GenotypePESRPart2.background_fail,
-        baseline_genotyped_pesr_vcf = baseline_genotyped_pesr_vcf,
-        baseline_genotyped_depth_vcf = baseline_genotyped_depth_vcf,
-        contig_list = select_first([primary_contigs_list]),
-        linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
-    }
-  }
-
-  call merge.UpdateChromosomeX as UpdateBatchDepthVcf {
-    input:
-      original_vcf = original_batch_depth_vcf,
-      original_vcf_index = original_batch_depth_vcf_index,
-      chrx_vcf = GenotypeDepthPart2.genotyped_vcf,
-      prefix = batch + ".chrX_rerun.full.genotyped.depth",
-      create_index = true,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_update_batch_depth_vcf
-  }
-
-  call UpdateRegenoCoverageMedians {
-    input:
-      original_regeno_coverage_medians = original_regeno_coverage_medians,
-      chrx_regeno_coverage_medians = GenotypeDepthPart2.regeno_coverage_medians,
-      batch = batch,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_update_regeno_cov_med
-  }
 
   output {
     File sr_bothside_pass = GenotypePESRPart2.bothside_pass
@@ -333,19 +204,10 @@ workflow GenotypeBatch {
 
     File? trained_genotype_pesr_pesr_sepcutoff = GenotypePESRPart1.RD_pesr_sepcutoff
     File? trained_genotype_pesr_depth_sepcutoff = GenotypePESRPart1.RD_depth_sepcutoff
-    File? trained_genotype_depth_pesr_sepcutoff = GenotypeDepthPart1.RD_pesr_sepcutoff
-    File? trained_genotype_depth_depth_sepcutoff = GenotypeDepthPart1.RD_depth_sepcutoff
     
-    File genotyped_depth_vcf = GenotypeDepthPart2.genotyped_vcf
-    File genotyped_depth_vcf_index = GenotypeDepthPart2.genotyped_vcf_index
     File genotyped_pesr_vcf = GenotypePESRPart2.genotyped_vcf
     File genotyped_pesr_vcf_index = GenotypePESRPart2.genotyped_vcf_index
-    File regeno_coverage_medians = UpdateRegenoCoverageMedians.updated_regeno_coverage_medians
-
-    File full_genotyped_depth_vcf = UpdateBatchDepthVcf.updated_vcf
-    File full_genotyped_depth_vcf_index = UpdateBatchDepthVcf.updated_vcf_index
     
-    File? metrics_file_genotypebatch = GenotypeBatchMetrics.metrics_file
   }
 }
 
