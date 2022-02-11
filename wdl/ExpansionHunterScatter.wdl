@@ -119,7 +119,8 @@ task SplitVariantCatalog {
                     i = 0
                     subset_counter += 1
                     subset_catalogs = []
-            serialize()
+            if len(subset_catalogs) > 0:
+                serialize()
         CODE
     >>>
 
