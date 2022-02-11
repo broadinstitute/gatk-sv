@@ -34,7 +34,7 @@ workflow ExpansionHunterScatter {
         input:
             variant_catalog = variant_catalog,
             batch_size = variant_catalog_batch_size_,
-            output_prefix = sample_id,
+            output_prefix = basename(variant_catalog),
             python_docker = python_docker
     }
 
@@ -84,7 +84,7 @@ task SplitVariantCatalog {
     }
 
     output {
-        Array[File] catalogs_json = glob("${output_prefix}*.json")
+        Array[File] catalogs_json = glob("~{output_prefix}*.json")
     }
 
     command <<<
