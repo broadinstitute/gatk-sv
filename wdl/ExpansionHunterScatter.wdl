@@ -92,8 +92,6 @@ task SplitVariantCatalog {
 
         python <<CODE
         import json
-        import sys
-        import os
         from pathlib import Path
 
         filename = "~{variant_catalog}"
@@ -102,10 +100,12 @@ task SplitVariantCatalog {
         i = 0
         subset_counter = 0
 
+
         def serialize():
             print(f"subset counter: {subset_counter}")
             with open(f"{output_prefix}{filename_without_ext}_{subset_counter}.json", "w") as f_out:
                 json.dump(subset_catalogs, f_out, indent=4)
+
 
         with open(filename, "r") as f_in:
             catalogs = json.load(f_in)
