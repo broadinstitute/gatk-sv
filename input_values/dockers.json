@@ -13,7 +13,7 @@
   "sv_base_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-2-6d104d7",
   "sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
   "sv_pipeline_base_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-base:mw-gnomad-0506-pr-2-6d104d7",
-  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-gnomad-0506-pr-2-6d104d7",
+  "sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-merge-pesr-depth-empty-4376a69",
   "sv_pipeline_hail_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-hail:mw-gnomad-0506-pr-2-b7988f0",
   "sv_pipeline_updates_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-updates:mw-gnomad-0506-superscale-dev-304ffa1",
   "sv_pipeline_qc_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline-qc:mw-gnomad-0506-pr-087d4df",
