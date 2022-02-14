@@ -26,9 +26,6 @@ import "AnnotateILFeaturesPerSampleBed.wdl" as annotate_il_features_per_sample
 
 workflow AnnotateILFeatures{
     input{
-        Array[File] cleanBeds
-        Array[String] prefixes
-
         Array[String] samples
         #Array[String?] il_bams
         #Array[String?] il_bam_bais
@@ -85,9 +82,6 @@ workflow AnnotateILFeatures{
     scatter (i in range(length(samples))){
         call annotate_il_features_per_sample.AnnotateILFeaturesPerSample as AnnotateILFeaturesPerSample{
             input:
-                cleanBeds = cleanBeds,
-                prefixes = prefixes,
-
                 sample = samples[i],
                 raw_manta = raw_mantas[i],
                 raw_wham = raw_whams[i],

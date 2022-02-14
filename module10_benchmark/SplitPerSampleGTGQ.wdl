@@ -37,6 +37,9 @@ workflow SplitPerSampleGTGQ{
         String sv_base_mini_docker
 
         RuntimeAttr? runtime_split_per_sample_gtgq
+        RuntimeAttr? runtime_attr_concat_gtgqs
+        RuntimeAttr? runtime_attr_concat_refs
+
     }
 
     scatter(SampleList in SampleLists){
@@ -51,7 +54,9 @@ workflow SplitPerSampleGTGQ{
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
 
-                runtime_split_per_sample_gtgq = runtime_split_per_sample_gtgq
+                runtime_split_per_sample_gtgq = runtime_split_per_sample_gtgq,
+                runtime_attr_concat_gtgqs = runtime_attr_concat_gtgqs,
+                runtime_attr_concat_refs = runtime_attr_concat_refs
         }
     }
 

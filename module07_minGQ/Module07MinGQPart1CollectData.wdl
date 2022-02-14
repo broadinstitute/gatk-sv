@@ -44,7 +44,6 @@ workflow Module07MinGQPart1 {
       vcf_idx = vcf_idx,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_updates_docker = sv_pipeline_updates_docker,
       prefix = prefix,
       contiglist = contiglist,
       max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
@@ -164,10 +163,9 @@ workflow Module07MinGQPart1 {
         vcf=SplitPcrVcf.PCRMINUS_vcf[0],
         vcf_idx=SplitPcrVcf.PCRMINUS_vcf_idx[0],
         famfile=trios_famfile,
-        max_count_famfile_shards=1000,
         fams_per_shard=1,
         prefix="~{prefix}.PCRMINUS",
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_base_mini_docker=sv_base_mini_docker
     }
     scatter ( fam in SplitFamfile_PCRMINUS.famfile_shards ) {
       call minGQTasks.CollectTrioSVdat as CollectTrioSVdat_PCRMINUS {
@@ -193,9 +191,8 @@ workflow Module07MinGQPart1 {
           vcf_idx=SplitPcrVcf.PCRPLUS_vcf_idx[0],
           famfile=trios_famfile,
           fams_per_shard=1,
-          max_count_famfile_shards = 1000,
           prefix="~{prefix}.PCRPLUS",
-          sv_pipeline_docker=sv_pipeline_docker
+          sv_base_mini_docker=sv_base_mini_docker
       }
       scatter ( fam in SplitFamfile_PCRPLUS.famfile_shards ) {
         call minGQTasks.CollectTrioSVdat as CollectTrioSVdat_PCRPLUS {

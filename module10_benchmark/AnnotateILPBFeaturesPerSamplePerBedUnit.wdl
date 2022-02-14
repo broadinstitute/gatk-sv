@@ -87,13 +87,10 @@ workflow AnnoILFeaturesPerSample{
         RuntimeAttr? runtime_attr_SplitVcf
         RuntimeAttr? runtime_attr_ConcatBeds
         RuntimeAttr? runtime_attr_ConcatVcfs
-    }
-
-
-    call mini_tasks.Bed2QueryAndRef{
-        input:
-            bed = bed_file,
-            sv_base_mini_docker = sv_base_mini_docker
+        RuntimeAttr? runtime_attr_bed_vs_hgsv
+        RuntimeAttr? runtime_attr_bed_vs_pacbio
+        RuntimeAttr? runtime_attr_bed_vs_bionano
+        RuntimeAttr? runtime_attr_bed_vs_array
     }
 
     if(run_vapor){
@@ -113,9 +110,10 @@ workflow AnnoILFeaturesPerSample{
         call mini_tasks.BedComparison as BedComparison_vs_hgsv{
             input:
                 query = hgsv_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.hgsv",
-                sv_pipeline_docker=rdpesr_benchmark_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_bed_vs_hgsv
         }
     }
 
@@ -123,29 +121,45 @@ workflow AnnoILFeaturesPerSample{
         call mini_tasks.BedComparison as BedComparison_vs_pacbio{
             input:
                 query = pacbio_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = bed_file,
                 prefix = "${sample}.vs.pacbio",
-                sv_pipeline_docker=rdpesr_benchmark_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_bed_vs_pacbio
         }
     }
     
     if (defined(bionano_query)){
+        call ExtractLargeCNV as extract_lg_cnv_bionano{
+            input:
+                file = bed_file,
+                sv_base_mini_docker = sv_base_mini_docker
+        }
+
         call mini_tasks.BedComparison as BedComparison_vs_bionano{
             input:
                 query = bionano_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = extract_lg_cnv_bionano.out_file,
                 prefix = "${sample}.vs.bionano",
-                sv_pipeline_docker=rdpesr_benchmark_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_bed_vs_bionano
         }
     }
 
     if (defined(array_query)){
+
+        call ExtractLargeCNV as extract_lg_cnv_array{
+            input:
+                file = bed_file,
+                sv_base_mini_docker = sv_base_mini_docker
+        }
+
         call mini_tasks.BedComparison as BedComparison_vs_array{
             input:
                 query = array_query,
-                ref = Bed2QueryAndRef.ref,
+                ref = extract_lg_cnv_array.out_file,
                 prefix = "${sample}.vs.array",
-                sv_pipeline_docker=rdpesr_benchmark_docker
+                sv_pipeline_docker=rdpesr_benchmark_docker,
+                runtime_attr_override = runtime_attr_bed_vs_array
         }
     }
 
@@ -168,7 +182,7 @@ workflow AnnoILFeaturesPerSample{
             raw_wham = raw_wham,
             raw_melt = raw_melt,
             raw_depth = raw_depth,
-            ref = Bed2QueryAndRef.ref,
+            ref = bed_file,
             prefix = "${sample}.vs",
             sv_pipeline_docker=rdpesr_benchmark_docker
     }
@@ -195,7 +209,6 @@ workflow AnnoILFeaturesPerSample{
     }
     
     output{
-        File bed = bed_file
 
         File? PesrAnno  = RunRdPeSrAnnotation.pesr_anno
         File? RdAnno    = RunRdPeSrAnnotation.cov
@@ -217,7 +230,7 @@ workflow AnnoILFeaturesPerSample{
         }
     }
  
- task BedComparisons{
+task BedComparisons{
     input{
         File? raw_manta
         File? raw_wham
@@ -482,3 +495,44 @@ task VaporValidation{
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
+
+task ExtractLargeCNV{
+    input{
+        File file
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 1, 
+        disk_gb: 5,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+  
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File out_file = "~{prefix}.lg.gz"
+    }
+
+    String prefix = basename(file, 'gz')
+    command <<<
+        zcat ~{file} | awk '{if ($6>5000) print}' | bgzip > ~{prefix}.lg.gz
+    >>>
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
+
+
+

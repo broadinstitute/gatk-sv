@@ -22,9 +22,6 @@ import "AnnotateILFeaturesPerSamplePerBedUnit.wdl" as anno_il
 
 workflow AnnotateILFeaturesPerSample{
     input{
-        Array[File] cleanBeds
-        Array[String] prefixes
-
         String sample
 
         File bed

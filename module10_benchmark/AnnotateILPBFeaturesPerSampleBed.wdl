@@ -26,15 +26,13 @@ import "AnnotateILPBFeaturesPerSamplePerBed.wdl" as annotate_il_pb_featuers_per_
 
 workflow AnnotateILPBFeaturesPerSampleBed{
     input{
-        Array[File] cleanBeds
-        Array[String] prefixes
-
         String sample
         File raw_manta
         File raw_wham
         File raw_melt
         File raw_depth
         File gtgq
+        File bed
 
         File pacbio_seq
         File pacbio_index
@@ -46,7 +44,7 @@ workflow AnnotateILPBFeaturesPerSampleBed{
         File ref_fasta
         File ref_fai
         File ref_dict
-        Array[File] contig_lists
+        File contig_list
         Int min_shard_size
 
         Boolean requester_pays_crams = false
@@ -75,22 +73,22 @@ workflow AnnotateILPBFeaturesPerSampleBed{
         RuntimeAttr? runtime_attr_ConcatVcfs
         RuntimeAttr? runtime_inte_anno
         RuntimeAttr? runtime_attr_split_vcf
+        RuntimeAttr? runtime_attr_bed_vs_hgsv
+        RuntimeAttr? runtime_attr_bed_vs_pacbio
+        RuntimeAttr? runtime_attr_bed_vs_bionano
+        RuntimeAttr? runtime_attr_bed_vs_array
     }
 
 
-    scatter (i in range(length(cleanBeds))){
-
         call annotate_il_pb_featuers_per_sample_per_bed.AnnotateILPBFeaturesPerSamplePerBed as AnnotateILPBFeaturesPerSamplePerBed{
             input:
-                cleanBed = cleanBeds[i],
-                prefix = prefixes[i],
-
                 sample = sample,
                 raw_manta = raw_manta,
                 raw_wham = raw_wham,
                 raw_melt = raw_melt,
                 raw_depth = raw_depth,
                 gtgq = gtgq,
+                bed = bed,
 
                 pacbio_seq = pacbio_seq,
                 pacbio_index = pacbio_index,
@@ -102,7 +100,7 @@ workflow AnnotateILPBFeaturesPerSampleBed{
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
-                contig_list = contig_lists[i],
+                contig_list = contig_list,
                 min_shard_size = min_shard_size,
 
                 requester_pays_crams = requester_pays_crams,
@@ -130,27 +128,17 @@ workflow AnnotateILPBFeaturesPerSampleBed{
                 runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
                 runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
                 runtime_inte_anno = runtime_inte_anno,
-                runtime_attr_split_vcf = runtime_attr_split_vcf
+                runtime_attr_split_vcf = runtime_attr_split_vcf,
+                runtime_attr_bed_vs_hgsv = runtime_attr_bed_vs_hgsv,
+                runtime_attr_bed_vs_pacbio = runtime_attr_bed_vs_pacbio,
+                runtime_attr_bed_vs_bionano = runtime_attr_bed_vs_bionano,
+                runtime_attr_bed_vs_array = runtime_attr_bed_vs_array
         }
-    }
 
-    call mini_tasks.ConcatBeds as concat_anno{
-        input:
-            shard_bed_files = AnnotateILPBFeaturesPerSamplePerBed.integrated_file,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
-
-    call mini_tasks.ConcatVaPoR as concat_vapor{
-        input:
-            shard_plots = AnnotateILPBFeaturesPerSamplePerBed.vapor_plots,
-            prefix = sample,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
 
     output{
-        File annotated_file = concat_anno.merged_bed_file
-        File vapor_plot = concat_vapor.merged_bed_plot
+        File annotated_file = AnnotateILPBFeaturesPerSamplePerBed.integrated_file
+        File vapor_plot = AnnotateILPBFeaturesPerSamplePerBed.vapor_plots
     }
 }
 

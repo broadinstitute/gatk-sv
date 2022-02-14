@@ -26,15 +26,13 @@ import "VaPoR.wdl" as vapor
 
 workflow AnnotateILPBFeaturesPerSamplePerBed{
     input{
-        File cleanBed
-        String prefix
-
         String sample
         File raw_manta
         File raw_wham
         File raw_melt
         File raw_depth
         File gtgq
+        File bed
 
         File pacbio_seq
         File pacbio_index
@@ -74,23 +72,18 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
         RuntimeAttr? runtime_attr_ConcatBeds
         RuntimeAttr? runtime_attr_ConcatVcfs
         RuntimeAttr? runtime_inte_anno
-        RuntimeAttr? runtime_attr_split_vcf
+        RuntimeAttr? runtime_attr_bed_vs_hgsv
+        RuntimeAttr? runtime_attr_bed_vs_pacbio
+        RuntimeAttr? runtime_attr_bed_vs_bionano
+        RuntimeAttr? runtime_attr_bed_vs_array
     }
 
     Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
-    call mini_tasks.split_per_sample_bed as split_per_sample_bed{
-        input:
-            bed = cleanBed,
-            sample = sample,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_split_vcf
-    }
-
     call anno_il.AnnoILFeaturesPerSample as anno_il_features{
         input:
             sample = sample,
-            bed_file = split_per_sample_bed.bed_file,
+            bed_file = bed,
 
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
@@ -127,7 +120,12 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
             runtime_attr_vcf2bed = runtime_attr_vcf2bed,
             runtime_attr_SplitVcf = runtime_attr_SplitVcf,
             runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
-            runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs
+            runtime_attr_ConcatVcfs = runtime_attr_ConcatVcfs,
+            runtime_attr_bed_vs_hgsv = runtime_attr_bed_vs_hgsv,
+            runtime_attr_bed_vs_pacbio = runtime_attr_bed_vs_pacbio,
+            runtime_attr_bed_vs_bionano = runtime_attr_bed_vs_bionano,
+            runtime_attr_bed_vs_array = runtime_attr_bed_vs_array
+
     }
 
     call vapor.VaPoR as vapor{
@@ -136,7 +134,7 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
             sample = sample,
             bam_or_cram_file = pacbio_seq,
             bam_or_cram_index = pacbio_index,
-            bed_file = split_per_sample_bed.bed_file,
+            bed_file = bed,
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
             ref_dict = ref_dict,
@@ -153,9 +151,8 @@ workflow AnnotateILPBFeaturesPerSamplePerBed{
 
     call IntegrateAnno{
         input:
-            prefix = "~{sample}.~{prefix}",
             sample = sample,
-            bed           = anno_il_features.bed,
+            bed           = bed,
             gt_anno       = gtgq,
             pesr_anno     = anno_il_features.PesrAnno,
             rd_anno       = anno_il_features.RdAnno,
@@ -204,7 +201,6 @@ task IntegrateAnno{
         File? vs_array
         File? denovo
         File? vapor_info
-        String prefix
         String sample
         String rdpesr_benchmark_docker
         RuntimeAttr? runtime_attr_override
@@ -222,7 +218,7 @@ task IntegrateAnno{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File anno_file = "~{prefix}.anno.bed.gz"
+        File anno_file = "~{sample}.anno.bed.gz"
     }
     
     command <<<
@@ -232,7 +228,7 @@ task IntegrateAnno{
 
         Rscript /src/integrate_annotations.R \
             --bed ~{bed} \
-            --output ~{prefix}.anno.bed \
+            --output ~{sample}.anno.bed \
             ~{"--gt " + gt_anno} \
             ~{"--raw_manta " + raw_manta} \
             ~{"--raw_wham " + raw_wham} \
@@ -251,7 +247,7 @@ task IntegrateAnno{
             ~{"--vapor " + vapor_info} \
             ~{"--denovo " + denovo}
 
-        bgzip ~{prefix}.anno.bed
+        bgzip ~{sample}.anno.bed
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

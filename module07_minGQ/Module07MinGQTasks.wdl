@@ -49,61 +49,8 @@ task GetSampleLists {
   }
 }
 
-#concatinate minGQ tarballs trained on different chromosomes
-task ConcatTarball{
-  input{
-    Array[File] tarballs
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
 
-  RuntimeAttr default_attr = object {
-    cpu_cores: 2, 
-    mem_gb: 3, 
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-      set -e
-
-      while read tarball; do
-        tar xzf $tarball
-      done < ~{write_lines(tarballs)}
-      find . -name trio_variant_info.txt.gz > files.txt
-      mkdir -p out
-      NUM_SHARDS=$(cat files.txt | sed 's/\/cacheCopy//g' | sed 's/\/attempt-[2-9]//g' | tr '/' '\t' | cut -f7 | sort | uniq | wc -l)
-
-      for (( i=0; i<$NUM_SHARDS; i++ )); do
-        fgrep "/shard-$i/" files.txt > shard.txt
-        mkdir -p "out/shard-$i/"
-        OUT="out/shard-$i/trio_variant_info.txt.gz"
-        sed 1q shard.txt | xargs -n1 gunzip -c | bgzip > $OUT
-        cat shard.txt | tail -n+2 | xargs -n1 gunzip -c | { grep -v ^# || true; } | bgzip >> $OUT
-      done
-
-      echo "test1"
-      tar -czf "out.tar.gz" out/
-  >>>
-  output{
-        File tarball = "out.tar.gz"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
+# Split a VCF into two parts, corresponding to PCR+ and PCR-
 # Split a VCF into two parts, corresponding to PCR+ and PCR-
 task SplitPcrVcf {
   input{
@@ -252,11 +199,10 @@ task SplitFamfile {
     Int? max_count_famfile_shards
     File famfile
     String prefix
-    String sv_pipeline_docker
+    String sv_base_mini_docker
     Int fams_per_shard
     RuntimeAttr? runtime_attr_override
   }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
@@ -270,34 +216,18 @@ task SplitFamfile {
   command <<<
     set -euo pipefail
     #Get list of sample IDs & column numbers from VCF header
-    tabix -H ~{vcf} | fgrep -v "##" | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
-
-    set -euo pipefail
-    python3 <<CODE > "~{prefix}.cleaned_trios.fam"
-    import random
-    import sys
-    random.seed(928483)
-    SAMPLES_PATH="vcf_header_columns.txt"
-    PED_PATH="~{famfile}"
-    SHARD_SIZE=int(~{fams_per_shard})
-    MAX_SHARDS=int(~{max_count_famfile_shards})
-
-    with open(SAMPLES_PATH) as f:
-      samples = set([line.strip().split()[0] for line in f])
-    with open(PED_PATH) as f:
-      ped = []
-      for line in f:
-        family = line.strip().split('\t') 
-        if family[1] in samples and family[2] in samples and family[3] in samples:
-          ped.append(family)
-
-    if len(ped) > SHARD_SIZE * MAX_SHARDS:
-      random.shuffle(ped)
-      ped = ped[:SHARD_SIZE * MAX_SHARDS]
-
-    for family in ped:
-      sys.stdout.write("\t".join(family) + "\n")
-    CODE
+    tabix -H ~{vcf} | fgrep -v "##" | sed 's/\t/\n/g' \
+      | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
+    #Iterate over families & subset VCF
+    while read famID pro fa mo prosex pheno; do
+      pro_idx=$( awk -v ID=$pro '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
+      fa_idx=$( awk -v ID=$fa '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
+      mo_idx=$( awk -v ID=$mo '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
+      if ! [ -z $pro_idx ] && ! [ -z $fa_idx ] && ! [ -z $mo_idx ]; then
+        fgrep -w "$famID" ~{famfile} || true
+      fi
+    done < ~{famfile} \
+    > "~{prefix}.cleaned_trios.fam"
 
     split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
   >>>
@@ -312,7 +242,7 @@ task SplitFamfile {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

@@ -28,22 +28,21 @@ workflow Module07MinGQPart2 {
         Int roc_min_gq
         Int roc_max_gq
         Int roc_step_gq
-        Int min_sv_per_proband_per_condition
 
         Array[File] PCRMINUS_vcf_lists
         Array[File] PCRMINUS_vcf_idx_lists
         Array[File] PCRPLUS_vcf_lists
         Array[File] PCRPLUS_vcf_idx_lists
 
-        File? pcrplus_samples_list
+        File? AF_table_preMinGQ_PCRMINUS
+        File? AF_table_preMinGQ_PCRPLUS
 
         Array[File] PCRMINUS_trio_tarball
-        Array[File] PCRPLUS_trio_tarball
+        Array[File]? PCRPLUS_trio_tarball
         File PCRMINUS_cleaned_trios_famfile
         File? PCRPLUS_cleaned_trios_famfile
 
         String sv_pipeline_docker
-        String sv_base_mini_docker
 
         RuntimeAttr? runtime_attr_EnumerateConditions
         RuntimeAttr? runtime_attr_ConcatTarball
@@ -70,8 +69,8 @@ workflow Module07MinGQPart2 {
     call minGQTasks.ConcatTarball as ConcatTarballPCRMINUS{
         input: 
             tarballs = PCRMINUS_trio_tarball,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_ConcatTarball
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_ConcatTarball = runtime_attr_ConcatTarball
     }
 
     scatter ( shard in EnumerateConditions.minGQ_conditions_table_noHeader_shards ) {
@@ -124,8 +123,8 @@ workflow Module07MinGQPart2 {
         call minGQTasks.ConcatTarball as ConcatTarballPCRPLUS{
             input: 
                 tarballs = PCRPLUS_trio_tarball,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_ConcatTarball
+                sv_pipeline_docker = sv_pipeline_docker,
+                runtime_attr_ConcatTarball = runtime_attr_ConcatTarball
         }
 
         scatter ( shard in EnumerateConditions.minGQ_conditions_table_noHeader_shards ) {

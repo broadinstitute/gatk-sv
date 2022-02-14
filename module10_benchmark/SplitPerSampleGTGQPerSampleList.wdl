@@ -36,6 +36,8 @@ workflow SplitPerSampleGTGQPerSampleList{
         String sv_base_mini_docker
 
         RuntimeAttr? runtime_split_per_sample_gtgq
+        RuntimeAttr? runtime_attr_concat_gtgqs
+        RuntimeAttr? runtime_attr_concat_refs
     }
 
     scatter(i in range(length(cleanVcfs))){
@@ -63,19 +65,22 @@ workflow SplitPerSampleGTGQPerSampleList{
 
     call merge_gtgq.MergeGTGQ as MergeGTGQ{
         input:
-            shards_chr_sample = split_per_sample_gtgq.gtgq_file,
-            sv_base_mini_docker = sv_base_mini_docker
+            shards_chr_sample_gtgq = split_per_sample_gtgq.gtgq_file,
+            shards_chr_sample_beds = split_per_sample_bed.bed_file,
+            sv_base_mini_docker = sv_base_mini_docker,
+            runtime_attr_concat_gtgqs = runtime_attr_concat_gtgqs,
+            runtime_attr_concat_refs = runtime_attr_concat_refs
     }
 
-    call merge_gtgq.MergeGTGQ as MergeBED{
-        input:
-            shards_chr_sample = split_per_sample_bed.bed_file,
-            sv_base_mini_docker = sv_base_mini_docker
-    }
+    #call merge_gtgq.MergeGTGQ as MergeBED{
+    #    input:
+    #        shards_chr_sample = split_per_sample_bed.bed_file,
+    #        sv_base_mini_docker = sv_base_mini_docker
+    #}
 
     output{
         Array[File] gtgq_out = MergeGTGQ.gtgq
-        Array[File] bed_out = MergeBED.gtgq
+        Array[File] bed_out = MergeGTGQ.refs
     }
 }
 
@@ -109,7 +114,7 @@ task split_per_sample_gtgq {
   >>>
 
   output {
-    Array[File] gtgq_file =  glob("per_sample_GTGQ/*~{chr}.gtgq.gz")
+    Array[File] gtgq_file =  glob("per_sample_GTGQ/*~{chr}")
   }
   
   runtime {
@@ -152,7 +157,7 @@ task split_per_sample_bed {
   >>>
 
   output {
-    Array[File] bed_file =  glob("per_sample_bed/*~{chr}.bed.gz")
+    Array[File] bed_file =  glob("per_sample_bed/*~{chr}")
   }
   
   runtime {

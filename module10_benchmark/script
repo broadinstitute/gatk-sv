@@ -1,0 +1,59 @@
+#!/bin/bash
+
+cd /cromwell_root
+tmpDir=$(mkdir -p "/cromwell_root/tmp.bb488896" && echo "/cromwell_root/tmp.bb488896")
+chmod 777 "$tmpDir"
+export _JAVA_OPTIONS=-Djava.io.tmpdir="$tmpDir"
+export TMPDIR="$tmpDir"
+export HOME="$HOME"
+(
+cd /cromwell_root
+touch /cromwell_root/monitoring.log
+chmod u+x /cromwell_root/monitoring.sh
+/cromwell_root/monitoring.sh > /cromwell_root/monitoring.log &
+)
+out9d663680="${tmpDir}/out.$$" err9d663680="${tmpDir}/err.$$"
+mkfifo "$out9d663680" "$err9d663680"
+trap 'rm "$out9d663680" "$err9d663680"' EXIT
+tee '/cromwell_root/stdout' < "$out9d663680" &
+tee '/cromwell_root/stderr' < "$err9d663680" >&2 &
+(
+cd /cromwell_root
+
+
+set -Eeuo pipefail
+ 
+mv /cromwell_root/talkowski-sv-gnomad-cromwell-execution/AnnotateILPBFeatures/a532b314-0a50-4d06-b59f-d2840d8eb0ef/call-AnnotateILPBFeaturesPerSamplePerBed/shard-47/AnnotateILPBFeaturesPerSamplePerBed/d69c5958-fdd2-4636-be52-db38fe995122/call-vapor/VaPoR/f9d27af1-7342-4d43-b611-2399f920c2cb/call-VaPoR_bed/VaPoRBed/9b807eae-cf7e-488c-8f26-d5d614b60728/call-VaPoRBedPerChromosome/shard-18/VaPoRBedPerChromosome/9d663680-3ec1-42c6-b0b7-b0684b99ce4e/call-SplitBed/chr19.bed.gz __na20847__f9d4e5.bed.gz
+gunzip __na20847__f9d4e5.bed.gz
+grep -v "BND" __na20847__f9d4e5.bed | grep -v "CNV" | sed -e 's/CPX/INV/' | cut -f1-6 | sed -e 's/INS\t/INS_/' | sed -e 's/MEI\t/INS_/' | cut -f1-5 >> __na20847__f9d4e5.vapor.bed
+
+touch __na20847__f9d4e5.vapor.split.aaaaaa
+split -l 2000 -a 6 __na20847__f9d4e5.vapor.bed __na20847__f9d4e5.vapor.split.
+fi
+)  > "$out9d663680" 2> "$err9d663680"
+echo $? > /cromwell_root/rc.tmp
+(
+# add a .file in every empty directory to facilitate directory delocalization on the cloud
+cd /cromwell_root
+find . -type d -exec sh -c '[ -z "$(ls -A '"'"'{}'"'"')" ] && touch '"'"'{}'"'"'/.file' \;
+)
+(
+cd /cromwell_root
+sync
+# make the directory which will keep the matching files
+mkdir /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4
+
+# create the glob control file that will allow for the globbing to succeed even if there is 0 match
+echo "This file is used by Cromwell to allow for globs that would not match any file.
+By its presence it works around the limitation of some backends that do not allow empty globs.
+Regardless of the outcome of the glob, this file will not be part of the final list of globbed files." > /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4/cromwell_glob_control_file
+
+# hardlink or symlink all the files into the glob directory
+( ln -L /cromwell_root/__na20847__f9d4e5.vapor.split.* /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4 2> /dev/null ) || ( ln /cromwell_root/__na20847__f9d4e5.vapor.split.* /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4 )
+
+# list all the files (except the control file) that match the glob into a file called glob-[md5 of glob].list
+ls -1 /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4 | grep -v cromwell_glob_control_file > /cromwell_root/glob-5b2e3e13ad8e79989feacb4c8c2426f4.list
+
+
+)
+mv /cromwell_root/rc.tmp /cromwell_root/rc
