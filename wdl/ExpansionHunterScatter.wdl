@@ -99,7 +99,7 @@ task SplitVariantCatalog {
 
         def serialize():
             print(f"subset counter: {subset_counter}")
-            with open(f"{output_prefix}{filename_without_ext}_{subset_counter}.json", "w") as f_out:
+            with open(f"{output_prefix}{filename_without_ext}_{subset_counter:06}.json", "w") as f_out:
                 json.dump(subset_catalogs, f_out, indent=4)
 
 
