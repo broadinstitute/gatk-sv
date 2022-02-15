@@ -191,7 +191,7 @@ task ConcatEHOutputs {
         TIMINGS=(~{sep=" " timings})
         FIRST_TIMING=${TIMINGS[0]}
         head -1 ${FIRST_TIMING} > ~{output_prefix}_timing.tsv
-        tail -n +2 -q ~{sep=" " timings} >> ~{output_prefix}_timing.tsv
+        awk FNR!=1 ~{sep=" " timings} >> ~{output_prefix}_timing.tsv
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
