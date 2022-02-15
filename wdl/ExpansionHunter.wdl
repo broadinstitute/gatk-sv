@@ -183,7 +183,7 @@ task ConcatEHOutputs {
         jq -s 'reduce .[] as $item ({}; . * $item)' ~{sep=" " jsons} > ~{output_prefix}.json
 
         VCFS="~{write_lines(vcfs_gz)}"
-        bcftools concat --no-version --naive --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
+        bcftools concat --no-version --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
 
         BAMS="~{write_lines(overlapping_reads)}"
         samtools merge ~{output_prefix}.bam -b ${BAMS}
