@@ -24,11 +24,7 @@ workflow ExpansionHunterScatter {
         sample_ids: "One ID per sample, in the same order as the files in bams_or_crams. These IDs must match the ID given in the second column (`Individual ID` column) of the given PED file. These IDs will also be used as an output prefix."
     }
 
-    String variant_catalog_batch_size_ =
-        if defined(variant_catalog_batch_size) then
-            select_first([variant_catalog_batch_size])
-        else
-            10000
+    String variant_catalog_batch_size_ = select_first([variant_catalog_batch_size, 1000])
 
     call SplitVariantCatalog as svc {
         input:
