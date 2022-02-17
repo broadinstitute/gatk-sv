@@ -12,7 +12,7 @@ workflow ExpansionHunterScatter {
         File? ped_file
         File reference_fasta
         File? reference_fasta_index
-        File variant_catalog
+        File variant_catalog_json
         Int? variant_catalog_batch_size
         String expansion_hunter_docker
         String python_docker
