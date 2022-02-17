@@ -30,7 +30,7 @@ workflow ExpansionHunterScatter {
         input:
             variant_catalog = variant_catalog,
             batch_size = variant_catalog_batch_size_,
-            output_prefix = basename(variant_catalog),
+            output_prefix = basename(variant_catalog, ".json"),
             python_docker = python_docker
     }
 
