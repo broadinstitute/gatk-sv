@@ -64,7 +64,7 @@ workflow MergePesrDepth {
         input:
             vcf=subtyped_pesr_vcf,
             vcf_index=subtyped_pesr_vcf + ".tbi",
-            outfile_prefix="~{prefix}.subset_small",
+            outfile_prefix="~{prefix}.subset_large",
             records_filter='INFO/SVLEN>=2500',
             use_ssd=true,
             sv_base_mini_docker=sv_base_mini_docker,
