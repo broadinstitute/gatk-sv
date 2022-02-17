@@ -32,6 +32,8 @@ workflow Module07MinGQPart1 {
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_split_vcf_to_clean
+    RuntimeAttr? runtime_attr_collect_trio_svdat_pcrminus
+    RuntimeAttr? runtime_attr_collect_trio_svdat_pcrplus
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
@@ -174,7 +176,8 @@ workflow Module07MinGQPart1 {
         input:
           vcf_shards=SplitPcrVcf.PCRMINUS_vcf,
           famfile=fam,
-          sv_pipeline_docker=sv_pipeline_docker
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_collect_trio_svdat_pcrminus
       }
     }
     call minGQTasks.GatherTrioData as GatherTrioData_PCRMINUS {
@@ -202,7 +205,8 @@ workflow Module07MinGQPart1 {
           input:
             vcf_shards=SplitPcrVcf.PCRPLUS_vcf,
             famfile=fam,
-            sv_pipeline_docker=sv_pipeline_docker
+            sv_pipeline_docker=sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_collect_trio_svdat_pcrplus
         }
       }
       call minGQTasks.GatherTrioData as GatherTrioData_PCRPLUS {

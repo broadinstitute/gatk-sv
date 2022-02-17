@@ -604,7 +604,7 @@ task BuildFilterTree {
 task ApplyMinGQFilter {
   input{
     File vcf
-    File minGQ_lookup_table
+    File? minGQ_lookup_table
     String prefix
     String PCR_status
     Float maxNCR

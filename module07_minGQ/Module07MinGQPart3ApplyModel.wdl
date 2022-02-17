@@ -22,6 +22,8 @@ workflow Module07MinGQPart3 {
         Int global_minGQ
 
         String sv_pipeline_docker
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_CombineVcfs
     }
 
 

@@ -16,6 +16,7 @@ workflow MinGQRocOpt {
     Int min_sv_per_proband_per_condition
     String sv_pipeline_docker
     String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_roc_single
   }
   # Scatter over each condition and send the trio data for ROC optimization
   Array[Array[String]] conditions = read_tsv(conditions_table)
@@ -44,8 +45,9 @@ workflow MinGQRocOpt {
         roc_max_fdr=roc_max_fdr,
         roc_min_gq=roc_min_gq,
         roc_max_gq=roc_max_gq,
-       roc_step_gq=roc_step_gq,
-        min_sv_per_proband_per_condition=min_sv_per_proband_per_condition
+        roc_step_gq=roc_step_gq,
+        min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
+        runtime_attr_override = runtime_attr_roc_single
     }
   }
 
@@ -98,7 +100,7 @@ task FilterMergeVariantsWithROC {
     mem_gb: 8,
     disk_gb: 50,
     boot_disk_gb: 10,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
