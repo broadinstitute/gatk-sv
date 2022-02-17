@@ -8,7 +8,6 @@
     "Module07MinGQPart1.min_records_per_shard_step1" :  1000,
     "Module07MinGQPart1.runtime_override_split_vcf_to_clean": {"disk_gb" : 750},
     "Module07MinGQPart1.runtime_attr_SplitVcfPerContig": {"disk_gb": 800},
-    "Module07MinGQPart1.runtime_override_combine_step_1_vcfs": {"disk_gb": 1200},
     "Module07MinGQPart1.vcf": "gs://talkowski-sv-gnomad-output/zero/CleanVcfChromosomeLastTwoSteps/d79d626b-8e14-4300-9d15-809248cd1a62/call-FinalCleanup/gnomad-sv-v3.chr12.final_cleanup.vcf.gz",
     "Module07MinGQPart1.vcf_idx": "gs://talkowski-sv-gnomad-output/zero/CleanVcfChromosomeLastTwoSteps/d79d626b-8e14-4300-9d15-809248cd1a62/call-FinalCleanup/gnomad-sv-v3.chr12.final_cleanup.vcf.gz.tbi",
     "Module07MinGQPart1.prefix": "gnomad-sv-v3.chr12",

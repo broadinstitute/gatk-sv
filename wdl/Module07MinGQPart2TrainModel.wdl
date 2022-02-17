@@ -30,11 +30,6 @@ workflow Module07MinGQPart2 {
         Int roc_step_gq
         Int min_sv_per_proband_per_condition
 
-        Array[File] PCRMINUS_vcf_lists
-        Array[File] PCRMINUS_vcf_idx_lists
-        Array[File] PCRPLUS_vcf_lists
-        Array[File] PCRPLUS_vcf_idx_lists
-
         File? pcrplus_samples_list
 
         Array[File] PCRMINUS_trio_tarball
