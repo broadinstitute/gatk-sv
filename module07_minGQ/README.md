@@ -21,4 +21,4 @@ The original minGQ script has now been splitted into three parts:
 	- last script to run for minGQ; 
 	- applies the trained model from Part2 to filter SVs; 
 	- this wdl can parallelize across chromosomes;
-
+	- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step3." in file name.
