@@ -63,7 +63,8 @@ workflow Module07MinGQPart3 {
           }
         }
 
-        File filtered_vcf_shards = select_first([apply_filter_PCRMINUS.filtered_vcf, merge_PCR_VCFs.merged_vcf ])
+        File filtered_vcf_shards = select_first([merge_PCR_VCFs.merged_vcf, apply_filter_PCRMINUS.filtered_vcf])
+
       }
 
     call MiniTasks.ConcatVcfs as CombineVcfs {
