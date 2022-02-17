@@ -45,7 +45,7 @@ workflow Module07MinGQPart3 {
           ### PCRPLUS
           call minGQTasks.ApplyMinGQFilter as apply_filter_PCRPLUS {
             input:
-              vcf=PCRPLUS_vcf_lists[i],
+              vcf=select_first([PCRPLUS_vcf_lists])[i],
               minGQ_lookup_table= PCRPLUS_lookup_table,
               prefix="~{prefix}.PCRPLUS",
               PCR_status="PCRPLUS",

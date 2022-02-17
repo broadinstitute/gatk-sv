@@ -4,9 +4,9 @@ import "Structs.wdl"
 
 workflow MinGQRocOpt {
   input{
-    File trio_tarball
+    File? trio_tarball
     String prefix
-    File trios_list
+    File? trios_list
     File conditions_table
     Int maxSVperTrio
     Float roc_max_fdr
@@ -16,6 +16,7 @@ workflow MinGQRocOpt {
     Int min_sv_per_proband_per_condition
     String sv_pipeline_docker
     String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_roc_single
   }
   # Scatter over each condition and send the trio data for ROC optimization
   Array[Array[String]] conditions = read_tsv(conditions_table)
@@ -44,8 +45,9 @@ workflow MinGQRocOpt {
         roc_max_fdr=roc_max_fdr,
         roc_min_gq=roc_min_gq,
         roc_max_gq=roc_max_gq,
-       roc_step_gq=roc_step_gq,
-        min_sv_per_proband_per_condition=min_sv_per_proband_per_condition
+        roc_step_gq=roc_step_gq,
+        min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
+        runtime_attr_override = runtime_attr_roc_single
     }
   }
 
@@ -70,9 +72,9 @@ workflow MinGQRocOpt {
 # and run ROC if condition has enough variants per sample
 task FilterMergeVariantsWithROC {
   input{
-    File trio_tarball
+    File? trio_tarball
     String prefix
-    File trios_list
+    File? trios_list
     String condition_id
     String minSVLEN
     String maxSVLEN
@@ -95,10 +97,10 @@ task FilterMergeVariantsWithROC {
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 50,
+    mem_gb: 2,
+    disk_gb: 10,
     boot_disk_gb: 10,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
