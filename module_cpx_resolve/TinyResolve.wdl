@@ -97,7 +97,8 @@ task ResolveManta {
       sample_no=`printf %03d $i`
       bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $pe ${sample_id} ~{mei_bed} ~{cytoband}
       mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz
-      mv manta.unresolved.vcf tloc_${sample_no}.${sample_id}.manta.unresolved.vcf.gz
+      bgzip manta.unresolved.vcf 
+      mv manta.unresolved.vcf.gz tloc_${sample_no}.${sample_id}.manta.unresolved.vcf.gz
     done
   >>>
 
