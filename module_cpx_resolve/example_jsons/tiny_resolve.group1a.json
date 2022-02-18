@@ -1,0 +1,29 @@
+{
+    "TinyResolve.sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-gnomad-0506-239e643",
+    "TinyResolve.cytoband" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
+    "TinyResolve.mei_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
+    "TinyResolve.samples_per_shard": 2,
+    "TinyResolve.samples" : ["__09c87322__b65896","__09c99766__578f5e","__10c100721__a22750","__10c101595__3a8e01","__10c102970__1120a1","__10c107781__02bf80","__10c110674__d73c43","__10c110962__e98e31","__11c119096__06bef2","__11c119347__b10850"],
+    "TinyResolve.manta_vcfs" : ["gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_315.manta.__09c87322__b65896.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_316.manta.__09c99766__578f5e.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_000.manta.__10c100721__a22750.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_317.manta.__10c101595__3a8e01.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_318.manta.__10c102970__1120a1.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_319.manta.__10c107781__02bf80.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_320.manta.__10c110674__d73c43.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_321.manta.__10c110962__e98e31.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_322.manta.__11c119096__06bef2.vcf.gz",
+        "gs://talkowski-sv-gnomad-output/zero/Module00c/std_vcf/17446b93-ec4c-4770-8419-067fc4436686/glob-31de091d1940ddb276ce7b6086a74725/std_323.manta.__11c119347__b10850.vcf.gz"],
+    "TinyResolve.discfile" : ["gs://talkowski-sv-gnomad-output/zero/SplitPE/__09c87322__b65896.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__09c99766__578f5e.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c100721__a22750.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c101595__3a8e01.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c102970__1120a1.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c107781__02bf80.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c110674__d73c43.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__10c110962__e98e31.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__11c119096__06bef2.PE.txt.gz",
+            "gs://talkowski-sv-gnomad-output/zero/SplitPE/__11c119347__b10850.PE.txt.gz"]
+
+
+}  
