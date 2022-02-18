@@ -127,14 +127,15 @@ task SplitVariantCatalog {
         max_retries: 1,
         disk_gb: 10
     }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     runtime {
         docker: python_docker
-        cpu: select_first([runtime_attr_override.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr_override.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr_override.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr_override.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr_override.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr_override.max_retries, default_attr.max_retries])
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
