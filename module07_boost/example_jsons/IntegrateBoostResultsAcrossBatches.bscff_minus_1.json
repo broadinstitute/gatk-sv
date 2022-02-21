@@ -1,0 +1,31 @@
+{
+    "IntegrateBoostResultsAcrossBatches.boost_models": [
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-0/batch_1.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-1/batch_2.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-2/batch_3.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-3/batch_4.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-4/batch_5.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-5/attempt-2/batch_6.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-6/batch_7.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-7/batch_8.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-8/batch_9.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-9/batch_10.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-10/attempt-2/batch_11.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-11/batch_12.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-12/batch_13.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-13/attempt-2/batch_14.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-14/attempt-2/batch_15.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-15/batch_16.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-16/batch_17.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-17/batch_18.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-18/batch_19.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-19/attempt-2/batch_20.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-20/batch_21.tar.gz",
+        "gs://talkowski-sv-gnomad-output/zero/TrainAndApplyBoostModel/1c1f04c4-5c3d-4b6a-901d-9e247e4c44af/call-apply_boost_filter/shard-21/batch_22.tar.gz"],
+    "IntegrateBoostResultsAcrossBatches.boost_cutoff_table" : "gs://talkowski-sv-gnomad-output/zero/boost_filter/boost_cff_tables/boost_cff_table_minus1.tsv",
+    "IntegrateBoostResultsAcrossBatches.contig_list" : "gs://gatk-sv-resources/resources/contig.fai",
+    "IntegrateBoostResultsAcrossBatches.prefix" : "BoostCff_neg_1",
+    "IntegrateBoostResultsAcrossBatches.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
+    "IntegrateBoostResultsAcrossBatches.sv_benchmark_docker": "talkowski/sv_benchmark"
+}
+
