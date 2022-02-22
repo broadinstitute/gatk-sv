@@ -14,6 +14,7 @@ Use `IntegrateBoostScores.wdl` to run this step.
 
 Example of the json: *./example_jsons/IntegrateBoostResultsAcrossBatches.bscff_minus_1.json*
 
+## others
 Example of the boost score cutoff table can be found at: *./example_boost_cff_table/boost_cff_table_minus1.tsv*
 
 The docker files for `sv_benchmark_docker` can be found at: gatk-sv/dockerfiles/rdpesr_docker
