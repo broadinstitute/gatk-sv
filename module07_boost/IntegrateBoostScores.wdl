@@ -49,9 +49,9 @@ workflow IntegrateBoostResultsAcrossBatches{
     scatter (contig in contigs){
         call SplitBoostStatByContig{
             input:
-                boost_stats = IntegrateBoostScoreAcrossBatches.boost_stat
+                boost_stats = IntegrateBoostScoreAcrossBatches.boost_stat,
                 contig = contig,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_benchmark_docker = sv_benchmark_docker,
                 runtime_attr_override = runtime_attr_split_boost_stat_by_contig
         }
     }
@@ -63,9 +63,13 @@ workflow IntegrateBoostResultsAcrossBatches{
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_concat_stat
     }
+
+    output{
+        File stat = ConcatStats.merged_stat
+    }
 }
 
-Task IntegrateBoostScoreAcrossBatches{
+task IntegrateBoostScoreAcrossBatches{
     input{
         File boost_model
         File boost_cutoff_table
@@ -76,8 +80,8 @@ Task IntegrateBoostScoreAcrossBatches{
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
         mem_gb: 7, 
-        disk_gb: 10,
-        boot_disk_gb: 10,
+        disk_gb: 75,
+        boot_disk_gb: 15,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -88,15 +92,15 @@ Task IntegrateBoostScoreAcrossBatches{
         File boost_stat = "~{boostname}.stat"
     }
 
-    String boostname = basename(BoostModel, ".tar.gz")
+    String boostname = basename(boost_model, ".tar.gz")
     
     command <<<
         set -Eeuo pipefail
 
         mkdir boost_models/
-        tar zxvf ~{BoostModel} -C boost_models/
+        tar zxvf ~{boost_model} -C boost_models/
         python /src/Integrate_Boost_Score_across_Samples.py \
-            --cff_table ~{BoostCutoffTable} \
+            --cff_table ~{boost_cutoff_table} \
             --path "boost_models/~{boostname}/" \
             --output "~{boostname}.stat"
     >>>
@@ -112,11 +116,11 @@ Task IntegrateBoostScoreAcrossBatches{
     }
 }
 
-Task SplitBoostStatByContig{
+task SplitBoostStatByContig{
     input{
         Array[File] boost_stats
         String contig
-        String sv_base_mini_docker
+        String sv_benchmark_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -135,16 +139,17 @@ Task SplitBoostStatByContig{
         File per_contig_stat = "~{boost_stat_name}.~{contig}.stat.gz"
     }
 
-    String boost_stat_name = basename(BoostStat,".stat")
+    String boost_stat_name = basename(boost_stats[0],".stat")
 
     command <<<
         set -Eeuo pipefail
 
         while read BoostStat; do
-            sed -e 's/\./\t/g' ~{BoostStat} | awk '{if ($2=="~{contig}") print}' > ~{contig}.~{BoostStat}
+            boost_base=$(basename "$BoostStat")
+            sed -e 's/\./\t/g' ${BoostStat} | awk '{if ($2=="~{contig}") print}' > ~{contig}.${boost_base}
         done < ~{write_lines(boost_stats)}
 
-        Rscript Integrate_Boost_Score_across_Batches.R \
+        Rscript /src/Integrate_Boost_Score_across_Batches.R \
             --prefix ~{boost_stat_name} \
             --chr ~{contig}
 
