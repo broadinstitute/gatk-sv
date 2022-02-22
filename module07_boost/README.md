@@ -10,19 +10,19 @@ Use `TrainAndApplyBoostModel.wdl` to run this step. Example of the json: *./exam
 ## Layer 2: Integrate boost score across samples and calculate the overall boost failure rate for each SV locus.
 This step integrates the boost score assigned to each sample in Layer 1. A boost score cutoff should be decided / arbitrarily assigned for each variant type. For a specific SV, samples that carry this SV but have a lower boost score than the cutoff would be considered as failure, and vise versa.
 
-Use `IntegrateBoostScores.wdl` to run this step. Example of the json: *./example_jsons/IntegrateBoostResultsAcrossBatches.bscff_minus_1.json*
+Use `IntegrateBoostScores.wdl` to run this step. 
+
+Example of the json: *./example_jsons/IntegrateBoostResultsAcrossBatches.bscff_minus_1.json*
 
 Example of the boost score cutoff table can be found at: *./example_boost_cff_table/boost_cff_table_minus1.tsv*
 
 
 
-Below are brief descriptions of the scripts involved in this process:
+## Below are brief descriptions of the scripts involved in this process:
 
-**Step2.boost_filter.R**
- - Script to train boost model. Note: this script is expected to run on local computer, and paths to all required inputs are hard coded.
+**Step2.boost_filter.R**  - Script to train boost model. Note: this script is expected to run on local computer, and paths to all required inputs are hard coded.
 
-**Step3.apply_boost_filter.R**
- - Script to apply boost model.
+**Step3.apply_boost_filter.R**  - Script to apply boost model.
 
 The docker files for `sv_benchmark_docker` can be found at: gatk-sv/dockerfiles/rdpesr_docker
 
