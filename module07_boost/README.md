@@ -20,3 +20,6 @@ Below are brief descriptions of the scripts involved in this process:
 
 **Step3.apply_boost_filter.R**
  - Script to apply boost model.
+
+The docker files for `sv_benchmark_docker` can be found at: gatk-sv/dockerfiles/rdpesr_docker
+
