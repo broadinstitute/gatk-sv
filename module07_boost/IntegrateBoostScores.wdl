@@ -204,7 +204,7 @@ task ConcatStats {
 
     command <<<
         set -eu
-        head -1 shard_stats[0] > ~{prefix}.stat
+        head -1 ~{shard_stats[0]} > ~{prefix}.stat
 
         set -o pipefail
         while read SPLIT; do
