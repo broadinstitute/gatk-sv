@@ -16,13 +16,5 @@ Example of the json: *./example_jsons/IntegrateBoostResultsAcrossBatches.bscff_m
 
 Example of the boost score cutoff table can be found at: *./example_boost_cff_table/boost_cff_table_minus1.tsv*
 
-
-
-## Below are brief descriptions of the scripts involved in this process:
-
-**Step2.boost_filter.R**  - Script to train boost model. Note: this script is expected to run on local computer, and paths to all required inputs are hard coded.
-
-**Step3.apply_boost_filter.R**  - Script to apply boost model.
-
 The docker files for `sv_benchmark_docker` can be found at: gatk-sv/dockerfiles/rdpesr_docker
 
