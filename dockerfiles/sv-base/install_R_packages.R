@@ -13,7 +13,7 @@ if ( 0 == length(to.be.installed) ) {
 }
 
 # multiple repos, multiple retries when a package is not found
-repos <- c("http://lib.stat.cmu.edu/R/CRAN/")
+repos <- c("http://lib.stat.cmu.edu/R/CRAN/", "https://cran.microsoft.com/")
 
 # install to default place, quietly, then leave
 install.packages(pkgs = to.be.installed, 

@@ -7,8 +7,7 @@ FROM ${SV_PIPELINE_BASE_IMAGE}
 # Install R & bioconductor packages
 ARG SV_PIPELINE_BIOCONDUCTOR_PKGS="SNPRelate"
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  make cmake automake && \
     mkdir -p /tmp/R_pkg_download/ && \
     cd /opt/ && \
@@ -31,8 +30,7 @@ ARG KING_URL="https://www.kingrelatedness.com/executables/Linux-king215.tar.gz"
 ARG PLING2_URL="https://github.com/chrchang/plink-ng/releases/download/2019/plink2_linux_x86_64_20190107.zip"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  wget unzip && \
     cd /opt && \
     wget -q ${KING_URL} && \

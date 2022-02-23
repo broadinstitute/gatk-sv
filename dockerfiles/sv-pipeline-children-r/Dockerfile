@@ -7,8 +7,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ARG SV_PIPELINE_R_PKGS="assertthat BH cli crayon digest dplyr fansi generics glue magrittr MASS Matrix nlme nnet numDeriv pillar pkgconfig plogr plyr purrr R6 RColorBrewer Rcpp reshape2 rlang rpart stringi stringr survival tibble tidyr tidyselect utf8 withr zoo"
 ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  make cmake automake \
                  libssh2-1-dev \
                  libssl-dev && \

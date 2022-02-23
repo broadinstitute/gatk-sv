@@ -14,8 +14,7 @@ ARG SV_PIPELINE_BIOC_PKGS="\"multtest\""
 ARG SV_PIPELINE_R_PKGS="BSDA caret fpc hash metap perm plyr pwr reshape ROCR zoo"
 ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  make cmake automake \
                  libssh2-1-dev \
                  libssl-dev && \
