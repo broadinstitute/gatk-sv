@@ -81,28 +81,6 @@ jobs:
           echo "::set-output name=BASE_SHA::$BASE_SHA"
           echo "::set-output name=HEAD_SHA::$HEAD_SHA"
 
-      - name: Compose Image Tag
-        id: image_tag
-        # This step composes a tag to be used for all the images created by
-        # the build_docker.py script. The tag follows the following template:
-        #
-        #   DATE-HEAD_SHA_8
-        #
-        # where 'DATE' is YYYYMMDD extracted from the time stamp of the last
-        # commit on the feature branch (HEAD), and 'HEAD_SHA_8' is the first
-        # eight letters of its commit SHA.
-        run: |
-          COMMIT_SHA=${{ steps.commit_sha.outputs.HEAD_SHA }}
-
-          # Extract the time stamp of COMMIT_SHA in YYYYMMDD format.
-          # See git-show documentation available at:
-          # http://schacon.github.io/git/git-show
-          DATE=$(git show -s --format=%ad --date=format:'%Y%m%d' $COMMIT_SHA)
-
-          IMAGE_TAG=$DATE-${COMMIT_SHA::8}
-          echo "::debug::Image tag: $IMAGE_TAG"
-          echo "::set-output name=IMAGE_TAG::$IMAGE_TAG"
-
   build_job:
     runs-on: ubuntu-20.04
     name: Test Images Build
@@ -130,8 +108,7 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} \
-            --head-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} \
-            --image-tag ${{ needs.build_args_job.outputs.images_tag }}
+            --head-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }}
 
   publish_job:
     # This job first configures gcloud with the authentication of a
@@ -196,5 +173,4 @@ jobs:
           python build_docker.py \
             --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} \
             --head-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} \
-            --image-tag ${{ needs.build_args_job.outputs.images_tag }} \
             --docker-repo us.gcr.io/broad-dsde-methods/gatk-sv
