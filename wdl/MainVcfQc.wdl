@@ -14,11 +14,12 @@ import "Utils.wdl" as Utils
 
 # Main workflow to perform comprehensive quality control (QC) on
 # an SV VCF output by GATK-SV
-workflow MasterVcfQc {
+workflow MainVcfQc {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
     Boolean vcf_format_has_cn = true
+    Boolean subset_to_pass_and_multiallelic = false
     File? ped_file
     File? list_of_samples_to_include
     Int max_trios = 1000
@@ -45,11 +46,12 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_sanitize_outputs
 
     # overrides for MiniTasks or Utils
-    RuntimeAttr? runtime_overrite_subset_vcf
+    RuntimeAttr? runtime_override_subset_vcf
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
     # overrides for ShardedQcCollection
+    RuntimeAttr? runtime_override_subset_to_pass 
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_split_vcf_to_qc
@@ -84,7 +86,7 @@ workflow MasterVcfQc {
           list_of_samples_to_keep=select_first([list_of_samples_to_include]),
           subset_name=basename(vcf_info.left, '.vcf.gz') + ".subsetted",
           sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_overrite_subset_vcf
+          runtime_attr_override=runtime_override_subset_vcf
       }
     }
   }
@@ -101,6 +103,7 @@ workflow MasterVcfQc {
         vcf_idxs=vcf_idxs_for_qc,
         contig=contig,
         sv_per_shard=sv_per_shard,
+        subset_pass=subset_to_pass_and_multiallelic,
         prefix="~{prefix}.~{contig}.shard",
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,

@@ -12,12 +12,14 @@ workflow ShardedQcCollection {
     Array[File] vcf_idxs
     String contig
     Int sv_per_shard
+    Boolean subset_pass = false
     String prefix
 
     String sv_base_mini_docker
     String sv_pipeline_docker
 
     # overrides for local tasks
+    RuntimeAttr? runtime_override_subset_to_pass
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
 
@@ -44,18 +46,30 @@ workflow ShardedQcCollection {
 
   # Scatter over VCF shards
   scatter (shard in vcf_shards) {
+    # Subset shard to PASS and MULTIALLELIC variants only, if optioned
+    if (subset_pass) {
+      call SubsetToPassAndMultiallelic {
+        input:
+          vcf=shard,
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_attr_override=runtime_override_subset_to_pass
+      }
+    }
+    File filtered_vcf = select_first([SubsetToPassAndMultiallelic.outvcf, shard])
+
     # Collect VCF-wide summary stats
     call CollectShardedVcfStats {
       input:
-        vcf=shard,
+        vcf=filtered_vcf,
         prefix=prefix + ".shard_",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_sharded_vcf_stats
       }
+
     # Run vcf2bed_subworkflow for record purposes
     call SvtkVcf2bed {
       input:
-        vcf=shard,
+        vcf=filtered_vcf,
         prefix="~{prefix}.shard",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_2_bed
@@ -87,6 +101,55 @@ workflow ShardedQcCollection {
     File vcf_stats_idx=MergeSubvcfStatShards.merged_bed_idx
     File samples_list=CollectShardedVcfStats.samples_list[0]
     File vcf2bed_out=MergeSvtkVcf2bed.merged_bed_file
+  }
+}
+
+# Task to subset VCF to PASS and MULTIALLELIC variants only
+task SubsetToPassAndMultiallelic {
+  input {
+    File vcf
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  File outvcf_fname = basename(vcf, ".vcf.gz") + ".pass_only.vcf.gz"
+
+  Float input_size = size(vcf, "GiB")
+  Float compression_factor = 2.0
+  Float base_disk_gb = 10.0
+  Float base_mem_gb = 2.0
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + (compression_factor * input_size),
+    disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
+    cpu_cores: 1,
+    preemptible_tries: 1,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_base_mini_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    time bcftools view \
+      --no-update \
+      -f "PASS,MULTIALLELIC" \
+      -l 1 -O z \
+      -o ~{outvcf_fname} \
+      ~{vcf}
+  >>>
+
+  output {
+    File outvcf = outvcf_fname
   }
 }
 
