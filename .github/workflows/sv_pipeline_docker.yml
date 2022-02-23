@@ -266,4 +266,4 @@ jobs:
       - name: Build and Publish Docker Images
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --docker-repo us.gcr.io/broad-dsde-methods/gatk-sv
