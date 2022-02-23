@@ -421,9 +421,9 @@ task ConcatVaPoR {
       #find -type f -name '~{prefix}.tmp_plots/*/*INS.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
       #find -type f -name '~{prefix}.tmp_plots/*/*.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
 
-      find '~{prefix}.tmp_plots/' -type f | grep DEL.png | xargs -n1 -I{} mv {} __na19240__a01b77.plots/
-      find '~{prefix}.tmp_plots/' -type f | grep INS.png | xargs -n1 -I{} mv {} __na19240__a01b77.plots/
-      find '~{prefix}.tmp_plots/' -type f | grep png | xargs -n1 -I{} mv {} __na19240__a01b77.plots/
+      find '~{prefix}.tmp_plots/' -type f | grep DEL.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      find '~{prefix}.tmp_plots/' -type f | grep INS.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
+      find '~{prefix}.tmp_plots/' -type f | grep png | xargs -n1 -I{} mv {} ~{prefix}.plots/
 
       rm -r ~{prefix}.tmp_plots/*
     done < ~{write_lines(shard_plots)}
