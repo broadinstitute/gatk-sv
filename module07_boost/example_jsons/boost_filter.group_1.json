@@ -1,9 +1,0 @@
-{
-    "AnnotateILFeatures.site_feature_folder": "gs://talkowski-sv-gnomad-output/zero/boost_filter/training_sets/per_chr_anno.tar.gz",
-    "AnnotateILFeatures.model_folder": "gs://talkowski-sv-gnomad-output/zero/boost_filter/training_sets/lgb_models.tar.gz",
-    "AnnotateILFeatures.input_folder": "gs://talkowski-sv-gnomad-output/zero/boost_filter/testing_set/input_folder_test.tar.gz",
-    "AnnotateILFeatures.sv_benchmark_docker": "talkowski/sv_benchmark",
-    "AnnotateILFeatures.runtime_attr_boost_filter": {"preemptible_tries": 1}
-
-}
-

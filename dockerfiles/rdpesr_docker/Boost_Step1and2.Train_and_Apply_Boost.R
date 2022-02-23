@@ -1133,14 +1133,14 @@ cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2",
 
 # read in per sv site features
 site_feature = readin_site_features(train_site_path)
+site_feature[,ncol(site_feature)+1] = site_feature$count_dnv/site_feature$count_children
+colnames(site_feature)[ncol(site_feature)] = 'dnv_rate'
 
 # read in per-sample features 
 samp_feature = readin_sample_features(train_sample_path)
 
 # combine site-level and sample-level features for a complete training dataset
 training_data = readin_training(samp_feature, site_feature)
-feature_list_cnv = c('svtype','size_cate','GT','CN','CNQ','EV','GQ','PE_GQ','PE_GT','RD_CN','RD_GQ','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','vs_raw_depth_ovr1a','vs_raw_depth_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
-feature_list_oth = c('svtype','size_cate','GT','EV','GQ','PE_GQ','PE_GT','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
 
 #readin SVID with high LD with SNVs
 LD_SVID_afr = read.table(paste(train_LD_path, 'gnomadV2_vs_V3.AFR.SVID', sep = ''))
@@ -1160,8 +1160,8 @@ output_path = paste(paste(strsplit(output_path,'/')[[1]],collapse = '/'),'/',sep
 site_feature = readin_site_features(train_site_path)
 
 #train bgm model on testing samples:
-feature_list_cnv = c('svtype','size_cate','GT','CN','CNQ','EV','GQ','PE_GQ','PE_GT','RD_CN','RD_GQ','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','vs_raw_depth_ovr1a','vs_raw_depth_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
-feature_list_oth = c('svtype','size_cate','GT','EV','GQ','PE_GQ','PE_GT','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
+feature_list_cnv = c('svtype','size_cate','dnv_rate','GT','CN','CNQ','EV','GQ','PE_GQ','PE_GT','RD_CN','RD_GQ','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','vs_raw_depth_ovr1a','vs_raw_depth_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
+feature_list_oth = c('svtype','size_cate','dnv_rate','GT','EV','GQ','PE_GQ','PE_GT','SR_GQ','SR_GT','vs_raw_manta_ovr1a','vs_raw_manta_ovr1b','vs_raw_wham_ovr1a','vs_raw_wham_ovr1b','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b','ALGORITHMS','EVIDENCE','sr_background_fail','sr_bothside_support','PASS','PESR_GT_OVERDISPERSION','UNRESOLVED','MULTIALLELIC','GC')
 bgm_models = train_del_dup_ins(training_data,feature_list_cnv, feature_list_oth, LD_SVID, ssc_hq, ssc_lq)
 saveRDS.lgb.Booster(bgm_models[[1]], file = paste(output_path, 'bgm_model.DEL_s1_under250bp.rds', sep = ''), raw=TRUE)
 saveRDS.lgb.Booster(bgm_models[[2]], file = paste(output_path, 'bgm_model.DUP_s1_under250bp.rds', sep = ''), raw=TRUE)

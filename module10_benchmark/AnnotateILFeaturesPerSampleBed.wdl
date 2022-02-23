@@ -182,6 +182,7 @@ task IntegrateAnno{
             ~{"--raw_manta " + raw_manta} \
             ~{"--raw_wham " + raw_wham} \
             ~{"--raw_melt " + raw_melt} \
+            ~{"--raw_depth " + raw_depth} \
             ~{"--gt " + gt_anno} \
             ~{"--vs_pacbio " + vs_pacbio} \
             ~{"--vs_bionano " + vs_bionano} \

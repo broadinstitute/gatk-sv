@@ -726,7 +726,7 @@ task MergePcrVCFs {
         "~{prefix}.minGQ_filtered.vcf" \
         "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
-      bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      vcf-sort "~{prefix}.minGQ_filtered.no_blanks.vcf" | bgzip > "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
     fi
   >>>
 
