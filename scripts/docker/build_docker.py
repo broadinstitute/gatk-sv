@@ -601,6 +601,9 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
                                           help='Docker repo to push images to. This will push images that are built '
                                                'this run of build_docker.py, or that currently have only a local image '
                                                'in --input-json')
+    docker_remote_args_group.add_argument('--gcr-project', type=str,
+                                          help='Deprecated. Used to determine which docker repo to push images to. Use '
+                                               '--docker-repo instead.')
     docker_remote_args_group.add_argument('--update-latest', action='store_true',
                                           help=f'also update \"{ProjectBuilder.latest_tag}\" tag in remote docker'
                                                f'repo(s)')
@@ -697,6 +700,12 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
             raise ValueError(
                 "Current directory has uncommitted changes or untracked files. Cautiously refusing to proceed."
             )
+
+    if parsed_args.gcr_project is not None:
+        if parsed_args.docker_repo is not None:
+            raise ValueError("Both --gcr-project and --docker-repo were specified, but only one is allowed.")
+        print(colored("--gcr-project is deprecated, use --docker-repo instead.", "red"))
+        parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project}"
     return parsed_args
 
 
