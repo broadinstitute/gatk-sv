@@ -71,7 +71,7 @@ task CollectVidsPerSample {
   Float disk_scaling_factor = 1.0
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-    mem_gb: 2.0,
+    mem_gb: 1.5,
     disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
     cpu_cores: 1,
     preemptible_tries: 1,
