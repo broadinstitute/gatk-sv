@@ -1,0 +1,28 @@
+{
+  "BenchmarkGqFilter.train_vcf":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
+  "BenchmarkGqFilter.train_vcf_label":
+    "HGDP and HGSV",
+  "BenchmarkGqFilter.filtered_vcf":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
+  "BenchmarkGqFilter.cross_validated_filtered_vcf":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed_cross_validated.vcf.gz",
+  "BenchmarkGqFilter.truth_overlap_info":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/truth_overlap.json",
+  "BenchmarkGqFilter.ped_file":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "BenchmarkGqFilter.module03_docker":
+    "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:41c2751",
+  "BenchmarkGqFilter.sv_base_docker":
+    "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df",
+  "BenchmarkGqFilter.benchmark_args":
+    [],
+  "BenchmarkGqFilter.pickled_variant_properties":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed_svtype_svlen_gt.pickle.bz2",
+  "BenchmarkGqFilter.pickled_original_scores":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2",
+  "BenchmarkGqFilter.pickled_filtered_scores":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_gq.pickle.bz2",
+  "BenchmarkGqFilter.pickled_cross_validated_scores":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/hgdp_and_hgsv.cleaned_fixed_cross_validated_gq.pickle.bz2"
+}

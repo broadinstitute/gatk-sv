@@ -1,0 +1,27 @@
+{
+  "GetTruthOverlap.test_vcfs": [
+    "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz"
+  ],
+  "GetTruthOverlap.ped_files": [
+    "gs://talkowski-sv-gnomad-output/HGDP/manifest/HGDP_1KGP.ped"
+  ],
+  "GetTruthOverlap.truth_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
+  ],
+  "GetTruthOverlap.vapor_files": {
+    "HG00512": "gs://broad-dsde-methods-tbrookin/vapor/HG00512_CCS.bed.gz",
+    "HG00513": "gs://broad-dsde-methods-tbrookin/vapor/HG00513_CCS.bed.gz",
+    "HG00514": "gs://broad-dsde-methods-tbrookin/vapor/HG00514_CCS.bed.gz",
+    "HG00731": "gs://broad-dsde-methods-tbrookin/vapor/HG00731_CCS.bed.gz",
+    "HG00732": "gs://broad-dsde-methods-tbrookin/vapor/HG00732_CCS.bed.gz",
+    "HG00733": "gs://broad-dsde-methods-tbrookin/vapor/HG00733_CCS.bed.gz",
+    "NA19238": "gs://broad-dsde-methods-tbrookin/vapor/NA19238_CCS.bed.gz",
+    "NA19239": "gs://broad-dsde-methods-tbrookin/vapor/NA19239_CCS.bed.gz",
+    "NA19240": "gs://broad-dsde-methods-tbrookin/vapor/NA19240_CCS.bed.gz"
+  },
+  "GetTruthOverlap.module03_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:e2daaec",
+  "GetTruthOverlap.sv_base_docker": "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df"
+}

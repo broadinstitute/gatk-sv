@@ -1,0 +1,139 @@
+{
+  "TrainModule03VariantFilter.train_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/super_panel.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/super_panel.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/super_panel.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/super_panel.wham.vcf.gz"
+  ],
+  "TrainModule03VariantFilter.train_ped_files": [
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/large_quads.ped"
+  ],
+  "TrainModule03VariantFilter.train_metrics_files": [
+    "gs://broad-dsde-methods-tbrookin/dev_module03_resources/mega_panel/super_panel.metrics"
+  ],
+  "TrainModule03VariantFilter.test_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.wham.vcf.gz",
+
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.wham.vcf.gz",
+
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.wham.vcf.gz",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.depth.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.manta.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.melt.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.wham.vcf.gz"
+  ],
+  "TrainModule03VariantFilter.test_ped_files": [
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/1KGP_2504_and_698.batch_1_1.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/1KGP_2504_and_698.batch_1_2.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/1KGP_2504_and_698.batch_1_3.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/1KGP_2504_and_698.batch_1_4.ped",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/1KGP_2504_and_698.batch_2_1.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/1KGP_2504_and_698.batch_2_2.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/1KGP_2504_and_698.batch_2_3.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/1KGP_2504_and_698.batch_2_4.ped",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/1KGP_2504_and_698.batch_3_1.ped",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/1KGP_2504_and_698.batch_3_2.ped"
+  ],
+  "TrainModule03VariantFilter.test_metrics_files": [
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.metrics",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.metrics",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.metrics",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.metrics"
+  ],
+  "TrainModule03VariantFilter.test_legacy_scores_files": [
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_1/batch_1_1.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_2/batch_1_2.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_3/batch_1_3.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_1_4/batch_1_4.updated_scores",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_1/batch_2_1.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_2/batch_2_2.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_3/batch_2_3.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_2_4/batch_2_4.updated_scores",
+
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_1/batch_3_1.updated_scores",
+    "gs://broad-dsde-methods-tbrookin/module03_validation_data/batch_3_2/batch_3_2.updated_scores"
+  ],
+  "TrainModule03VariantFilter.truth_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
+  ],
+  "TrainModule03VariantFilter.vapor_files": {
+    "HG00512": "gs://broad-dsde-methods-tbrookin/vapor/HG00512_CCS.bed.gz",
+    "HG00513": "gs://broad-dsde-methods-tbrookin/vapor/HG00513_CCS.bed.gz",
+    "HG00514": "gs://broad-dsde-methods-tbrookin/vapor/HG00514_CCS.bed.gz",
+    "HG00731": "gs://broad-dsde-methods-tbrookin/vapor/HG00731_CCS.bed.gz",
+    "HG00732": "gs://broad-dsde-methods-tbrookin/vapor/HG00732_CCS.bed.gz",
+    "HG00733": "gs://broad-dsde-methods-tbrookin/vapor/HG00733_CCS.bed.gz",
+    "NA19238": "gs://broad-dsde-methods-tbrookin/vapor/NA19238_CCS.bed.gz",
+    "NA19239": "gs://broad-dsde-methods-tbrookin/vapor/NA19239_CCS.bed.gz",
+    "NA19240": "gs://broad-dsde-methods-tbrookin/vapor/NA19240_CCS.bed.gz"
+  },
+  "TrainModule03VariantFilter.genome_tracts": [
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-RepeatMasker.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-Segmental-Dups.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-Simple-Repeats.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_gaps.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s100.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s24.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s36.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s50.bed.gz"
+  ],
+  "TrainModule03VariantFilter.optimal_overlap_cutoffs":
+          "gs://broad-dsde-methods-tbrookin/pacbio/optimal_overlap_cutoffs.pickle",
+  "TrainModule03VariantFilter.module03_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:e8c99bf"
+}
