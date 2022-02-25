@@ -92,7 +92,7 @@ task BenchmarkSamples {
   Float compression_factor = 3.5
   Float base_disk_gb = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: 7.5,
+    mem_gb: 3.5,
     disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
     cpu_cores: 1,
     preemptible_tries: 1,

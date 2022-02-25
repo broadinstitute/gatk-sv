@@ -112,7 +112,7 @@ task SubsetToPassAndMultiallelic {
     RuntimeAttr? runtime_attr_override
   }
 
-  File outvcf_fname = basename(vcf, ".vcf.gz") + ".pass_only.vcf.gz"
+  String outvcf_fname = basename(vcf, ".vcf.gz") + ".pass_only.vcf.gz"
 
   Float input_size = size(vcf, "GiB")
   Float compression_factor = 2.0
@@ -140,7 +140,7 @@ task SubsetToPassAndMultiallelic {
   command <<<
     set -euo pipefail
 
-    time bcftools view \
+    bcftools view \
       --no-update \
       -f "PASS,MULTIALLELIC" \
       -l 1 -O z \
@@ -167,10 +167,10 @@ task CollectShardedVcfStats {
   Float input_size = size(vcf, "GiB")
   Float compression_factor = 2.0
   Float base_disk_gb = 5.0
-  Float base_mem_gb = 3.75
+  Float base_mem_gb = 1.5
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + compression_factor * input_size,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + 2.0 * compression_factor)),
+    mem_gb: base_mem_gb + (compression_factor * input_size),
+    disk_gb: ceil(base_disk_gb + (compression_factor * input_size)),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
