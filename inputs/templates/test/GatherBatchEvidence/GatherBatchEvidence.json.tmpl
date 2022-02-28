@@ -60,5 +60,7 @@
   "GatherBatchEvidence.samples": {{ test_batch.samples | tojson }},
   "GatherBatchEvidence.melt_vcfs": {{ test_batch.melt_vcfs | tojson }},
   "GatherBatchEvidence.wham_vcfs": {{ test_batch.wham_vcfs | tojson }},
-  "GatherBatchEvidence.gvcfs": {{ test_batch.gvcfs | tojson }}
+  "GatherBatchEvidence.gvcfs": {{ test_batch.gvcfs | tojson }},
+
+  "GatherBatchEvidence.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }}
 }

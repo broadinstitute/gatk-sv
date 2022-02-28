@@ -71,7 +71,7 @@ workflow GATKSVPipelineBatch {
     File contig_ploidy_model_tar
     Array[File] gcnv_model_tars
 
-    File outlier_cutoff_table
+    File? outlier_cutoff_table
     File qc_definitions
 
     # Run module metrics - all modules on by default for batch WDL
@@ -437,11 +437,11 @@ workflow GATKSVPipelineBatch {
     File? sites_filtered_wham_vcf = GATKSVPipelinePhase1.sites_filtered_wham_vcf
     File? sites_filtered_melt_vcf = GATKSVPipelinePhase1.sites_filtered_melt_vcf
     File? sites_filtered_depth_vcf = GATKSVPipelinePhase1.sites_filtered_depth_vcf
-    # TODO : can't get FilterBatchSamples inputs since PlotSVCountsPerSample uses a select_all
 
     File cutoffs = GATKSVPipelinePhase1.cutoffs
     File genotyped_pesr_vcf = GenotypeBatch.genotyped_pesr_vcf
     File genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf
+    File regeno_coverage_medians = GenotypeBatch.regeno_coverage_medians
     File regenotyped_depth_vcf = RegenotypeCNVs.regenotyped_depth_vcfs[0]
 
     File genotype_pesr_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_pesr_sepcutoff])

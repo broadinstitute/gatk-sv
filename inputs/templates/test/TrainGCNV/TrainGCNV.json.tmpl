@@ -57,15 +57,6 @@
   "TrainGCNV.gcnv_sample_psi_scale" : 0.000001,
   "TrainGCNV.ploidy_sample_psi_scale" : 0.001,
 
-  "TrainGCNV.runtime_attr_bundle": {
-    "cpu_cores": 1,
-    "mem_gb": 1.0,
-    "disk_gb": 200,
-    "boot_disk_gb": 10,
-    "preemptible_tries": 3,
-    "max_retries": 1
-  },
-
   "TrainGCNV.cohort": {{ test_batch.name | tojson }},
   "TrainGCNV.count_files": {{ test_batch.counts | tojson }},
   "TrainGCNV.samples": {{ test_batch.samples | tojson }}

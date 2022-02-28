@@ -75,11 +75,12 @@
   "GATKSVPipelinePhase1.reference_index": {{ reference_resources.reference_index | tojson }},
   "GATKSVPipelinePhase1.reference_dict": {{ reference_resources.reference_dict | tojson }},
 
-  "GATKSVPipelinePhase1.batch": "ref_panel_v1",
+  "GATKSVPipelinePhase1.batch": {{ test_batch.name | tojson }},
   "GATKSVPipelinePhase1.ped_file": {{ test_batch.ped_file | tojson }},
   "GATKSVPipelinePhase1.samples": {{ test_batch.samples | tojson }},
   "GATKSVPipelinePhase1.gcnv_model_tars" : {{ test_batch.gcnv_model_tars | tojson }},
   "GATKSVPipelinePhase1.gvcfs": {{ test_batch.gvcfs | tojson }},
+  "GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }},
   "GATKSVPipelinePhase1.PE_files": {{ test_batch.PE_files | tojson }},
   "GATKSVPipelinePhase1.SR_files": {{ test_batch.SR_files | tojson }},
   "GATKSVPipelinePhase1.counts": {{ test_batch.counts | tojson }},

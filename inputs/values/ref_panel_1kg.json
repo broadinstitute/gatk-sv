@@ -2071,10 +2071,11 @@
     "name": "ref_panel_1kg",
     "outlier_cutoff_table": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v1/module03_outlier_cutoff_table.tsv",
     "ped_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/ref-panel/1KG/v1/ped/1kg_ref_panel_v1.ped",
-    "qc_definitions": "gs://gatk-sv-resources-public/test/batch/batch_sv.test_large.qc_definitions.tsv",
-    "qc_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-BatchQC/cacheCopy/sv_qc.ref_panel_1kg.tsv",
+    "qc_definitions": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/ref_panel_1kg.qc_definitions.tsv",
+    "qc_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/sv_qc.ref_panel_1kg.tsv",
     "raw_sr_background_fail_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-TripleStreamCatFail/cacheCopy/ref_panel_1kg.genotype_SR_part2_background_fail.txt",
     "raw_sr_bothside_pass_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-TripleStreamCatPass/cacheCopy/ref_panel_1kg.genotype_SR_part2_bothside_pass.txt",
+    "regeno_coverage_medians": "gs://gatk-sv-ref-panel-1kg/outputs/GenotypeBatch/6f4ea58f-ae01-4f24-b447-d8ea72f82425/call-GenotypeDepthPart2/GenotypeDepthPart2/89ff502b-ecc8-49c6-b978-3b86eb9c5cde/call-MergeRegenoCoverageMedians/ref_panel_1kg.regeno.coverage_medians_merged.bed",
     "regenotyped_depth_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-RegenotypeCNVs/RegenotypeCNVs/cda0e73d-e69f-473a-ab87-1068b6d99005/call-ConcatRegenotypedVcfs/shard-0/cacheCopy/ref_panel_1kg.depth.regeno_final.vcf.gz",
     "requester_pays_crams": true,
     "samples": [

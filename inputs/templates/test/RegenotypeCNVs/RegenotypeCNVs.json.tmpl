@@ -8,7 +8,7 @@
 
   "RegenotypeCNVs.cohort": {{ test_batch.name | tojson }},
   "RegenotypeCNVs.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
-  "RegenotypeCNVs.regeno_coverage_medians": [{{ test_batch.medianfile | tojson }}],
+  "RegenotypeCNVs.regeno_coverage_medians": [{{ test_batch.regeno_coverage_medians | tojson }}],
 
   "RegenotypeCNVs.RD_depth_sepcutoffs": [{{ test_batch.depth_gt_rd_sep_file | tojson }}],
 

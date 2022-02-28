@@ -205,7 +205,6 @@ workflow GatherBatchEvidence {
 
     RuntimeAttr? runtime_attr_ploidy
     RuntimeAttr? runtime_attr_case
-    RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
   }
@@ -432,7 +431,6 @@ workflow GatherBatchEvidence {
       allosomal_contigs = allosomal_contigs,
       runtime_attr_ploidy = runtime_attr_ploidy,
       runtime_attr_case = runtime_attr_case,
-      runtime_attr_bundle = runtime_attr_bundle,
       runtime_attr_postprocess = runtime_attr_postprocess,
       runtime_attr_explode = runtime_attr_explode
   }

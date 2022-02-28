@@ -91,7 +91,12 @@ There are two scripts for running the full pipeline:
 #### Building inputs
 Example workflow inputs can be found in `/inputs`. Build using `scripts/inputs/build_default_inputs.sh`, which 
 generates input jsons in `/inputs/build`. Except the MELT docker image, all required resources are available in public 
-Google buckets.
+Google buckets. 
+
+Some workflows require a Google Cloud Project ID to be defined in a cloud environment parameter group. An example is 
+provided at `/inputs/values/google_cloud.json` but should not be used, as modifying this file will cause tracked 
+changes in the repository. Instead, create a copy in the same directory with the format `google_cloud.my_project.json` 
+and modify as necessary.
 
 #### MELT
 **Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
@@ -116,7 +121,8 @@ We recommend running the pipeline on a dedicated [Cromwell](https://github.com/b
 > cp $GATK_SV_ROOT/wdl/*.wdl .
 > zip dep.zip *.wdl
 > cd ..
-> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT
+> echo '{ "google_project_id": "my-google-project-id" }' > inputs/values/google_cloud.my_project.json
+> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT -c google_cloud.my_project
 > cp $GATK_SV_ROOT/inputs/build/ref_panel_1kg/test/GATKSVPipelineBatch/GATKSVPipelineBatch.json GATKSVPipelineBatch.my_run.json
 > cromshell submit wdl/GATKSVPipelineBatch.wdl GATKSVPipelineBatch.my_run.json cromwell_config.json wdl/dep.zip
 ```
@@ -196,12 +202,14 @@ Here is an example of how to generate workflow input jsons from `GATKSVPipelineB
     --final-workflow-outputs-dir gs://my-outputs-bucket \
     metadata.json \
     > inputs/values/my_ref_panel.json
-> # Build test files for batched workflows
+> # Define your google project id, if not done already
+> echo '{ "google_project_id": "my-google-project-id" }' > inputs/values/google_cloud.my_project.json
+> # Build test files for batched workflows (google cloud project id required)
 > python scripts/inputs/build_inputs.py \
     inputs/values \
     inputs/templates/test \
     inputs/build/my_ref_panel/test \
-    -a '{ "test_batch" : "ref_panel_1kg" }'
+    -a '{ "test_batch" : "ref_panel_1kg", "cloud_env": "google_cloud.my_project" }'
 > # Build test files for the single-sample workflow
 > python scripts/inputs/build_inputs.py \
     inputs/values \

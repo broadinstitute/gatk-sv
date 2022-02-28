@@ -7,6 +7,7 @@ import os.path
 import glob
 import json
 from jinja2 import Environment, FileSystemLoader, Undefined
+import logging
 
 # This script generates input files (for example JSON inputs to be passed to cromwell, but also
 # potentially tsv files for Terra import) based on the input templates in the repository and the
@@ -91,7 +92,16 @@ def main():
                         help="Directory to create output files in")
     parser.add_argument('-a', '--aliases', type=json.loads,
                         default={}, help="Aliases for input value bundles")
+    parser.add_argument('--log-info', action='store_true',
+                        help="Show INFO-level logging messages")
     args = parser.parse_args()
+
+    # Set logger
+    logging_fmt = '%(levelname)s: %(message)s'
+    if args.log_info:
+        logging.basicConfig(level=logging.INFO, format=logging_fmt)
+    else:
+        logging.basicConfig(level=logging.WARNING, format=logging_fmt)
 
     # prepare input values and bundle aliases
     input_directory = args.input_values_directory
@@ -104,12 +114,15 @@ def main():
     raw_input_bundles['test_batch_empty']['name'] = 'test_batch'
     raw_input_bundles['single_sample_none'] = {}
     raw_input_bundles['single_sample_none']['name'] = 'single_sample'
+    raw_input_bundles['cloud_env_none'] = {}
+    raw_input_bundles['cloud_env_none']['name'] = 'cloud_env'
 
     default_aliases = {'dockers': 'dockers',
                        'ref_panel': 'ref_panel_empty',
                        'reference_resources': 'resources_hg38',
                        'test_batch': 'test_batch_empty',
-                       'single_sample': 'single_sample_none'}
+                       'single_sample': 'single_sample_none',
+                       'cloud_env': 'cloud_env_none'}
 
     # prepare the input_dict using default, document default, and user-specified aliases
     input_dict = {}
@@ -117,7 +130,7 @@ def main():
         input_dict[alias] = raw_input_bundles[default_aliases[alias]]
 
     user_aliases = args.aliases
-    print("Using user aliases: " + str(user_aliases))
+    logging.info("Using user aliases: " + str(user_aliases))
     for alias in user_aliases:
         input_dict[alias] = raw_input_bundles[user_aliases[alias]]
 
@@ -157,7 +170,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
 
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
-        print("WARNING: skipping file " + template_file_path +
+        logging.warning("skipping file " + template_file_path +
               " because it does not have .tmpl extension")
         return
 
@@ -166,10 +179,10 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     env = Environment(loader=FileSystemLoader(template_subdir),
                       undefined=TrackMissingValuesUndefined)
     env.policies['json.dumps_function'] = to_json_custom
-    print(template_file_path + " -> " + target_file_path)
+    logging.info(template_file_path + " -> " + target_file_path)
     processed_content = env.get_template(template_file).render(input_dict)
     if len(undefined_names) > 0:
-        print("WARNING: skipping file " + template_file_path +
+        logging.warning("skipping file " + template_file_path +
               " due to missing values " + str(undefined_names))
     else:
         os.makedirs(target_subdir, exist_ok=True)
