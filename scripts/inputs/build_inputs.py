@@ -171,7 +171,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
         logging.warning("skipping file " + template_file_path +
-              " because it does not have .tmpl extension")
+                        " because it does not have .tmpl extension")
         return
 
     target_file = template_file.rsplit('.', 1)[0]
@@ -183,7 +183,7 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     processed_content = env.get_template(template_file).render(input_dict)
     if len(undefined_names) > 0:
         logging.warning("skipping file " + template_file_path +
-              " due to missing values " + str(undefined_names))
+                        " due to missing values " + str(undefined_names))
     else:
         os.makedirs(target_subdir, exist_ok=True)
         target_file = open(target_file_path, "w")
