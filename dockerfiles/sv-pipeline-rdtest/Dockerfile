@@ -15,7 +15,7 @@ ARG SV_PIPELINE_R_PKGS="BSDA caret fpc hash metap perm plyr pwr reshape ROCR zoo
 ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends \
-                 make cmake automake fftw3 pkg-config \
+                 make cmake automake fftw3 fftw3-dev pkg-config \
                  libssh2-1-dev \
                  libssl-dev && \
     /opt/install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/data.table/data.table_1.12.8.tar.gz" && \
