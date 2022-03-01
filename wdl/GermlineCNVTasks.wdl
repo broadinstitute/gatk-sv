@@ -105,7 +105,12 @@ task FilterIntervals {
         export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        #grep gz$ "$read_count_files_list" | xargs -l1 -P0 gunzip -k -f
+        while read file; do
+            if [[ $file == *.gz ]]; then
+                if [ ! -f "${file%.gz}" ]; then gunzip -k $file;else echo "done";fi
+            fi
+        done < $read_count_files_list
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 
