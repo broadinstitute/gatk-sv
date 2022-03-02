@@ -213,8 +213,8 @@ task MakeCrossValidationVcfs {
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
     String index_file_name = fixed_vcf_name + ".tbi"
 
-    Int disk_gb = 500 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
-    Int mem_gb = 2
+    Int disk_gb = 1000 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
+    Float mem_gb = 2.0
 
     runtime {
         docker: module03_docker
@@ -256,8 +256,8 @@ task MergeRecalibratedTestVcfs {
         String bcftools_docker
     }
 
-    Int disk_gb = 500 + 2 * round(size(filtered_vcfs, "GiB") + size(filtered_vcf_indices, "GiB"))
-    Int mem_gb = 4
+    Int disk_gb = 1000 + 2 * round(size(filtered_vcfs, "GiB") + size(filtered_vcf_indices, "GiB"))
+    Float mem_gb = 4.0
 
     runtime {
         docker: bcftools_docker

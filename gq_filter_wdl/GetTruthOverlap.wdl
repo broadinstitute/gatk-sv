@@ -170,7 +170,7 @@ task GetTruthOverlapTask {
     }
 
     # High disk size for large throughput. A large proportion of run time is loading data from huge VCFs. Disk is cheap.
-    Int disk_gb = round(4000 + size(test_vcfs, "GiB") + size(truth_vcfs, "GiB") + size(ped_files, "GiB")
+    Int disk_gb = round(1000 + size(test_vcfs, "GiB") + size(truth_vcfs, "GiB") + size(ped_files, "GiB")
                         + size(optimal_overlap_cutoffs, "GiB") + vapor_size_gib)
     String optimal_overlap_cutoffs_filename = if defined(optimal_overlap_cutoffs)
         then basename(select_first([optimal_overlap_cutoffs]))
@@ -181,8 +181,8 @@ task GetTruthOverlapTask {
 
     Float mem_baseline = 1.0
     Float mem_scale = "3.5e-6"
-    Int mem_gb = if (defined(max_test_records) && defined(max_truth_records))
-        then round(mem_baseline + mem_scale * (select_first([max_test_records]) + select_first([max_truth_records])))
+    Float mem_gb = if (defined(max_test_records) && defined(max_truth_records))
+        then mem_baseline + mem_scale * (select_first([max_test_records]) + select_first([max_truth_records]))
         else 3.0
 
     runtime {

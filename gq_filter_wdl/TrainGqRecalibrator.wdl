@@ -96,10 +96,10 @@ task FixVcf {
     String index_file_name = fixed_vcf_name + ".tbi"
 
     Float uncompress_scale = 10
-    Int disk_gb = 4000 + round((2 + uncompress_scale) * size(vcf, "GiB"))
+    Int disk_gb = 1000 + round((2 + uncompress_scale) * size(vcf, "GiB"))
     Int mem_gb_overhead = 2
     Float mem_scale = 2.0
-    Int mem_gb = mem_gb_overhead + round(mem_scale * size(vcf, "GiB"))
+    Float mem_gb = mem_gb_overhead + mem_scale * size(vcf, "GiB")
 
     runtime {
         docker: module03_docker
@@ -137,9 +137,9 @@ task IndexVcf {
     String index_file_name = basename(vcf) + ".tbi"
 
     Int disk_gb = 10
-    Int mem_gb_overhead = 1
-    Int mem_gb_java = 2
-    Int mem_gb = mem_gb_java + mem_gb_overhead
+    Float mem_gb_overhead = 1.0
+    Float mem_gb_java = 2.0
+    Float mem_gb = mem_gb_java + mem_gb_overhead
 
     runtime {
         docker: sv_base_docker
@@ -179,12 +179,12 @@ task TrainGqRecalibratorFilter {
         Float mem_gb_overhead = 1.5
     }
 
-    Int disk_gb = round(4000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
+    Int disk_gb = round(1000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
                         size(genome_tracts, "GiB") + size(gq_recalibrator_model_file, "GiB"))
     Float mem_gb_java = if defined(num_entries)
         then 3.0 + mem_scale_num_entries * select_first([num_entries])
         else 3.0 + mem_scale_vcf_size * size(train_vcf, "GiB")
-    Int mem_gb = min(round(mem_gb_java + mem_gb_overhead), 624)
+    Float mem_gb = min(mem_gb_java + mem_gb_overhead, 624.0)
     String model_file_name = if defined(gq_recalibrator_model_file)
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"

@@ -12,7 +12,7 @@
   "BenchmarkGqFilter.ped_file":
     "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
   "BenchmarkGqFilter.module03_docker":
-    "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:41c2751",
+    "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:9575636",
   "BenchmarkGqFilter.sv_base_docker":
     "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df",
   "BenchmarkGqFilter.benchmark_args":

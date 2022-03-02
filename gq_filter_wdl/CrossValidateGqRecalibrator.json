@@ -37,11 +37,12 @@
   "CrossValidateGqRecalibrator.train_args": [
     "--target-precision 0.95",
     "--max-inheritance-af 0.1",
+    "--large-af-weight-penalty 0.1",
     "--max-depth 10",
     "--subsample 0.8",
     "--colsample-by-tree 0.8",
     "--min-child-weight 5000",
-    "--truth-weight 0.2",
+    "--truth-weight 0.25",
     "--train-homref true",
     "--keep-homvar false",
     "--keep-multiallelic false"
@@ -51,7 +52,8 @@
     "--point-sv-scale-factor 1.0",
     "--expand-non-point-svs-bp 0",
     "--non-point-sv-scale-factor 0.0",
-    "--min-overlap-cutoff-precision 0.8"
+    "--min-overlap-cutoff-precision 0.8",
+    "--inheritance-af-rareness 0.05"
   ],
   "CrossValidateGqRecalibrator.recalibrate_gq_args": [
     "--keep-homvar false",
@@ -76,7 +78,7 @@
     "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_3.vcf.gz",
     "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_4.vcf.gz"
   ],
-  "CrossValidateGqRecalibrator.module03_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:41c2751",
+  "CrossValidateGqRecalibrator.module03_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:9575636",
   "CrossValidateGqRecalibrator.gatk_docker": "us.gcr.io/broad-dsde-methods/tbrookin/gatk:f58f15e8d1",
   "CrossValidateGqRecalibrator.bcftools_docker": "quay.io/biocontainers/bcftools:1.13--h3a49de5_0",
   "CrossValidateGqRecalibrator.sv_base_docker": "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df"

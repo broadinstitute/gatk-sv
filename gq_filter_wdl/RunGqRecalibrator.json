@@ -1,0 +1,30 @@
+{
+  "RunGqRecalibrator.vcf":
+    "gs://bucket/path/to/your/vcf.vcf.gz",
+  "RunGqRecalibrator.vcf_index":
+    "gs://bucket/OPTIONAL/path/to/your/vcf.vcf.gz.tbi",
+  "RunGqRecalibrator.genome_tracts":  [
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-RepeatMasker.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-Segmental-Dups.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38-Simple-Repeats.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_gaps.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s100.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s24.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s36.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracts/hg38_umap_s50.bed.gz"
+  ],
+  "RunGqRecalibrator.gq_recalibrator_model_file":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/gq_recalibrator.model",
+  "RunGqRecalibrator.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-multiallelic false"
+  ],
+  "RunGqRecalibrator.vcf_vcf":
+    true,
+  "RunGqRecalibrator.gatk_docker":
+    "us.gcr.io/broad-dsde-methods/tbrookin/gatk:f58f15e8d1",
+  "RunGqRecalibrator.module03_docker":
+    "us.gcr.io/broad-dsde-methods/tbrookin/sv_utils:9575636",
+  "RunGqRecalibrator.sv_base_docker":
+    "us.gcr.io/broad-dsde-methods/markw/sv-base:mw-gnomad-0506-pr-087d4df"
+}

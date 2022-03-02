@@ -74,7 +74,6 @@ workflow BenchmarkGqFilter {
     }
     File pickled_cross_validated_scores_ = select_first([pickled_cross_validated_scores,
                                                         PickleCrossValidatedScores.pickled_properties])
-
     call BenchmarkFilter {
         input:
             variant_properties=pickled_variant_properties_,
@@ -109,25 +108,28 @@ task PickleVcfProperties {
 
     # High disk size for large throughput. A large proportion of run time is loading data from huge VCFs. Disk is cheap.
     Int disk_gb = round(
-        4000 + size([vcf], "GiB")
+        1000 + size([vcf], "GiB")
     )
     Float mem_scale_vcf_size = 10.0
     Float mem_scale_vcf_entries = if length(wanted_properties) == 1 then "5e-8" else "1.4e-8"
-    Int mem_gb_overhead = 2
-    Int mem_gb = mem_gb_overhead + if defined(num_entries)
-        then round(mem_scale_vcf_entries * select_first([num_entries]))
-        else round(mem_scale_vcf_size * size(vcf, "GiB"))
+    Float mem_gb_overhead = 2.0
+    Float mem_gb = mem_gb_overhead + if defined(num_entries)
+        then mem_scale_vcf_entries * select_first([num_entries])
+        else mem_scale_vcf_size * size(vcf, "GiB")
 
     # create output filename:
     #   strip .vcf.gz from end (if present)
     #   add wanted properties (separated by underscores)
     #   and add ".pickle.bz2"
-#    String pickled_properties_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
-#                                   + "_" + sep("_", wanted_properties)
-#                                   + ".pickle.bz2"
     String pickled_properties_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
-                                   + "_" + "~{sep='_' wanted_properties}"
+                                   + "_" + sep("_", wanted_properties)
                                    + ".pickle.bz2"
+#    This doesn't work outside command block: it adds an extra bracket, and seemingly quotes in the command block!
+#       e.g. pickled_properties_name = hgdp_and_hgsv.cleaned_fixed_cross_validated_["gq"].pickle.bz2 inside
+#            pickled_properties_name = hgdp_and_hgsv.cleaned_fixed_cross_validated_[gq].pickle.bz2 outside
+#    String pickled_properties_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
+#                                   + "_" + "~{sep='_' wanted_properties}"
+#                                   + ".pickle.bz2"
 
     runtime {
         docker: module03_docker
@@ -180,23 +182,22 @@ task BenchmarkFilter {
 
     # High disk size for large throughput. A large proportion of run time is loading data from huge VCFs. Disk is cheap.
     Int disk_gb = round(
-        4000 + size([variant_properties, original_scores, filtered_scores, cross_validated_scores, ped_file,
+        1000 + size([variant_properties, original_scores, filtered_scores, cross_validated_scores, ped_file,
                      truth_overlap_info], "GiB")
     )
 
     Boolean is_vcf = sub(sub(basename(variant_properties), ".gz$", ""), ".vcf$", "") != basename(variant_properties)
-    Float mem_scale_vcf_size = if is_vcf then 70.0 else 1000.0
+    Float mem_scale_vcf_size = if is_vcf then 75.0 else 1000.0
     Float mem_scale_vcf_entries = "2.5e-8"
-    Int mem_gb_overhead = 2
-    Int mem_gb = mem_gb_overhead + if defined(num_entries)
-        then round(mem_scale_vcf_entries * select_first([num_entries]))
-        else round(mem_scale_vcf_size * size(variant_properties, "GiB"))
+    Float mem_gb_overhead = 2.0
+    Float mem_gb = mem_gb_overhead + if defined(num_entries)
+        then mem_scale_vcf_entries * select_first([num_entries])
+        else mem_scale_vcf_size * size(variant_properties, "GiB")
 
     String data_label = select_first([train_vcf_label, "cohort"])
     String scores_data_json = "scores_data.json"
     String benchmark_figure_filename = "quality-benchmark.pdf"
-    # String args_str = if length(benchmark_args) > 0 then sep(" ", benchmark_args) else ""
-    String args_str = if length(benchmark_args) > 0 then "~{sep=' ' benchmark_args}" else ""
+    String args_str = if length(benchmark_args) > 0 then sep(" ", benchmark_args) else ""
 
     runtime {
         docker: module03_docker
