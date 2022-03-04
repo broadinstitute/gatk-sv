@@ -1,0 +1,26 @@
+{
+  "ClusterBatch.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "ClusterBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+
+  "ClusterBatch.contigs": {{ reference_resources.primary_contigs_fai | tojson }},
+  "ClusterBatch.depth_flags": "--merge-coordinates",
+  "ClusterBatch.depth_frac": "0.8",
+  "ClusterBatch.pesr_svsize": "0",
+  "ClusterBatch.pesr_frac": "0.1",
+  "ClusterBatch.pesr_flags": "--preserve-ids",
+  "ClusterBatch.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "ClusterBatch.pesr_distance": "300",
+  "ClusterBatch.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
+  "ClusterBatch.depth_exclude_list_frac_max": "0.5",
+
+  "ClusterBatch.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "ClusterBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
+  "ClusterBatch.linux_docker": {{ dockers.linux_docker | tojson }},
+
+  "ClusterBatch.batch": {{ test_batch.name | tojson }},
+  "ClusterBatch.del_bed": {{ test_batch.del_bed| tojson }},
+  "ClusterBatch.dup_bed": {{ test_batch.dup_bed | tojson }},
+  "ClusterBatch.wham_vcfs": {{ test_batch.std_wham_vcfs | tojson }},
+  "ClusterBatch.manta_vcfs": {{ test_batch.std_manta_vcfs | tojson }},
+  "ClusterBatch.melt_vcfs": {{ test_batch.std_melt_vcfs | tojson }}
+}

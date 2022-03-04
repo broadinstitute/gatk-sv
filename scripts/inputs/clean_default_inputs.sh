@@ -30,5 +30,4 @@ if [[ ! -d "$BASE_DIR" ]]; then
    exit 1
 fi
 
-rm -r ${BASE_DIR}/inputs
-rm -r ${BASE_DIR}/test_inputs
+rm -r ${BASE_DIR}/inputs/build

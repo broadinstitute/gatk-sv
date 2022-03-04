@@ -247,7 +247,6 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? runtime_attr_ploidy
     RuntimeAttr? runtime_attr_case
-    RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
 
@@ -788,7 +787,6 @@ workflow GATKSVPipelineSingleSample {
       add_sample_to_ped_runtime_attr=add_sample_to_ped_runtime_attr,
       runtime_attr_ploidy = runtime_attr_ploidy,
       runtime_attr_case = runtime_attr_case,
-      runtime_attr_bundle = runtime_attr_bundle,
       runtime_attr_postprocess = runtime_attr_postprocess,
       runtime_attr_explode = runtime_attr_explode
   }
@@ -852,7 +850,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_manta) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterManta {
         input :
-            vcf_gz=select_first([ClusterBatch.manta_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_manta_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -862,7 +860,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_wham) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterWham {
         input :
-            vcf_gz=select_first([ClusterBatch.wham_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_wham_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -872,7 +870,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_melt) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterMelt {
         input :
-            vcf_gz=select_first([ClusterBatch.melt_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_melt_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -882,7 +880,7 @@ workflow GATKSVPipelineSingleSample {
   if (use_delly) {
     call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
         input :
-            vcf_gz=select_first([ClusterBatch.delly_vcf]),
+            vcf_gz=select_first([ClusterBatch.clustered_delly_vcf]),
             sample_id=sample_id,
             evidence="RD,PE,SR",
             sv_base_mini_docker=sv_base_mini_docker,
@@ -892,7 +890,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
-      vcf_gz=ClusterBatch.depth_vcf,
+      vcf_gz=ClusterBatch.clustered_depth_vcf,
       sample_id=sample_id,
       evidence="RD",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -930,7 +928,7 @@ workflow GATKSVPipelineSingleSample {
 
   call batchmetrics.GetMaleOnlyVariantIDs {
     input:
-      vcf = ClusterBatch.depth_vcf,
+      vcf = ClusterBatch.clustered_depth_vcf,
       female_samples = SamplesList.female_samples,
       male_samples = SamplesList.male_samples,
       contig = select_first([chr_x, "chrX"]),

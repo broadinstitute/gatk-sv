@@ -13,9 +13,9 @@ workflow FilterBatchQc {
     File? merged_pesr_vcf
     String batch
     File ped_file
-    Array[File]? thousand_genomes_tarballs
-    Array[File]? hgsv_tarballs
-    Array[File]? asc_tarballs
+    Array[File]? thousand_genomes_benchmark_calls
+    Array[File]? hgsv_benchmark_calls
+    Array[File]? asc_benchmark_calls
     File? sanders_2015_tarball
     File? collins_2017_tarball
     File? werling_2018_tarball
@@ -98,9 +98,9 @@ workflow FilterBatchQc {
           prefix="${batch}.${algorithms[i]}_FilterBatch_filtered_vcf",
           sv_per_shard=10000,
           samples_per_shard=100,
-          thousand_genomes_tarballs=thousand_genomes_tarballs,
-          hgsv_tarballs=hgsv_tarballs,
-          asc_tarballs=asc_tarballs,
+          thousand_genomes_benchmark_calls=thousand_genomes_benchmark_calls,
+          hgsv_benchmark_calls=hgsv_benchmark_calls,
+          asc_benchmark_calls=asc_benchmark_calls,
           sanders_2015_tarball=sanders_2015_tarball,
           collins_2017_tarball=collins_2017_tarball,
           werling_2018_tarball=werling_2018_tarball,

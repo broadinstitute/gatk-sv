@@ -8,7 +8,12 @@ gatk-sv.iml
 src/svtk/build/
 src/svtk/svtk/utils/helpers.c
 src/svtk/svtk/utils/helpers.*.so
-/test_inputs
-/inputs/
-/wdl_test/.runs.json
-/wdl_test/.configs.json
+src/svtk/svtk/utils/helpers.cpython-36m-darwin.so
+src/svtk/svtk/utils/helpers.cpython-37m-darwin.so
+src/svtk/svtk/utils/s3bam.pyc
+src/svtk/svtk/utils/utils.pyc
+src/svtk/svtk/vcfcluster.pyc
+/inputs/build/
+/inputs/values/google_cloud.*.json
+/carrot/.runs.json
+/carrot/.configs.json

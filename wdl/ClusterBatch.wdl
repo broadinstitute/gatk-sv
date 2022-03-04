@@ -169,11 +169,16 @@ workflow ClusterBatch {
   }
 
   output {
-    File depth_vcf = ClusterDepth.clustered_vcf
-    File? manta_vcf = ClusterPESR_manta.clustered_vcf
-    File? delly_vcf = ClusterPESR_delly.clustered_vcf
-    File? wham_vcf = ClusterPESR_wham.clustered_vcf
-    File? melt_vcf = ClusterPESR_melt.clustered_vcf
+    File clustered_depth_vcf = ClusterDepth.clustered_vcf
+    File clustered_depth_vcf_index = ClusterDepth.clustered_vcf_index
+    File? clustered_manta_vcf = ClusterPESR_manta.clustered_vcf
+    File? clustered_manta_vcf_index = ClusterPESR_manta.clustered_vcf_index
+    File? clustered_delly_vcf = ClusterPESR_delly.clustered_vcf
+    File? clustered_delly_vcf_index = ClusterPESR_delly.clustered_vcf_index
+    File? clustered_wham_vcf = ClusterPESR_wham.clustered_vcf
+    File? clustered_wham_vcf_index = ClusterPESR_wham.clustered_vcf_index
+    File? clustered_melt_vcf = ClusterPESR_melt.clustered_vcf
+    File? clustered_melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
 
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }

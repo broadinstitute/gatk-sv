@@ -97,7 +97,6 @@ workflow CNVGermlineCaseWorkflow {
       ############################
       RuntimeAttr? runtime_attr_ploidy
       RuntimeAttr? runtime_attr_case
-      RuntimeAttr? runtime_attr_bundle
       RuntimeAttr? runtime_attr_postprocess
       RuntimeAttr? runtime_attr_explode
     }
