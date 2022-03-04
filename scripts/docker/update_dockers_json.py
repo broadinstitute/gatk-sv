@@ -168,7 +168,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser(
         description="For a given Docker image tag, this script checks "
                     "if any of the Docker images listed in the provided JSON "
-                    "file (e.g., `input_values/dockers.json`) are pushed to "
+                    "file (e.g., `inputs/values/dockers.json`) are pushed to "
                     "the container registry (e.g., Google Container "
                     "Registry) with that tag.\n\n"
                     "If the given tag is different from the tag in the "
@@ -211,7 +211,7 @@ def parse_arguments():
     parser.add_argument(
         "-i", "--input-json",
         default=join(dirname(dirname(dirname(abspath(__file__)))),
-                     "input_values/dockers.json"),
+                     "inputs/values/dockers.json"),
         help="A JSON file containing Docker images to check.")
 
     parser.add_argument(

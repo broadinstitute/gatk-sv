@@ -607,7 +607,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     docker_remote_args_group.add_argument('--update-latest', action='store_true',
                                           help=f'also update \"{ProjectBuilder.latest_tag}\" tag in remote docker'
                                                f'repo(s)')
-    dockers_json_path = os.path.join(Paths.gatk_sv_path, "input_values", "dockers.json")
+    dockers_json_path = os.path.join(Paths.gatk_sv_path, "inputs", "values", "dockers.json")
     docker_remote_args_group.add_argument('--input-json', type=str, default=dockers_json_path,
                                           help="Path to dockers.json to use as input. This file serves as a store for "
                                                "both the default docker image to use for various gatk-sv WDLs, and for "
