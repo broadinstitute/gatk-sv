@@ -79,7 +79,7 @@ task GetPotential{
     awk -v dupp="$dupp" -v dupmed="$dupmed" '{if ($3=="DUP" && $5<dupmed && $6>dupp) print}' phase3-1_7.depth.metrics> dup.potentialmosaic.txt
     cat del.potentialmosaic.txt dup.potentialmosaic.txt |cut -f1 > potentialmosaic.txt
     tabix -f ~{depth_vcf}
-    tabix -H ~{depth_vcf} > head.txt
+    tabix -f -H ~{depth_vcf} > head.txt
     zcat ~{depth_vcf} |fgrep -w -f potentialmosaic.txt >body.txt
     cat head.txt body.txt |bgzip -c > test.vcf.gz
     bash /opt/sv-pipeline/04_variant_resolution/scripts/stitch_fragmented_calls.sh -x 1 test.vcf.gz test1.vcf.gz

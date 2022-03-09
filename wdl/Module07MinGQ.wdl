@@ -337,7 +337,7 @@ task SplitPcrVcf {
     awk 'ARGIND==1{inFileA[$1]; next} !($1 in inFileA)' ~{pcrplus_samples_list} all_samples.list \
       > pcrminus_samples.list
     bcftools reheader -s pcrminus_samples.list -Oz -o ~{prefix}.PCRMINUS.vcf.gz
-    tabix ~{prefix}.PCRMINUS.vcf.gz
+    tabix -f ~{prefix}.PCRMINUS.vcf.gz
   >>>
 
   output {
@@ -457,7 +457,7 @@ task SplitFamfile {
   command <<<
     set -euo pipefail
     #Get list of sample IDs & column numbers from VCF header
-    tabix -H ~{vcf} | fgrep -v "##" | sed 's/\t/\n/g' \
+    tabix -f -H ~{vcf} | fgrep -v "##" | sed 's/\t/\n/g' \
       | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
     #Iterate over families & subset VCF
     while read famID pro fa mo prosex pheno; do

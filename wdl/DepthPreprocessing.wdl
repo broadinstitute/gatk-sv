@@ -110,7 +110,7 @@ task GcnvVcfToBed {
 
     set -e
     tar xzf ~{contig_ploidy_call_tar}
-    tabix ~{vcf}
+    tabix -f ~{vcf}
     python /opt/WGD/bin/convert_gcnv.py \
       --cutoff ~{qs_cutoff} \
       contig_ploidy.tsv \
@@ -216,7 +216,7 @@ task MergeSet {
       | awk -v OFS="\t" -v svtype=~{svtype} -v batch=~{batch} '{$4=batch"_"svtype"_"NR; print}' \
       | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
       | bgzip -c > ~{batch}.~{svtype}.bed.gz;
-    tabix -p bed ~{batch}.~{svtype}.bed.gz
+    tabix -f -p bed ~{batch}.~{svtype}.bed.gz
 		
   >>>
   runtime {

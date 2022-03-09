@@ -87,7 +87,7 @@ task ReviseSVtypeMEI{
     zcat ~{vcf} | grep -v '#' | grep -v "INS:ME"  >> ~{prefix}.vcf
     mkdir tmp
     vcf-sort -t tmp/ ~{prefix}.vcf | bgzip > ~{prefix}.vcf.gz
-    tabix -p vcf ~{prefix}.vcf.gz
+    tabix -f -p vcf ~{prefix}.vcf.gz
   >>>
 
   output{

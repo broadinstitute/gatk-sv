@@ -30,9 +30,9 @@ task SplitVCF {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf}
+    tabix -f -p vcf ~{vcf}
     mkdir splits
-    tabix ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
+    tabix -f ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
 
     if [ ! -f splits/~{batch}.~{algorithm}.split.`printf '%0~{suffix_len}d' 0` ]; then
       touch splits/~{batch}.~{algorithm}.split.`printf '%0~{suffix_len}d' 0`
@@ -100,7 +100,7 @@ task GetCommonVCF {
     /usr/local/bin/bcftools filter -i 'ID=@common_SVID' ~{vcf} > common_SVs.vcf
 
     vcf-sort common_SVs.vcf | bgzip > common_SVs.vcf.gz
-    tabix common_SVs.vcf.gz
+    tabix -f common_SVs.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

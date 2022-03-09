@@ -139,7 +139,7 @@ task MakeCleanGQ {
             ~{prefix}
 
         bcftools view -G -O z ~{prefix}.multiallelic.vcf.gz > ~{prefix}.multiallelic.sites.vcf.gz
-        tabix ~{prefix}.cleanGQ.vcf.gz
+        tabix -f ~{prefix}.cleanGQ.vcf.gz
     >>>
 
     output {

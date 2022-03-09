@@ -385,7 +385,7 @@ task ResolvePrep {
         > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
+    tabix -f -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {
@@ -542,7 +542,7 @@ task RestoreUnresolvedCnv {
         /dev/stdin /dev/stdout \
       | bgzip \
       > ~{resolved_plus_cnv}
-    tabix ~{resolved_plus_cnv}
+    tabix -f ~{resolved_plus_cnv}
   >>>
 
   output {

@@ -154,7 +154,7 @@ task split_per_sample_vcf{
         set -Eeuo pipefail
         
         bcftools view -s ~{sample} ~{vcf} | grep -v "0/0" | bgzip > ~{sample}.vcf.gz
-        tabix -p vcf ~{sample}.vcf.gz
+        tabix -f -p vcf ~{sample}.vcf.gz
 
     >>>
     runtime {

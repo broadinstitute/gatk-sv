@@ -186,14 +186,14 @@ task RunWhamg {
 
     whamg -c "~{sep=","  chr_list}" -x ~{num_cpu} -a ~{reference_fasta} -f ~{bam_file} \
       | bgzip -c > "$VCF_FILE_BAD_TAGS"
-    tabix -p vcf "$VCF_FILE_BAD_TAGS"
+    tabix -f -p vcf "$VCF_FILE_BAD_TAGS"
 
     # write out a an annotation table with the new sample ID for each variant record.
     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t~{sample_id}\n' $VCF_FILE_BAD_TAGS | bgzip -c > tags_annotation_file.tsv.gz
     tabix -f -s1 -b2 -e2 tags_annotation_file.tsv.gz
     # Use bcftools annotate to re-write the TAGS field in each variant based on the annotation table.
     bcftools annotate -a tags_annotation_file.tsv.gz -c CHROM,POS,REF,ALT,INFO/TAGS  $VCF_FILE_BAD_TAGS | bgzip -c > $VCF_FILE_BAD_HEADER
-    tabix -p vcf "$VCF_FILE_BAD_HEADER"
+    tabix -f -p vcf "$VCF_FILE_BAD_HEADER"
 
     echo "Adding contigs with length to vcf header"
     # get the existing header
@@ -213,7 +213,7 @@ task RunWhamg {
         "$VCF_FILE_BAD_HEADER" > $VCF_FILE_FIXED_HEADER
     
     echo "Indexing vcf"
-    tabix "$VCF_FILE_FIXED_HEADER"
+    tabix -f "$VCF_FILE_FIXED_HEADER"
     
     echo "finished RunWhamg"
     
@@ -326,7 +326,7 @@ task RunWhamgIncludelist {
         -r "$GOOD_INTERVAL" \
         | bgzip -c > "$NEW_VCF"
       # index results vcf
-      tabix "$NEW_VCF"
+      tabix -f "$NEW_VCF"
       # add vcf file name to list of vcfs, separated by spaces
       if [ -z "$VCFS" ]; then
         VCFS="$NEW_VCF"
@@ -347,14 +347,14 @@ task RunWhamgIncludelist {
     # concatenate resulting vcfs into final vcf
     echo "Concatenating results"
     bcftools concat -a -O z -o "$VCF_FILE_BAD_TAGS" $VCFS
-    tabix -p vcf "$VCF_FILE_BAD_TAGS"
+    tabix -f -p vcf "$VCF_FILE_BAD_TAGS"
 
     # write out a an annotation table with the new sample ID for each variant record.
     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t~{sample_id}\n' $VCF_FILE_BAD_TAGS | bgzip -c > tags_annotation_file.tsv.gz
     tabix -f -s1 -b2 -e2 tags_annotation_file.tsv.gz
     # Use bcftools annotate to re-write the TAGS field in each variant based on the annotation table.
     bcftools annotate -a tags_annotation_file.tsv.gz -c CHROM,POS,REF,ALT,INFO/TAGS  $VCF_FILE_BAD_TAGS | bgzip -c > $VCF_FILE_BAD_HEADER
-    tabix -p vcf "$VCF_FILE_BAD_HEADER"
+    tabix -f -p vcf "$VCF_FILE_BAD_HEADER"
 
     echo "Getting existing header"
     # get the existing header
@@ -380,7 +380,7 @@ task RunWhamgIncludelist {
       > "$VCF_FILE_FIXED_HEADER"
     
     echo "Indexing vcf"
-    tabix "$VCF_FILE_FIXED_HEADER"
+    tabix -f "$VCF_FILE_FIXED_HEADER"
     
     echo "finished RunWhamg"
     

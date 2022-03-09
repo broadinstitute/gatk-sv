@@ -252,8 +252,8 @@ task RdTestGenotype {
       bgzip local.RD.txt
     fi
 
-    tabix -p bed local.RD.txt.gz
-    tabix -p bed ~{bin_exclude}
+    tabix -f -p bed local.RD.txt.gz
+    tabix -f -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \

@@ -121,7 +121,7 @@ task AnnotateFinalRecali{
         CODE
 
         bgzip annotated.vcf
-        tabix annotated.vcf.gz
+        tabix -f annotated.vcf.gz
     >>>
 
     output{
@@ -207,7 +207,7 @@ task AnnotateBatchEffect{
         CODE
 
         bgzip annotated.vcf
-        tabix annotated.vcf.gz
+        tabix -f annotated.vcf.gz
     >>>
 
     output{
@@ -293,7 +293,7 @@ task AnnotateOutlierFilter{
         CODE
 
         bgzip annotated.vcf
-        tabix annotated.vcf.gz
+        tabix -f annotated.vcf.gz
     >>>
 
     output{
@@ -381,7 +381,7 @@ task AnnotateMinGQ{
 
         bgzip annotated.vcf
         mv annotated.vcf.gz ~{prefix}.filter_annotated.vcf.gz
-        tabix ~{prefix}.filter_annotated.vcf.gz
+        tabix -f ~{prefix}.filter_annotated.vcf.gz
     >>>
 
     output{
@@ -468,7 +468,7 @@ task AnnotateWithFilterResults{
         CODE
 
         bgzip annotated.vcf
-        tabix annotated.vcf.gz
+        tabix -f annotated.vcf.gz
     >>>
 
     output{

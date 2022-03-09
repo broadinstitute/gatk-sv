@@ -85,7 +85,7 @@ task ScatterBAFBySample {
 
     set -euo pipefail
     zcat ~{BAF} | awk -F "\t" -v OFS="\t" '{if ($4=="~{sample}") print}' | bgzip -c > BAF.~{sample}.txt.gz
-    tabix -s 1 -b 2 -e 2 BAF.~{sample}.txt.gz
+    tabix -f -s 1 -b 2 -e 2 BAF.~{sample}.txt.gz
 
   >>>
   runtime {
@@ -125,7 +125,7 @@ task GatherBAF {
 
     set -euo pipefail
     cat ~{sep=" "  BAF} > ~{batch}.BAF.txt.gz
-    tabix -s1 -b2 -e2 ~{batch}.BAF.txt.gz
+    tabix -f -s1 -b2 -e2 ~{batch}.BAF.txt.gz
 
   >>>
   runtime {

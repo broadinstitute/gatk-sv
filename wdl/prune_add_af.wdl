@@ -88,7 +88,7 @@ task PruneVcf {
   command <<<
     set -euo pipefail
     #Tabix chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
+    tabix -f -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
     #Get column indexes corresponding to samples to drop, if any exist
     if ~{defined(prune_list)}; then
       dropidx=$( zfgrep "#" ~{contig}.vcf.gz | fgrep -v "##" \

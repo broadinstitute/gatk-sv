@@ -265,7 +265,7 @@ task ZPaste {
 
     # paste unzipped files and compress
     paste column_file_fifos/* | bgzip -c > "~{matrix_file_name}"
-    tabix -p bed "~{matrix_file_name}"
+    tabix -f -p bed "~{matrix_file_name}"
   >>>
 
   runtime {

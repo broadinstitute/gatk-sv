@@ -210,7 +210,7 @@ task GetVcfHeaderWithMembersInfoLine {
     echo "##INFO=<ID=MEMBERS,Number=.,Type=String,Description=\"IDs of cluster's constituent records.\">" >> ~{prefix}.vcf
     zgrep "^#CHROM" ~{vcf_gz} >> ~{prefix}.vcf
     bgzip ~{prefix}.vcf
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -258,7 +258,7 @@ task ShardClusters {
 
   command <<<
     set -euo pipefail
-    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -p bed ~{exclude_list}" else ""}
+    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -f -p bed ~{exclude_list}" else ""}
 
     #Run clustering
     svtk vcfcluster <(echo "~{vcf}") ~{prefix}.vcf.gz \
@@ -319,7 +319,7 @@ task SvtkVcfCluster {
 
   command <<<
     set -euo pipefail
-    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -p bed ~{exclude_list}" else ""}
+    ~{if defined(exclude_list) && !defined(exclude_list_idx) then "tabix -f -p bed ~{exclude_list}" else ""}
 
     #Run clustering
     svtk vcfcluster <(echo "~{vcf}") - \

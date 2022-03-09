@@ -33,7 +33,7 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
     sampleIndex=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk '$1 == "~{sample_id}" {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}'`
 
     bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t~{evidence}\n" ~{vcf_gz} | bgzip -c > evidence_annotations.tab.gz
-    tabix -s1 -b2 -e2 evidence_annotations.tab.gz
+    tabix -f -s1 -b2 -e2 evidence_annotations.tab.gz
 
     echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
 
@@ -91,7 +91,7 @@ task FilterVcfForShortDepthCalls {
       -s ~{filter_name} |
          bgzip -c > ~{outfile}
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
 
   >>>
   runtime {
@@ -150,7 +150,7 @@ task GetUniqueNonGenotypedDepthCalls {
 
     cat header.txt unique_depth_records.txt | bgzip -c > ~{outfile}
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -197,7 +197,7 @@ task FilterVcfForCaseSampleGenotype {
         -i "FILTER ~ \"MULTIALLELIC\" || GT[${sampleIndex}]=\"alt\"" \
         ~{vcf_gz} | bgzip -c > ~{outfile}
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -260,7 +260,7 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
        | bgzip -c \
        > ~{outfile}
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -374,7 +374,7 @@ task FilterVcfWithReferencePanelCalls {
       -s REF_PANEL_GENOTYPES \
       -m + \
       del_dup_cpx_inv_filtered.vcf.gz | bgzip -c > ~{outfile}
-  tabix ~{outfile}
+  tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -422,7 +422,7 @@ task ResetFilter {
   echo '~{info_header_line}' > header.txt
 
   bcftools filter -i 'FILTER ~ "~{filter_to_reset}"' ~{single_sample_vcf} | bgzip -c > sites.vcf.gz
-  tabix sites.vcf.gz
+  tabix -f sites.vcf.gz
 
   bcftools annotate \
     -k \
@@ -432,7 +432,7 @@ task ResetFilter {
     -x FILTER/~{filter_to_reset} \
     ~{single_sample_vcf} | bgzip -c > ~{outfile}
 
-  tabix ~{outfile}
+  tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -480,7 +480,7 @@ task FinalVCFCleanup {
      # clean up bad END tags
      bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\n' \
         ~{single_sample_vcf} | awk '$5 < $2 {OFS="\t"; $5 = $2 + 1; print}' | bgzip -c > bad_ends.txt.gz
-     tabix -s1 -b2 -e2 bad_ends.txt.gz
+     tabix -f -s1 -b2 -e2 bad_ends.txt.gz
      bcftools annotate \
         -a bad_ends.txt.gz \
         -c CHROM,POS,REF,ALT,END \
@@ -490,7 +490,7 @@ task FinalVCFCleanup {
         | vcf-sort -c \
         | bgzip -c > ~{outfile}
 
-     tabix ~{outfile}
+     tabix -f ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -588,7 +588,7 @@ task ConvertCNVsWithoutDepthSupportToBNDs {
         ~{default="1000" min_length} \
         -o ~{outfile}
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
 
   >>>
   runtime {
@@ -691,7 +691,7 @@ task SampleQC {
       cp wgd_filtered.vcf.gz ~{outfile}
     fi
 
-    tabix ~{outfile}
+    tabix -f ~{outfile}
 
   >>>
   runtime {

@@ -366,7 +366,7 @@ task vcf2bed{
         set -Eeuo pipefail
         
         gsutil cp ~{vcf} ./tmp.vcf.gz
-        tabix -p vcf ./tmp.vcf.gz
+        tabix -f -p vcf ./tmp.vcf.gz
         svtk vcf2bed -i SVTYPE -i SVLEN tmp.vcf.gz ~{prefix}.bed
         
     >>>
@@ -543,8 +543,8 @@ task ShiftVcfForDuphold{
         bgzip ~{prefix}.ri_flank.vcf
         bgzip ~{prefix}.le_flank.vcf
 
-        tabix -p vcf ~{prefix}.ri_flank.vcf.gz
-        tabix -p vcf ~{prefix}.le_flank.vcf.gz
+        tabix -f -p vcf ~{prefix}.ri_flank.vcf.gz
+        tabix -f -p vcf ~{prefix}.le_flank.vcf.gz
     >>>
 
     runtime {
@@ -714,7 +714,7 @@ task RunRdPeSrAnnotation{
         zcat ~{rd_matrix} | grep -v '@' | grep -v CONTIG |bgzip >    bincov.tsv.gz
         Rscript /src/bincov_to_normCov.R -i bincov.tsv.gz
         bgzip normCov.tsv
-        tabix -b 2 -e 2 normCov.tsv.gz
+        tabix -f -b 2 -e 2 normCov.tsv.gz
 
         python3 /src/add_RD_to_SVs.py ~{bed} normCov.tsv.gz ~{filebase}.bed.Rd
         python3 /src/add_RD_to_SVs.py ~{bed}.ri_flank normCov.tsv.gz ~{filebase}.ri_flank.Rd

@@ -228,7 +228,7 @@ task SRTest {
       bgzip local.SR.txt
     fi
 
-    tabix -s1 -b2 -e2 local.SR.txt.gz
+    tabix -f -s1 -b2 -e2 local.SR.txt.gz
     svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats
   >>>
   runtime {

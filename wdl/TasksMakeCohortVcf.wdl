@@ -150,7 +150,7 @@ task SortVcf {
         --output-type z \
         --output-file ~{outfile_name} \
         ~{vcf}
-    tabix ~{outfile_name}
+    tabix -f ~{outfile_name}
   >>>
 
   output {
@@ -209,7 +209,7 @@ task ConcatVcfs {
   String naive_flag = if naive then "--naive" else ""
   String concat_output_type = if (sites_only) then "v" else "z"
   String sites_only_command = if (sites_only) then "| bcftools view --no-version -G -Oz" else ""
-  String generate_index_command = if (generate_index) then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
+  String generate_index_command = if (generate_index) then "tabix -f ~{outfile_name}" else "touch ~{outfile_name}.tbi"
 
   command <<<
     set -euo pipefail
@@ -289,7 +289,7 @@ task ConcatBeds {
       > ~{output_file}
 
     if ~{call_tabix}; then
-      tabix -p bed ~{output_file}
+      tabix -f -p bed ~{output_file}
     else
       touch ~{output_file}.tbi
     fi
@@ -440,7 +440,7 @@ task FilterVcf {
   command <<<
     set -eu
     bcftools view --no-version --no-update -i '~{records_filter}' -O z -o ~{outfile_name} ~{vcf}
-    tabix ~{outfile_name}
+    tabix -f ~{outfile_name}
   >>>
 
   output {
@@ -568,7 +568,7 @@ task SplitVcf {
     set -eu -o pipefail
 
     # Uncompress vcf. If index is present and contig is specified, use tabix to extract desired contig
-    ~{if defined(vcf_idx) && defined(contig) then "tabix -h ~{vcf} ~{contig}" else "zcat ~{vcf}"} \
+    ~{if defined(vcf_idx) && defined(contig) then "tabix -f -h ~{vcf} ~{contig}" else "zcat ~{vcf}"} \
       > uncompressed.vcf
 
     # Extract vcf header:
@@ -820,7 +820,7 @@ task MakeSitesOnlyVcf {
   command <<<
     set -euxo pipefail
     bcftools view --no-version -G ~{vcf} -Oz -o ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -862,7 +862,7 @@ task ReheaderVcf {
   command <<<
     set -euxo pipefail
     bcftools reheader -h ~{header} ~{vcf} > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -903,7 +903,7 @@ task PullVcfShard {
   command <<<
     set -euo pipefail
     bcftools view --no-version --include ID=@~{vids} ~{vcf} -O z -o ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.vcf.gz
+    tabix -f ~{output_prefix}.vcf.gz
     wc -l < ~{vids} > count.txt
   >>>
 
@@ -953,7 +953,7 @@ task RenameVariantIds {
       | bgzip \
       > ~{file_prefix}.vcf.gz
     if ~{defined(vcf_index)}; then
-      tabix ~{file_prefix}.vcf.gz
+      tabix -f ~{file_prefix}.vcf.gz
     else
       touch ~{file_prefix}.vcf.gz
     fi

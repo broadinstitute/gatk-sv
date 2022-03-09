@@ -105,10 +105,10 @@ task MergeList {
     cut -f 4 ~{regeno_file} >regeno_variants.txt
     fgrep -f regeno_variants.txt ~{regeno_sample_ids_lookup} > cohort.regeno_var.combined.bed
     cat ~{sep=' ' nonempty_txt}|sort -k1,1V -k2,2n -k3,3n |bgzip -c > nonempty.bed.gz
-    tabix nonempty.bed.gz
+    tabix -f nonempty.bed.gz
     # For each variant in regeno_file, take variants across all batches
     while read chr start end var type;do
-        samplelist=$(tabix nonempty.bed.gz $chr:$start-$end |awk -v var="$var" '{if($4==var)print $6}' |tr "\n" ",")
+        samplelist=$(tabix -f nonempty.bed.gz $chr:$start-$end |awk -v var="$var" '{if($4==var)print $6}' |tr "\n" ",")
         printf "$chr\t$start\t$end\t$var\t$samplelist\n" 
     done<~{regeno_file} >regeno_variant_sample.txt
     # Use cohort cluster file, add samples that are clustered with the variant in question across whole cohort

@@ -299,7 +299,7 @@ task ConcatReGenotypedVcfs {
     vcf-concat ~{batch}.regeno.vcf.gz no_variant.vcf.gz \
       | vcf-sort -c \
       | bgzip -c > ~{batch}.depth.regeno.vcf.gz
-    tabix ~{batch}.depth.regeno.vcf.gz
+    tabix -f ~{batch}.depth.regeno.vcf.gz
   
   >>>
   runtime {

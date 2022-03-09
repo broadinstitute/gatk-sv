@@ -64,7 +64,7 @@ task RenameVcfSamplesTask {
     paste ~{current_sample_list} ~{new_sample_list} > dict.tsv
     /opt/sv-pipeline/scripts/vcf_replacement_samples.py --vcf ~{vcf} --dict dict.tsv > reheader.list
     bcftools reheader --samples reheader.list -o ~{prefix}.vcf.gz ~{vcf}
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {

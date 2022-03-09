@@ -173,7 +173,7 @@ task MergeAnnotations {
       ~{prefix}.annotated.vcf
 
     bgzip ~{prefix}.annotated.vcf
-    tabix ~{prefix}.annotated.vcf.gz
+    tabix -f ~{prefix}.annotated.vcf.gz
     
     orig=$( zcat ~{vcf} | cut -f1 | grep -cv "^#" || true)
     new=$( zcat ~{prefix}.annotated.vcf.gz | cut -f1 | grep -cv "^#" || true)

@@ -209,7 +209,7 @@ task GatherBCFs {
       | bgzip -c \
       > $VCF_OUT
     echo "Indexing $VCF_OUT"
-    tabix "$VCF_OUT"
+    tabix -f "$VCF_OUT"
     
   >>>
   runtime {

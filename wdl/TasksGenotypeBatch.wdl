@@ -227,7 +227,7 @@ task ConcatGenotypedVcfs {
     vcf-concat ~{sep=" " lt5kb_vcfs} ~{sep=" " gt5kb_vcfs} ~{sep=" " bca_vcfs} \
       | vcf-sort -c \
       | bgzip -c > ~{batch}.~{evidence_type}.vcf.gz
-    tabix -p vcf ~{batch}.~{evidence_type}.vcf.gz
+    tabix -f -p vcf ~{batch}.~{evidence_type}.vcf.gz
 
   >>>
   runtime {
@@ -347,7 +347,7 @@ task RDTestGenotype {
       bgzip local.RD.txt
     fi
 
-    tabix -p bed local.RD.txt.gz
+    tabix -f -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -438,7 +438,7 @@ task CountPE {
       bgzip local.PE.txt
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
+    tabix -f -s1 -b2 -e2 local.PE.txt.gz
     svtk count-pe -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
@@ -514,7 +514,7 @@ task CountSR {
       bgzip local.SR.txt
     fi
 
-    tabix -s1 -b2 -e2 local.SR.txt.gz
+    tabix -f -s1 -b2 -e2 local.SR.txt.gz
     svtk count-sr -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt

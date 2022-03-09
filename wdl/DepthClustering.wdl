@@ -211,7 +211,7 @@ task BedCluster {
   command <<<
 
     set -euo pipefail
-    tabix -p bed ~{bed};
+    tabix -f -p bed ~{bed};
     svtk bedcluster ~{bed} -r ~{chrom} \
       -p ~{batch}_depth_~{svtype}_~{chrom} \
       -f ~{frac} \

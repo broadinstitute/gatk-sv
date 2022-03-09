@@ -357,7 +357,7 @@ task GenerateBAF {
       | bgzip \
       > ~{batch}.~{shard}.txt.gz
 
-    tabix -s1 -b2 -e2 ~{batch}.~{shard}.txt.gz
+    tabix -f -s1 -b2 -e2 ~{batch}.~{shard}.txt.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -405,13 +405,13 @@ task MergeEvidenceFiles {
     mkdir data
     while read file; do
       filename=`basename $file`
-      tabix -h -R ~{inclusion_bed} $file > data/$filename.txt
+      tabix -f -h -R ~{inclusion_bed} $file > data/$filename.txt
       rm $file
     done < ~{write_lines(files)}
 
     mkdir tmp
     sort -m -k1,1V -k2,2n -T tmp data/*.txt | bgzip -c > ~{batch}.~{evidence}.txt.gz
-    tabix -s1 -b2 -e2 ~{batch}.~{evidence}.txt.gz
+    tabix -f -s1 -b2 -e2 ~{batch}.~{evidence}.txt.gz
 
   >>>
   runtime {

@@ -128,7 +128,7 @@ finally:
 CODE
 
   mv merged.vcf.bgz ~{prefix}.vcf.gz
-  tabix ~{prefix}.vcf.gz
+  tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -176,7 +176,7 @@ task FixHeader {
     bcftools reheader -h header ~{merged_vcf} \
       ~{if reset_cnv_gts then "| gunzip | python /opt/sv-pipeline/04_variant_resolution/scripts/reset_cnv_gts.py stdin stdout | bgzip" else ""} \
       > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {

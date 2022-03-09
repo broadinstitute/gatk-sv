@@ -87,8 +87,8 @@ task VCFCluster {
   command <<<
 
     set -euo pipefail
-    for f in ~{sep=" "  vcfs}; do tabix -p vcf -f $f; done;
-    tabix -p bed ~{exclude_list};
+    for f in ~{sep=" "  vcfs}; do tabix -f -p vcf -f $f; done;
+    tabix -f -p bed ~{exclude_list};
 
     svtk vcfcluster ~{write_lines(vcfs)} stdout \
       -r ~{chrom} \
@@ -142,7 +142,7 @@ task ConcatVCFs {
 
     set -euo pipefail
     vcf-concat ~{sep=" "  vcfs} | vcf-sort -c | bgzip -c > ~{batch}.~{algorithm}.vcf.gz;
-    tabix -p vcf ~{batch}.~{algorithm}.vcf.gz;
+    tabix -f -p vcf ~{batch}.~{algorithm}.vcf.gz;
   
   >>>
   runtime {

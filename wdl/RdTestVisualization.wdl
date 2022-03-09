@@ -70,16 +70,16 @@ task rdtest {
             if [ $i -gt 1 ]
             then
                 export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-                tabix -h $bincov -R test.merged.bed|cut -f4->covfile.$i.bed 
+                tabix -f -h $bincov -R test.merged.bed|cut -f4->covfile.$i.bed 
             else
                 export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-                tabix -h $bincov -R test.merged.bed>covfile.$i.bed 
+                tabix -f -h $bincov -R test.merged.bed>covfile.$i.bed 
 
         fi
         done<bincovlist.txt
 
         paste covfile.*.bed |tr ' ' '\t' |bgzip >allcovfile.bed.gz 
-        tabix allcovfile.bed.gz
+        tabix -f allcovfile.bed.gz
         rm covfile.*.bed
         zcat allcovfile.bed.gz |head -n 1|cut -f 4-|tr '\t' '\n'>samples.txt
         Rscript /opt/RdTest/RdTest.R \

@@ -208,7 +208,7 @@ task ParseGenotypes {
       ~{genotypes} \
       ~{ped_file} \
       ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
-    tabix ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
+    tabix -f ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
   >>>
 
   output {

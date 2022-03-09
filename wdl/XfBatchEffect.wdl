@@ -215,7 +215,7 @@ task GetBatchSamplesList {
   command <<<
     set -euo pipefail
     # Get list of all samples present in VCF header
-    tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' | sort -Vk1,1 \
+    tabix -f -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' | sort -Vk1,1 \
     > all_samples.list
     # Get list of samples in batch
     fgrep -w ~{batch} ~{sample_batch_assignments} | cut -f1 \
@@ -646,7 +646,7 @@ task ApplyBatchEffectLabels {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    tabix -h ~{vcf} ~{contig} \
+    tabix -f -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
         --unstable-af-pcrminus ~{mingq_prePost_pcrminus_fails} \
         stdin \

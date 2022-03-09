@@ -153,7 +153,7 @@ task CombineShardedVcfs {
     else
       cat merged.vcf | bgzip -c > "~{prefix}.wAFs.vcf.gz"
     fi
-    tabix -p vcf "~{prefix}.wAFs.vcf.gz"
+    tabix -f -p vcf "~{prefix}.wAFs.vcf.gz"
   }
 
 

@@ -161,7 +161,7 @@ task RunManta {
       > diploidSV.vcf
 
     bgzip -c diploidSV.vcf > ~{sample_id}.manta.vcf.gz
-    tabix -p vcf ~{sample_id}.manta.vcf.gz
+    tabix -f -p vcf ~{sample_id}.manta.vcf.gz
     
   >>>
   runtime {

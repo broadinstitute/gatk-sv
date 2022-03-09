@@ -50,7 +50,7 @@ task ConcatRegenotypedVcfs {
     vcf-concat regeno.vcf.gz no_variant.vcf.gz \
       | vcf-sort -c \
       | bgzip -c > ~{batch}.depth.regeno_final.vcf.gz
-    tabix ~{batch}.depth.regeno_final.vcf.gz
+    tabix -f ~{batch}.depth.regeno_final.vcf.gz
        >>>
   output {
     File genotyped_vcf = "~{batch}.depth.regeno_final.vcf.gz"

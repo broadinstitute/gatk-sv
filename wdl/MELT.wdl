@@ -670,7 +670,7 @@ task RunMELT {
     rm temp.vcf.gz
     
     # index vcf
-    tabix -p vcf "~{sample_id}.melt.vcf.gz"
+    tabix -f -p vcf "~{sample_id}.melt.vcf.gz"
     
   >>>
   runtime {

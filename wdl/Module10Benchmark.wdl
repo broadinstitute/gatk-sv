@@ -534,7 +534,7 @@ task RunRdPeSrAnnotation{
     zcat ~{rd_metrics} | grep -v '@' | grep -v CONTIG |bgzip >  bincov.tsv.gz
     Rscript /bincov_to_normCov.R -i bincov.tsv.gz
     bgzip normCov.tsv
-    tabix normCov.tsv.gz
+    tabix -f normCov.tsv.gz
 
     python /add_RD_to_SVs.py ~{bed} normCov.tsv.gz
     python /add_RD_to_SVs.py ~{filename}.ri_flank normCov.tsv.gz

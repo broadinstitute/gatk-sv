@@ -123,7 +123,7 @@ task BAFTest {
       bgzip local.BAF.txt
     fi
 
-    tabix -s1 -b2 -e2 local.BAF.txt.gz
+    tabix -f -s1 -b2 -e2 local.BAF.txt.gz
     svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
   
   >>>
@@ -217,15 +217,15 @@ task SplitBafVcf {
   command <<<
 
     set -euo pipefail 
-    tabix -p vcf ~{vcf}
+    tabix -f -p vcf ~{vcf}
     #TODO : split -a parameter should be scaled properly (using suffix_len does not always work)
-    tabix -h ~{vcf} ~{chrom} \
+    tabix -f -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \
       | fgrep -e "DEL" -e "DUP" \
       | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
       | awk '($3-$2>=10000 && $3-$2<10000000)' \
       | split -a ~{suffix_len} -d -l 300 - ~{batch}.~{algorithm}.split.gt10kb.
-    tabix -h ~{vcf} ~{chrom} \
+    tabix -f -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \
       | fgrep -e "DEL" -e "DUP" \
       | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \

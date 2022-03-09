@@ -81,9 +81,9 @@ task Cleanup {
     
     set -euo pipefail
     #Subset to chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > input.vcf.gz
+    tabix -f -h ~{vcf} ~{contig} | bgzip -c > input.vcf.gz
     #Get list of PCR- samples
-    tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' \
+    tabix -f -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' \
     > all.samples.list
     if [ ! -z "~{pcrplus_samples_list}" ];then
       fgrep -wvf ~{pcrplus_samples_list} all.samples.list \

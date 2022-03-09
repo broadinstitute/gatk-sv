@@ -416,7 +416,7 @@ task ModifyVcf {
         CODE
 
         bgzip ~{prefix}.annotated.vcf
-        tabix ~{prefix}.annotated.vcf.gz
+        tabix -f ~{prefix}.annotated.vcf.gz
     >>>
 
     output {

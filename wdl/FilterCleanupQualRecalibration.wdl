@@ -87,11 +87,11 @@ task RemoveMCNVs{
   command <<<
     set -euo pipefail
     zcat ~{vcf} | awk '{if ($7!="MULTIALLELIC") print}' | bgzip > no_MCNV.vcf.gz
-    tabix no_MCNV.vcf.gz
+    tabix -f no_MCNV.vcf.gz
     zcat ~{vcf} | grep '#' > MCNV.vcf
     zcat ~{vcf} | awk '{if ($7=="MULTIALLELIC") print}' >> MCNV.vcf
     bgzip MCNV.vcf
-    tabix MCNV.vcf.gz
+    tabix -f MCNV.vcf.gz
   >>>
 
   output{
@@ -134,9 +134,9 @@ task MergeMCNV{
   command <<<
     set -euo pipefail
     #zcat ~{mcnv} |uniq | bgzip > mcnv.vcf.gz
-    #tabix mcnv.vcf.gz
+    #tabix -f mcnv.vcf.gz
     vcf-concat ~{vcf} ~{mcnv} | vcf-sort | bgzip > ~{prefix}.cleaned_filters_qual_recali.vcf.gz
-    tabix ~{prefix}.cleaned_filters_qual_recali.vcf.gz
+    tabix -f ~{prefix}.cleaned_filters_qual_recali.vcf.gz
   >>>
 
   output{
@@ -182,9 +182,9 @@ task Cleanup {
     
     set -euo pipefail
     #Subset to chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > input.vcf.gz
+    tabix -f -h ~{vcf} ~{contig} | bgzip -c > input.vcf.gz
     #Get list of PCR- samples
-    tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' \
+    tabix -f -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' \
     > all.samples.list
     if [ ! -z "~{pcrplus_samples_list}" ];then
       fgrep -wvf ~{pcrplus_samples_list} all.samples.list \
@@ -220,7 +220,7 @@ task Cleanup {
       stdout \
     | bgzip -c \
     > "~{prefix}.~{contig}.cleaned_filters_qual_recalibrated.vcf.gz"
-    # tabix -p vcf -f "~{prefix}.cleaned_filters_qual_recalibrated.vcf.gz"
+    # tabix -f -p vcf -f "~{prefix}.cleaned_filters_qual_recalibrated.vcf.gz"
   >>>
 
   output {

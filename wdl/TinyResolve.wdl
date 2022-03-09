@@ -111,7 +111,7 @@ task ResolveManta {
     for (( i=0; i<~{num_samples}; i++ ));
     do
       vcf=${vcfs[$i]}
-      tabix -p vcf $vcf
+      tabix -f -p vcf $vcf
       sample_id=${sample_ids[$i]}
       pe=${discfiles[$i]}
       sample_no=`printf %03d $i`

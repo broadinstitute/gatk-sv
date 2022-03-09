@@ -90,7 +90,7 @@ task ShardVcf {
     set -euo pipefail
 
     # Tabix chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
+    tabix -f -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
     
     # Then shard VCF
     /opt/sv-pipeline/scripts/shard_VCF.sh \
@@ -213,7 +213,7 @@ task CombineShardedVcfs {
       | vcf-sort \
       | bgzip -c \
       > "~{prefix}.wAFs.vcf.gz";
-    tabix -p vcf "~{prefix}.wAFs.vcf.gz"
+    tabix -f -p vcf "~{prefix}.wAFs.vcf.gz"
   
   >>>
  

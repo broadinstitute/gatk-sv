@@ -252,13 +252,13 @@ task SplitVcf{
   command <<<
     if [[ ~{vcf_file} == *.gz ]] ;  then
       tabix -f -p vcf ~{vcf_file}
-      tabix -h ~{vcf_file} ~{contig} | bgzip > ~{contig}.vcf.gz
-      tabix -p vcf ~{contig}.vcf.gz
+      tabix -f -h ~{vcf_file} ~{contig} | bgzip > ~{contig}.vcf.gz
+      tabix -f -p vcf ~{contig}.vcf.gz
     else
       bgzip ~{vcf_file}
       tabix -f -p vcf ~{vcf_file}.gz
-      tabix -h ~{vcf_file}.gz ~{contig} | bgzip > ~{contig}.vcf.gz
-      tabix -p vcf ~{contig}.vcf.gz
+      tabix -f -h ~{vcf_file}.gz ~{contig} | bgzip > ~{contig}.vcf.gz
+      tabix -f -p vcf ~{contig}.vcf.gz
     fi
   >>>
 

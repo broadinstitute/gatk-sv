@@ -357,7 +357,7 @@ task CleanVcf1a {
       ~{prefix}.sexchr.revise.txt \
       | bgzip \
       > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -731,7 +731,7 @@ task FinalCleanup {
       | fgrep -v "##INFO=<ID=MEMBERS,Number=.,Type=String," \
       | bgzip -c \
       > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {

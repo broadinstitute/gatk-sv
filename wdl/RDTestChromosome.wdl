@@ -179,7 +179,7 @@ task RDTest {
       bgzip local.RD.txt
     fi
 
-    tabix -p bed local.RD.txt.gz
+    tabix -f -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -231,14 +231,14 @@ task SplitRDVcf {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf};
-    tabix -h ~{vcf} ~{chrom} \
+    tabix -f -p vcf ~{vcf};
+    tabix -f -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \
       | fgrep -e "DEL" -e "DUP" \
       | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \
       | awk '($3-$2>=10000)' \
       > ~{batch}.~{algorithm}.split.gt10kb;
-    tabix -h ~{vcf} ~{chrom} \
+    tabix -f -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \
       | fgrep -e "DEL" -e "DUP" \
       | awk -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' \

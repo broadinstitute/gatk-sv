@@ -178,7 +178,7 @@ task SetSampleId {
 
     set -euo pipefail
     zcat ~{file} | awk -F "\t" -v OFS="\t" '$~{sample_column_index}="~{sample_id}"' | bgzip -c > ~{output_name}
-    tabix -s1 -b2 -e2 ~{output_name}
+    tabix -f -s1 -b2 -e2 ~{output_name}
 
   >>>
   runtime {
@@ -228,7 +228,7 @@ task MergeEvidenceFilesByContig {
     awk -F "\t" '{if ($1=="~{contig}") print}' ~{inclusion_bed} > regions.bed
     while read file; do
       filename=`basename $file`
-      tabix -h -R regions.bed $file > data/$filename.txt
+      tabix -f -h -R regions.bed $file > data/$filename.txt
     done < ~{write_lines(files)}
 
     mkdir tmp

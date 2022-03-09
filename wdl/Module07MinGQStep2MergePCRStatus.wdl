@@ -120,7 +120,7 @@ task get_sample_lists {
 
   command <<<
     set -euo pipefail
-    tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' > all_samples.list
+    tabix -f -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' > all_samples.list
     fgrep -wf ~{PCRPLUS_samples_list} all_samples.list > "~{prefix}.PCRPLUS.samples.list" || true
     fgrep -wvf ~{PCRPLUS_samples_list} all_samples.list > "~{prefix}.PCRMINUS.samples.list" || true
     cat \
@@ -209,8 +209,8 @@ task Split_Vcf_by_contig {
   command <<<
       set -euo pipefail
       #Tabix chromosome of interest
-      tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
-      tabix -p vcf ~{contig}.vcf.gz
+      tabix -f -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
+      tabix -f -p vcf ~{contig}.vcf.gz
   >>>
 
   output {
@@ -289,7 +289,7 @@ task combine_vcfs {
   
   command <<<
     vcf-concat ~{sep=" " vcfs} | vcf-sort | bgzip -c > ~{prefix}.minGQ_filtered.vcf.gz;
-    tabix -p vcf ~{prefix}.minGQ_filtered.vcf.gz
+    tabix -f -p vcf ~{prefix}.minGQ_filtered.vcf.gz
   >>>
 
   runtime {

@@ -124,7 +124,7 @@ task WriteSamplesList {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    tabix -H ~{vcf} | fgrep -v "##" \
+    tabix -f -f -H ~{vcf} | fgrep -v "##" \
     | cut -f10- | sed 's/\t/\n/g' > "~{prefix}.samples.list"
     if [ ! -z "~{pcrplus_samples_list}" ];then
       fgrep -wf ~{pcrplus_samples_list} "~{prefix}.samples.list" \
@@ -176,7 +176,7 @@ task CountSvtypes {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    tabix --print-header "~{vcf}" "~{contig}" \
+    tabix -f --print-header "~{vcf}" "~{contig}" \
     | fgrep -v "MULTIALLELIC" \
     | fgrep -v "PESR_GT_OVERDISPERSION" \
     | svtk count-svtypes --no-header stdin \
@@ -327,7 +327,7 @@ task ExcludeOutliers {
     cat ~{plus_outliers_list} ~{minus_outliers_list} \
       | sort -Vk1,1 | uniq \
       > "~{prefix}.SV_count_outliers.samples.list" || true
-    tabix -H ~{vcf} | fgrep -v "##" | \
+    tabix -f -H ~{vcf} | fgrep -v "##" | \
       sed 's/\t/\n/g' | awk -v OFS="\t" '{ print $1, NR }' | \
       fgrep -wf "~{prefix}.SV_count_outliers.samples.list" | cut -f2 > \
       indexes_to_exclude.txt || true
@@ -343,7 +343,7 @@ task ExcludeOutliers {
     else
       cp ~{vcf} ~{outfile}
     fi
-    tabix -p vcf -f "~{outfile}"
+    tabix -f -p vcf -f "~{outfile}"
   >>>
 
   output {

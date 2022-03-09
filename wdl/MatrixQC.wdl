@@ -157,7 +157,7 @@ task PESRBAF_QC {
       bgzip local.RD.txt
     fi
 
-    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
+    tabix -f -s 1 -b 2 -e 2 local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
@@ -234,7 +234,7 @@ task RD_QC {
       bgzip local.RD.txt
     fi
 
-    tabix -p bed local.RD.txt.gz
+    tabix -f -p bed local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \

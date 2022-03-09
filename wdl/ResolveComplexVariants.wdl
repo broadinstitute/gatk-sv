@@ -297,7 +297,7 @@ task IntegrateResolvedVcfs {
       |bcftools sort - -O z -T temp \
       > ~{prefix}.vcf.gz
 
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {
@@ -349,8 +349,8 @@ task BreakpointOverlap {
       ~{prefix}.dropped_records.vcf.gz \
       | bgzip \
       > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
-    tabix ~{prefix}.dropped_records.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.dropped_records.vcf.gz
   >>>
 
   output {
@@ -399,7 +399,7 @@ task RenameVariants {
     /opt/sv-pipeline/04_variant_resolution/scripts/rename.py --chrom ~{chrom} --prefix ~{vid_prefix} ~{vcf} - \
       | bgzip \
       > ~{prefix}.vcf.gz
-    tabix ~{prefix}.vcf.gz
+    tabix -f ~{prefix}.vcf.gz
   >>>
 
   output {

@@ -220,12 +220,12 @@ task LocalizeContigVcfs {
     # See Issue #52 "Use GATK to retrieve VCF records in JoinContigFromRemoteVcfs"
     # https://github.com/broadinstitute/gatk-sv/issues/52
 
-    tabix -h "~{vcf}" "~{contig}" \
+    tabix -f -h "~{vcf}" "~{contig}" \
       | sed "s/AN=[0-9]*;//g" \
       | sed "s/AC=[0-9]*;//g" \
       | bgzip \
       > contig.vcf.gz
-    tabix contig.vcf.gz
+    tabix -f contig.vcf.gz
 
     python3 <<CODE
     import pysam
@@ -313,7 +313,7 @@ task JoinVcfs {
           sys.stdout.write("\t".join(out_lines))
         sys.stdout.write('\n')
     CODE
-    tabix ~{prefix}.~{contig}.joined.vcf.gz
+    tabix -f ~{prefix}.~{contig}.joined.vcf.gz
   >>>
 
   output {
@@ -362,7 +362,7 @@ task FixMultiallelicRecords {
       ~{joined_vcf} \
       ~{write_lines(batch_contig_vcfs)} \
       ~{prefix}.~{contig}.fixed_multiallelics.vcf.gz
-    tabix ~{prefix}.~{contig}.fixed_multiallelics.vcf.gz
+    tabix -f ~{prefix}.~{contig}.fixed_multiallelics.vcf.gz
   >>>
 
   output {
@@ -415,7 +415,7 @@ task FixEvidenceTags {
       | sed -e 's/ID=EV,Number=.,Type=String/ID=EV,Number=1,Type=Integer/g' \
       | bgzip \
       > ~{prefix}.~{contig}.unclustered.vcf.gz
-    tabix ~{prefix}.~{contig}.unclustered.vcf.gz
+    tabix -f ~{prefix}.~{contig}.unclustered.vcf.gz
   >>>
 
   output {
