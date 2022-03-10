@@ -705,7 +705,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         if parsed_args.docker_repo is not None:
             raise ValueError("Both --gcr-project and --docker-repo were specified, but only one is allowed.")
         print(colored("--gcr-project is deprecated, use --docker-repo instead.", "red"))
-        parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project}"
+        parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project.strip('/')}"
     return parsed_args
 
 
