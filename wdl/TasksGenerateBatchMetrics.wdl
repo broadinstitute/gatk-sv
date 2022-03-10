@@ -30,7 +30,9 @@ task SplitVCF {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf}
+    # Adding this for FSx/local FS 
+    # Only running tabix if the file is not present
+    if [ ! -f "~{vcf}.tbi" ]; then tabix -p vcf ~{vcf}; else echo "tbi already available."; fi
     mkdir splits
     tabix ~{vcf} ~{chrom} | split -a ~{suffix_len} -d -l ~{split_size} - splits/~{batch}.~{algorithm}.split.
 

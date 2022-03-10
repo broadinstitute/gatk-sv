@@ -42,6 +42,9 @@ workflow ResolveComplexSv {
     RuntimeAttr? runtime_override_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   File vcf_idx = vcf + ".tbi"
@@ -473,6 +476,7 @@ task RestoreUnresolvedCnv {
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
+    Boolean shared_filesystem = false
   }
 
   String resolved_plus_cnv = "~{prefix}.vcf.gz"
@@ -504,11 +508,21 @@ task RestoreUnresolvedCnv {
 
     # get unresolved records
     bcftools view --no-header ~{unresolved_vcf} -Oz -o unresolved_records.vcf.gz
-    rm "~{unresolved_vcf}"
+    # Adding this for FSx/local FS 
+    if [ ! ~{shared_filesystem} ]; 
+    then
+      rm "~{unresolved_vcf}"
+    fi
 
     # avoid possible obliteration of input file during later processing by writing
     # to temporary file (and postCPX_cleanup.py writing final result to output name)
-    mv ~{resolved_vcf} ~{resolved_plus_cnv}.tmp.gz
+    # Adding this for FSx/local FS 
+    if [ ~{shared_filesystem} ]; 
+    then
+      cp ~{resolved_vcf} ~{resolved_plus_cnv}.tmp.gz
+    else
+      mv ~{resolved_vcf} ~{resolved_plus_cnv}.tmp.gz
+    fi
 
     #Add unresolved CNVs to resolved VCF and wipe unresolved status
     zcat unresolved_records.vcf.gz \

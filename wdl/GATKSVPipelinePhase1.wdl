@@ -235,6 +235,8 @@ workflow GATKSVPipelinePhase1 {
     Boolean? run_filterbatch_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
 
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
@@ -344,7 +346,8 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_explode = runtime_attr_explode,
       run_module_metrics = run_batchevidence_metrics,
       primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      shared_filesystem=shared_filesystem
   }
 
   call clusterbatch.ClusterBatch as ClusterBatch {

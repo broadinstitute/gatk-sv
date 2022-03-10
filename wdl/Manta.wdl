@@ -133,6 +133,17 @@ task RunManta {
       rm ./runWorkflow.py
     fi
 
+    # Adding this for FSx/local FS 
+    # Removing the symbolic links created by this process only if it exists
+    # This is added to avoid failures in case of retries.    
+    if [ -f sample~{bam_ext} ]; then
+      rm sample~{bam_ext}
+    fi
+
+    if [ -f sample~{bam_ext}~{index_ext} ]; then
+      rm sample~{bam_ext}~{index_ext}
+    fi
+
     ln -s ~{bam_or_cram_file} sample~{bam_ext}
     ln -s ~{bam_or_cram_index} sample~{bam_ext}~{index_ext}
 

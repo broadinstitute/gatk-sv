@@ -17,6 +17,9 @@ workflow ExpansionHunterScatter {
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_attr
+
+        # Filesystem configuration
+        Boolean shared_filesystem = false
     }
 
     parameter_meta {
@@ -58,7 +61,8 @@ workflow ExpansionHunterScatter {
                 sample_id=sample_id,
                 ped_file=ped_file,
                 expansion_hunter_docker=expansion_hunter_docker,
-                python_docker=python_docker
+                python_docker=python_docker,
+                shared_filesystem=shared_filesystem
         }
     }
 

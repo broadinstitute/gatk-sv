@@ -87,8 +87,12 @@ task VCFCluster {
   command <<<
 
     set -euo pipefail
-    for f in ~{sep=" "  vcfs}; do tabix -p vcf -f $f; done;
-    tabix -p bed ~{exclude_list};
+    # Adding this for FSx/local FS 
+    # Only running tabix if the file is not present
+    for f in ~{sep=" "  vcfs}; do
+        if [ ! -f "${f}.tbi" ]; then tabix -p vcf -f $f; else echo "tbi already available."; fi
+    done
+    if [ ! -f "~{exclude_list}.tbi" ]; then tabix -p bed ~{exclude_list}; else echo "tbi already available."; fi
 
     svtk vcfcluster ~{write_lines(vcfs)} stdout \
       -r ~{chrom} \

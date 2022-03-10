@@ -81,6 +81,9 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   #Scatter per chromosome
@@ -143,7 +146,8 @@ workflow CleanVcf {
         runtime_attr_override_scatter_1b=runtime_attr_override_scatter_1b,
         runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
         runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
-        runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b
+        runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
+        shared_filesystem=shared_filesystem
     }
   }
 

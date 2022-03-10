@@ -231,7 +231,9 @@ task SplitRDVcf {
   command <<<
 
     set -euo pipefail
-    tabix -p vcf ~{vcf};
+    # Adding this for FSx/local FS 
+    # Only running tabix if the file is not present
+    if [ ! -f "~{vcf}.tbi" ]; then tabix -p vcf ~{vcf}; else echo "tbi already available."; fi
     tabix -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \
       | fgrep -e "DEL" -e "DUP" \

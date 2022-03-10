@@ -211,7 +211,9 @@ task BedCluster {
   command <<<
 
     set -euo pipefail
-    tabix -p bed ~{bed};
+    # Adding this for FSx/local FS, shouldn't impact GCP
+    # Only create tbi file if not present.
+    if [ ! -f "~{bed}.tbi" ]; then tabix -p bed ~{bed};else echo "tbi already available.";fi
     svtk bedcluster ~{bed} -r ~{chrom} \
       -p ~{batch}_depth_~{svtype}_~{chrom} \
       -f ~{frac} \

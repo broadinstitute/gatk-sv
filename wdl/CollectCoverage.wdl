@@ -59,7 +59,9 @@ task CollectCounts {
       ~{sep=' ' disabled_read_filters_arr}
 
     sed -ri "s/@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:~{sample_id}/g" ~{sample_id}.counts.tsv
-    bgzip ~{sample_id}.counts.tsv
+    # Updated bgzip command to keep original file as its used by downstream process in case of FSx/local
+    # Also, this won't impact the GCP process
+    bgzip -f ~{sample_id}.counts.tsv -c > ~{sample_id}.counts.tsv.gz
   >>>
 
   runtime {
@@ -112,7 +114,9 @@ task CondenseReadCounts {
       --factor ~{select_first([num_bins, 20])} \
       --out-bin-length ~{select_first([expected_bin_size, 2000])}
     sed -ri "s/^@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:~{sample}/g" condensed_counts.~{sample}.tsv
-    bgzip condensed_counts.~{sample}.tsv
+    # Updated bgzip command to keep original file as its used by downstream process in case of FSx/local
+    # Also, this won't impact the GCP process
+    bgzip -f condensed_counts.~{sample}.tsv -c > condensed_counts.~{sample}.tsv.gz
   >>>
 
   runtime {

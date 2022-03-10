@@ -21,6 +21,9 @@ workflow CollectQcPerSample {
     # overrides for mini tasks
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_tar_shard_vid_lists
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   # Shard sample list
@@ -70,6 +73,7 @@ task CollectVidsPerSample {
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
+    Boolean shared_filesystem = false
   }
   
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
@@ -102,7 +106,11 @@ task CollectVidsPerSample {
     
     # For purposes of memory, cut vcf to samples of interest
     zcat ~{vcf} > uncompressed.vcf
-    rm ~{vcf}
+    # Adding this for FSx/local FS 
+    if [ ! ~{shared_filesystem} ]; 
+    then
+      rm ~{vcf}
+    fi
     grep -B9999999999 -m1 -Ev "^#" uncompressed.vcf  | sed '$ d' > header.vcf \
       || cp uncompressed.vcf header.vcf
     N_HEADER=$(wc -l < header.vcf)

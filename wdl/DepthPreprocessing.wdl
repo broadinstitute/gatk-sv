@@ -110,7 +110,9 @@ task GcnvVcfToBed {
 
     set -e
     tar xzf ~{contig_ploidy_call_tar}
-    tabix ~{vcf}
+    # Adding this for FSx/local FS, shouldn't impact GCP
+    # Only create tbi file if not present.
+    if [ ! -f "~{vcf}.tbi" ]; then tabix ~{vcf};else echo "tbi already available.";fi
     python /opt/WGD/bin/convert_gcnv.py \
       --cutoff ~{qs_cutoff} \
       contig_ploidy.tsv \
@@ -216,7 +218,9 @@ task MergeSet {
       | awk -v OFS="\t" -v svtype=~{svtype} -v batch=~{batch} '{$4=batch"_"svtype"_"NR; print}' \
       | cat <(echo -e "#chr\\tstart\\tend\\tname\\tsample\\tsvtype\\tsources") - \
       | bgzip -c > ~{batch}.~{svtype}.bed.gz;
-    tabix -p bed ~{batch}.~{svtype}.bed.gz
+    # Adding this for FSx/local FS, shouldn't impact GCP
+    # Force fully create the tbi file.
+    tabix -f -p bed ~{batch}.~{svtype}.bed.gz
 		
   >>>
   runtime {

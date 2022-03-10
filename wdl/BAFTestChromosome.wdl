@@ -217,7 +217,7 @@ task SplitBafVcf {
   command <<<
 
     set -euo pipefail 
-    tabix -p vcf ~{vcf}
+    if [ ! -f "~{vcf}.tbi" ]; then tabix -p vcf ~{vcf}; else echo "tbi already available."; fi
     #TODO : split -a parameter should be scaled properly (using suffix_len does not always work)
     tabix -h ~{vcf} ~{chrom} \
       | svtk vcf2bed --no-header stdin stdout \

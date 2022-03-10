@@ -36,6 +36,9 @@ workflow MinGQStep2MergePcrStatus {
     String sv_base_mini_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_override_collect_vids_per_sample
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   Array[String] contigs = transpose(read_tsv(contiglist))[0]
@@ -97,7 +100,8 @@ workflow MinGQStep2MergePcrStatus {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
+      shared_filesystem=shared_filesystem
   }
 
   # Final output

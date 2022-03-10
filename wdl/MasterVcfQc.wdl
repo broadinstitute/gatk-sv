@@ -67,6 +67,9 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
@@ -129,6 +132,7 @@ workflow MasterVcfQc {
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
       runtime_override_split_samples_list=runtime_override_split_samples_list,
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
+      shared_filesystem=shared_filesystem
   }
 
   # Plot per-sample stats
@@ -599,6 +603,7 @@ task PlotQcPerFamily {
     String prefix
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
+    Boolean shared_filesystem = false
   }
   
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
@@ -635,8 +640,12 @@ task PlotQcPerFamily {
       ~{samples_list} \
       ~{ped_file} \
       cleaned.fam
-    rm ~{ped_file} ~{samples_list}
-
+    # Adding this for FSx/local FS 
+    if [ ! ~{shared_filesystem} ]; 
+    then
+      rm ~{ped_file} ~{samples_list}
+    fi
+    
     # Only run if any families remain after cleaning
     if [ $( grep -Ev "^#" cleaned.fam | wc -l ) -gt 0 ]; then
 

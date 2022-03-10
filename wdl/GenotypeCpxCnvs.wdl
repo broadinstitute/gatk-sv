@@ -41,6 +41,9 @@ workflow GenotypeCpxCnvs {
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   String contig_prefix = prefix + "." + contig
@@ -75,7 +78,8 @@ workflow GenotypeCpxCnvs {
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
         runtime_override_rd_genotype=runtime_override_rd_genotype,
-        runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes
+        runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
+        shared_filesystem=shared_filesystem
     }
   }
 

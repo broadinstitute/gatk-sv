@@ -26,6 +26,9 @@ workflow ExpansionHunter {
         String python_docker
         RuntimeAttr? runtime_attr
         RuntimeAttr? runtime_override_concat
+
+        # Filesystem configuration
+        Boolean shared_filesystem = false
     }
 
     parameter_meta {
@@ -88,6 +91,7 @@ task RunExpansionHunter {
         File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
+        Boolean shared_filesystem = false
     }
 
     output {
@@ -104,13 +108,25 @@ task RunExpansionHunter {
         BAM_OR_CRAM_INDEX_FILENAME="$(basename "~{bam_or_cram_index}")"
         DEST="$BAM_OR_CRAM_DIR/$BAM_OR_CRAM_INDEX_FILENAME"
         if [ $DEST != ~{bam_or_cram_index} ]; then
-            mv ~{bam_or_cram_index} $DEST
+            # Adding this for FSx/local FS
+            if [ ~{shared_filesystem} ]; 
+            then
+                cp ~{bam_or_cram_index} $DEST
+            else
+                mv ~{bam_or_cram_index} $DEST
+            fi
         fi
 
         REF="$(basename "~{reference_fasta}")"
-        mv ~{reference_fasta} $REF
-        mv ~{reference_fasta_index} $REF.fai
-
+        # Adding this for FSx/local FS
+        if [ ~{shared_filesystem} ]; 
+        then
+            cp ~{reference_fasta} $REF
+            cp ~{reference_fasta_index} $REF.fai
+        else
+            mv ~{reference_fasta} $REF
+            mv ~{reference_fasta_index} $REF.fai
+        fi
         sex=""
         if ~{defined(ped_file)}; then
             sex=$(awk -F '\t' '{if ($2 == "~{sample_id}") {if ($5 == "1") {print "--sex male"; exit 0} else if ($5 == "2") {print "--sex female"; exit 0}}}' < ~{ped_file} )

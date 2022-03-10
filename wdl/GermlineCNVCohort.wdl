@@ -128,6 +128,9 @@ workflow CNVGermlineCohortWorkflow {
       RuntimeAttr? runtime_attr_cohort
       RuntimeAttr? runtime_attr_postprocess
       RuntimeAttr? runtime_attr_explode
+
+      # Filesystem configuration
+      Boolean shared_filesystem = false
     }
 
     if (select_first([do_explicit_gc_correction, false])) {
@@ -336,6 +339,7 @@ task DetermineGermlineContigPloidyCohortMode {
       # Runtime parameters
       String gatk_docker
       RuntimeAttr? runtime_attr_override
+      Boolean shared_filesystem = false
     }
 
     RuntimeAttr default_attr = object {
@@ -363,7 +367,18 @@ task DetermineGermlineContigPloidyCohortMode {
         export OMP_NUM_THREADS=~{cpu}
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        # Adding this for FSx/local FS 
+        # If the file is compressed, then only uncompressed it.
+        if [ ~{shared_filesystem} ]; 
+        then
+            while read file; do
+                if [[ $file == *.gz ]]; then
+                    if [ ! -f "${file%.gz}" ]; then gunzip -k $file;else echo "done";fi
+                fi
+            done < $read_count_files_list
+        else
+            grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        fi
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 
@@ -456,6 +471,7 @@ task GermlineCNVCallerCohortMode {
       # Runtime parameters
       String gatk_docker
       RuntimeAttr? runtime_attr_override
+      Boolean shared_filesystem = false
     }
 
     RuntimeAttr default_attr = object {
@@ -488,7 +504,18 @@ task GermlineCNVCallerCohortMode {
 
         # prepare read-count files and compose gatk argument file
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        # Adding this for FSx/local FS 
+        # If the file is compressed, then only uncompressed it.
+        if [ ~{shared_filesystem} ]; 
+        then
+            while read file; do
+                if [[ $file == *.gz ]]; then
+                    if [ ! -f "${file%.gz}" ]; then gunzip -k $file;else echo "done";fi
+                fi
+            done < $read_count_files_list
+        else
+            grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        fi
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 

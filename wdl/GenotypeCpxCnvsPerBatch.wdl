@@ -33,6 +33,9 @@ workflow GenotypeCpxCnvsPerBatch {
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_concat_melted_genotypes
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   File coverage_file_idx = coverage_file + ".tbi"
@@ -98,6 +101,7 @@ task SplitBedBySize {
     Int? size_cutoff_kb
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
+    Boolean shared_filesystem = false
   }
 
   Int size_cutoff=select_first([size_cutoff_kb, 5])
@@ -137,7 +141,8 @@ task SplitBedBySize {
         '{ print $1, $2, $3, $4, samples, $6 }' \
       | sort -Vk1,1 -k2,2n -k3,3n \
       > $MERGED_BED
-    rm -f ~{bed}
+    # Adding this for FSx/local FS
+    if [ ! ~{shared_filesystem} ]; then rm -f ~{bed};fi
 
     #Second, split by small vs large CNVs
     SMALL_BED="lt~{size_cutoff}kb.bed"
@@ -253,7 +258,8 @@ task RdTestGenotype {
     fi
 
     tabix -p bed local.RD.txt.gz
-    tabix -p bed ~{bin_exclude}
+    # Check if the tbi file is not present than only generate it.
+    if [ ! -f "~{bin_exclude}.tbi" ]; then tabix -p bed ~{bin_exclude};else echo "tbi already available.";fi
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \

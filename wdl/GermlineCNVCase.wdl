@@ -99,6 +99,9 @@ workflow CNVGermlineCaseWorkflow {
       RuntimeAttr? runtime_attr_case
       RuntimeAttr? runtime_attr_postprocess
       RuntimeAttr? runtime_attr_explode
+      
+      # Filesystem configuration
+      Boolean shared_filesystem = false
     }
 
     call DetermineGermlineContigPloidyCaseMode {
@@ -244,7 +247,8 @@ task DetermineGermlineContigPloidyCaseMode {
         tar xzf ~{contig_ploidy_model_tar} -C input-contig-ploidy-model
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip
+        # Adding this for FSx/local FS as we need to keep both the original file and compressed file
+        grep gz$ $read_count_files_list | xargs -l1 -P0 gunzip -k -f
         sed 's/\.gz$//' $read_count_files_list | \
             awk '{print "--input "$0}' > read_count_files.args
 
@@ -320,6 +324,7 @@ task GermlineCNVCallerCaseMode {
       # Runtime parameters
       String gatk_docker
       RuntimeAttr? runtime_attr_override
+      Boolean shared_filesystem = false
     }
 
     Int base_disk_space_gb = 10
@@ -361,7 +366,18 @@ task GermlineCNVCallerCaseMode {
         tar xzf ~{gcnv_model_tar} -C gcnv-model
 
         read_count_files_list=~{write_lines(read_count_files)}
-        grep gz$ "$read_count_files_list" | xargs -l1 -P0 gunzip
+        # Adding this for FSx/local FS 
+        # If the file is compressed, then only uncompressed it.
+        if [ ~{shared_filesystem} ]; 
+        then
+            while read file; do
+                if [[ $file == *.gz ]]; then
+                    if [ ! -f "${file%.gz}" ]; then gunzip -k $file;else echo "done";fi
+                fi
+            done < $read_count_files_list
+        else
+            grep gz$ "$read_count_files_list" | xargs -l1 -P0 gunzip
+        fi
         sed 's/\.gz$//' "$read_count_files_list" \
             | awk '{print "--input "$0}' \
             > read_count_files.args

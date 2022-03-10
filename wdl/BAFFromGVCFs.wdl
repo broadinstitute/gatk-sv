@@ -24,6 +24,9 @@ workflow BAFFromGVCFs {
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_merge_baf
+
+    # Filesystem configuration
+    Boolean shared_filesystem = false
   }
 
   Int num_of_original_intervals = length(read_lines(unpadded_intervals_file))
@@ -201,6 +204,7 @@ task GenotypeGVCFs {
     String docker
     Int disk_size
     Int preemptible
+    Boolean shared_filesystem = false
   }
 
   parameter_meta {
@@ -215,6 +219,14 @@ task GenotypeGVCFs {
   command <<<
     set -e
 
+    # Adding this for FSx/local FS
+    if [ ~{shared_filesystem} ]; 
+    then
+        cwd=$(pwd)
+        cp ~{workspace_tar} /tmp/
+        cd /tmp
+    fi
+
     tar -xf ~{workspace_tar}
     WORKSPACE=$( basename ~{workspace_tar} .tar)
 
@@ -228,6 +240,14 @@ task GenotypeGVCFs {
      --allow-old-rms-mapping-quality-annotation-data \
      -V gendb://$WORKSPACE \
      -L ~{interval}
+
+    # Adding this for FSx/local FS
+    if [ ~{shared_filesystem} ]; 
+    then
+        cp -r * $cwd/
+        cd $cwd
+    fi
+
   >>>
   runtime {
     docker: docker
@@ -258,6 +278,7 @@ task ImportGVCFs {
     Int disk_size
     Int preemptible
     Int batch_size
+    Boolean shared_filesystem = false
   }
   parameter_meta {
     input_gvcfs: {
@@ -285,6 +306,14 @@ task ImportGVCFs {
 
     CODE
 
+    # Adding this for FSx/local FS
+    if [ ~{shared_filesystem} ]; 
+    then
+        cwd=$(pwd)
+        cp inputs.list /tmp
+        cd /tmp
+    fi
+
     rm -rf ~{workspace_dir_name}
 
     # The memory setting here is very important and must be several GB lower
@@ -303,6 +332,13 @@ task ImportGVCFs {
      ~{"--gcs-project-for-requester-pays " + gcs_project_for_requester_pays}
 
     tar -cf ~{workspace_dir_name}.tar ~{workspace_dir_name}
+
+    # Adding this for FSx/local FS
+    if [ ~{shared_filesystem} ]; 
+    then
+        cp -r * $cwd/
+        cd $cwd
+    fi
 
   >>>
   runtime {
