@@ -115,6 +115,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # See the comment on build_args_job.
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v2
@@ -147,6 +150,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
+        with:
+          # See the comment on build_args_job.
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@v2
