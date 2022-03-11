@@ -25,8 +25,9 @@ jobs:
     env:
       GITHUB_CONTEXT: ${{ toJson(github) }}
     outputs:
-      target_images: ${{ steps.target_images.outputs.TARGETS }}
       images_tag: ${{ steps.image_tag.outputs.IMAGE_TAG }}
+      base_sha: ${{ steps.commit_sha.outputs.BASE_SHA }}
+      head_sha: ${{ steps.commit_sha.outputs.HEAD_SHA }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -128,7 +129,7 @@ jobs:
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
-          python build_docker.py --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} --current-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} --image-tag ${{ needs.build_args_job.outputs.images_tag }}
+          python build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --image-tag ${{ needs.build_args_job.outputs.images_tag }}
 
   publish_job:
     # This job first configures gcloud with the authentication of a
@@ -189,4 +190,4 @@ jobs:
       - name: Build and Publish Docker Images
         run: |
           cd ./scripts/docker/
-          python build_docker.py --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} --current-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+          python build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
