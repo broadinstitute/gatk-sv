@@ -103,83 +103,6 @@ jobs:
           echo "::debug::Image tag: $IMAGE_TAG"
           echo "::set-output name=IMAGE_TAG::$IMAGE_TAG"
 
-      - name: Determine Target Images
-        id: target_images
-        # This step determines the target images to be rebuilt based on the
-        # files changed between the HEAD and BASE commits (see the
-        # 'Determine Commit SHAs' step). For instance, if the commit changes
-        # the `dockerfiles/sv-base/Dockerfile`, then the `sv-base` docker
-        # image and all its dependencies are rebuilt.
-        #
-        # This step first gets the HEAD and BASE commit SHAs from the
-        # 'commit_sha' step. Then uses `git diff` to determine the files
-        # changed between the commits. Based on the changed files, it
-        # determines a list of docker images to be rebuilt. Finally, it
-        # stores the determined docker images in $TARGETS variable that can
-        # be accessed in other steps.
-        run: |
-          BASE_SHA=${{ steps.commit_sha.outputs.BASE_SHA }}
-          HEAD_SHA=${{ steps.commit_sha.outputs.HEAD_SHA }}
-
-          # A list of all the files changed in HEAD commit w.r.t BASE commit.
-          CHANGED_FILES=$(git diff --name-only $BASE_SHA $HEAD_SHA)
-
-          # Add a given target image name to the TARGETS
-          # array if it is not already in the array.
-          TARGETS=()
-          try_add_target() {
-            if [[ ! " ${TARGETS[*]} " =~ $1 ]]; then
-              TARGETS+=($1)
-            fi
-          }
-
-          for i in "${CHANGED_FILES[@]}"
-          do
-            if [[ $i == *".github/workflows/sv_pipeline_docker.yml"* ]]; then
-              # A change to this file may impact how images are built,
-              # hence, if this file is changed, all the images are rebuilt.
-              TARGETS=("all")
-              break
-            elif [[ $i == *"src/svtk"* ||
-                  $i == *"src/sv-pipeline"* ||
-                  $i == *"src/svtest"* ||
-                  $i == *"src/svqc"* ]]; then
-              try_add_target "sv-pipeline"
-              try_add_target "sv-pipeline-base"
-              try_add_target "sv-pipeline-children-r"
-            elif [[ $i == *"src/RdTest"* ]]; then
-              try_add_target "sv-pipeline-rdtest"
-            elif [[ $i == *"src/WGD"* ]]; then
-              try_add_target "sv-pipeline-qc"
-              try_add_target "cnmops"
-            fi
-
-            # Rebuild the docker image of the Dockerfiles specified in
-            # the `D` array. Use regular expression to extract the target
-            # image from the file path. For instance, if
-            # i = dockerfiles/delly/Dockerfile, then M="delly".
-            if [[ $i =~ (dockerfiles/)([^,]*)(/Dockerfile) ]]; then
-              M="${BASH_REMATCH[2]}"
-              D=("delly" "manta" "wham" "sv-base-mini" "sv-base" "samtools-cloud")
-              if [[ " ${D[*]} " =~ $M ]]; then
-                try_add_target $M
-              fi
-            fi
-          done
-
-          # Join the determined targets in a space-delimited string.
-          TARGETS=$(IFS=' '; echo "${TARGETS[*]}")
-
-          # Print some debugging information.
-          echo "::debug::Docker images to rebuild: $TARGETS"
-          echo "::debug::Changed files:"
-          for f in "${CHANGED_FILES[@]}"; do
-            echo "::debug:: - $f"
-          done
-
-          # Set the output of this step so it can be accessed in other steps.
-          echo "::set-output name=TARGETS::$TARGETS"
-
   build_job:
     runs-on: ubuntu-20.04
     name: Test Images Build
@@ -205,7 +128,7 @@ jobs:
       - name: Run build_docker.py
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args_job.outputs.images_tag }}
+          python build_docker.py --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} --current-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} --image-tag ${{ needs.build_args_job.outputs.images_tag }}
 
   publish_job:
     # This job first configures gcloud with the authentication of a
@@ -266,4 +189,4 @@ jobs:
       - name: Build and Publish Docker Images
         run: |
           cd ./scripts/docker/
-          python build_docker.py --targets ${{ needs.build_args_job.outputs.target_images }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+          python build_docker.py --base-git-commit ${{ steps.commit_sha.outputs.BASE_SHA }} --current-git-commit ${{ steps.commit_sha.outputs.HEAD_SHA }} --image-tag ${{ needs.build_args_job.outputs.images_tag }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
