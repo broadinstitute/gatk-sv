@@ -1,0 +1,15 @@
+{
+  "write_to_cache": true,
+  "read_from_cache": true,
+  "default_runtime_attributes": {
+    "ulimits": [
+      {
+        "name": "nofile",
+        "softLimit": "9000",
+        "hardLimit": "9000"
+      }
+    ],
+    "awsBatchRetryAttempts": 10
+  },
+  "system.file-hash-cache": true
+}
