@@ -1,6 +1,7 @@
 # This is the base dockerfile for the GATK SV pipeline that adds dependencies
 # for the sv-pipeline, RdTest, and VCF-QC images
 #
+#
 
 # Start with the barebones image
 ARG MINIBASE_IMAGE=gatksv/sv-base-mini:latest
