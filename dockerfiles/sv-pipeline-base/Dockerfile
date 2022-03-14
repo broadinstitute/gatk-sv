@@ -1,7 +1,6 @@
 # This is the base dockerfile for the GATK SV pipeline that adds dependencies
 # for the sv-pipeline, sv-pipeline-qc, and sv-pipeline-rdtest
 #
-#
 ARG SVBASE_IMAGE=sv-base:latest
 ARG CONDABASE_IMAGE=conda-base:latest
 ARG PYTHON_ENV_PATH="/gatk-sv-python"
