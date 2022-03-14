@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - dummy_master_2
     paths:
       - 'src/**'
       - 'dockerfiles/**'
@@ -12,6 +13,7 @@ on:
   pull_request:
     branches:
       - master
+      - dummy_master_2
     paths:
       - 'src/**'
       - 'dockerfiles/**'
@@ -174,3 +176,10 @@ jobs:
         run: |
           cd ./scripts/docker/
           python build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+
+      - name: Commit Changes to dockers.json
+        run: |
+          git config --global user.name 'aaaaaaaaaaaaa'
+          git config --global user.email 'aaaaaaaaaaaaa@users.noreply.github.com'
+          git commit -am "Automated report"
+          git push
