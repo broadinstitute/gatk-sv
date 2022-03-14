@@ -43,6 +43,14 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Recommended: [cromshell](https://github.com/broadinstitute/cromshell) for interacting with a dedicated Cromwell server.
 * Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
 
+#### Alternative backends
+We currently only support execution of GATK-SV on the Google Cloud Platform (GCP), so we are not able to provide specific guidance or support for other execution platforms. We do not currently have plans to support local backends, high-performance compute (HPC) clusters, or other cloud platforms. However, some users have been able to execute GATK-SV workflows on a HPC cluster or AWS, after making small changes to accommodate the differences between platforms. Here are a few considerations for using alternative backends based on comments from those users:
+* Refer to Cromwell's [documentation](https://cromwell.readthedocs.io/en/stable/backends/Backends/) for configuration instructions.
+* The handling and ordering of `glob` commands may differ between platforms.
+* The behavior of commands such as `rm` or `mv` may differ between platforms if a shared file system is used. Enabling [copy localization](https://cromwell.readthedocs.io/en/stable/Configuring/#local-filesystem-options) may help to more closely replicate the behavior on GCP.
+* For clusters that do not support Docker, Singularity is an alternative. See [Cromwell documentation on Singularity(https://cromwell.readthedocs.io/en/stable/tutorials/Containers/#singularity).
+* The GATK-SV pipeline takes advantage of the massive parallelization possible in the cloud. Local backends may not have the resources to execute all of the workflows. Workflows that use fewer resources or that are less parallelized may be more successful. For instance, some users have been able to run [GatherSampleEvidence](#gather-sample-evidence) on a SLURM cluster.
+
 ### Data:
 * Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). BAMs must also be indexed.
 * Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
