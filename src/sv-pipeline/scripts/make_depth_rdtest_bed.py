@@ -12,6 +12,8 @@ import pandas as pd
 
 
 def make_depth_rdtest_bed(svof):
+    x = "Trivial change"
+    print(x)
     svof['#chrom'] = svof['#chrom'].astype(str)
     svof['start'] = svof.start.astype(int)
     svof['end'] = svof.end.astype(int)
