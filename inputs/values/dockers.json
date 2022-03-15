@@ -12,12 +12,12 @@
   "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/tbrookin/samtools-cloud:ee27c3f",
   "sv_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base:ee27c3f",
   "sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:ee27c3f",
-  "sv_pipeline_base_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-base:6dead4a",
-  "sv_pipeline_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline:6dead4a",
-  "sv_pipeline_hail_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-hail:6dead4a",
-  "sv_pipeline_updates_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-updates:6dead4a",
-  "sv_pipeline_qc_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-qc:6dead4a",
-  "sv_pipeline_rdtest_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-rdtest:6dead4a",
+  "sv_pipeline_base_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-base:1dd0bdc",
+  "sv_pipeline_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline:1dd0bdc",
+  "sv_pipeline_hail_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-hail:1dd0bdc",
+  "sv_pipeline_updates_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-updates:1dd0bdc",
+  "sv_pipeline_qc_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-qc:1dd0bdc",
+  "sv_pipeline_rdtest_docker": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-rdtest:1dd0bdc",
   "wham_docker": "us.gcr.io/broad-dsde-methods/wham:8645aa",
   "igv_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/igv:mw-xz-fixes-2-b1be6a9",
   "duphold_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/duphold:mw-xz-fixes-2-b1be6a9",
@@ -25,5 +25,5 @@
   "cloud_sdk_docker": "google/cloud-sdk",
   "pangenie_docker": "us.gcr.io/broad-dsde-methods/vjalili/pangenie:vj-127571f",
   "conda-base": "us.gcr.io/broad-dsde-methods/tbrookin/conda-base:25a7945",
-  "sv-pipeline-children-r": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-children-r:6dead4a"
+  "sv-pipeline-children-r": "us.gcr.io/talkowski-service-account-test/gatk-sv/sv-pipeline-children-r:1dd0bdc"
 }
