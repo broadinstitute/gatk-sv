@@ -179,7 +179,7 @@ jobs:
 
       - name: Commit Changes to dockers.json
         run: |
-          git config --global user.name 'aaaaaaaaaaaaa'
-          git config --global user.email 'aaaaaaaaaaaaa@users.noreply.github.com'
-          git commit -am "Automated report"
+          git config --global user.name 'VJalili'
+          git config --global user.email 'Jalili@users.noreply.github.com'
+          git commit -am "Update dockers.json with newly built and published images."
           git push
