@@ -2,6 +2,7 @@
 # for the sv-pipeline, RdTest, and VCF-QC images
 #
 #
+#
 
 # Start with the barebones image
 ARG MINIBASE_IMAGE=gatksv/sv-base-mini:latest
