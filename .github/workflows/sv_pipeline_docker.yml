@@ -182,7 +182,7 @@ jobs:
           echo "::set-output name=CHANGED::$CHANGED"
 
       - name: Commit Changes to dockers.json
-        if: ${{ steps.build_and_publish.outputs.CHANGED=="true" }}
+        if: steps.build_and_publish.outputs.CHANGED == "true"
         run: |
           git config --global user.name 'VJalili'
           git config --global user.email 'VJalili@users.noreply.github.com'
