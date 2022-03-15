@@ -120,7 +120,7 @@ jobs:
     # determined by the `build_args_job`) and pushes them to GCR.
     name: Publish
     runs-on: ubuntu-20.04
-    environment: GCP_PROJECT_ID
+    environment: Deploy
     if: github.event_name == 'push'
     needs: build_args_job
     strategy:
