@@ -134,7 +134,7 @@ task RunExpansionHunter {
 
     RuntimeAttr default_runtime_ = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 8,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
