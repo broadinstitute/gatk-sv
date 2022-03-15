@@ -178,11 +178,11 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
           cd ../..
-          CHANGED=$(git diff --quiet ./inputs/values/dockers.json || echo "true")
+          CHANGED=$(git diff --quiet ./inputs/values/dockers.json || echo True)
           echo "::set-output name=CHANGED::$CHANGED"
 
       - name: Commit Changes to dockers.json
-        if: steps.build_and_publish.outputs.CHANGED == "true"
+        if: steps.build_and_publish.outputs.CHANGED
         run: |
           git config --global user.name 'VJalili'
           git config --global user.email 'VJalili@users.noreply.github.com'
