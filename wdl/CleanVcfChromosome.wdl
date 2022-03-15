@@ -76,6 +76,7 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
   }
 
@@ -294,10 +295,19 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_final_cleanup
 
   }
+
+  call MiniTasks.FixBadEnds {
+    input:
+      vcf = FinalCleanup.final_cleaned_shard,
+      vcf_idx = FinalCleanup.final_cleaned_shard_idx,
+      prefix = prefix,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_override_fix_bad_ends
+  }
   
   output {
-    File out=FinalCleanup.final_cleaned_shard
-    File out_idx=FinalCleanup.final_cleaned_shard_idx
+    File out=FixBadEnds.out
+    File out_idx=FixBadEnds.out_idx
   }
 }
 

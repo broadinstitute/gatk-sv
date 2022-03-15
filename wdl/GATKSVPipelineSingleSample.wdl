@@ -481,6 +481,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -1260,7 +1261,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
       runtime_override_benchmark_samples=runtime_override_benchmark_samples,
       runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
-      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
+      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
+      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
 
   }
 
@@ -1378,12 +1380,13 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
+  call SingleSampleFiltering.UpdateBreakendRepresentation {
     input:
-      single_sample_vcf=AnnotateVcf.output_vcf,
-      single_sample_vcf_idx=AnnotateVcf.output_vcf_idx,
+      vcf=AnnotateVcf.output_vcf,
+      vcf_idx=AnnotateVcf.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
+      prefix=basename(AnnotateVcf.output_vcf, ".vcf.gz") + ".final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1397,7 +1400,7 @@ workflow GATKSVPipelineSingleSample {
       sample_sr = case_sr_file_,
       sample_counts = case_counts_file_,
       cleaned_vcf = MakeCohortVcf.vcf,
-      final_vcf = FinalVCFCleanup.out,
+      final_vcf = UpdateBreakendRepresentation.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
@@ -1415,8 +1418,8 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    File final_vcf = FinalVCFCleanup.out
-    File final_vcf_idx = FinalVCFCleanup.out_idx
+    File final_vcf = UpdateBreakendRepresentation.out
+    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
 
     File final_bed = VcfToBed.bed
 

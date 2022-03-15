@@ -179,6 +179,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -441,7 +442,8 @@ workflow MakeCohortVcf {
       runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
-      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs
+      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
+      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
   }
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
