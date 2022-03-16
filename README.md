@@ -44,7 +44,16 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
 
 #### Alternative backends
-We currently only support execution of GATK-SV on the Google Cloud Platform (GCP), so we are not able to provide specific guidance or support for other execution platforms. We do not currently have plans to support local backends, high-performance compute (HPC) clusters, or other cloud platforms. However, some users have been able to execute GATK-SV workflows on a HPC cluster or AWS, after making small changes to accommodate the differences between platforms. Here are a few considerations for using alternative backends based on comments from those users:
+Because GATK-SV has been tested only on the Google Cloud Platform (GCP), we are unable to provide specific guidance or support for other execution platforms including HPC clusters and AWS. Contributions from the community to improve portability between backends will be considered on a case-by-case-basis. We ask contributors to please adhere to the following guidelines when submitting issues and pull requests:
+
+1. Code changes must be functionally equivalent on GCP backends, i.e. not result in changed output
+2. Increases to cost and runtime on GCP backends should be minimal
+3. Avoid adding new inputs and tasks to workflows. Simpler changes are more likely to be approved, e.g. small in-line changes to scripts or WDL task command sections
+4. Avoid introducing new code paths, e.g. conditional statements
+5. Additional backend-specific scripts, workflows, tests, and Dockerfiles will not be approved
+6. Changes to Dockerfiles may require extensive testing before approval
+
+We still encourage members of the community to adapt GATK-SV for non-GCP backends and share code on forked repositories. Here are a some considerations:
 * Refer to Cromwell's [documentation](https://cromwell.readthedocs.io/en/stable/backends/Backends/) for configuration instructions.
 * The handling and ordering of `glob` commands may differ between platforms.
 * The behavior of commands such as `rm` or `mv` may differ between platforms if a shared file system is used. Enabling [copy localization](https://cromwell.readthedocs.io/en/stable/Configuring/#local-filesystem-options) may help to more closely replicate the behavior on GCP.
