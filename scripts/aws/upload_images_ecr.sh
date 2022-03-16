@@ -82,7 +82,7 @@ pull_and_push_image()
 while read line
 do
     # Ignoring google cloud sdk image and lnux dockerhub as it will be downloaded on runtime.
-    if [[ "$line" == *"_docker"* ]] && [[ "$line" != *"cloud_sdk_docker"* ]] && [[ "$line" != *"linux_docker"* ]]; then
+    if [[ "$line" == *"_docker"* ]] && [[ "$line" != *"cloud_sdk_docker"* ]] && [[ "$line" != *"linux_docker"* ]] && [[ "$line" != *"melt_docker"* ]]; then
         echo "Running for : $line"
         ecr_image_tag=`echo $line | cut -d '"' -f2`
         gcr_image=`echo $line | cut -d '"' -f4`
