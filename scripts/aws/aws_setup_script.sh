@@ -6,7 +6,7 @@ HAPLOTYPE_GVCF_PATH="${S3_OR_FSX}/reference/gvcf"
 GATK_SV_RESOURCES_PATH="${S3_OR_FSX}/reference/gatk-sv-resources"
 BATCH_DEF_PATH="${S3_OR_FSX}/reference/batch_sv.test_large.qc_definitions.tsv"
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
-AWS_REGION=`aws configure get region`
+AWS_REGION=`curl -s http://169.254.169.254/latest/dynamic/instance-identity/document| grep region | cut -d '"' -f4`
 ECR_REPO_NAME="sv-pipeline"
 
 # Install docker
@@ -57,7 +57,7 @@ for i_var in "${array[@]}"
 do
 	i_val=${!i_var}
     # Below might need -i '' if running on mac.
-	sed -i "s/${i_var}/${i_val}/g" aws_GATKSVPipelineBatch.json
+	sed -i "s#${i_var}#${i_val}#g" aws_GATKSVPipelineBatch.json
 done
 cp opts.json aws_GATKSVPipelineBatch.json ../../gatk_run/
 
