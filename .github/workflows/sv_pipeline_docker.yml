@@ -171,6 +171,16 @@ jobs:
           sudo systemctl restart docker.service
 
       - name: Build and Publish Docker Images
+        id: build_and_publish
         run: |
-          cd ./scripts/docker/
-          python build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+          python ./scripts/docker/build_docker.py --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} --gcr-project ${{ secrets.GCP_PROJECT_ID }}/gatk-sv
+          CHANGED=$(git diff --quiet ./inputs/values/dockers.json || echo True)
+          echo "::set-output name=CHANGED::$CHANGED"
+
+      - name: Commit Changes to dockers.json
+        if: steps.build_and_publish.outputs.CHANGED
+        run: |
+          git config --global user.name 'gatk-sv-bot'
+          git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
+          git commit -am "Update dockers.json with newly built and published images."
+          git push
