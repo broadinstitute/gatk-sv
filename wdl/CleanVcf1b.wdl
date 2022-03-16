@@ -322,6 +322,7 @@ task FilterVcf {
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
+        Boolean shared_filesystem = false
     }
 
     Float input_size = size([intermediate_vcf, dictionary_json_gz], "GB")
