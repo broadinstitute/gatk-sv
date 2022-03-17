@@ -176,7 +176,7 @@ option_list <- list(
   make_option(c("--minGQ"), type="integer", default=0,
               help="minimum GQ in window to test [default %default]",
               metavar="integer"),
-  make_option(c("--maxGQ"), type="integer", default=999,
+  make_option(c("--maxGQ"), type="integer", default=99,
               help="maximum GQ in window to test [default %default]",
               metavar="integer"),
   make_option(c("--step"), type="integer", default=1,

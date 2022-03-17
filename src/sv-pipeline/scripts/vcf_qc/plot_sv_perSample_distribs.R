@@ -73,7 +73,7 @@ readDatPerSample <- function(ID){
   }
 }
 #Filters VIDs for a single sample based on GQ
-GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=999){
+GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=99){
   #Check input variant list
   if(ID %in% names(VID.lists)){
     vlist <- VID.lists[[which(names(VID.lists)==ID)]]
@@ -114,7 +114,7 @@ countVarsSingle <- function(dat,vlist,count="variants"){
 }
 #Create matrix of variant/allele counts for a list of samples
 countVarsMulti <- function(dat,samples,count="variants",
-                           min.GQ=0,max.GQ=999,biallelic=F){
+                           min.GQ=0,max.GQ=99,biallelic=F){
   #Exclude non-biallelic sites, if optioned
   if(biallelic==T){
     dat <- dat[which(dat$carriers>0 & dat$other_gts==0),]
@@ -193,7 +193,7 @@ mediansByFreq <- function(dat,samples,svtypes,max.freqs,freq.labs,count="variant
   return(median.mat)
 }
 #Gather median count of variants per sample by minimum GQ
-mediansByGQ <- function(dat,samples,svtypes,min.GQs=seq(0,900,100),count="variants",biallelic=F){
+mediansByGQ <- function(dat,samples,svtypes,min.GQs=seq(0,90,10),count="variants",biallelic=F){
   #Iterate over min GQs and compose matrix of medians
   median.mat <- t(sapply(min.GQs,function(min.GQ){
     #Get matrix of variants per sample

@@ -53,8 +53,8 @@ readDatPerSample <- function(ID,nocall.placeholder=9999){
 }
 #Subset SV stats data
 subsetDat <- function(dat,vlist,biallelic=T,
-                      min.GQ.pro=0,max.GQ.pro=999,
-                      min.GQ.par=0,max.GQ.par=999){
+                      min.GQ.pro=0,max.GQ.pro=99,
+                      min.GQ.par=0,max.GQ.par=99){
   #Check input variant list
   #Subset dat to variants found in sample & append number of alleles in sample
   x <- merge(dat,vlist,by="VID",sort=F)

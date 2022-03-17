@@ -66,7 +66,7 @@ def recal_qual_score(record):
         elif GT in HET_GTs:
             quals.append(record.samples[s]['GQ'])
         else:
-            quals.append(999)
+            quals.append(99)
 
     if len(quals) > 0:
         return int(median(quals))

@@ -1017,11 +1017,13 @@ task ScatterVcf {
   }
 }
 
-task FixBadEnds {
+task FixEndsRescaleGQ {
   input {
     File vcf
-    File vcf_idx
     String prefix
+
+    Boolean? fix_ends
+    Boolean? rescale_gq
 
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -1037,7 +1039,9 @@ task FixBadEnds {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String outfile = "~{prefix}.fix_bad_ends.vcf.gz"
+  String outfile = "~{prefix}.vcf.gz"
+  Boolean fix_ends_ = if defined(fix_ends) then fix_ends else true
+  Boolean rescale_gq_ = if defined(rescale_gq) then rescale_gq else true
 
   output {
     File out = "~{outfile}"
@@ -1045,18 +1049,43 @@ task FixBadEnds {
   }
   command <<<
 
-     set -euo pipefail
+    set -euo pipefail
 
-     # clean up bad END tags
-     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\n' \
-        ~{vcf} | awk '$5 < $2 {OFS="\t"; $5 = $2 + 1; print}' | bgzip -c > bad_ends.txt.gz
-     tabix -s1 -b2 -e2 bad_ends.txt.gz
-     bcftools annotate \
-        -a bad_ends.txt.gz \
-        -c CHROM,POS,REF,ALT,END \
-        ~{vcf} | bgzip -c > ~{outfile}
+    python <<CODE
+    import pysam
+    import argparse
+    from math import floor
 
-     tabix ~{outfile}
+
+    GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
+
+
+    def fix_bad_end(record):
+      # pysam converts to 0-based half-open intervals by subtracting 1 from start, but END is unaltered
+      if record.stop < record.start + 1:
+        if record.info["SVTYPE"] == "BND" or record.info["SVTYPE"] == "CTX":
+          record.info["END2"] = record.stop  # just in case it is not already set. not needed for INS or CPX
+        record.stop = record.start + 1
+
+
+    def rescale_gq(record):
+      for sample in record.samples:
+        for gq_field in GQ_FIELDS:
+          if gq_field in record.samples[sample] and record.samples[sample][gq_field] is not None:
+            record.samples[sample][gq_field] = floor(record.samples[sample][gq_field] / 10)
+
+
+    with pysam.VariantFile(~{vcf}, 'r') as f_in, pysam.VariantFile(~{outfile}, 'w', header=f_in.header) as f_out:
+      for record in f_in:
+        if ~{fix_ends_}:
+          fix_bad_end(record)
+        if ~{rescale_gq_}:
+          rescale_gq(record)
+        f_out.write(record)
+
+    CODE
+    tabix ~{outfile}
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
