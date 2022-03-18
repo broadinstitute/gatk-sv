@@ -198,7 +198,10 @@ class ProjectBuilder:
         if output_json is None or not output_json or output_json == Paths.dev_null:
             return  # no update is desired
         new_dockers_json = {
-            json_key: self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
+            json_key: (self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
+                       if ProjectBuilder.get_target_from_image(docker_image) in self.dependencies
+                       else docker_image)
+
             for json_key, docker_image in self.dockers_json.items()
         }
         # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
