@@ -12,11 +12,13 @@ workflow RunGqRecalibrator {
         Array[String] recalibrate_gq_args = []
         Boolean fix_vcf = true
         Boolean shard_vcf = false
-        Int records_per_shard = 10000
+        Int records_per_shard = 5000
         String gatk_docker
         String module03_docker
         String sv_base_docker
         String sv_base_mini_docker
+        RuntimeAttr? runtime_override_shard_vcf
+        RuntimeAttr? runtime_override_concat_vcf
     }
 
     if(shard_vcf) {
@@ -26,7 +28,8 @@ workflow RunGqRecalibrator {
                 vcf_idx=vcf_index,
                 prefix=basename(vcf, ".vcf.gz") + "_sharded",
                 min_vars_per_shard=records_per_shard,
-                sv_base_mini_docker=sv_base_mini_docker
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_override_shard_vcf
         }
     }
 
@@ -67,7 +70,8 @@ workflow RunGqRecalibrator {
         input:
             vcfs=ApplyGqRecalibratorFilter.filtered_vcf,
             vcfs_idx=ApplyGqRecalibratorFilter.filtered_vcf_index,
-            sv_base_mini_docker=sv_base_mini_docker
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_override_concat_vcf
     }
 
     output {
