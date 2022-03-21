@@ -12,7 +12,7 @@ Resources:
           InstanceId:
             description: "ID of the Instance."
             type: "String" 
-            default: "i-0501fef47405068ad"
+            default: ""
           AutomationAssumeRole:
             default: ""
             description: "(Optional) The ARN of the role that allows Automation to perform the actions on your behalf."

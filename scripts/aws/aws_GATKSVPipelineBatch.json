@@ -769,7 +769,7 @@
         "GATK_SV_RESOURCES_PATH/ref_panel_1kg_v2-gcnv-model-shard-98.tar.gz",
         "GATK_SV_RESOURCES_PATH/ref_panel_1kg_v2-gcnv-model-shard-99.tar.gz"
     ],
-    "GATKSVPipelineBatch.qc_definitions": "BATCH_DEF_PATH/batch_sv.test_large.qc_definitions.tsv",
+    "GATKSVPipelineBatch.qc_definitions": "BATCH_DEF_PATH",
     "GATKSVPipelineBatch.manta_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:manta_docker",
     "GATKSVPipelineBatch.wham_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:wham_docker",
     "GATKSVPipelineBatch.cnmops_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:cnmops_docker",
