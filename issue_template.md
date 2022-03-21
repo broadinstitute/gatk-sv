@@ -4,6 +4,7 @@ The github issue tracker is for bug reports and feature requests.
 - Use a **concise** yet **descriptive** title
 - Choose the corresponding template block below and fill it in, replacing or deleting text in italics (surrounded by `_`) as appropriate
 - Delete the other template blocks and this header.
+- For issues related to executing GATK-SV on a platform other than Google Cloud, refer to the [Alternative Backends](https://github.com/broadinstitute/gatk-sv/tree/master#alternative-backends) section of the README.
 
 ----
 
