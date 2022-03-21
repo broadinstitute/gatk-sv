@@ -117,9 +117,6 @@ workflow GATKSVPipelineBatch {
     RuntimeAttr? runtime_attr_cat_metrics
     RuntimeAttr? runtime_attr_plot_metrics
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
-
     # Do not use
     Array[File]? NONE_ARRAY_
     String? NONE_STRING_
@@ -241,8 +238,7 @@ workflow GATKSVPipelineBatch {
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker,
-      shared_filesystem=shared_filesystem
+      condense_counts_docker=condense_counts_docker
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -288,8 +284,7 @@ workflow GATKSVPipelineBatch {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
-      shared_filesystem=shared_filesystem
+      sv_pipeline_base_docker=sv_pipeline_base_docker
   }
   
 
@@ -322,8 +317,7 @@ workflow GATKSVPipelineBatch {
       sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
-      shared_filesystem=shared_filesystem
+      sv_base_mini_docker=sv_base_mini_docker
   }
 
   call tu.CatMetrics as CatBatchMetrics {

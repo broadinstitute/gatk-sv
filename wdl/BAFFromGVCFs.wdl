@@ -24,9 +24,6 @@ workflow BAFFromGVCFs {
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_merge_baf
-
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   Int num_of_original_intervals = length(read_lines(unpadded_intervals_file))
@@ -204,7 +201,6 @@ task GenotypeGVCFs {
     String docker
     Int disk_size
     Int preemptible
-    Boolean shared_filesystem = false
   }
 
   parameter_meta {
@@ -220,12 +216,9 @@ task GenotypeGVCFs {
     set -e
 
     # Adding this for FSx/local FS
-    if [ ~{shared_filesystem} ]; 
-    then
-        cwd=$(pwd)
-        cp ~{workspace_tar} /tmp/
-        cd /tmp
-    fi
+    cwd=$(pwd)
+    cp ~{workspace_tar} /tmp/
+    cd /tmp
 
     tar -xf ~{workspace_tar}
     WORKSPACE=$( basename ~{workspace_tar} .tar)
@@ -242,11 +235,8 @@ task GenotypeGVCFs {
      -L ~{interval}
 
     # Adding this for FSx/local FS
-    if [ ~{shared_filesystem} ]; 
-    then
-        cp -r * $cwd/
-        cd $cwd
-    fi
+    cp -r * $cwd/
+    cd $cwd
 
   >>>
   runtime {
@@ -278,7 +268,6 @@ task ImportGVCFs {
     Int disk_size
     Int preemptible
     Int batch_size
-    Boolean shared_filesystem = false
   }
   parameter_meta {
     input_gvcfs: {
@@ -307,12 +296,9 @@ task ImportGVCFs {
     CODE
 
     # Adding this for FSx/local FS
-    if [ ~{shared_filesystem} ]; 
-    then
-        cwd=$(pwd)
-        cp inputs.list /tmp
-        cd /tmp
-    fi
+    cwd=$(pwd)
+    cp inputs.list /tmp
+    cd /tmp
 
     rm -rf ~{workspace_dir_name}
 
@@ -334,11 +320,8 @@ task ImportGVCFs {
     tar -cf ~{workspace_dir_name}.tar ~{workspace_dir_name}
 
     # Adding this for FSx/local FS
-    if [ ~{shared_filesystem} ]; 
-    then
-        cp -r * $cwd/
-        cd $cwd
-    fi
+    cp -r * $cwd/
+    cd $cwd
 
   >>>
   runtime {

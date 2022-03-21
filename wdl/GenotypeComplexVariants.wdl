@@ -54,9 +54,6 @@ workflow GenotypeComplexVariants {
     RuntimeAttr? runtime_override_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
-
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   scatter (i in range(length(batches))) {
@@ -118,8 +115,7 @@ workflow GenotypeComplexVariants {
         runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
         runtime_override_preconcat=runtime_override_preconcat,
         runtime_override_hail_merge=runtime_override_hail_merge,
-        runtime_override_fix_header=runtime_override_fix_header,
-        shared_filesystem=shared_filesystem
+        runtime_override_fix_header=runtime_override_fix_header
     }
   }
 

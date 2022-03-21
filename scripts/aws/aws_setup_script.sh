@@ -42,8 +42,8 @@ cp -r ../wdl .
 cd wdl; 
 # MAKE MELT FLAGS FALSE. Search for "use_melt" and change flag to false. 
 # `find . -type f | xargs grep "Boolean use_melt"` can be used to search files.
-sed -i "s/Boolean use_melt = true/Boolean use_melt = false/g" GATKSVPipelineBatch.wdl
-sed -i "s/Boolean use_melt = true/Boolean use_melt = false/g" GATKSVPipelineSingleSample.wdl
+# sed -i "s/Boolean use_melt = true/Boolean use_melt = false/g" GATKSVPipelineBatch.wdl
+# sed -i "s/Boolean use_melt = true/Boolean use_melt = false/g" GATKSVPipelineSingleSample.wdl
 # Update TinyResolve CPU/MEM for AWS in order to run it on newer instance as we have seen Container Pull issues while it runs with other jobs.
 # Increasing the CPU/MEM to 16 will ensure a new Batch EC2 is spun up coz rest other parallel jobs are using below 8 cpus.
 sed -i "s/cpu_cores: 1/cpu_cores: 16/g;s/mem_gb: 3.75/mem_gb: 16/g" TinyResolve.wdl

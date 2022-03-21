@@ -77,8 +77,6 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   call MiniTasks.SplitVcf as SplitVcfToClean {
@@ -158,8 +156,7 @@ workflow CleanVcfChromosome {
       runtime_attr_override_scatter=runtime_attr_override_scatter_1b,
       runtime_attr_override_filter_vcf=runtime_attr_override_filter_vcf_1b,
       runtime_override_concat_vcfs=runtime_override_concat_vcfs_1b,
-      runtime_override_cat_multi_cnvs=runtime_override_cat_multi_cnvs_1b,
-      shared_filesystem=shared_filesystem
+      runtime_override_cat_multi_cnvs=runtime_override_cat_multi_cnvs_1b
   }
 
   call MiniTasks.SplitUncompressed as SplitIncludeList {
@@ -642,7 +639,6 @@ task StitchFragmentedCnvs {
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
-    Boolean shared_filesystem = false
   }
 
   Float input_size = size(vcf, "GB")
@@ -674,11 +670,7 @@ task StitchFragmentedCnvs {
     java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 ~{vcf} \
       | bgzip \
       > tmp.vcf.gz
-    # Adding this for FSx/local FS
-    if [ ! ~{shared_filesystem} ];
-    then
-      rm ~{vcf}
-    fi
+
     echo "Second pass..."
     java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
       | bgzip \

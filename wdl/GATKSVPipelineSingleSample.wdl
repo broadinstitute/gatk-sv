@@ -583,9 +583,6 @@ workflow GATKSVPipelineSingleSample {
 
     # Do not use
     String? NONE_STRING_
-
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   String? delly_docker_ = if (!defined(case_delly_vcf) && use_delly) then delly_docker else NONE_STRING_
@@ -1235,8 +1232,7 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
       runtime_override_benchmark_samples=runtime_override_benchmark_samples,
       runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
-      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
-      shared_filesystem=shared_filesystem
+      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
   }
 
   call SingleSampleFiltering.FilterVcfForShortDepthCalls as FilterVcfDepthLt5kb {

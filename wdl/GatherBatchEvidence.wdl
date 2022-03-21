@@ -207,9 +207,6 @@ workflow GatherBatchEvidence {
     RuntimeAttr? runtime_attr_case
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
-
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   Array[String] all_samples = flatten(select_all([samples, ref_panel_samples]))
@@ -288,8 +285,7 @@ workflow GatherBatchEvidence {
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,
         runtime_attr_baf_gen = runtime_attr_baf_gen,
-        runtime_attr_merge_baf = runtime_attr_merge_baf,
-        shared_filesystem=shared_filesystem
+        runtime_attr_merge_baf = runtime_attr_merge_baf
     }
   }
 
@@ -436,8 +432,7 @@ workflow GatherBatchEvidence {
       runtime_attr_ploidy = runtime_attr_ploidy,
       runtime_attr_case = runtime_attr_case,
       runtime_attr_postprocess = runtime_attr_postprocess,
-      runtime_attr_explode = runtime_attr_explode,
-      shared_filesystem=shared_filesystem
+      runtime_attr_explode = runtime_attr_explode
   }
 
   call dpn.MergeDepth as MergeDepth {

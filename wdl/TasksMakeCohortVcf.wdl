@@ -974,7 +974,6 @@ task ScatterVcf {
     Int? threads = 1
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
-    Boolean shared_filesystem = false
   }
 
   Float input_size = size(vcf, "GB")
@@ -1010,12 +1009,8 @@ task ScatterVcf {
     while read vcf; do
       shard_no=`printf %06d $i`
       # Adding this for FSx/local FS 
-      if [ ~{shared_filesystem} ]; 
-      then
-        mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
-      else
-        mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
-      fi
+      cp ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
+
       i=$((i+1))
     done < vcfs.list
   >>>

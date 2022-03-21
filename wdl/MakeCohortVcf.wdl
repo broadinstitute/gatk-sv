@@ -246,8 +246,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   call Cluster.CombineBatches {
@@ -343,8 +341,7 @@ workflow MakeCohortVcf {
       runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_inv,
       runtime_override_preconcat=runtime_override_preconcat_resolve_inv,
       runtime_override_hail_merge=runtime_override_hail_merge_resolve_inv,
-      runtime_override_fix_header=runtime_override_fix_header_resolve_inv,
-      shared_filesystem=shared_filesystem
+      runtime_override_fix_header=runtime_override_fix_header_resolve_inv
   }
 
   call ComplexGenotype.GenotypeComplexVariants {
@@ -381,8 +378,7 @@ workflow MakeCohortVcf {
       runtime_attr_subset_ped=runtime_attr_subset_ped_regeno,
       runtime_override_preconcat=runtime_override_preconcat_regeno,
       runtime_override_hail_merge=runtime_override_hail_merge_regeno,
-      runtime_override_fix_header=runtime_override_fix_header_regeno,
-      shared_filesystem=shared_filesystem
+      runtime_override_fix_header=runtime_override_fix_header_regeno
   }
 
   call Clean.CleanVcf {
@@ -446,8 +442,7 @@ workflow MakeCohortVcf {
       runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
-      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      shared_filesystem=shared_filesystem
+      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs
   }
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
@@ -470,8 +465,7 @@ workflow MakeCohortVcf {
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
-      shared_filesystem=shared_filesystem
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true

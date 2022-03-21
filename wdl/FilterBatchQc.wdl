@@ -66,8 +66,6 @@ workflow FilterBatchQc {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   Array[String] algorithms = ["manta", "delly", "melt", "wham", "depth", "pesr"]
@@ -138,8 +136,7 @@ workflow FilterBatchQc {
           runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
           runtime_override_benchmark_samples=runtime_override_benchmark_samples,
           runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
-          runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
-          shared_filesystem=shared_filesystem
+          runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
       }
     }
   }

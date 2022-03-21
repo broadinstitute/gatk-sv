@@ -58,9 +58,6 @@ workflow RegenotypeCNVs {
     #CombineReassess
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_merge_list_creassess 
-
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   call ClusterMergedDepthBeds {
@@ -290,7 +287,6 @@ task MakeRawCombinedBed {
     String cohort
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
-    Boolean shared_filesystem = false
   }
 
   RuntimeAttr default_attr = object {
@@ -312,11 +308,7 @@ task MakeRawCombinedBed {
         local_vcf=$(basename $vcf)
         svtk vcf2bed --no-header $vcf $local_vcf.bed   # for each depth vcf make bed, duplicated
     done < ~{write_lines(vcfs)}
-    # Adding this for FSx/local FS 
-    if [ ! ~{shared_filesystem} ]; 
-    then
-      rm ~{sep=' ' vcfs}
-    fi
+
     cat *.bed | sort -k1,1V -k2,2n -k3,3n > ~{cohort}.regeno.raw_combined_depth.bed # concat raw depth vcf, duplicated
   >>>
   runtime {
@@ -552,7 +544,6 @@ task GetRegenotype {
     String Batch
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
-    Boolean shared_filesystem = false
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -572,11 +563,7 @@ task GetRegenotype {
     sample=$(fgrep -v "#" ~{Batch}.bed|awk '{if($6!="" )print $6}' |head -n1|cut -d"," -f1)||true
     # restrict to variants originating in this batch
     fgrep "~{Batch}"_ ~{regeno_raw_combined_depth} > ~{Batch}.origin.raw_combined_depth.bed
-    # Adding this for FSx/local FS 
-    if [ ! ~{shared_filesystem} ]; 
-    then
-      rm ~{regeno_raw_combined_depth} ~{depth_genotyped_vcf}
-    fi
+
     # construct variant identifier string chr_start_end_svtype since varIDs may have changed
     python3 <<CODE
     in_files = ["~{Batch}.bed", "~{Batch}.origin.raw_combined_depth.bed"]

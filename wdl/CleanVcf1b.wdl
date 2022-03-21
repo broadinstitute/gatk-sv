@@ -23,8 +23,6 @@ workflow CleanVcf1b {
         RuntimeAttr? runtime_override_concat_vcfs
         RuntimeAttr? runtime_override_cat_multi_cnvs
 
-        # Filesystem configuration
-        Boolean shared_filesystem = false
     }
 
     call SubsetLargeCNVs {
@@ -84,8 +82,7 @@ workflow CleanVcf1b {
                 dictionary_json_gz=BuildGenoNormalReviseDictionary.out,
                 prefix="~{prefix}.filter_vcf.shard_~{i}",
                 sv_pipeline_docker=sv_pipeline_docker,
-                runtime_attr_override=runtime_attr_override_filter_vcf,
-                shared_filesystem=shared_filesystem
+                runtime_attr_override=runtime_attr_override_filter_vcf
         }
     }
 
@@ -322,7 +319,6 @@ task FilterVcf {
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
-        Boolean shared_filesystem = false
     }
 
     Float input_size = size([intermediate_vcf, dictionary_json_gz], "GB")

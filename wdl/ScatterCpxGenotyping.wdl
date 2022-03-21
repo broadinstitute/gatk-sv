@@ -53,8 +53,6 @@ workflow ScatterCpxGenotyping {
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   String contig_prefix = prefix + "." + contig
@@ -66,8 +64,7 @@ workflow ScatterCpxGenotyping {
       prefix=contig_prefix,
       records_per_shard=records_per_shard,
       sv_pipeline_docker=sv_pipeline_updates_docker,
-      runtime_attr_override=runtime_override_split_vcf_to_genotype,
-      shared_filesystem=shared_filesystem
+      runtime_attr_override=runtime_override_split_vcf_to_genotype
   }
 
   # Scatter genotyping over shards
@@ -99,8 +96,7 @@ workflow ScatterCpxGenotyping {
         runtime_override_merge_melted_gts=runtime_override_merge_melted_gts,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
         runtime_override_rd_genotype=runtime_override_rd_genotype,
-        runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes,
-        shared_filesystem=shared_filesystem
+        runtime_override_concat_melted_genotypes=runtime_override_concat_melted_genotypes
     }
   }
 

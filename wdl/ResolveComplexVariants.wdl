@@ -64,8 +64,6 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_hail_merge_inv
     RuntimeAttr? runtime_override_fix_header_inv
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   #Scatter per chromosome
@@ -115,8 +113,7 @@ workflow ResolveComplexVariants {
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_inv,
         runtime_override_preconcat=runtime_override_preconcat_inv,
         runtime_override_hail_merge=runtime_override_hail_merge_inv,
-        runtime_override_fix_header=runtime_override_fix_header_inv,
-        shared_filesystem=shared_filesystem
+        runtime_override_fix_header=runtime_override_fix_header_inv
     }
 
     #Run same-bp overlap filter on full vcf
@@ -161,8 +158,7 @@ workflow ResolveComplexVariants {
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
         runtime_override_preconcat=runtime_override_preconcat,
         runtime_override_hail_merge=runtime_override_hail_merge,
-        runtime_override_fix_header=runtime_override_fix_header,
-        shared_filesystem=shared_filesystem
+        runtime_override_fix_header=runtime_override_fix_header
     }
 
     #Integrate inv-only and all-variants resolved VCFs

@@ -102,8 +102,6 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
 
-    # Filesystem configuration
-    Boolean shared_filesystem = false
   }
 
   if (defined(sample_ids_training_subset)) {
@@ -202,8 +200,7 @@ workflow TrainGCNV {
       runtime_attr_ploidy = runtime_attr_ploidy,
       runtime_attr_cohort = runtime_attr_cohort,
       runtime_attr_postprocess = runtime_attr_postprocess,
-      runtime_attr_explode = runtime_attr_explode,
-      shared_filesystem=shared_filesystem
+      runtime_attr_explode = runtime_attr_explode
   }
 
   output {

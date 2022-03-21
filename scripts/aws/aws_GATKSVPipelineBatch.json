@@ -2,8 +2,7 @@
     "GATKSVPipelineBatch.use_delly": "false",
     "GATKSVPipelineBatch.use_manta": "true",
     "GATKSVPipelineBatch.use_wham": "true",
-    "GATKSVPipelineBatch.use_melt": "false",
-    "GATKSVPipelineBatch.shared_filesystem": "true",
+    "GATKSVPipelineBatch.use_melt": "true",
     "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays": "broad-dsde-methods",
     "GATKSVPipelineBatch.name": "ref_panel_1kg",
     "GATKSVPipelineBatch.ped_file": "BROAD_REF_PATH/1kg_ref_panel_v1.ped",
@@ -770,6 +769,7 @@
         "GATK_SV_RESOURCES_PATH/ref_panel_1kg_v2-gcnv-model-shard-99.tar.gz"
     ],
     "GATKSVPipelineBatch.qc_definitions": "BATCH_DEF_PATH",
+    "GATKSVPipelineBatch.melt_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:melt_docker",
     "GATKSVPipelineBatch.manta_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:manta_docker",
     "GATKSVPipelineBatch.wham_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:wham_docker",
     "GATKSVPipelineBatch.cnmops_docker": "AWS_ACCOUNT_ID.dkr.ecr.AWS_REGION.amazonaws.com/ECR_REPO_NAME:cnmops_docker",
