@@ -1,5 +1,6 @@
 version development
 
+import "TasksRunGqRecalibrator.wdl" as Utils
 import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
 
 workflow RunGqRecalibrator {
@@ -10,43 +11,68 @@ workflow RunGqRecalibrator {
         File gq_recalibrator_model_file
         Array[String] recalibrate_gq_args = []
         Boolean fix_vcf = true
+        Boolean shard_vcf = false
+        Int records_per_shard = 10000
         String gatk_docker
         String module03_docker
         String sv_base_docker
+        String sv_base_mini_docker
     }
 
-    if(fix_vcf) {
-        call TrainGqRecalibrator.FixVcf as FixVcf {
+    if(shard_vcf) {
+        call Utils.SplitVcf as ShardVcf {
             input:
                 vcf=vcf,
-                module03_docker=module03_docker
+                vcf_idx=vcf_index,
+                prefix=basename(vcf, ".vcf.gz") + "_sharded",
+                min_vars_per_shard=records_per_shard,
+                sv_base_mini_docker=sv_base_mini_docker
         }
     }
 
-    if(!defined(vcf_index) && !fix_vcf) {
-        call TrainGqRecalibrator.IndexVcf as IndexVcf {
+    Array[File] vcf_shards_ = select_first([ShardVcf.vcf_shards, [vcf]])
+
+    scatter ( shard in vcf_shards_ ) {
+        if(fix_vcf) {
+            call TrainGqRecalibrator.FixVcf as FixVcf {
+                input:
+                    vcf=shard,
+                    module03_docker=module03_docker
+            }
+        }
+
+        if(!fix_vcf) {
+            call TrainGqRecalibrator.IndexVcf as IndexVcf {
+                input:
+                    vcf=shard,
+                    sv_base_docker=sv_base_docker
+            }
+        }
+
+        File vcf_ = select_first([FixVcf.fixed_vcf, shard])
+        File vcf_index_ = select_first([FixVcf.fixed_vcf_index, IndexVcf.index_file])
+
+        call ApplyGqRecalibratorFilter {
             input:
-                vcf=vcf,
-                sv_base_docker=sv_base_docker
+                vcf=vcf_,
+                vcf_index=vcf_index_,
+                genome_tracts=genome_tracts,
+                gq_recalibrator_model_file=gq_recalibrator_model_file,
+                recalibrate_gq_args = recalibrate_gq_args,
+                gatk_docker=gatk_docker
         }
     }
 
-    File vcf_ = select_first([FixVcf.fixed_vcf, vcf])
-    File vcf_index_ = select_first([FixVcf.fixed_vcf_index, vcf_index, IndexVcf.index_file])
-
-    call ApplyGqRecalibratorFilter {
+    call Utils.ConcatVcfs as ConcatShards {
         input:
-            vcf=vcf_,
-            vcf_index=vcf_index_,
-            genome_tracts=genome_tracts,
-            gq_recalibrator_model_file=gq_recalibrator_model_file,
-            recalibrate_gq_args = recalibrate_gq_args,
-            gatk_docker=gatk_docker
+            vcfs=ApplyGqRecalibratorFilter.filtered_vcf,
+            vcfs_idx=ApplyGqRecalibratorFilter.filtered_vcf_index,
+            sv_base_mini_docker=sv_base_mini_docker
     }
 
     output {
-        File filtered_vcf = ApplyGqRecalibratorFilter.filtered_vcf
-        File filtered_vcf_index = ApplyGqRecalibratorFilter.filtered_vcf_index
+        File filtered_vcf = ConcatShards.concat_vcf
+        File filtered_vcf_index = ConcatShards.concat_vcf_idx
     }
 }
 
