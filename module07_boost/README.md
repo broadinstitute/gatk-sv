@@ -14,6 +14,8 @@ Use `TrainAndApplyBoostModel.wdl` to run this step.
 
 Example json: `./example_jsons/TrainAndApplyBoostModel.group_all.json`  
 
+This step splits all samples into batches, applies the boost model to all variants per sample, and returns one tarball per batch. Each tarball contains a two-column .tsv per sample with the variant ID and boost score for every non-reference variant per sample.
+
 ## Step 2: Annotate VCF with lgBoost results  
 
 This step aggregates the results from `Step 1` and writes them into the input VCF under a custom genotype field, `BS`.  
