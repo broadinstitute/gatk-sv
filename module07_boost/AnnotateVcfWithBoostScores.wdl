@@ -24,7 +24,7 @@ workflow AnnotateVcfWithBoostScores {
     File vcf_idx
     Array[File] boost_score_tarballs
     String sv_base_mini_docker
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_override_subset_vcf
     RuntimeAttr? runtime_override_annotate_vcf
   }

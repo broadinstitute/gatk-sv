@@ -15,8 +15,7 @@ ARG GATK_COMMIT="a33bf19dd3188af0af1bd17bce015eb20ba73227"
 ENV GATK_JAR="/opt/gatk.jar"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  ${GATK_DEP} && \
     cd / && git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && git lfs install && \
@@ -44,8 +43,7 @@ ARG GCLOUD_SDK_TRANSIENT_DEP="gpg-agent gnupg python-pip python-setuptools "
 ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  ${GCLOUD_SDK_DEPENDENCIES} && \
     pip install -q -U --no-cache-dir \
                 crcmod \
@@ -53,8 +51,8 @@ RUN apt-get -qqy update --fix-missing && \
     export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
     echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    apt-get -qqy update && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy update --fix-missing && \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \
                  $GCLOUD_SDK_EXTRA_COMPONENTS && \
     gcloud config set core/disable_usage_reporting true && \
@@ -78,9 +76,9 @@ RUN apt-get -qqy update --fix-missing && \
 #  3. install R packages that all/most child images depend on
 #  4. remove doc, help, demos and tests (saves ~ 10% space)
 #  4. final clean up
-COPY install_R_packages.R /opt/
-COPY install_bioconductor_packages.R /opt/
-COPY install_deprecated_R_package.sh /opt/
+COPY dockerfiles/sv-base/install_R_packages.R /opt/
+COPY dockerfiles/sv-base/install_bioconductor_packages.R /opt/
+COPY dockerfiles/sv-base/install_deprecated_R_package.sh /opt/
 ARG R_DEP_TRANSIENT="make gpg-agent gnupg"
 ARG R_DEPENDENCIES="software-properties-common build-essential \
     ${R_DEP_TRANSIENT} libz-dev libncurses5-dev libbz2-dev liblzma-dev \
@@ -91,14 +89,12 @@ ARG SV_BASE_R_PKGS="optparse BiocManager"
 ARG SLIM_R_LIB_CMD="find .  -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  ${R_DEPENDENCIES} && \
     apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9 && \
     add-apt-repository "deb http://cran.rstudio.com/bin/linux/ubuntu bionic-cran35/" && \
     apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  r-base-core="${R_RELEASE_VERSION}"-2bionic \
                  r-base-dev="${R_RELEASE_VERSION}"-2bionic && \
     mkdir -p /tmp/R_pkg_download/ && \

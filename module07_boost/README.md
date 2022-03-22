@@ -24,7 +24,7 @@ This step aggregates the results from `Step 1` and writes them into the input VC
 
 Use `AnnotateVcfWithBoostScores.wdl` to run this step.  
 
-This step is currently a work-in-progress. Documentation will be updated soon.  
+The output of this step is a single VCF with a `BS` attribute added to the sample-level genotype fields for all variants.    
 
 ---  
 
