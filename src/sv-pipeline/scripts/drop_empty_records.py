@@ -14,6 +14,7 @@ from svtk.utils import is_biallelic
 
 
 def drop_nonref_gts(vcf, fout):
+    # New comment
     NULL_GT = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
     samples = [s for s in vcf.header.samples]
 
