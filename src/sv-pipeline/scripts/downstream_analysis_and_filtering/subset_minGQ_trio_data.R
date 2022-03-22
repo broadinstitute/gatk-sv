@@ -24,6 +24,7 @@ checkOpt <- function(value,numeric=F){
   }
   return(cleaned)
 }
+
 #Filter a numeric vector
 filterNumeric <- function(vals,cutoff,greater=T){
   if(length(vals)>0){
@@ -40,6 +41,7 @@ filterNumeric <- function(vals,cutoff,greater=T){
     return(NULL)
   }
 }
+
 #Filter a categorical vector
 filterCategorical <- function(vals,criteria,include=T){
   if(length(vals)>1){
@@ -64,6 +66,7 @@ filterCategorical <- function(vals,criteria,include=T){
     return(NULL)
   }
 }
+
 #Filter variant table
 filterVariants <- function(dat,min.size,max.size,min.freq,max.freq,
                            svtype.include,svtype.exclude,
@@ -127,7 +130,9 @@ option_list <- list(
   make_option(c("--ev.exclude"), type="character", default=NULL,
               help="Per-sample genotype EV to exclude [default %default]"),
   make_option(c("--max.variants"), type="integer", default=1000000,
-              help="Maximum number of variants to retain per trio [default %default]")
+              help="Maximum number of variants to retain per trio [default %default]"),
+  make_option(c("--optimize.metric"), type="character", default="GQ",
+              help="Metric to use for optimization [default %default]")
 )
 
 ###Get command-line arguments & options
@@ -151,9 +156,9 @@ if(!is.na(min.size)){
     min.size <- -2
   }
 }
-max.size <- checkOpt(opts$max.size,numeric=T)
-min.freq <- checkOpt(opts$min.freq,numeric=T)
-max.freq <- checkOpt(opts$max.freq,numeric=T)
+max.size <- checkOpt(opts$max.size, numeric=T)
+min.freq <- checkOpt(opts$min.freq, numeric=T)
+max.freq <- checkOpt(opts$max.freq, numeric=T)
 svtype.include <- checkOpt(opts$svtype.include)
 svtype.exclude <- checkOpt(opts$svtype.exclude)
 filter.include <- checkOpt(opts$filter.include)
@@ -161,9 +166,10 @@ filter.exclude <- checkOpt(opts$filter.exclude)
 ev.include <- checkOpt(opts$ev.include)
 ev.exclude <- checkOpt(opts$ev.exclude)
 max.variants <- as.numeric(opts$max.variants)
+metric <- as.character(opts$optimize.metric)
 
 ###Read input data
-dat <- read.table(INFILE,header=T,comment.char="",check.names=F)
+dat <- read.table(INFILE,header=T, comment.char="", check.names=F)
 colnames(dat)[1] <- "famID"
 
 ###Filter input data
@@ -181,7 +187,13 @@ if(nrow(dat)>0){
                         ev.exclude=ev.exclude,
                         max.variants=max.variants)
 }
-dat <- data.frame(dat$famID,dat$VID,dat$pro_AC,dat$fa_AC,dat$mo_AC,dat$pro_GQ,dat$fa_GQ,dat$mo_GQ)
+dat <- data.frame(dat$famID, dat$VID, dat$pro_AC, dat$fa_AC, dat$mo_AC, 
+                  dat[, paste("pro", metric, sep="_")], 
+                  dat[, paste("fa", metric, sep="_")], 
+                  dat[, paste("mo", metric, sep="_")])
 
 ###Return filtered data
-write.table(dat,OUTFILE,col.names=F,row.names=F,quote=F,sep="\t")
+if(OUTFILE %in% c("-", "stdout", "/dev/stdout")){
+  OUTFILE <- stdout()
+}
+write.table(dat, OUTFILE, col.names=F, row.names=F, quote=F, sep="\t")
