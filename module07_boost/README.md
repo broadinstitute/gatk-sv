@@ -1,6 +1,6 @@
 ## _Post hoc_ genotype filtering with lgBoost
 
-This repository includes scripts to train and apply a light gradient-boosted (lgBoost) model for genotype filtering.  
+This directory includes scripts to train and apply a light gradient-boosted (lgBoost) model for genotype filtering.  
 
 A trained lgBoost model can be applied with the following steps:  
 
