@@ -98,7 +98,8 @@ task ApplyGqRecalibratorFilter {
 
     String args_str = if length(recalibrate_gq_args) > 0 then sep(" ", recalibrate_gq_args) else ""
 
-    Int disk_gb = round(1000 + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracts, "GiB"))
+    Int base_disk_gb = 10
+    Int disk_gb = round(base_disk_gb + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracts, "GiB"))
     Float mem_gb = mem_gb_java + mem_gb_overhead
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
 

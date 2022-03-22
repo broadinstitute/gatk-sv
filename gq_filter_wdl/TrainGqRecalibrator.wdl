@@ -102,9 +102,10 @@ task FixVcf {
     Int mem_gb_overhead = 2
     Float mem_scale = 2.0
     Float uncompress_scale = 10
+    Int base_disk_gb = 10
     RuntimeAttr runtime_default = object {
         mem_gb: mem_gb_overhead + mem_scale * size(vcf, "GiB"),
-        disk_gb: 50 + round((2 + uncompress_scale) * size(vcf, "GiB")),
+        disk_gb: base_disk_gb + round((2 + uncompress_scale) * size(vcf, "GiB")),
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 1,
