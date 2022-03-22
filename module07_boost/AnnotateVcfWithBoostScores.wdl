@@ -95,7 +95,8 @@ task SubsetVcf {
     | xargs -I {} mv {} boost_results/
 
     # Get list of sample IDs
-    find boost_results -name "*.boost_filtered" \
+    find boost_results/ -name "*.boost_filtered" \
+    | xargs -I {} basename {} \
     | sed 's/\.boost_filtered/\t/g' | cut -f1 \
     | sort -Vk1,1 | uniq \
     > samples.list
@@ -103,6 +104,7 @@ task SubsetVcf {
     # Subset & index VCF 
     bcftools view \
       -S samples.list \
+      --force-samples \
       -O z \
       -o ~{vcf_out_prefix}.subsetted.vcf.gz \
       ~{vcf}
