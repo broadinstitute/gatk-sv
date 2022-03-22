@@ -18,6 +18,7 @@ workflow RunGqRecalibrator {
         String sv_base_docker
         String sv_base_mini_docker
         RuntimeAttr? runtime_override_shard_vcf
+        RuntimeAttr? runtime_override_fix_vcf
         RuntimeAttr? runtime_override_concat_vcf
     }
 
@@ -40,7 +41,8 @@ workflow RunGqRecalibrator {
             call TrainGqRecalibrator.FixVcf as FixVcf {
                 input:
                     vcf=shard,
-                    module03_docker=module03_docker
+                    module03_docker=module03_docker,
+                    runtime_attr_override=runtime_override_fix_vcf
             }
         }
 

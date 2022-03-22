@@ -1,5 +1,6 @@
 version development
 
+import "TasksRunGqRecalibrator.wdl" as Utils
 import "GetTruthOverlap.wdl" as GetTruthOverlap
 
 workflow TrainGqRecalibrator {
@@ -16,6 +17,7 @@ workflow TrainGqRecalibrator {
         Array[String] train_args = []
         Array[String] get_truth_overlap_args = []
         Boolean fix_vcf = true
+        RuntimeAttr? runtime_override_fix_vcf
         String module03_docker
         String gatk_docker
         String sv_base_docker
@@ -26,7 +28,8 @@ workflow TrainGqRecalibrator {
             input:
                 vcf=train_vcf,
                 module03_docker=module03_docker,
-                index_output_vcf=true
+                index_output_vcf=true,
+                runtime_attr_override=runtime_override_fix_vcf
         }
     }
 
@@ -90,24 +93,32 @@ task FixVcf {
         File vcf
         String module03_docker
         Boolean index_output_vcf = true
+        RuntimeAttr? runtime_attr_override
     }
 
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
     String index_file_name = fixed_vcf_name + ".tbi"
 
-    Float uncompress_scale = 10
-    Int disk_gb = 1000 + round((2 + uncompress_scale) * size(vcf, "GiB"))
     Int mem_gb_overhead = 2
     Float mem_scale = 2.0
-    Float mem_gb = mem_gb_overhead + mem_scale * size(vcf, "GiB")
-
+    Float uncompress_scale = 10
+    RuntimeAttr runtime_default = object {
+        mem_gb: mem_gb_overhead + mem_scale * size(vcf, "GiB"),
+        disk_gb: 50 + round((2 + uncompress_scale) * size(vcf, "GiB")),
+        cpu_cores: 1,
+        preemptible_tries: 3,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
     runtime {
+        memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
+        disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " HDD"
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
         docker: module03_docker
-        cpu: 1
-        preemptible: 3
-        max_retries: 0
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
     command <<<
