@@ -104,7 +104,8 @@ task SubsetVcf {
     bcftools view \
       -S samples.list \
       -O z \
-      -o ~{vcf_out_prefix}.subsetted.vcf.gz
+      -o ~{vcf_out_prefix}.subsetted.vcf.gz \
+      ~{vcf}
     tabix -p vcf ~{vcf_out_prefix}.subsetted.vcf.gz
   >>>
 
