@@ -1,12 +1,7 @@
-##########################################################################################
-
-## Github commit: talkowski-lab/gatk-sv-v1:<ENTER HASH HERE IN FIRECLOUD>
-
-##########################################################################################
-
-## Copyright Broad Institute, 2020
+## Copyright Broad Institute, 2022
 ## 
-## This WDL pipeline implements Duphold 
+## This WDL pipeline applies a pre-trained lgBoost model to batches of samples in 
+## a GATK-SV VCF
 ##
 ##
 ## LICENSING : 
