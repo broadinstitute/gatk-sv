@@ -200,7 +200,12 @@ task ConcatEHOutputs {
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
-        disk_gb: 10
+        disk_gb: 10 +
+            (2 * ceil(
+                size(vcfs_gz, "GiB") +
+                size(jsons, "GiB") +
+                size(overlapping_reads, "GiB") +
+                size(timings, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([
         runtime_attr_override,

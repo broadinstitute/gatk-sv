@@ -382,6 +382,7 @@ workflow GATKSVPipelineBatch {
     File clean_vcf_index = MakeCohortVcf.vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
+    File master_vcf_qc = MakeCohortVcf.vcf_qc
     File? metrics_file_makecohortvcf = MakeCohortVcf.metrics_file_makecohortvcf
     File final_sample_list = GATKSVPipelinePhase1.batch_samples_postOutlierExclusion_file
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file
