@@ -13,7 +13,7 @@ workflow RunGqRecalibrator {
         Boolean fix_vcf = true
         Boolean shard_vcf = false
         Int records_per_shard = 5000
-        Float? recalibrator_mem_gb_overhead = 1.5
+        Float recalibrator_mem_gb_overhead = 1.5
         String gatk_docker
         String module03_docker
         String sv_base_docker
@@ -65,6 +65,7 @@ workflow RunGqRecalibrator {
                 genome_tracts=genome_tracts,
                 gq_recalibrator_model_file=gq_recalibrator_model_file,
                 recalibrate_gq_args = recalibrate_gq_args,
+                mem_gb_overhead=recalibrator_mem_gb_overhead,
                 gatk_docker=gatk_docker
         }
     }
