@@ -129,6 +129,7 @@ task AnnotateBoostScores {
   input {
     File vcf
     File vcf_idx
+    File boost_tarball
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
