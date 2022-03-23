@@ -13,6 +13,7 @@ workflow RunGqRecalibrator {
         Boolean fix_vcf = true
         Boolean shard_vcf = false
         Int records_per_shard = 5000
+        Float? recalibrator_mem_gb_overhead = 1.5
         String gatk_docker
         String module03_docker
         String sv_base_docker
@@ -98,7 +99,7 @@ task ApplyGqRecalibratorFilter {
 
     String args_str = if length(recalibrate_gq_args) > 0 then sep(" ", recalibrate_gq_args) else ""
 
-    Int base_disk_gb = 10
+    Int base_disk_gb = 30
     Int disk_gb = round(base_disk_gb + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracts, "GiB"))
     Float mem_gb = mem_gb_java + mem_gb_overhead
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
