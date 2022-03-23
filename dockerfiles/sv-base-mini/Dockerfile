@@ -74,3 +74,4 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/??_* && \
     samtools --help && \
     bcftools --help
+

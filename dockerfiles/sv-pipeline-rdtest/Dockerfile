@@ -14,9 +14,8 @@ ARG SV_PIPELINE_BIOC_PKGS="\"multtest\""
 ARG SV_PIPELINE_R_PKGS="BSDA caret fpc hash metap perm plyr pwr reshape ROCR zoo"
 ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
-                 make cmake automake \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
+                 make cmake automake fftw3 fftw3-dev pkg-config \
                  libssh2-1-dev \
                  libssl-dev && \
     /opt/install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/data.table/data.table_1.12.8.tar.gz" && \
@@ -30,7 +29,7 @@ RUN apt-get -qqy update --fix-missing && \
     Rscript --vanilla install_R_packages.R ${SV_PIPELINE_R_PKGS} && \
     cd "/usr/local/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
     cd "/usr/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
-    apt-get -qqy purge make cmake automake && \
+    apt-get -qqy purge make cmake automake pkg-config && \
     apt-get -qqy clean && \
     rm -rf /tmp/* \
            /var/tmp/* \

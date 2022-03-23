@@ -4,9 +4,6 @@
 #    gnomAD SV Discovery    #
 #############################
 
-# Copyright (c) 2017 Ryan L. Collins
-# Distributed under terms of the MIT License (see LICENSE)
-# Contact: Ryan L. Collins <rlcollins@g.harvard.edu>
 # gnomAD credits: http://gnomad.broadinstitute.org/
 
 # Wrapper to run MELT (Gardner et al., Unpublished)

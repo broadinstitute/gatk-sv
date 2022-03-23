@@ -15,8 +15,7 @@ ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools 
 ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy dist-upgrade && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  ${GCLOUD_SDK_DEPENDENCIES} && \
     pip install -q -U --no-cache-dir \
                 crcmod \
@@ -24,8 +23,8 @@ RUN apt-get -qqy update --fix-missing && \
     export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
     echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
     curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    apt-get -qqy update && \
-    apt-get -qqy install --no-install-recommends \
+    apt-get -qqy update --fix-missing && \
+    apt-get -qqy install --no-upgrade --no-install-recommends \
                  google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \
                  $GCLOUD_SDK_EXTRA_COMPONENTS && \
     gcloud config set core/disable_usage_reporting true && \
