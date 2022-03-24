@@ -132,6 +132,7 @@ workflow GatherBatchEvidence {
     Array[File]? manta_vcfs        # Manta VCF
     Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
+    Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
     Int min_svsize                  # Minimum SV length to include
 
@@ -158,6 +159,7 @@ workflow GatherBatchEvidence {
     Array[File]? baseline_std_delly_vcf
     Array[File]? baseline_std_manta_vcf
     Array[File]? baseline_std_melt_vcf
+    Array[File]? baseline_std_scramble_vcf
     Array[File]? baseline_std_wham_vcf
 
     # Runtime parameters
@@ -469,6 +471,7 @@ workflow GatherBatchEvidence {
       manta_vcfs = manta_vcfs,
       delly_vcfs = delly_vcfs,
       melt_vcfs = melt_vcfs,
+      scramble_vcfs = scramble_vcfs,
       wham_vcfs = wham_vcfs,
       contigs = primary_contigs_fai,
       min_svsize = min_svsize,
@@ -526,6 +529,7 @@ workflow GatherBatchEvidence {
         std_delly_vcf = PreprocessPESR.std_delly_vcf,
         std_manta_vcf = PreprocessPESR.std_manta_vcf,
         std_melt_vcf = PreprocessPESR.std_melt_vcf,
+        std_scramble_vcf = PreprocessPESR.std_scramble_vcf,
         std_wham_vcf = PreprocessPESR.std_wham_vcf,
         baseline_merged_dels = baseline_merged_dels,
         baseline_merged_dups = baseline_merged_dups,
@@ -533,6 +537,7 @@ workflow GatherBatchEvidence {
         baseline_std_delly_vcf = baseline_std_delly_vcf,
         baseline_std_manta_vcf = baseline_std_manta_vcf,
         baseline_std_melt_vcf = baseline_std_melt_vcf,
+        baseline_std_scramble_vcf = baseline_std_scramble_vcf,
         baseline_std_wham_vcf = baseline_std_wham_vcf,
         contig_list = select_first([primary_contigs_list]),
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
@@ -573,6 +578,7 @@ workflow GatherBatchEvidence {
     Array[File]? std_manta_vcf = PreprocessPESR.std_manta_vcf
     Array[File]? std_delly_vcf = PreprocessPESR.std_delly_vcf
     Array[File]? std_melt_vcf = PreprocessPESR.std_melt_vcf
+    Array[File]? std_scramble_vcf = PreprocessPESR.std_scramble_vcf
     Array[File]? std_wham_vcf = PreprocessPESR.std_wham_vcf
 
     File? PE_stats = MatrixQC.PE_stats

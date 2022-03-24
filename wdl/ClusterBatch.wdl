@@ -10,6 +10,7 @@ workflow ClusterBatch {
     Array[File]? delly_vcfs
     Array[File]? wham_vcfs
     Array[File]? melt_vcfs
+    Array[File]? scramble_vcfs
     File del_bed
     File dup_bed
     String batch
@@ -37,6 +38,7 @@ workflow ClusterBatch {
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
+    File? baseline_scramble_vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -128,6 +130,26 @@ workflow ClusterBatch {
     }
   }
 
+  if (defined(scramble_vcfs) && (length(select_first([scramble_vcfs])) > 0)) {
+    call pesr.ClusterPESR as ClusterPESR_scramble {
+      input:
+        algorithm = "scramble",
+        vcfs = select_first([scramble_vcfs]),
+        svsize = pesr_svsize,
+        frac = pesr_frac,
+        svtypes = "INS",
+        flags = pesr_flags,
+        batch = batch,
+        dist = pesr_distance,
+        exclude_list = pesr_exclude_list,
+        contigs = contigs,
+        sv_base_mini_docker = sv_base_mini_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_cluster = runtime_attr_pesr_cluster,
+        runtime_attr_concat = runtime_attr_pesr_concat
+    }
+  }
+
   call depth.ClusterDepth as ClusterDepth {
   	input: 
   	  del_bed = del_bed,
@@ -156,11 +178,12 @@ workflow ClusterBatch {
         manta_vcf = ClusterPESR_manta.clustered_vcf,
         wham_vcf = ClusterPESR_wham.clustered_vcf,
         melt_vcf = ClusterPESR_melt.clustered_vcf,
+        scramble_vcf = ClusterPESR_scramble.clustered_vcf,
         baseline_depth_vcf = baseline_depth_vcf,
         baseline_delly_vcf = baseline_delly_vcf,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
-        baseline_melt_vcf = baseline_melt_vcf,
+        baseline_scramble_vcf = baseline_scramble_vcf,
         contig_list = select_first([primary_contigs_list]),
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
@@ -179,6 +202,8 @@ workflow ClusterBatch {
     File? clustered_wham_vcf_index = ClusterPESR_wham.clustered_vcf_index
     File? clustered_melt_vcf = ClusterPESR_melt.clustered_vcf
     File? clustered_melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
+    File? clustered_scramble_vcf = ClusterPESR_scramble.clustered_vcf
+    File? clustered_scramble_vcf_index = ClusterPESR_scramble.clustered_vcf_index
 
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }

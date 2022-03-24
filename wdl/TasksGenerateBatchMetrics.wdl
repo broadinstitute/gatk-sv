@@ -189,9 +189,9 @@ task MergeStats {
 
   command <<<
     set -euo pipefail
-    while read split; do
-      sed -e '1d' $split;
-    done < ~{write_lines(stats)} | cat <(head -n1 ~{stats[0]}) - > ~{prefix}.stats
+    touch ~{prefix}.stats
+    for f in ~{sep=" "  stats}; do sed -n 1p $f >~{prefix}.stats; break; done
+    for f in ~{sep=" "  stats}; do sed 1d $f >>~{prefix}.stats; done
   >>>
 
   output {

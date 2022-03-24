@@ -2,7 +2,8 @@
   "GATKSVPipelineBatch.use_delly": "false",
   "GATKSVPipelineBatch.use_manta": "true",
   "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "true",
+  "GATKSVPipelineBatch.use_melt": "false",
+  "GATKSVPipelineBatch.use_scramble": "true",
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }},
 
@@ -21,7 +22,7 @@
   "GATKSVPipelineBatch.wham_vcfs_input": {{ test_batch.wham_vcfs | tojson }},
 
   "GATKSVPipelineBatch.melt_docker" : {{ dockers.melt_docker | tojson }},
-
+  "GATKSVPipelineBatch.scramble_docker" : {{ dockers.scramble_docker | tojson }},
   "GATKSVPipelineBatch.manta_docker": {{ dockers.manta_docker | tojson }},
   "GATKSVPipelineBatch.wham_docker": {{ dockers.wham_docker | tojson }},
   "GATKSVPipelineBatch.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
