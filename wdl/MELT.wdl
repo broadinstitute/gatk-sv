@@ -600,12 +600,16 @@ task RunMELT {
     set -Eeuo pipefail
 
     # MELT expects the BAM index to have extension ".bam.bai"
-    mv ~{bam_file} ~{sample_id}.bam
-    mv ~{bam_index_file} ~{sample_id}.bam.bai
+    # Converting to cp for FSx/Local
+    cp ~{bam_file} ~{sample_id}.bam
+    cp ~{bam_index_file} ~{sample_id}.bam.bai
 
     # these locations should be stable
     MELT_DIR="/MELT"
-    CROMWELL_ROOT="/cromwell_root"
+    # Adding sample id to ensure the MELT files are created in a separate folder even if multiple jobs run on same compute instance.
+    # Hence adding mkdir to create the folder
+    CROMWELL_ROOT="/cromwell_root/~{sample_id}"
+    mkdir -p $CROMWELL_ROOT
 
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
@@ -625,8 +629,9 @@ task RunMELT {
     echo "JVM memory: $JVM_MAX_MEM"
 
     # call MELT
+    cwd=$(pwd)
     "$MELT_SCRIPT" \
-      "~{sample_id}.bam" \
+      "$cwd/~{sample_id}.bam" \
       "~{reference_fasta}" \
       ~{coverage} \
       ~{read_length} \
@@ -637,10 +642,11 @@ task RunMELT {
     
     # combine different mobile element VCFs into a single sample VCF
     # then sort into position order and compress with bgzip
-    cat SVA.final_comp.vcf | grep "^#" > "~{sample_id}.header.txt"
-    cat SVA.final_comp.vcf | grep -v "^#" > "~{sample_id}.sva.vcf"
-    cat LINE1.final_comp.vcf | grep -v "^#"> "~{sample_id}.line1.vcf"
-    cat ALU.final_comp.vcf | grep -v "^#"> "~{sample_id}.alu.vcf"
+    # Adding explicit path for the *final.comp.vcf to read it correctly
+    cat "$CROMWELL_ROOT"/SVA.final_comp.vcf | grep "^#" > "~{sample_id}.header.txt"
+    cat "$CROMWELL_ROOT"/SVA.final_comp.vcf | grep -v "^#" > "~{sample_id}.sva.vcf"
+    cat "$CROMWELL_ROOT"/LINE1.final_comp.vcf | grep -v "^#"> "~{sample_id}.line1.vcf"
+    cat "$CROMWELL_ROOT"/ALU.final_comp.vcf | grep -v "^#"> "~{sample_id}.alu.vcf"
     cat ~{sample_id}.header.txt ~{sample_id}.sva.vcf \
       ~{sample_id}.line1.vcf ~{sample_id}.alu.vcf \
       | vcf-sort -c | bgzip -c > ~{sample_id}.melt.vcf.gz
@@ -672,6 +678,9 @@ task RunMELT {
     # index vcf
     tabix -p vcf "~{sample_id}.melt.vcf.gz"
     
+    # Removing the local bam/bai file copied earlier as the process is complete and those are no longer needed.
+    rm ~{sample_id}.bam ~{sample_id}.bam.bai
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
