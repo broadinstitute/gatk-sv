@@ -1,34 +1,18 @@
 # GATK SV Pipeline VCF-QC / WGD dockerfile
+ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
+ARG VIRTUAL_ENV_IMAGE=sv-pipeline-qc-virtual-env:latest
 
-# IMPORTANT: these arguments must be specified at the begining to take advantage of multi-stage build AND runtime specification of base images
-ARG SV_PIPELINE_BASE_R_IMAGE=gatksv/sv-pipeline-children-r:latest
-FROM ${SV_PIPELINE_BASE_R_IMAGE}
+# establish alias to copy from later:
+FROM $VIRTUAL_ENV_IMAGE as virtual_env_image
+RUN rm_unneeded_r_library_files.sh $VIRTUAL_ENV_PATH
 
-# R packages
+FROM $SV_PIPELINE_IMAGE
+
+# Install needed libraries
 ARG DEBIAN_FRONTEND=noninteractive
-ARG GERT_DEPENDENCY_R_PKGS="openssl credentials askpass"
-ARG SV_PIPELINE_R_PKGS="beeswarm devtools HardyWeinberg nloptr RColorBrewer vioplot zoo"
-ARG SLIM_R_LIB_CMD="find . -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
-# wget newer version of cmake because nloptr package crashes with the version available in ubuntu:18.04 (it needs -j -2)
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends \
-                 make automake \
-                 libgit2-dev \
-                 libssh2-1-dev \
-                 libxml2-dev \
-                 libssl-dev && \
-    wget --quiet https://github.com/Kitware/CMake/releases/download/v3.21.5/cmake-3.21.5-linux-x86_64.tar.gz \
-         -O /tmp/cmake.tar.gz && \
-    tar -xf /tmp/cmake.tar.gz -C /tmp && \
-    ln -s /tmp/cmake-3.21.5-linux-x86_64/bin/cmake /usr/local/bin && \
-    mkdir -p /tmp/R_pkg_download/ && \
-    cd /opt/ && \
-    Rscript --vanilla install_R_packages.R ${GERT_DEPENDENCY_R_PKGS} && \
-    /opt/install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/gert/gert_0.3.tar.gz" && \
-    Rscript --vanilla install_R_packages.R ${SV_PIPELINE_R_PKGS} && \
-    cd "/usr/local/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
-    cd "/usr/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
-    apt-get -qqy purge make automake && \
+                 libgit2-dev libssh2-1-dev libxml2-dev libssl-dev && \
     apt-get -qqy clean && \
     rm -rf /tmp/* \
            /var/tmp/* \
@@ -37,3 +21,6 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/?? \
            /usr/share/man/??_* \
            /usr/local/bin/cmake
+
+# Copy updated virtual environment from VIRTUAL_ENV_IMAGE
+COPY --from=virtual_env_image $VIRTUAL_ENV_PATH $VIRTUAL_ENV_PATH

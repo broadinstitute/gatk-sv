@@ -1,28 +1,24 @@
-# IMPORTANT: these arguments must be specified at the begining to take advantage of multi-stage build AND runtime specification of base images
-ARG SVBASE_IMAGE=gatksv/sv-base:latest
+ARG SVBASE_IMAGE=sv-base:latest
+ARG VIRTUAL_ENV_IMAGE=cnmops-virtual-env:latest
+
+# establish alias to copy from later:
+FROM $VIRTUAL_ENV_IMAGE as virtual_env_image
+RUN  rm_unneeded_r_library_files.sh $VIRTUAL_ENV_PATH
 
 # Start from base with most R/Python dependencies included
-FROM ${SVBASE_IMAGE}
+FROM $SVBASE_IMAGE
 
-# Install R and bioconductor dependencies
-ARG SLIM_R_LIB_CMD="find .  -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
-ARG DEBIAN_FRONTEND=noninteractive
+# Copy in updated virtual environment
+COPY --from=virtual_env_image $VIRTUAL_ENV_PATH $VIRTUAL_ENV_PATH
+
+# Add WGD
+COPY src/WGD /opt/WGD
+ENV PATH="/opt/WGD/bin:${PATH}"
+
+# install supporting libraries
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends \
-                 make cmake automake \
-                 file \
-                 g++ \
-                 gfortran \
-                 liblapack-dev \
-                 libopenblas-dev \
-                 libxml2-dev && \
-    mkdir -p /tmp/R_pkg_download/ && \
-    /opt/install_deprecated_R_package.sh https://cran.r-project.org/src/contrib/Archive/XML/XML_3.99-0.3.tar.gz && \
-    cd /opt/ && \
-    Rscript --vanilla install_bioconductor_packages.R cn.mops rtracklayer && \
-    cd "/usr/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
-    cd "/usr/local/lib/R/site-library" && eval ${SLIM_R_LIB_CMD} && \
-    apt-get -qqy remove make cmake automake && \
+                 file g++ gfortran liblapack-dev libopenblas-dev libxml2-dev && \
     apt-get -qqy clean && \
     rm -rf /tmp/* \
            /var/tmp/* \
@@ -30,7 +26,3 @@ RUN apt-get -qqy update --fix-missing && \
            /var/lib/apt/lists/* \
            /usr/share/man/?? \
            /usr/share/man/??_*
-
-# Add WGD
-COPY src/WGD /opt/WGD
-ENV PATH="/opt/WGD/bin:${PATH}"
