@@ -54,7 +54,7 @@ task GetBamID {
   }
 
   parameter_meta {
-    bam_file: {
+    bam_or_cram_file: {
       localization_optional: true
     }
   }

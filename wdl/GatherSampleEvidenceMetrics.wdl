@@ -11,11 +11,13 @@ workflow GatherSampleEvidenceMetrics {
     File? delly_vcf
     File? manta_vcf
     File? melt_vcf
+    File? scramble_vcf
     File? wham_vcf
 
     File? baseline_delly_vcf
     File? baseline_manta_vcf
     File? baseline_melt_vcf
+    File? baseline_scramble_vcf
     File? baseline_wham_vcf
 
     File contig_list
@@ -29,6 +31,7 @@ workflow GatherSampleEvidenceMetrics {
     RuntimeAttr? runtime_attr_manta_metrics
     RuntimeAttr? runtime_attr_melt_std
     RuntimeAttr? runtime_attr_melt_metrics
+    RuntimeAttr? runtime_attr_scramble_metrics
     RuntimeAttr? runtime_attr_wham_std
     RuntimeAttr? runtime_attr_wham_metrics
     RuntimeAttr? runtime_attr_sr_metrics
@@ -141,6 +144,19 @@ workflow GatherSampleEvidenceMetrics {
         runtime_attr_override = runtime_attr_melt_metrics
     }
   }
+  if (defined(scramble_vcf) && defined(baseline_scramble_vcf)) {
+    call tu.VCFMetrics as Scramble_Metrics {
+      input:
+        vcf = select_first([scramble_vcf]),
+        baseline_vcf = select_first([baseline_scramble_vcf]),
+        samples = [sample],
+        prefix = "scramble_" + sample,
+        types = "INS",
+        contig_list = contig_list,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        runtime_attr_override = runtime_attr_scramble_metrics
+    }
+  }
   if (defined(wham_vcf)) {
     call tu.StandardizeVCF as Wham_Std {
       input:
@@ -205,6 +221,6 @@ workflow GatherSampleEvidenceMetrics {
   }
 
   output {
-    Array[File] sample_metrics_files = select_all([Delly_Metrics.out, Manta_Metrics.out, Melt_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
+    Array[File] sample_metrics_files = select_all([Delly_Metrics.out, Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
   }
 }
