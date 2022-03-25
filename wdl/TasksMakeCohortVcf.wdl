@@ -1075,11 +1075,11 @@ task FixEndsRescaleGQ {
             record.samples[sample][gq_field] = floor(record.samples[sample][gq_field] / 10)
 
 
-    with pysam.VariantFile(~{vcf}, 'r') as f_in, pysam.VariantFile(~{outfile}, 'w', header=f_in.header) as f_out:
+    with pysam.VariantFile("~{vcf}", 'r') as f_in, pysam.VariantFile("~{outfile}", 'w', header=f_in.header) as f_out:
       for record in f_in:
-        if ~{fix_ends_}:
+        if "~{fix_ends_}" == "true":
           fix_bad_end(record)
-        if ~{rescale_gq_}:
+        if "~{rescale_gq_}" == "true":
           rescale_gq(record)
         f_out.write(record)
 
