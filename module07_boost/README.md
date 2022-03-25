@@ -34,7 +34,7 @@ Use `wdl/Module07FilterGTsPart3ApplyModel.wdl` to run this step.
 
 This step requires a minimum BS lookup table for filtering. This table can be generated in several ways, such as:  
 
-1. Manually generating a table of hard thresholds; see `_TBD_` for an example of this format, or
+1. Manually generating a table of hard thresholds; see `example_inputs/flat_BS_filter_lookup_table.tsv` for an example of this format, or
 2. Dynamically optimizing thresholds for different types of SVs using the minGQ workflows. Note that this option is still in development.  
 
 The output of this step is a filtered VCF ready for additional downstream filtering & annotation.  

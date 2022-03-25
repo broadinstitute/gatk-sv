@@ -278,8 +278,7 @@ def _get_minMetric(record, minMetric_dict, SVLEN_table, AF_table, SVTYPE_table,
     #Get minMetric_dict indexes
     if 'SVLEN' in record.info.keys():
         SVLEN_idx = _lookup_SVLEN_key(record.info['SVLEN'], SVLEN_table)
-    if 'AF' in record.info.keys():
-        AF_idx = _lookup_AF_key(record.info['AF'][0], AF_table)
+    AF_idx = _lookup_AF_key(record.info['AF'][0], AF_table)
     if 'SVTYPE' in record.info.keys():
         SVTYPE_idx = _lookup_SVTYPE_key(record.info['SVTYPE'], SVTYPE_table)
     FILTER_query = ','.join(f for f in record.filter)
@@ -387,9 +386,16 @@ def main():
                  '{:.2%}'.format(args.maxNCR) + ' of {0} sample GTs were '.format(args.prefix) + \
                  'masked as no-call GTs due to low {0}. '.format(args.metric) + \
                  'Indicates a possibly noisy locus in {0} samples.>'.format(args.prefix)
-    header = vcf.header
-    header.add_line(NEW_FILTER)
+    vcf.header.add_line(NEW_FILTER)
     filter_text = 'HIGH_{0}_NOCALL_RATE'.format(args.prefix)
+
+    # Check to ensure either AF or AC & AN are provided in input VCF header
+    if 'AF' in vcf.header.info.keys():
+        pass
+    elif ('AC' in vcf.header.info.keys() and 'AN' in vcf.header.info.keys()):
+        vcf.header.add_line('##INFO=<ID=AF,Number=A,Type=Float,Description="Allele frequency">')
+    else:
+        exit('Input VCF must have either AF or AC & AN defined.')
 
     if args.fout in '- stdout'.split():
         fout = pysam.VariantFile(sys.stdout, 'w', header=vcf.header)
@@ -405,7 +411,7 @@ def main():
 
     #Make filtering lookup table
     minMetric_dict = make_minMetric_dict(args.minMetricTable, SVLEN_table, AF_table, 
-                                 SVTYPE_table, FILTER_table, EV_table)
+                                         SVTYPE_table, FILTER_table, EV_table)
 
     #Iterate over records in vcf and apply filter
     for record in vcf.fetch():
@@ -413,10 +419,16 @@ def main():
         if args.multiallelics or \
         (not args.multiallelics and 
          not _is_multiallelic(record)):
-            apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
-                               SVTYPE_table, FILTER_table, EV_table, 
-                               globalMin=args.globalMin, maxNCR=args.maxNCR, 
-                               highNCR_filter=filter_text)
+            # Infer record's AF if AC & AN (but not AF) are provided
+            if 'AF' in record.info.keys():
+                pass
+            else:
+                AF = tuple([ac / record.info['AN'] for ac in record.info['AC']])
+                record.info['AF'] = AF
+            apply_minMetric_filter(record, args.metric, minMetric_dict, 
+                                   SVLEN_table, AF_table, SVTYPE_table, 
+                                   FILTER_table, EV_table, globalMin=args.globalMin, 
+                                   maxNCR=args.maxNCR, highNCR_filter=filter_text)
 
         if args.cleanAFinfo:
             # Clean biallelic AF annotation

@@ -1,0 +1,6 @@
+#condition	minSVLEN	maxSVLEN	minAF	maxAF	includeSVTYPE	excludeSVTYPE	includeFILTER	excludeFILTER	includeEV	excludeEV	cutoff	source
+all_DEL	-2	300000000	0	1	DEL	None	None	None	None	None	-1	manual
+all_DUP	-2	300000000	0	1	DUP	None	None	None	None	None	-1	manual
+all_INS	-2	300000000	0	1	INS	None	None	None	None	None	-1	manual
+all_INV_CPX	-2	300000000	0	1	INV,CPX,CTX	None	None	None	None	None	0	manual
+all_BND	-2	300000000	0	1	BND	None	None	None	None	None	2	manual

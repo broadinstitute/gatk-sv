@@ -146,8 +146,8 @@ task AnnotateBoostScores {
   String out_prefix = basename(vcf, ".vcf.gz") + ".boost_anno"
 
   Float input_size = size([vcf, boost_tarball], "GB")
-  Float base_disk_gb = 100.0
-  Float compression_factor = 20.0
+  Float base_disk_gb = 50.0
+  Float compression_factor = 30.0
   RuntimeAttr runtime_default = object {
       mem_gb: 6,
       disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
