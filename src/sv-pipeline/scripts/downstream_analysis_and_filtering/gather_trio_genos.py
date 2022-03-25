@@ -5,7 +5,7 @@
 # Distributed under terms of the MIT license.
 
 """
-Extract trio allele counts & GQs for all variants in a vcf
+Extract trio allele counts & GQs (or another FORMAT field) for all variants in a vcf
 """
 
 import argparse
@@ -13,6 +13,7 @@ import sys
 import csv
 from collections import defaultdict
 import pysam
+from numpy import round
 
 
 def read_ac_adj(infile, pro, fa, mo):
@@ -33,14 +34,17 @@ def read_ac_adj(infile, pro, fa, mo):
     return ac_adj
 
 
-def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
+def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ', 
+                fill_incomplete = False, default_metric_value = 999, 
+                no_header = False):
     GTs_to_skip = './. None/None 0/None None/0'.split()
     sex_chroms = 'X Y chrX chrY'.split()
 
     #Write header to output file
     if not no_header:
-        header = '#VID\tSVLEN\tAF\tSVTYPE\tFILTER\tpro_EV\tpro_AC\tfa_AC\tmo_AC\tpro_GQ\tfa_GQ\tmo_GQ\n'
-        fout.write(header)
+        header_cols = '#VID SVLEN AF SVTYPE FILTER pro_EV pro_AC fa_AC mo_AC pro_{0} fa_{0} mo_{0}'
+        header = '\t'.join(header_cols.format(metric).split())
+        fout.write(header + '\n')
 
     trio_samples = [pro, fa, mo]
 
@@ -50,12 +54,6 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
         vids_to_correct = []
 
     for record in vcf:
-        # #Do not include UNRESOLVED variants
-        # if 'UNRESOLVED' in record.info.keys() \
-        # or 'UNRESOLVED_TYPE' in record.info.keys() \
-        # or 'UNRESOLVED' in record.filter:
-        #     continue
-
         #Do not include variants from sex chromosomes
         if record.chrom in sex_chroms:
             continue
@@ -95,22 +93,20 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, no_header = False):
             newACs = ac_adj[record.id]
             for i in [0, 1, 2]:
                 ACs[i] = str(max([int(ACs[i]), int(newACs[i])]))
-            # oldACs_str = '(' + ', '.join(oldACs) + ')'
-            # newACs_str = '(' + ', '.join(ACs) + ')'
-            # print('Overwriting ACs for {0} from {1} to {2}\n'.format(record.id,
-            #                                                          oldACs_str,
-            #                                                          newACs_str))
 
-        #Get genotype qualities for trio
-        GQs = [record.samples[ID]['GQ'] for ID in trio_samples]
+        #Get genotype metrics for trio
+        GQs = [record.samples[ID][metric] for ID in trio_samples]
 
-        #Skip sites that are missing integer GQs in any member of the trio
-        #This shouldn't occur in theory, but somtimes does. Cause unclear.
+        # Fill missing quality metrics in any member of the trio with a default value
         if len([g for g in GQs if g is None]) > 0:
-            continue
-        #Otherwise, convert GQs to string for writing to file
-        else:
-            GQs = [str(g) for g in GQs]
+            if not fill_incomplete:
+                continue
+            else:
+                GQs = [default_metric_value if g is None else g for g in GQs]
+
+        if isinstance(GQs[0], float):
+            GQs = [round(g, 4) for g in GQs]
+        GQs = [str(g) for g in GQs]
 
         #Get minimal variant info
         vid = record.id
@@ -157,6 +153,15 @@ def main():
     parser.add_argument('mo', help='Mother sample ID.')
     parser.add_argument('--ac-adj', help='tsv with variant IDs and ' +
                         'pro/fa/mo AC to be manually overwritten.')
+    parser.add_argument('--metric', default='GQ', type=str, help='Quality metric ' +
+                        'to extract from FORMAT for each GT.')
+    parser.add_argument('--fill-incomplete', default=False, action='store_true',
+                        help='Fill GT quality metrics with --default-metric-value ' +
+                        'for samples missing quality metrics. Default: skip ' +
+                        'sites with incomplete quality metrics.')
+    parser.add_argument('--default-metric-value', default=999, help='Default ' +
+                        'value to fill missing GT quality metrics. Only used if ' +
+                        '--fill-incomplete is provided. Default: 999.')
     parser.add_argument('--no-header', help='Do not write header line.',
                         action='store_true', default=False)
 
@@ -177,7 +182,8 @@ def main():
     else:
         ac_adj = None
 
-    gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.no_header)
+    gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.metric, 
+                args.fill_incomplete, args.default_metric_value, args.no_header)
 
     fout.close()
 

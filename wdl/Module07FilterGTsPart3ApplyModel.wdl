@@ -8,7 +8,7 @@ import "Module07MinGQTasks.wdl" as minGQTasks
 import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 
-workflow Module07MinGQPart3 {
+workflow Module07FilterGTsPart3 {
     input {
         String prefix
         File PCRMINUS_lookup_table
@@ -20,7 +20,7 @@ workflow Module07MinGQPart3 {
 
         Float max_noCallRate
         String filter_metric = "GQ"
-        Int global_minMetric
+        Int global_min_metric
 
         String sv_pipeline_docker
         String sv_base_mini_docker
@@ -39,7 +39,7 @@ workflow Module07MinGQPart3 {
             prefix="~{prefix}.PCRMINUS",
             PCR_status="PCRMINUS",
             maxNCR=max_noCallRate,
-            global_minMetric=global_minMetric,
+            global_min_metric=global_min_metric,
             sv_pipeline_docker=sv_pipeline_docker
         }
 
@@ -53,7 +53,7 @@ workflow Module07MinGQPart3 {
               prefix="~{prefix}.PCRPLUS",
               PCR_status="PCRPLUS",
               maxNCR=max_noCallRate,
-              global_minMetric=global_minMetric,
+              global_min_metric=global_min_metric,
               sv_pipeline_docker=sv_pipeline_docker
           }
 

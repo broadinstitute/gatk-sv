@@ -1,24 +1,30 @@
-This repository includes scripts to run minGQ on gnomad samples.
+## Genotype filtering optimization  
 
-The original minGQ script has now been splitted into three parts:
+_Note: this directory contains instructions to run the revised version of the workflow previously known as minGQ, now known as Module07FilterGTs_ 
 
-***../wdl/Module07MinGQPart1CollectData.wdl***: 
+The original minGQ workflow has now been divided into three sequential steps:
 
-	- the first script to run for minGQ; 
-	- collects information from cleanvcf to build minGQ model; 
-	- this script can parallelize across chromosomes; 
-	- json files are kept under example_jsons/  with "minGQ.gnomad_v3.Step1." in file name.
+1. **../wdl/Module07FilterGTsPart1CollectData.wdl**:  
+```
+- Collects data for all trios present in an input VCF to train a genotype filtering model in Step 2 
+- This step can be parallelized across chromosomes
+- Input json files are kept under example_jsons/  with "minGQ.gnomad_v3.Step1." in file name [note: these reflect XZ's original implementation]
+```
 
-***../wdl/Module07MinGQPart2TrainModel.wdl***: 
+2. **../wdl/Module07FilterGTsPart2TrainModel.wdl**: 
+```
+- Integrates trio data across all chromosomes output by Step 1 to build global genotype filtering model  
+- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step2." in file name [note: these reflect XZ's original implementation]
+```
 
-	- the second script to run for minGQ; 
-	- integrates data across the genome to build global minGQ model;  
-	- outputs across all chromosomes from Part1 are integrated to build the minGQ model in this script;
-	- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step2." in file name.
+3. **../wdl/Module07FilterGTsPart3ApplyModel.wdl**: 
+```
+- Filters genotypes using the model trained in Step 2
+- This step can be parallelized across chromosomes
+- Recommended to apply directly to the sharded, PCR-split VCFs output by step 1 (for reasonable runtimes)
+- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step3." in file name [note: these reflect XZ's original implementation]
+```
 
-***../wdl/Module07FilterGTsPart3ApplyModel.wdl***: 
+---  
 
-	- last script to run for minGQ; 
-	- applies the trained model from Part2 to filter SVs; 
-	- this wdl can parallelize across chromosomes;
-	- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step3." in file name.
+Developers note: this codebase is a work-in-progress and there may be some inconsistencies between XZ's original implementation and RLC's revised implementation  

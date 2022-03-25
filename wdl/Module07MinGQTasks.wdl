@@ -323,6 +323,8 @@ task CollectTrioSVdat {
   input{
     Array[File] vcf_shards
     File famfile
+    String filter_metric = "GQ"
+    Array[String] gather_trio_geno_options = []
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -340,22 +342,29 @@ task CollectTrioSVdat {
   command <<<
     for wrapper in 1; do
       #Write header
-      echo -e "#famID\tVID\tSVLEN\tAF\tSVTYPE\tFILTER\tpro_EV\tpro_AC\tfa_AC\tmo_AC\tpro_GQ\tfa_GQ\tmo_GQ"
+      echo -e "#famID\tVID\tSVLEN\tAF\tSVTYPE\tFILTER\tpro_EV\tpro_AC\tfa_AC\tmo_AC\tpro_~{filter_metric}\tfa_~{filter_metric}\tmo_~{filter_metric}"
+
       #Iterate over list of VCF shards
       while read vcf; do
+
         #Get list of sample IDs & column numbers from VCF header
         zfgrep "#" $vcf | fgrep -v "##" | head -n1000 |sed 's/\t/\n/g' \
           | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
+
         #Iterate over families & subset VCF
         while read famID pro fa mo prosex pheno; do
+
           pro_idx=$( awk -v ID=$pro '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
           fa_idx=$( awk -v ID=$fa '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
           mo_idx=$( awk -v ID=$mo '{ if ($1==ID) print $2 }' vcf_header_columns.txt )
+
           if ! [ -z $pro_idx ] && ! [ -z $fa_idx ] && ! [ -z $mo_idx ]; then
-            #Subset vcf to only multiallelic sites in teh family
+
+            #Subset vcf to only non-ref or multiallelic sites in the family
             zcat "$vcf" | cut -f1-9,"$pro_idx","$fa_idx","$mo_idx" \
             | grep -e '\#\|[0-1]\/1\|MULTIALLELIC' \
             | bgzip -c > $famID.vcf.gz
+
             #Get list of CNVs in proband that are ≥5kb have ≥50% coverage in either parent
             svtk vcf2bed -i SVTYPE --no-header $famID.vcf.gz stdout \
             | awk -v OFS="\t" '{ if ($NF ~ /DEL|DUP|CNV/) print $1, $2, $3, $4, $NF, $6 }' \
@@ -365,7 +374,8 @@ task CollectTrioSVdat {
             > $pro.CNVs.gt5kb.bed
             fgrep -w $fa $famID.CNVs.bed > $fa.CNVs.bed
             fgrep -w $mo $famID.CNVs.bed > $mo.CNVs.bed
-            #Deletions
+
+            # Find deletions where AC needs to be updated due to parental coverage
             awk -v OFS="\t" '{ if ($NF=="DEL") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
               -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $fa.CNVs.bed ) \
@@ -374,7 +384,8 @@ task CollectTrioSVdat {
               -b <( awk '{ if ($5 ~ /DEL|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             > $famID.RD_genotype_update.txt
-            #Duplications
+
+            # Find duplications where AC needs to be updated due to parental coverage
             awk -v OFS="\t" '{ if ($NF=="DUP") print $0, "1" }' $pro.CNVs.gt5kb.bed \
             | bedtools coverage -a - \
               -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $fa.CNVs.bed ) \
@@ -383,16 +394,19 @@ task CollectTrioSVdat {
               -b <( awk '{ if ($5 ~ /DUP|CNV/) print $0 }' $mo.CNVs.bed ) \
             | awk -v OFS="\t" '{ if ($NF>=0.5) $NF=1; else $NF=0; print $4, $6, $7, $NF }' \
             >> $famID.RD_genotype_update.txt
-            #Get variant stats
+
+            # Get variant stats
             /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/gather_trio_genos.py \
               --ac-adj $famID.RD_genotype_update.txt \
+              --metric ~{filter_metric} \
+              ~{sep=" " gather_trio_geno_options} \
               --no-header \
               $famID.vcf.gz stdout "$pro" "$fa" "$mo" \
             | awk -v famID="$famID" -v OFS="\t" '{ print famID, $0 }'
           fi
         done < ~{famfile}
       done < ~{write_lines(vcf_shards)}
-    done | bgzip -c > "trio_variant_info.txt.gz"
+    done | gzip -c > "trio_variant_info.txt.gz"
   >>>
 
   output {
@@ -609,7 +623,7 @@ task FilterGTs {
     String prefix
     String PCR_status
     Float maxNCR
-    Int global_minMetric
+    Int global_min_metric
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override    
   }
