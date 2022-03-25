@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright © 2018 Ryan Collins <rlcollins@g.harvard.edu>
+# Copyright © 2022 Ryan Collins <rlcollins@g.harvard.edu>
 # Distributed under terms of the MIT license.
 
 """
-Apply per-sample minGQ filters to an input VCF
+Apply per-sample filters on GQ (or another FORMAT field) to an input VCF
 """
 
 import argparse
@@ -18,16 +18,16 @@ import svtk.utils as svu
 
 
 #Make dummy dict for all unique ranges of SVLEN
-def _make_SVLEN_interval_dict(minGQtable):
+def _make_SVLEN_interval_dict(minMetricTable):
     #Prep lookup table
     SVLEN_table = {}
     i = 0
 
-    with open(minGQtable) as lt:
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -54,16 +54,16 @@ def _lookup_SVLEN_key(SVLEN, SVLEN_table):
 
 
 #Make dummy dict for all unique ranges of AF
-def _make_AF_interval_dict(minGQtable, scalar=10000):
+def _make_AF_interval_dict(minMetricTable, scalar=10000):
     #Prep lookup table
     AF_table = {}
     i = 0
 
-    with open(minGQtable) as lt:
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -93,17 +93,17 @@ def _lookup_AF_key(AF, AF_table, scalar=10000):
 
 
 #Make dummy dict for all SVTYPEs
-def _make_SVTYPE_dict(minGQtable):
+def _make_SVTYPE_dict(minMetricTable):
     #Prep lookup table
     SVTYPE_table = {}
     i = 0
 
-    #Add all SVTYPE mappings from input minGQ table
-    with open(minGQtable) as lt:
+    #Add all SVTYPE mappings from input minMetric table
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -129,7 +129,7 @@ def _lookup_SVTYPE_key(SVTYPE, SVTYPE_table):
 
 
 #Make dummy dict for all FILTER combinations
-def _make_FILTER_dict(minGQtable, vcf):
+def _make_FILTER_dict(minMetricTable, vcf):
     #Prep lookup table
     FILTER_table = {}
     i = 0
@@ -137,12 +137,12 @@ def _make_FILTER_dict(minGQtable, vcf):
     #Get all FILTER statuses from VCF header
     vcf_filters = vcf.header.filters.keys()
 
-    #Add all FILTER mappings from input minGQ table
-    with open(minGQtable) as lt:
+    #Add all FILTER mappings from input minMetric table
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -174,7 +174,7 @@ def _lookup_FILTER_key(FILTERs, FILTER_table):
 
 
 #Make dummy dict for all EV combinations
-def _make_EV_dict(minGQtable):
+def _make_EV_dict(minMetricTable):
     #Prep lookup table
     EV_table = {}
     i = 0
@@ -182,12 +182,12 @@ def _make_EV_dict(minGQtable):
     #Get list of universe of possible combinations of evidence
     ev_types = ['RD', 'PE', 'SR', 'RD,PE', 'RD,SR', 'PE,SR', 'RD,PE,SR']
 
-    #Add all EV mappings from input minGQ table
-    with open(minGQtable) as lt:
+    #Add all EV mappings from input minMetric table
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -224,23 +224,23 @@ def _lookup_EV_key(EV, EV_table):
     return out
 
 
-#Create master minGQ lookup table
-def make_minGQ_dict(minGQtable, SVLEN_table, AF_table, SVTYPE_table, 
-                    FILTER_table, EV_table):
-    #Prep master minGQ lookup table
+#Create master minMetric lookup table
+def make_minMetric_dict(minMetricTable, SVLEN_table, AF_table, SVTYPE_table, 
+                        FILTER_table, EV_table):
+    #Prep master minMetric lookup table
     def _nested_dict(n, type):
         if n == 1:
             return defaultdict(type)
         else:
             return defaultdict(lambda: _nested_dict(n-1, type))
-    minGQ_dict = _nested_dict(5, str)
+    minMetric_dict = _nested_dict(5, str)
 
-    with open(minGQtable) as lt:
+    with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         #Enter each line in the lookup table into the dictionary
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minGQ, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -251,13 +251,15 @@ def make_minGQ_dict(minGQtable, SVLEN_table, AF_table, SVTYPE_table,
             SVLEN_idx = _lookup_SVLEN_key(SVLEN, SVLEN_table)
             AF = np.mean([float(minAF), float(maxAF)])
             AF_idx = _lookup_AF_key(AF, AF_table)
-            FILTERs = (',').join([f for f in includeFILTER.split(',') if f not in excludeFILTER.split(',')])
+            FILTERs = (',').join([f for f in includeFILTER.split(',') \
+                                  if f not in excludeFILTER.split(',')])
             FILTER_idx = _lookup_FILTER_key(FILTERs, FILTER_table)
             EV_idx = _lookup_EV_key(includeEV, EV_table)
-            minGQ = int(minGQ)
+            minMetric = int(minMetric)
 
             #Update one line for each qualifying SVTYPE
-            for SVTYPE in [s for s in includeSVTYPE.split(',') if s not in excludeSVTYPE.split(',')]:
+            for SVTYPE in [s for s in includeSVTYPE.split(',') \
+                           if s not in excludeSVTYPE.split(',')]:
                 SVTYPE_idx = _lookup_SVTYPE_key(SVTYPE, SVTYPE_table)
 
                 #Add line to dict if all indexes are not None
@@ -265,15 +267,15 @@ def make_minGQ_dict(minGQtable, SVLEN_table, AF_table, SVTYPE_table,
                 and AF_idx is not None \
                 and SVTYPE_idx is not None \
                 and FILTER_idx is not None:
-                    minGQ_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx][EV_idx] = int(minGQ)
+                    minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx][EV_idx] = int(minMetric)
 
-    return minGQ_dict
+    return minMetric_dict
 
 
-#Query master minGQ lookup table
-def _get_minGQ(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table, 
-               FILTER_table, EV_table, globalMin=0):
-    #Get minGQ_dict indexes
+#Query master minMetric lookup table
+def _get_minMetric(record, minMetric_dict, SVLEN_table, AF_table, SVTYPE_table, 
+                   FILTER_table, EV_table, globalMin=0):
+    #Get minMetric_dict indexes
     if 'SVLEN' in record.info.keys():
         SVLEN_idx = _lookup_SVLEN_key(record.info['SVLEN'], SVLEN_table)
     if 'AF' in record.info.keys():
@@ -283,27 +285,28 @@ def _get_minGQ(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table,
     FILTER_query = ','.join(f for f in record.filter)
     FILTER_idx = _lookup_FILTER_key(FILTER_query, FILTER_table) 
     
-    #Get minGQ dict down to EV
+    #Get minMetric dict down to EV
     if SVLEN_idx is not None \
     and AF_idx is not None \
     and SVTYPE_idx is not None \
     and FILTER_idx is not None:
-        minGQ = minGQ_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx]
+        minMetric = minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx]
     #Otherwise, set all EV categories to globalMin
     else:
-        minGQ = defaultdict(dict)
+        minMetric = defaultdict(dict)
         for key in list(set(EV_table.values())):
-            minGQ[key] = int(globalMin)
+            minMetric[key] = int(globalMin)
     
-    return(minGQ)
+    return(minMetric)
 
 
-def apply_minGQ_filter(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table, 
-                       FILTER_table, EV_table, globalMin=0, maxNCR=0.005, 
-                       highNCR_filter="COHORT"):
-    #Get minGQ dict down to EV for this variant
-    minGQ_by_ev = _get_minGQ(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table, 
-                             FILTER_table, EV_table, globalMin)
+def apply_minMetric_filter(record, metric, minMetric_dict, SVLEN_table, AF_table, 
+                           SVTYPE_table, FILTER_table, EV_table, globalMin=0, 
+                           maxNCR=0.05, highNCR_filter="COHORT"):
+    #Get minMetric dict down to EV for this variant
+    minMetric_by_ev = _get_minMetric(record, minMetric_dict, SVLEN_table, 
+                                     AF_table, SVTYPE_table, FILTER_table, 
+                                     EV_table, globalMin)
 
     n_samples = len(record.samples)
 
@@ -313,14 +316,14 @@ def apply_minGQ_filter(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table,
         if record.samples[s]['GT'] == (1, 1):
             continue
             
-        #Get minGQ cutoff given that sample's evidence
+        #Get minMetric cutoff given that sample's evidence
         EV = record.samples[s]['EV']
         if isinstance(EV, tuple):
             EV = ','.join(list(EV))
         EV_key = _lookup_EV_key(EV, EV_table)
-        minGQ = minGQ_by_ev.get(EV_key, globalMin)
-        if record.samples[s]['GQ'] is not None:
-            if record.samples[s]['GQ'] < minGQ:
+        minMetric = minMetric_by_ev.get(EV_key, globalMin)
+        if record.samples[s][metric] is not None:
+            if record.samples[s][metric] < minMetric:
                 record.samples[s]['GT'] = (None, None)
                 bl += 1
 
@@ -346,14 +349,17 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('vcf', help='Input vcf (supports "stdin").')
-    parser.add_argument('minGQtable', help='Tab-delimited minGQ filtering lookup' + 
-                        ' table generated by create_minGQ_lookup_table.R.')
+    parser.add_argument('minMetricTable', help='Tab-delimited filtering lookup ' + 
+                        'table in the same format as generated by ' +
+                        'create_minGQ_lookup_table.R.')
     parser.add_argument('fout', help='Output file (supports "stdout").')
-    parser.add_argument('-m', '--minGQ', help='Global min GQ', type=int, 
-                        default=0, dest='globalMin')
+    parser.add_argument('--metric', default='GQ', type=str, help='FORMAT field ' +
+                        'to which filtering should be applied [default: GQ]')
+    parser.add_argument('--globalMin', help='Global minimum metric value', 
+                        type=int, default=0)
     parser.add_argument('--multiallelics', default=False, action='store_true',
                         help='Also apply filtering to multiallelic sites ' + 
-                        '(default: skip multiallelics).')
+                        '(default: do not filter multiallelics).')
     parser.add_argument('--dropEmpties', default=False, action='store_true',
                         help='After GT reassignments, drop any SV with no remaining ' + 
                         ' non-ref samples (default: keep all SV).')
@@ -362,8 +368,7 @@ def main():
                         'to be SVTYPE=INS (default: keep original SVTYPEs).')    
     parser.add_argument('--maxNCR', help='Max no-call rate among all ' + 
                         'samples before adding a flag to the record\'s FILTER field' + 
-                        ' (default: 0.005)', 
-                        type=float, default=0.005, dest='maxNCR')
+                        ' (default: 0.05)', type=float, default=0.05, dest='maxNCR')
     parser.add_argument('--cleanAFinfo', help='Remove all AF-related terms from ' + 
                         ' the INFO field and VCF header (default: keep all terms).', 
                         default=False, action='store_true')
@@ -380,8 +385,8 @@ def main():
     #Add HIGH_NOCALL_RATE filter to vcf header
     NEW_FILTER = '##FILTER=<ID=HIGH_{0}_NOCALL_RATE,Description="More than '.format(args.prefix) + \
                  '{:.2%}'.format(args.maxNCR) + ' of {0} sample GTs were '.format(args.prefix) + \
-                 'masked as no-call GTs due to low GQ. Indicates a possibly noisy locus ' + \
-                 'in {0} samples.>'.format(args.prefix)
+                 'masked as no-call GTs due to low {0}. '.format(args.metric) + \
+                 'Indicates a possibly noisy locus in {0} samples.>'.format(args.prefix)
     header = vcf.header
     header.add_line(NEW_FILTER)
     filter_text = 'HIGH_{0}_NOCALL_RATE'.format(args.prefix)
@@ -392,14 +397,14 @@ def main():
         fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
     #Make dummy lookup tables for SVLEN, AF, SVTYPE, FILTER, and EV
-    SVLEN_table = _make_SVLEN_interval_dict(args.minGQtable)
-    AF_table = _make_AF_interval_dict(args.minGQtable)
-    SVTYPE_table = _make_SVTYPE_dict(args.minGQtable)
-    FILTER_table = _make_FILTER_dict(args.minGQtable, vcf)
-    EV_table = _make_EV_dict(args.minGQtable)
+    SVLEN_table = _make_SVLEN_interval_dict(args.minMetricTable)
+    AF_table = _make_AF_interval_dict(args.minMetricTable)
+    SVTYPE_table = _make_SVTYPE_dict(args.minMetricTable)
+    FILTER_table = _make_FILTER_dict(args.minMetricTable, vcf)
+    EV_table = _make_EV_dict(args.minMetricTable)
 
-    #Make minGQ lookup table
-    minGQ_dict = make_minGQ_dict(args.minGQtable, SVLEN_table, AF_table, 
+    #Make filtering lookup table
+    minMetric_dict = make_minMetric_dict(args.minMetricTable, SVLEN_table, AF_table, 
                                  SVTYPE_table, FILTER_table, EV_table)
 
     #Iterate over records in vcf and apply filter
@@ -408,7 +413,7 @@ def main():
         if args.multiallelics or \
         (not args.multiallelics and 
          not _is_multiallelic(record)):
-            apply_minGQ_filter(record, minGQ_dict, SVLEN_table, AF_table, 
+            apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
                                SVTYPE_table, FILTER_table, EV_table, 
                                globalMin=args.globalMin, maxNCR=args.maxNCR, 
                                highNCR_filter=filter_text)

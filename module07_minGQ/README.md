@@ -16,7 +16,7 @@ The original minGQ script has now been splitted into three parts:
 	- outputs across all chromosomes from Part1 are integrated to build the minGQ model in this script;
 	- json files are kept under example_jsons/ with "minGQ.gnomad_v3.Step2." in file name.
 
-***../wdl/Module07MinGQPart3ApplyModel.wdl***: 
+***../wdl/Module07FilterGTsPart3ApplyModel.wdl***: 
 
 	- last script to run for minGQ; 
 	- applies the trained model from Part2 to filter SVs; 

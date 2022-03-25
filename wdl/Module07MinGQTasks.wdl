@@ -600,15 +600,16 @@ task BuildFilterTree {
 }
 
 
-# Apply minGQ filter to VCF
-task ApplyMinGQFilter {
+# Apply minMetric filter to VCF
+task FilterGTs {
   input{
     File vcf
-    File? minGQ_lookup_table
+    File? minMetric_lookup_table
+    String filter_metric = "GQ"
     String prefix
     String PCR_status
     Float maxNCR
-    Int global_minGQ
+    Int global_minMetric
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override    
   }
@@ -624,14 +625,15 @@ task ApplyMinGQFilter {
 
   command <<<
     set -euo pipefail
-    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/apply_minGQ_filter.py \
-      --minGQ "~{global_minGQ}" \
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/filter_GTs_by_metric.py \
+      --minMetric "~{global_min_metric}" \
+      --metric ~{filter_metric} \
       --maxNCR "~{maxNCR}" \
       --simplify-INS-SVTYPEs \
       --cleanAFinfo \
       --prefix "~{PCR_status}" \
       "~{vcf}" \
-      "~{minGQ_lookup_table}" \
+      "~{minMetric_lookup_table}" \
       stdout \
     | fgrep -v "##INFO=<ID=AN," \
     | fgrep -v "##INFO=<ID=AC," \
@@ -649,11 +651,11 @@ task ApplyMinGQFilter {
     | fgrep -v "##INFO=<ID=CN_NONREF_COUNT," \
     | fgrep -v "##INFO=<ID=CN_NONREF_FREQ," \
     | bgzip -c \
-    > "~{prefix}.minGQ_filtered.vcf.gz"
+    > "~{prefix}.filtered.vcf.gz"
   >>>
 
   output {
-    File filtered_vcf = "~{prefix}.minGQ_filtered.vcf.gz"
+    File filtered_vcf = "~{prefix}.filtered.vcf.gz"
   }
 
   runtime {

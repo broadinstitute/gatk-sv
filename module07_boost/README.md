@@ -26,6 +26,19 @@ Use `AnnotateVcfWithBoostScores.wdl` to run this step.
 
 The output of this step is a single VCF with a `BS` attribute added to the sample-level genotype fields for all variants.    
 
+## Step 3: Filter VCF based on lgBoost scores  
+
+This step filters low-quality genotypes based on their Boost scores as annotated in `Step 2`.  
+
+Use `wdl/Module07FilterGTsPart3ApplyModel.wdl` to run this step.  
+
+This step requires a minimum BS lookup table for filtering. This table can be generated in several ways, such as:  
+
+1. Manually generating a table of hard thresholds; see `_TBD_` for an example of this format, or
+2. Dynamically optimizing thresholds for different types of SVs using the minGQ workflows. Note that this option is still in development.  
+
+The output of this step is a filtered VCF ready for additional downstream filtering & annotation.  
+
 ---  
 
 ## OLD (pre-RLC):  

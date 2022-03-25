@@ -19,7 +19,8 @@ workflow Module07MinGQPart3 {
         Array[File]? PCRPLUS_vcf_idx_lists
 
         Float max_noCallRate
-        Int global_minGQ
+        String filter_metric = "GQ"
+        Int global_minMetric
 
         String sv_pipeline_docker
         String sv_base_mini_docker
@@ -30,27 +31,29 @@ workflow Module07MinGQPart3 {
     # Apply filter per chromosome
     scatter (i in range(length(PCRMINUS_vcf_lists))){
         ### PCRMINUS
-        call minGQTasks.ApplyMinGQFilter as apply_filter_PCRMINUS {
+        call minGQTasks.FilterGTs as apply_filter_PCRMINUS {
           input:
             vcf=PCRMINUS_vcf_lists[i],
-            minGQ_lookup_table=PCRMINUS_lookup_table,
+            minMetric_lookup_table=PCRMINUS_lookup_table,
+            filter_metric=filter_metric,
             prefix="~{prefix}.PCRMINUS",
             PCR_status="PCRMINUS",
             maxNCR=max_noCallRate,
-            global_minGQ=global_minGQ,
+            global_minMetric=global_minMetric,
             sv_pipeline_docker=sv_pipeline_docker
         }
 
         if (defined(PCRPLUS_vcf_lists)){
           ### PCRPLUS
-          call minGQTasks.ApplyMinGQFilter as apply_filter_PCRPLUS {
+          call minGQTasks.FilterGTs as apply_filter_PCRPLUS {
             input:
               vcf=select_first([PCRPLUS_vcf_lists])[i],
-              minGQ_lookup_table= PCRPLUS_lookup_table,
+              minMetric_lookup_table= PCRPLUS_lookup_table,
+              filter_metric=filter_metric,
               prefix="~{prefix}.PCRPLUS",
               PCR_status="PCRPLUS",
               maxNCR=max_noCallRate,
-              global_minGQ=global_minGQ,
+              global_minMetric=global_minMetric,
               sv_pipeline_docker=sv_pipeline_docker
           }
 
@@ -59,7 +62,7 @@ workflow Module07MinGQPart3 {
               PCRPLUS_vcf=apply_filter_PCRPLUS.filtered_vcf,
               PCRMINUS_vcf=apply_filter_PCRMINUS.filtered_vcf,
               prefix=prefix, 
-              sv_pipeline_docker = sv_pipeline_docker
+              sv_pipeline_docker=sv_pipeline_docker
           }
         }
 
