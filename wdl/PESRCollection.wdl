@@ -91,9 +91,6 @@ task RunPESRCollection {
         --sr-file ~{sample_id}.sr.txt.gz \
         --sample-name ~{sample_id} \
         -R ~{reference_fasta}
-
-    tabix -s1 -b2 -e2 -0 ~{sample_id}.pe.txt.gz
-    tabix -s1 -b2 -e2 -0 ~{sample_id}.sr.txt.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
