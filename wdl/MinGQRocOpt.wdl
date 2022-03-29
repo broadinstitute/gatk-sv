@@ -10,14 +10,17 @@ workflow MinGQRocOpt {
     File conditions_table
     Int maxSVperTrio
     Float roc_max_fdr
-    Int roc_min_gq
-    Int roc_max_gq
-    Int roc_step_gq
+    String optimize_metric = "GQ"
+    Int roc_min_metric
+    Int roc_max_metric
+    Int roc_step_metric
     Int min_sv_per_proband_per_condition
     String sv_pipeline_docker
+    String sv_pipeline_base_docker
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_roc_single
   }
+
   # Scatter over each condition and send the trio data for ROC optimization
   Array[Array[String]] conditions = read_tsv(conditions_table)
   scatter ( condition in conditions ) {
@@ -28,7 +31,7 @@ workflow MinGQRocOpt {
       input:
         trio_tarball=trio_tarball,
         prefix="~{prefix}",
-        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_base_docker=sv_pipeline_base_docker,
         trios_list=trios_list,
         condition_id=condition[0],
         minSVLEN=condition[1],
@@ -43,9 +46,10 @@ workflow MinGQRocOpt {
         excludeEV=condition[10],
         maxSVperTrio=maxSVperTrio,
         roc_max_fdr=roc_max_fdr,
-        roc_min_gq=roc_min_gq,
-        roc_max_gq=roc_max_gq,
-        roc_step_gq=roc_step_gq,
+        optimize_metric=optimize_metric,
+        roc_min_metric=roc_min_metric,
+        roc_max_metric=roc_max_metric,
+        roc_step_metric=roc_step_metric,
         min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
         runtime_attr_override = runtime_attr_roc_single
     }
@@ -88,11 +92,12 @@ task FilterMergeVariantsWithROC {
     String excludeEV
     Int maxSVperTrio
     Float roc_max_fdr
-    Int roc_min_gq
-    Int roc_max_gq
-    Int roc_step_gq
+    String optimize_metric
+    Int roc_min_metric
+    Int roc_max_metric
+    Int roc_step_metric
     Int min_sv_per_proband_per_condition
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -109,6 +114,7 @@ task FilterMergeVariantsWithROC {
     set -euo pipefail
     tar -xzvf ~{trio_tarball}
     find -name "trio_variant_info.txt.gz" > trio_dat_list.txt
+
     #Iterate over families and process them one at a time
     while read famdat; do
       #Subset to variants matching condition
@@ -124,10 +130,12 @@ task FilterMergeVariantsWithROC {
         --ev.include "~{includeEV}" \
         --ev.exclude "~{excludeEV}" \
         --max.variants "~{maxSVperTrio}" \
+        --optimize.metric "~{optimize_metric}" \
         "$famdat" /dev/stdout
     done < trio_dat_list.txt \
     | gzip -c \
     > "~{prefix}.~{condition_id}.trio_variants.txt.gz"
+
     #Compute median # of filtered calls per trio
     if [ $( zcat "~{prefix}.~{condition_id}.trio_variants.txt.gz" | wc -l ) -gt 0 ]; then
       /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/helper_median_counts_per_trio.R \
@@ -141,6 +149,7 @@ task FilterMergeVariantsWithROC {
       > "~{prefix}.~{condition_id}.perTrio_distrib_stats.txt"
       med=0
     fi
+
     #Run ROC if enough variants per proband
     echo -e "FINISHED FILTERING. FOUND $med MEDIAN QUALIFYING VARIANTS PER CHILD."
     if [ "$med" -gt ~{min_sv_per_proband_per_condition} ]; then
@@ -148,26 +157,27 @@ task FilterMergeVariantsWithROC {
       /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/optimize_minGQ_ROC_v2.R \
         --prefix "~{condition_id}" \
         --fdr "~{roc_max_fdr}" \
-        --minGQ "~{roc_min_gq}" \
-        --maxGQ "~{roc_max_gq}" \
-        --step "~{roc_step_gq}" \
+        --optimize-metric "~{optimize_metric}" \
+        --min-metric-value "~{roc_min_metric}" \
+        --max-metric-value "~{roc_max_metric}" \
+        --step "~{roc_step_metric}" \
         "~{prefix}.~{condition_id}.trio_variants.txt.gz" \
         "~{trios_list}" \
         "./"
-      gzip "~{condition_id}.minGQ_ROC.data.txt"
+      gzip "~{condition_id}.min~{optimize_metric}_ROC.data.txt"
     else
       echo -e "TOO FEW VARIANTS FOR ROC OPTIMIZATION."
-      touch "~{condition_id}.minGQ_ROC.data.txt.gz"
-      touch "~{condition_id}.minGQ_ROC.optimal.txt"
-      touch "~{condition_id}.minGQ_ROC.plot.pdf"
+      touch "~{condition_id}.min~{optimize_metric}_ROC.data.txt.gz"
+      touch "~{condition_id}.min~{optimize_metric}_ROC.optimal.txt"
+      touch "~{condition_id}.min~{optimize_metric}_ROC.plot.pdf"
     fi
   >>>
 
   output {
     File distrib_stats = "~{prefix}.~{condition_id}.perTrio_distrib_stats.txt"
-    File roc_data = "~{condition_id}.minGQ_ROC.data.txt.gz"
-    File roc_optimal = "~{condition_id}.minGQ_ROC.optimal.txt"
-    File roc_plot = "~{condition_id}.minGQ_ROC.plot.pdf"
+    File roc_data = "~{condition_id}.min~{optimize_metric}_ROC.data.txt.gz"
+    File roc_optimal = "~{condition_id}.min~{optimize_metric}_ROC.optimal.txt"
+    File roc_plot = "~{condition_id}.min~{optimize_metric}_ROC.plot.pdf"
   }
 
   runtime {
@@ -175,7 +185,7 @@ task FilterMergeVariantsWithROC {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -188,6 +198,7 @@ task CombineRocOptResults {
     Array[File] condition_optimizations
     Array[File] condition_distrib_stats
     String prefix
+    String optimize_metric
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -203,17 +214,17 @@ task CombineRocOptResults {
 
   command <<<
     set -euo pipefail
-    find . -name "*.minGQ_ROC.optimal.txt" \
+    find . -name "*.min~{optimize_metric}_ROC.optimal.txt" \
     | xargs -I {} cat {} | fgrep -v "#" | sort -Vk1,1 \
-    > "~{prefix}.minGQ_condition_opts.txt" ||true
+    > "~{prefix}.min~{optimize_metric}_condition_opts.txt" ||true
     find / -name "*.perTrio_distrib_stats.txt" \
     | xargs -I {} cat {} | fgrep -v "#" | sort -Vk1,1 \
-    > "~{prefix}.minGQ_condition_distrib_stats.txt" ||true
+    > "~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt" ||true
   >>>
 
   output {
-    File combined_optimizations = "~{prefix}.minGQ_condition_opts.txt"
-    File combined_distrib_stats = "~{prefix}.minGQ_condition_distrib_stats.txt"
+    File combined_optimizations = "~{prefix}.min~{optimize_metric}_condition_opts.txt"
+    File combined_distrib_stats = "~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt"
   }
 
   runtime {

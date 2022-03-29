@@ -49,9 +49,9 @@ task GetSampleLists {
   }
 }
 
-#concatinate minGQ tarballs trained on different chromosomes
-task ConcatTarball{
-  input{
+# Concatenate minGQ tarballs trained on different chromosomes
+task ConcatTarball {
+  input {
     Array[File] tarballs
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -69,28 +69,29 @@ task ConcatTarball{
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-      set -e
+    set -e
 
-      while read tarball; do
-        tar xzf $tarball
-      done < ~{write_lines(tarballs)}
-      find . -name trio_variant_info.txt.gz > files.txt
-      mkdir -p out
-      NUM_SHARDS=$(cat files.txt | sed 's/\/cacheCopy//g' | sed 's/\/attempt-[2-9]//g' | tr '/' '\t' | cut -f7 | sort | uniq | wc -l)
+    while read tarball; do
+      tar xzf $tarball
+    done < ~{write_lines(tarballs)}
+    find . -name trio_variant_info.txt.gz > files.txt
+    mkdir -p out
+    NUM_SHARDS=$(cat files.txt | sed 's/\/cacheCopy//g' | sed 's/\/attempt-[2-9]//g' | tr '/' '\t' | cut -f7 | sort | uniq | wc -l)
 
-      for (( i=0; i<$NUM_SHARDS; i++ )); do
-        fgrep "/shard-$i/" files.txt > shard.txt
-        mkdir -p "out/shard-$i/"
-        OUT="out/shard-$i/trio_variant_info.txt.gz"
-        sed 1q shard.txt | xargs -n1 gunzip -c | bgzip > $OUT
-        cat shard.txt | tail -n+2 | xargs -n1 gunzip -c | { grep -v ^# || true; } | bgzip >> $OUT
-      done
+    for (( i=0; i<$NUM_SHARDS; i++ )); do
+      fgrep "/shard-$i/" files.txt > shard.txt
+      mkdir -p "out/shard-$i/"
+      OUT="out/shard-$i/trio_variant_info.txt.gz"
+      sed 1q shard.txt | xargs -n1 gunzip -c | bgzip > $OUT
+      cat shard.txt | tail -n+2 | xargs -n1 gunzip -c | { grep -v ^# || true; } | bgzip >> $OUT
+    done
 
-      echo "test1"
-      tar -czf "out.tar.gz" out/
+    echo "test1"
+    tar -czf "out.tar.gz" out/
   >>>
-  output{
-        File tarball = "out.tar.gz"
+
+  output {
+    File tarball = "out.tar.gz"
   }
 
   runtime {
@@ -325,12 +326,12 @@ task CollectTrioSVdat {
     File famfile
     String filter_metric = "GQ"
     Array[String] gather_trio_geno_options = []
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 3.75, 
+    mem_gb: 2, 
     disk_gb: 50,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -417,7 +418,7 @@ task CollectTrioSVdat {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -511,9 +512,9 @@ task EnumerateConditions {
   >>>
 
   output {
-    File minGQ_conditions_table = "~{prefix}.minGQ_conditions.txt"
-    File minGQ_conditions_table_noHeader = "~{prefix}.minGQ_conditions.noHeader.txt"
-    Array[File] minGQ_conditions_table_noHeader_shards = glob("~{prefix}.minGQ_conditions.noHeader.shard*")
+    File conditions_table = "~{prefix}.minGQ_conditions.txt"
+    File conditions_table_noHeader = "~{prefix}.minGQ_conditions.noHeader.txt"
+    Array[File] conditions_table_noHeader_shards = glob("~{prefix}.minGQ_conditions.noHeader.shard*")
   }
 
   runtime {
@@ -573,7 +574,8 @@ task BuildFilterTree {
     File condition_optimizations
     File condition_distrib_stats
     String prefix
-    String sv_pipeline_docker
+    String optimize_metric = "GQ"
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -589,17 +591,18 @@ task BuildFilterTree {
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/create_minGQ_lookup_table.R \
+      --optimize-metric "~{optimize_metric}" \
       "~{conditions_table}" \
       "~{condition_distrib_stats}" \
       "~{condition_optimizations}" \
-      "~{prefix}.minGQ.ordered_tree_hierarchy.txt" \
-      "~{prefix}.minGQ.filter_lookup_table.txt"
+      "~{prefix}.min~{optimize_metric}.ordered_tree_hierarchy.txt" \
+      "~{prefix}.min~{optimize_metric}.filter_lookup_table.txt"
   >>>
 
 
   output {
-    File ordered_tree_hierarchy = "~{prefix}.minGQ.ordered_tree_hierarchy.txt"
-    File filter_lookup_table = "~{prefix}.minGQ.filter_lookup_table.txt"
+    File ordered_tree_hierarchy = "~{prefix}.min~{optimize_metric}.ordered_tree_hierarchy.txt"
+    File filter_lookup_table = "~{prefix}.min~{optimize_metric}.filter_lookup_table.txt"
   }
 
   runtime {
@@ -607,7 +610,7 @@ task BuildFilterTree {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -624,7 +627,7 @@ task FilterGTs {
     String PCR_status
     Float maxNCR
     Int global_min_metric
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override    
   }
   RuntimeAttr default_attr = object {
@@ -677,7 +680,7 @@ task FilterGTs {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

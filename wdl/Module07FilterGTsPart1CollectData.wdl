@@ -18,10 +18,12 @@ workflow Module07FilterGTsPart1 {
     Int min_records_per_shard_step1
     Int records_per_shard_AF_annotation = 1000
     String filter_metric = "GQ"
+    Array[String] gather_trio_geno_options = []
     File? pcrplus_samples_list
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_pipeline_base_docker
     String sv_pipeline_updates_docker
 
     # overrides for local tasks
@@ -156,7 +158,8 @@ workflow Module07FilterGTsPart1 {
         vcf_shards = SplitPcrVcf.PCRMINUS_vcf,
         famfile = fam,
         filter_metric = filter_metric,
-        sv_pipeline_docker = sv_pipeline_docker,
+        gather_trio_geno_options=gather_trio_geno_options,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_collect_trio_svdat_pcrminus
     }
   }
@@ -186,7 +189,8 @@ workflow Module07FilterGTsPart1 {
           vcf_shards = SplitPcrVcf.PCRPLUS_vcf,
           famfile = fam,
           filter_metric = filter_metric,
-          sv_pipeline_docker = sv_pipeline_docker,
+          gather_trio_geno_options=gather_trio_geno_options,
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
           runtime_attr_override = runtime_attr_collect_trio_svdat_pcrplus
       }
     }
