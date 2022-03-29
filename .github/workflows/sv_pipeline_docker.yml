@@ -214,7 +214,9 @@ jobs:
       - name: Commit Changes to dockers.json
         if: steps.build_and_publish.outputs.CHANGED
         run: |
+          COMMIT_SHA=${{ needs.build_args_job.outputs.head_sha }}
           git config --global user.name 'gatk-sv-bot'
           git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
-          git commit -am "Update dockers.json with newly built and published images."
+          git commit ./inputs/values/dockers.json -m "Update docker images list, triggered by "${COMMIT_SHA::8}
+          git pull --rebase origin master
           git push
