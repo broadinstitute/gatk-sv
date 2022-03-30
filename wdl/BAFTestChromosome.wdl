@@ -121,9 +121,9 @@ task BAFTest {
     else
       touch local.BAF.txt
       bgzip local.BAF.txt
+      tabix -s1 -b2 -e2 local.BAF.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.BAF.txt.gz
     svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
   
   >>>

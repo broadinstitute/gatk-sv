@@ -177,9 +177,8 @@ task RDTest {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
-
-    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \

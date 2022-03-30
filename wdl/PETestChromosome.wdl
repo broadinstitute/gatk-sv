@@ -225,9 +225,9 @@ task PETest {
     else
       touch local.PE.txt
       bgzip local.PE.txt
+      tabix -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats
   >>>
   runtime {

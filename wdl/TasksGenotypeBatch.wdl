@@ -345,9 +345,9 @@ task RDTestGenotype {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
 
-    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -436,9 +436,9 @@ task CountPE {
     else
       touch local.PE.txt
       bgzip local.PE.txt
+      tabix -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk count-pe -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
@@ -512,9 +512,9 @@ task CountSR {
     else
       touch local.SR.txt
       bgzip local.SR.txt
+      tabix -s1 -b2 -e2 local.SR.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.SR.txt.gz
     svtk count-sr -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt
