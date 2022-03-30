@@ -47,7 +47,6 @@ workflow MatrixQC {
       genome_file = genome_file,
       ref_dict = ref_dict,
       prefix = "${batch}.RD",
-      ev = "RD",
       batch = batch,
       distance = distance,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -146,22 +145,21 @@ task PESRBAF_QC {
     set -euo pipefail
     fgrep -v "#" ~{genome_file} | awk -v distance=~{distance} -v OFS="\t" '{ print $1, $2-distance, $2 }' > regions.bed
 
+    LOCAL_EVIDENCE_FILE="local.~{ev}.txt.gz"
     if [ -s regions.bed ]; then
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{matrix_file} \
         -L regions.bed \
-        -O local.RD.txt.gz
+        -O $LOCAL_EVIDENCE_FILE
     else
-      touch local.RD.txt
-      bgzip local.RD.txt
+      echo -n "" | bgzip > $LOCAL_EVIDENCE_FILE
+      tabix -s 1 -b 2 -e 2 $LOCAL_EVIDENCE_FILE
     fi
-
-    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
-      local.RD.txt.gz \
+      $LOCAL_EVIDENCE_FILE \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
@@ -186,7 +184,6 @@ task RD_QC {
     File genome_file
     File ref_dict
     String prefix
-    String ev
     String batch
     Int distance
     String sv_pipeline_docker
@@ -216,7 +213,7 @@ task RD_QC {
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
   output {
-    File stats = "~{batch}.~{ev}.QC_matrix.txt"
+    File stats = "~{batch}.RD.QC_matrix.txt"
   }
   command <<<
 
@@ -230,19 +227,17 @@ task RD_QC {
         -L regions.bed \
         -O local.RD.txt.gz
     else
-      touch local.RD.txt
-      bgzip local.RD.txt
+      echo -n "" | bgzip >  local.RD.txt.gz
+      tabix -p bed local.RD.txt.gz
     fi
-
-    tabix -p bed local.RD.txt.gz
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
       local.RD.txt.gz \
       ~{genome_file} \
-      ~{batch}.~{ev}.QC_stats.txt
+      ~{batch}.RD.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
-    python /opt/sv-pipeline/00_preprocessing/misc_scripts/qcstat2matrix.py ~{batch}.~{ev}.QC_stats.txt ~{batch} ~{ev} contigs.list
+    python /opt/sv-pipeline/00_preprocessing/misc_scripts/qcstat2matrix.py ~{batch}.RD.QC_stats.txt ~{batch} RD contigs.list
   
   >>>
   runtime {
