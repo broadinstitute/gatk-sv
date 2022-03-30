@@ -12,7 +12,7 @@ workflow Module07FilterGTsPart2 {
     Array[File] PCRMINUS_trio_tarballs
     File PCRMINUS_cleaned_trios_famfile
 
-    Array?[File] PCRPLUS_trio_tarballs
+    Array[File]? PCRPLUS_trio_tarballs
     File? PCRPLUS_cleaned_trios_famfile
 
     Int roc_shards
@@ -32,7 +32,7 @@ workflow Module07FilterGTsPart2 {
     String optimize_metric = "GQ"
     Int roc_min_metric
     Int roc_max_metric
-    Int roc_step_metric
+    Float roc_step_metric
     String prefix
 
     String sv_pipeline_docker
@@ -65,20 +65,20 @@ workflow Module07FilterGTsPart2 {
   if (length(PCRMINUS_trio_tarballs) > 1){
     call minGQTasks.ConcatTarball as ConcatTarballPCRMINUS {
       input: 
-        tarballs = PCRMINUS_trio_tarball,
+        tarballs = PCRMINUS_trio_tarballs,
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ConcatTarball
     }
   }
-  File PCRMINUS_merged_tarball = select_first([ConcatTarballPCRMINUS.tarball, PCRMINUS_trio_tarball[0]])
+  File PCRMINUS_merged_tarball = select_first([ConcatTarballPCRMINUS.tarball, PCRMINUS_trio_tarballs[0]])
   if (defined(PCRPLUS_cleaned_trios_famfile)){
     call minGQTasks.ConcatTarball as ConcatTarballPCRPLUS {
       input: 
-        tarballs = PCRPLUS_trio_tarball,
+        tarballs = select_first([PCRPLUS_trio_tarballs, []]),
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ConcatTarball
     }
-    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, PCRPLUS_trio_tarball[0]])
+    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, PCRPLUS_trio_tarballs])[0]
   }
 
   # Train PCR- filtering model
@@ -97,20 +97,19 @@ workflow Module07FilterGTsPart2 {
         roc_step_metric=roc_step_metric,
         min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
         sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_base_docker=sv_pipeline_base_docker
+        sv_pipeline_base_docker=sv_pipeline_base_docker,
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
   call minGQTasks.CombineRocOptResults as combine_roc_optimal_PCRMINUS {
     input:
       shards=roc_opt_PCRMINUS.roc_optimal_merged,
-      optimize_metric=optimize_metric,
       outfile="~{prefix}.PCRMINUS.min~{optimize_metric}_condition_opts.txt",
       sv_base_mini_docker=sv_base_mini_docker
   }
   call minGQTasks.CombineRocOptResults as combine_roc_stats_PCRMINUS {
     input:
       shards=roc_opt_PCRMINUS.distrib_stats_merged,
-      optimize_metric=optimize_metric,
       outfile="~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt",
       sv_base_mini_docker=sv_base_mini_docker
   }
@@ -141,20 +140,19 @@ workflow Module07FilterGTsPart2 {
           roc_step_metric=roc_step_metric,
           min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_base_docker=sv_pipeline_base_docker
+          sv_pipeline_base_docker=sv_pipeline_base_docker,
+          sv_pipeline_docker=sv_pipeline_docker
       }
     }
     call minGQTasks.CombineRocOptResults as combine_roc_optimal_PCRPLUS {
       input:
         shards=roc_opt_PCRPLUS.roc_optimal_merged,
-        optimize_metric=optimize_metric,
         outfile="~{prefix}.PCRPLUS.min~{optimize_metric}_condition_opts.txt",
         sv_base_mini_docker=sv_base_mini_docker
     }
     call minGQTasks.CombineRocOptResults as combine_roc_stats_PCRPLUS {
       input:
         shards=roc_opt_PCRPLUS.distrib_stats_merged,
-        optimize_metric=optimize_metric,
         outfile="~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt",
         sv_base_mini_docker=sv_base_mini_docker
     }

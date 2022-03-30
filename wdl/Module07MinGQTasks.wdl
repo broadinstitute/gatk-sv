@@ -643,8 +643,8 @@ task FilterGTs {
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/filter_GTs_by_metric.py \
-      --minMetric "~{global_min_metric}" \
       --metric ~{filter_metric} \
+      --globalMin "~{global_min_metric}" \
       --maxNCR "~{maxNCR}" \
       --simplify-INS-SVTYPEs \
       --cleanAFinfo \

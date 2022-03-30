@@ -13,7 +13,7 @@ workflow MinGQRocOpt {
     String optimize_metric = "GQ"
     Int roc_min_metric
     Int roc_max_metric
-    Int roc_step_metric
+    Float roc_step_metric
     Int min_sv_per_proband_per_condition
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -61,6 +61,7 @@ workflow MinGQRocOpt {
     sv_base_mini_docker=sv_base_mini_docker,
     condition_optimizations=roc_single.roc_optimal,
     condition_distrib_stats=roc_single.distrib_stats,
+    optimize_metric=optimize_metric,
     prefix="~{prefix}"
   }
 
@@ -95,7 +96,7 @@ task FilterMergeVariantsWithROC {
     String optimize_metric
     Int roc_min_metric
     Int roc_max_metric
-    Int roc_step_metric
+    Float roc_step_metric
     Int min_sv_per_proband_per_condition
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override

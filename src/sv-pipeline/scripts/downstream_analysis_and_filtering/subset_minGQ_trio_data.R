@@ -192,9 +192,12 @@ if(nrow(dat)>0){
                         max.variants=max.variants)
 }
 dat <- data.frame(dat$famID, dat$VID, dat$pro_AC, dat$fa_AC, dat$mo_AC, 
-                  dat$paste("pro", metric, sep="_"), 
-                  dat$paste("fa", metric, sep="_"), 
-                  dat$paste("mo", metric, sep="_"))
+                  dat[, paste("pro", metric, sep="_")], 
+                  dat[, paste("fa", metric, sep="_")], 
+                  dat[, paste("mo", metric, sep="_")])
 
 ###Return filtered data
-write.table(dat,OUTFILE,col.names=F, row.names=F, quote=F, sep="\t")
+if(OUTFILE %in% c("-", "stdout", "/dev/stdout")){
+  OUTFILE <- stdout()
+}
+write.table(dat, OUTFILE, col.names=F, row.names=F, quote=F, sep="\t")

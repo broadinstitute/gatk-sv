@@ -27,10 +27,11 @@ readTrioDat <- function(dn_dat, metric){
   dat <- dat[which(dat$pro_AC==1), ]
   dat$label <- "inh"
   dat$label[which(dat$pro_AC - (dat$fa_AC + dat$mo_AC)>0)] <- "dn"
-  dat.out <- data.frame("fam"=dat$fam,"label"=dat$label,
-                        paste("pro", metric, sep="_")=dat$paste("pro", metric, sep="_"),
-                        paste("fa", metric, sep="_")=dat$paste("fa", metric, sep="_"),
-                        paste("mo", metric, sep="_")=dat$paste("mo", metric, sep="_"))
+  dat.out <- data.frame(dat$fam, dat$label, dat[, paste("pro", metric, sep="_")],
+                        dat[, paste("fa", metric, sep="_")],
+                        dat[, paste("mo", metric, sep="_")])
+  colnames(dat.out) <- c("fam", "label", paste("pro", metric, sep="_"),
+                         paste("fa", metric, sep="_"), paste("mo", metric, sep="_"))
   return(dat.out)
 }
 
@@ -38,11 +39,11 @@ readTrioDat <- function(dn_dat, metric){
 filterMetricStats <- function(dat, trio, metric, min.metric=0){
   #Get variant counts
   max.inh <- nrow(dat[which(dat$fam==trio & dat$label=="inh"),])
-  ret.inh <- nrow(dat[which(dat$fam==trio & dat$paste("pro", metric, sep="_")>min.metric & dat$label=="inh"),])
+  ret.inh <- nrow(dat[which(dat$fam==trio & dat[, paste("pro", metric, sep="_")] > min.metric & dat$label=="inh"),])
   ret.dn <- nrow(dat[which(dat$fam==trio & dat$label=="dn" &
-                             dat$paste("pro", metric, sep="_")>min.metric & 
-                             dat$paste("fa", metric, sep="_")>min.metric & 
-                             dat$paste("mo", metric, sep="_")>min.metric), ])
+                             dat[, paste("pro", metric, sep="_")] > min.metric & 
+                             dat[, paste("fa", metric, sep="_")] > min.metric & 
+                             dat[, paste("mo", metric, sep="_")] > min.metric), ])
   #Get rates
   if(max.inh>0){
     ret.inh.rate <- ret.inh/max.inh
@@ -63,7 +64,7 @@ getMetricStats <- function(dat, trio, metric, metric.range){
   })))
   colnames(iter.res) <- c("inh.ret","inh.ret.rate",
                           "dn.ret","dn.rate")
-  iter.res <- cbind("min.value"=rangeGQ, iter.res)
+  iter.res <- cbind("min.value"=metric.range, iter.res)
   return(iter.res)
 }
 
@@ -188,13 +189,13 @@ option_list <- list(
   make_option(c("--optimize-metric"), type="character", default="GQ",
               help="FORMAT metric to optimize [default %default]",
               metavar="character"),
-  make_option(c("--min-metric-value"), type="integer", default=0,
+  make_option(c("--min-metric-value"), type="numeric", default=0,
               help="minimum metric in window to test [default %default]",
               metavar="integer"),
-  make_option(c("--max-metric-value"), type="integer", default=999,
+  make_option(c("--max-metric-value"), type="numeric", default=999,
               help="maximum metric in window to test [default %default]",
               metavar="integer"),
-  make_option(c("--step"), type="integer", default=1,
+  make_option(c("--step"), type="numeric", default=1,
               help="metric increment step size [default %default]",
               metavar="integer"),
   make_option(c("--noplot"), type="logical", default=FALSE,
@@ -233,7 +234,7 @@ if(!dir.exists(OUTDIR)){
 ###Compute ROC stats
 res <- processDeNovoDat(dn_dat=dn_dat, famfile_path=famfile_path, metric=metric,
                         min.metric=min.metric, max.metric=max.metric, step=step)
-opt.value <- ROC(min.metric=res$min.metric, sens=res$inh.ret.rate, 
+opt.value <- ROC(min.value=res$min.value, sens=res$inh.ret.rate, 
                  spec=res$dn.rate, min.spec=FDR)
 res.opt <- cbind(data.frame("condition"=prefix), res[which(res$min.value==opt.value),])
 
