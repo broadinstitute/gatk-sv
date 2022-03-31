@@ -146,8 +146,8 @@ task AnnotateBoostScores {
   String out_prefix = basename(vcf, ".vcf.gz") + ".boost_anno"
 
   Float input_size = size([vcf, boost_tarball], "GB")
-  Float base_disk_gb = 200.0
-  Float compression_factor = 50.0
+  Float base_disk_gb = 50.0
+  Float compression_factor = 10.0
   RuntimeAttr runtime_default = object {
       mem_gb: 16,
       disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
@@ -213,8 +213,8 @@ task MergeVcfs {
   Float input_size = size(vcfs, "GB")
   Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
-      mem_gb: 4,
-      disk_gb: ceil(base_disk_gb + (input_size * 5.0)),
+      mem_gb: 2,
+      disk_gb: ceil(base_disk_gb + (input_size * 3.0)),
       cpu_cores: 1,
       preemptible_tries: 3,
       max_retries: 1,
