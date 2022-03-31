@@ -39,6 +39,7 @@
   "rmsk" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "segdups" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
   "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
+  "single_sample_qc_definitions": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv",
   "unpadded_intervals_file" : "gs://gcp-public-data--broad-references/hg38/v0/hg38.even.handcurated.20k.intervals",
   "wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
