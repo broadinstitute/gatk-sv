@@ -217,7 +217,6 @@ task PETest {
 
     if [ -s region.merged.bed ]; then
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-        --skip-header \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{discfile} \
         -L region.merged.bed \

@@ -345,7 +345,6 @@ task ResolvePrep {
 
         if [ -s regions.bed ]; then
           java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-                --skip-header \
                 --sequence-dictionary ~{ref_dict} \
                 --evidence-file $GS_PATH_TO_DISC_FILE \
                 -L regions.bed \
@@ -355,7 +354,7 @@ task ResolvePrep {
         fi
 
         cat ${SLICE}.PE.txt \
-          | awk '{ if ($1==$4 && $3==$6) print }' \
+          | awk '{ if ($0!~"#" && $1==$4 && $3==$6) print }' \
           | bgzip -c \
           > ${SLICE}.PE.txt.gz
         rm ${SLICE}.PE.txt

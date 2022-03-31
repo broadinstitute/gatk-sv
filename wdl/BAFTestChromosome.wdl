@@ -113,7 +113,6 @@ task BAFTest {
       set -o pipefail
 
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-        --skip-header \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{baf_metrics} \
         -L "${chrom}:${start}-${end}" \
