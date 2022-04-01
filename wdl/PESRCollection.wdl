@@ -74,10 +74,10 @@ task RunPESRCollection {
   Int command_mem_mb = ceil(mem_gb * 1000 - 500)
 
   output {
-    File split_out = "${sample_id}.split.txt.gz"
-    File split_out_index = "${sample_id}.split.txt.gz.tbi"
-    File disc_out = "${sample_id}.disc.txt.gz"
-    File disc_out_index = "${sample_id}.disc.txt.gz.tbi"
+    File split_out = "${sample_id}.sr.txt.gz"
+    File split_out_index = "${sample_id}.sr.txt.gz.tbi"
+    File disc_out = "${sample_id}.pe.txt.gz"
+    File disc_out_index = "${sample_id}.pe.txt.gz.tbi"
   }
   command <<<
 
@@ -85,15 +85,15 @@ task RunPESRCollection {
 
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar_override}
 
-    /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" PairedEndAndSplitReadEvidenceCollection \
+    /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" CollectSVEvidence \
         -I ~{cram} \
-        --pe-file ~{sample_id}.disc.txt.gz \
-        --sr-file ~{sample_id}.split.txt.gz \
+        --pe-file ~{sample_id}.pe.txt.gz \
+        --sr-file ~{sample_id}.sr.txt.gz \
         --sample-name ~{sample_id} \
         -R ~{reference_fasta}
 
-    tabix -f -s1 -b 2 -e 2 ~{sample_id}.disc.txt.gz
-    tabix -f -s1 -b 2 -e 2 ~{sample_id}.split.txt.gz
+    tabix -f -s1 -b 2 -e 2 ~{sample_id}.pe.txt.gz
+    tabix -f -s1 -b 2 -e 2 ~{sample_id}.sr.txt.gz
 
   >>>
   runtime {
