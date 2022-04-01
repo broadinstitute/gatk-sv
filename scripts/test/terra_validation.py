@@ -31,7 +31,7 @@ Outputs: If successful, last line of printout should read
 """
 
 WDLS_PATH = "wdl/"
-TERRA_INPUTS_PATH = "inputs/terra_workspaces/cohort_mode/workflow_configurations/"
+TERRA_INPUTS_PATH = "inputs/build/ref_panel_1kg/terra/workflow_configurations/"
 
 def list_jsons(inputs_path, expected_num_jsons, subdir="", description=""):
     jsons = [os.path.join(subdir, x) for x in listdir(os.path.join(inputs_path, subdir)) if x.endswith(".json")]
