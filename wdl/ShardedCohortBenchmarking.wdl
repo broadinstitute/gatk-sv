@@ -4,7 +4,7 @@ version 1.0
 
 # Workflow to scatter site-level benchmarking vs. an external dataset by chromosome
 
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow ShardedCohortBenchmarking {
   input {
