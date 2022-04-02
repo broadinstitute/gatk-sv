@@ -9,7 +9,7 @@ import "ShardedQcCollection.wdl" as ShardedQcCollection
 import "CollectQcPerSample.wdl" as CollectQcPerSample
 import "ShardedCohortBenchmarking.wdl" as CohortExternalBenchmark
 import "PerSampleExternalBenchmark.wdl" as PerSampleExternalBenchmark
-import "Tasks0506.wdl" as MiniTasks
+import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Utils.wdl" as Utils
 
 # Main workflow to perform comprehensive quality control (QC) on
