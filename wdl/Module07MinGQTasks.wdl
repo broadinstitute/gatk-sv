@@ -507,6 +507,7 @@ task EnumerateConditions {
       > "~{prefix}.minGQ_conditions.noHeader.txt"
     /opt/sv-pipeline/04_variant_resolution/scripts/evenSplitter.R \
       -S ~{condition_shards} \
+      --shuffle \
       "~{prefix}.minGQ_conditions.noHeader.txt" \
       "~{prefix}.minGQ_conditions.noHeader.shard"
   >>>
