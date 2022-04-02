@@ -336,7 +336,7 @@ STATS <- args$args[2]
 ROC_OPTS <- args$args[3]
 OUT_TREE <- args$args[4]
 OUT_TABLE <- args$args[5]
-metric <- opts$`optimize-metric`
+metric <- options$`optimize-metric`
 
 ###Process input data
 dat <- process.inputs(CONDITIONS, STATS, ROC_OPTS, metric)

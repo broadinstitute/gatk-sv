@@ -37,6 +37,7 @@ workflow Module07FilterGTsPart2 {
 
     String sv_pipeline_docker
     String sv_pipeline_base_docker
+    String sv_pipeline_base_docker_tmp      # Note: remove this before full run
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_EnumerateConditions
@@ -78,7 +79,7 @@ workflow Module07FilterGTsPart2 {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ConcatTarball
     }
-    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, PCRPLUS_trio_tarballs])[0]
+    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, PCRPLUS_trio_tarballs[0]])
   }
 
   # Train PCR- filtering model
@@ -120,7 +121,7 @@ workflow Module07FilterGTsPart2 {
       condition_distrib_stats=combine_roc_stats_PCRMINUS.merged_file,
       prefix="~{prefix}.PCRMINUS",
       optimize_metric=optimize_metric,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_base_docker=sv_pipeline_base_docker_tmp
   }
 
   # Train PCR+ filtering model, if optioned
@@ -140,7 +141,7 @@ workflow Module07FilterGTsPart2 {
           roc_step_metric=roc_step_metric,
           min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_base_docker=sv_pipeline_base_docker,
+          sv_pipeline_base_docker=sv_pipeline_base_docker_tmp,
           sv_pipeline_docker=sv_pipeline_docker
       }
     }
