@@ -71,7 +71,8 @@ workflow Module07FilterGTsPart2 {
         runtime_attr_override = runtime_attr_ConcatTarball
     }
   }
-  File PCRMINUS_merged_tarball = select_first([ConcatTarballPCRMINUS.tarball, PCRMINUS_trio_tarballs[0]])
+  File PCRMINUS_merged_tarball = select_first([ConcatTarballPCRMINUS.tarball, 
+                                               PCRMINUS_trio_tarballs[0]])
   if (defined(PCRPLUS_cleaned_trios_famfile)){
     call minGQTasks.ConcatTarball as ConcatTarballPCRPLUS {
       input: 
@@ -79,14 +80,15 @@ workflow Module07FilterGTsPart2 {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_attr_ConcatTarball
     }
-    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, PCRPLUS_trio_tarballs[0]])
+    File PCRPLUS_merged_tarball = select_first([ConcatTarballPCRPLUS.tarball, 
+                                                select_first([PCRPLUS_trio_tarballs])[0]])
   }
 
   # Train PCR- filtering model
   scatter ( shard in EnumerateConditions.conditions_table_noHeader_shards ) {
     call roc_opt_sub.MinGQRocOpt as roc_opt_PCRMINUS {
       input:
-        trio_tarball=ConcatTarballPCRMINUS.tarball,
+        trio_tarball=PCRMINUS_merged_tarball,
         prefix="~{prefix}.PCRMINUS",
         trios_list=PCRMINUS_cleaned_trios_famfile,
         conditions_table=shard,
@@ -129,7 +131,7 @@ workflow Module07FilterGTsPart2 {
     scatter ( shard in EnumerateConditions.conditions_table_noHeader_shards ) {
       call roc_opt_sub.MinGQRocOpt as roc_opt_PCRPLUS {
         input:
-          trio_tarball=ConcatTarballPCRPLUS.tarball,
+          trio_tarball=PCRPLUS_merged_tarball,
           prefix="~{prefix}.PCRPLUS",
           trios_list=PCRPLUS_cleaned_trios_famfile,
           conditions_table=shard,

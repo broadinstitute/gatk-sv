@@ -345,7 +345,7 @@ dat <- process.inputs(CONDITIONS, STATS, ROC_OPTS, metric)
 order.tree <- build.tree(dat, fixed.f1="filt.SVTYPE")
 
 ###Create minGQ filtering lookup table
-minGQ.table <- prune.tree(dat, order.tree)
+minGQ.table <- prune.tree(dat, order.tree, metric)
 
 ###Write out final files
 colnames(order.tree)[1] <- "#filt.1"
