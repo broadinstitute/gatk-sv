@@ -105,6 +105,56 @@ task ConcatTarball {
   }
 }
 
+# Downsample minGQ tarballs to a random set of N trios
+task SubsetTrioTarball {
+  input {
+    File tarball_in
+    Int max_trios
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2, 
+    disk_gb: 30,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -eu -o pipefail
+
+    mkdir tar_contents/
+    tar -xzvf ~{tarball_in} --directory tar_contents/
+
+    mkdir ~{prefix}/
+    find tar_contents/ -type d -name "shard-*" \
+    | shuf --random-source=<( yes 2022 ) \
+    | head -n ~{max_trios} \
+    | xargs -I {} mv {} ~{prefix}/
+    tar -czvf ~{prefix}.tar.gz ~{prefix}
+  >>>
+
+  output {
+    File subsetted_tarball = "~{prefix}.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 # Split a VCF into two parts, corresponding to PCR+ and PCR-
 task SplitPcrVcf {
   input{

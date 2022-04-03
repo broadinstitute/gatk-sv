@@ -25,6 +25,7 @@ workflow Module07FilterGTsPart2 {
     String optimize_excludeFILTERs
     String optimize_includeEV
     String optimize_excludeEV
+    Int optimize_maxTrainingTrios = 1000
     Int optimize_maxSVperTrio = 1000
     Int min_sv_per_proband_per_condition = 10
     Float roc_max_fdr_PCRMINUS
@@ -41,6 +42,7 @@ workflow Module07FilterGTsPart2 {
 
     RuntimeAttr? runtime_attr_EnumerateConditions
     RuntimeAttr? runtime_attr_ConcatTarball
+    RuntimeAttr? runtime_attr_SubsetTrioTarball
   }
 
   # Get table of all conditions to evaluate
@@ -83,11 +85,37 @@ workflow Module07FilterGTsPart2 {
                                                 select_first([PCRPLUS_trio_tarballs])[0]])
   }
 
+  # Subset trios for training, if optioned
+  if(defined(optimize_maxTrainingTrios)) { 
+    call minGQTasks.SubsetTrioTarball as SubsetTriosPCRMINUS {
+      input:
+        tarball_in=PCRMINUS_merged_tarball,
+        max_trios=select_first([optimize_maxTrainingTrios, 1000000]),
+        prefix=basename(PCRMINUS_merged_tarball, ".tar.gz") + "subsetted",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_SubsetTrioTarball
+    }
+    if (defined(PCRPLUS_cleaned_trios_famfile)){
+      call minGQTasks.SubsetTrioTarball as SubsetTriosPCRPLUS {
+        input:
+          tarball_in=select_first([PCRPLUS_merged_tarball]),
+          max_trios=select_first([optimize_maxTrainingTrios, 1000000]),
+          prefix=basename(select_first([PCRPLUS_merged_tarball]), ".tar.gz") + "subsetted",
+          sv_base_mini_docker=sv_base_mini_docker,
+          runtime_attr_override=runtime_attr_SubsetTrioTarball
+      }
+    }
+  }
+  File PCRMINUS_training_tarball = select_first([SubsetTriosPCRMINUS.subsetted_tarball, 
+                                                 PCRMINUS_merged_tarball])
+  File PCRPLUS_training_tarball = select_first([SubsetTriosPCRPLUS.subsetted_tarball, 
+                                                 PCRPLUS_merged_tarball])
+
   # Train PCR- filtering model
   scatter ( shard in EnumerateConditions.conditions_table_noHeader_shards ) {
     call roc_opt_sub.MinGQRocOpt as roc_opt_PCRMINUS {
       input:
-        trio_tarball=PCRMINUS_merged_tarball,
+        trio_tarball=PCRMINUS_training_tarball,
         prefix="~{prefix}.PCRMINUS",
         trios_list=PCRMINUS_cleaned_trios_famfile,
         conditions_table=shard,
@@ -130,7 +158,7 @@ workflow Module07FilterGTsPart2 {
     scatter ( shard in EnumerateConditions.conditions_table_noHeader_shards ) {
       call roc_opt_sub.MinGQRocOpt as roc_opt_PCRPLUS {
         input:
-          trio_tarball=PCRPLUS_merged_tarball,
+          trio_tarball=PCRPLUS_training_tarball,
           prefix="~{prefix}.PCRPLUS",
           trios_list=PCRPLUS_cleaned_trios_famfile,
           conditions_table=shard,
