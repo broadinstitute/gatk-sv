@@ -38,7 +38,6 @@ workflow Module07FilterGTsPart1 {
 
   Array[Array[String]] contigs = read_tsv(contiglist)
 
-
   # Differenciate MEI from INS
   call ReviseSVtype.ReviseSVtypeINStoMEI as ReviseSVtypeMEI {
     input:
@@ -56,7 +55,7 @@ workflow Module07FilterGTsPart1 {
       runtime_override_combine_step_1_vcfs = runtime_override_combine_step_1_vcfs
   }
 
-  # extract sample names from the vcf, and output a 2-column file with SVID in 1st column and PCR status in 2nd column
+  # extract sample names from the vcf, and output a 2-column file with sample ID in 1st column and PCR status in 2nd column
   ## we should consider revising this function to use PCR+ and PCR- sample list as input to save mem and disk usage, as vcf can be large
   call minGQTasks.GetSampleLists {
     input:
@@ -65,6 +64,14 @@ workflow Module07FilterGTsPart1 {
       pcrplus_samples_list = pcrplus_samples_list,
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  # Subset famfile to probands from complete trios present in the VCF only
+  call minGQTasks.SubsetFamfile {
+    input:
+      famfile=trios_famfile,
+      sample_PCR_labels=GetSampleLists.sample_PCR_labels,
+      sv_base_mini_docker=sv_base_mini_docker
   }
 
   # Shard VCF
@@ -121,7 +128,6 @@ workflow Module07FilterGTsPart1 {
         prefix = prefix,
         sv_pipeline_docker = sv_pipeline_docker
     }
-
   }
 
   # Build tables of AF per variant by PCR status prior to GT filtering
@@ -146,7 +152,7 @@ workflow Module07FilterGTsPart1 {
     input:
       vcf = SplitPcrVcf.PCRMINUS_vcf[0],
       vcf_idx = SplitPcrVcf.PCRMINUS_vcf_idx[0],
-      famfile = trios_famfile,
+      famfile = SubsetFamfile.subsetted_famfile,
       max_count_famfile_shards = 1000,
       fams_per_shard = 1,
       prefix = "~{prefix}.PCRMINUS",
@@ -177,7 +183,7 @@ workflow Module07FilterGTsPart1 {
       input:
         vcf = SplitPcrVcf.PCRPLUS_vcf[0],
         vcf_idx = SplitPcrVcf.PCRPLUS_vcf_idx[0],
-        famfile = trios_famfile,
+        famfile = SubsetFamfile.subsetted_famfile,
         fams_per_shard = 1,
         max_count_famfile_shards = 1000,
         prefix = "~{prefix}.PCRPLUS",

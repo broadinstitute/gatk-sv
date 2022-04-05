@@ -49,6 +49,44 @@ task GetSampleLists {
   }
 }
 
+# Restrict famfile to probands from complete trios with all members present in the VCF
+task SubsetFamfile {
+  input {
+    File famfile
+    File sample_PCR_labels
+    String sv_base_mini_docker
+  }
+
+  runtime {
+    cpu: 1
+    memory: "2 GiB"
+    disks: "local-disk 20 HDD"
+    bootDiskSizeGb: 10
+    docker: sv_base_mini_docker
+    preemptible: 3
+    maxRetries: 1
+  }
+
+  command <<<
+    set -eu -o pipefail
+
+    # Get list of samples from families not present in VCF
+    cut -f1 ~{sample_PCR_labels} | sort | uniq > all_samples.list
+    cut -f2-4 ~{famfile} | sed 's/\t/\n/g' | sort | uniq > famfile_samples.list
+    fgrep -wvf all_samples.list famfile_samples.list > missing_samples.list
+
+    # Restrict famfile to proband entries from trios without missing samples
+    fgrep -wvf missing_samples.list ~{famfile} \
+    | awk -v FS="\t" -v OFS="\t" \
+      '{ if ($2!="0" && $3!="0" && $4!="0") print $0 }' \
+    > cleaned_trios_in_vcf.fam
+  >>>
+
+  output {
+    File subsetted_famfile = "cleaned_trios_in_vcf.fam"
+  }
+}
+
 # Concatenate minGQ tarballs trained on different chromosomes
 task ConcatTarball {
   input {
