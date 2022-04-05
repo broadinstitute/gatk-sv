@@ -255,7 +255,7 @@ def make_minMetric_dict(minMetricTable, SVLEN_table, AF_table, SVTYPE_table,
                                   if f not in excludeFILTER.split(',')])
             FILTER_idx = _lookup_FILTER_key(FILTERs, FILTER_table)
             EV_idx = _lookup_EV_key(includeEV, EV_table)
-            minMetric = int(minMetric)
+            minMetric = float(minMetric)
 
             #Update one line for each qualifying SVTYPE
             for SVTYPE in [s for s in includeSVTYPE.split(',') \
