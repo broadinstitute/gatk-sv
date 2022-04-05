@@ -37,7 +37,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
-    Boolean use_scramble = true
+    Boolean use_scramble = false
     Boolean use_wham = true
 
     # If GatherSampleEvidence outputs already prepared
