@@ -16,8 +16,9 @@ load.bed <- function(path, dname="overlap"){
   colnames(df)[1] <- "chr"
   colnames(df)[which(colnames(df) == "AF")] <- paste("AF", dname, sep=".")
   df$VID <- NULL
+  df[, dname] <- 1
   orig.ovr.cidxs <- grep("^ovr", colnames(df))
-  df[, dname] <- apply(df[, grep("^ovr[1-2]", colnames(df))], 1, 
+  df[, "ovr"] <- apply(df[, grep("^ovr[1-2]", colnames(df))], 1, 
                        function(vals){any(vals != "NO_OVR")})
   df[, orig.ovr.cidxs] <- NULL
   return(df[which(!duplicated(df)), ])
@@ -28,7 +29,7 @@ dat <- apply(inputs, 1, function(vals){load.bed(vals[2], vals[1])})
 names(dat) <- inputs[, 1]
 
 # Collapse results
-key.cols <- c("chr", "start", "end", "svtype", "length")
+key.cols <- c("chr", "start", "end", "svtype", "length", "ovr")
 key.col.idxs <- which(colnames(dat[[1]]) %in% key.cols)
 key.cols <- colnames(dat[[1]])[key.col.idxs]
 res <- dat[[1]]
