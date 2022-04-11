@@ -22,6 +22,9 @@ workflow GatherSampleEvidence {
     # Use only for crams in requester pays buckets
     Boolean requester_pays_crams = false
 
+    # Provide path to service account credentials JSON if required to access CRAM file. Not supported for BAM access or revising bases
+    String? service_account_json
+
     # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
     # May be more expensive - use only if necessary
     Boolean revise_base_cram_to_bam = false
@@ -140,6 +143,7 @@ workflow GatherSampleEvidence {
           reference_fasta = reference_fasta,
           reference_index = reference_index,
           requester_pays = requester_pays_crams,
+          service_account_json = service_account_json,
           samtools_cloud_docker = samtools_cloud_docker,
           runtime_attr_override = runtime_attr_cram_to_bam
       }
