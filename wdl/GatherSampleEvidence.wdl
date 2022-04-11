@@ -117,6 +117,7 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_wham_include_list
     RuntimeAttr? runtime_attr_ReviseBaseInBam
     RuntimeAttr? runtime_attr_ConcatBam
+    RuntimeAttr? runtime_attr_localize_cram
 
     # Never assign these values! (workaround until None type is implemented)
     Float? NONE_FLOAT_
@@ -145,6 +146,8 @@ workflow GatherSampleEvidence {
           requester_pays = requester_pays_crams,
           service_account_json = service_account_json,
           samtools_cloud_docker = samtools_cloud_docker,
+          cloud_sdk_docker = cloud_sdk_docker,
+          runtime_attr_localize_cram = runtime_attr_localize_cram,
           runtime_attr_override = runtime_attr_cram_to_bam
       }
     }

@@ -67,6 +67,9 @@ workflow GatherBatchEvidence {
     File? dbsnp_vcf
     File? dbsnp_vcf_index
     String? gvcf_gcs_project_for_requester_pays  # Required only if GVCFs are in a requester pays bucket
+    String? service_account_json  # Provide path to service account credentials JSON if required to access gVCFs
+    String? cloud_sdk_docker  # Required if providing service_account_json
+    Int? localize_gvcf_disk_size
 
     # BAF Option #2, position-sharded VCFs
     Array[File]? snp_vcfs
@@ -192,6 +195,7 @@ workflow GatherBatchEvidence {
 
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
+    RuntimeAttr? runtime_attr_localize_gvcf
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped

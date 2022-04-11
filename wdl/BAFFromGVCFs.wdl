@@ -3,6 +3,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "Utils.wdl" as util
 
 workflow BAFFromGVCFs {
   input {
@@ -18,12 +19,16 @@ workflow BAFFromGVCFs {
     File inclusion_bed
     String batch
     String? gcs_project_for_requester_pays
+    String? service_account_json  # Provide path to service account credentials JSON if required to access gVCFs
+    Int? localize_gvcf_disk_size
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String? cloud_sdk_docker  # Required if providing service_account_json
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_gen
     RuntimeAttr? runtime_attr_merge_baf
+    RuntimeAttr? runtime_attr_localize_gvcf
   }
 
   Int num_of_original_intervals = length(read_lines(unpadded_intervals_file))
@@ -53,6 +58,20 @@ workflow BAFFromGVCFs {
       preemptible = 3
   }
 
+  if (defined(service_account_json)) {
+    scatter (i in range(num_gvcfs)) {
+      call util.LocalizeCloudFileAndIndexWithCredentials as LocalizeGVCF {
+        input:
+          cloud_file_path = defined_gvcfs_[i],
+          cloud_file_index_path = gvcf_indexes_[i],
+          service_account_json = select_first([service_account_json]),
+          disk_size = select_first([localize_gvcf_disk_size, 24]),
+          cloud_sdk_docker = select_first([cloud_sdk_docker]),
+          runtime_attr_override = runtime_attr_localize_gvcf
+      }
+    }
+  }
+
   Array[String] unpadded_intervals = read_lines(DynamicallyCombineIntervals.output_intervals)
 
   Int disk_size_gb = 10 + ceil((size(defined_gvcfs_, "GB") + size(gvcf_indexes_, "GB")) * 1.5)
@@ -61,8 +80,8 @@ workflow BAFFromGVCFs {
     call ImportGVCFs {
       input:
         sample_names = defined_samples_,
-        input_gvcfs = defined_gvcfs_,
-        input_gvcfs_indices = gvcf_indexes_,
+        input_gvcfs = select_first([LocalizeGVCF.output_file, defined_gvcfs_]),
+        input_gvcfs_indices = select_first([LocalizeGVCF.output_file_index, gvcf_indexes_]),
         interval = unpadded_intervals[idx],
         workspace_dir_name = "genomicsdb",
         disk_size = disk_size_gb,
