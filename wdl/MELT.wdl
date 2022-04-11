@@ -600,9 +600,8 @@ task RunMELT {
     set -Eeuo pipefail
 
     # MELT expects the BAM index to have extension ".bam.bai"
-    # Converting to cp for FSx/Local
-    cp ~{bam_file} ~{sample_id}.bam
-    cp ~{bam_index_file} ~{sample_id}.bam.bai
+    mv ~{bam_file} ~{sample_id}.bam
+    mv ~{bam_index_file} ~{sample_id}.bam.bai
 
     # these locations should be stable
     MELT_DIR="/MELT"
