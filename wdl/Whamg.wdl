@@ -158,7 +158,6 @@ task RunWhamg {
     set -euo pipefail
     # print some info that may be useful for debugging
     df -h
-    cat /sys/fs/cgroup/memory/memory.stat
     echo "whamg $(./whamg 2>&1 >/dev/null | grep Version)"
     
     # ensure that index files are present in appropriate locations
@@ -295,7 +294,6 @@ task RunWhamgIncludelist {
     set -euo pipefail
     # print some info that may be useful for debugging
     df -h
-    cat /sys/fs/cgroup/memory/memory.stat
     echo "whamg $(./whamg 2>&1 >/dev/null | grep Version)"
     
     # ensure that index files are present in appropriate locations
