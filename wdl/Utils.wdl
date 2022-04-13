@@ -313,3 +313,47 @@ task SubsetPedFile {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task LocalizeCloudFileWithCredentials {
+  input {
+    String cloud_file_path
+    String service_account_json
+    Int disk_size
+    String cloud_sdk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 0.9,
+    disk_gb: disk_size,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command {
+    set -euo pipefail
+
+    gsutil cp '~{service_account_json}' local.service_account.json
+    gcloud auth activate-service-account --key-file='local.service_account.json'
+
+    gsutil cp '~{cloud_file_path}' .
+  }
+
+  output {
+    File output_file = basename(cloud_file_path)
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: cloud_sdk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
