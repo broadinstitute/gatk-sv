@@ -38,7 +38,7 @@ workflow CramToBam {
     }
   }
 
-  if (requester_pays) {
+  if (requester_pays && !defined(service_account_json) {
     call RunCramToBamRequesterPays {
       input:
         cram_file = cram_file,
@@ -48,7 +48,7 @@ workflow CramToBam {
         runtime_attr_override = runtime_attr_override
     }
   }
-  if (!requester_pays && !defined(service_account_json)) {
+  if (!requester_pays)) {
     call RunCramToBam {
       input:
         cram_file = select_first([LocalizeCram.output_file, cram_file]),
