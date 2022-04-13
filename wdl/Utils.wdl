@@ -325,7 +325,7 @@ task LocalizeCloudFileWithCredentials {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 3.75,
+    mem_gb: 0.9,
     disk_gb: disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,

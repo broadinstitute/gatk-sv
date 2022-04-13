@@ -8,7 +8,7 @@ workflow CramToBam {
     File cram_file
     File reference_fasta
     File? reference_index
-    String? service_account_json  # Provide path to service account credentials JSON if required to access CRAM file
+    String? service_account_json  # Provide path to service account credentials JSON if required to access CRAM file. Not supported for requester pays CRAMs, BAM access, or revising bases
     String samtools_cloud_docker
     String? cloud_sdk_docker
     Boolean requester_pays = false
@@ -48,7 +48,7 @@ workflow CramToBam {
         runtime_attr_override = runtime_attr_override
     }
   }
-  if (!requester_pays) {
+  if (!requester_pays && !defined(service_account_json)) {
     call RunCramToBam {
       input:
         cram_file = select_first([LocalizeCram.output_file, cram_file]),

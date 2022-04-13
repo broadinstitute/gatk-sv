@@ -22,7 +22,8 @@ workflow GatherSampleEvidence {
     # Use only for crams in requester pays buckets
     Boolean requester_pays_crams = false
 
-    # Provide path to service account credentials JSON if required to access CRAM file. Not supported for BAM access or revising bases
+    # Provide path to service account credentials JSON if required to access CRAM file. 
+    # Not supported for requester pays CRAMs, BAM access, or revising bases
     String? service_account_json
 
     # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
