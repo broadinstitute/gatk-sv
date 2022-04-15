@@ -9,17 +9,21 @@ options(stringsAsFactors=F, scipen=1000)
 args <- commandArgs(trailingOnly=TRUE)
 dat <- read.table(args[1], header=T, sep="\t", comment.char="")[, -c(1:3)]
 dat$length[which(is.na(dat$length) | dat$length < 1)] <- 1
+dat$EV <- as.character(sapply(dat$EV, function(estr){
+  paste(sort(unlist(strsplit(estr, split=","))), collapse=",")
+}))
 
 # Define categories to evaluate
 svtypes <- unique(dat$svtype)
 AF.bins <- floor(log10(min(dat$AF, na.rm=T))):-1
 svlen.bins <- 0:8
-filters <- setdiff(colnames(dat), c("svtype", "length", "AF", "ovr"))
+EV.bins <- unique(dat$EV)
+filters <- setdiff(colnames(dat), c("svtype", "length", "AF", "EV", "ovr"))
 filter.combos <- c("none", filters,
                    apply(combn(filters, 2), 2, paste, collapse=";"),
                    apply(combn(filters, 3), 2, paste, collapse=";"))
-cats.df <- expand.grid(svtypes, svlen.bins, AF.bins, filter.combos)
-colnames(cats.df) <- c("SVTYPE", "SVLEN", "AF", "COMBO")
+cats.df <- expand.grid(svtypes, svlen.bins, AF.bins, EV.bins, filter.combos)
+colnames(cats.df) <- c("SVTYPE", "SVLEN", "AF", "EV", "COMBO")
 
 # Assign variants to categories
 dat$AF.bin <- floor(log10(dat$AF))
@@ -39,12 +43,14 @@ res <- t(apply(cats.df, 1, function(cat.vals){
   svtype <- as.character(unlist(cat.vals[1]))
   size.bin <- as.numeric(cat.vals[2])
   AF.bin <- as.numeric(cat.vals[3])
-  filt.val <- as.character(unlist(cat.vals[4]))
+  EV.bin <- as.character(cat.vals[4])
+  filt.val <- as.character(unlist(cat.vals[5]))
 
   # Find indexes of variants meeting category criteria
   svtype.match <- which(dat$svtype == svtype)
   svlen.match <- which(dat$svlen.bin == size.bin)
   AF.match <- which(dat$AF.bin == AF.bin)
+  EV.match <- which(dat$EV == EV.bin)
   filter.match <- which(dat$passing.filters == filt.val)
   all.matches <- Reduce(intersect, list(svtype.match, svlen.match, AF.match, filter.match))
   n.all.matches <- length(all.matches)

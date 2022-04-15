@@ -10,6 +10,7 @@ Integrate VCFs filtered by various different models
 """
 
 
+import numpy as np
 from collections import defaultdict
 import argparse
 import pysam
@@ -30,35 +31,20 @@ def is_mcnv(record):
         return False
 
 
-def categorize_svlen(svlen):
+def tokenize_numeric(svlen):
     """
-    Translates SVLEN values into string categories for simplicity
-    """
-
-    if svlen <= 250:
-        return 'tiny'
-    elif svlen > 250 and svlen <= 1000:
-        return 'small'
-    elif svlen > 1000 and svlen <= 5000:
-        return 'medium'
-    elif svlen > 5000:
-        return 'large'
-
-
-def tokenize_evidence(EV):
-    """
-    Convert EV tuple into a string token
+    Translates numeric values (SVLEN, AF, etc.) into string category for keying into dicts
     """
 
-    return ','.join(sorted(EV))
+    return str(np.floor(np.log10(svlen)))
 
 
 def load_rules(rules_tsv):
     """
     Loads rules .tsv as a nested series of defaultdicts, keyed on:
     1. SVTYPE
-    2. SVLEN
-    3. EVIDENCE
+    2. SVLEN, keyed by tokenize_numeric(SVLEN)
+    3. AF, keyed by tokenize_numeric(AF)
     """
 
     # Set baseline: keep any model if no information is provided
@@ -79,7 +65,9 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
 
     # Get descriptive information about record
     svtype = record.info['SVTYPE']
-    svsize = categorize_svlen(record.info.get('SVLEN', -1))
+    svsize = tokenize_numeric(record.info.get('SVLEN', -1))
+    # TODO: get allele frequency
+    # svaf = tokenize_numeric(record.info.get('AF'))
     multiallelic = is_mcnv(record)
     nocalls = 0
     nonref = 0
@@ -125,8 +113,12 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
                     pass_filts.add(tag)
 
         # Get list of filter combinations eligible for this GT
-        EV = tokenize_evidence(record.samples[sample]['EV'])
-        elig_combos = rules[svtype][svsize][EV]
+        elig_combos = rules[svtype][svsize][svaf]
+
+        # Don't consider Boost for homref GTs because Boost only scores non-ref GTs
+        if record.samples[sample]['GT'] == (0, 0):
+            for combo in elig_combos:
+                combo.discard('boost')
 
         # Check if GT passes any combination of eligible filters
         passing = any([len(combo.intersection(pass_filts)) == len(combo) for combo in elig_combos])
@@ -230,6 +222,7 @@ def main():
 
     # Close connection to output VCF
     outvcf.close()
+
 
 if __name__ == '__main__':
     main()
