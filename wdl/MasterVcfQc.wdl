@@ -23,7 +23,7 @@ workflow MasterVcfQc {
     File? sanders_2015_tarball
     File? collins_2017_tarball
     File? werling_2018_tarball
-    Array[String] contigs
+    File primary_contigs_fai
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
     File? vcf_idx
@@ -69,6 +69,8 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
+  Array[String] contigs = transpose(read_tsv(primary_contigs_fai))[0]
+
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
     # Collect VCF-wide summary stats
@@ -132,7 +134,7 @@ workflow MasterVcfQc {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
   }
 
-  Int max_gq_ = if (defined(max_gq)) then max_gq else 99
+  Int max_gq_ = if (defined(max_gq)) then select_first([max_gq]) else 99
   # Plot per-sample stats
   call PlotQcPerSample {
     input:

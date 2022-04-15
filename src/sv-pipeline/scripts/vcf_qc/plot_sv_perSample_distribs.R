@@ -870,7 +870,7 @@ option_list <- list(
               metavar="character"),
   make_option(c("-D", "--downsample"), type="integer", default=1000,
               help="restrict analyses to a random subset of N samples (for speed) [default %default]",
-              metavar="integer")
+              metavar="integer"),
   make_option(c("-G", "--maxgq"), type="integer", default=99,
               help="Max GQ value, ie. 99 for GQ on a scale of [0,99]",
               metavar="integer")

@@ -1236,7 +1236,7 @@ option_list <- list(
               metavar="character"),
   make_option(c("-M", "--multiallelics"), type="logical", default=FALSE,
               help="include multiallelic sites in inheritance calculations [default %default]",
-              metavar="logical")
+              metavar="logical"),
   make_option(c("-G", "--maxgq"), type="integer", default=99,
               help="Max GQ value, ie. 99 for GQ on a scale of [0,99]",
               metavar="integer")

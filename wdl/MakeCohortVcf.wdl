@@ -447,7 +447,6 @@ workflow MakeCohortVcf {
       runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
   }
 
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
   call VcfQc.MasterVcfQc {
     input:
       vcf=CleanVcf.cleaned_vcf,
@@ -462,7 +461,7 @@ workflow MakeCohortVcf {
       sanders_2015_tarball=sanders_2015_tarball,
       collins_2017_tarball=collins_2017_tarball,
       werling_2018_tarball=werling_2018_tarball,
-      contigs=contigs,
+      primary_contigs_fai=contig_list,
       random_seed=random_seed,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
