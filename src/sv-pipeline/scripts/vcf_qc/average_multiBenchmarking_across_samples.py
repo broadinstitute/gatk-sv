@@ -26,10 +26,10 @@ def summarize_group(subdf):
     # Expand filtering criteria
     out_res = pd.Series([subdf.SVTYPE.values[0], subdf.SVLEN.values[0], 
                          subdf.SVLEN.values[0]+1, subdf.AF.values[0], 
-                         subdf.AF.values[0]+1, subdf.COMBO.values[0],
-                         n_samples, *vals.tolist()],
+                         subdf.AF.values[0]+1, subdf.EV.values[0], 
+                         subdf.COMBO.values[0], n_samples, *vals.tolist()],
                          index=['SVTYPE', 'min_log10_SVLEN', 'max_log10_SVLEN',
-                                'min_log10_AF', 'max_log10_AF', 'passing_filters',
+                                'min_log10_AF', 'max_log10_AF', 'EV', 'passing_filters',
                                 'n_samples_evaluated', 'median_SVs_per_sample',
                                 'median_confirmed_SVs_per_sample', 
                                 'confirmation_rate'])
@@ -55,7 +55,7 @@ def main():
                     reset_index(drop=True)
 
     # Group results by category and take median across all samples
-    avg_res = cohort_res.groupby(['SVTYPE', 'SVLEN', 'AF', 'COMBO']).\
+    avg_res = cohort_res.groupby(['SVTYPE', 'SVLEN', 'AF', 'EV', 'COMBO']).\
                          apply(summarize_group).\
                          reset_index(drop=True)
 
@@ -66,5 +66,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
