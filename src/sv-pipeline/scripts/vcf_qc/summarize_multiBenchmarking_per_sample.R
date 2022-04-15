@@ -52,7 +52,7 @@ res <- t(apply(cats.df, 1, function(cat.vals){
   AF.match <- which(dat$AF.bin == AF.bin)
   EV.match <- which(dat$EV == EV.bin)
   filter.match <- which(dat$passing.filters == filt.val)
-  all.matches <- Reduce(intersect, list(svtype.match, svlen.match, AF.match, filter.match))
+  all.matches <- Reduce(intersect, list(svtype.match, svlen.match, AF.match, EV.match, filter.match))
   n.all.matches <- length(all.matches)
   
   # Calculate fraction of variants in category that are supported by benchmarking
