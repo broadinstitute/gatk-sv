@@ -11,6 +11,7 @@ Integrate VCFs filtered by various different models
 
 
 import numpy as np
+import csv
 from collections import defaultdict
 import argparse
 import pysam
@@ -39,21 +40,67 @@ def tokenize_numeric(svlen):
     return str(np.floor(np.log10(svlen)))
 
 
+def tokenize_EV(EV):
+    """
+    Translates EV values into a sorted token for keying into dicts
+    """
+
+    if isinstance(EV, str):
+        token = ','.join(sorted(EV.split(',')))
+    elif isinstance(EV, tuple):
+        token = ','.join(sorted([str(x) for x in EV]))
+
+    return token
+
+
+def calc_af(record):
+    """
+    Computes a simple AF for a single record
+    """
+
+    an = 0
+    ac = 0
+
+    for sample, sgt in record.samples.items():
+        alleles = sgt['GT']
+        an += len([a for a in alleles if a is not None])
+        ac += len([a for a in alleles if a is not None and str(a) != "0"])
+
+    if an > 0:
+        af = ac / an
+    else:
+        af = np.NaN
+
+    return af
+
+
 def load_rules(rules_tsv):
     """
     Loads rules .tsv as a nested series of defaultdicts, keyed on:
     1. SVTYPE
     2. SVLEN, keyed by tokenize_numeric(SVLEN)
-    3. AF, keyed by tokenize_numeric(AF)
+    3. AF before any filtering, keyed by tokenize_numeric(AF)
+    4. EV, keyed by tokenize_EV(EV)
     """
 
     # Set baseline: keep any model if no information is provided
     any_model = [set(['mingq']), set(['boost']), set(['gqrecal'])]
-    rules = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: any_model)))
+    rules = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: any_model))))
 
     if rules_tsv is not None:
-        # TODO: update rules dict from .tsv
-        import pdb; pdb.set_trace()
+        with csv.reader(open(rules_tsv), delimiter='\t') as reader:
+            for svtype, min_log10_SVLEN, min_log10_AF, EV, combos_str in reader:
+                combos = [set(';'.split(cstr)) for cstr in '|'.split(combos_str)]
+                if svtype not in rules.keys():
+                    rules[svtype] = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: any_model)))
+                svlen = tokenize_numeric(float(min_log10_SVLEN))
+                if svlen not in rules[svtype].keys():
+                    rules[svtype][svlen] = defaultdict(lambda: defaultdict(lambda: any_model))
+                svaf = tokenize_numeric(float(min_log10_AF))
+                if svaf not in rules[svtype][svlen].keys():
+                    rules[svtype][svlen][svaf] = defaultdict(lambda: any_model)
+                ev = tokenize_EV(EV)
+                rules[svtype][svlen][svaf].update({ev : combos})
 
     return rules
 
@@ -66,8 +113,11 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
     # Get descriptive information about record
     svtype = record.info['SVTYPE']
     svsize = tokenize_numeric(record.info.get('SVLEN', -1))
-    # TODO: get allele frequency
-    # svaf = tokenize_numeric(record.info.get('AF'))
+    # Compute simple AF on the fly if AF is not present in record INFO
+    if 'AF' in record.info.keys():
+        svaf = tokenize_numeric(record.info['AF'])
+    else:
+        svaf = tokenize_numeric(calc_af(record))
     multiallelic = is_mcnv(record)
     nocalls = 0
     nonref = 0
@@ -113,7 +163,8 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
                     pass_filts.add(tag)
 
         # Get list of filter combinations eligible for this GT
-        elig_combos = rules[svtype][svsize][svaf]
+        EV = tokenize_EV(record.samples[sample]['EV'])
+        elig_combos = rules[svtype][svsize][svaf][EV]
 
         # Don't consider Boost for homref GTs because Boost only scores non-ref GTs
         if record.samples[sample]['GT'] == (0, 0):
