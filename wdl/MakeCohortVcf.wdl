@@ -61,6 +61,7 @@ workflow MakeCohortVcf {
     File empty_file
     File? outlier_samples_list
     Int? random_seed
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
     Array[File]? thousand_genomes_benchmark_calls
     Array[File]? hgsv_benchmark_calls

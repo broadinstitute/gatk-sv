@@ -25,6 +25,7 @@ workflow MasterVcfQc {
     File? werling_2018_tarball
     Array[String] contigs
     Int? random_seed
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
     File? vcf_idx
 
     String sv_base_mini_docker
@@ -131,6 +132,7 @@ workflow MasterVcfQc {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
   }
 
+  Int max_gq_ = if (defined(max_gq)) then max_gq else 99
   # Plot per-sample stats
   call PlotQcPerSample {
     input:
@@ -138,6 +140,7 @@ workflow MasterVcfQc {
       samples_list=CollectQcVcfwide.samples_list[0],
       per_sample_tarball=CollectPerSampleVidLists.vid_lists,
       prefix=prefix,
+      max_gq=max_gq_,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
@@ -150,6 +153,7 @@ workflow MasterVcfQc {
       ped_file=ped_file,
       per_sample_tarball=CollectPerSampleVidLists.vid_lists,
       prefix=prefix,
+      max_gq=max_gq_,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_family
   }
@@ -526,6 +530,7 @@ task PlotQcPerSample {
     File samples_list
     File per_sample_tarball
     String prefix
+    Int max_gq
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -577,6 +582,7 @@ task PlotQcPerSample {
       ~{samples_list} \
       ~{prefix}_perSample/ \
       ~{prefix}_perSample_plots/
+      --maxgq ~{max_gq}
 
     # Prepare output
     tar -czvf ~{prefix}.plotQC_perSample.tar.gz \
@@ -597,6 +603,7 @@ task PlotQcPerFamily {
     File ped_file
     File per_sample_tarball
     String prefix
+    Int max_gq
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -658,6 +665,7 @@ task PlotQcPerFamily {
         cleaned.fam \
         ~{prefix}_perSample/ \
         ~{prefix}_perFamily_plots/
+        --maxgq ~{max_gq}
 
     else
 
