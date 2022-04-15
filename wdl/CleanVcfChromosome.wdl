@@ -299,7 +299,7 @@ workflow CleanVcfChromosome {
   call MiniTasks.FixEndsRescaleGQ {
     input:
       vcf = FinalCleanup.final_cleaned_shard,
-      prefix = prefix + ".ready_for_gatk",
+      prefix = prefix + ".cleaned",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_override_fix_bad_ends
   }
