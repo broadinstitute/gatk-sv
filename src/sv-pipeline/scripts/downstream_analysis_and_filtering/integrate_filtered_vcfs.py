@@ -219,10 +219,7 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
             relevant_rules = homref_rules
         else:
             relevant_rules = rules
-        try:
-            elig_combos = relevant_rules[svtype][svsize][svaf][EV]
-        except:
-            import pdb; pdb.set_trace()
+        elig_combos = relevant_rules[svtype][svsize][svaf][EV]
 
         # Check if GT passes any combination of eligible filters
         passing = any([len(combo.intersection(pass_filts)) == len(combo) for combo in elig_combos])

@@ -12,7 +12,7 @@
   "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/tbrookin/samtools-cloud:ee27c3f",
   "sv_base_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base:ee27c3f",
   "sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-base-mini:ee27c3f",
-  "sv_pipeline_base_docker": "sv-pipeline-base:g3_filter_integration_d2b675",
+  "sv_pipeline_base_docker": "sv-pipeline-base:g3_filter_integration_11ddd8",
   "sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:20220302-9bf5ca3b",
   "sv_pipeline_hail_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-hail:20220302-9bf5ca3b",
   "sv_pipeline_updates_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-updates:20220302-9bf5ca3b",
