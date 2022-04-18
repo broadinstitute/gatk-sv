@@ -12,10 +12,14 @@ Integrate VCFs filtered by various different models
 
 import numpy as np
 import csv
+from itertools import combinations
 from collections import defaultdict
 import argparse
 import pysam
 import sys
+
+
+filter_models = ['mingq', 'boost', 'gqrecalibrator']
 
 
 def is_mcnv(record):
@@ -83,22 +87,27 @@ def load_rules(rules_tsv):
     4. EV, keyed by tokenize_EV(EV)
     """
 
-    # Set baseline: keep any model if no information is provided
-    any_model = [set(['mingq']), set(['boost']), set(['gqrecal'])]
-    rules = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: any_model))))
+    # Set baseline: keep any model if no information is provided unless --strict option specified
+    if strict:
+        default_pass = [set(filter_models)]
+    else:
+        default_pass = [set(x) for x in filter_models + \
+                                        combinations(filter_models, 2) + \
+                                        combinations(filter_models, 3)]
+    rules = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass))))
 
     if rules_tsv is not None:
         with csv.reader(open(rules_tsv), delimiter='\t') as reader:
             for svtype, min_log10_SVLEN, min_log10_AF, EV, combos_str in reader:
                 combos = [set(';'.split(cstr)) for cstr in '|'.split(combos_str)]
                 if svtype not in rules.keys():
-                    rules[svtype] = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: any_model)))
+                    rules[svtype] = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass)))
                 svlen = tokenize_numeric(float(min_log10_SVLEN))
                 if svlen not in rules[svtype].keys():
-                    rules[svtype][svlen] = defaultdict(lambda: defaultdict(lambda: any_model))
+                    rules[svtype][svlen] = defaultdict(lambda: defaultdict(lambda: default_pass))
                 svaf = tokenize_numeric(float(min_log10_AF))
                 if svaf not in rules[svtype][svlen].keys():
-                    rules[svtype][svlen][svaf] = defaultdict(lambda: any_model)
+                    rules[svtype][svlen][svaf] = defaultdict(lambda: default_pass)
                 ev = tokenize_EV(EV)
                 rules[svtype][svlen][svaf].update({ev : combos})
 
@@ -202,6 +211,10 @@ def main():
                         'GQRecalibrator', required=True)
     parser.add_argument('--rules', help='.tsv of rules for integrating genotypes. ' +
                         'If omitted, will keep all informative GTs over no-calls.')
+    parser.add_argument('--strict', default=False, action='store_true',
+                        help='Require intersection of all three filters for any SVs ' +
+                        'not otherwise specified in --rules. [default: keep any ' +
+                        'passing GT]')
     parser.add_argument('--keep-empty-records', default=False, action='store_true',
                         help='Retain records where 100\% of non-reference GTs are ' +
                         'removed during filtering. Default: drop records with AC=0.')
