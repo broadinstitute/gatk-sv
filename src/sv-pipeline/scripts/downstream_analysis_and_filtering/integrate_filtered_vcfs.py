@@ -14,12 +14,16 @@ import numpy as np
 import csv
 from itertools import combinations
 from collections import defaultdict
+from copy import deepcopy
 import argparse
 import pysam
 import sys
+from time import time
+from datetime import timedelta
 
 
 filter_models = ['mingq', 'boost', 'gqrecalibrator']
+filter_models_noBoost = [x for x in filter_models if x != 'boost']
 
 
 def is_mcnv(record):
@@ -38,10 +42,10 @@ def is_mcnv(record):
 
 def tokenize_numeric(svlen):
     """
-    Translates numeric values (SVLEN, AF, etc.) into string category for keying into dicts
+    Translates log10-scaled numeric values (SVLEN, AF, etc.) into string keys for dicts
     """
 
-    return str(np.floor(np.log10(svlen)))
+    return str(int(np.floor(svlen)))
 
 
 def tokenize_EV(EV):
@@ -78,7 +82,7 @@ def calc_af(record):
     return af
 
 
-def load_rules(rules_tsv):
+def load_rules(rules_tsv, strict=False):
     """
     Loads rules .tsv as a nested series of defaultdicts, keyed on:
     1. SVTYPE
@@ -91,15 +95,18 @@ def load_rules(rules_tsv):
     if strict:
         default_pass = [set(filter_models)]
     else:
-        default_pass = [set(x) for x in filter_models + \
-                                        combinations(filter_models, 2) + \
-                                        combinations(filter_models, 3)]
+        default_pass = [set(x) for x in combinations(filter_models, 1)] + \
+                       [set(x) for x in combinations(filter_models, 2)] + \
+                       [set(x) for x in combinations(filter_models, 3)]
     rules = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass))))
 
     if rules_tsv is not None:
-        with csv.reader(open(rules_tsv), delimiter='\t') as reader:
+        with open(rules_tsv) as tsvin:
+            reader = csv.reader(tsvin, delimiter='\t')
             for svtype, min_log10_SVLEN, min_log10_AF, EV, combos_str in reader:
-                combos = [set(';'.split(cstr)) for cstr in '|'.split(combos_str)]
+                if svtype.startswith('#'):
+                    continue
+                combos = [set(cstr.split(';')) for cstr in combos_str.split('|')]
                 if svtype not in rules.keys():
                     rules[svtype] = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass)))
                 svlen = tokenize_numeric(float(min_log10_SVLEN))
@@ -114,20 +121,54 @@ def load_rules(rules_tsv):
     return rules
 
 
-def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
+def modify_homref_rules(rules, strict=False):
+    """
+    Modifies a rules dictionary (see load_rules()) for integrating homozygous ref GTs
+    Don't consider Boost for homref GTs because Boost only scores non-ref GTs
+    """
+
+    homref_rules = deepcopy(rules)
+    
+    # Update all defaults
+    if strict:
+        default_pass = [set(filter_models_noBoost)]
+    else:
+        default_pass = [set(x) for x in combinations(filter_models_noBoost, 1)] + \
+                       [set(x) for x in combinations(filter_models_noBoost, 2)]
+    homref_rules.default_factory = lambda: default_pass
+
+    # Update all rules
+    for svtype in rules.keys():
+        homref_rules[svtype].default_factory = lambda: default_pass
+        for svlen in rules[svtype].keys():
+            homref_rules[svtype][svlen].default_factory = lambda: default_pass
+            for svaf in rules[svtype][svlen].keys():
+                homref_rules[svtype][svlen][svaf].default_factory = lambda: default_pass
+                for svev in rules[svtype][svlen][svaf].keys():
+                    old = rules[svtype][svlen][svaf][svev]
+                    new = [x - set(['boost']) for x in old]
+                    homref_rules[svtype][svlen][svaf][svev] = \
+                        [x for x in new if len(x) > 0]
+
+    return homref_rules
+
+
+def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
     """
     Unify information across all versions of the same variant record
     """
 
     # Get descriptive information about record
     svtype = record.info['SVTYPE']
-    svsize = tokenize_numeric(record.info.get('SVLEN', -1))
-    # Compute simple AF on the fly if AF is not present in record INFO
-    if 'AF' in record.info.keys():
-        svaf = tokenize_numeric(record.info['AF'])
-    else:
-        svaf = tokenize_numeric(calc_af(record))
+    svsize = tokenize_numeric(np.log10(record.info.get('SVLEN', -1)))
     multiallelic = is_mcnv(record)
+    # Compute simple AF on the fly if AF is not present in record INFO
+    if not multiallelic:
+        if 'AF' in record.info.keys():
+            af = record.info['AF']
+        else:
+            af = calc_af(record)
+        svaf = tokenize_numeric(np.log10(af))
     nocalls = 0
     nonref = 0
     
@@ -172,13 +213,16 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
                     pass_filts.add(tag)
 
         # Get list of filter combinations eligible for this GT
-        EV = tokenize_EV(record.samples[sample]['EV'])
-        elig_combos = rules[svtype][svsize][svaf][EV]
-
         # Don't consider Boost for homref GTs because Boost only scores non-ref GTs
+        EV = tokenize_EV(record.samples[sample]['EV'])
         if record.samples[sample]['GT'] == (0, 0):
-            for combo in elig_combos:
-                combo.discard('boost')
+            relevant_rules = homref_rules
+        else:
+            relevant_rules = rules
+        try:
+            elig_combos = relevant_rules[svtype][svsize][svaf][EV]
+        except:
+            import pdb; pdb.set_trace()
 
         # Check if GT passes any combination of eligible filters
         passing = any([len(combo.intersection(pass_filts)) == len(combo) for combo in elig_combos])
@@ -195,6 +239,8 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules):
     # Annotate no-call rate (only for biallelic variants)
     if not multiallelic:
         record.info['NCR'] = nocalls / len(record.samples.keys())
+    else:
+        nonref = len(record.samples.keys())
 
     return record, nonref
 
@@ -210,6 +256,8 @@ def main():
     parser.add_argument('--gqrecalibrator-vcf', help='VCF filtered by GATK ' +
                         'GQRecalibrator', required=True)
     parser.add_argument('--rules', help='.tsv of rules for integrating genotypes. ' +
+                        'If provided, must have the following five columns: SVTYPE, ' +
+                        'min_log10_SVLEN, min_log10_AF, EV, passing_filter_combos. ' +
                         'If omitted, will keep all informative GTs over no-calls.')
     parser.add_argument('--strict', default=False, action='store_true',
                         help='Require intersection of all three filters for any SVs ' +
@@ -220,6 +268,8 @@ def main():
                         'removed during filtering. Default: drop records with AC=0.')
     parser.add_argument('-o','--vcf-out', help='Path to output VCF. Accepts "-" ' +
                         'and "stdout". Default: stdout', default='stdout')
+    parser.add_argument('-v', '--verbose', default=False, action='store_true',
+                        help='Print logging messages.')
     args = parser.parse_args()
 
     # Open connections to all input VCFs
@@ -241,7 +291,8 @@ def main():
                                    ('Description', "Proportion of no-call GTs")])
 
     # Load integration rules
-    rules = load_rules(args.rules)
+    rules = load_rules(args.rules, args.strict)
+    homref_rules = modify_homref_rules(rules)
 
     # Open connection to output VCF
     if args.vcf_out in '- stdout'.split():
@@ -255,6 +306,10 @@ def main():
     next_gqrecal_record = gqrecal_vcf.__next__()
 
     # Iterate over records
+    k=0
+    k_out=0
+    if args.verbose:
+        start_time = time()
     for record in raw_vcf:
         vid = record.id
 
@@ -277,12 +332,21 @@ def main():
 
         # Unify information from all versions of record
         record, n_nonref = unify_records(record, mingq_record, boost_record, 
-                                         gqrecal_record, rules)
+                                         gqrecal_record, rules, homref_rules)
 
         # Write updated record to output VCF if at least one non-reference GT was
         # retained (or unless overridden by --keep-empty-records)
         if n_nonref > 0 or args.keep_empty_records:
             outvcf.write(record)
+            k_out += 1
+
+        # Write logging message if --verbose is specified
+        k += 1
+        if k % 10 == 0 and args.verbose:
+            msg = 'Processed {:,} records ({:,} written to VCF). Elapsed time: {} ({} seconds per record).'
+            elapsed = time() - start_time
+            print(msg.format(k, k_out, timedelta(seconds=np.round(elapsed)),
+                             np.round(elapsed / k, 3)))
 
     # Close connection to output VCF
     outvcf.close()
