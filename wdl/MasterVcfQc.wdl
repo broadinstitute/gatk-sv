@@ -583,7 +583,7 @@ task PlotQcPerSample {
       ~{vcf_stats} \
       ~{samples_list} \
       ~{prefix}_perSample/ \
-      ~{prefix}_perSample_plots/
+      ~{prefix}_perSample_plots/ \
       --maxgq ~{max_gq}
 
     # Prepare output
@@ -666,7 +666,7 @@ task PlotQcPerFamily {
         ~{vcf_stats} \
         cleaned.fam \
         ~{prefix}_perSample/ \
-        ~{prefix}_perFamily_plots/
+        ~{prefix}_perFamily_plots/ \
         --maxgq ~{max_gq}
 
     else

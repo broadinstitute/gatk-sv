@@ -1063,7 +1063,7 @@ wrapperDeNovoRateLines <- function(fam.dat.list,fam.type,count="variants",gq=F,m
   
   #DNR by Proband GQ
   if(gq) {
-    GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count=count)
+    GQ.dat <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count=count,max.GQ=max.GQ)
     pdf(paste(OUTDIR,"/supporting_plots/sv_inheritance_plots/sv_de_novo_rate.",fam.type,"s.",count,".by_proband_GQ.pdf",sep=""),
         height=4,width=5)
     plotDNRvsGQ(DNRs=GQ.dat$DNRs,bins=GQ.dat$bins,k=4,nfams=length(fam.dat.list),
@@ -1162,7 +1162,7 @@ masterInhWrapper <- function(fam.dat.list,fam.type, gq=T,max.GQ=99){
                 count="variants",fam.type=fam.type,legend=F,cex.lab=cex.lab)
   #DNR vs min proband GQ
   if(gq) {
-    GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count="variants")
+    GQ.dat.v <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count="variants",max.GQ=max.GQ)
     plotDNRvsGQ(DNRs=GQ.dat.v$DNRs,bins=GQ.dat.v$bins,k=4,nfams=length(fam.dat.list),
                 title=paste("Site De Novo Rate by GQ",sep=""),
                 count="variants",fam.type=fam.type,legend=F,cex.lab=cex.lab,
@@ -1198,7 +1198,7 @@ masterInhWrapper <- function(fam.dat.list,fam.type, gq=T,max.GQ=99){
                 count="alleles",fam.type=fam.type,legend=F,cex.lab=cex.lab)
   #DNR vs min proband GQ
   if(gq){
-    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count="alleles")
+    GQ.dat.a <- deNovoRateByProGQ(trio.dat.list=fam.dat.list,GQ.bins=50,count="alleles",max.GQ=max.GQ)
     plotDNRvsGQ(DNRs=GQ.dat.a$DNRs,bins=GQ.dat.a$bins,k=4,nfams=length(fam.dat.list),
                 title=paste("Allele De Novo Rate by GQ",sep=""),
                 count="alleles",fam.type=fam.type,legend=F,cex.lab=cex.lab,
