@@ -313,22 +313,35 @@ def main():
     for record in raw_vcf:
         vid = record.id
 
-        # Find matching records
-        if next_mingq_record.id == vid:
-            mingq_record = next_mingq_record.copy()
-            next_mingq_record = mingq_vcf.__next__()
-        else:
-            mingq_record = None
-        if next_boost_record.id == vid:
-            boost_record = next_boost_record.copy()
-            next_boost_record = boost_vcf.__next__()
-        else:
-            boost_record = None
-        if next_gqrecal_record.id == vid:
-            gqrecal_record = next_gqrecal_record.copy()
-            next_gqrecal_record = gqrecal_vcf.__next__()
-        else:
-            gqrecal_record = None
+        # Check for matching MinGQ record
+        mingq_record = None
+        if next_mingq_record is not None:
+            if next_mingq_record.id == vid:
+                mingq_record = next_mingq_record.copy()
+                try:
+                    next_mingq_record = mingq_vcf.__next__()
+                except:
+                    next_mingq_record = None
+
+        # Check for matching Boost record
+        boost_record = None
+        if next_boost_record is not None:
+            if next_boost_record.id == vid:
+                boost_record = next_boost_record.copy()
+                try:
+                    next_boost_record = boost_vcf.__next__()
+                except:
+                    next_boost_record = None
+
+        # Check for matching GQRecalibrator record
+        gqrecal_record = None
+        if next_gqrecal_record is not None:
+            if next_gqrecal_record.id == vid:
+                gqrecal_record = next_gqrecal_record.copy()
+                try:
+                    next_gqrecal_record = gqrecal_vcf.__next__()
+                except:
+                    next_gqrecal_record = None
 
         # Unify information from all versions of record
         record, n_nonref = unify_records(record, mingq_record, boost_record, 
