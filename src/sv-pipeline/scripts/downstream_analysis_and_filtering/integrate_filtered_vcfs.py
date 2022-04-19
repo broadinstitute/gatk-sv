@@ -160,7 +160,7 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
 
     # Get descriptive information about record
     svtype = record.info['SVTYPE']
-    svsize = tokenize_numeric(np.log10(record.info.get('SVLEN', -1)))
+    svsize = tokenize_numeric(np.log10(np.nanmax([1, record.info.get('SVLEN', 1)])))
     multiallelic = is_mcnv(record)
     # Compute simple AF on the fly if AF is not present in record INFO
     if not multiallelic:
