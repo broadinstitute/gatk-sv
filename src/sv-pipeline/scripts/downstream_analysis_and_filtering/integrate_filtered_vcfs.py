@@ -135,13 +135,13 @@ def modify_homref_rules(rules, strict=False):
     else:
         default_pass = [set(x) for x in combinations(filter_models_noBoost, 1)] + \
                        [set(x) for x in combinations(filter_models_noBoost, 2)]
-    homref_rules.default_factory = lambda: default_pass
+    homref_rules.default_factory = lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass)))
 
     # Update all rules
     for svtype in rules.keys():
-        homref_rules[svtype].default_factory = lambda: default_pass
+        homref_rules[svtype].default_factory = lambda: defaultdict(lambda: defaultdict(lambda: default_pass))
         for svlen in rules[svtype].keys():
-            homref_rules[svtype][svlen].default_factory = lambda: default_pass
+            homref_rules[svtype][svlen].default_factory = lambda: defaultdict(lambda: default_pass)
             for svaf in rules[svtype][svlen].keys():
                 homref_rules[svtype][svlen][svaf].default_factory = lambda: default_pass
                 for svev in rules[svtype][svlen][svaf].keys():
@@ -219,7 +219,10 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
             relevant_rules = homref_rules
         else:
             relevant_rules = rules
-        elig_combos = relevant_rules[svtype][svsize][svaf][EV]
+        try:
+            elig_combos = relevant_rules[svtype][svsize][svaf][EV]
+        except:
+            import pdb; pdb.set_trace()
 
         # Check if GT passes any combination of eligible filters
         passing = any([len(combo.intersection(pass_filts)) == len(combo) for combo in elig_combos])
