@@ -1,9 +1,12 @@
 # GATK SV Pipeline Hail dockerfile
+ARG SV_PIPELINE_IMAGE=sv-pipeline:latest
+ARG VIRTUAL_ENV_IMAGE=sv-pipeline-hail-virtual-env:latest
 
-# IMPORTANT: these arguments must be specified at the begining to take advantage of multi-stage build AND runtime specification of base images
-ARG SV_PIPELINE_IMAGE=gatksv/sv-pipeline:latest
-FROM ${SV_PIPELINE_IMAGE}
+# establish alias to copy from later:
+FROM $VIRTUAL_ENV_IMAGE as virtual_env_image
+RUN rm_unneeded_r_library_files.sh $VIRTUAL_ENV_PATH
 
-# Dependencies for creating a Hail cluster on GCS DataProc
-RUN pip3 --no-cache-dir install hail==0.2.71 && \
-    pip3 --no-cache-dir install google-cloud-dataproc \
+FROM $SV_PIPELINE_IMAGE
+
+# Copy updated virtual environment from VIRTUAL_ENV_IMAGE
+COPY --from=virtual_env_image $VIRTUAL_ENV_PATH $VIRTUAL_ENV_PATH

@@ -8,6 +8,7 @@ workflow RenameVcfSamples {
     File vcf_index
     Array[String] current_sample_ids
     Array[String] new_sample_ids
+    String cohort_name
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }

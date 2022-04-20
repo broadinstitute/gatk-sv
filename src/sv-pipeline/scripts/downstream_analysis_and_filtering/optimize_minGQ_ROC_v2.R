@@ -27,11 +27,11 @@ readTrioDat <- function(dn_dat){
   return(dat.out)
 }
 #Get counts of all inherited & de novo variants given min GQ
-filterGQStats <- function(dat,trio,minGQ=0){
+filterGQStats <- function(dat,minGQ=0){
   #Get variant counts
-  max.inh <- nrow(dat[which(dat$fam==trio & dat$label=="inh"),])
-  ret.inh <- nrow(dat[which(dat$fam==trio & dat$pro_GQ>minGQ & dat$label=="inh"),])
-  ret.dn <- nrow(dat[which(dat$fam==trio & dat$label=="dn" &
+  max.inh <- nrow(dat[which(dat$label=="inh"),])
+  ret.inh <- nrow(dat[which(dat$pro_GQ>minGQ & dat$label=="inh"),])
+  ret.dn <- nrow(dat[which(dat$label=="dn" &
                              dat$pro_GQ>minGQ & dat$fa_GQ>minGQ & dat$mo_GQ>minGQ),])
   #Get rates
   if(max.inh>0){
@@ -46,8 +46,9 @@ filterGQStats <- function(dat,trio,minGQ=0){
 }
 #Get matrix of sens & spec stats across a range of GQs
 getGQStats <- function(dat,trio,rangeGQ){
+  trio_dat <- dat[which(dat$fam==trio),]
   iter.res <- as.data.frame(t(sapply(rangeGQ,function(minGQ){
-    stats <- filterGQStats(dat,trio,minGQ)
+    stats <- filterGQStats(trio_dat,minGQ)
     return(stats)
   })))
   colnames(iter.res) <- c("inh.ret","inh.ret.rate",

@@ -330,7 +330,8 @@ def apply_minGQ_filter(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table,
                 bl += 1
 
     if n_samples > 0:
-        frac_bl = bl / n_samples
+        frac_bl = bl / float(n_samples)
+        record.info['minGQ_NCR'] = round(frac_bl, 2)
         if frac_bl > maxNCR:
             record.filter.add(highNCR_filter)
 
@@ -382,13 +383,16 @@ def main():
     else:
         vcf = pysam.VariantFile(args.vcf)
 
-    # Add HIGH_NOCALL_RATE filter to vcf header
+    # Add HIGH_NOCALL_RATE filter and info field to vcf header
     NEW_FILTER = '##FILTER=<ID=HIGH_{0}_NOCALL_RATE,Description="More than '.format(args.prefix) + \
                  '{:.2%}'.format(args.maxNCR) + ' of {0} sample GTs were '.format(args.prefix) + \
                  'masked as no-call GTs due to low GQ. Indicates a possibly noisy locus ' + \
                  'in {0} samples.>'.format(args.prefix)
+    NEW_INFO = '##INFO=<ID=minGQ_NCR,Number=1,Type=Float,Description="Fraction of sample GTs that were ' \
+               'masked as no-call GTs due to low GQ during minGQ filtering.>'
     header = vcf.header
     header.add_line(NEW_FILTER)
+    header.add_line(NEW_INFO)
     filter_text = 'HIGH_{0}_NOCALL_RATE'.format(args.prefix)
 
     if args.fout in '- stdout'.split():

@@ -1,0 +1,6 @@
+{
+  "MergeBatchSites.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "MergeBatchSites.pesr_vcfs": [{{ test_batch.filtered_pesr_vcf | tojson }}],
+  "MergeBatchSites.depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
+  "MergeBatchSites.cohort": {{ test_batch.name | tojson }}
+}

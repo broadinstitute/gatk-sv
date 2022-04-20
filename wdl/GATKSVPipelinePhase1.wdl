@@ -108,6 +108,7 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? manta_vcfs        # Manta VCF
     Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
+    Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
     Int min_svsize                 # Minimum SV length to include
 
@@ -156,7 +157,6 @@ workflow GATKSVPipelinePhase1 {
 
     RuntimeAttr? runtime_attr_ploidy
     RuntimeAttr? runtime_attr_case
-    RuntimeAttr? runtime_attr_bundle
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
 
@@ -301,6 +301,7 @@ workflow GATKSVPipelinePhase1 {
       manta_vcfs=manta_vcfs,
       delly_vcfs=delly_vcfs,
       melt_vcfs=melt_vcfs,
+      scramble_vcfs=scramble_vcfs,
       wham_vcfs=wham_vcfs,
       min_svsize=min_svsize,
       run_matrix_qc=run_matrix_qc,
@@ -341,7 +342,6 @@ workflow GATKSVPipelinePhase1 {
       matrix_qc_rd_runtime_attr=matrix_qc_rd_runtime_attr,
       runtime_attr_ploidy = runtime_attr_ploidy,
       runtime_attr_case = runtime_attr_case,
-      runtime_attr_bundle = runtime_attr_bundle,
       runtime_attr_postprocess = runtime_attr_postprocess,
       runtime_attr_explode = runtime_attr_explode,
       run_module_metrics = run_batchevidence_metrics,
@@ -355,6 +355,7 @@ workflow GATKSVPipelinePhase1 {
       delly_vcfs=GatherBatchEvidence.std_delly_vcf,
       wham_vcfs=GatherBatchEvidence.std_wham_vcf,
       melt_vcfs=GatherBatchEvidence.std_melt_vcf,
+      scramble_vcfs=GatherBatchEvidence.std_scramble_vcf,
       del_bed=GatherBatchEvidence.merged_dels,
       dup_bed=GatherBatchEvidence.merged_dups,
       batch=batch,
@@ -385,11 +386,12 @@ workflow GATKSVPipelinePhase1 {
   call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
     input:
       batch=batch,
-      depth_vcf=ClusterBatch.depth_vcf,
-      melt_vcf=ClusterBatch.melt_vcf,
-      delly_vcf=ClusterBatch.delly_vcf,
-      wham_vcf=ClusterBatch.wham_vcf,
-      manta_vcf=ClusterBatch.manta_vcf,
+      depth_vcf=ClusterBatch.clustered_depth_vcf,
+      melt_vcf=ClusterBatch.clustered_melt_vcf,
+      scramble_vcf=ClusterBatch.clustered_scramble_vcf,
+      delly_vcf=ClusterBatch.clustered_delly_vcf,
+      wham_vcf=ClusterBatch.clustered_wham_vcf,
+      manta_vcf=ClusterBatch.clustered_manta_vcf,
       baf_metrics=select_first([GatherBatchEvidence.merged_BAF]),
       discfile=GatherBatchEvidence.merged_PE,
       coveragefile=GatherBatchEvidence.merged_bincov,
@@ -430,11 +432,12 @@ workflow GATKSVPipelinePhase1 {
   call filterbatch.FilterBatch as FilterBatch {
     input:
       batch=batch,
-      manta_vcf=ClusterBatch.manta_vcf,
-      delly_vcf=ClusterBatch.delly_vcf,
-      wham_vcf=ClusterBatch.wham_vcf,
-      melt_vcf=ClusterBatch.melt_vcf,
-      depth_vcf=ClusterBatch.depth_vcf,
+      manta_vcf=ClusterBatch.clustered_manta_vcf,
+      delly_vcf=ClusterBatch.clustered_delly_vcf,
+      wham_vcf=ClusterBatch.clustered_wham_vcf,
+      melt_vcf=ClusterBatch.clustered_melt_vcf,
+      scramble_vcf=ClusterBatch.clustered_scramble_vcf,
+      depth_vcf=ClusterBatch.clustered_depth_vcf,
       outlier_cutoff_table=outlier_cutoff_table,
       evidence_metrics=GenerateBatchMetrics.metrics,
       evidence_metrics_common=GenerateBatchMetrics.metrics_common,
@@ -480,16 +483,24 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? std_manta_vcf = GatherBatchEvidence.std_manta_vcf
     Array[File]? std_delly_vcf = GatherBatchEvidence.std_delly_vcf
     Array[File]? std_melt_vcf = GatherBatchEvidence.std_melt_vcf
+    Array[File]? std_scramble_vcf = GatherBatchEvidence.std_scramble_vcf
     Array[File]? std_wham_vcf = GatherBatchEvidence.std_wham_vcf
 
     File? metrics_file_batchevidence = GatherBatchEvidence.metrics_file_batchevidence
 
     # ClusterBatch
-    File? depth_vcf = ClusterBatch.depth_vcf
-    File? manta_vcf = ClusterBatch.manta_vcf
-    File? delly_vcf = ClusterBatch.delly_vcf
-    File? wham_vcf = ClusterBatch.wham_vcf
-    File? melt_vcf = ClusterBatch.melt_vcf
+    File depth_vcf = ClusterBatch.clustered_depth_vcf
+    File depth_vcf_index = ClusterBatch.clustered_depth_vcf_index
+    File? manta_vcf = ClusterBatch.clustered_manta_vcf
+    File? manta_vcf_index = ClusterBatch.clustered_manta_vcf_index
+    File? delly_vcf = ClusterBatch.clustered_delly_vcf
+    File? delly_vcf_index = ClusterBatch.clustered_delly_vcf_index
+    File? wham_vcf = ClusterBatch.clustered_wham_vcf
+    File? wham_vcf_index = ClusterBatch.clustered_wham_vcf_index
+    File? melt_vcf = ClusterBatch.clustered_melt_vcf
+    File? melt_vcf_index = ClusterBatch.clustered_melt_vcf_index
+    File? scramble_vcf = ClusterBatch.clustered_scramble_vcf
+    File? scramble_vcf_index = ClusterBatch.clustered_scramble_vcf_index
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 
@@ -504,6 +515,7 @@ workflow GATKSVPipelinePhase1 {
     File? filtered_delly_vcf = FilterBatch.filtered_delly_vcf
     File? filtered_wham_vcf = FilterBatch.filtered_wham_vcf
     File? filtered_melt_vcf = FilterBatch.filtered_melt_vcf
+    File? filtered_scramble_vcf = FilterBatch.filtered_scramble_vcf
     File? filtered_depth_vcf = FilterBatch.filtered_depth_vcf
     File? filtered_pesr_vcf = FilterBatch.filtered_pesr_vcf
     File cutoffs = FilterBatch.cutoffs
@@ -513,6 +525,11 @@ workflow GATKSVPipelinePhase1 {
     Array[String] batch_samples_postOutlierExclusion = FilterBatch.batch_samples_postOutlierExclusion
     File outlier_samples_excluded_file = FilterBatch.outlier_samples_excluded_file
     File batch_samples_postOutlierExclusion_file = FilterBatch.batch_samples_postOutlierExclusion_file
+
+    File? sites_filtered_manta_vcf = FilterBatch.sites_filtered_manta_vcf
+    File? sites_filtered_wham_vcf = FilterBatch.sites_filtered_wham_vcf
+    File? sites_filtered_melt_vcf = FilterBatch.sites_filtered_melt_vcf
+    File? sites_filtered_depth_vcf = FilterBatch.sites_filtered_depth_vcf
 
     File? metrics_file_filterbatch = FilterBatch.metrics_file_filterbatch
   }

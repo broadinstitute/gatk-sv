@@ -17,27 +17,30 @@ import "TestUtils.wdl" as tu
 workflow GATKSVPipelineBatch {
   input {
     # Batch data
-    String batch
-    Array[String] sample_ids
+    String name
+    Array[String] samples
 
     # Required unless caller and evidence outputs are provided (below)
     Array[File]? bam_or_cram_files
     Array[File]? bam_or_cram_indexes
+    Boolean requester_pays_crams = false
 
     # Optionally provide calls and evidence (override caller flags below)
-    Array[File]? counts_files
-    Array[File]? pe_files
-    Array[File]? sr_files
-    Array[File?]? baf_files
-    Array[File]? delly_vcfs
-    Array[File]? manta_vcfs
-    Array[File]? melt_vcfs
-    Array[File]? wham_vcfs
+    Array[File]? counts_files_input
+    Array[File]? pe_files_input
+    Array[File]? sr_files_input
+    Array[File?]? baf_files_input
+    Array[File]? delly_vcfs_input
+    Array[File]? manta_vcfs_input
+    Array[File]? melt_vcfs_input
+    Array[File]? scramble_vcfs_input
+    Array[File]? wham_vcfs_input
 
     # Enable different callers
     Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
+    Boolean use_scramble = true
     Boolean use_wham = true
 
     # BAF Generation (if baf_files unavailable)
@@ -65,6 +68,13 @@ workflow GATKSVPipelineBatch {
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     File autosome_file      # fai of autosomal contigs
     File allosome_file      # fai of allosomal contigs
+
+    # gCNV
+    File contig_ploidy_model_tar
+    Array[File] gcnv_model_tars
+
+    File? outlier_cutoff_table
+    File qc_definitions
 
     # Run module metrics - all modules on by default for batch WDL
     Boolean? run_sampleevidence_metrics
@@ -102,6 +112,7 @@ workflow GATKSVPipelineBatch {
     String? delly_docker
     String? manta_docker
     String? melt_docker
+    String? scramble_docker
     String? wham_docker
     String cloud_sdk_docker
 
@@ -114,39 +125,42 @@ workflow GATKSVPipelineBatch {
     String? NONE_STRING_
   }
 
-  Boolean collect_coverage_ = !defined(counts_files)
-  Boolean collect_pesr_ = !(defined(pe_files) && defined(sr_files))
+  Boolean collect_coverage_ = !defined(counts_files_input)
+  Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input))
 
-  String? delly_docker_ = if (!defined(delly_vcfs) && use_delly) then delly_docker else NONE_STRING_
-  String? manta_docker_ = if (!defined(manta_vcfs) && use_manta) then manta_docker else NONE_STRING_
-  String? melt_docker_ = if (!defined(melt_vcfs) && use_melt) then melt_docker else NONE_STRING_
-  String? wham_docker_ = if (!defined(wham_vcfs) && use_wham) then wham_docker else NONE_STRING_
+  String? delly_docker_ = if (!defined(delly_vcfs_input) && use_delly) then delly_docker else NONE_STRING_
+  String? manta_docker_ = if (!defined(manta_vcfs_input) && use_manta) then manta_docker else NONE_STRING_
+  String? melt_docker_ = if (!defined(melt_vcfs_input) && use_melt) then melt_docker else NONE_STRING_
+  String? scramble_docker_ = if (!defined(scramble_vcfs_input) && use_scramble) then scramble_docker else NONE_STRING_
+  String? wham_docker_ = if (!defined(wham_vcfs_input) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidenceBatch {
       input:
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
+        requester_pays_crams=requester_pays_crams,
         collect_coverage=collect_coverage_,
         collect_pesr=collect_pesr_,
-        sample_ids=sample_ids,
+        sample_ids=samples,
         primary_contigs_list=primary_contigs_list,
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
         run_module_metrics = run_sampleevidence_metrics,
         primary_contigs_fai = primary_contigs_fai,
-        batch = batch,
+        batch = name,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        delly_docker=delly_docker,
-        manta_docker=manta_docker,
-        melt_docker=melt_docker,
-        wham_docker=wham_docker,
+        delly_docker=delly_docker_,
+        manta_docker=manta_docker_,
+        melt_docker=melt_docker_,
+        scramble_docker=scramble_docker_,
+        wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
         gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
@@ -155,27 +169,30 @@ workflow GATKSVPipelineBatch {
     }
   }
 
-  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files])
-  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files])
-  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files])
+  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files_input])
+  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files_input])
+  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files_input])
 
   if (use_delly) {
-    Array[File] delly_vcfs_ = if defined(delly_vcfs) then select_first([delly_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
+    Array[File] delly_vcfs_ = if defined(delly_vcfs_input) then select_first([delly_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
   }
   if (use_manta) {
-    Array[File] manta_vcfs_ = if defined(manta_vcfs) then select_first([manta_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
+    Array[File] manta_vcfs_ = if defined(manta_vcfs_input) then select_first([manta_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
   }
   if (use_melt) {
-    Array[File] melt_vcfs_ = if defined(melt_vcfs) then select_first([melt_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.melt_vcf]))
+    Array[File] melt_vcfs_ = if defined(melt_vcfs_input) then select_first([melt_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.melt_vcf]))
+  }
+  if (use_scramble) {
+    Array[File] scramble_vcfs_ = if defined(scramble_vcfs_input) then select_first([scramble_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.scramble_vcf]))
   }
   if (use_wham) {
-    Array[File] wham_vcfs_ = if defined(wham_vcfs) then select_first([wham_vcfs]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
+    Array[File] wham_vcfs_ = if defined(wham_vcfs_input) then select_first([wham_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.wham_vcf]))
   }
 
   call evidenceqc.EvidenceQC as EvidenceQC {
     input:
-      batch=batch,
-      samples=sample_ids,
+      batch=name,
+      samples=samples,
       genome_file=genome_file,
       counts=counts_files_,
       run_ploidy = false,
@@ -187,15 +204,17 @@ workflow GATKSVPipelineBatch {
 
   call phase1.GATKSVPipelinePhase1 {
     input:
-      batch=batch,
-      samples=sample_ids,
+      batch=name,
+      samples=samples,
       ped_file=ped_file,
       genome_file=genome_file,
       contigs=primary_contigs_fai,
       reference_fasta=reference_fasta,
       reference_index=reference_index,
       reference_dict=reference_dict,
-      BAF_files=baf_files,
+      contig_ploidy_model_tar=contig_ploidy_model_tar,
+      gcnv_model_tars=gcnv_model_tars,
+      BAF_files=baf_files_input,
       counts=counts_files_,
       bincov_matrix=EvidenceQC.bincov_matrix,
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
@@ -204,6 +223,7 @@ workflow GATKSVPipelineBatch {
       delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
+      scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
       gvcfs=gvcfs,
       snp_vcfs=snp_vcfs,
@@ -236,7 +256,7 @@ workflow GATKSVPipelineBatch {
       batch_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
       cohort_pesr_vcf=select_first([GATKSVPipelinePhase1.filtered_pesr_vcf]),
       cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      batch=batch,
+      batch=name,
       rf_cutoffs=GATKSVPipelinePhase1.cutoffs,
       medianfile=GATKSVPipelinePhase1.median_cov,
       coveragefile=GATKSVPipelinePhase1.merged_bincov,
@@ -261,8 +281,8 @@ workflow GATKSVPipelineBatch {
       depth_vcfs=[GenotypeBatch.genotyped_depth_vcf],
       batch_depth_vcfs=[select_first([GATKSVPipelinePhase1.filtered_depth_vcf])],
       cohort_depth_vcf=select_first([GATKSVPipelinePhase1.filtered_depth_vcf]),
-      batches=[batch],
-      cohort=batch,
+      batches=[name],
+      cohort=name,
       medianfiles=[GATKSVPipelinePhase1.median_cov],
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
@@ -292,9 +312,9 @@ workflow GATKSVPipelineBatch {
       ref_dict=reference_dict,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
       bincov_files=[GATKSVPipelinePhase1.merged_bincov],
-      cohort_name=batch,
+      cohort_name=name,
       rf_cutoff_files=[GATKSVPipelinePhase1.cutoffs],
-      batches=[batch],
+      batches=[name],
       depth_gt_rd_sep_files=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
       run_module_metrics = run_makecohortvcf_metrics,
@@ -311,7 +331,7 @@ workflow GATKSVPipelineBatch {
 
   call tu.CatMetrics as CatBatchMetrics {
       input:
-        prefix = "batch_sv." + batch,
+        prefix = "batch_sv." + name,
         metric_files = select_all([GatherSampleEvidenceBatch.metrics_file_sampleevidence, GATKSVPipelinePhase1.metrics_file_batchevidence, GATKSVPipelinePhase1.metrics_file_clusterbatch, GATKSVPipelinePhase1.metrics_file_batchmetrics, GATKSVPipelinePhase1.metrics_file_filterbatch, GenotypeBatch.metrics_file_genotypebatch, MakeCohortVcf.metrics_file_makecohortvcf]),
         linux_docker = linux_docker,
         runtime_attr_override = runtime_attr_cat_metrics
@@ -321,15 +341,15 @@ workflow GATKSVPipelineBatch {
   if (length(defined_baseline_metrics) > 0) {
     call tu.CatMetrics as CatBaselineMetrics {
       input:
-        prefix = "baseline." + batch,
+        prefix = "baseline." + name,
         metric_files = defined_baseline_metrics,
         linux_docker = linux_docker,
         runtime_attr_override = runtime_attr_cat_metrics
     }
     call tu.PlotMetrics {
       input:
-        name = batch,
-        samples = sample_ids,
+        name = name,
+        samples = samples,
         test_metrics = CatBatchMetrics.out,
         base_metrics = CatBaselineMetrics.out,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
@@ -339,38 +359,111 @@ workflow GATKSVPipelineBatch {
 
   call utils.RunQC as BatchQC {
     input:
-      name = batch,
+      name = name,
       metrics = CatBatchMetrics.out,
+      qc_definitions = qc_definitions,
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
+  scatter (i in range(length(samples))) {
+    File pe_files_index_ = pe_files_[i] + ".tbi"
+    File sr_files_index_ = sr_files_[i] + ".tbi"
+  }
+
+  if (defined(manta_vcfs_)) {
+    scatter (i in range(length(samples))) {
+      File manta_vcfs_index_ = select_first([manta_vcfs_])[i] + ".tbi"
+    }
+  }
+  if (defined(melt_vcfs_)) {
+    scatter (i in range(length(samples))) {
+      File melt_vcfs_index_ = select_first([melt_vcfs_])[i] + ".tbi"
+    }
+  }
+  if (defined(wham_vcfs_)) {
+    scatter (i in range(length(samples))) {
+      File wham_vcfs_index_ = select_first([wham_vcfs_])[i] + ".tbi"
+    }
+  }
+
   output {
-    File vcf = MakeCohortVcf.vcf
-    File vcf_index = MakeCohortVcf.vcf_index
+    File clean_vcf = MakeCohortVcf.vcf
+    File clean_vcf_index = MakeCohortVcf.vcf_index
     File metrics_file_batch = CatBatchMetrics.out
     File qc_file = BatchQC.out
-
-    # Additional outputs for creating a reference panel
-    Array[File] pesr_disc_files = pe_files_
-    Array[File] pesr_split_files = sr_files_
-    Array[File]? std_delly_vcfs = GATKSVPipelinePhase1.std_delly_vcf
-    Array[File]? std_manta_vcfs = GATKSVPipelinePhase1.std_manta_vcf
-    Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
-    Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
-    File bincov_matrix = GATKSVPipelinePhase1.merged_bincov
-    File del_bed = GATKSVPipelinePhase1.merged_dels
-    File dup_bed = GATKSVPipelinePhase1.merged_dups
-
+    File master_vcf_qc = MakeCohortVcf.vcf_qc
+    File? metrics_file_makecohortvcf = MakeCohortVcf.metrics_file_makecohortvcf
     File final_sample_list = GATKSVPipelinePhase1.batch_samples_postOutlierExclusion_file
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file
 
+    # Additional outputs for creating a reference panel
+    Array[File] counts = counts_files_
+    Array[File] PE_files = pe_files_
+    Array[File] PE_files_index = pe_files_index_
+    Array[File] SR_files = sr_files_
+    Array[File] SR_files_index = sr_files_index_
+    Array[File]? manta_vcfs = manta_vcfs_
+    Array[File]? manta_vcfs_index = manta_vcfs_index_
+    Array[File]? melt_vcfs = melt_vcfs_
+    Array[File]? melt_vcfs_index = melt_vcfs_index_
+    Array[File]? wham_vcfs = wham_vcfs_
+    Array[File]? wham_vcfs_index = wham_vcfs_index_
+
+    File medianfile = GATKSVPipelinePhase1.median_cov
+    File merged_coverage_file = GATKSVPipelinePhase1.merged_bincov
+    File merged_coverage_file_index = GATKSVPipelinePhase1.merged_bincov_index
+    File merged_baf_file = GATKSVPipelinePhase1.merged_BAF
+    File merged_baf_file_index = GATKSVPipelinePhase1.merged_BAF_index
+    File merged_disc_file = GATKSVPipelinePhase1.merged_PE
+    File merged_disc_file_index = GATKSVPipelinePhase1.merged_PE_index
+    File merged_split_file = GATKSVPipelinePhase1.merged_SR
+    File merged_split_file_index = GATKSVPipelinePhase1.merged_SR_index
+
+    File del_bed = GATKSVPipelinePhase1.merged_dels
+    File del_bed_index = GATKSVPipelinePhase1.merged_dels + ".tbi"
+    File dup_bed = GATKSVPipelinePhase1.merged_dups
+    File dup_bed_index = GATKSVPipelinePhase1.merged_dups + ".tbi"
+    Array[File]? std_manta_vcfs = GATKSVPipelinePhase1.std_manta_vcf
+    Array[File]? std_melt_vcfs = GATKSVPipelinePhase1.std_melt_vcf
+    Array[File]? std_scramble_vcfs = GATKSVPipelinePhase1.std_scramble_vcf
+    Array[File]? std_wham_vcfs = GATKSVPipelinePhase1.std_wham_vcf
+
+    File merged_depth_vcf = GATKSVPipelinePhase1.depth_vcf
+    File merged_depth_vcf_index = GATKSVPipelinePhase1.depth_vcf_index
+    File? merged_manta_vcf = GATKSVPipelinePhase1.manta_vcf
+    File? merged_manta_vcf_index = GATKSVPipelinePhase1.manta_vcf_index
+    File? merged_melt_vcf = GATKSVPipelinePhase1.melt_vcf
+    File? merged_melt_vcf_index = GATKSVPipelinePhase1.melt_vcf_index
+    File? merged_wham_vcf = GATKSVPipelinePhase1.wham_vcf
+    File? merged_wham_vcf_index = GATKSVPipelinePhase1.wham_vcf_index
+
+    File evidence_metrics = GATKSVPipelinePhase1.evidence_metrics
+    File evidence_metrics_common = GATKSVPipelinePhase1.evidence_metrics_common
+
+    File filtered_depth_vcf = select_first([GATKSVPipelinePhase1.filtered_depth_vcf])
+    File filtered_pesr_vcf = select_first([GATKSVPipelinePhase1.filtered_pesr_vcf])
+    File cohort_pesr_vcf = select_first([GATKSVPipelinePhase1.filtered_pesr_vcf])
+    File cohort_depth_vcf = select_first([GATKSVPipelinePhase1.filtered_depth_vcf])
+    File? sites_filtered_manta_vcf = GATKSVPipelinePhase1.sites_filtered_manta_vcf
+    File? sites_filtered_wham_vcf = GATKSVPipelinePhase1.sites_filtered_wham_vcf
+    File? sites_filtered_melt_vcf = GATKSVPipelinePhase1.sites_filtered_melt_vcf
+    File? sites_filtered_depth_vcf = GATKSVPipelinePhase1.sites_filtered_depth_vcf
+
     File cutoffs = GATKSVPipelinePhase1.cutoffs
+    File genotyped_pesr_vcf = GenotypeBatch.genotyped_pesr_vcf
+    File genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf
+    File regeno_coverage_medians = GenotypeBatch.regeno_coverage_medians
+    File regenotyped_depth_vcf = RegenotypeCNVs.regenotyped_depth_vcfs[0]
+
     File genotype_pesr_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_pesr_sepcutoff])
     File genotype_pesr_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_pesr_depth_sepcutoff])
     File genotype_depth_pesr_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_pesr_sepcutoff])
     File genotype_depth_depth_sepcutoff = select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])
+    File depth_gt_rd_sep_file = select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])
     File PE_metrics = select_first([GenotypeBatch.trained_PE_metrics])
     File SR_metrics = select_first([GenotypeBatch.trained_SR_metrics])
+    File raw_sr_bothside_pass_file = GenotypeBatch.sr_bothside_pass
+    File raw_sr_background_fail_file = GenotypeBatch.sr_background_fail
   }
 }
 

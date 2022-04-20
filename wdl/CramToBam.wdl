@@ -1,15 +1,20 @@
 version 1.0
 
 import "Structs.wdl"
+import "Utils.wdl" as util
 
 workflow CramToBam {
   input {
     File cram_file
     File reference_fasta
     File? reference_index
+    String? service_account_json  # Provide path to service account credentials JSON if required to access CRAM file. Not supported for requester pays CRAMs, BAM access, or revising bases
     String samtools_cloud_docker
+    String? cloud_sdk_docker
     Boolean requester_pays = false
+    Int? localize_cram_disk_size
     RuntimeAttr? runtime_attr_override
+    RuntimeAttr? runtime_attr_localize_cram
   }
 
   parameter_meta {
@@ -22,7 +27,18 @@ workflow CramToBam {
       email: "tbrookin@broadinstitute.org"
   }
 
-  if (requester_pays) {
+  if (defined(service_account_json)) {
+    call util.LocalizeCloudFileWithCredentials as LocalizeCram {
+      input:
+        cloud_file_path = cram_file,
+        service_account_json = select_first([service_account_json]),
+        disk_size = select_first([localize_cram_disk_size, 50]),
+        cloud_sdk_docker = select_first([cloud_sdk_docker]),
+        runtime_attr_override = runtime_attr_localize_cram
+    }
+  }
+
+  if (requester_pays && !defined(service_account_json)) {
     call RunCramToBamRequesterPays {
       input:
         cram_file = cram_file,
@@ -35,7 +51,7 @@ workflow CramToBam {
   if (!requester_pays) {
     call RunCramToBam {
       input:
-        cram_file = cram_file,
+        cram_file = select_first([LocalizeCram.output_file, cram_file]),
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         samtools_cloud_docker = samtools_cloud_docker,

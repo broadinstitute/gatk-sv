@@ -225,7 +225,6 @@ workflow AnnoILFeatures {
     call MiniTasks.ConcatVcfs as ConcatVcfsIL{
         input:
             vcfs=Bcf2VcfIL.vcf,
-            merge_sort=true,
             outfile_prefix="~{prefix}.IL",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_ConcatVcfs
@@ -234,7 +233,6 @@ workflow AnnoILFeatures {
     call MiniTasks.ConcatVcfs as ConcatVcfsIL_le_flank{
         input:
             vcfs=Bcf2VcfIL_le_flank.vcf,
-            merge_sort=true,
             outfile_prefix="~{prefix}.IL_le_flank",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_ConcatVcfs
@@ -243,7 +241,6 @@ workflow AnnoILFeatures {
     call MiniTasks.ConcatVcfs as ConcatVcfsIL_ri_flank{
         input:
             vcfs=Bcf2VcfIL_ri_flank.vcf,
-            merge_sort=true,
             outfile_prefix="~{prefix}.IL_ri_flank",
             sv_base_mini_docker=sv_base_mini_docker,
             runtime_attr_override=runtime_attr_ConcatVcfs

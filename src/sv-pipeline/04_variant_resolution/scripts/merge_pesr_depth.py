@@ -51,10 +51,7 @@ def merge_pesr_depth(vcf, fout, prefix, frac, sample_overlap, min_depth_only_siz
             return
         svtype = record.info['SVTYPE']
         counts[svtype] += 1
-        if _record_is_depth(record):
-            new_record = clean_depth_record(base_record, record)
-        else:
-            new_record = record.copy()
+        new_record = record.copy()
         new_record.id = '{0}_{1}_{2}'.format(prefix, svtype, counts[svtype])
         if salvaged:
             new_record.id = new_record.id + "_salvaged"
@@ -102,20 +99,10 @@ def merge_pesr_depth(vcf, fout, prefix, frac, sample_overlap, min_depth_only_siz
             and _reciprocal_overlap(record_a, record_b) \
             and _sample_overlap(record_a, record_b)
 
-    def _get_base_record(vcf):
-        for record in vcf.fetch():
-            if not _record_is_depth(record):
-                vcf.reset()
-                return record
-
     sample_overlap_cache = {}
     sample_id_to_index_dict = {s: i for i, s in enumerate(vcf.header.samples)}
     cnv_types = ['DEL', 'DUP']
     min_svlen = min_depth_only_size * frac
-
-    base_record = _get_base_record(vcf)
-    if base_record is None:
-        raise ValueError("No PESR records were found")
 
     active_records = []
     counts = defaultdict(int)
@@ -169,29 +156,6 @@ def merge_pesr_depth(vcf, fout, prefix, frac, sample_overlap, min_depth_only_siz
         active_records = [r for r in active_records if r.id not in finalized_record_ids]
 
     _flush_active_records()
-
-
-def clean_depth_record(base_record, depth_record):
-    base = base_record.copy()
-    base.chrom = depth_record.chrom
-    base.pos = depth_record.pos
-    base.id = depth_record.id
-    base.ref = depth_record.ref
-    base.alts = depth_record.alts
-    base.stop = depth_record.stop
-
-    for key in base.info.keys():
-        if key not in depth_record.info:
-            base.info.pop(key)
-
-    for key, val in depth_record.info.items():
-        base.info[key] = val
-
-    for sample in depth_record.samples:
-        for key, val in depth_record.samples[sample].items():
-            base.samples[sample][key] = val
-
-    return base
 
 
 def check_header(vcf):

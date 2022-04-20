@@ -126,7 +126,6 @@ workflow CNVGermlineCohortWorkflow {
       RuntimeAttr? runtime_attr_scatter
       RuntimeAttr? runtime_attr_ploidy
       RuntimeAttr? runtime_attr_cohort
-      RuntimeAttr? runtime_attr_bundle
       RuntimeAttr? runtime_attr_postprocess
       RuntimeAttr? runtime_attr_explode
     }
