@@ -1010,7 +1010,6 @@ task ScatterVcf {
       shard_no=`printf %06d $i`
       # Adding this for FSx/local FS 
       cp ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
-
       i=$((i+1))
     done < vcfs.list
   >>>

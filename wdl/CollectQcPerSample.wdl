@@ -21,7 +21,6 @@ workflow CollectQcPerSample {
     # overrides for mini tasks
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_tar_shard_vid_lists
-
   }
 
   # Shard sample list
@@ -103,7 +102,6 @@ task CollectVidsPerSample {
     
     # For purposes of memory, cut vcf to samples of interest
     zcat ~{vcf} > uncompressed.vcf
-
     grep -B9999999999 -m1 -Ev "^#" uncompressed.vcf  | sed '$ d' > header.vcf \
       || cp uncompressed.vcf header.vcf
     N_HEADER=$(wc -l < header.vcf)

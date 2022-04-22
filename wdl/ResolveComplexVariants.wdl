@@ -63,7 +63,6 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_preconcat_inv
     RuntimeAttr? runtime_override_hail_merge_inv
     RuntimeAttr? runtime_override_fix_header_inv
-
   }
 
   #Scatter per chromosome

@@ -101,7 +101,6 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_cohort
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_attr_explode
-
   }
 
   if (defined(sample_ids_training_subset)) {

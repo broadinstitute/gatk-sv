@@ -36,7 +36,6 @@ workflow MinGQStep2MergePcrStatus {
     String sv_base_mini_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_override_collect_vids_per_sample
-
   }
 
   Array[String] contigs = transpose(read_tsv(contiglist))[0]

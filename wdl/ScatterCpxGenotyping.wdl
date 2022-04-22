@@ -52,7 +52,6 @@ workflow ScatterCpxGenotyping {
     RuntimeAttr? runtime_override_split_bed_by_size
     RuntimeAttr? runtime_override_rd_genotype
     RuntimeAttr? runtime_override_concat_melted_genotypes
-
   }
 
   String contig_prefix = prefix + "." + contig

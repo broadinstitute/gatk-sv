@@ -67,7 +67,6 @@ workflow MasterVcfQc {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
-
   }
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
@@ -636,7 +635,6 @@ task PlotQcPerFamily {
       ~{samples_list} \
       ~{ped_file} \
       cleaned.fam
-    
     # Only run if any families remain after cleaning
     if [ $( grep -Ev "^#" cleaned.fam | wc -l ) -gt 0 ]; then
 

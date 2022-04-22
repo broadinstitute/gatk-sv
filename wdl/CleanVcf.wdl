@@ -81,7 +81,6 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
-
   }
 
   #Scatter per chromosome

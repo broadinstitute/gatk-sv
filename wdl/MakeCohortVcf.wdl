@@ -245,7 +245,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
-
   }
 
   call Cluster.CombineBatches {

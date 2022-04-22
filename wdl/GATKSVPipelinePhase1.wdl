@@ -235,6 +235,7 @@ workflow GATKSVPipelinePhase1 {
     Boolean? run_batchmetrics_metrics
     Boolean? run_filterbatch_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
+    
   }
 
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {

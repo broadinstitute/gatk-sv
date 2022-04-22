@@ -22,7 +22,6 @@ workflow CleanVcf1b {
         RuntimeAttr? runtime_attr_override_filter_vcf
         RuntimeAttr? runtime_override_concat_vcfs
         RuntimeAttr? runtime_override_cat_multi_cnvs
-
     }
 
     call SubsetLargeCNVs {

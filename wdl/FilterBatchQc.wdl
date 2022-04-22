@@ -65,7 +65,6 @@ workflow FilterBatchQc {
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
-
   }
 
   Array[String] algorithms = ["manta", "delly", "melt", "wham", "depth", "pesr"]

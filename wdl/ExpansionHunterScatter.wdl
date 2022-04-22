@@ -17,7 +17,6 @@ workflow ExpansionHunterScatter {
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_attr
-
     }
 
     parameter_meta {

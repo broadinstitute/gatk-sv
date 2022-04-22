@@ -670,7 +670,6 @@ task StitchFragmentedCnvs {
     java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 ~{vcf} \
       | bgzip \
       > tmp.vcf.gz
-
     echo "Second pass..."
     java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
       | bgzip \

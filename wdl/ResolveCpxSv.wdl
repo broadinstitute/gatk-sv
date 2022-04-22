@@ -42,7 +42,6 @@ workflow ResolveComplexSv {
     RuntimeAttr? runtime_override_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_fix_header
-
   }
 
   File vcf_idx = vcf + ".tbi"
