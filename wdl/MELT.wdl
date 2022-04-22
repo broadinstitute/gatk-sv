@@ -629,9 +629,8 @@ task RunMELT {
     echo "JVM memory: $JVM_MAX_MEM"
 
     # call MELT
-    cwd=$(pwd)
     "$MELT_SCRIPT" \
-      "$cwd/~{sample_id}.bam" \
+      "~{sample_id}.bam" \
       "~{reference_fasta}" \
       ~{coverage} \
       ~{read_length} \
