@@ -5,7 +5,7 @@ import "CleanVcf5.wdl" as cleanvcf5
 import "TasksMakeCohortVcf.wdl" as tmc
 
 workflow CalcAF {
-  input{
+  input {
     File vcf
     File vcf_idx
     Int sv_per_shard
@@ -18,6 +18,10 @@ workflow CalcAF {
     File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
     String sv_pipeline_docker
     String? drop_empty_records
+
+    RuntimeAttr? runtime_attr_compute_shard_af
+    RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_combine_sharded_vcfs
   }
 
 
@@ -27,7 +31,8 @@ workflow CalcAF {
       vcf=vcf,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_updates_docker,
-      records_per_shard=sv_per_shard
+      records_per_shard=sv_per_shard,
+      runtime_attr_override = runtime_attr_scatter_vcf
   }
 
   # Scatter over VCF shards
@@ -41,7 +46,8 @@ workflow CalcAF {
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
         par_bed=par_bed,
-        allosomes_list=allosomes_list
+        allosomes_list=allosomes_list,
+        runtime_attr_override = runtime_attr_compute_shard_af
       }
   	}
 
@@ -51,7 +57,8 @@ workflow CalcAF {
       vcfs=ComputeShardAFs.shard_wAFs,
       sv_pipeline_docker=sv_pipeline_docker,
       prefix=prefix,
-      drop_empty_records=drop_empty_records
+      drop_empty_records=drop_empty_records,
+      runtime_attr_override = runtime_attr_combine_sharded_vcfs
   }
 
   # Final output
@@ -63,7 +70,7 @@ workflow CalcAF {
 
 # Subset a vcf to a single chromosome, and add global AF information (no subpop)
 task ComputeShardAFs {
-  input{
+  input {
     File vcf
     String prefix
     String sv_pipeline_docker
@@ -76,7 +83,7 @@ task ComputeShardAFs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 1.5,
-    disk_gb: 20 + size(vcf, "GB") * 2,
+    disk_gb: ceil(20 + size(vcf, "GB") * 2),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -124,7 +131,7 @@ task ComputeShardAFs {
 
 # Merge VCF shards & drop records with zero remaining non-ref alleles
 task CombineShardedVcfs {
-  input{
+  input {
     Array[File] vcfs
     String prefix
     String sv_pipeline_docker

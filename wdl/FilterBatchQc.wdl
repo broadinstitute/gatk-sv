@@ -22,6 +22,7 @@ workflow FilterBatchQc {
 
     File contig_list
     Int? random_seed
+    Int? max_gq
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -71,8 +72,6 @@ workflow FilterBatchQc {
   Array[File?] vcfs_array = [manta_vcf_noOutliers, delly_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
   Int num_algorithms = length(algorithms)
 
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
-
   call util.GetSampleIdsFromVcf {
     input:
       vcf = select_first(vcfs_array),
@@ -89,6 +88,8 @@ workflow FilterBatchQc {
       runtime_attr_override = runtime_attr_subset_ped
   }
 
+  Int max_gq_ = select_first([max_gq, 999])
+
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {
       call vcf_qc.MasterVcfQc as VcfQc {
@@ -104,8 +105,9 @@ workflow FilterBatchQc {
           sanders_2015_tarball=sanders_2015_tarball,
           collins_2017_tarball=collins_2017_tarball,
           werling_2018_tarball=werling_2018_tarball,
-          contigs=contigs,
+          primary_contigs_fai=contig_list,
           random_seed=random_seed,
+          max_gq=max_gq_,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,

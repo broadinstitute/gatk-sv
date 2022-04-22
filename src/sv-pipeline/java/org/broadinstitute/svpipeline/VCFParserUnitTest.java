@@ -116,8 +116,8 @@ public final class VCFParserUnitTest {
     public static void testRecord() {
         final String line = "chr1\t10000\tna19240_DUP_chr1_1\tN\t<DUP>\t999\tPASS;BUT_FUNKY\t" +
                 "END=16000;SVTYPE=DUP;FLAG1;CHR2=chr1;SVLEN=6000;ALGORITHMS=depth;EVIDENCE=RD;FLAG2\t" +
-                "GT:GQ:RD_CN:RD_GQ:PE_GT:PE_GQ:SR_GT:SR_GQ:EV\t0/1:142:3:142:.:.:.:.:RD\t" +
-                "0/0:999:2:999:.:.:.:.:RD";
+                "GT:GQ:RD_CN:RD_GQ:PE_GT:PE_GQ:SR_GT:SR_GQ:EV\t0/1:14:3:14:.:.:.:.:RD\t" +
+                "0/0:99:2:99:.:.:.:.:RD";
         final byte[] bytes = (line + "\n").getBytes();
         final VCFParser parser = new VCFParser(new ByteArrayInputStream(bytes));
         assert(!parser.hasMetadata());
@@ -223,10 +223,10 @@ public final class VCFParserUnitTest {
         final List<CompoundField> genotypes = record.getGenotypes();
         assert(genotypes.size() == 2);
         final ByteSequence geno1 = genotypes.get(0).getValue();
-        final ByteSequence geno1Value = new ByteSequence("0/1:142:3:142:.:.:.:.:RD");
+        final ByteSequence geno1Value = new ByteSequence("0/1:14:3:14:.:.:.:.:RD");
         assert(geno1.equals(geno1Value));
         final ByteSequence geno2 = genotypes.get(1).getValue();
-        final ByteSequence geno2Value = new ByteSequence("0/0:999:2:999:.:.:.:.:RD");
+        final ByteSequence geno2Value = new ByteSequence("0/0:99:2:99:.:.:.:.:RD");
         assert(geno2.equals(geno2Value));
         record.setGenotypes(Collections.singletonList(geno2Value));
         final List<CompoundField> newGenotypes = record.getGenotypes();
@@ -262,6 +262,6 @@ public final class VCFParserUnitTest {
         sb.append("N\t").append("<DUP>\t").append("999\t").append("PASS\t");
         sb.append("END=").append(pos+999).append('\t');
         sb.append("SVTYPE=DUP;CHR2=chr1;SVLEN=1000;ALGORITHMS=depth;EVIDENCE=RD\t");
-        sb.append("GT:GQ:RD_CN\t").append("0/1:999:2\t").append("0/0:999:1\n");
+        sb.append("GT:GQ:RD_CN\t").append("0/1:99:2\t").append("0/0:99:1\n");
     }
 }

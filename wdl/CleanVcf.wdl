@@ -41,6 +41,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -143,7 +144,8 @@ workflow CleanVcf {
         runtime_attr_override_scatter_1b=runtime_attr_override_scatter_1b,
         runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
         runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
-        runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b
+        runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
+        runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
     }
   }
 
