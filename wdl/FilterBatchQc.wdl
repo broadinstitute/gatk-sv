@@ -88,7 +88,7 @@ workflow FilterBatchQc {
       runtime_attr_override = runtime_attr_subset_ped
   }
 
-  Int max_gq_ = if (defined(max_gq)) then select_first([max_gq]) else 999
+  Int max_gq_ = select_first([max_gq, 999])
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs_array[i])) {

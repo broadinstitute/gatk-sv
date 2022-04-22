@@ -134,7 +134,7 @@ workflow MasterVcfQc {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
   }
 
-  Int max_gq_ = if (defined(max_gq)) then select_first([max_gq]) else 99
+  Int max_gq_ = select_first([max_gq, 99])
   # Plot per-sample stats
   call PlotQcPerSample {
     input:
