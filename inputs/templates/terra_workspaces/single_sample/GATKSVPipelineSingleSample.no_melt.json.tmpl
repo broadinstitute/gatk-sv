@@ -106,10 +106,10 @@
 
   "GATKSVPipelineSingleSample.cnmops_mem_gb_override_sample3": 24,
 
-  "GATKSVPipelineSingleSample.ref_samples" : {{ ref_panel.samples | tojson }},
-  "GATKSVPipelineSingleSample.ref_std_manta_vcfs" : {{ ref_panel.std_manta_vcfs | tojson }},
-  "GATKSVPipelineSingleSample.ref_std_wham_vcfs" : {{ ref_panel.std_wham_vcfs | tojson }},
-  "GATKSVPipelineSingleSample.ref_pesr_disc_files" : {{ ref_panel.PE_files | tojson }},
-  "GATKSVPipelineSingleSample.ref_pesr_split_files" : {{ ref_panel.SR_files | tojson }},
-  "GATKSVPipelineSingleSample.gcnv_model_tars" : {{ ref_panel.gcnv_model_tars | tojson }}
+  "GATKSVPipelineSingleSample.ref_samples_list" : ${workspace.ref_panel_samples_list}",
+  "GATKSVPipelineSingleSample.ref_std_manta_vcfs" : "${workspace.ref_panel_std_manta_vcfs_list}",
+  "GATKSVPipelineSingleSample.ref_std_wham_vcfs" : "${workspace.ref_panel_std_wham_vcfs_list}",
+  "GATKSVPipelineSingleSample.ref_pesr_disc_files" : "${workspace.ref_panel_PE_files_list}",
+  "GATKSVPipelineSingleSample.ref_pesr_split_files" : "${workspace.ref_panel_SR_files_list}",
+  "GATKSVPipelineSingleSample.gcnv_model_tars" : "${workspace.ref_panel_gcnv_model_tars_list}"
 }
