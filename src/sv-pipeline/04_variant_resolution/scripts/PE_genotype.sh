@@ -116,7 +116,7 @@ fi
 
 # remove repetitive breakpoints
 cat ${blacklist} \
-  | coverageBed -a <(awk '{print $1,$2,$2+1,$4 "\n" $1,$3,$3+1,$4}' cnv.bed | tr ' ' '\t')  -b - \
+  | bedtools coverage -a <(awk '{print $1,$2,$2+1,$4 "\n" $1,$3,$3+1,$4}' cnv.bed | tr ' ' '\t')  -b - \
   | awk '{if($NF>0) print $4}' \
   | sort -u \
   > repeat.breakpoint.fail.ids.txt;
@@ -136,7 +136,8 @@ awk '{if ($1!~"X" && $1!~"Y") print $4}' cnv.bed \
   > "$batch.pe.train.include.txt";
 
 # select training
-pe_pval=$( awk -F'\t' '{if ( $5=="PE_log_pval") print $2}' $RF_cutoffs)
+pe_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
+          {if ( $col["metric"]=="PE_log_pval") print $col["cutoff"]}' $RF_cutoffs)
 pe_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $pe_pval)
 zcat ${PE_counts} \
   | awk -v var=$pe_count '{if ($3>=var) print}' \

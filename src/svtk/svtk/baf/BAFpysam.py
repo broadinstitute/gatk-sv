@@ -30,7 +30,7 @@ def ROH(F, M, E, length, thres=0.0001):
 
 class DeletionTest:
 
-    def __init__(self, obj, probands, length):
+    def __init__(self, obj, probands, length, random_state=None):
         self.length = length  # length of SV
         self.obj = obj  # het file
         # self.homobkgrd=0
@@ -63,9 +63,10 @@ class DeletionTest:
             self.nullavg = nsROH / (len(self.nullratio) + 1)
             self.ns = ns
             self.nullratio = np.array(self.nullratio).reshape(-1, 1)
-            if len(self.nullratio) > 10:
+            if self.is_trainable_nullratio:
                 self.gmm = mixture.BayesianGaussianMixture(
-                    n_components=3, covariance_type='spherical').fit(self.nullratio)
+                    n_components=3, covariance_type='spherical', n_init=20, max_iter=200, random_state=random_state
+                ).fit(self.nullratio)
     # def Ttest(self,sample):
 
         # testlist=[self.count[x]['Ratio'] for x in sample if self.count[x]['Ratio']!='ROH']
@@ -112,13 +113,16 @@ class DeletionTest:
             # mean=np.mean([10**-x for x in testlist])
             # return mean,pvalue
 
-    def Ttest(self, sample):
+    @property
+    def is_trainable_nullratio(self):
+        return len(self.nullratio) > 10 and max(self.nullratio) - min(self.nullratio) >= 0.0001
 
+    def Ttest(self, sample):
+        if not self.is_trainable_nullratio:
+            return 'nan', "ROHregion"
         testlist = [self.count[x]['Ratio']
                     for x in sample if self.count[x]['Ratio'] != 'ROH']
-        if len(self.nullratio) <= 10 or max(self.nullratio) - min(self.nullratio) < 0.0001:
-            return 'nan', "ROHregion"
-        elif len(testlist) == 0:
+        if len(testlist) == 0:
             return 'nan', "ROH"
         elif len(testlist) > len(self.nullratio) or self.ns < 10:
             return 'nan', "Potential ROHregion or reference error"

@@ -145,8 +145,10 @@ class RandomForest:
 
         self.cutoffs = pd.DataFrame.from_dict({'cutoff': cutoffs},
                                               orient='columns')\
-            .reset_index()
-        self.cutoffs = self.cutoffs.rename(columns=dict(index='metric'))
+            .reset_index()\
+            .rename(columns={'index': 'metric'})
+        # force consistent column order, multiple downstream tasks assume this order
+        self.cutoffs = self.cutoffs[sorted(self.cutoffs.columns)]
 
     def cutoff_probs(self):
         self.testable['prob'] = self.probs

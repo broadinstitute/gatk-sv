@@ -97,7 +97,7 @@ task GenotypeSRPart1 {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 3.75,
+    mem_gb: 6,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,

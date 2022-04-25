@@ -4,37 +4,56 @@
 
 # Start with the barebones image that has samtools (a version that must support NIO) installed 
 ARG MINIBASE_IMAGE=sv-base-mini:latest
-FROM ${MINIBASE_IMAGE}
+ARG VIRTUAL_ENV_IMAGE=samtoolscloud-virtual-env:latest
+# available gsutil versions here: https://cloud.google.com/sdk/docs/release-notes
+ARG CLOUD_SDK_VERSION=389.0.0
+ARG CONDA_ENV_NAME="gatk-sv"
+ARG CONDA_INSTALL_DIR=/opt/conda
+ARG GOOGLE_CLOUD_INSTALL_DIR=/opt/google-cloud-sdk
 
-ENV HOME=/root
+################## install google-cloud-cli into a copy of the virtual image
+FROM $VIRTUAL_ENV_IMAGE as prep_virtual_env
 
-# install GCloud SDK
-ARG CLOUD_SDK_VERSION=239.0.0
-ARG GCLOUD_SDK_EXTRA_COMPONENTS
-ARG GCLOUD_SDK_TRANSIENT_DEP="curl gpg-agent gnupg python-pip python-setuptools "
-ARG GCLOUD_SDK_DEPENDENCIES="lsb-release ${GCLOUD_SDK_TRANSIENT_DEP}"
+# get prerequisites for installing google-cloud-cli
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends \
-                 ${GCLOUD_SDK_DEPENDENCIES} && \
-    pip install -q -U --no-cache-dir \
-                crcmod \
-                wheel && \
-    export CLOUD_SDK_REPO="cloud-sdk-$(lsb_release -c -s)" && \
-    echo "deb https://packages.cloud.google.com/apt $CLOUD_SDK_REPO main" > /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - && \
-    apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-upgrade --no-install-recommends \
-                 google-cloud-sdk=${CLOUD_SDK_VERSION}-0 \
-                 $GCLOUD_SDK_EXTRA_COMPONENTS && \
+                 apt-transport-https ca-certificates wget libssl3
+
+# install google-cloud-cli
+# NOTE --override-components to avoid installing bq (BigQuery)
+# NOTE: despite this being a "versioned" package, the installer will insist on upgrading at install time, so this
+#       is difficult to fully pin
+ARG CLOUD_SDK_VERSION
+ARG GOOGLE_CLOUD_INSTALL_DIR
+ENV CLOUDSDK_CONFIG=$GOOGLE_CLOUD_INSTALL_DIR
+ENV PATH=$GOOGLE_CLOUD_INSTALL_DIR/bin:$PATH
+RUN wget -q https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-sdk-${CLOUD_SDK_VERSION}-linux-x86_64.tar.gz && \
+    tar xzf google-cloud-sdk-${CLOUD_SDK_VERSION}-linux-x86_64.tar.gz && \
+    mkdir -p $(basename $GOOGLE_CLOUD_INSTALL_DIR) && \
+    mv google-cloud-sdk $GOOGLE_CLOUD_INSTALL_DIR && \
+    cd $GOOGLE_CLOUD_INSTALL_DIR && \
+    ./install.sh --usage-reporting false --override-components core gsutil && \
     gcloud config set core/disable_usage_reporting true && \
     gcloud config set component_manager/disable_update_check true && \
-    gcloud config set metrics/environment github_docker_image && \
-    apt-get -qqy purge ${GCLOUD_SDK_TRANSIENT_DEP} && \
-    apt-get -qqy clean && \
-    rm -rf /tmp/* \
-           /var/tmp/* \
-           /var/cache/apt/* \
-           /var/lib/apt/lists/* \
-           /usr/share/man/?? \
-           /usr/share/man/??_*
+    gcloud config set metrics/environment github_docker_image
+
+# clean up some stuff we don't need
+#    -anthoscli  (Anthos)
+RUN rm $GOOGLE_CLOUD_INSTALL_DIR/bin/anthoscli
+
+########## Copy results to final image
+FROM $MINIBASE_IMAGE
+ARG CONDA_INSTALL_DIR
+ARG CONDA_ENV_NAME
+ARG CONDA_ENV_PATH=$CONDA_INSTALL_DIR/envs/$CONDA_ENV_NAME
+# copy conda environment
+COPY --from=prep_virtual_env $CONDA_ENV_PATH $CONDA_ENV_PATH
+# copy google-cloud-cli
+ARG GOOGLE_CLOUD_INSTALL_DIR
+COPY --from=prep_virtual_env $GOOGLE_CLOUD_INSTALL_DIR $GOOGLE_CLOUD_INSTALL_DIR
+ENV PATH=/opt/google-cloud-sdk/bin:$CONDA_ENV_PATH/bin:$PATH
+
+# show the google packages run
+RUN gcloud --version
+RUN gsutil --version

@@ -124,40 +124,6 @@ def fam_info_readin(fam_file):
     return [fam, samp, fa, mo]
 
 
-def get_inh_rate(called):
-    quads = defaultdict(list)
-
-    fam_file = args.fam
-    [fam, samp, fa, mo] = fam_info_readin(fam_file)
-
-    for sample in called:
-        if 'fa' in sample or 'mo' in sample or 'p1' in sample or 's1' in sample:
-            quad, member = sample.split('.')
-            quads[quad].append(member)
-        else:
-            quad = fam[samp.index(sample)]
-            if sample in fa:
-                member = 'fa'
-            elif sample in mo:
-                member = 'mo'
-            else:
-                member = 'pb'
-
-    n_called = len([s for s in called if _is_child(s)])
-
-    n_inh = 0
-    for quad, members in quads.items():
-        if 'fa' in members or 'mo' in members:
-            if 'p1' in members:
-                n_inh += 1
-            if 's1' in members:
-                n_inh += 1
-            if 'pb' in members:
-                n_inh += 1
-
-    return n_inh / n_called
-
-
 def process_metadata(variants, bed=False, batch_list=None):
     if bed:
         samples = [s.strip() for s in batch_list.readlines()]

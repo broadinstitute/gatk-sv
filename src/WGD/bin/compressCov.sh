@@ -77,7 +77,7 @@ fi
 
 #Unzip input file if gzipped
 GZI=0
-if [ $( file ${INPUT} | fgrep "gzip compressed" | wc -l ) -gt 0 ]; then
+if file ${INPUT} | grep -qE "gzip (compressed|compatible)"; then
   GZI=1
   TMPI=`mktemp`; mv ${TMPI} ${TMPI}.gz; TMPI=${TMPI}.gz
   cp ${INPUT} ${TMPI}
