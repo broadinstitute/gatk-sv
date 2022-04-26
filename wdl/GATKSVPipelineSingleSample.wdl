@@ -554,9 +554,9 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     File protein_coding_gtf
-    File linc_rna_gtf
-    File promoter_bed
     File noncoding_bed
+    Int? promoter_window
+    Int? max_breakend_as_cnv_length
     Int annotation_sv_per_shard
     Int annotation_max_shards_per_chrom_step1
     Int annotation_min_records_per_shard_step1
@@ -564,6 +564,8 @@ workflow GATKSVPipelineSingleSample {
     File? external_af_ref_bed             # bed file with population AFs for annotation
     String? external_af_ref_bed_prefix    # name of external AF bed file call set
     Array[String]? external_af_population # populations to annotate external AFs (required if ref_bed set, use "ALL" for all)
+
+    RuntimeAttr? runtime_attr_svannotate
 
     ############################################################
     ## Single sample filtering
@@ -1362,9 +1364,9 @@ workflow GATKSVPipelineSingleSample {
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
-        linc_rna_gtf = linc_rna_gtf,
-        promoter_bed = promoter_bed,
         noncoding_bed = noncoding_bed,
+        promoter_window = promoter_window,
+        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
@@ -1372,7 +1374,9 @@ workflow GATKSVPipelineSingleSample {
         max_shards_per_chrom_step1 = annotation_max_shards_per_chrom_step1,
         min_records_per_shard_step1 = annotation_min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        gatk_docker = gatk_docker,
+        runtime_attr_svannotate = runtime_attr_svannotate
   }
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
