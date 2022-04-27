@@ -43,7 +43,7 @@ def list_jsons(inputs_paths, expected_num_jsons):
         jsons.extend([os.path.join(path, x) for x in listdir(path) if x.endswith(".json")])
     num_input_jsons = len(jsons)
     if num_input_jsons < expected_num_jsons:
-        raise Exception(f"Expected {expected_num_jsons} Terra {description}input JSONs but found {num_input_jsons}.")
+        raise Exception(f"Expected {expected_num_jsons} Terra input JSONs but found {num_input_jsons}.")
     jsons.sort()
     return jsons
 
