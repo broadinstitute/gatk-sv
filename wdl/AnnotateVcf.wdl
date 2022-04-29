@@ -64,7 +64,7 @@ workflow AnnotateVcf {
   call pav.PruneAndAddVafs as PruneAndAddVafs {
     input:
       vcf                    = AnnotateFunctionalConsequences.annotated_vcf,
-      vcf_idx                = AnnotateFunctionalConsequences.annotated_vcf_idx,
+      vcf_idx                = AnnotateFunctionalConsequences.annotated_vcf_index,
       prefix                 = prefix,
       sample_pop_assignments = sample_pop_assignments,
       prune_list             = prune_list,

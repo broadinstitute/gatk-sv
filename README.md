@@ -57,7 +57,7 @@ We still encourage members of the community to adapt GATK-SV for non-GCP backend
 * Refer to Cromwell's [documentation](https://cromwell.readthedocs.io/en/stable/backends/Backends/) for configuration instructions.
 * The handling and ordering of `glob` commands may differ between platforms.
 * Shell commands that are potentially destructive to input files (e.g. `rm`, `mv`, `tabix`) can cause unexpected behavior on shared filesystems. Enabling [copy localization](https://cromwell.readthedocs.io/en/stable/Configuring/#local-filesystem-options) may help to more closely replicate the behavior on GCP.
-* For clusters that do not support Docker, Singularity is an alternative. See [Cromwell documentation on Singularity(https://cromwell.readthedocs.io/en/stable/tutorials/Containers/#singularity).
+* For clusters that do not support Docker, Singularity is an alternative. See [Cromwell documentation on Singularity](https://cromwell.readthedocs.io/en/stable/tutorials/Containers/#singularity).
 * The GATK-SV pipeline takes advantage of the massive parallelization possible in the cloud. Local backends may not have the resources to execute all of the workflows. Workflows that use fewer resources or that are less parallelized may be more successful. For instance, some users have been able to run [GatherSampleEvidence](#gather-sample-evidence) on a SLURM cluster.
 
 ### Data:

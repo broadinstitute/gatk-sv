@@ -51,15 +51,6 @@ task SVAnnotate {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    protein_coding_gtf: {
-      localization_optional: true
-    }
-    noncoding_bed: {
-      localization_optional: true
-    }
-  }
-  
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 3.75,
@@ -69,27 +60,27 @@ task SVAnnotate {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  
+
   Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.7)
 
   String outfile = "~{prefix}.annotated.vcf.gz"
 
   output {
-    File out = "~{outfile}"
-    File out_idx = "~{outfile}.tbi"
+    File annotated_vcf = "~{outfile}"
+    File annotated_vcf_index = "~{outfile}.tbi"
   }
   command <<<
 
      set -euo pipefail
 
-     java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} SVAnnotate \
-      -V ~{vcf}
-      -O ~{outfile}
+     gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
+      -V ~{vcf} \
+      -O ~{outfile} \
       --protein-coding-gtf ~{protein_coding_gtf} \
-      ~{"--non-coding-bed" noncoding_bed} \
-      ~{"--promoter-window-length" promoter_window} \
-      ~{"--max-breakend-as-cnv-length" max_breakend_as_cnv_length}
+      ~{if defined(noncoding_bed) then "--non-coding-bed " + noncoding_bed else ""} \
+      ~{if defined(promoter_window) then "--promoter-window-length " + promoter_window else ""} \
+      ~{if defined(max_breakend_as_cnv_length) then "--max-breakend-as-cnv-length" + max_breakend_as_cnv_length else ""}
 
   >>>
   runtime {
@@ -97,7 +88,7 @@ task SVAnnotate {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: gatk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
