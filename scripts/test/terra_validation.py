@@ -31,25 +31,30 @@ Outputs: If successful, last line of printout should read
 """
 
 WDLS_PATH = "wdl/"
-TERRA_INPUTS_PATH = "inputs/build/ref_panel_1kg/terra/workflow_configurations/"
+TERRA_INPUTS_PATHS = [
+    "inputs/build/ref_panel_1kg/terra/workflow_configurations/",
+    "inputs/build/NA12878/terra/"
+]
 
 
-def list_jsons(inputs_path, expected_num_jsons, subdir="", description=""):
-    jsons = [os.path.join(subdir, x) for x in listdir(os.path.join(inputs_path, subdir)) if x.endswith(".json")]
+def list_jsons(inputs_paths, expected_num_jsons):
+    jsons = []
+    for path in inputs_paths:
+        jsons.extend([os.path.join(path, x) for x in listdir(path) if x.endswith(".json")])
     num_input_jsons = len(jsons)
     if num_input_jsons < expected_num_jsons:
-        raise Exception(f"Expected {expected_num_jsons} Terra {description}input JSONs but found {num_input_jsons}.")
+        raise Exception(f"Expected {expected_num_jsons} Terra input JSONs but found {num_input_jsons}.")
     jsons.sort()
     return jsons
 
 
-def get_wdl_json_pairs(wdl_path, terra_inputs_path, expected_num_inputs):
-    jsons = list_jsons(terra_inputs_path, expected_num_inputs)
+def get_wdl_json_pairs(wdl_path, terra_inputs_paths, expected_num_inputs):
+    jsons = list_jsons(terra_inputs_paths, expected_num_inputs)
 
     for json_file in jsons:
         path_to_wdl = os.path.join(wdl_path, os.path.basename(json_file).split(".")[0] + ".wdl")
         if os.path.isfile(path_to_wdl):
-            yield path_to_wdl, os.path.join(terra_inputs_path, json_file)
+            yield path_to_wdl, json_file
         else:
             logging.warning(f"Can't find WDL corresponding to {os.path.basename(json_file)} at {path_to_wdl}.")
 
@@ -85,7 +90,7 @@ def validate_terra_json(wdl, terra_json, womtool_jar):
 def validate_all_terra_jsons(base_dir, womtool_jar, expected_num_inputs):
     successes = 0
     for wdl, json_file in get_wdl_json_pairs(os.path.join(base_dir, WDLS_PATH),
-                                             os.path.join(base_dir, TERRA_INPUTS_PATH),
+                                             [os.path.join(base_dir, x) for x in TERRA_INPUTS_PATHS],
                                              expected_num_inputs):
         successes += validate_terra_json(wdl, json_file, womtool_jar)
 
@@ -103,7 +108,7 @@ def main():
     parser.add_argument("-j", "--womtool-jar", help="Path to womtool jar", required=True)
     parser.add_argument("-n", "--num-input-jsons",
                         help="Number of Terra input JSONs expected",
-                        required=False, default=19, type=int)
+                        required=False, default=20, type=int)
     parser.add_argument("--log-level",
                         help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
                         required=False, default="INFO")
