@@ -169,13 +169,13 @@ workflow GATKSVPipelineSingleSample {
 
     # gCNV inputs
     File contig_ploidy_model_tar
-    File gcnv_model_tars  # list of files, one per line
+    File gcnv_model_tars_list  # list of files, one per line
 
     # bincov counts files (for cn.mops)
     File ref_panel_bincov_matrix
 
-    File ref_pesr_disc_files  # list of files, one per line
-    File ref_pesr_split_files  # list of files, one per line
+    File ref_pesr_disc_files_list  # list of files, one per line
+    File ref_pesr_split_files_list  # list of files, one per line
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -262,10 +262,10 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_depth_merge_pre_clusterbatch
 
     # Reference panel standardized caller VCFs
-    File ref_std_manta_vcfs  # list of files, one per line
-    File ref_std_wham_vcfs  # list of files, one per line
-    File? ref_std_melt_vcfs  # list of files, one per line
-    File? ref_std_scramble_vcfs  # list of files, one per line
+    File ref_std_manta_vcfs_list  # list of files, one per line
+    File ref_std_wham_vcfs_list  # list of files, one per line
+    File? ref_std_melt_vcfs_list  # list of files, one per line
+    File? ref_std_scramble_vcfs_list  # list of files, one per line
     File ref_panel_del_bed
     File ref_panel_dup_bed
 
@@ -717,12 +717,12 @@ workflow GATKSVPipelineSingleSample {
       PE_files=[case_pe_file_],
       cytoband=cytobands,
       mei_bed=mei_bed,
-      ref_panel_PE_files=read_lines(ref_pesr_disc_files),
+      ref_panel_PE_files=read_lines(ref_pesr_disc_files_list),
       SR_files=[case_sr_file_],
-      ref_panel_SR_files=read_lines(ref_pesr_split_files),
+      ref_panel_SR_files=read_lines(ref_pesr_split_files_list),
       inclusion_bed=inclusion_bed,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
-      gcnv_model_tars = read_lines(gcnv_model_tars),
+      gcnv_model_tars = read_lines(gcnv_model_tars_list),
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
@@ -809,13 +809,13 @@ workflow GATKSVPipelineSingleSample {
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
   # Merge calls with reference panel
-  Array[File] merged_manta_vcfs_array = flatten([select_first([GatherBatchEvidence.std_manta_vcf]), read_lines(ref_std_manta_vcfs)])
-  Array[File] merged_wham_vcfs_array = flatten([select_first([GatherBatchEvidence.std_wham_vcf]), read_lines(ref_std_wham_vcfs)])
+  Array[File] merged_manta_vcfs_array = flatten([select_first([GatherBatchEvidence.std_manta_vcf]), read_lines(ref_std_manta_vcfs_list)])
+  Array[File] merged_wham_vcfs_array = flatten([select_first([GatherBatchEvidence.std_wham_vcf]), read_lines(ref_std_wham_vcfs_list)])
   if (defined(GatherBatchEvidence.std_melt_vcf)) {
-    Array[File]? merged_melt_vcfs_array = flatten([select_first([GatherBatchEvidence.std_melt_vcf]), read_lines(select_first([ref_std_melt_vcfs]))])
+    Array[File]? merged_melt_vcfs_array = flatten([select_first([GatherBatchEvidence.std_melt_vcf]), read_lines(select_first([ref_std_melt_vcfs_list]))])
   }
   if (defined(GatherBatchEvidence.std_scramble_vcf)) {
-    Array[File]? merged_scramble_vcfs_array = flatten([select_first([GatherBatchEvidence.std_scramble_vcf]), read_lines(select_first([ref_std_scramble_vcfs]))])
+    Array[File]? merged_scramble_vcfs_array = flatten([select_first([GatherBatchEvidence.std_scramble_vcf]), read_lines(select_first([ref_std_scramble_vcfs_list]))])
   }
 
   call dpn.MergeSet as MergeSetDel {
