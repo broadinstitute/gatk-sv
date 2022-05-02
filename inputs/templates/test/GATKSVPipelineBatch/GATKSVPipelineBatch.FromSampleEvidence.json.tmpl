@@ -2,8 +2,8 @@
   "GATKSVPipelineBatch.use_delly": "false",
   "GATKSVPipelineBatch.use_manta": "true",
   "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "false",
-  "GATKSVPipelineBatch.use_scramble": "true",
+  "GATKSVPipelineBatch.use_melt": "true",
+  "GATKSVPipelineBatch.use_scramble": "false",
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }},
 
@@ -143,14 +143,5 @@
   "GATKSVPipelineBatch.MakeCohortVcf.samples_per_clean_vcf_step2_shard": 100,
   "GATKSVPipelineBatch.MakeCohortVcf.clean_vcf5_records_per_shard": 5000,
   "GATKSVPipelineBatch.MakeCohortVcf.random_seed": 0,
-  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500,
-
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.runtime_attr_postprocess": {
-    "cpu_cores": 1,
-    "mem_gb": 8.5,
-    "disk_gb": 200,
-    "boot_disk_gb": 10,
-    "preemptible_tries": 3,
-    "max_retries": 1
-  }
+  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500
 }
