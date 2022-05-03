@@ -250,9 +250,9 @@ task RdTestGenotype {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
 
-    tabix -p bed local.RD.txt.gz
     tabix -p bed ~{bin_exclude}
 
     Rscript /opt/RdTest/RdTest.R \

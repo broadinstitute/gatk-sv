@@ -2,8 +2,8 @@
   "GATKSVPipelineBatch.use_delly": "false",
   "GATKSVPipelineBatch.use_manta": "true",
   "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "false",
-  "GATKSVPipelineBatch.use_scramble": "true",
+  "GATKSVPipelineBatch.use_melt": "true",
+  "GATKSVPipelineBatch.use_scramble": "false",
 
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }},
 
@@ -23,7 +23,6 @@
   "GATKSVPipelineBatch.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
   "GATKSVPipelineBatch.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineBatch.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
   "GATKSVPipelineBatch.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GATKSVPipelineBatch.scramble_docker" : {{ dockers.scramble_docker | tojson }},

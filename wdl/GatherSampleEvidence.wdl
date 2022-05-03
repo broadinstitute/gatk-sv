@@ -98,7 +98,6 @@ workflow GatherSampleEvidence {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -232,7 +231,7 @@ workflow GatherSampleEvidence {
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
-        gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
+        gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_pesr
     }
   }
