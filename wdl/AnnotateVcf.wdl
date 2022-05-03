@@ -16,6 +16,7 @@ workflow AnnotateVcf {
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
+    String? svannotate_additional_args
 
     Int max_shards_per_chrom_step1
     Int min_records_per_shard_step1
@@ -57,6 +58,7 @@ workflow AnnotateVcf {
       noncoding_bed = noncoding_bed,
       promoter_window = promoter_window,
       max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      additional_args = svannotate_additional_args,
       gatk_docker = gatk_docker,
       runtime_attr_svannotate = runtime_attr_svannotate
   }

@@ -12,6 +12,7 @@ workflow AnnotateFunctionalConsequences {
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
+    String? additional_args
 
     String gatk_docker
     RuntimeAttr? runtime_attr_svannotate
@@ -26,6 +27,7 @@ workflow AnnotateFunctionalConsequences {
       noncoding_bed = noncoding_bed,
       promoter_window = promoter_window,
       max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      additional_args = additional_args,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_svannotate
   }
@@ -46,6 +48,7 @@ task SVAnnotate {
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
+    String? additional_args
 
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -78,9 +81,10 @@ task SVAnnotate {
       -V ~{vcf} \
       -O ~{outfile} \
       --protein-coding-gtf ~{protein_coding_gtf} \
-      ~{if defined(noncoding_bed) then "--non-coding-bed " + noncoding_bed else ""} \
-      ~{if defined(promoter_window) then "--promoter-window-length " + promoter_window else ""} \
-      ~{if defined(max_breakend_as_cnv_length) then "--max-breakend-as-cnv-length" + max_breakend_as_cnv_length else ""}
+      ~{"--non-coding-bed " + noncoding_bed} \
+      ~{"--promoter-window-length " + promoter_window} \
+      ~{"--max-breakend-as-cnv-length" + max_breakend_as_cnv_length} \
+      ~{additional_args}
 
   >>>
   runtime {
