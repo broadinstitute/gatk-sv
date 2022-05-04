@@ -63,7 +63,7 @@ class RecordData:
         self.freq = len(self.called_samples)
         self.length = record.info['SVLEN']
         self.gt_50bp = self.length >= 50
-        self.is_mei = 'melt' in record.info['ALGORITHMS']
+        self.is_mei = 'melt' in record.info['ALGORITHMS'] or 'scramble' in record.info['ALGORITHMS']
 
     def __str__(self):
         return ",".join(str(x) for x in
