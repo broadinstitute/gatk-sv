@@ -3,8 +3,6 @@
   "AnnotateVcf.vcf_idx" : "${this.vcf_index}",
 
   "AnnotateVcf.protein_coding_gtf" : "${workspace.protein_coding_gtf}",
-  "AnnotateVcf.linc_rna_gtf" : "${workspace.linc_rna_gtf}",
-  "AnnotateVcf.promoter_bed" : "${workspace.promoter_bed}",
   "AnnotateVcf.noncoding_bed" : "${workspace.noncoding_bed}",
   "AnnotateVcf.ref_bed" : "${workspace.external_af_ref_bed}",
   "AnnotateVcf.ref_prefix" : "${workspace.external_af_ref_bed_prefix}",
@@ -19,6 +17,7 @@
 
   "AnnotateVcf.prefix" : "${this.sample_set_set_id}",
 
+  "AnnotateVcf.gatk_docker" : "${workspace.gatk_docker}",
   "AnnotateVcf.sv_base_mini_docker" : "${workspace.sv_base_mini_docker}",
   "AnnotateVcf.sv_pipeline_docker" : "${workspace.sv_pipeline_docker}"
 }

@@ -1,6 +1,6 @@
 version 1.0
 
-import "ScatterAnnotateVcfByChrom.wdl" as ann
+import "AnnotateFunctionalConsequences.wdl" as func
 import "PruneAndAddVafs.wdl" as pav
 import "AnnotateExternalAF.wdl" as eaf
 
@@ -13,9 +13,10 @@ workflow AnnotateVcf {
     String prefix
 
     File protein_coding_gtf
-    File linc_rna_gtf
-    File promoter_bed
-    File noncoding_bed
+    File? noncoding_bed
+    Int? promoter_window
+    Int? max_breakend_as_cnv_length
+    String? svannotate_additional_args
 
     Int max_shards_per_chrom_step1
     Int min_records_per_shard_step1
@@ -31,10 +32,9 @@ workflow AnnotateVcf {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
+    String gatk_docker
 
-    RuntimeAttr? runtime_attr_annotate_intervals
-    RuntimeAttr? runtime_attr_merge_annotations
-    RuntimeAttr? runtime_attr_subset_vcf
+    RuntimeAttr? runtime_attr_svannotate
     RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_prune_vcf
     RuntimeAttr? runtime_attr_shard_vcf
@@ -49,28 +49,24 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_select_matched_svs
   }
 
-  call ann.ScatterAnnotateVcfByChrom as ScatterAnnotateVcfByChrom {
+  call func.AnnotateFunctionalConsequences {
     input:
-      vcf                = vcf,
-      vcf_idx            = vcf_idx,
-      prefix             = prefix,
-      contig_list        = contig_list,
+      vcf = vcf,
+      vcf_index = vcf_idx,
+      prefix = prefix,
       protein_coding_gtf = protein_coding_gtf,
-      linc_rna_gtf       = linc_rna_gtf,
-      promoter_bed       = promoter_bed,
-      noncoding_bed      = noncoding_bed,
-      sv_base_mini_docker     = sv_base_mini_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_annotate_intervals = runtime_attr_annotate_intervals,
-      runtime_attr_merge_annotations  = runtime_attr_merge_annotations,
-      runtime_attr_subset_vcf         = runtime_attr_subset_vcf,
-      runtime_attr_concat_vcfs        = runtime_attr_concat_vcfs
+      noncoding_bed = noncoding_bed,
+      promoter_window = promoter_window,
+      max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+      additional_args = svannotate_additional_args,
+      gatk_docker = gatk_docker,
+      runtime_attr_svannotate = runtime_attr_svannotate
   }
 
   call pav.PruneAndAddVafs as PruneAndAddVafs {
     input:
-      vcf                    = ScatterAnnotateVcfByChrom.annotated_vcf,
-      vcf_idx                = ScatterAnnotateVcfByChrom.annotated_vcf_idx,
+      vcf                    = AnnotateFunctionalConsequences.annotated_vcf,
+      vcf_idx                = AnnotateFunctionalConsequences.annotated_vcf_index,
       prefix                 = prefix,
       sample_pop_assignments = sample_pop_assignments,
       prune_list             = prune_list,

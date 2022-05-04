@@ -3,8 +3,6 @@
   "AnnotateVcf.vcf_idx" : {{ test_batch.clean_vcf_index | tojson }},
 
   "AnnotateVcf.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
-  "AnnotateVcf.linc_rna_gtf" :       {{ reference_resources.linc_rna_gtf | tojson }},
-  "AnnotateVcf.promoter_bed" :       {{ reference_resources.promoter_bed | tojson }},
   "AnnotateVcf.noncoding_bed" :       {{ reference_resources.noncoding_bed | tojson }},
   "AnnotateVcf.ref_bed" :       {{ reference_resources.external_af_ref_bed | tojson }},
   "AnnotateVcf.ref_prefix" :       {{ reference_resources.external_af_ref_bed_prefix | tojson }},
@@ -19,6 +17,7 @@
 
   "AnnotateVcf.prefix" : {{ test_batch.name | tojson }},
 
+  "AnnotateVcf.gatk_docker":{{ dockers.gatk_docker | tojson }},
   "AnnotateVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "AnnotateVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
 }
