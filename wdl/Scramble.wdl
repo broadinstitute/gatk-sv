@@ -169,8 +169,11 @@ task RunScramble {
               "GT","0/1" }' xyzzy???_PredictedDeletions.txt >> tmp.vcf
     fi
 
+    # Remove HLA contigs to avoid bcftools error "[W::vcf_parse] Contig 'HLA-DRB1*10' is not defined in the header"
+    grep -v ^HLA tmp.vcf > tmp-nohla.vcf
+
     # sort and index the output VCF
-    bcftools sort -Oz <tmp.vcf >"~{sample_name}.scramble.vcf.gz"
+    bcftools sort -Oz <tmp-nohla.vcf >"~{sample_name}.scramble.vcf.gz"
     bcftools index -ft "~{sample_name}.scramble.vcf.gz"
   >>>
   runtime {
