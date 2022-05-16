@@ -73,6 +73,8 @@ def main():
                         'subsets for which NCR should be annotated separately. ' +
                         'First column: subset prefix. Second column: path to .txt ' +
                         'file with all sample IDs in subset.')
+    parser.add_argument('--stats-tsv', help='Optional path to output .tsv file ' +
+                        'with NCR stats for all records in vcf_in.')
     args = parser.parse_args()
 
     # Open connection to input VCF
@@ -105,13 +107,27 @@ def main():
     else:
         outvcf = pysam.VariantFile(args.vcf_out, 'w', header=vcf.header)
 
+    # Open connection to output .tsv, if optioned
+    if args.stats_tsv is not None:
+        stats_out = open(args.stats_tsv, 'w')
+
     # Process records
     for record in vcf:
         record = add_ncrs(record, subsets)
         outvcf.write(record)
+        if args.stats_tsv is not None:
+            stats = [record.id]
+            for key in ['NCR'] + [x + '_NCR' for x in subsets.keys()]:
+                if key in record.info.keys():
+                    stats.append(str(np.round(record.info[key], 8)))
+                else:
+                    stats.append('.')
+            stats_out.write('\t'.join(stats) + '\n')
 
-    # Close connection to output VCF
+    # Close connection to output VCF and (optionally) stats .tsv
     outvcf.close()
+    if args.stats_tsv is not None:
+        stats_out.close()
 
 
 if __name__ == '__main__':
