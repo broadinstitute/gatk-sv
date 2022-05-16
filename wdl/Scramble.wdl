@@ -61,7 +61,7 @@ task RunScramble {
     File? NOT_A_FILE
   }
 
-  Int mem_size_gb = if detect_deletions then 16 else 3
+  Int mem_size_gb = if detect_deletions then 32 else 6
   Int disk_size_gb = ceil(size(bam_or_cram_file,"GiB") + size(bam_or_cram_index,"GiB") + size(reference_fasta,"GiB") + 10)
 
   RuntimeAttr default_attr = object {
