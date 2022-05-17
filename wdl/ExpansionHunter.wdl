@@ -174,13 +174,20 @@ task ConcatEHOutputs {
         File json = "${output_prefix}.json"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File overlapping_reads = "${output_prefix}.bam"
-        File timing = "${output_prefix}_timing.tsv"
+        File timing = "${output_prefix}.tsv"
     }
 
     command <<<
         set -euxo pipefail
 
-        jq -s 'reduce .[] as $item ({}; . * $item)' ~{sep=" " jsons} > ~{output_prefix}.json
+        JSONS_FILENAME="~{write_lines(jsons)}"
+        MERGED_JSON=~{output_prefix}.json
+        TEMP_MERGED_JSON=~{output_prefix}tmp.json
+        printf "{}" >> $MERGED_JSON
+        while IFS= read -r line; do
+            jq -s 'reduce .[] as $item ({}; . * $item)' $line $MERGED_JSON > $TEMP_MERGED_JSON
+            mv $TEMP_MERGED_JSON $MERGED_JSON
+        done < $JSONS_FILENAME
 
         VCFS="~{write_lines(vcfs_gz)}"
         bcftools concat --no-version --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
@@ -188,10 +195,13 @@ task ConcatEHOutputs {
         BAMS="~{write_lines(overlapping_reads)}"
         samtools merge ~{output_prefix}.bam -b ${BAMS}
 
-        TIMINGS=(~{sep=" " timings})
-        FIRST_TIMING=${TIMINGS[0]}
-        head -1 ${FIRST_TIMING} > ~{output_prefix}_timing.tsv
-        awk FNR!=1 ~{sep=" " timings} >> ~{output_prefix}_timing.tsv
+        TIMINGS_FILENAME="~{write_lines(timings)}"
+        MERGED_TIMINGS_FILENAME=~{output_prefix}.tsv
+        FIRST_TSV=$(head -n 1 $TIMINGS_FILENAME)
+        head -1 $FIRST_TSV > $MERGED_TIMINGS_FILENAME
+        while IFS= read -r line; do
+            awk FNR!=1 $line >> $MERGED_TIMINGS_FILENAME
+        done < $TIMINGS_FILENAME
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
