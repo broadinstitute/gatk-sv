@@ -12,14 +12,9 @@ Annotate no-call GT rates for all records in a VCF
 
 import numpy as np
 import csv
-from itertools import combinations
-from collections import defaultdict
-from copy import deepcopy
 import argparse
 import pysam
 import sys
-from time import time
-from datetime import timedelta
 
 
 def is_mcnv(record):
