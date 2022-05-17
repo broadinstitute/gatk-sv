@@ -50,7 +50,7 @@ workflow ExpansionHunterScatter {
 
         String sample_id = sample_ids[i]
 
-        call ExpansionHunter.ExpansionHunter as expanionHunter {
+        call ExpansionHunter.ExpansionHunter  {
             input:
                 bam_or_cram=bam_or_cram_,
                 bam_or_cram_index=bam_or_cram_index_,
@@ -67,10 +67,11 @@ workflow ExpansionHunterScatter {
     }
 
     output {
-        Array[File] jsons = expanionHunter.json
-        Array[File] vcfs_gz = expanionHunter.vcf_gz
-        Array[File] overlapping_reads = expanionHunter.overlapping_reads
-        Array[File] timing = expanionHunter.timing
+        Array[File] variants_tsv = ExpansionHunter.variants_tsv
+        Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
+        Array[File] vcfs_gz = ExpansionHunter.vcf_gz
+        Array[File] overlapping_reads = ExpansionHunter.overlapping_reads
+        Array[File] timing = ExpansionHunter.timing
     }
 }
 
@@ -125,7 +126,7 @@ task SplitVariantCatalog {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 3.75,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
