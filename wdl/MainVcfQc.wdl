@@ -19,7 +19,7 @@ workflow MainVcfQc {
     Array[File] vcfs
     Array[File] vcf_idxs
     Boolean vcf_format_has_cn = true
-    Boolean subset_to_pass_and_multiallelic = false
+    String bcftools_preprocessing_options = ""
     File? ped_file
     File? list_of_samples_to_include
     Int max_trios = 1000
@@ -50,7 +50,7 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
     # overrides for ShardedQcCollection
-    RuntimeAttr? runtime_override_subset_to_pass 
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_split_vcf_to_qc
@@ -101,7 +101,7 @@ workflow MainVcfQc {
         vcf_idxs=vcf_idxs_for_qc,
         contig=contig,
         sv_per_shard=sv_per_shard,
-        subset_pass=subset_to_pass_and_multiallelic,
+        bcftools_preprocessing_options=bcftools_preprocessing_options,
         prefix="~{prefix}.~{contig}.shard",
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
