@@ -12,14 +12,14 @@ workflow ShardedQcCollection {
     Array[File] vcf_idxs
     String contig
     Int sv_per_shard
-    Boolean subset_pass = false
+    String bcftools_preprocessing_options = ""
     String prefix
 
     String sv_base_mini_docker
     String sv_pipeline_docker
 
     # overrides for local tasks
-    RuntimeAttr? runtime_override_subset_to_pass
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
 
@@ -46,16 +46,17 @@ workflow ShardedQcCollection {
 
   # Scatter over VCF shards
   scatter (shard in vcf_shards) {
-    # Subset shard to PASS and MULTIALLELIC variants only, if optioned
-    if (subset_pass) {
-      call SubsetToPassAndMultiallelic {
+    # Preprocess VCF with bcftools, if optioned
+    if ( bcftools_preprocessing_options != "" ) {
+      call PreprocessVcf {
         input:
           vcf=shard,
+          bcftools_preprocessing_options=bcftools_preprocessing_options,
           sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_override_subset_to_pass
+          runtime_attr_override=runtime_override_preprocess_vcf
       }
     }
-    File filtered_vcf = select_first([SubsetToPassAndMultiallelic.outvcf, shard])
+    File filtered_vcf = select_first([PreprocessVcf.outvcf, shard])
 
     # Collect VCF-wide summary stats
     call CollectShardedVcfStats {
@@ -104,10 +105,11 @@ workflow ShardedQcCollection {
   }
 }
 
-# Task to subset VCF to PASS and MULTIALLELIC variants only
-task SubsetToPassAndMultiallelic {
+# Task to preprocess VCF using bcftools
+task PreprocessVcf {
   input {
     File vcf
+    String bcftools_preprocessing_options = ""
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -142,7 +144,7 @@ task SubsetToPassAndMultiallelic {
 
     bcftools view \
       --no-update \
-      -f "PASS,MULTIALLELIC" \
+      $bcftools_preprocessing_options \
       -l 1 -O z \
       -o ~{outvcf_fname} \
       ~{vcf}
