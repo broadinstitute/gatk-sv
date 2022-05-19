@@ -61,6 +61,7 @@ workflow MakeCohortVcf {
     File empty_file
     File? outlier_samples_list
     Int? random_seed
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
     Array[File]? thousand_genomes_benchmark_calls
     Array[File]? hgsv_benchmark_calls
@@ -179,6 +180,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -441,10 +443,10 @@ workflow MakeCohortVcf {
       runtime_override_combine_multi_ids_4=runtime_override_combine_multi_ids_4,
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
-      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs
+      runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
+      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
   }
 
-  Array[String] contigs = transpose(read_tsv(contig_list))[0]
   call VcfQc.MasterVcfQc {
     input:
       vcf=CleanVcf.cleaned_vcf,
@@ -459,7 +461,7 @@ workflow MakeCohortVcf {
       sanders_2015_tarball=sanders_2015_tarball,
       collins_2017_tarball=collins_2017_tarball,
       werling_2018_tarball=werling_2018_tarball,
-      contigs=contigs,
+      primary_contigs_fai=contig_list,
       random_seed=random_seed,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,

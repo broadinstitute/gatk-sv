@@ -57,7 +57,7 @@ We still encourage members of the community to adapt GATK-SV for non-GCP backend
 * Refer to Cromwell's [documentation](https://cromwell.readthedocs.io/en/stable/backends/Backends/) for configuration instructions.
 * The handling and ordering of `glob` commands may differ between platforms.
 * Shell commands that are potentially destructive to input files (e.g. `rm`, `mv`, `tabix`) can cause unexpected behavior on shared filesystems. Enabling [copy localization](https://cromwell.readthedocs.io/en/stable/Configuring/#local-filesystem-options) may help to more closely replicate the behavior on GCP.
-* For clusters that do not support Docker, Singularity is an alternative. See [Cromwell documentation on Singularity(https://cromwell.readthedocs.io/en/stable/tutorials/Containers/#singularity).
+* For clusters that do not support Docker, Singularity is an alternative. See [Cromwell documentation on Singularity](https://cromwell.readthedocs.io/en/stable/tutorials/Containers/#singularity).
 * The GATK-SV pipeline takes advantage of the massive parallelization possible in the cloud. Local backends may not have the resources to execute all of the workflows. Workflows that use fewer resources or that are less parallelized may be more successful. For instance, some users have been able to run [GatherSampleEvidence](#gather-sample-evidence) on a SLURM cluster.
 
 ### Data:
@@ -475,11 +475,11 @@ Combines variants across multiple batches, resolves complex variants, re-genotyp
 * Finalized "cleaned" VCF and QC plots
 
 ## <a name="module07">Module 07</a> (in development)
-Apply downstream filtering steps to the cleaned vcf to further control the false discovery rate; all steps are optional and users should decide based on the specific purpose of their projects.
+Apply downstream filtering steps to the cleaned VCF to further control the false discovery rate; all steps are optional and users should decide based on the specific purpose of their projects.
 
-Filterings methods include:
+Filtering methods include:
 * minGQ - remove variants based on the genotype quality across populations.
-Note: Trio families are required to build the minGQ filtering model in this step. We provide tables pre-trained with the 1000 genomes samples at different FDR thresholds for projects that lack family structures, and they can be found here: 
+Note: Trio families are required to build the minGQ filtering model in this step. We provide tables pre-trained with the 1000 genomes samples at different FDR thresholds for projects that lack family structures, and they can be found at the paths below.  These tables assume that GQ has a scale of [0,999], so they will not work with newer VCFs where GQ has a scale of [0,99].
 ```
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.10perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.1perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
@@ -493,10 +493,10 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 ## <a name="annotate-vcf">AnnotateVcf</a> (in development)
 *Formerly Module08Annotation*
 
-Add annotations, such as the inferred function and allele frequencies of variants, to final vcf.
+Add annotations, such as the inferred function and allele frequencies of variants, to final VCF.
 
 Annotations methods include:
-* Functional annotation - annotate SVs with inferred function on protein coding regions, regulatory regions such as UTR and Promoters and other non coding elements;
+* Functional annotation - annotate SVs with inferred functional consequence on protein-coding regions, regulatory regions such as UTR and promoters, and other non-coding elements.
 * Allele Frequency annotation - annotate SVs with their allele frequencies across all samples, and samples of specific sex, as well as specific sub-populations.
 * Allele Frequency annotation with external callset - annotate SVs with the allele frequencies of their overlapping SVs in another callset, eg. gnomad SV callset.
 

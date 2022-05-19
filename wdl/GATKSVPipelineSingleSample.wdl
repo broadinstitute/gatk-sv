@@ -52,7 +52,7 @@ workflow GATKSVPipelineSingleSample {
 
     # Global files
     File ref_ped_file
-    Array[String] ref_samples
+    File ref_samples_list
     File genome_file
     File primary_contigs_list
     File primary_contigs_fai
@@ -169,13 +169,13 @@ workflow GATKSVPipelineSingleSample {
 
     # gCNV inputs
     File contig_ploidy_model_tar
-    Array[File] gcnv_model_tars
+    File gcnv_model_tars_list  # list of files, one per line
 
     # bincov counts files (for cn.mops)
     File ref_panel_bincov_matrix
 
-    Array[File] ref_pesr_disc_files
-    Array[File] ref_pesr_split_files
+    File ref_pesr_disc_files_list  # list of files, one per line
+    File ref_pesr_split_files_list  # list of files, one per line
 
     File? gatk4_jar_override
     Float? gcnv_p_alt
@@ -262,10 +262,10 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_depth_merge_pre_clusterbatch
 
     # Reference panel standardized caller VCFs
-    Array[File] ref_std_manta_vcfs
-    Array[File] ref_std_wham_vcfs
-    Array[File]? ref_std_melt_vcfs
-    Array[File]? ref_std_scramble_vcfs
+    File ref_std_manta_vcfs_list  # list of files, one per line
+    File ref_std_wham_vcfs_list  # list of files, one per line
+    File? ref_std_melt_vcfs_list  # list of files, one per line
+    File? ref_std_scramble_vcfs_list  # list of files, one per line
     File ref_panel_del_bed
     File ref_panel_dup_bed
 
@@ -481,6 +481,7 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
+    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -553,9 +554,9 @@ workflow GATKSVPipelineSingleSample {
     ############################################################
 
     File protein_coding_gtf
-    File linc_rna_gtf
-    File promoter_bed
     File noncoding_bed
+    Int? promoter_window
+    Int? max_breakend_as_cnv_length
     Int annotation_sv_per_shard
     Int annotation_max_shards_per_chrom_step1
     Int annotation_min_records_per_shard_step1
@@ -563,6 +564,8 @@ workflow GATKSVPipelineSingleSample {
     File? external_af_ref_bed             # bed file with population AFs for annotation
     String? external_af_ref_bed_prefix    # name of external AF bed file call set
     Array[String]? external_af_population # populations to annotate external AFs (required if ref_bed set, use "ALL" for all)
+
+    RuntimeAttr? runtime_attr_svannotate
 
     ############################################################
     ## Single sample filtering
@@ -695,6 +698,8 @@ workflow GATKSVPipelineSingleSample {
     Array[File] wham_vcfs_ = [select_first([case_wham_vcf, GatherSampleEvidence.wham_vcf])]
   }
 
+  Array[String] ref_samples = read_lines(ref_samples_list)
+
   call batchevidence.GatherBatchEvidence as GatherBatchEvidence {
     input:
       batch=batch,
@@ -714,12 +719,12 @@ workflow GATKSVPipelineSingleSample {
       PE_files=[case_pe_file_],
       cytoband=cytobands,
       mei_bed=mei_bed,
-      ref_panel_PE_files=ref_pesr_disc_files,
+      ref_panel_PE_files=read_lines(ref_pesr_disc_files_list),
       SR_files=[case_sr_file_],
-      ref_panel_SR_files=ref_pesr_split_files,
+      ref_panel_SR_files=read_lines(ref_pesr_split_files_list),
       inclusion_bed=inclusion_bed,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
-      gcnv_model_tars = gcnv_model_tars,
+      gcnv_model_tars = read_lines(gcnv_model_tars_list),
       gatk4_jar_override = gatk4_jar_override,
       run_ploidy = true,
       append_first_sample_to_ped = true,
@@ -806,13 +811,13 @@ workflow GATKSVPipelineSingleSample {
   File combined_ped_file = select_first([GatherBatchEvidence.combined_ped_file])
 
   # Merge calls with reference panel
-  Array[File] merged_manta_vcfs_array = flatten([select_first([GatherBatchEvidence.std_manta_vcf]), ref_std_manta_vcfs])
-  Array[File] merged_wham_vcfs_array = flatten([select_first([GatherBatchEvidence.std_wham_vcf]), ref_std_wham_vcfs])
+  Array[File] merged_manta_vcfs_array = flatten([select_first([GatherBatchEvidence.std_manta_vcf]), read_lines(ref_std_manta_vcfs_list)])
+  Array[File] merged_wham_vcfs_array = flatten([select_first([GatherBatchEvidence.std_wham_vcf]), read_lines(ref_std_wham_vcfs_list)])
   if (defined(GatherBatchEvidence.std_melt_vcf)) {
-    Array[File]? merged_melt_vcfs_array = flatten([select_first([GatherBatchEvidence.std_melt_vcf]), select_first([ref_std_melt_vcfs])])
+    Array[File]? merged_melt_vcfs_array = flatten([select_first([GatherBatchEvidence.std_melt_vcf]), read_lines(select_first([ref_std_melt_vcfs_list]))])
   }
   if (defined(GatherBatchEvidence.std_scramble_vcf)) {
-    Array[File]? merged_scramble_vcfs_array = flatten([select_first([GatherBatchEvidence.std_scramble_vcf]), select_first([ref_std_scramble_vcfs])])
+    Array[File]? merged_scramble_vcfs_array = flatten([select_first([GatherBatchEvidence.std_scramble_vcf]), read_lines(select_first([ref_std_scramble_vcfs_list]))])
   }
 
   call dpn.MergeSet as MergeSetDel {
@@ -1260,7 +1265,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
       runtime_override_benchmark_samples=runtime_override_benchmark_samples,
       runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
-      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
+      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks,
+      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
 
   }
 
@@ -1358,9 +1364,9 @@ workflow GATKSVPipelineSingleSample {
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
-        linc_rna_gtf = linc_rna_gtf,
-        promoter_bed = promoter_bed,
         noncoding_bed = noncoding_bed,
+        promoter_window = promoter_window,
+        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
@@ -1368,7 +1374,9 @@ workflow GATKSVPipelineSingleSample {
         max_shards_per_chrom_step1 = annotation_max_shards_per_chrom_step1,
         min_records_per_shard_step1 = annotation_min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        gatk_docker = gatk_docker,
+        runtime_attr_svannotate = runtime_attr_svannotate
   }
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
@@ -1378,12 +1386,13 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker = sv_pipeline_docker
   }
 
-  call SingleSampleFiltering.FinalVCFCleanup as FinalVCFCleanup {
+  call SingleSampleFiltering.UpdateBreakendRepresentation {
     input:
-      single_sample_vcf=AnnotateVcf.output_vcf,
-      single_sample_vcf_idx=AnnotateVcf.output_vcf_idx,
+      vcf=AnnotateVcf.output_vcf,
+      vcf_idx=AnnotateVcf.output_vcf_idx,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
+      prefix=basename(AnnotateVcf.output_vcf, ".vcf.gz") + ".final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1397,7 +1406,7 @@ workflow GATKSVPipelineSingleSample {
       sample_sr = case_sr_file_,
       sample_counts = case_counts_file_,
       cleaned_vcf = MakeCohortVcf.vcf,
-      final_vcf = FinalVCFCleanup.out,
+      final_vcf = UpdateBreakendRepresentation.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,
       genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf,
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
@@ -1415,8 +1424,8 @@ workflow GATKSVPipelineSingleSample {
   }
 
   output {
-    File final_vcf = FinalVCFCleanup.out
-    File final_vcf_idx = FinalVCFCleanup.out_idx
+    File final_vcf = UpdateBreakendRepresentation.out
+    File final_vcf_idx = UpdateBreakendRepresentation.out_idx
 
     File final_bed = VcfToBed.bed
 

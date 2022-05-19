@@ -73,7 +73,7 @@ readDatPerSample <- function(ID){
   }
 }
 #Filters VIDs for a single sample based on GQ
-GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=999){
+GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=99){
   #Check input variant list
   if(ID %in% names(VID.lists)){
     vlist <- VID.lists[[which(names(VID.lists)==ID)]]
@@ -114,7 +114,7 @@ countVarsSingle <- function(dat,vlist,count="variants"){
 }
 #Create matrix of variant/allele counts for a list of samples
 countVarsMulti <- function(dat,samples,count="variants",
-                           min.GQ=0,max.GQ=999,biallelic=F){
+                           min.GQ=0,max.GQ=99,biallelic=F){
   #Exclude non-biallelic sites, if optioned
   if(biallelic==T){
     dat <- dat[which(dat$carriers>0 & dat$other_gts==0),]
@@ -193,11 +193,11 @@ mediansByFreq <- function(dat,samples,svtypes,max.freqs,freq.labs,count="variant
   return(median.mat)
 }
 #Gather median count of variants per sample by minimum GQ
-mediansByGQ <- function(dat,samples,svtypes,min.GQs=seq(0,900,100),count="variants",biallelic=F){
+mediansByGQ <- function(dat,samples,svtypes,min.GQs=seq(0,90,10),count="variants",biallelic=F,max.GQ=99){
   #Iterate over min GQs and compose matrix of medians
   median.mat <- t(sapply(min.GQs,function(min.GQ){
     #Get matrix of variants per sample
-    mat.sub <- countVarsMulti(dat=dat,samples=samples,count=count,min.GQ=min.GQ,biallelic=biallelic)
+    mat.sub <- countVarsMulti(dat=dat,samples=samples,count=count,min.GQ=min.GQ,biallelic=biallelic,max.GQ=max.GQ)
     
     #Get median per sample
     medians <- apply(mat.sub,2,median,na.rm=T)
@@ -870,6 +870,9 @@ option_list <- list(
               metavar="character"),
   make_option(c("-D", "--downsample"), type="integer", default=1000,
               help="restrict analyses to a random subset of N samples (for speed) [default %default]",
+              metavar="integer"),
+  make_option(c("-G", "--maxgq"), type="integer", default=99,
+              help="Max GQ value, ie. 99 for GQ on a scale of [0,99]",
               metavar="integer")
 )
 
@@ -879,6 +882,7 @@ args <- parse_args(OptionParser(usage="%prog svstats.bed samples.list perSampleD
                    positional_arguments=TRUE)
 opts <- args$options
 downsamp <- opts$downsample
+maxgq <- opts$maxgq
 
 ###Checks for appropriate positional arguments
 if(length(args$args) != 4){
@@ -990,7 +994,8 @@ plot.data <- lapply(list("variants","alleles"),function(count){
                                 samples=samples,count=count)
   
   #Medians per sample
-  median.GQ <- t(mediansByGQ(dat=dat,samples=samples,count=count))
+  stepgq <- ceiling(maxgq / 10)
+  median.GQ <- t(mediansByGQ(dat=dat,samples=samples,count=count,max.GQ=maxgq,min.GQs=seq(0,stepgq*9,stepgq)))
   median.size <- mediansBySize(dat=dat,samples=samples,count=count,
                                max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                            medlarge.max.size,large.max.size,huge.max.size),

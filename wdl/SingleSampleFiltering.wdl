@@ -445,12 +445,13 @@ task ResetFilter {
   }
 }
 
-task FinalVCFCleanup {
+task UpdateBreakendRepresentation {
   input {
-    File single_sample_vcf
-    File single_sample_vcf_idx
+    File vcf
+    File vcf_idx
     File ref_fasta
     File ref_fasta_idx
+    String prefix
 
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -466,8 +467,7 @@ task FinalVCFCleanup {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String filebase = basename(single_sample_vcf, ".vcf.gz")
-  String outfile = "~{filebase}.final_cleanup.vcf.gz"
+  String outfile = "~{prefix}.vcf.gz"
 
   output {
     File out = "~{outfile}"
@@ -477,16 +477,7 @@ task FinalVCFCleanup {
 
      set -euo pipefail
 
-     # clean up bad END tags
-     bcftools query -f '%CHROM\t%POS\t%REF\t%ALT\t%INFO/END\n' \
-        ~{single_sample_vcf} | awk '$5 < $2 {OFS="\t"; $5 = $2 + 1; print}' | bgzip -c > bad_ends.txt.gz
-     tabix -s1 -b2 -e2 bad_ends.txt.gz
-     bcftools annotate \
-        -a bad_ends.txt.gz \
-        -c CHROM,POS,REF,ALT,END \
-        ~{single_sample_vcf} | bgzip -c > fix_bad_ends.vcf.gz
-
-     /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py fix_bad_ends.vcf.gz ~{ref_fasta} \
+     /opt/sv-pipeline/scripts/single_sample/update_variant_representations.py ~{vcf} ~{ref_fasta} \
         | vcf-sort -c \
         | bgzip -c > ~{outfile}
 

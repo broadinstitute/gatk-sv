@@ -12,7 +12,7 @@ ARG CONDA_INSTALL_DIR="/opt/conda"
 ARG CONDA_BIN=${CONDA_INSTALL_DIR}/bin
 ARG CONDA_CMD=${CONDA_BIN}/conda
 ENV PATH=${CONDA_BIN}:$PATH
-ENV EH_VERSION=v4.0.2
+ENV EH_VERSION=v5.0.0
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
     python3-dev \

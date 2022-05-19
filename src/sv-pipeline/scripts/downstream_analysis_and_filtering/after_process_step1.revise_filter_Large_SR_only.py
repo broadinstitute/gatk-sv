@@ -12,7 +12,7 @@ def revise_filter_Large_SR_only(vcf, fout, size_cutoff=500, sample_proportion_cu
                 SR_only_list = []
                 gt_list = []
                 for sample in record.samples.values():
-                    if sample['RD_CN'] == 2 and sample['PE_GT'] == 0 and sample['PE_GQ'] == 999 and sample['SR_GT'] != 0:
+                    if sample['RD_CN'] == 2 and sample['PE_GT'] == 0 and sample['PE_GQ'] == 99 and sample['SR_GT'] != 0:
                         SR_only_list.append(1)
                         gt_list.append(sample['GT'])
                     else:

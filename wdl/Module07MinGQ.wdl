@@ -50,6 +50,10 @@ workflow Module07MinGQ {
     RuntimeAttr? runtime_attr_GatherTrioData
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
     RuntimeAttr? runtime_override_split_vcf_to_clean
+
+    RuntimeAttr? runtime_attr_compute_shard_af
+    RuntimeAttr? runtime_attr_scatter_vcf_calcaf
+    RuntimeAttr? runtime_attr_combine_sharded_vcfs_calcaf
   }
 
   Array[Array[String]] contigs = read_tsv(contiglist)
@@ -89,14 +93,17 @@ workflow Module07MinGQ {
         sv_per_shard=1000,
         prefix="~{prefix}.~{contig[0]}",
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+        runtime_attr_scatter_vcf = runtime_attr_scatter_vcf_calcaf,
+        runtime_attr_compute_shard_af = runtime_attr_compute_shard_af,
+        runtime_attr_combine_sharded_vcfs = runtime_attr_combine_sharded_vcfs_calcaf
     }
     if (defined(pcrplus_samples_list)) {
       call SplitPcrVcf {
         input:
           vcf=getAFs.vcf_wAFs,
           prefix="~{prefix}.~{contig[0]}",
-          pcrplus_samples_list=pcrplus_samples_list,
+          pcrplus_samples_list=select_first([pcrplus_samples_list]),
           sv_base_mini_docker=sv_base_mini_docker
       }
     }
@@ -115,7 +122,10 @@ workflow Module07MinGQ {
         prefix="~{prefix}.~{contig[0]}",
         sample_pop_assignments=GetSampleLists.sample_PCR_labels,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+        runtime_attr_scatter_vcf = runtime_attr_scatter_vcf_calcaf,
+        runtime_attr_compute_shard_af = runtime_attr_compute_shard_af,
+        runtime_attr_combine_sharded_vcfs = runtime_attr_combine_sharded_vcfs_calcaf
     }
     # Gather table of AC/AN/AF for PCRPLUS and PCRMINUS samples
     call GetAfTables {
@@ -139,8 +149,8 @@ workflow Module07MinGQ {
     ###PCRMINUS
     call SplitFamfile as SplitFamfile_PCRMINUS {
       input:
-        vcf=pcr_minus_vcf,
-        vcf_idx=pcr_minus_vcf + ".tbi",
+        vcf=pcr_minus_vcf[0],
+        vcf_idx=pcr_minus_vcf[0] + ".tbi",
         famfile=trios_famfile,
         fams_per_shard=1,
         prefix="~{prefix}.PCRMINUS",
@@ -232,7 +242,7 @@ workflow Module07MinGQ {
 
   # Apply filter per chromosome
   ###PCRMINUS
-  scatter ( vcf_shard in SplitPcrVcf.PCRMINUS_vcf ) {
+  scatter ( vcf_shard in pcr_minus_vcf ) {
     call ApplyMinGQFilter as apply_filter_PCRMINUS {
       input:
         vcf=vcf_shard,
@@ -468,7 +478,8 @@ task SplitFamfile {
         fgrep -w "$famID" ~{famfile} || true
       fi
     done < ~{famfile} \
-    > "~{prefix}.cleaned_trios.fam"
+      | awk -v FS="\t" -v OFS="\t" '{ if ($2!="0" && $3!="0" && $4!="0") print $0 }' \
+    > "~{prefix}.cleaned_trios.fam"  # proband-only
     split -l ~{fams_per_shard} --numeric-suffixes=00001 -a 5 ~{prefix}.cleaned_trios.fam famfile_shard_
   >>>
 

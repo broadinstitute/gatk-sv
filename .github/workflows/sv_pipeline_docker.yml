@@ -160,6 +160,8 @@ jobs:
         with:
           # See the comment on build_args_job.
           fetch-depth: 0
+          # Authenticates git using the bot's access token.
+          token: ${{ secrets.BOT_PAT }}
 
       - name: Setup Python
         uses: actions/setup-python@v2
