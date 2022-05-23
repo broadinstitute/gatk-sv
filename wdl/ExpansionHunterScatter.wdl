@@ -14,6 +14,8 @@ workflow ExpansionHunterScatter {
         File? reference_fasta_index
         File variant_catalog_json
         Int? variant_catalog_batch_size
+        Boolean? generate_realigned_bam
+        Boolean? generate_vcf
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_attr
@@ -26,7 +28,7 @@ workflow ExpansionHunterScatter {
 
     String variant_catalog_batch_size_ = select_first([variant_catalog_batch_size, 1000])
 
-    call SplitVariantCatalog as svc {
+    call SplitVariantCatalog {
         input:
             variant_catalog = variant_catalog_json,
             batch_size = variant_catalog_batch_size_,
@@ -54,9 +56,11 @@ workflow ExpansionHunterScatter {
                 bam_or_cram_index=bam_or_cram_index_,
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
-                split_variant_catalogs=svc.catalogs_json,
+                split_variant_catalogs=SplitVariantCatalog.catalogs_json,
                 sample_id=sample_id,
                 ped_file=ped_file,
+                generate_realigned_bam=generate_realigned_bam,
+                generate_vcf=generate_vcf,
                 expansion_hunter_docker=expansion_hunter_docker,
                 python_docker=python_docker
         }

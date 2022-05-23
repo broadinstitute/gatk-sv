@@ -21,6 +21,8 @@ workflow ExpansionHunter {
         File? reference_fasta_index
         Array[File] split_variant_catalogs
         String sample_id
+        Boolean? generate_realigned_bam
+        Boolean? generate_vcf
         File? ped_file
         String expansion_hunter_docker
         String python_docker
@@ -44,6 +46,9 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
+    Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
+    Boolean generate_vcf_ = select_first([generate_vcf, false])
+
     scatter (i in range(length(split_variant_catalogs))) {
         call RunExpansionHunter as expanionHunter {
             input:
@@ -53,6 +58,8 @@ workflow ExpansionHunter {
                 reference_fasta_index = reference_fasta_index_,
                 variant_catalog = split_variant_catalogs[i],
                 sample_id = sample_id,
+                generate_realigned_bam = generate_realigned_bam_,
+                generate_vcf = generate_vcf_,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
                 runtime_attr_override = runtime_attr
@@ -65,6 +72,8 @@ workflow ExpansionHunter {
             jsons = expanionHunter.json,
             overlapping_reads = expanionHunter.overlapping_reads,
             timings = expanionHunter.timing,
+            generate_realigned_bam = generate_realigned_bam_,
+            generate_vcf = generate_vcf_,
             output_prefix = sample_id,
             expansion_hunter_docker = expansion_hunter_docker
     }
@@ -85,6 +94,8 @@ task RunExpansionHunter {
         File reference_fasta_index
         File variant_catalog
         String sample_id
+        Boolean generate_realigned_bam
+        Boolean generate_vcf
         File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
@@ -129,7 +140,17 @@ task RunExpansionHunter {
             --record-timing \
             $sex
 
-        bgzip ~{sample_id}.vcf
+        if ~{generate_realigned_bam}; then
+            rm ~{sample_id}_realigned.bam
+            touch ~{sample_id}_realigned.bam
+        fi
+
+        if ~{generate_vcf}; then
+            rm ~{sample_id}.vcf
+            touch ~{sample_id}.vcf.gz
+        else
+            bgzip ~{sample_id}.vcf
+        fi
     >>>
 
     RuntimeAttr default_runtime_ = object {
@@ -165,6 +186,8 @@ task ConcatEHOutputs {
         Array[File] jsons
         Array[File] overlapping_reads
         Array[File] timings
+        Boolean generate_realigned_bam
+        Boolean generate_vcf
         String? output_prefix
         String expansion_hunter_docker
         RuntimeAttr? runtime_attr_override
@@ -174,24 +197,42 @@ task ConcatEHOutputs {
         File json = "${output_prefix}.json"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File overlapping_reads = "${output_prefix}.bam"
-        File timing = "${output_prefix}_timing.tsv"
+        File timing = "${output_prefix}.tsv"
     }
 
     command <<<
         set -euxo pipefail
 
-        jq -s 'reduce .[] as $item ({}; . * $item)' ~{sep=" " jsons} > ~{output_prefix}.json
+        JSONS_FILENAME="~{write_lines(jsons)}"
+        MERGED_JSON=~{output_prefix}.json
+        TEMP_MERGED_JSON=~{output_prefix}tmp.json
+        printf "{}" >> $MERGED_JSON
+        while IFS= read -r line; do
+            jq -s 'reduce .[] as $item ({}; . * $item)' $line $MERGED_JSON > $TEMP_MERGED_JSON
+            mv $TEMP_MERGED_JSON $MERGED_JSON
+        done < $JSONS_FILENAME
 
-        VCFS="~{write_lines(vcfs_gz)}"
-        bcftools concat --no-version --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
+        if ~{generate_vcf}; then
+            VCFS="~{write_lines(vcfs_gz)}"
+            bcftools concat --no-version --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
+        else
+            touch ~{output_prefix}.vcf.gz
+        fi
 
-        BAMS="~{write_lines(overlapping_reads)}"
-        samtools merge ~{output_prefix}.bam -b ${BAMS}
+        if ~{generate_realigned_bam}; then
+            BAMS="~{write_lines(overlapping_reads)}"
+            samtools merge ~{output_prefix}.bam -b ${BAMS}
+        else
+            touch ~{output_prefix}.bam
+        fi
 
-        TIMINGS=(~{sep=" " timings})
-        FIRST_TIMING=${TIMINGS[0]}
-        head -1 ${FIRST_TIMING} > ~{output_prefix}_timing.tsv
-        awk FNR!=1 ~{sep=" " timings} >> ~{output_prefix}_timing.tsv
+        TIMINGS_FILENAME="~{write_lines(timings)}"
+        MERGED_TIMINGS_FILENAME=~{output_prefix}.tsv
+        FIRST_TSV=$(head -n 1 $TIMINGS_FILENAME)
+        head -1 $FIRST_TSV > $MERGED_TIMINGS_FILENAME
+        while IFS= read -r line; do
+            awk FNR!=1 $line >> $MERGED_TIMINGS_FILENAME
+        done < $TIMINGS_FILENAME
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
