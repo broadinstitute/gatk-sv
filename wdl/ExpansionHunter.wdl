@@ -140,7 +140,7 @@ task RunExpansionHunter {
             --record-timing \
             $sex
 
-        if [ ~{generate_realigned_bam} = false ]; then
+        if ~{generate_realigned_bam}; then
             rm ~{sample_id}_realigned.bam
             touch ~{sample_id}_realigned.bam
         fi
