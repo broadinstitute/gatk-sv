@@ -212,7 +212,7 @@ task ConcatEHOutputs {
             mv $TEMP_MERGED_JSON $MERGED_JSON
         done < $JSONS_FILENAME
 
-        if [ ~{generate_vcf} = true ]; then
+        if ~{generate_vcf}; then
             VCFS="~{write_lines(vcfs_gz)}"
             bcftools concat --no-version --naive-force --output-type z --file-list ${VCFS} --output "~{output_prefix}.vcf.gz"
         else
