@@ -56,7 +56,7 @@ workflow ExpansionHunterScatter {
                 bam_or_cram_index=bam_or_cram_index_,
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
-                split_variant_catalogs=split_variant_catalog.catalogs_json,
+                split_variant_catalogs=SplitVariantCatalog.catalogs_json,
                 sample_id=sample_id,
                 ped_file=ped_file,
                 generate_realigned_bam=generate_realigned_bam,
