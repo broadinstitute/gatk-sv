@@ -26,6 +26,9 @@ def main():
                         'and "stdout". Default: stdout', default='stdout')
     parser.add_argument('--global-max-ncr', type=float, default=0.1,
                         help='Global maximum NCR to be permitted. [default %(default)s]')
+    parser.add_argument('--global-filter-on', default='NCR', help='Key for INFO ' + 
+                        'field to use when applying --global-max-ncr. ' +
+                        '[default %(default)s]')
     parser.add_argument('--hard-filter', default=False, action='store_true',
                         help='Exclude failing records outright from vcf_out. ' +
                         '[default: retain failing records but tag them with ' +
@@ -38,10 +41,11 @@ def main():
     vcf = pysam.VariantFile(args.vcf_in)
 
     # Check to ensure NCR is present in VCF header
-    if 'NCR' not in vcf.header.records.header.info.keys():
-        msg = 'ERROR: INFO "NCR" not found in header of input VCF. Has this VCF ' + \
+    ncr_key = args.global_filter_on
+    if ncr_key not in vcf.header.records.header.info.keys():
+        msg = 'ERROR: INFO "{}" not found in header of input VCF. Has this VCF ' + \
               'been preprocessed by annotate_nocall_rates.py yet?'
-        exit(msg)
+        exit(msg.format(ncr_key))
 
     # Update VCF header as needed
     vcf.header.add_meta('FILTER',
@@ -64,9 +68,9 @@ def main():
         k += 1
 
         # Check global NCR
-        if 'NCR' not in record.info.keys():
+        if ncr_key not in record.info.keys():
             k_missing += 1
-        elif record.info['NCR'] > args.global_max_ncr:
+        elif record.info[ncr_key] > args.global_max_ncr:
             k_fail += 1
             if args.hard_filter:
                 continue
