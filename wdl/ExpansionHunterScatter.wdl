@@ -28,7 +28,7 @@ workflow ExpansionHunterScatter {
 
     String variant_catalog_batch_size_ = select_first([variant_catalog_batch_size, 1000])
 
-    call SplitVariantCatalog as split_variant_catalog {
+    call SplitVariantCatalog {
         input:
             variant_catalog = variant_catalog_json,
             batch_size = variant_catalog_batch_size_,
