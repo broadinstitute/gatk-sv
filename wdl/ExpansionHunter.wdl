@@ -145,7 +145,7 @@ task RunExpansionHunter {
             touch ~{sample_id}_realigned.bam
         fi
 
-        if [ ~{generate_vcf} = false ]; then
+        if ~{generate_vcf}; then
             rm ~{sample_id}.vcf
             touch ~{sample_id}.vcf.gz
         else
