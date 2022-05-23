@@ -219,7 +219,7 @@ task ConcatEHOutputs {
             touch ~{output_prefix}.vcf.gz
         fi
 
-        if [ ~{generate_realigned_bam} = true ]; then
+        if ~{generate_realigned_bam}; then
             BAMS="~{write_lines(overlapping_reads)}"
             samtools merge ~{output_prefix}.bam -b ${BAMS}
         else
