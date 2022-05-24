@@ -7,24 +7,31 @@
 version 1.0 
 
 import "Structs.wdl"
+import "TasksMakeCohortVcf.wdl" as Utils
 
-# This is an analysis WDL to identify & filter outliers from VCFs 
-# after minGQ filtering at the end of the Talkowski SV pipeline
+# This is an analysis WDL to identify & filter outlier samples from VCFs 
+# after genotype filtering (e.g., minGQ, Boost, GQRecalibrator) 
+# at the end of GATK-SV
 
 # Treats PCR+ and PCR- samples separately
 
-workflow FilterOutlierSamplesPostMinGQ {
-  input{
+workflow FilterOutlierSamplesPostHoc {
+  input {
     File vcf
     File vcf_idx
     File? pcrplus_samples_list
     Int? n_iqr_cutoff_pcrplus
-    Int n_iqr_cutoff_pcrminus
+    Int? n_iqr_cutoff_pcrminus
+    Int records_per_shard = 5000
     String prefix
-    File autosomes_list
+    File autosomes_fai
+    Boolean collect_data_only = false
+
     String sv_pipeline_docker
+    String sv_base_mini_docker
+
+    RuntimeAttr? runtime_overide_shard_vcf
   }
-  Array[Array[String]] contigs=read_tsv(autosomes_list)
   Boolean PCRPLUS = defined(pcrplus_samples_list)
 
   # Write original list of unfiltered samples and split by PCR status
@@ -37,14 +44,26 @@ workflow FilterOutlierSamplesPostMinGQ {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  # Get count of biallelic autosomal variants per sample
-  scatter ( contig in contigs ) {
+  # Shard input VCF
+  call Utils.SplitVcf as ShardVcf {
+    input:
+      vcf=vcf,
+      vcf_idx=vcf_idx,
+      prefix=prefix,
+      min_vars_per_shard=records_per_shard,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_overide_shard_vcf
+  }
+  Array[Pair[File, File]] shard_pairs = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shards_idx)
+
+  # Get count of biallelic autosomal variants per sample per shard
+  scatter ( shard in shard_pairs ) {
     call CountSvtypes {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
+        vcf=shard.left,
+        vcf_idx=shard.right,
         prefix=prefix,
-        contig=contig[0],
+        autosomes_fai=autosomes_fai,
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
@@ -56,55 +75,60 @@ workflow FilterOutlierSamplesPostMinGQ {
   }
 
   # Get outliers
-  if (PCRPLUS) {
-    call IdentifyOutliers as IdentifyPcrPlusOutliers {
+  if (!collect_data_only) {
+    if (PCRPLUS) {
+      call IdentifyOutliers as IdentifyPcrPlusOutliers {
+        input:
+          svcounts=CombineCounts.summed_svcounts,
+          n_iqr_cutoff=select_first([n_iqr_cutoff_pcrplus]),
+          samples_list=WriteSamplesList.plus_samples_list,
+          prefix="~{prefix}.PCRPLUS",
+          sv_pipeline_docker=sv_pipeline_docker
+      }
+    }
+    call IdentifyOutliers as IdentifyPcrMinusOutliers {
       input:
         svcounts=CombineCounts.summed_svcounts,
-        n_iqr_cutoff=select_first([n_iqr_cutoff_pcrplus]),
-        samples_list=WriteSamplesList.plus_samples_list,
-        prefix="~{prefix}.PCRPLUS",
+        n_iqr_cutoff=select_first([n_iqr_cutoff_pcrminus]),
+        samples_list=WriteSamplesList.minus_samples_list,
+        prefix="~{prefix}.PCRMINUS",
         sv_pipeline_docker=sv_pipeline_docker
     }
-  }
-  call IdentifyOutliers as IdentifyPcrMinusOutliers {
-    input:
-      svcounts=CombineCounts.summed_svcounts,
-      n_iqr_cutoff=n_iqr_cutoff_pcrminus,
-      samples_list=WriteSamplesList.minus_samples_list,
-      prefix="~{prefix}.PCRMINUS",
-      sv_pipeline_docker=sv_pipeline_docker
-  }
 
-  # Exclude outliers from vcf
-  call ExcludeOutliers {
-    input:
-      vcf=vcf,
-      vcf_idx=vcf_idx,
-      plus_outliers_list=IdentifyPcrPlusOutliers.outliers_list,
-      minus_outliers_list=IdentifyPcrMinusOutliers.outliers_list,
-      outfile="~{prefix}.outliers_removed.vcf.gz",
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
-  }
+    # Exclude outliers from vcf
+    call ExcludeOutliers {
+      input:
+        vcf=vcf,
+        vcf_idx=vcf_idx,
+        plus_outliers_list=IdentifyPcrPlusOutliers.outliers_list,
+        minus_outliers_list=IdentifyPcrMinusOutliers.outliers_list,
+        outfile="~{prefix}.outliers_removed.vcf.gz",
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
 
-  # Write new list of samples without outliers
-  call FilterSampleList {
-    input:
-      original_samples_list=WriteSamplesList.samples_list,
-      outlier_samples=ExcludeOutliers.merged_outliers_list,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+    # Write new list of samples without outliers
+    call FilterSampleList {
+      input:
+        original_samples_list=WriteSamplesList.samples_list,
+        outlier_samples=ExcludeOutliers.merged_outliers_list,
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   # Final outputs
   output {
-    File vcf_noOutliers = ExcludeOutliers.vcf_no_outliers
-    File vcf_noOutliers_idx = ExcludeOutliers.vcf_no_outliers_idx
-    File nooutliers_samples_list = FilterSampleList.filtered_samples_list
-    File excluded_samples_list = ExcludeOutliers.merged_outliers_list
+    File? vcf_noOutliers = ExcludeOutliers.vcf_no_outliers
+    File? vcf_noOutliers_idx = ExcludeOutliers.vcf_no_outliers_idx
+    File? nooutliers_samples_list = FilterSampleList.filtered_samples_list
+    File? excluded_samples_list = ExcludeOutliers.merged_outliers_list
     File svcounts_per_sample_data = CombineCounts.summed_svcounts
     File? svcounts_per_sample_plots_PCRPLUS = IdentifyPcrPlusOutliers.svcount_distrib_plots
-    File svcounts_per_sample_plots_PCRMINUS = IdentifyPcrMinusOutliers.svcount_distrib_plots
+    File? svcounts_per_sample_plots_PCRMINUS = IdentifyPcrMinusOutliers.svcount_distrib_plots
+    File all_samples_list = WriteSamplesList.samples_list
+    File plus_samples_list = WriteSamplesList.plus_samples_list
+    File minus_samples_list = WriteSamplesList.minus_samples_list
   }
 }
 
@@ -167,7 +191,7 @@ task CountSvtypes {
     File vcf
     File vcf_idx
     String prefix
-    String contig
+    File autosomes_fai
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -180,19 +204,6 @@ task CountSvtypes {
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<<
-    set -euo pipefail
-    tabix --print-header "~{vcf}" "~{contig}" \
-    | fgrep -v "MULTIALLELIC" \
-    | fgrep -v "PESR_GT_OVERDISPERSION" \
-    | svtk count-svtypes --no-header stdin \
-    | awk -v OFS="\t" -v chr="~{contig}" '{ print $0, chr }' \
-    > "~{prefix}.~{contig}.svcounts.txt"
-  >>>
-
-  output {
-    File sv_counts = "~{prefix}.~{contig}.svcounts.txt"
-  }
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -202,6 +213,25 @@ task CountSvtypes {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    fingerprint=$( echo $RANDOM | md5sum | cut -c1-8 )
+
+    awk -v FS="\t" -v OFS="\t" '{ print $1, "0", $2 }' ~{autosomes_fai} > regions.bed
+
+    tabix --print-header -R regions.bed "~{vcf}" \
+    | fgrep -v "MULTIALLELIC" \
+    | fgrep -v "PESR_GT_OVERDISPERSION" \
+    | svtk count-svtypes --no-header stdin \
+    | awk -v OFS="\t" -v fingerprint="$fingerprint" '{ print $0, fingerprint }' \
+    > "~{prefix}.$fingerprint.svcounts.txt"
+  >>>
+
+  output {
+    File sv_counts = glob("~{prefix}.*.svcounts.txt")[0]
   }
 }
 
