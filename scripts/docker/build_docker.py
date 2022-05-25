@@ -251,12 +251,17 @@ class ProjectBuilder:
                 with open(output_json, 'w') as f_out:
                     json.dump(new_dockers_json, f_out, indent="  ")
 
-    def get_build_priority(self, target_name: str) -> int:
+    def get_build_priority(self, target_name: str) -> (int, str):
+        """
+        Return sort key that sorts targets so that:
+        1) ancestors are built before their descendants
+        2) after that, things are built in alphabetical order (for more repeatable behavior while debugging)
+        """
         if target_name not in self.build_priority:
             build_deps = ProjectBuilder.dependencies[target_name].docker_dependencies
             self.build_priority[target_name] = 0 if not build_deps \
-                else 1 + max((self.get_build_priority(build_dep) for build_dep in build_deps.keys()), default=0)
-        return self.build_priority[target_name]
+                else 1 + max((self.get_build_priority(build_dep)[0] for build_dep in build_deps.keys()), default=0)
+        return self.build_priority[target_name], target_name
 
     def _add_image_prereqs(self, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
@@ -398,6 +403,9 @@ class ProjectBuilder:
                     image_builder = ImageBuilder(target_name, self)
                     image_builder.build(build_time_args)
                     image_builder.push()
+                    if self.project_arguments.prune_after_each_image and not self.project_arguments.dry_run:
+                        # clean dangling images (i.e. those "<none>" images), stopped containers, etc
+                        os.system("docker system prune -f")
                     print(colored('#' * 50, 'magenta'))
 
                 print(colored('BUILD PROCESS SUCCESS!', 'green'))
@@ -678,6 +686,9 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
                              "this options specifies the current git commit to check for changes. If omitted,"
                              " use current status of git repo with uncommitted changes. Can be a SHA or other specifier"
                              " (e.g. HEAD)")
+    parser.add_argument('--prune-after-each-image', action='store_true',
+                        help='Do "docker system prune" after each image is successfully built, to save disk space. Only'
+                             ' necessary on cramped VMs')
 
     # parse and consistency check
     if len(args_list) <= 1:  # no arguments, print help and exit with success
