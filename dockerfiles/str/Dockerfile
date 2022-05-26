@@ -41,9 +41,9 @@ RUN wget -O htslib.tar.bz2 https://github.com/samtools/htslib/releases/download/
     mkdir samtools && tar -xvjf samtools.tar.bz2 -C samtools --strip-components=1 && rm samtools.tar.bz2 && \
     cd samtools && ./configure && make && make install && cd ..
 
-ENV PATH="/bcftools-1.15.1:$PATH"
-ENV PATH="/htslib-1.15.1:$PATH"
-ENV PATH="/samtools-1.15.1:$PATH"
+ENV PATH="/bcftools:$PATH"
+ENV PATH="/htslib:$PATH"
+ENV PATH="/samtools:$PATH"
 
 COPY /src/str /opt/str
 
