@@ -1,6 +1,6 @@
 # This docker image contains the following
 # list of tools and their dependencies:
-# - ExpansionHunter
+# - ExpansionHunter (custom-built)
 # - htslib, bcftools, and samtools.
 
 FROM ubuntu:18.04
@@ -22,9 +22,10 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     ca-certificates \
     && update-ca-certificates
 
-COPY --chmod=0755 /dockerfiles/str/ExpansionHunter /ExpansionHunter/
-ENV PATH="/ExpansionHunter/:$PATH"
-
+RUN mkdir eh && \
+    wget -O eh/ExpansionHunter https://github.com/bw2/ExpansionHunter/raw/master/bin/linux/ExpansionHunter && \
+    chmod 0755 /eh/ExpansionHunter
+ENV PATH="/eh/:$PATH"
 
 RUN wget https://github.com/samtools/htslib/releases/download/1.15.1/htslib-1.15.1.tar.bz2 && \
     tar -xvjf htslib-1.15.1.tar.bz2 && \
