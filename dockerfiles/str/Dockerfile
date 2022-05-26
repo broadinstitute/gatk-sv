@@ -5,6 +5,8 @@
 
 FROM ubuntu:18.04
 
+ARG HTSLIB_VER=1.15.1
+
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl3 \
     tabix \
@@ -27,14 +29,9 @@ RUN mkdir eh && \
     chmod 0755 /eh/ExpansionHunter
 ENV PATH="/eh/:$PATH"
 
-RUN wget https://github.com/samtools/htslib/releases/download/1.15.1/htslib-1.15.1.tar.bz2 && \
-    tar -xvjf htslib-1.15.1.tar.bz2 && \
-    rm htslib-1.15.1.tar.bz2 && \
-    cd htslib-1.15.1 && \
-    ./configure && \
-    make && \
-    make install && \
-    cd .. && \
+RUN wget -O htslib.tar.bz2 https://github.com/samtools/htslib/releases/download/$HTSLIB_VER/htslib-$HTSLIB_VER.tar.bz2 && \
+    mkdir htslib && tar -xvjf htslib.tar.bz2 -C htslib --strip-components=1 && rm htslib.tar.bz2 && \
+    cd htslib && ./configure && make && make install && cd .. && \
     wget https://github.com/samtools/bcftools/releases/download/1.15.1/bcftools-1.15.1.tar.bz2 && \
     tar -xvjf bcftools-1.15.1.tar.bz2 && \
     rm bcftools-1.15.1.tar.bz2 && \
