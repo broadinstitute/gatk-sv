@@ -7,6 +7,7 @@ FROM ubuntu:18.04
 
 ARG HTSLIB_VER=1.15.1
 ARG BCFTOOLS_VER=1.15.1
+ARG SAMTOOLS_VER=1.15.1
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl3 \
@@ -35,14 +36,10 @@ RUN wget -O htslib.tar.bz2 https://github.com/samtools/htslib/releases/download/
     cd htslib && ./configure && make && make install && cd .. && \
     wget -O bcftools.tar.bz2 https://github.com/samtools/bcftools/releases/download/$BCFTOOLS_VER/bcftools-$BCFTOOLS_VER.tar.bz2 && \
     mkdir bcftools && tar -xvjf bcftools.tar.bz2 -C bcftools --strip-components=1 && rm bcftools.tar.bz2 && \
-    cd bcftools && make && make install && cd .. && \
-    wget https://github.com/samtools/samtools/releases/download/1.15.1/samtools-1.15.1.tar.bz2 && \
-    tar -xvjf samtools-1.15.1.tar.bz2 && \
-    rm samtools-1.15.1.tar.bz2 && \
-    cd samtools-1.15.1 && \
-    ./configure && \
-    make && \
-    make install
+    cd bcftools && ./configure && make && make install && cd .. && \
+    wget -O samtools.tar.bz2 https://github.com/samtools/samtools/releases/download/$SAMTOOLS_VER/samtools-$SAMTOOLS_VER.tar.bz2 && \
+    mkdir samtools && tar -xvjf samtools.tar.bz2 -C samtools --strip-components=1 && rm samtools.tar.bz2 && \
+    cd samtools && ./configure && make && make install && cd ..
 
 ENV PATH="/bcftools-1.15.1:$PATH"
 ENV PATH="/htslib-1.15.1:$PATH"
