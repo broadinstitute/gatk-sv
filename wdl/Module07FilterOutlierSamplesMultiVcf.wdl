@@ -23,7 +23,10 @@ workflow FilterOutlierSamplesPostHocMultiVcf {
     File autosomes_fai
 
     String sv_pipeline_docker
+    String sv_pipeline_docker_CombineCounts #note: can remove this input once debugged
     String sv_base_mini_docker
+
+    RuntimeAttr? runtime_overide_shard_vcf
   }
 
   Array[Pair[File, File]] vcf_pairs = zip(vcfs, vcf_idxs)
@@ -41,7 +44,9 @@ workflow FilterOutlierSamplesPostHocMultiVcf {
         autosomes_fai=autosomes_fai,
         collect_data_only=true,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_base_mini_docker=sv_base_mini_docker
+        sv_pipeline_docker_CombineCounts=sv_pipeline_docker_CombineCounts,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_overide_shard_vcf=runtime_overide_shard_vcf
     }
   }
   call FilterSingle.CombineCounts as Combine {
