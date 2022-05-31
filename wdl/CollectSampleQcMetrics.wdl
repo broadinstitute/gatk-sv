@@ -29,8 +29,10 @@ workflow CollectSampleQcMetrics {
     Boolean run_quality_yield_metrics = true
     Boolean run_multiple_metrics = false
 
-    String genomes_in_the_cloud_docker
+    String picard_docker
     String gatk_docker
+
+    String? picard_jar  # path to picard.jar in docker image
 
     RuntimeAttr? runtime_attr_wgs_metrics
     RuntimeAttr? runtime_attr_raw_wgs_metrics
@@ -53,6 +55,8 @@ workflow CollectSampleQcMetrics {
   File ref_index_ = select_first([ref_index, ref_fasta + ".fai"])
   File ref_dict_ = select_first([ref_dict, sub(ref_fasta, "\\.fasta$", ".dict")])
 
+  String picard_jar_ = select_first([picard_jar, "/usr/picard/picard.jar"])
+
   if (run_wgs_metrics) {
     call CollectWgsMetrics {
       input:
@@ -63,7 +67,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         intervals = wgs_metrics_intervals,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_wgs_metrics
     }
   }
@@ -78,7 +83,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         intervals = wgs_metrics_intervals,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_raw_wgs_metrics
     }
   }
@@ -92,7 +98,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_raw_wgs_metrics
     }
   }
@@ -106,7 +113,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_insert_size_metrics
     }
   }
@@ -120,7 +128,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_quality_score_distribution
     }
   }
@@ -134,7 +143,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_mean_quality_by_cycle
     }
   }
@@ -148,7 +158,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_base_distribution_by_cycle
     }
   }
@@ -162,7 +173,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_gc_bias_metrics
     }
   }
@@ -177,7 +189,8 @@ workflow CollectSampleQcMetrics {
         reference_index = ref_index_,
         reference_dict = ref_dict_,
         intervals = multiple_metrics_intervals,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_sequencing_artifact_metrics
     }
   }
@@ -191,7 +204,8 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
-        genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_quality_yield_metrics
     }
   }
@@ -244,7 +258,8 @@ task CollectWgsMetrics {
     File reference_index
     File? intervals
     Boolean? use_fast_algorithm
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -274,7 +289,7 @@ task CollectWgsMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -284,7 +299,7 @@ task CollectWgsMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectWgsMetrics \
       INPUT=~{bam_or_cram_file} \
       VALIDATION_STRINGENCY=SILENT \
@@ -312,7 +327,8 @@ task CollectRawWgsMetrics {
     File reference_index
     File? intervals
     Boolean? use_fast_algorithm
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -342,7 +358,7 @@ task CollectRawWgsMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -352,7 +368,7 @@ task CollectRawWgsMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectRawWgsMetrics \
       INPUT=~{bam_or_cram_file} \
       VALIDATION_STRINGENCY=SILENT \
@@ -379,7 +395,8 @@ task CollectAlignmentSummaryMetrics {
     File reference_index
     File reference_dict
     File? intervals
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -407,7 +424,7 @@ task CollectAlignmentSummaryMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -417,7 +434,7 @@ task CollectAlignmentSummaryMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectAlignmentSummaryMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -437,7 +454,8 @@ task CollectInsertSizeMetrics {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -466,7 +484,7 @@ task CollectInsertSizeMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -476,7 +494,7 @@ task CollectInsertSizeMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectInsertSizeMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -498,7 +516,8 @@ task QualityScoreDistribution {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -527,7 +546,7 @@ task QualityScoreDistribution {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -537,7 +556,7 @@ task QualityScoreDistribution {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       QualityScoreDistribution \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -559,7 +578,8 @@ task MeanQualityByCycle {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -588,7 +608,7 @@ task MeanQualityByCycle {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -598,7 +618,7 @@ task MeanQualityByCycle {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       MeanQualityByCycle \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -621,7 +641,8 @@ task CollectBaseDistributionByCycle {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -650,7 +671,7 @@ task CollectBaseDistributionByCycle {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -660,7 +681,7 @@ task CollectBaseDistributionByCycle {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectBaseDistributionByCycle \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -682,7 +703,8 @@ task CollectGcBiasMetrics {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -712,7 +734,7 @@ task CollectGcBiasMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -722,7 +744,7 @@ task CollectGcBiasMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectGcBiasMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -747,7 +769,8 @@ task CollectSequencingArtifactMetrics {
     File reference_index
     File reference_dict
     File? intervals
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -775,7 +798,7 @@ task CollectSequencingArtifactMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -785,7 +808,7 @@ task CollectSequencingArtifactMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectSequencingArtifactMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
@@ -808,7 +831,8 @@ task CollectQualityYieldMetrics {
     File reference_fasta
     File reference_index
     File reference_dict
-    String genomes_in_the_cloud_docker
+    String picard_jar_path
+    String picard_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -836,7 +860,7 @@ task CollectQualityYieldMetrics {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: genomes_in_the_cloud_docker
+    docker: picard_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -846,7 +870,7 @@ task CollectQualityYieldMetrics {
     set -Eeuo pipefail
 
     # calculate coverage
-    java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
+    java -Xms~{java_mem_mb}m -jar ~{picard_jar_path} \
       CollectQualityYieldMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
