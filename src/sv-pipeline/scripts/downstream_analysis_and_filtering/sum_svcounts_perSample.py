@@ -37,7 +37,7 @@ def main():
                 values = line.rstrip().split('\t')
                 sample = values[0]
                 svtype = values[1]
-                k = int(values[2])
+                k = values[2]
                 
                 # Skip header line if present
                 if sample == 'sample':
@@ -47,9 +47,9 @@ def main():
                 if sample not in res.keys():
                     res[sample] = {}
                 if svtype in res[sample].keys():
-                    res[sample][svtype] += k
+                    res[sample][svtype] += int(k)
                 else:
-                    res[sample][svtype] = k
+                    res[sample][svtype] = int(k)
 
     # Write output
     stdout.write('\t'.join('sample svtype count'.split()) + '\n')
