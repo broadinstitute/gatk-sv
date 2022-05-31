@@ -14,7 +14,6 @@ Replacement for sum_svcounts_perSample.R
 
 
 import argparse
-import csv
 from sys import stdout
 
 
@@ -30,7 +29,15 @@ def main():
     res = {}
     for in_tsv in args.input_tsvs:
         with open(in_tsv) as fin:
-            for sample, svtype, k, contig in csv.reader(fin, delimiter='\t'):
+            for line in fin.readlines():
+
+                # Unpack line values
+                # Note: can't do this with csv package because we need to accept
+                # a variable number of columns
+                values = line.rstrip().split('\t')
+                sample = values[0]
+                svtype = values[1]
+                k = int(values[2])
                 
                 # Skip header line if present
                 if sample == 'sample':
@@ -40,9 +47,9 @@ def main():
                 if sample not in res.keys():
                     res[sample] = {}
                 if svtype in res[sample].keys():
-                    res[sample][svtype] += int(k)
+                    res[sample][svtype] += k
                 else:
-                    res[sample][svtype] = int(k)
+                    res[sample][svtype] = k
 
     # Write output
     stdout.write('\t'.join('sample svtype count'.split()) + '\n')

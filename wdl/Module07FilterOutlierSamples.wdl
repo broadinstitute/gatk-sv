@@ -28,7 +28,7 @@ workflow FilterOutlierSamplesPostHoc {
     Boolean collect_data_only = false
 
     String sv_pipeline_docker
-    String sv_pipeline_docker_CombineCounts #note: can remove this input once debugged
+    String sv_pipeline_base_docker
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_overide_shard_vcf
@@ -72,7 +72,7 @@ workflow FilterOutlierSamplesPostHoc {
     input:
       svcounts=CountSvtypes.sv_counts,
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker_CombineCounts
+      sv_pipeline_base_docker=sv_pipeline_base_docker
   }
 
   # Get outliers
@@ -144,10 +144,11 @@ task WriteSamplesList {
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
+  Int vcf_size = ceil(size(vcf, "GB"))
    RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 50,
+    disk_gb: 20 + (2 * vcf_size),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -250,7 +251,7 @@ task CombineCounts {
   input{
     Array[File] svcounts
     String prefix
-    String sv_pipeline_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -281,7 +282,7 @@ task CombineCounts {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
