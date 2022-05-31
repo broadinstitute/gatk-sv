@@ -265,7 +265,7 @@ task CollectWgsMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -333,7 +333,7 @@ task CollectRawWgsMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -398,7 +398,7 @@ task CollectAlignmentSummaryMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -421,7 +421,7 @@ task CollectAlignmentSummaryMetrics {
       CollectAlignmentSummaryMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
-      OUTPUT="~{metrics_file_name}" 
+      OUTPUT="~{metrics_file_name}"
   >>>
 
   output {
@@ -457,7 +457,7 @@ task CollectInsertSizeMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -481,7 +481,7 @@ task CollectInsertSizeMetrics {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       HISTOGRAM_FILE="~{metrics_histogram_name}" \
-      OUTPUT="~{metrics_file_name}" 
+      OUTPUT="~{metrics_file_name}"
   >>>
 
   output {
@@ -518,7 +518,7 @@ task QualityScoreDistribution {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -542,7 +542,7 @@ task QualityScoreDistribution {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       CHART_OUTPUT="~{chart_name}" \
-      OUTPUT="~{table_name}" 
+      OUTPUT="~{table_name}"
   >>>
 
   output {
@@ -579,7 +579,7 @@ task MeanQualityByCycle {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -603,7 +603,7 @@ task MeanQualityByCycle {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       CHART_OUTPUT="~{chart_name}" \
-      OUTPUT="~{table_name}" 
+      OUTPUT="~{table_name}"
   >>>
 
   output {
@@ -641,7 +641,7 @@ task CollectBaseDistributionByCycle {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -665,7 +665,7 @@ task CollectBaseDistributionByCycle {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       CHART_OUTPUT="~{chart_name}" \
-      OUTPUT="~{table_name}" 
+      OUTPUT="~{table_name}"
   >>>
 
   output {
@@ -703,7 +703,7 @@ task CollectGcBiasMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -728,7 +728,7 @@ task CollectGcBiasMetrics {
       REFERENCE_SEQUENCE=~{reference_fasta} \
       CHART_OUTPUT="~{chart_name}" \
       SUMMARY_OUTPUT="~{summary_metrics_file_name}" \
-      OUTPUT="~{metrics_file_name}" 
+      OUTPUT="~{metrics_file_name}"
   >>>
 
   output {
@@ -766,7 +766,7 @@ task CollectSequencingArtifactMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -791,7 +791,7 @@ task CollectSequencingArtifactMetrics {
       REFERENCE_SEQUENCE=~{reference_fasta} \
       FILE_EXTENSION=".txt" \
       ~{if defined(intervals) then "--INTERVALS ~{intervals}" else ""} \
-      OUTPUT="~{metrics_file_base}" 
+      OUTPUT="~{metrics_file_base}"
   >>>
 
   output {
@@ -827,7 +827,7 @@ task CollectQualityYieldMetrics {
     mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -850,7 +850,7 @@ task CollectQualityYieldMetrics {
       CollectQualityYieldMetrics \
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
-      OUTPUT="~{metrics_file_name}" 
+      OUTPUT="~{metrics_file_name}"
   >>>
 
   output {
@@ -929,7 +929,7 @@ task CollectMultipleMetrics {
       --METRIC_ACCUMULATION_LEVEL null \
       --METRIC_ACCUMULATION_LEVEL SAMPLE
 
-    
+
   >>>
 
   output {
