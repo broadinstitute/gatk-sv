@@ -21,10 +21,13 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl4-gnutls-dev \
     libncurses5-dev \
     libncursesw5-dev \
+    python3.8 \
     jq \
     wget \
-    ca-certificates \
-    && update-ca-certificates
+    ca-certificates && \
+    update-ca-certificates && \
+    ln -s /usr/bin/python3.8 /usr/bin/python && \
+    ln -s /usr/bin/pip3 /usr/bin/pip
 
 RUN mkdir eh && \
     wget -O eh/ExpansionHunter https://github.com/bw2/ExpansionHunter/raw/master/bin/linux/ExpansionHunter && \
