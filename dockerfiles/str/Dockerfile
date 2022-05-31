@@ -1,7 +1,8 @@
 # This docker image contains the following
 # list of tools and their dependencies:
-# - ExpansionHunter (custom-built)
-# - htslib, bcftools, and samtools.
+# - ExpansionHunter (custom-built);
+# - htslib, bcftools, and samtools;
+# - python3.8
 
 FROM ubuntu:18.04
 
