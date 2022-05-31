@@ -2,7 +2,7 @@
 # list of tools and their dependencies:
 # - ExpansionHunter (custom-built);
 # - htslib, bcftools, and samtools;
-# - python3.8
+# - python3.8, pip
 
 FROM ubuntu:18.04
 
@@ -23,12 +23,17 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libncurses5-dev \
     libncursesw5-dev \
     python3.8 \
+    python3-pip \
     jq \
     wget \
     ca-certificates && \
     update-ca-certificates && \
     ln -s /usr/bin/python3.8 /usr/bin/python && \
     ln -s /usr/bin/pip3 /usr/bin/pip
+
+RUN pip install virtualenv && \
+    virtualenv .venv && . .venv/bin/activate && \
+    pip install numpy pandas
 
 RUN mkdir eh && \
     wget -O eh/ExpansionHunter https://github.com/bw2/ExpansionHunter/raw/master/bin/linux/ExpansionHunter && \
