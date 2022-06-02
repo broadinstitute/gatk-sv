@@ -26,6 +26,7 @@ workflow FilterOutlierSamplesPostHoc {
     String prefix
     File autosomes_fai
     Boolean collect_data_only = false
+    Boolean output_sharded_vcf = false
 
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -56,6 +57,10 @@ workflow FilterOutlierSamplesPostHoc {
       runtime_attr_override=runtime_overide_shard_vcf
   }
   Array[Pair[File, File]] shard_pairs = zip(ShardVcf.vcf_shards, ShardVcf.vcf_shards_idx)
+  if ( output_sharded_vcf ) {
+    Array[File] vcf_shards = ShardVcf.vcf_shards
+    Array[File] vcf_shard_idxs = ShardVcf.vcf_shards_idx
+  }
 
   # Get count of biallelic autosomal variants per sample per shard
   scatter ( shard in shard_pairs ) {
@@ -105,7 +110,7 @@ workflow FilterOutlierSamplesPostHoc {
         minus_outliers_list=IdentifyPcrMinusOutliers.outliers_list,
         outfile="~{prefix}.outliers_removed.vcf.gz",
         prefix=prefix,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_base_mini_docker=sv_base_mini_docker
     }
 
     # Write new list of samples without outliers
@@ -130,6 +135,8 @@ workflow FilterOutlierSamplesPostHoc {
     File all_samples_list = WriteSamplesList.samples_list
     File plus_samples_list = WriteSamplesList.plus_samples_list
     File minus_samples_list = WriteSamplesList.minus_samples_list
+    Array[File]? sharded_input_vcf = vcf_shards
+    Array[File]? sharded_input_vcf_idxs = vcf_shard_idxs
   }
 }
 
@@ -351,13 +358,13 @@ task ExcludeOutliers {
     File minus_outliers_list
     String outfile
     String prefix
-    String sv_pipeline_docker
+    String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 100,
+    disk_gb: 20 + (3 * ceil(size(vcf, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -367,25 +374,27 @@ task ExcludeOutliers {
 
   command <<<
     set -euo pipefail
+
     cat ~{plus_outliers_list} ~{minus_outliers_list} \
-      | sort -Vk1,1 | uniq \
-      > "~{prefix}.SV_count_outliers.samples.list" || true
-    tabix -H ~{vcf} | fgrep -v "##" | \
-      sed 's/\t/\n/g' | awk -v OFS="\t" '{ print $1, NR }' | \
-      fgrep -wf "~{prefix}.SV_count_outliers.samples.list" | cut -f2 > \
-      indexes_to_exclude.txt || true
-    if [ $( cat indexes_to_exclude.txt | wc -l ) -gt 0 ]; then
-      zcat ~{vcf} | \
-      cut --complement -f$( cat indexes_to_exclude.txt | paste -s -d, ) | \
-      bgzip -c \
-      > "~{prefix}.subsetted_preEmptyRemoval.vcf.gz" || true
-      /opt/sv-pipeline/scripts/drop_empty_records.py \
-        "~{prefix}.subsetted_preEmptyRemoval.vcf.gz" \
-        stdout | \
-      bgzip -c > ~{outfile} || true
-    else
-      cp ~{vcf} ~{outfile}
-    fi
+    | sort -Vk1,1 | uniq \
+    > "~{prefix}.SV_count_outliers.samples.list" || true
+
+    # Need to relocate VCF and index to avoid issues with Cromwell finding VCF index
+    mv ~{vcf} ~{vcf_idx} ./
+
+    tabix -H ~{basename(vcf)} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' \
+    | fgrep -wvf "~{prefix}.SV_count_outliers.samples.list" \
+    > keep.samples.list || true
+
+    bcftools view \
+      -S keep.samples.list \
+      --force-samples \
+      "~{basename(vcf)}" \
+    | bcftools view \
+      --no-update \
+      --exclude 'INFO/SVTYPE != "CNV" & AC == 0' \
+      -l 1 -O z -o "~{outfile}"
+
     tabix -p vcf -f "~{outfile}"
   >>>
 
@@ -400,7 +409,7 @@ task ExcludeOutliers {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
+    docker: sv_base_mini_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
