@@ -2,7 +2,7 @@
 # list of tools and their dependencies:
 # - ExpansionHunter (custom-built);
 # - htslib, bcftools, and samtools;
-# - python3.8, pip
+# - python3.6, pip, wheel, venv
 
 FROM ubuntu:18.04
 
