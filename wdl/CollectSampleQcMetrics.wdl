@@ -12,6 +12,9 @@ workflow CollectSampleQcMetrics {
     File? ref_index
     File? ref_dict
 
+    File? dbsnp_vcf
+    Float? minimum_pct_orientation  # For InsertSizeMetrics. default for this workflow = 0. overrides tool default = 0.05
+
     File? wgs_metrics_intervals
     File? multiple_metrics_intervals
 
@@ -113,6 +116,7 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
+        minimum_pct_orientation = minimum_pct_orientation,
         picard_jar_path = picard_jar_,
         picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_insert_size_metrics
@@ -188,6 +192,7 @@ workflow CollectSampleQcMetrics {
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         reference_dict = ref_dict_,
+        dbsnp_vcf = dbsnp_vcf,
         intervals = multiple_metrics_intervals,
         picard_jar_path = picard_jar_,
         picard_docker = picard_docker,
@@ -454,6 +459,7 @@ task CollectInsertSizeMetrics {
     File reference_fasta
     File reference_index
     File reference_dict
+    Float? minimum_pct_orientation
     String picard_jar_path
     String picard_docker
     RuntimeAttr? runtime_attr_override
@@ -461,6 +467,8 @@ task CollectInsertSizeMetrics {
 
   String metrics_file_name = "~{sample_id}.insert_size_metrics.txt"
   String metrics_histogram_name = "~{sample_id}.insert_size_histogram.pdf"
+
+  Float minimum_pct_orientation_ = select_first([minimum_pct_orientation, 0.00])
 
   Int num_cpu = if defined(runtime_attr_override) then select_first([select_first([runtime_attr_override]).cpu_cores, 1]) else 1
   Float mem_size_gb = num_cpu * 8.0
@@ -499,6 +507,7 @@ task CollectInsertSizeMetrics {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       HISTOGRAM_FILE="~{metrics_histogram_name}" \
+      MINIMUM_PCT=~{minimum_pct_orientation_} \
       OUTPUT="~{metrics_file_name}"
   >>>
 
@@ -768,6 +777,7 @@ task CollectSequencingArtifactMetrics {
     File reference_fasta
     File reference_index
     File reference_dict
+    File? dbsnp_vcf
     File? intervals
     String picard_jar_path
     String picard_docker
@@ -814,6 +824,7 @@ task CollectSequencingArtifactMetrics {
       REFERENCE_SEQUENCE=~{reference_fasta} \
       FILE_EXTENSION=".txt" \
       ~{if defined(intervals) then "--INTERVALS ~{intervals}" else ""} \
+      ~{if defined(dbsnp_vcf) then "--DB_SNP ~{dbsnp_vcf}" else ""} \
       OUTPUT="~{metrics_file_base}"
   >>>
 
