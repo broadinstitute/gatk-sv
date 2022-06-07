@@ -823,8 +823,8 @@ task CollectSequencingArtifactMetrics {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       FILE_EXTENSION=".txt" \
-      ~{if defined(intervals) then "--INTERVALS ~{intervals}" else ""} \
-      ~{if defined(dbsnp_vcf) then "--DB_SNP ~{dbsnp_vcf}" else ""} \
+      ~{if defined(intervals) then "INTERVALS=~{intervals}" else ""} \
+      ~{if defined(dbsnp_vcf) then "DB_SNP=~{dbsnp_vcf}" else ""} \
       OUTPUT="~{metrics_file_base}"
   >>>
 
