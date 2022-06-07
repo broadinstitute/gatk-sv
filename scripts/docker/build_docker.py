@@ -108,6 +108,7 @@ class ProjectBuilder:
         "manta": ImageDependencies("dockerfiles/manta/*"),
         "melt": ImageDependencies("dockerfiles/melt/*"),
         "wham": ImageDependencies("dockerfiles/wham/*"),
+        "str": ImageDependencies("dockerfiles/str/*"),
         "sv-base-mini": ImageDependencies("dockerfiles/sv-base-mini/*"),
         "samtools-cloud": ImageDependencies("dockerfiles/samtools-cloud/*", {"sv-base-mini": "MINIBASE_IMAGE"}),
         "sv-base-virtual-env": ImageDependencies("dockerfiles/sv-base-virtual-env/*"),
