@@ -1,82 +1,70 @@
 # This docker image contains the following
 # list of tools and their dependencies:
-# - GangSTR
-# - TRTools
-# - ExpansionHunter
+# - ExpansionHunter (custom-built);
+# - htslib, bcftools, and samtools;
+# - python3.6, pip
 
-FROM ubuntu:20.04
-ARG DEBIAN_FRONTEND=noninteractive
-ENV PATH="/root/miniconda3/bin:${PATH}"
-ARG CONDA_RELEASE="4.6.14"
-ARG CONDA_INSTALL_DIR="/opt/conda"
-ARG CONDA_BIN=${CONDA_INSTALL_DIR}/bin
-ARG CONDA_CMD=${CONDA_BIN}/conda
-ENV PATH=${CONDA_BIN}:$PATH
-ENV EH_VERSION=v5.0.0
+FROM ubuntu:18.04
+
+ARG HTSLIB_VER=1.15.1
+ARG BCFTOOLS_VER=1.15.1
+ARG SAMTOOLS_VER=1.15.1
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
-    python3-dev \
-    python3-pip \
-    python \
-    python-dev \
-    awscli \
-    build-essential \
+    libcurl3 \
+    tabix \
     git \
+    make \
+    gcc \
+    g++ \
+    zlib1g-dev \
     libbz2-dev \
     liblzma-dev \
-    make \
-    pkg-config \
+    libcurl4-gnutls-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    python3.6-dev \
+    python3-pip \
+    python3-wheel \
+    python3-venv \
+    python3-setuptools \
+    jq \
     wget \
-    unzip \
-    zlib1g-dev \
-    libcurl4-openssl-dev \
-    libssl-dev
+    ca-certificates && \
+    update-ca-certificates && \
+    ln -s /usr/bin/python3.6 /usr/bin/python && \
+    ln -s /usr/bin/pip3 /usr/bin/pip
 
-# Install and configure conda
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_RELEASE}-Linux-x86_64.sh -O /tmp/miniconda.sh && \
-    bash /tmp/miniconda.sh -b -p ${CONDA_INSTALL_DIR} && \
-    ${CONDA_CMD} init bash && \
-    bash -c "source ${HOME}/.bashrc"
+RUN pip install --upgrade setuptools
+# Combining the following two `RUN`s under a single `RUN` cause image build failure.
+# RUN pip3 install -q -U wheel Cython==0.29.30 numpy==1.19.5 pandas==1.1.5
+RUN pip install -q -U Cython==0.29.30 numpy==1.19.5
+RUN pip install -q -U pandas==1.1.5
 
-RUN pip install Cython==0.29.24 numpy==1.21.2 pybedtools==0.8.2 scipy==1.7.1
+RUN cd /opt/ && mkdir eh && cd eh/ && \
+    wget -O ExpansionHunter https://github.com/bw2/ExpansionHunter/raw/master/bin/linux/ExpansionHunter && \
+    chmod 0755 ExpansionHunter
+ENV PATH="/opt/eh/:$PATH"
 
-# Install samtools (needed to index reference fasta files)
-RUN wget -O samtools-1.13.tar.bz2 https://github.com/samtools/samtools/releases/download/1.13/samtools-1.13.tar.bz2 && \
-    tar -xjf samtools-1.13.tar.bz2 && \
-    cd samtools-1.13 && \
-    ./configure --without-curses && make && make install && \
-    cd ..
+# Install htslib, bcftools, & samtools.
+RUN wget -O htslib.tar.bz2 https://github.com/samtools/htslib/releases/download/$HTSLIB_VER/htslib-$HTSLIB_VER.tar.bz2 && \
+    mkdir htslib && tar -xvjf htslib.tar.bz2 -C htslib --strip-components=1 && rm htslib.tar.bz2 && \
+    cd htslib && ./configure && make && make install && cd .. && \
+    wget -O bcftools.tar.bz2 https://github.com/samtools/bcftools/releases/download/$BCFTOOLS_VER/bcftools-$BCFTOOLS_VER.tar.bz2 && \
+    mkdir bcftools && tar -xvjf bcftools.tar.bz2 -C bcftools --strip-components=1 && rm bcftools.tar.bz2 && \
+    cd bcftools && ./configure && make && make install && cd .. && \
+    wget -O samtools.tar.bz2 https://github.com/samtools/samtools/releases/download/$SAMTOOLS_VER/samtools-$SAMTOOLS_VER.tar.bz2 && \
+    mkdir samtools && tar -xvjf samtools.tar.bz2 -C samtools --strip-components=1 && rm samtools.tar.bz2 && \
+    cd samtools && ./configure && make && make install && cd ..
+ENV PATH="/opt/bcftools:$PATH"
+ENV PATH="/opt/htslib:$PATH"
+ENV PATH="/opt/samtools:$PATH"
 
-# Install bedtools (needed for DumpSTR)
-## Option 1: install from source
-RUN wget -O bedtools-2.27.1.tar.gz https://github.com/arq5x/bedtools2/releases/download/v2.27.1/bedtools-2.27.1.tar.gz
-RUN tar -xzvf bedtools-2.27.1.tar.gz
-WORKDIR bedtools2
-RUN make && make install
-WORKDIR ..
-## Option 2: install from apt
-#RUN apt-get install bedtools
-
-# Download and install TRTools
-RUN git clone https://github.com/gymreklab/TRTools && \
-    cd TRTools && \
-    git checkout tags/v4.0.0 -b v4.0.0-branch && \
-    pip install -r requirements.txt && \
-    python3 setup.py install && \
-    cd ..
-
-# Install ExpansionHunter
-RUN wget https://github.com/Illumina/ExpansionHunter/releases/download/${EH_VERSION}/ExpansionHunter-${EH_VERSION}-linux_x86_64.tar.gz && \
-    tar xzf ExpansionHunter-${EH_VERSION}-linux_x86_64.tar.gz && \
-    rm ExpansionHunter-${EH_VERSION}-linux_x86_64.tar.gz && \
-    mv /ExpansionHunter-${EH_VERSION}-linux_x86_64 /ExpansionHunter
-ENV PATH="/ExpansionHunter/bin/:$PATH"
-
-# Install GangSTR
-RUN conda install -c bioconda -c conda-forge gangstr
+# Copy the scripts needed in the ExpansionHunter WDL.
+COPY /src/str /opt/str
 
 # Clean up
 RUN rm -rf /tmp/* \
     /var/tmp/* \
     /var/cache/apt/* \
-    /var/lib/apt/lists/* \
+    /var/lib/apt/lists/*

@@ -50,7 +50,7 @@ workflow ExpansionHunter {
     Boolean generate_vcf_ = select_first([generate_vcf, false])
 
     scatter (i in range(length(split_variant_catalogs))) {
-        call RunExpansionHunter as expanionHunter {
+        call RunExpansionHunter {
             input:
                 bam_or_cram = bam_or_cram,
                 bam_or_cram_index = bam_or_cram_index_,
@@ -68,10 +68,11 @@ workflow ExpansionHunter {
 
     call ConcatEHOutputs {
         input:
-            vcfs_gz = expanionHunter.vcf_gz,
-            jsons = expanionHunter.json,
-            overlapping_reads = expanionHunter.overlapping_reads,
-            timings = expanionHunter.timing,
+            vcfs_gz = RunExpansionHunter.vcf_gz,
+            variants_tsvs = RunExpansionHunter.variants_tsv,
+            alleles_tsvs = RunExpansionHunter.alleles_tsv,
+            overlapping_reads = RunExpansionHunter.overlapping_reads,
+            timings = RunExpansionHunter.timing,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
@@ -79,7 +80,8 @@ workflow ExpansionHunter {
     }
 
     output {
-        File json = ConcatEHOutputs.json
+        File variants_tsv = ConcatEHOutputs.variants_tsv
+        File alleles_tsv = ConcatEHOutputs.alleles_tsv
         File vcf_gz = ConcatEHOutputs.vcf_gz
         File overlapping_reads = ConcatEHOutputs.overlapping_reads
         File timing = ConcatEHOutputs.timing
@@ -102,7 +104,8 @@ task RunExpansionHunter {
     }
 
     output {
-        File json = "${sample_id}.json"
+        File variants_tsv = "${sample_id}_variants.tsv"
+        File alleles_tsv = "${sample_id}_alleles.tsv"
         File vcf_gz = "${sample_id}.vcf.gz"
         File overlapping_reads = "${sample_id}_realigned.bam"
         File timing = "${sample_id}_timing.tsv"
@@ -151,11 +154,15 @@ task RunExpansionHunter {
         else
             bgzip ~{sample_id}.vcf
         fi
+
+        python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
+        mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
+        mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
     >>>
 
     RuntimeAttr default_runtime_ = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 3.75,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
@@ -183,7 +190,8 @@ task RunExpansionHunter {
 task ConcatEHOutputs {
     input {
         Array[File] vcfs_gz
-        Array[File] jsons
+        Array[File] variants_tsvs
+        Array[File] alleles_tsvs
         Array[File] overlapping_reads
         Array[File] timings
         Boolean generate_realigned_bam
@@ -194,23 +202,15 @@ task ConcatEHOutputs {
     }
 
     output {
-        File json = "${output_prefix}.json"
+        File variants_tsv = "${output_prefix}_variants.tsv"
+        File alleles_tsv = "${output_prefix}_alleles.tsv"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File overlapping_reads = "${output_prefix}.bam"
-        File timing = "${output_prefix}.tsv"
+        File timing = "${output_prefix}_timing.tsv"
     }
 
     command <<<
         set -euxo pipefail
-
-        JSONS_FILENAME="~{write_lines(jsons)}"
-        MERGED_JSON=~{output_prefix}.json
-        TEMP_MERGED_JSON=~{output_prefix}tmp.json
-        printf "{}" >> $MERGED_JSON
-        while IFS= read -r line; do
-            jq -s 'reduce .[] as $item ({}; . * $item)' $line $MERGED_JSON > $TEMP_MERGED_JSON
-            mv $TEMP_MERGED_JSON $MERGED_JSON
-        done < $JSONS_FILENAME
 
         if ~{generate_vcf}; then
             VCFS="~{write_lines(vcfs_gz)}"
@@ -226,13 +226,20 @@ task ConcatEHOutputs {
             touch ~{output_prefix}.bam
         fi
 
-        TIMINGS_FILENAME="~{write_lines(timings)}"
-        MERGED_TIMINGS_FILENAME=~{output_prefix}.tsv
-        FIRST_TSV=$(head -n 1 $TIMINGS_FILENAME)
-        head -1 $FIRST_TSV > $MERGED_TIMINGS_FILENAME
-        while IFS= read -r line; do
-            awk FNR!=1 $line >> $MERGED_TIMINGS_FILENAME
-        done < $TIMINGS_FILENAME
+        function merge_tsv {
+            INPUTS=$1
+            OUTPUT_FILENAME=$2
+
+            FIRST_TSV=$(head -n 1 $INPUTS)
+            head -1 $FIRST_TSV > $OUTPUT_FILENAME
+            while IFS= read -r line; do
+                awk FNR!=1 $line >> $OUTPUT_FILENAME
+            done < $INPUTS
+        }
+
+        merge_tsv "~{write_lines(timings)}" "~{output_prefix}_timing.tsv"
+        merge_tsv "~{write_lines(alleles_tsvs)}" "~{output_prefix}_alleles.tsv"
+        merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
     >>>
 
     RuntimeAttr runtime_attr_str_profile_default = object {
@@ -244,7 +251,8 @@ task ConcatEHOutputs {
         disk_gb: 10 +
             (2 * ceil(
                 size(vcfs_gz, "GiB") +
-                size(jsons, "GiB") +
+                size(variants_tsvs, "GiB") +
+                size(alleles_tsvs, "GiB") +
                 size(overlapping_reads, "GiB") +
                 size(timings, "GiB")))
     }
