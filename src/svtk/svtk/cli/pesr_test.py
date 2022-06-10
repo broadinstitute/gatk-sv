@@ -242,7 +242,7 @@ def count_pe(argv):
         counts['name'] = record.id
         cols = 'name sample count'.split()
 
-        for row in counts[cols].as_matrix():
+        for row in counts[cols].to_numpy():
             fout.write('\t'.join([str(x) for x in row]) + '\n')
         #  counts[cols].to_csv(fout, header=False, index=False, sep='\t', na_rep='NA')
 

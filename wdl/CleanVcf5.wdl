@@ -242,8 +242,8 @@ task Polish {
         VCFS="~{write_lines(clean_gq_vcfs)}"
         cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs_sorted.list
         cat ~{redundant_multiallelics_list} ~{sep=" " no_sample_lists} > ids_to_remove.list
-        /usr/local/bin/bcftools concat --no-version --output-type u --file-list vcfs_sorted.list | \
-            /usr/local/bin/bcftools view --no-version \
+        bcftools concat --no-version --output-type u --file-list vcfs_sorted.list | \
+            bcftools view --no-version \
                 --exclude 'ID=@ids_to_remove.list' \
                 --output-type z -o polished.need_reheader.vcf.gz --threads ~{threads}
 

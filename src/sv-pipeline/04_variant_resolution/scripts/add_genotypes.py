@@ -71,7 +71,7 @@ def add_genotypes(record, genotypes, varGQ):
         make_multiallelic_alts(record, max_CN, is_bca)
 
     cols = 'name sample GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
-    gt_matrix = genotypes.reset_index().as_matrix(columns=cols)
+    gt_matrix = genotypes.reset_index()[cols].to_numpy()
 
     # update genotype and other data for each sample
     for j, sample in enumerate(record.samples):

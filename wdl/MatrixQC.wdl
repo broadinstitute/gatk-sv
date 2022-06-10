@@ -141,6 +141,9 @@ task PESRBAF_QC {
   output {
     File stats = "~{batch}.~{ev}.QC_matrix.txt"
   }
+
+  String print_ev_output = "local.~{ev}.txt.gz"
+
   command <<<
 
     set -euo pipefail
@@ -151,17 +154,17 @@ task PESRBAF_QC {
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{matrix_file} \
         -L regions.bed \
-        -O local.RD.txt.gz
+        -O ~{print_ev_output}
     else
-      touch local.RD.txt
-      bgzip local.RD.txt
+      touch ~{print_ev_output}
+      bgzip ~{print_ev_output}
     fi
 
-    tabix -s 1 -b 2 -e 2 local.RD.txt.gz
+    tabix -f -s 1 -b 2 -e 2 ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
-      local.RD.txt.gz \
+      ~{print_ev_output} \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list
@@ -218,6 +221,9 @@ task RD_QC {
   output {
     File stats = "~{batch}.~{ev}.QC_matrix.txt"
   }
+
+  String print_ev_output = "local.~{ev}.txt.gz"
+
   command <<<
 
     set -euo pipefail
@@ -228,17 +234,17 @@ task RD_QC {
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{matrix_file} \
         -L regions.bed \
-        -O local.RD.txt.gz
+        -O ~{print_ev_output}
     else
       touch local.RD.txt
       bgzip local.RD.txt
     fi
 
-    tabix -p bed local.RD.txt.gz
+    tabix -f -p bed ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
-      local.RD.txt.gz \
+      ~{print_ev_output} \
       ~{genome_file} \
       ~{batch}.~{ev}.QC_stats.txt
     cut -f1 ~{genome_file} > contigs.list

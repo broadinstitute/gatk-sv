@@ -20,8 +20,7 @@ class SmooveStandardizer(VCFStandardizer):
             strands = record.info['STRANDS']
             for i, strand in enumerate(strands):
                 record.info['STRANDS'] = (strand, )
-                std_rec = self.std_vcf.new_record()
-                std_rec = self.standardize_record(std_rec, record)
+                std_rec = self.standardize_record(record)
 
                 # Some variants have stranded pairs that don't match their
                 # SV type

@@ -127,6 +127,7 @@ def main(argv):
 
     # this is necessary to avoid stochasticity in calculation of KS statistic
     np.random.seed(0)
+    random_state = np.random.RandomState(0)
 
     with open(args.bed, 'r') as f:
         for line in f:
@@ -148,7 +149,7 @@ def main(argv):
                 # Running BAF testing
                 if not het_counts.empty:
                     Del = DeletionTest(het_counts, samplelist,
-                                       min(end - start, 1000000))
+                                       min(end - start, 1000000), random_state=random_state)
                     KS = KS2sample(called_bafs, samplelist)
                     ks, ksp = KS.test(samplelist)
                     mean, delp = Del.Ttest(samplelist)

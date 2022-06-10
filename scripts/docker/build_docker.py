@@ -110,56 +110,29 @@ class ProjectBuilder:
         "wham": ImageDependencies("dockerfiles/wham/*"),
         "str": ImageDependencies("dockerfiles/str/*"),
         "sv-base-mini": ImageDependencies("dockerfiles/sv-base-mini/*"),
-        "samtools-cloud": ImageDependencies("dockerfiles/samtools-cloud/*", {"sv-base-mini": "MINIBASE_IMAGE"}),
+        "samtools-cloud-virtual-env": ImageDependencies("dockerfiles/samtools-cloud-virtual-env/*"),
+        "samtools-cloud": ImageDependencies(
+            "dockerfiles/samtools-cloud/*",
+            {"sv-base-mini": "MINIBASE_IMAGE", "samtools-cloud-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "sv-base-virtual-env": ImageDependencies("dockerfiles/sv-base-virtual-env/*"),
         "sv-base": ImageDependencies(
             "dockerfiles/sv-base/*",
-            {"sv-base-mini": "MINIBASE_IMAGE", "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "cnmops-virtual-env": ImageDependencies(
             "dockerfiles/cnmops-virtual-env/*",
             {"sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "cnmops": ImageDependencies(
             ("dockerfiles/cnmops/*", "src/WGD/*"),
             {"sv-base": "SVBASE_IMAGE", "cnmops-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-base-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-base-virtual-env/*",
-            {"sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-base": ImageDependencies(
-            ("dockerfiles/sv-pipeline-base/*", "src/*"),
-            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "sv-pipeline-virtual-env": ImageDependencies(
             "dockerfiles/sv-pipeline-virtual-env/*",
-            {"sv-pipeline-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            {"sv-base-mini": "SV_BASE_MINI_IMAGE",
+             "sv-base-virtual-env": "R_VIRTUAL_ENV_IMAGE",
+             "samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}),
         "sv-pipeline": ImageDependencies(
-            "dockerfiles/sv-pipeline/*",
-            {"sv-pipeline-base": "SV_PIPELINE_BASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-hail-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-hail-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-hail": ImageDependencies(
-            "dockerfiles/sv-pipeline-hail/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-hail-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-updates-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-updates-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-updates": ImageDependencies(
-            "dockerfiles/sv-pipeline-updates/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-updates-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-children-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-children-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-qc-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-qc-virtual-env/*",
-            {"sv-pipeline-children-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-qc": ImageDependencies(
-            "dockerfiles/sv-pipeline-qc/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-qc-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-rdtest-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-rdtest-virtual-env/*",
-            {"sv-pipeline-children-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-rdtest": ImageDependencies(
-            "dockerfiles/sv-pipeline-rdtest/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-rdtest-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            ("dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*", "src/svqc/*", "src/svtest/*",
+             "src/svtk/*", "src/WGD/*"),
+            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"})
     }
     non_public_images = frozenset({'melt'})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
@@ -525,7 +498,7 @@ class ImageBuilder:  # class for building and pushing a single image
             print(f"skipping build of {self.local_image} because it is already built and --no-force-rebuild is set")
             return
         # standard build command
-        docker_build_command = "docker build --progress plain \\\n    "
+        docker_build_command = "docker build --progress plain --network=host \\\n    "
         docker_build_command += "-f " + f"{self.working_dir}/dockerfiles/{self.name}/Dockerfile" + " \\\n    "
         docker_build_command += "--tag " + self.local_image + " \\\n    "
         # parse extra args list
