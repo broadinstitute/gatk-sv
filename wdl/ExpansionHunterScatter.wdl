@@ -36,7 +36,7 @@ workflow ExpansionHunterScatter {
             batch_size = variant_catalog_batch_size_,
             output_prefix = basename(variant_catalog_json, ".json"),
             python_docker = python_docker,
-            runtime_attr_override = runtime_split_var_catalog
+            runtime_override = runtime_split_var_catalog
     }
 
     scatter (i in range(length(bams_or_crams))) {
@@ -86,7 +86,7 @@ task SplitVariantCatalog {
         Int batch_size
         String output_prefix
         String python_docker
-        RuntimeAttr? runtime_attr_override
+        RuntimeAttr? runtime_override
     }
 
     output {
@@ -129,7 +129,7 @@ task SplitVariantCatalog {
         CODE
     >>>
 
-    RuntimeAttr default_attr = object {
+    RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 3.75,
         boot_disk_gb: 10,
@@ -137,15 +137,15 @@ task SplitVariantCatalog {
         max_retries: 1,
         disk_gb: 10 + (2 * ceil(size(variant_catalog, "GiB")))
     }
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
     runtime {
         docker: python_docker
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     }
 }
