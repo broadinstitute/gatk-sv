@@ -26,8 +26,8 @@ workflow ExpansionHunter {
         File? ped_file
         String expansion_hunter_docker
         String python_docker
-        RuntimeAttr? runtime_attr
-        RuntimeAttr? runtime_override_concat
+        RuntimeAttr? runtime_eh
+        RuntimeAttr? runtime_concat
     }
 
     parameter_meta {
@@ -62,7 +62,7 @@ workflow ExpansionHunter {
                 generate_vcf = generate_vcf_,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
-                runtime_attr_override = runtime_attr
+                runtime_attr_override = runtime_eh
         }
     }
 
@@ -76,7 +76,8 @@ workflow ExpansionHunter {
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
-            expansion_hunter_docker = expansion_hunter_docker
+            expansion_hunter_docker = expansion_hunter_docker,
+            runtime_attr_override = runtime_concat
     }
 
     output {

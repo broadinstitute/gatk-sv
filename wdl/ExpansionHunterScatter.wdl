@@ -18,7 +18,9 @@ workflow ExpansionHunterScatter {
         Boolean? generate_vcf
         String expansion_hunter_docker
         String python_docker
-        RuntimeAttr? runtime_attr
+        RuntimeAttr? runtime_split_var_catalog
+        RuntimeAttr? runtime_eh
+        RuntimeAttr? runtime_concat
     }
 
     parameter_meta {
@@ -33,7 +35,8 @@ workflow ExpansionHunterScatter {
             variant_catalog = variant_catalog_json,
             batch_size = variant_catalog_batch_size_,
             output_prefix = basename(variant_catalog_json, ".json"),
-            python_docker = python_docker
+            python_docker = python_docker,
+            runtime_attr_override = runtime_split_var_catalog
     }
 
     scatter (i in range(length(bams_or_crams))) {
@@ -62,7 +65,9 @@ workflow ExpansionHunterScatter {
                 generate_realigned_bam=generate_realigned_bam,
                 generate_vcf=generate_vcf,
                 expansion_hunter_docker=expansion_hunter_docker,
-                python_docker=python_docker
+                python_docker=python_docker,
+                runtime_eh=runtime_eh,
+                runtime_concat=runtime_concat
         }
     }
 
@@ -130,7 +135,7 @@ task SplitVariantCatalog {
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
-        disk_gb: 10
+        disk_gb: 10 + (2 * ceil(size(variant_catalog, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
