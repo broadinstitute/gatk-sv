@@ -17,7 +17,7 @@ def split_gtgq_per_sample(sample_list, vcf_file, chr_name):
 	fin=pysam.VariantFile(vcf_file)
 	fout = {sample: gzip.open("per_sample_GTGQ/"+sample+'.'+chr_name, mode='w', compresslevel=3) for sample in sample_list}
 	for sample in sample_list:
-		out_str = '\t'.join(['SVID','GT', 'CN', 'CNQ', 'EV', 'GQ', 'PE_GQ', 'PE_GT', 'RD_CN', 'RD_GQ', 'SR_GQ', 'SR_GT']) + '\n'
+		out_str = '\t'.join(['SVID','GT', 'EV', 'GQ',  'RD_CN', 'RD_GQ','PE_GT','PE_GQ', 'SR_GT',  'SR_GQ']) + '\n'
 		fout[sample].write(out_str.encode())
 
 	for record in fin:
@@ -26,11 +26,14 @@ def split_gtgq_per_sample(sample_list, vcf_file, chr_name):
 			sample_data = record.samples[sample]
 			if sample_data['GT']==(0,0) or sample_data['GT']==(None,None): 
 				continue
-			out_str = '\t'.join([str(j) for j in [record.id, '/'.join([str(i) for i in sample_data['GT']]),sample_data['CN'],sample_data['CNQ'],
-										','.join([i for i in sample_data['EV']]),sample_data['GQ'],
-										sample_data['RD_CN'],sample_data['RD_GQ'],
-										sample_data['PE_GT'],sample_data['PE_GQ'],
-										sample_data['SR_GT'],sample_data['SR_GQ']]]) + '\n'
+			out_str = '\t'.join([str(j) for j in [record.id, '/'.join([str(i) for i in sample_data['GT']]),
+										','.join([i for i in sample_data['EV']]),[sample_data['GQ'] if 'GQ' in sample_data.keys() else "NA"][0],
+										[sample_data['RD_CN'] if 'RD_CN' in sample_data.keys() else "NA"][0],
+										[sample_data['RD_GQ'] if 'RD_GQ' in sample_data.keys() else "NA"][0],
+										[sample_data['PE_GT'] if 'PE_GT' in sample_data.keys() else "NA"][0],
+										[sample_data['PE_GQ'] if 'PE_GQ' in sample_data.keys() else "NA"][0],
+										[sample_data['SR_GT'] if 'SR_GT' in sample_data.keys() else "NA"][0],
+										[sample_data['SR_GQ'] if 'SR_GQ' in sample_data.keys() else "NA"][0]]]) + '\n'
 			fout[sample].write(out_str.encode())
 
 def main():
