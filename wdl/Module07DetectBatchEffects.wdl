@@ -7,7 +7,6 @@
 version 1.0
 
 import "prune_add_af.wdl" as calcAF
-import "batch_effect_helper.wdl" as helper
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 workflow DetectBatchEffects {
@@ -449,7 +448,7 @@ task MergeFreqTables {
 
   output {
     File merged_table = "~{prefix}.merged_AF_table.txt.gz"
-    File merged_table_shards = glob("~{prefix}.merged_AF_table.shard_*.txt.gz")
+    Array[File] merged_table_shards = glob("~{prefix}.merged_AF_table.shard_*.txt.gz")
     Int n_records = read_int("n_records.txt")
   }
 
@@ -622,6 +621,7 @@ task PrepOneVsAllPairsList {
     File batches_list
     String prefix
     String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
