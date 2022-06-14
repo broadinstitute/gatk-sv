@@ -18,6 +18,7 @@ workflow prune_and_add_vafs {
     File vcf_idx
     String prefix
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
 
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? prune_list              #List of samples to be excluded from the output vcf
@@ -53,7 +54,8 @@ workflow prune_and_add_vafs {
         famfile=famfile,
         par_bed=par_bed,
         drop_empty_records=drop_empty_records,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker
     }
   }
 
@@ -74,7 +76,7 @@ workflow prune_and_add_vafs {
 
 #Shard vcf into single chromosome shards & drop pruned samples
 task PruneVcf {
-  input{
+  input {
     File vcf
     File vcf_idx
     String contig
@@ -93,27 +95,34 @@ task PruneVcf {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
-    set -euo pipefail
-    #Tabix chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
-    #Get column indexes corresponding to samples to drop, if any exist
-    if ~{defined(prune_list)}; then
-      dropidx=$( zfgrep "#" ~{contig}.vcf.gz | fgrep -v "##" \
-                 | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print NR, $1 }' \
-                 | fgrep -wf ~{prune_list} | cut -f1 | paste -s -d, )
-      zcat ~{contig}.vcf.gz \
-      | cut --complement -f"$dropidx" \
-      | bgzip -c \
-      > "~{prefix}.~{contig}.pruned.vcf.gz"
+    set -eu -o pipefail
+
+    # Define subset of samples to keep
+    tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' > samples.all.list
+    if [ "~{defined(prune_list)}" == "true" ]; then
+      fgrep -wvf "~{prune_list}" samples.all.list > samples.keep.list
     else
-      cp "~{contig}.vcf.gz" "~{prefix}.~{contig}.pruned.vcf.gz"
+      cp samples.all.list samples.keep.list
     fi
-    tabix -f "~{prefix}.~{contig}.pruned.vcf.gz"
+
+    # Relocate VCF and index to avoid bcftools issues locating VCF index
+    mv ~{vcf} ~{vcf_idx} ./
+
+    # Extract chromosome of interest and subset to samples to keep
+    bcftools view \
+      -S samples.keep.list \
+      --force-samples \
+      --no-update \
+      -l 1 -O z -o "~{basename(vcf, '.vcf.gz')}.pruned.vcf.gz" \
+      "~{basename(vcf)}" \
+      "~{contig}"
+
+    tabix -p vcf -f "~{basename(vcf, '.vcf.gz')}.pruned.vcf.gz"
   >>>
 
   output {
-    File pruned_vcf = "~{prefix}.~{contig}.pruned.vcf.gz"
-    File pruned_vcf_idx = "~{prefix}.~{contig}.pruned.vcf.gz.tbi"
+    File pruned_vcf = "~{basename(vcf, '.vcf.gz')}.pruned.vcf.gz"
+    File pruned_vcf_idx = "~{basename(vcf, '.vcf.gz')}.pruned.vcf.gz.tbi"
   }
 
   runtime {

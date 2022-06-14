@@ -972,9 +972,11 @@ task RenameVariantIds {
 task ScatterVcf {
   input {
     File vcf
+    File? vcf_idx  #only necessary if contig is also specified
     String prefix
     Int records_per_shard
     Int? threads = 1
+    String? contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -1003,9 +1005,15 @@ task ScatterVcf {
 
   command <<<
     set -euo pipefail
+
     # in case the file is empty create an empty shard
     bcftools view -h ~{vcf} | bgzip -c > ~{prefix}.0.vcf.gz
-    bcftools +scatter ~{vcf} -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard}
+    if [ "~{defined(contig)}" == "true" ]; then
+      bcftools view --no-update ~{vcf} "~{contig}" \
+      | bcftools +scatter -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard}
+    else
+      bcftools +scatter ~{vcf} -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard}
+    fi
 
     ls ~{prefix}.*.vcf.gz | sort -k1,1V > vcfs.list
     i=0

@@ -16,7 +16,7 @@ workflow CalcAF {
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
     File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
-    String sv_pipeline_docker
+    String? contig                #Restrict to a single contig, if desired
     String? drop_empty_records
   }
 
@@ -25,9 +25,11 @@ workflow CalcAF {
   call tasks.ScatterVcf {
     input:
       vcf=vcf,
+      vcf_idx=vcf_idx,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_updates_docker,
-      records_per_shard=sv_per_shard
+      records_per_shard=sv_per_shard,
+      contig=contig
   }
 
   # Scatter over VCF shards
