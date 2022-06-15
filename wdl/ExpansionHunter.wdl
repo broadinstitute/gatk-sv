@@ -71,7 +71,7 @@ workflow ExpansionHunter {
             vcfs_gz = RunExpansionHunter.vcf_gz,
             variants_tsvs = RunExpansionHunter.variants_tsv,
             alleles_tsvs = RunExpansionHunter.alleles_tsv,
-            overlapping_reads = RunExpansionHunter.overlapping_reads,
+            overlapping_reads_files = RunExpansionHunter.overlapping_reads,
             timings = RunExpansionHunter.timing,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
@@ -191,7 +191,7 @@ task ConcatEHOutputs {
         Array[File] vcfs_gz
         Array[File] variants_tsvs
         Array[File] alleles_tsvs
-        Array[File] overlapping_reads
+        Array[File] overlapping_reads_files
         Array[File] timings
         Boolean generate_realigned_bam
         Boolean generate_vcf
@@ -219,7 +219,7 @@ task ConcatEHOutputs {
         fi
 
         if ~{generate_realigned_bam}; then
-            BAMS="~{write_lines(overlapping_reads)}"
+            BAMS="~{write_lines(overlapping_reads_files)}"
             samtools merge ~{output_prefix}.bam -b ${BAMS}
         else
             touch ~{output_prefix}.bam
@@ -252,7 +252,7 @@ task ConcatEHOutputs {
                 size(vcfs_gz, "GiB") +
                 size(variants_tsvs, "GiB") +
                 size(alleles_tsvs, "GiB") +
-                size(overlapping_reads, "GiB") +
+                size(overlapping_reads_files, "GiB") +
                 size(timings, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
