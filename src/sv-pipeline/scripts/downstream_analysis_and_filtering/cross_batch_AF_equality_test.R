@@ -35,7 +35,11 @@ test.variants <- function(dat, allpops){
     ACs <- vals[grep(paste(optimal.pop, "AC.", sep="_"), names(vals), fixed=T)]
     ANs <- vals[grep(paste(optimal.pop, "AN.", sep="_"), names(vals), fixed=T)]
     keep.batch.idx <- which(ANs > 0)
-    prop.test(ACs[keep.batch.idx], ANs[keep.batch.idx], correct=F)$p.value
+    if(length(keep.batch.idx) > 1){
+      prop.test(ACs[keep.batch.idx], ANs[keep.batch.idx], correct=F)$p.value
+    }else{
+      return(NA)
+    }
   })
   data.frame("VID"=dat$VID, "prop.test.pvalue"=pvals)
 }
@@ -51,8 +55,8 @@ batchlist.in <- as.character(args[2])
 OUTFILE <- as.character(args[3])
 
 # #Dev parameters:
-# infile <- "~/scratch/test_AF_tables.txt.gz"
-# batchlist.in <- "~/scratch/test_batches_subset.list"
+# infile <- "~/scratch/gnomAD-SV-v3.1.10pct_NCR.no_outliers.batch_fx.chr22.merged_AF_table.shard_7.txt.gz"
+# batchlist.in <- "~/scratch/gnomAD-SV-v3.1.PCRMINUS.batches.list"
 # OUTFILE <- "~/scratch/test_batchFx.tsv"
 
 ### Process input data and subset to batches present in batchlist.in
@@ -73,4 +77,3 @@ pvals <- test.variants(dat, allpops)
 
 ### Write to outfile
 write.table(pvals, OUTFILE, col.names=T, row.names=F, sep="\t", quote=F)
-

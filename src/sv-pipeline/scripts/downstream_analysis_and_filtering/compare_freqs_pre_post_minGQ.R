@@ -13,44 +13,26 @@
 options(stringsAsFactors=F, scipen=10)
 
 
-### Import pre-minGQ frequency data
-load.preMinGQ.freqs <- function(pre.freqs.PCRPLUS.in, pre.freqs.PCRMINUS.in){
-  # Read data
-  plus.dat <- read.table(pre.freqs.PCRPLUS.in, header=F, sep="\t")
-  colnames(plus.dat) <- c("VID", "AC", "AN")
-  minus.dat <- read.table(pre.freqs.PCRMINUS.in, header=F, sep="\t")
-  colnames(minus.dat) <- c("VID", "AC", "AN")
-  # Merge data
-  joined.dat <- merge(plus.dat, minus.dat, by="VID", all=T, sort=F,
-                      suffixes=c(".PCRPLUS", ".PCRMINUS"))
-  return(joined.dat)
-}
-
-
 ### Import batch effect-derived frequency data 
-load.batcheffect.freqs <- function(freq.table.in){
+load.batcheffect.freqs <- function(freq.table.in, plus.batches, minus.batches){
   # Read data
-  dat <- read.table(freq.table.in, header=T, sep="\t", comment.char="")
+  dat <- read.table(freq.table.in, header=T, sep="\t", comment.char="", check.names=F)
   colnames(dat)[1] <- "VID"
   # Drop multiallelics
   mcnv.idxs <- unique(unlist(apply(dat[, -c(1:3)], 2, function(vals){grep(",", vals, fixed=T)})))
   if(length(mcnv.idxs) > 0){
     dat <- dat[-mcnv.idxs, ]
   }
-  # Convert all rows to numerics
+  # Convert all columns to numerics
   dat[, -c(1:3)] <- apply(dat[, -c(1:3)], 2, as.numeric)
   # Sum frequencies
-  PCRPLUS_AN.idxs <- intersect(grep("PCRPLUS", colnames(dat), fixed=T), 
-                               grep("AN.", colnames(dat), fixed=T))
+  PCRPLUS_AN.idxs <- which(colnames(dat) %in% paste("AN", plus.batches, sep="."))
   PCRPLUS_AN <- apply(dat[, PCRPLUS_AN.idxs], 1, sum)
-  PCRPLUS_AC.idxs <- intersect(grep("PCRPLUS", colnames(dat), fixed=T), 
-                               grep("AC.", colnames(dat), fixed=T))
+  PCRPLUS_AC.idxs <- which(colnames(dat) %in% paste("AC", plus.batches, sep="."))
   PCRPLUS_AC <- apply(dat[, PCRPLUS_AC.idxs], 1, sum)
-  PCRMINUS_AN.idxs <- intersect(grep("PCRMINUS", colnames(dat), fixed=T), 
-                                grep("AN.", colnames(dat), fixed=T))
+  PCRMINUS_AN.idxs <- which(colnames(dat) %in% paste("AN", minus.batches, sep="."))
   PCRMINUS_AN <- apply(dat[, PCRMINUS_AN.idxs], 1, sum)
-  PCRMINUS_AC.idxs <- intersect(grep("PCRMINUS", colnames(dat), fixed=T), 
-                                grep("AC.", colnames(dat), fixed=T))
+  PCRMINUS_AC.idxs <- which(colnames(dat) %in% paste("AC", minus.batches, sep="."))
   PCRMINUS_AC <- apply(dat[, PCRMINUS_AC.idxs], 1, sum)
   # Prep cleaned data
   out.df <- data.frame("VID"=dat$VID,
@@ -74,7 +56,8 @@ merge.clean.freqs <- function(pre.dat, post.dat){
   #   vals <- as.numeric(vals)
   #   return(vals)
   # })
-  mcnv.idxs <- grep(",", merged.dat$AC.PCRMINUS.pre, fixed=T)
+  mcnv.idxs <- union(grep(",", merged.dat$AC.PCRMINUS.pre, fixed=T),
+                     grep("_CNV_", merged.dat$VID, fixed=T))
   if(length(mcnv.idxs) > 0){
     merged.dat <- merged.dat[-mcnv.idxs, ]
   }
@@ -97,9 +80,13 @@ calc.pvals <- function(dat, PCR){
   post.ref <- post.AN - post.AC
   # Run chisq tests
   sapply(1:nrow(dat), function(i){
-    chisq.test(matrix(c(pre.ref[i], post.ref[i],
-                        pre.AC[i], post.AC[i]),
-                      nrow=2, byrow=T))$p.value
+    if(pre.AN[i] > 0 & post.AN[i] > 0){
+      chisq.test(matrix(c(pre.ref[i], post.ref[i],
+                          pre.AC[i], post.AC[i]),
+                        nrow=2, byrow=T))$p.value  
+    }else{
+      NA
+    }
   })
 }
 
@@ -152,29 +139,37 @@ plot.freqs <- function(dat, PCR){
 
 ### Read command-line arguments
 args <- commandArgs(trailingOnly=T)
-pre.freqs.PCRPLUS.in <- as.character(args[1])
-pre.freqs.PCRMINUS.in <- as.character(args[2])
-freq.table.in <- as.character(args[3])
-OUTDIR <- as.character(args[4])
-prefix <- as.character(args[5])
+pre.freq.table.in <- as.character(args[1])
+post.freq.table.in <- as.character(args[2])
+PCRPLUS.batches.in <- as.character(args[3])
+PCRMINUS.batches.in <- as.character(args[4])
+OUTDIR <- as.character(args[5])
+prefix <- as.character(args[6])
 
 # #DEV:
-# pre.freqs.PCRPLUS.in <- "~/scratch/gnomAD_v2_SV_MASTER.PCRPLUS.AF_preMinGQ.txt"
-# pre.freqs.PCRMINUS.in <- "~/scratch/gnomAD_v2_SV_MASTER.PCRMINUS.AF_preMinGQ.txt"
-# freq.table.in <- "~/scratch/gnomAD_v2_SV_MASTER.merged_AF_table.txt.gz"
+# pre.freq.table.in <- "~/scratch/gnomAD-SV-v3.1.10pct_NCR.no_outliers.batch_fx.chr22.merged_AF_table.txt.gz"
+# post.freq.table.in <- "~/scratch/gnomAD-SV-v3.1.10pct_NCR.no_outliers.batch_fx.chr22.merged_AF_table.txt.gz"
+# PCRPLUS.batches.in <- "~/scratch/gnomAD-SV-v3.1.PCRPLUS.batches.list"
+# PCRMINUS.batches.in <- "~/scratch/gnomAD-SV-v3.1.PCRMINUS.batches.list"
 # OUTDIR <- "~/scratch"
-# prefix <- "gnomAD_v2_SV_MASTER.test."
+# prefix <- "prePostMinGQ_test."
 
 # Read frequency data
-pre.dat <- load.preMinGQ.freqs(pre.freqs.PCRPLUS.in, pre.freqs.PCRMINUS.in)
-post.dat <- load.batcheffect.freqs(freq.table.in)
+if(file.size(PCRPLUS.batches.in) == 0L){
+  plus.batches <- c()
+}else{
+  plus.batches <- unique(read.table(PCRPLUS.batches.in)[, 1])
+}
+minus.batches <- unique(read.table(PCRMINUS.batches.in)[, 1])
+pre.dat <- load.batcheffect.freqs(pre.freq.table.in, plus.batches, minus.batches)
+post.dat <- load.batcheffect.freqs(post.freq.table.in, plus.batches, minus.batches)
 
 # Merge & clean frequency data
 merged.dat <- merge.clean.freqs(pre.dat, post.dat)
 
 # Compute p-values
-p.PCRPLUS <- suppressWarnings(calc.pvals(merged.dat, "PCRPLUS"))
-p.PCRMINUS <- suppressWarnings(calc.pvals(merged.dat, "PCRMINUS"))
+p.PCRPLUS <- calc.pvals(merged.dat, "PCRPLUS")
+p.PCRMINUS <- calc.pvals(merged.dat, "PCRMINUS")
 
 # Estimate pct of null-GT samples
 PCRPLUS.nullGTs <- estimate.null.gts(merged.dat, "PCRPLUS")
@@ -214,6 +209,3 @@ par(mfrow=c(1, 2))
 plot.freqs(merged.dat, "PCRPLUS")
 plot.freqs(merged.dat, "PCRMINUS")
 dev.off()
-
-
-

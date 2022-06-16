@@ -13,6 +13,8 @@ workflow DetectBatchEffects {
   input{
     File vcf
     File vcf_idx
+    File vcf_preMinGQ
+    File vcf_preMinGQ_idx
     File sample_batch_assignments
     File batches_list
     File pcrminus_batches_list
@@ -23,11 +25,9 @@ workflow DetectBatchEffects {
     File? par_bed
     Int variants_per_shard
     String prefix
-    File af_pcrminus_premingq
 
     # Optional inputs if PCR+ samples are in callset    
     File? pcrplus_batches_list
-    File? af_pcrplus_premingq
     File? pcrplus_samples_list
 
     String sv_pipeline_docker
@@ -37,10 +37,11 @@ workflow DetectBatchEffects {
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
   }
-    Array[String] batches = read_lines(batches_list)
-    Array[Array[String]] contigs = read_tsv(contiglist)
-    
-  # Shard VCF per batch, compute pops-specific AFs, and convert to table of VID & AF stats
+
+  Array[String] batches = read_lines(batches_list)
+  Array[Array[String]] contigs = read_tsv(contiglist)
+
+  # Shard VCF per batch, compute pop-specific AFs, and convert to table of VID & AF stats
   scatter ( batch in batches ) {
     # Get list of samples to include & exclude per batch
     call GetBatchSamplesList {
@@ -52,7 +53,7 @@ workflow DetectBatchEffects {
         probands_list=excludesamples_list,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    # Prune VCF to samples 
+    # Prune VCFs to samples 
     call calcAF.prune_and_add_vafs as getAFs {
       input:
         vcf=vcf,
@@ -68,10 +69,32 @@ workflow DetectBatchEffects {
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_updates_docker=sv_pipeline_updates_docker
     }
+    call calcAF.prune_and_add_vafs as getAFs_preMinGQ {
+      input:
+        vcf=vcf_preMinGQ,
+        vcf_idx=vcf_preMinGQ_idx,
+        prefix=batch,
+        sample_pop_assignments=sample_pop_assignments,
+        prune_list=GetBatchSamplesList.exclude_samples_list,
+        famfile=famfile,
+        sv_per_shard=25000,
+        contiglist=contiglist,
+        drop_empty_records="FALSE",
+        par_bed=par_bed,
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+    }
     # Get minimal table of AF data per batch, split by ancestry
     call GetFreqTable {
       input:
         vcf=getAFs.output_vcf,
+        sample_pop_assignments=sample_pop_assignments,
+        prefix=batch,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+    call GetFreqTable as GetFreqTable_preMinGQ {
+      input:
+        vcf=getAFs_preMinGQ.output_vcf,
         sample_pop_assignments=sample_pop_assignments,
         prefix=batch,
         sv_pipeline_docker=sv_pipeline_docker
@@ -95,16 +118,25 @@ workflow DetectBatchEffects {
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker
   }
+  call MergeFreqTables as MergeFreqTables_allPops_preMinGQ {
+    input:
+      tables=GetFreqTable_preMinGQ.freq_data_allPops,
+      batches_list=batches_list,
+      rows_per_shard=variants_per_shard,
+      prefix=prefix + "_preMinGQ",
+      sv_pipeline_docker=sv_pipeline_docker
+  }
 
   # Test 1: compare frequencies before and after minGQ, and generate list 
   # of variants that are significantly different between the steps
   call CompareFreqsPrePostMinGQ {
     input:
-      af_pcrminus_premingq=af_pcrminus_premingq,
-      af_pcrplus_premingq=af_pcrplus_premingq,
+      AF_preMinGQ_table=MergeFreqTables_allPops_preMinGQ.merged_table,
       AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
+      minus_batches_list=pcrminus_batches_list,
+      plus_batches_list=pcrplus_batches_list,
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_base_docker=sv_pipeline_base_docker
   }
 
   # Compute AF stats per pair of batches & determine variants with batch effects
@@ -371,7 +403,7 @@ task MergeFreqTables {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 16,
-    disk_gb: 100 + (5 * size(tables, "GB")),
+    disk_gb: 50 + ceil(5 * size(tables, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -433,7 +465,7 @@ task MergeFreqTables {
     zcat "~{prefix}.merged_AF_table.txt.gz" | head -n1 > shard_header.tsv || true
     zcat "~{prefix}.merged_AF_table.txt.gz" | sed '1d' > shard_body.tsv
     /opt/sv-pipeline/04_variant_resolution/scripts/evenSplitter.R \
-      -L ${rows_per_shard} \
+      -L ~{rows_per_shard} \
       shard_body.tsv \
       "~{prefix}.sharded_"
     n_shards=$( find ./ -name "~{prefix}.sharded_*" | wc -l )
@@ -441,15 +473,11 @@ task MergeFreqTables {
       cat shard_header.tsv "~{prefix}.sharded_$i" | gzip -c \
       > "~{prefix}.merged_AF_table.shard_$i.txt.gz"
     done
-
-    # Get total number of records (required for downstream steps)
-    cut -f1 shard_body.tsv | wc -l > n_records.txt
   >>>
 
   output {
     File merged_table = "~{prefix}.merged_AF_table.txt.gz"
     Array[File] merged_table_shards = glob("~{prefix}.merged_AF_table.shard_*.txt.gz")
-    Int n_records = read_int("n_records.txt")
   }
 
   runtime {
@@ -467,11 +495,12 @@ task MergeFreqTables {
 # Compare frequencies before and after minGQ
 task CompareFreqsPrePostMinGQ {
   input{
-  File af_pcrminus_premingq
-  File? af_pcrplus_premingq
+  File AF_preMinGQ_table
   File AF_postMinGQ_table
+  File minus_batches_list
+  File? plus_batches_list
   String prefix
-  String sv_pipeline_docker
+  String sv_pipeline_base_docker
   RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -488,20 +517,19 @@ task CompareFreqsPrePostMinGQ {
     set -euo pipefail
 
     # Different behavior whether or not af_pcrplus_premingq is provided
-    if [ "~{defined(af_pcrplus_premingq)}" == "true" ]; then
-      /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/compare_freqs_pre_post_minGQ.R \
-        ~{af_pcrminus_premingq} \
-        ~{af_pcrplus_premingq} \
-        ~{AF_postMinGQ_table} \
-        ./ \
-        "~{prefix}."
+    if [ "~{defined(plus_batches_list)}" == "true" ]; then
+      plus_batches="~{plus_batches_list}"
     else
-      /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/compare_freqs_pre_post_minGQ.PCRMinus_only.R \
-        ~{af_pcrminus_premingq} \
-        ~{AF_postMinGQ_table} \
-        ./ \
-        "~{prefix}."
+      touch empty_file.txt
+      plus_batches="empty_file.txt"
     fi
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/compare_freqs_pre_post_minGQ.R \
+      ~{AF_preMinGQ_table} \
+      ~{AF_postMinGQ_table} \
+      ~{minus_batches_list} \
+      $plus_batches \
+      ./ \
+      "~{prefix}."
   >>>
 
   output {
@@ -660,7 +688,6 @@ task CompareBatchPairs {
   input{
     File freq_table
     File batch_pairs_list
-    Int total_n_records
     String prefix
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override

@@ -48,21 +48,32 @@ compare.pcr.afs <- function(vals, allpops){
   minus.ACs <- vals[paste(allpops, "AC.minus", sep="_")]
   plus.ACs <- vals[paste(allpops, "AC.plus", sep="_")]
   elig.pops <- allpops[which(apply(cbind(minus.ACs, plus.ACs), 1, sum) > 0)]
-  minus.ANs <- vals[paste(elig.pops, "AN.minus", sep="_")]
-  plus.ANs <- vals[paste(elig.pops, "AN.plus", sep="_")]
-  min.ANs <- apply(cbind(minus.ANs, plus.ANs), 1, min)
-  best.pop <- elig.pops[which(min.ANs == max(min.ANs, na.rm=T))]
+  if(length(elig.pops) > 0){
+    minus.ANs <- vals[paste(elig.pops, "AN.minus", sep="_")]
+    plus.ANs <- vals[paste(elig.pops, "AN.plus", sep="_")]
+    min.ANs <- apply(cbind(minus.ANs, plus.ANs), 1, min)
+    best.pop <- head(elig.pops[which(min.ANs == max(min.ANs, na.rm=T))], 1)
+    
+    # Extra data and run chi-squared test
+    minus.AN <- as.numeric(vals[paste(best.pop, "AN.minus", sep="_")])
+    minus.AC <- as.numeric(vals[paste(best.pop, "AC.minus", sep="_")])
+    minus.AF <- minus.AC / minus.AN
+    plus.AN <- as.numeric(vals[paste(best.pop, "AN.plus", sep="_")])
+    plus.AC <- as.numeric(vals[paste(best.pop, "AC.plus", sep="_")])
+    plus.AF <- plus.AC / plus.AN
+    if(minus.AN > 0 & plus.AN > 0){
+      chisq.p <- chisq.test(matrix(c(minus.AN-minus.AC, minus.AC,
+                                     plus.AN-plus.AC, plus.AC),
+                                   nrow=2, byrow=F))$p.value
+    }else{
+      chisq.p <- NA
+    }
+  }else{
+    best.pop <- NA
+    plus.AF <- minus.AF <- 0
+    chisq.p <- 1
+  }
   
-  # Extra data and run chi-squared test
-  minus.AN <- as.numeric(vals[paste(best.pop, "AN.minus", sep="_")])
-  minus.AC <- as.numeric(vals[paste(best.pop, "AC.minus", sep="_")])
-  minus.AF <- minus.AC / minus.AN
-  plus.AN <- as.numeric(vals[paste(best.pop, "AN.plus", sep="_")])
-  plus.AC <- as.numeric(vals[paste(best.pop, "AC.plus", sep="_")])
-  plus.AF <- plus.AC / plus.AN
-  chisq.p <- chisq.test(matrix(c(minus.AN-minus.AC, minus.AC,
-                                 plus.AN-plus.AC, plus.AC),
-                               nrow=2, byrow=F))$p.value
   # Return values
   data.frame("VID"=VID, "pop"=best.pop, "minus.AF"=minus.AF, 
              "plus.AF"=plus.AF, "chisq.p"=chisq.p)
@@ -77,7 +88,7 @@ plus.batches.in <- as.character(args[3])
 OUTFILE <- as.character(args[4])
 
 # #Dev parameters:
-# infile <- "~/scratch/test_AF_tables.txt.gz"
+# infile <- "~/scratch/gnomAD-SV-v3.1.10pct_NCR.no_outliers.batch_fx.chr22.merged_AF_table.shard_41.txt.gz"
 # minus.batches.in <- "~/scratch/gnomAD-SV-v3.1.PCRMINUS.batches.list"
 # plus.batches.in <- "~/scratch/gnomAD-SV-v3.1.PCRPLUS.batches.list"
 # OUTFILE <- "~/scratch/test_batchFx.tsv"
