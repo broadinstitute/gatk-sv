@@ -120,6 +120,12 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
         If any record is multiallelic, make all genotypes multiallelic
     """
 
+    def _binary_or(x, y):
+        return x | y
+
+    def _str_to_tuple(x):
+        return (x,) if type(x) is str else x
+
     if preserve_multiallelic:
         is_multiallelic = check_multiallelic(records)
     else:
@@ -129,8 +135,6 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
         new_record.alts = make_multiallelic_alts(records)
 
     new_record_formats = new_record.header.formats.keys()
-    int_or_lambda = lambda x, y: x | y
-    str_to_tuple_lambda = lambda x: (x,) if type(x) is str else x
     for sample in new_record.samples:
         best_record = choose_best_genotype(sample, records)
         for key in best_record.format.keys():
@@ -151,7 +155,7 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                         new_record.samples[sample][key] = GT
                 elif key == 'EV':
                     ev_values = [r.samples[sample][key] for r in records]
-                    ev_values = [str_to_tuple_lambda(v) for v in ev_values]
+                    ev_values = [_str_to_tuple(v) for v in ev_values]
                     ev_types = list(set(type(v) for v in ev_values if v is not None))
                     if len(ev_types) == 0:
                         new_record.samples[sample][key] = None
@@ -163,7 +167,7 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                             new_record.samples[sample][key] = ",".join(
                                 sorted(tuple(set(t for ev in ev_values for t in ev))))
                         elif ev_type is int:
-                            new_record.samples[sample][key] = reduce(int_or_lambda, ev_values)
+                            new_record.samples[sample][key] = reduce(_binary_or, ev_values)
                         else:
                             raise ValueError(f"Unsupported EV type: {str(ev_type)}")
                 else:
