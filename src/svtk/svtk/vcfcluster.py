@@ -147,7 +147,11 @@ class VCFCluster(GenomeSLINK):
 
         # If strands are required to match and don't, skip remaining calcs
         if self.match_svtypes and self.match_strands:
-            if first.record.info['STRANDS'] != second.record.info['STRANDS']:
+            if ('STRANDS' in first.record.info.keys()) != ('STRANDS' in second.record.info.keys()):
+                raise ValueError(f"One of records {first.record.id} and {second.record.id} has "
+                                 f"STRANDS annotation assigned but the other does not")
+            elif 'STRANDS' in first.record.info.keys() \
+                    and first.record.info['STRANDS'] != second.record.info['STRANDS']:
                 return False
 
         clusters = (super().clusters_with(first, second) and

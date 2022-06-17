@@ -216,7 +216,10 @@ class SVRecordCluster:
         new_record.info['CHR2'] = base_record.chrB
 
         # TODO: Check if strands should be merged
-        new_record.info['STRANDS'] = base_record.record.info['STRANDS']
+        if 'STRANDS' in base_record.record.info.keys():
+            new_record.info['STRANDS'] = base_record.record.info['STRANDS']
+        elif new_record.info['SVTYPE'] == 'BND':
+            raise ValueError(f"STRANDS not defined in base record {base_record.record.id} for the merged BND record")
 
         # Merge coordinates
         POS, END, CIPOS, CIEND = self.merge_pos()

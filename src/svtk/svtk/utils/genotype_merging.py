@@ -6,6 +6,8 @@
 
 """
 
+from functools import reduce
+
 
 def choose_best_genotype(sample, records):
     """
@@ -118,6 +120,12 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
         If any record is multiallelic, make all genotypes multiallelic
     """
 
+    def _binary_or(x, y):
+        return x | y
+
+    def _str_to_tuple(x):
+        return (x,) if type(x) is str else x
+
     if preserve_multiallelic:
         is_multiallelic = check_multiallelic(records)
     else:
@@ -143,23 +151,24 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                         else:
                             new_record.samples[sample][key] = GT
                     else:
-                        GT = tuple([min(x, 1) for x in GT])
+                        GT = tuple([x if x is None else min(x, 1) for x in GT])
                         new_record.samples[sample][key] = GT
                 elif key == 'EV':
-                    if 'EV' in new_record.samples[sample].keys():
-                        curr_ev = new_record.samples[sample][key]
+                    ev_values = [r.samples[sample][key] for r in records]
+                    ev_values = [_str_to_tuple(v) for v in ev_values]
+                    ev_types = list(set(type(v) for v in ev_values if v is not None))
+                    if len(ev_types) == 0:
+                        new_record.samples[sample][key] = None
+                    elif len(ev_types) > 1:
+                        raise ValueError(f"Found multiple EV types: {str(ev_types)}")
                     else:
-                        curr_ev = 0
-
-                    if curr_ev is None:
-                        curr_ev = 0
-
-                    for record in records:
-                        if 'EV' in record.samples[sample].keys():
-                            ev = record.samples[sample][key]
-                            if ev is None:
-                                ev = 0
-                            curr_ev = curr_ev | ev
-                    new_record.samples[sample][key] = curr_ev
+                        ev_type = ev_types[0]
+                        if ev_type is tuple:
+                            new_record.samples[sample][key] = ",".join(
+                                sorted(tuple(set(t for ev in ev_values for t in ev))))
+                        elif ev_type is int:
+                            new_record.samples[sample][key] = reduce(_binary_or, ev_values)
+                        else:
+                            raise ValueError(f"Unsupported EV type: {str(ev_type)}")
                 else:
                     new_record.samples[sample][key] = best_record.samples[sample][key]
