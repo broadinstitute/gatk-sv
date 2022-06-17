@@ -26,8 +26,8 @@ workflow ExpansionHunter {
         File? ped_file
         String expansion_hunter_docker
         String python_docker
-        RuntimeAttr? runtime_attr
-        RuntimeAttr? runtime_override_concat
+        RuntimeAttr? runtime_eh
+        RuntimeAttr? runtime_concat
     }
 
     parameter_meta {
@@ -62,7 +62,7 @@ workflow ExpansionHunter {
                 generate_vcf = generate_vcf_,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
-                runtime_attr_override = runtime_attr
+                runtime_override = runtime_eh
         }
     }
 
@@ -76,7 +76,8 @@ workflow ExpansionHunter {
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
-            expansion_hunter_docker = expansion_hunter_docker
+            expansion_hunter_docker = expansion_hunter_docker,
+            runtime_override = runtime_concat
     }
 
     output {
@@ -100,7 +101,7 @@ task RunExpansionHunter {
         Boolean generate_vcf
         File? ped_file
         String expansion_hunter_docker
-        RuntimeAttr? runtime_attr_override
+        RuntimeAttr? runtime_override
     }
 
     output {
@@ -160,7 +161,7 @@ task RunExpansionHunter {
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
     >>>
 
-    RuntimeAttr default_runtime_ = object {
+    RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 3.75,
         boot_disk_gb: 10,
@@ -172,18 +173,16 @@ task RunExpansionHunter {
             reference_fasta,
             reference_fasta_index], "GiB"))
     }
-    RuntimeAttr runtime_attr = select_first([
-        runtime_attr_override,
-        default_runtime_])
+    RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
     runtime {
         docker: expansion_hunter_docker
-        cpu: runtime_attr.cpu_cores
-        memory: runtime_attr.mem_gb + " GiB"
-        disks: "local-disk " + runtime_attr.disk_gb + " HDD"
-        bootDiskSizeGb: runtime_attr.boot_disk_gb
-        preemptible: runtime_attr.preemptible_tries
-        maxRetries: runtime_attr.max_retries
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     }
 }
 
@@ -198,7 +197,7 @@ task ConcatEHOutputs {
         Boolean generate_vcf
         String? output_prefix
         String expansion_hunter_docker
-        RuntimeAttr? runtime_attr_override
+        RuntimeAttr? runtime_override
     }
 
     output {
@@ -242,7 +241,7 @@ task ConcatEHOutputs {
         merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
     >>>
 
-    RuntimeAttr runtime_attr_str_profile_default = object {
+    RuntimeAttr runtime_default = object {
         cpu_cores: 1,
         mem_gb: 4,
         boot_disk_gb: 10,
@@ -256,17 +255,15 @@ task ConcatEHOutputs {
                 size(overlapping_reads_files, "GiB") +
                 size(timings, "GiB")))
     }
-    RuntimeAttr runtime_attr = select_first([
-        runtime_attr_override,
-        runtime_attr_str_profile_default])
+    RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
     runtime {
         docker: expansion_hunter_docker
-        cpu: runtime_attr.cpu_cores
-        memory: runtime_attr.mem_gb + " GiB"
-        disks: "local-disk " + runtime_attr.disk_gb + " HDD"
-        bootDiskSizeGb: runtime_attr.boot_disk_gb
-        preemptible: runtime_attr.preemptible_tries
-        maxRetries: runtime_attr.max_retries
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     }
 }

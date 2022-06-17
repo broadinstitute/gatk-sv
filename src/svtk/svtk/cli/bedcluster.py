@@ -60,7 +60,7 @@ def bedcluster(bed, frac=0.8, intersection=None):
     """
     # Get list of unique variant IDs and map to indices on sparse graph
     variant_indices = {variant_id: index for index, variant_id in enumerate(
-        {interval.name for interval in bed.intervals})
+        sorted({interval.name for interval in bed.intervals}))
     }
     G = sparse.eye(len(variant_indices), dtype=np.uint16, format='lil')
 
@@ -197,7 +197,10 @@ def main(argv):
     samples = sorted(set([interval.fields[4] for interval in bed.intervals]))
     num_samples = float(len(samples))
 
-    for i, cluster in enumerate(clusters):
+    def _cluster_sort_key(_cluster):
+        return min(_interval.start for _interval in _cluster), max(_interval.end for _interval in _cluster)
+
+    for i, cluster in enumerate(sorted(clusters, key=_cluster_sort_key)):
         # Calculate RMSSTD before merging per-sample variants
         pre_RMSSTD = rmsstd(cluster)
 

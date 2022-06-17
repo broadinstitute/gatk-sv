@@ -1,6 +1,6 @@
 #!/bin/bash
-VIRTUAL_ENV_PATH=${1:-"/gatk-sv-env"}
-R_LIB_PATH=$(find $VIRTUAL_ENV_PATH/R -name lib -type d | head -n1)
+R_INSTALL_PATH=${1:-/opt/R}
+R_LIB_PATH=$(find $R_INSTALL_PATH -name lib -type d -print -quit)
 
 find $R_LIB_PATH \
     -type d \

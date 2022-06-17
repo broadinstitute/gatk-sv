@@ -245,6 +245,8 @@ getCpuUsage > /dev/null
 echo "0 0" > $TEMP_IO
 getBlockDeviceIO "$BLOCK_DEVICE_STAT_FILE" > /dev/null
 
+# sleep for just long enough to avoid divide by zero errors in CPU% and IO calculations
+sleep 0.001
 
 while true; do
     runtimeInfo

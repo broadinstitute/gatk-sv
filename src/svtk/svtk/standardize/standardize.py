@@ -14,7 +14,9 @@ INFO fields, with specified constraints:
   SVLEN:   SV length (-1 if translocation)
 """
 
-
+import os
+import tempfile
+import pysam
 from svtk.utils import make_bnd_alt, NULL_GT
 
 
@@ -59,8 +61,10 @@ class VCFStandardizer:
         self.include_reference_sites = include_reference_sites
         self.call_null_sites = call_null_sites
 
-        if len(std_vcf.header.samples) > 0:
-            raise ValueError("Input std_vcf must have empty samples header")
+        self.std_sample_names = list(sample_names)
+        if len(std_vcf.header.samples) > 0 and list(std_vcf.header.samples) != self.std_sample_names:
+            raise ValueError("Input std_vcf must have empty samples header, or the samples must be identical to "
+                             "provided sample_names")
 
         num_out_samples = len(sample_names)
         num_raw_samples = len(self.raw_vcf.header.samples)
@@ -68,7 +72,17 @@ class VCFStandardizer:
             raise ValueError("There are %d standardized sample names but the "
                              "raw vcf contains %d samples." % (num_out_samples,
                                                                num_raw_samples))
-        self.std_sample_names = sample_names
+
+    @staticmethod
+    def get_header_from_template(template_file, samples_list):
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        append_samples = '\t'.join(samples_list)
+        with tempfile.NamedTemporaryFile(suffix=".vcf") as named_temp_file:
+            # use sed to add the sample ids to the end of the main header line, and redirect to temporary file
+            os.system(f"sed 's/FORMAT$/FORMAT\t{append_samples}/' {template_file} > {named_temp_file.name}")
+            # use pysam to open the temporary file and get the header
+            return pysam.VariantFile(named_temp_file.name).header
 
     @classmethod
     def register(cls, source):
@@ -123,8 +137,7 @@ class VCFStandardizer:
             Standardized records
         """
         for record in self.filter_raw_vcf():
-            std_rec = self.std_vcf.new_record()
-            yield self.standardize_record(std_rec, record)
+            yield self.standardize_record(record)
 
     def standardize_vcf(self):
         """
@@ -138,9 +151,10 @@ class VCFStandardizer:
             Standardized records
         """
 
-        # Add provided sample names to std header
-        for sample in self.std_sample_names:
-            self.std_vcf.header.add_sample(sample)
+        if len(self.std_vcf.header.samples) == 0:
+            # Add provided sample names to std header
+            for sample in self.std_sample_names:
+                self.std_vcf.header.add_sample(sample)
 
         idx = 1
         for std_rec in self.standardize_records():
@@ -167,13 +181,13 @@ class VCFStandardizer:
 
             yield std_rec
 
-    def standardize_record(self, std_rec, raw_rec):
+    def standardize_record(self, raw_rec):
         """
         Create a standardized copy of a VCF record.
 
         Parameters
         ----------
-        record : pysam.VariantRecord
+        raw_rec : pysam.VariantRecord
 
         Returns
         -------

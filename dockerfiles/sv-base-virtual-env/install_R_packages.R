@@ -1,6 +1,8 @@
 #!/usr/bin/env Rscript
 # override for debugging purposes
 quiet <- as.logical(Sys.getenv("QUIET", unset="TRUE"))
+library(parallel)
+Ncpus <- detectCores()
 
 # treat warnings as errors, otherwise script can fail silently if a package fails to install
 options(warn = 2)
@@ -18,5 +20,6 @@ repos <- c("http://lib.stat.cmu.edu/R/CRAN/", "https://cran.rstudio.com")
 install.packages(pkgs = to.be.installed, 
                  repos = repos, 
                  clean = TRUE,
-                 quiet = quiet)
+                 quiet = quiet,
+                 Ncpus = Ncpus)
 q(save = "no")
