@@ -1,0 +1,41 @@
+{
+  "BenchmarkGqFilter.data_label":
+    "HGDP and HGSV",
+  "BenchmarkGqFilter.original_scores": {
+    "label": "original",
+    "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
+    "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+    "property": "gq",
+    "passing_score": 1
+  },
+  "BenchmarkGqFilter.comparison_scores": [
+    {
+      "label": "recalibrated",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+      "property": "sl",
+      "passing_score": 0
+    },
+    {
+      "label": "cross-validated",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_cross_validated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_cross_validated.vcf.gz.tbi",
+      "property": "sl",
+      "passing_score": 0
+    },
+    {
+      "label": "Xuefang",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
+      "property": "gq",
+      "passing_score": 0
+    }
+  ],
+  "BenchmarkGqFilter.benchmark_args":
+    [],
+  "BenchmarkGqFilter.truth_overlap_info":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/truth_overlap.json",
+  "BenchmarkGqFilter.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "BenchmarkGqFilter.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "BenchmarkGqFilter.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+}

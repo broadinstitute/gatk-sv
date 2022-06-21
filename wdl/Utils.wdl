@@ -314,6 +314,7 @@ task SubsetPedFile {
   }
 }
 
+
 task LocalizeCloudFileWithCredentials {
   input {
     String cloud_file_path
@@ -357,3 +358,86 @@ task LocalizeCloudFileWithCredentials {
   }
 }
 
+
+task GetVcfSize {
+    input {
+        File vcf
+        File vcf_index
+        String samtools_cloud_docker
+    }
+
+    parameter_meta {
+        vcf: {
+          localization_optional: true
+        }
+    }
+
+    Int disk_gb = round(10 + size(vcf_index, "GiB"))
+    String num_records_file = "num_records.txt"
+    String num_samples_file = "num_samples.txt"
+    # if vcf_index is not supplied, try this path automatically:
+    String automatic_vcf_index = vcf + ".tbi"
+
+    runtime {
+        docker: samtools_cloud_docker
+        cpu: 1
+        preemptible: 3
+        max_retries: 1
+        memory: "2 GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        set -euo pipefail
+
+        # symlink vcf_index to current working dir
+        ln -s ~{vcf_index} .
+
+        export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+        bcftools query -l ~{vcf} | wc -w > ~{num_samples_file}
+        # get num records from index.
+        {
+            bcftools index --nrecords ~{vcf} || {
+                # indices built by GATK are broken and won't work. If that happens:
+                #   rm symlink to vcf_index
+                #   build index on the fly
+                #   get records from good index
+                #   delete the good index (in case this is run locally)
+                rm ~{vcf_index}
+                bcftools index -f -t -o "$(basename ~{vcf}).tbi" ~{vcf}
+                bcftools index --nrecords ~{vcf}
+                rm "$(basename ~{vcf}).tbi"
+            }
+        } > ~{num_records_file}
+    >>>
+
+    output {
+        Int num_records = read_int(num_records_file)
+        Int num_samples = read_int(num_samples_file)
+        Int num_entries = num_records * num_samples
+    }
+}
+
+
+task MaxInts {
+    input {
+        Array[Int] ints
+    }
+
+    command <<<
+        awk 'BEGIN {z=0;} {z=(z>=$0?z:$0);} END {print z;}' "~{write_lines(ints)}"
+    >>>
+
+    output {
+        Int max_int = read_int(stdout())
+    }
+
+    runtime {
+        docker: "ubuntu:latest"
+        cpu: 1
+        preemptible: 3
+        max_retries: 1
+        memory: "1 GiB"
+        disks: "local-disk 10 HDD"
+    }
+}
