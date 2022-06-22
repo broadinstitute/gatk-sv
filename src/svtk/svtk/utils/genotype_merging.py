@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 #
 
-"""
-
-"""
-
 from functools import reduce
+
+# Caches genotype carrier status for _is_non_ref()
+_carrier_map = {}
 
 
 def choose_best_genotype(sample, records):
@@ -23,41 +22,37 @@ def choose_best_genotype(sample, records):
     best_record : pysam.VariantRecord
     """
 
-    best_GT = (0, 0)
-    best_GQ = 0
-    best_record = None
-
-    if not any(['GQ' in record.samples[sample].keys() for record in records]):
-        for record in records:
-            if record.samples[sample]['GT'] != (0, 0):
-                return record
-        return records[0]
-
-    # Pick best non-reference genotype
-    # for record in records:
-    #    if record.samples[sample]['GQ'] >= best_GQ:
-        # if record is non-reference , use it
-        # or if it's a higher GQ for a reference call, use it
-    #        if record.samples[sample]['GT'] != (0, 0) or best_GT == (0, 0):
-    #            best_GT = record.samples[sample]['GT']
-    #            best_GQ = record.samples[sample]['GQ']
-    #            best_record = record
-
-    for record in records:
-        # if found non-ref GT, replace GT and GQ together
-        if record.samples[sample]['GT'] != (0, 0) and best_GT == (0, 0):
-            best_GT = record.samples[sample]['GT']
-            best_GQ = record.samples[sample]['GQ']
-            best_record = record
-        elif record.samples[sample]['GT'] == (0, 0) and best_GT != (0, 0):
-            continue
-        # if new GT  = best_GT, while found a higher GQ, replace GQ
+    # Returns true if the GT is called and non-ref
+    # TODO: does not handle multi-allelic CNVs
+    def _is_non_ref(format_fields):
+        gt = format_fields.get('GT', None)
+        if gt in _carrier_map:
+            return _carrier_map[gt]
         else:
-            if record.samples[sample]['GQ'] >= best_GQ:
-                best_GQ = record.samples[sample]['GQ']
-                best_record = record
+            is_carrier = gt is not None and any(a is not None and a > 0 for a in gt)
+            _carrier_map[gt] = is_carrier
+            return is_carrier
 
-    return best_record
+    def _get_mingq_index(format_fields_list):
+        gqs = [f['GQ'] for f in format_fields_list]
+        min_gq = min((x for x in gqs if x is not None), default=None)
+        return gqs.index(min_gq) if min_gq is not None else None
+
+    # Pre-fetch sample format fields and store with original record in a tuple as (record, formats_dict)
+    original_format_fields = [(record, record.samples[sample]) for record in records]
+
+    # Same as above but for called non-ref samples
+    carrier_format_fields = [x for x in original_format_fields if _is_non_ref(x[1])]
+
+    carrier_mingq_index = _get_mingq_index([f for _, f in carrier_format_fields])
+    if carrier_mingq_index is None:
+        original_mingq_index = _get_mingq_index([f for _, f in original_format_fields])
+        if original_mingq_index is None:
+            return records[0]
+        else:
+            return original_format_fields[original_mingq_index][0]
+    else:
+        return carrier_format_fields[carrier_mingq_index][0]
 
 
 def check_multiallelic(records):
