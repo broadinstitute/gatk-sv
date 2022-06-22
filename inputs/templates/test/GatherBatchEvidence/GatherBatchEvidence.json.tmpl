@@ -15,15 +15,11 @@
   "GatherBatchEvidence.cnmops_chrom_file": {{ reference_resources.autosome_file | tojson }},
   "GatherBatchEvidence.primary_contigs_fai": {{ reference_resources.primary_contigs_fai | tojson }},
   "GatherBatchEvidence.genome_file": {{ reference_resources.genome_file | tojson }},
-  "GatherBatchEvidence.inclusion_bed": {{ reference_resources.inclusion_bed | tojson }},
   "GatherBatchEvidence.matrix_qc_distance": "1000000",
   "GatherBatchEvidence.min_svsize": "50",
   "GatherBatchEvidence.run_matrix_qc": "true",
 
-  "GatherBatchEvidence.unpadded_intervals_file" : {{ reference_resources.unpadded_intervals_file | tojson }},
-  "GatherBatchEvidence.dbsnp_vcf" : {{ reference_resources.dbsnp_vcf | tojson }},
-  "GatherBatchEvidence.ref_fasta": {{ reference_resources.reference_fasta | tojson }},
-  "GatherBatchEvidence.ref_fasta_index": {{ reference_resources.reference_index | tojson }},
+  "GatherBatchEvidence.sd_locs_vcf" : {{ reference_resources.sd_locs_vcf | tojson }},
   "GatherBatchEvidence.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
   "GatherBatchEvidence.ploidy_sample_psi_scale": "0.001",
@@ -55,12 +51,10 @@
   "GatherBatchEvidence.gcnv_model_tars" : {{ test_batch.gcnv_model_tars | tojson }},
   "GatherBatchEvidence.PE_files": {{ test_batch.PE_files | tojson }},
   "GatherBatchEvidence.SR_files": {{ test_batch.SR_files | tojson }},
+  "GatherBatchEvidence.SD_files": {{ test_batch.SD_files | tojson }},
   "GatherBatchEvidence.counts": {{ test_batch.counts | tojson }},
   "GatherBatchEvidence.manta_vcfs": {{ test_batch.manta_vcfs | tojson }},
   "GatherBatchEvidence.samples": {{ test_batch.samples | tojson }},
   "GatherBatchEvidence.melt_vcfs": {{ test_batch.melt_vcfs | tojson }},
-  "GatherBatchEvidence.wham_vcfs": {{ test_batch.wham_vcfs | tojson }},
-  "GatherBatchEvidence.gvcfs": {{ test_batch.gvcfs | tojson }},
-
-  "GatherBatchEvidence.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }}
+  "GatherBatchEvidence.wham_vcfs": {{ test_batch.wham_vcfs | tojson }}
 }

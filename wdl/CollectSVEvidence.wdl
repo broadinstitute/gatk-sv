@@ -3,20 +3,21 @@ version 1.0
 import "Structs.wdl"
 
 # Workflow to run PE/SR collection on a single sample
-workflow PESRCollection {
+workflow CollectSVEvidence {
   input {
     File cram
     File cram_index
     String sample_id
-    String gatk_docker
     File reference_fasta
     File reference_index
     File reference_dict
+    File sd_locs_vcf
     File? gatk_jar_override
+    String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  call RunPESRCollection {
+  call RunCollectSVEvidence {
     input:
       cram = cram,
       cram_index = cram_index,
@@ -24,28 +25,32 @@ workflow PESRCollection {
       reference_fasta = reference_fasta,
       reference_index = reference_index,
       reference_dict = reference_dict,
-      gatk_docker = gatk_docker,
+      sd_locs_vcf = sd_locs_vcf,
       gatk_jar_override = gatk_jar_override,
+      gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
   }
 
   output {
-    File disc_out = RunPESRCollection.disc_out
-    File disc_out_index = RunPESRCollection.disc_out_index
-    File split_out = RunPESRCollection.split_out
-    File split_out_index = RunPESRCollection.split_out_index
+    File disc_out = RunCollectSVEvidence.disc_out
+    File disc_out_index = RunCollectSVEvidence.disc_out_index
+    File split_out = RunCollectSVEvidence.split_out
+    File split_out_index = RunCollectSVEvidence.split_out_index
+    File sd_out = RunCollectSVEvidence.sd_out
+    File sd_out_index = RunCollectSVEvidence.sd_out_index
   }
 }
 
 # Task to run collect-pesr on a single sample
-task RunPESRCollection {
+task RunCollectSVEvidence {
   input {
     File cram
     File cram_index
+    String sample_id
     File reference_fasta
     File reference_index
     File reference_dict
-    String sample_id
+    File sd_locs_vcf
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -78,6 +83,8 @@ task RunPESRCollection {
     File split_out_index = "${sample_id}.sr.txt.gz.tbi"
     File disc_out = "${sample_id}.pe.txt.gz"
     File disc_out_index = "${sample_id}.pe.txt.gz.tbi"
+    File sd_out = "${sample_id}.sd.txt.gz"
+    File sd_out_index = "${sample_id}.sd.txt.gz.tbi"
   }
   command <<<
 
@@ -87,13 +94,12 @@ task RunPESRCollection {
 
     /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" CollectSVEvidence \
         -I ~{cram} \
-        --pe-file ~{sample_id}.pe.txt.gz \
-        --sr-file ~{sample_id}.sr.txt.gz \
+        --sr-file "~{sample_id}.sr.txt.gz" \
+        --pe-file "~{sample_id}.pe.txt.gz" \
+        --allele-count-file "~{sample_id}.sd.txt.gz" \
+        --allele-count-vcf ~{sd_locs_vcf} \
         --sample-name ~{sample_id} \
         -R ~{reference_fasta}
-
-    tabix -f -s1 -b 2 -e 2 ~{sample_id}.pe.txt.gz
-    tabix -f -s1 -b 2 -e 2 ~{sample_id}.sr.txt.gz
 
   >>>
   runtime {
@@ -105,6 +111,5 @@ task RunPESRCollection {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-
 }
 

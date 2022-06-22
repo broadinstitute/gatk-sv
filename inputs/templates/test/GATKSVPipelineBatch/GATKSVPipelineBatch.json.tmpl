@@ -5,14 +5,11 @@
   "GATKSVPipelineBatch.use_melt": "false",
   "GATKSVPipelineBatch.use_scramble": "true",
 
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.gvcf_gcs_project_for_requester_pays" : {{ cloud_env.google_project_id | tojson }},
-
   "GATKSVPipelineBatch.name": {{ test_batch.name | tojson }},
   "GATKSVPipelineBatch.ped_file": {{ test_batch.ped_file | tojson }},
   "GATKSVPipelineBatch.requester_pays_crams": {{ test_batch.requester_pays_crams | tojson }},
   "GATKSVPipelineBatch.samples": {{ test_batch.samples | tojson }},
   "GATKSVPipelineBatch.bam_or_cram_files": {{ test_batch.bam_or_cram_files | tojson }},
-  "GATKSVPipelineBatch.gvcfs": {{ test_batch.gvcfs | tojson }},
   "GATKSVPipelineBatch.gcnv_model_tars" : {{ test_batch.gcnv_model_tars | tojson }},
   "GATKSVPipelineBatch.qc_definitions" : {{ test_batch.qc_definitions | tojson }},
 
@@ -51,6 +48,7 @@
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
@@ -58,10 +56,8 @@
   "GATKSVPipelineBatch.EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
   "GATKSVPipelineBatch.EvidenceQC.run_vcf_qc": "false",
 
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.unpadded_intervals_file" : {{ reference_resources.unpadded_intervals_file | tojson }},
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.dbsnp_vcf" : {{ reference_resources.dbsnp_vcf | tojson }},
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.sd_locs_vcf" : {{ reference_resources.sd_locs_vcf | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.cnmops_exclude_list": {{ reference_resources.cnmops_exclude_list | tojson }},
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.inclusion_bed": {{ reference_resources.inclusion_bed | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.cytoband": {{ reference_resources.cytobands | tojson }},
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.matrix_qc_distance": "1000000",

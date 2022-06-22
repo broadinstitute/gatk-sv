@@ -62,7 +62,6 @@ We still encourage members of the community to adapt GATK-SV for non-GCP backend
 
 ### Data:
 * Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). BAMs must also be indexed.
-* Indexed GVCFs produced by GATK HaplotypeCaller, or a jointly genotyped VCF.
 * Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
 
 #### <a name="sample-exclusion">Sample Exclusion</a>
@@ -81,7 +80,7 @@ Sample IDs should not:
 
 The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow inputs.
 
-Sample IDs are provided to [GatherSampleEvidence](#gather-sample-evidence) directly and need not match sample names from the BAM/CRAM headers or GVCFs. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [GatherBatchEvidence](#gather-batch-evidence). 
+Sample IDs are provided to [GatherSampleEvidence](#gather-sample-evidence) directly and need not match sample names from the BAM/CRAM headers. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [GatherBatchEvidence](#gather-batch-evidence). 
 
 The following inputs will need to be updated with the transformed sample IDs:
 * Sample ID list for [GatherSampleEvidence](#gather-sample-evidence) or [GatherBatchEvidence](#gather-batch-evidence)
@@ -130,7 +129,6 @@ The input values are provided only as an example and are not publicly accessible
 **Important**: The following parameters must be set when certain input data is in requester pays (RP) buckets:
 
 * `GATKSVPipelineSingleSample.requester_pays_cram` and `GATKSVPipelineBatch.GatherSampleEvidenceBatch.requester_pays_crams` - set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
-* `GATKSVPipelineBatch.GATKSVPipelinePhase1.gcs_project_for_requester_pays` - set to your Google Cloud Project ID if gVCFs are in an RP bucket, otherwise omit this parameter.
 
 #### Execution
 We recommend running the pipeline on a dedicated [Cromwell](https://github.com/broadinstitute/cromwell) server with a [cromshell](https://github.com/broadinstitute/cromshell) client. A batch run can be started with the following commands:
@@ -321,8 +319,7 @@ Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence int
 
 #### Inputs:
 * PED file (updated with [EvidenceQC](#evidence-qc) sex assignments, including sex = 0 for sex aneuploidies. Calls will not be made on sex chromosomes when sex = 0 in order to avoid generating many confusing calls or upsetting normalized copy numbers for the batch.)
-* Per-sample indexed GVCFs generated with HaplotypeCaller (`gvcfs` input), or a jointly-genotyped VCF (position-sharded, `snp_vcfs` input or `snp_vcfs_shard_list` input). The jointly-genotyped VCF may contain multi-allelic sites and indels, but only biallelic SNVs will be used by the pipeline. We recommend shards of 10 GB or less to lower compute time and resources.
-* Read count, BAF, PE, and SR files ([GatherSampleEvidence](#gather-sample-evidence))
+* Read count, BAF, PE, SD, and SR files ([GatherSampleEvidence](#gather-sample-evidence))
 * Caller VCFs ([GatherSampleEvidence](#gather-sample-evidence))
 * Contig ploidy model and gCNV model files ([gCNV training](#gcnv-training))
 
