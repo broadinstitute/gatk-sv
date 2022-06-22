@@ -22,8 +22,22 @@ from time import time
 from datetime import timedelta
 
 
-filter_models = ['mingq', 'boost', 'gqrecalibrator']
-filter_models_noBoost = [x for x in filter_models if x != 'boost']
+def load_filtered_vcfs(info_tsv, homref_exclude=[]):
+    """
+    Load connections to filtered VCFs
+    """
+
+    filtered_vcfs = {}
+
+    with open(info_tsv) as fin:
+        for prefix, vcf in csv.reader(fin, delimiter='\t'):
+            prefix = prefix.lower()
+            filtered_vcfs[prefix] = pysam.VariantFile(vcf)
+
+    filter_models = list(filtered_vcfs.keys())
+    homref_filter_models = [m for m in filter_models if m not in homref_exclude]
+
+    return filtered_vcfs, filter_models, homref_filter_models
 
 
 def is_mcnv(record):
@@ -82,7 +96,7 @@ def calc_af(record):
     return af
 
 
-def load_rules(rules_tsv, strict=False):
+def load_rules(rules_tsv, filter_models, strict=False):
     """
     Loads rules .tsv as a nested series of defaultdicts, keyed on:
     1. SVTYPE
@@ -121,20 +135,20 @@ def load_rules(rules_tsv, strict=False):
     return rules
 
 
-def modify_homref_rules(rules, strict=False):
+def modify_homref_rules(rules, homref_filter_models=[], strict=False):
     """
     Modifies a rules dictionary (see load_rules()) for integrating homozygous ref GTs
-    Don't consider Boost for homref GTs because Boost only scores non-ref GTs
+    Don't consider models specified in homref_filter_models for homref GTs (e.g., because Boost only scores non-ref GTs)
     """
 
     homref_rules = deepcopy(rules)
     
     # Update all defaults
     if strict:
-        default_pass = [set(filter_models_noBoost)]
+        default_pass = [set(homref_filter_models)]
     else:
-        default_pass = [set(x) for x in combinations(filter_models_noBoost, 1)] + \
-                       [set(x) for x in combinations(filter_models_noBoost, 2)]
+        default_pass = [set(x) for x in combinations(homref_filter_models, 1)] + \
+                       [set(x) for x in combinations(homref_filter_models, 2)]
     homref_rules.default_factory = lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: default_pass)))
 
     # Update all rules
@@ -146,14 +160,15 @@ def modify_homref_rules(rules, strict=False):
                 homref_rules[svtype][svlen][svaf].default_factory = lambda: default_pass
                 for svev in rules[svtype][svlen][svaf].keys():
                     old = rules[svtype][svlen][svaf][svev]
-                    new = [x - set(['boost']) for x in old]
+                    new = [x - set(homref_filter_models) for x in old]
                     homref_rules[svtype][svlen][svaf][svev] = \
                         [x for x in new if len(x) > 0]
 
     return homref_rules
 
 
-def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
+def unify_records(record, record_matches, rules, homref_rules, 
+                  homref_filter_models=[], bs_key=None, gqr_key=None):
     """
     Unify information across all versions of the same variant record
     """
@@ -171,28 +186,27 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
         svaf = tokenize_numeric(np.log10(af))
     nocalls = 0
     nonref = 0
-    
+
     # Process each sample in serial
     for sample in record.samples.keys():
 
         # Add BS from boost
-        if boost_r is not None:
-            BS = boost_r.samples[sample].get('BS', None)
-        else:
-            BS = None
-        record.samples[sample]['BS'] = BS
+        if bs_key is not None:
+            if record_matches[bs_key] is not None:
+                BS = record_matches[bs_key].samples[sample].get('BS', None)
+            else:
+                BS = None
+            record.samples[sample]['BS'] = BS
 
-        # Rewrite GQ from gqrecal
-        if gqrecal_r is not None:
-            GQ = gqrecal_r.samples[sample].get('GQ', None)
-            record.samples[sample]['GQ'] = GQ
-
-        # Add SL from gqrecal
-        if gqrecal_r is not None:
-            SL = gqrecal_r.samples[sample].get('SL', None)
-        else:
-            SL = None
-        record.samples[sample]['SL'] = SL
+        # Add GQR and SL from gqrecal, if provided
+        if gqr_key is not None:
+            if record_matches[gqr_key] is not None:
+                GQR = record_matches[gqr_key].samples[sample].get('GQ', None)
+                record.samples[sample]['GQR'] = GQR
+                SL = record_matches[gqr_key].samples[sample].get('SL', None)
+            else:
+                SL = None
+            record.samples[sample]['SL'] = SL
 
         # Do not modify GT for multiallelic variants
         if multiallelic:
@@ -200,29 +214,28 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
 
         # Get list of filtering methods where this genotype passes
         pass_filts = set()
-        for rec, tag in [(mingq_r, 'mingq'), (boost_r, 'boost'), (gqrecal_r, 'gqrecal')]:
-            if rec is not None:
-                GT = rec.samples[sample]['GT']
+        fail_filts = set()
+        for prefix, matching_record in record_matches.items():
+            if matching_record is not None:
+                GT = matching_record.samples[sample]['GT']
 
-                # Don't consider Boost for homref GTs because Boost only scores non-ref GTs
-                if tag == 'boost' and GT == (0, 0):
+                # Don't consider certain models for homref GTs (e.g., Boost only scores non-ref GTs)
+                if GT == (0, 0) and prefix not in homref_filter_models:
                     continue
 
                 # If any GT other than ./. is observed, consider this GT passing
-                if GT != (None, None):
-                    pass_filts.add(tag)
+                if GT == (None, None):
+                    fail_filts.add(prefix)
+                else:
+                    pass_filts.add(prefix)
 
         # Get list of filter combinations eligible for this GT
-        # Don't consider Boost for homref GTs because Boost only scores non-ref GTs
         EV = tokenize_EV(record.samples[sample]['EV'])
         if record.samples[sample]['GT'] == (0, 0):
             relevant_rules = homref_rules
         else:
             relevant_rules = rules
-        try:
-            elig_combos = relevant_rules[svtype][svsize][svaf][EV]
-        except:
-            import pdb; pdb.set_trace()
+        elig_combos = relevant_rules[svtype][svsize][svaf][EV]
 
         # Check if GT passes any combination of eligible filters
         passing = any([len(combo.intersection(pass_filts)) == len(combo) for combo in elig_combos])
@@ -235,6 +248,12 @@ def unify_records(record, mingq_r, boost_r, gqrecal_r, rules, homref_rules):
             if record.samples[sample]['GT'] != (None, None) \
             and record.samples[sample]['GT'] != (0, 0):
                 nonref += 1
+
+        # Update sample FT field based on failed filters
+        if len(fail_filts) > 0:
+            record.samples[sample]['FT'] = tuple(fail_filts)
+        else:
+            record.samples[sample]['FT'] = tuple(['PASS'])
 
     # Annotate no-call rate (only for biallelic variants)
     if not multiallelic:
@@ -251,10 +270,8 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--unfiltered-vcf', help='Original vcf prior to filtering',
                         required=True)
-    parser.add_argument('--mingq-vcf', help='VCF filtered by minGQ', required=True)
-    parser.add_argument('--boost-vcf', help='VCF filtered by Boost', required=True)
-    parser.add_argument('--gqrecalibrator-vcf', help='VCF filtered by GATK ' +
-                        'GQRecalibrator', required=True)
+    parser.add_argument('--filtered-vcfs', help='Two-column .tsv listing all ' +
+                        'filtered VCF prefixes and paths', required=True)
     parser.add_argument('--rules', help='.tsv of rules for integrating genotypes. ' +
                         'If provided, must have the following five columns: SVTYPE, ' +
                         'min_log10_SVLEN, min_log10_AF, EV, passing_filter_combos. ' +
@@ -263,6 +280,9 @@ def main():
                         help='Require intersection of all three filters for any SVs ' +
                         'not otherwise specified in --rules. [default: keep any ' +
                         'passing GT]')
+    parser.add_argument('--homref-exclude', action='append', help='Specify filtered ' +
+                        'VCF prefix(es) to exclude when filtering homozygous ' +
+                        'reference GTs.')
     parser.add_argument('--keep-empty-records', default=False, action='store_true',
                         help='Retain records where 100\% of non-reference GTs are ' +
                         'removed during filtering. Default: drop records with AC=0.')
@@ -274,25 +294,41 @@ def main():
 
     # Open connections to all input VCFs
     raw_vcf = pysam.VariantFile(args.unfiltered_vcf)
-    mingq_vcf = pysam.VariantFile(args.mingq_vcf)
-    boost_vcf = pysam.VariantFile(args.boost_vcf)
-    gqrecal_vcf = pysam.VariantFile(args.gqrecalibrator_vcf)
+    filtered_vcfs, filter_models, homref_filter_models = \
+        load_filtered_vcfs(args.filtered_vcfs, args.homref_exclude)
 
     # Update VCF header as needed
-    raw_vcf.header.add_meta('FORMAT', 
-                            items=[('ID', "BS"), ('Number', "1"), ('Type', "Float"), 
-                                   ('Description', "lgBoost score")])
-    raw_vcf.header.add_meta('FORMAT', 
-                            items=[('ID', "SL"), ('Number', "1"), ('Type', "Integer"), 
-                                   ('Description', "250 times the logits that " + \
-                                                   "the genotype is correct")])
+    bs_prefix_hits = [p for p in filtered_vcfs.keys() if 'boost' in p]
+    if len(bs_prefix_hits) > 0:
+        bs_prefix = bs_prefix_hits[0]
+        raw_vcf.header.add_meta('FORMAT', 
+                                items=[('ID', "BS"), ('Number', "1"), ('Type', "Float"), 
+                                       ('Description', "lgBoost score")])
+    else:
+        bs_prefix = None
+    gqr_prefix_hits = [p for p in filtered_vcfs.keys() if 'gqrecal' in p]
+    if len(gqr_prefix_hits) > 0:
+        gqr_prefix = gqr_prefix_hits[0]
+        raw_vcf.header.add_meta('FORMAT', 
+                                items=[('ID', "GQR"), ('Number', "1"), ('Type', "Integer"), 
+                                       ('Description', "Recalibrated genotype " + \
+                                        "quality from GATK GQRecalibrator")])
+        raw_vcf.header.add_meta('FORMAT', 
+                                items=[('ID', "SL"), ('Number', "1"), ('Type', "Integer"), 
+                                       ('Description', "250 times the logits that " + \
+                                                       "the genotype is correct")])
+    else:
+        gqr_prefix = None
     raw_vcf.header.add_meta('INFO',
                             items=[('ID', "NCR"), ('Number', "1"), ('Type', "Float"),
                                    ('Description', "Proportion of no-call GTs")])
+    raw_vcf.header.add_meta('FORMAT',
+                            items=[('ID', "FT"), ('Number', "."), ('Type', "String"),
+                                   ('Description', "GT filters")])
 
     # Load integration rules
-    rules = load_rules(args.rules, args.strict)
-    homref_rules = modify_homref_rules(rules)
+    rules = load_rules(args.rules, filter_models, args.strict)
+    homref_rules = modify_homref_rules(rules, homref_filter_models)
 
     # Open connection to output VCF
     if args.vcf_out in '- stdout'.split():
@@ -301,9 +337,7 @@ def main():
         outvcf = pysam.VariantFile(args.vcf_out, 'w', header=raw_vcf.header)
 
     # Load first records from all filtered VCFs into memory
-    next_mingq_record = mingq_vcf.__next__()
-    next_boost_record = boost_vcf.__next__()
-    next_gqrecal_record = gqrecal_vcf.__next__()
+    next_records = {k : v.__next__() for k, v in filtered_vcfs.items()}
 
     # Iterate over records
     k=0
@@ -313,39 +347,22 @@ def main():
     for record in raw_vcf:
         vid = record.id
 
-        # Check for matching MinGQ record
-        mingq_record = None
-        if next_mingq_record is not None:
-            if next_mingq_record.id == vid:
-                mingq_record = next_mingq_record.copy()
-                try:
-                    next_mingq_record = mingq_vcf.__next__()
-                except:
-                    next_mingq_record = None
-
-        # Check for matching Boost record
-        boost_record = None
-        if next_boost_record is not None:
-            if next_boost_record.id == vid:
-                boost_record = next_boost_record.copy()
-                try:
-                    next_boost_record = boost_vcf.__next__()
-                except:
-                    next_boost_record = None
-
-        # Check for matching GQRecalibrator record
-        gqrecal_record = None
-        if next_gqrecal_record is not None:
-            if next_gqrecal_record.id == vid:
-                gqrecal_record = next_gqrecal_record.copy()
-                try:
-                    next_gqrecal_record = gqrecal_vcf.__next__()
-                except:
-                    next_gqrecal_record = None
+        # Check for matching records
+        record_matches = {}
+        for prefix, vcf in filtered_vcfs.items():
+            record_matches[prefix] = None
+            if next_records[prefix] is not None:
+                if next_records[prefix].id == vid:
+                    record_matches[prefix] = next_records[prefix].copy()
+                    try:
+                        next_records[prefix] = filtered_vcfs[prefix].__next__()
+                    except:
+                        next_records[prefix] = None
 
         # Unify information from all versions of record
-        record, n_nonref = unify_records(record, mingq_record, boost_record, 
-                                         gqrecal_record, rules, homref_rules)
+        record, n_nonref = \
+            unify_records(record, record_matches, rules, homref_rules, 
+                          homref_filter_models, bs_prefix, gqr_prefix)
 
         # Write updated record to output VCF if at least one non-reference GT was
         # retained (or unless overridden by --keep-empty-records)
