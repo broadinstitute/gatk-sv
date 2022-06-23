@@ -29,6 +29,7 @@ workflow GATKSVPipelineBatch {
     Array[File]? counts_files_input
     Array[File]? pe_files_input
     Array[File]? sr_files_input
+    Array[File]? sd_files_input
     Array[File?]? baf_files_input
     Array[File]? delly_vcfs_input
     Array[File]? manta_vcfs_input
@@ -42,16 +43,6 @@ workflow GATKSVPipelineBatch {
     Boolean use_melt = true
     Boolean use_scramble = true
     Boolean use_wham = true
-
-    # BAF Generation (if baf_files unavailable)
-    # BAF Option #1 (provide all)
-    # From single-sample gVCFS
-    Array[File]? gvcfs
-
-    # BAF Option #2
-    # From multi-sample VCFs (sharded by position)
-    Array[File]? snp_vcfs
-    File? snp_vcf_header # Required only if VCFs are unheadered
 
     # Merge contig vcfs at each stage of MakeCohortVcf for QC
     Boolean makecohortvcf_merge_cluster_vcfs = false
@@ -126,7 +117,7 @@ workflow GATKSVPipelineBatch {
   }
 
   Boolean collect_coverage_ = !defined(counts_files_input)
-  Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input))
+  Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input) && defined(sd_files_input))
 
   String? delly_docker_ = if (!defined(delly_vcfs_input) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(manta_vcfs_input) && use_manta) then manta_docker else NONE_STRING_
@@ -172,6 +163,7 @@ workflow GATKSVPipelineBatch {
   Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files_input])
   Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files_input])
   Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files_input])
+  Array[File] sd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_sd])) else select_first([sd_files_input])
 
   if (use_delly) {
     Array[File] delly_vcfs_ = if defined(delly_vcfs_input) then select_first([delly_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
@@ -209,8 +201,6 @@ workflow GATKSVPipelineBatch {
       ped_file=ped_file,
       genome_file=genome_file,
       contigs=primary_contigs_fai,
-      reference_fasta=reference_fasta,
-      reference_index=reference_index,
       reference_dict=reference_dict,
       contig_ploidy_model_tar=contig_ploidy_model_tar,
       gcnv_model_tars=gcnv_model_tars,
@@ -220,14 +210,12 @@ workflow GATKSVPipelineBatch {
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
+      SD_files=sd_files_,
       delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
-      gvcfs=gvcfs,
-      snp_vcfs=snp_vcfs,
-      snp_vcf_header=snp_vcf_header,
       cnmops_chrom_file=autosome_file,
       cnmops_allo_file=allosome_file,
       allosome_contigs=allosome_file,

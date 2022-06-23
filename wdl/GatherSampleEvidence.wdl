@@ -9,7 +9,7 @@ import "Manta.wdl" as manta
 import "MELT.wdl" as melt
 import "Scramble.wdl" as scramble
 import "GatherSampleEvidenceMetrics.wdl" as metrics
-import "PESRCollection.wdl" as pesr
+import "CollectSVEvidence.wdl" as coev
 import "Whamg.wdl" as wham
 
 # Runs selected tools on BAM/CRAM files
@@ -63,6 +63,9 @@ workflow GatherSampleEvidence {
     File? manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
+
+    # PESR inputs
+    File sd_locs_vcf
 
     # Melt inputs
     File? melt_standard_vcf_header # required if run_melt True
@@ -224,7 +227,7 @@ workflow GatherSampleEvidence {
   }
 
   if (collect_pesr) {
-    call pesr.PESRCollection {
+    call coev.CollectSVEvidence {
       input:
         cram = bam_file_,
         cram_index = bam_index_,
@@ -232,6 +235,7 @@ workflow GatherSampleEvidence {
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
+        sd_locs_vcf = sd_locs_vcf,
         gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
         runtime_attr_override = runtime_attr_pesr
     }
@@ -298,7 +302,7 @@ workflow GatherSampleEvidence {
   # Avoid storage costs
   if (!is_bam_) {
     if (delete_intermediate_bam) {
-      Array[File] ctb_dummy = select_all([CollectCounts.counts, Delly.vcf, Manta.vcf, PESRCollection.disc_out, PESRCollection.split_out, MELT.vcf, Scramble.vcf, Whamg.vcf])
+      Array[File] ctb_dummy = select_all([CollectCounts.counts, Delly.vcf, Manta.vcf, CollectSVEvidence.disc_out, CollectSVEvidence.split_out, CollectSVEvidence.sd_out, MELT.vcf, Scramble.vcf, Whamg.vcf])
       call DeleteIntermediateFiles {
         input:
           intermediates = select_all([CramToBam.bam_file, MELT.filtered_bam]),
@@ -314,8 +318,8 @@ workflow GatherSampleEvidence {
       input:
         sample = sample_id,
         coverage_counts = CollectCounts.counts,
-        pesr_disc = PESRCollection.disc_out,
-        pesr_split = PESRCollection.split_out,
+        pesr_disc = CollectSVEvidence.disc_out,
+        pesr_split = CollectSVEvidence.split_out,
         delly_vcf = Delly.vcf,
         manta_vcf = Manta.vcf,
         melt_vcf = MELT.vcf,
@@ -350,10 +354,12 @@ workflow GatherSampleEvidence {
     File? scramble_vcf = Scramble.vcf
     File? scramble_index = Scramble.index
 
-    File? pesr_disc = PESRCollection.disc_out
-    File? pesr_disc_index = PESRCollection.disc_out_index
-    File? pesr_split = PESRCollection.split_out
-    File? pesr_split_index = PESRCollection.split_out_index
+    File? pesr_disc = CollectSVEvidence.disc_out
+    File? pesr_disc_index = CollectSVEvidence.disc_out_index
+    File? pesr_split = CollectSVEvidence.split_out
+    File? pesr_split_index = CollectSVEvidence.split_out_index
+    File? pesr_sd = CollectSVEvidence.sd_out
+    File? pesr_sd_index = CollectSVEvidence.sd_out_index
 
     File? wham_vcf = Whamg.vcf
     File? wham_index = Whamg.index
