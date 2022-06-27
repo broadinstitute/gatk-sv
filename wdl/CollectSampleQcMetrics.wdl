@@ -60,13 +60,28 @@ workflow CollectSampleQcMetrics {
 
   String picard_jar_ = select_first([picard_jar, "/usr/picard/picard.jar"])
 
+  if (run_alignment_summary_metrics) {
+    call CollectAlignmentSummaryMetrics {
+      input:
+        sample_id = sample_id,
+        bam_or_cram_file = bam_or_cram_file,
+        bam_or_cram_index = bam_or_cram_index_,
+        reference_fasta = ref_fasta,
+        reference_index = ref_index_,
+        reference_dict = ref_dict_,
+        picard_jar_path = picard_jar_,
+        picard_docker = picard_docker,
+        runtime_attr_override = runtime_attr_raw_wgs_metrics
+    }
+  }
+
   if (run_wgs_metrics) {
     call CollectWgsMetrics {
       input:
         sample_id = sample_id,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index_,
-        read_length = read_length_override,
+        read_length = select_first([read_length_override, CollectAlignmentSummaryMetrics.mean_read_length, 150]),
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         intervals = wgs_metrics_intervals,
@@ -82,25 +97,10 @@ workflow CollectSampleQcMetrics {
         sample_id = sample_id,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index_,
-        read_length = read_length_override,
+        read_length = select_first([read_length_override, CollectAlignmentSummaryMetrics.mean_read_length, 150]),
         reference_fasta = ref_fasta,
         reference_index = ref_index_,
         intervals = wgs_metrics_intervals,
-        picard_jar_path = picard_jar_,
-        picard_docker = picard_docker,
-        runtime_attr_override = runtime_attr_raw_wgs_metrics
-    }
-  }
-
-  if (run_alignment_summary_metrics) {
-    call CollectAlignmentSummaryMetrics {
-      input:
-        sample_id = sample_id,
-        bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index_,
-        reference_fasta = ref_fasta,
-        reference_index = ref_index_,
-        reference_dict = ref_dict_,
         picard_jar_path = picard_jar_,
         picard_docker = picard_docker,
         runtime_attr_override = runtime_attr_raw_wgs_metrics
@@ -444,10 +444,49 @@ task CollectAlignmentSummaryMetrics {
       INPUT=~{bam_or_cram_file} \
       REFERENCE_SEQUENCE=~{reference_fasta} \
       OUTPUT="~{metrics_file_name}"
+
+    function transpose_table() {
+          cat \
+          | awk ' {
+              for (col = 1; col <= NF; ++col) {
+                table[NR, col] = $col
+              }
+              if(NF > num_cols) {
+                num_cols = NF
+              }
+            } END {
+              for (row = 1; row <= num_cols; ++row) {
+                printf "%s", table[1, row]
+                for (col = 2; col <= NR; ++col) {
+                  printf "\t%s", table[col, row]
+                }
+                printf "\n"
+              }
+            }'
+        }
+
+    # get alignment summary metrics for all PAIR from sample,
+    # and transpose to get one
+    #    property_name -tab- value
+    # per line. This is readable by cromwell read_map()
+    # Then remove the CATEGORY, LIBRARY, SAMPLE, and READ_GROUP properties
+    # to get table with properties:
+    #   TOTAL_READS, PF_READS, PCT_PF_READS, PF_NOISE_READS, PF_READS_ALIGNED, PCT_PF_READS_ALIGNED,
+    #   PF_ALIGNED_BASES, PF_HQ_ALIGNED_READS, PF_HQ_ALIGNED_BASES, PF_HQ_ALIGNED_Q20_BASES,
+    #   PF_HQ_MEDIAN_MISMATCHES, PF_MISMATCH_RATE, PF_HQ_ERROR_RATE, PF_INDEL_RATE, MEAN_READ_LENGTH,
+    #   READS_ALIGNED_IN_PAIRS, PCT_READS_ALIGNED_IN_PAIRS, PF_READS_IMPROPER_PAIRS, PCT_PF_READS_IMPROPER_PAIRS,
+    #   BAD_CYCLES, STRAND_BALANCE, PCT_CHIMERAS, PCT_ADAPTER
+    grep -A4 "^## METRICS CLASS" "~{metrics_file_name}" \
+      | grep -E "^CATEGORY\s|^PAIR\s" \
+      | transpose_table \
+      | grep -Ev "^CATEGORY\s|^LIBRARY\s|^SAMPLE\s|^READ_GROUP\s" \
+      > "map.tsv"
+
   >>>
 
   output {
     File metrics_file = metrics_file_name
+    Int mean_read_length = round(read_map("map.tsv")["MEAN_READ_LENGTH"])
   }
 }
 
