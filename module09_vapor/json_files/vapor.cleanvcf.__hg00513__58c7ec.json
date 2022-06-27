@@ -1,0 +1,16 @@
+{
+    "VaPoR.ref_fasta" : "gs://talkowski-sv-gnomad-resources/reference/Homo_sapiens_assembly38.fasta",
+    "VaPoR.ref_fai" : "gs://talkowski-sv-gnomad-resources/reference/Homo_sapiens_assembly38.fasta.fai",
+    "VaPoR.ref_dict": "gs://talkowski-sv-gnomad-resources/reference/Homo_sapiens_assembly38.dict",
+    "VaPoR.contigs": ["chr1","chr2","chr3","chr4","chr5","chr6","chr7","chr8","chr9","chr10","chr11","chr12","chr3","chr14","chr15","chr16","chr17","chr18","chr19","chr20", "chr21", "chr22", "chrX"],
+    "VaPoR.sv_base_mini_docker" :      "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
+    "VaPoR.sv_pipeline_docker":        "us.gcr.io/broad-dsde-methods/eph/sv-pipeline:eph_hotfix_no_evidence-1f461ed",
+    "VaPoR.vapor_docker" :             "talkowski/vapor:20210525",
+    "VaPoR.runtime_attr_vapor": {"disk_gb": 50},
+    "VaPoR.min_shard_size" : 100,
+    "VaPoR.sample": "__hg00513__58c7ec",
+    "VaPoR.prefix": "cleanvcf___hg00513__58c7ec",
+    "VaPoR.bam_or_cram_file": "gs://broad-dsde-methods-long-reads-outgoing/HGSVC2/PBCCSWholeGenome/HG00513/alignments/HG00513.bam",
+    "VaPoR.bam_or_cram_index": "gs://broad-dsde-methods-long-reads-outgoing/HGSVC2/PBCCSWholeGenome/HG00513/alignments/HG00513.bam.crai",
+    "VaPoR.bed_file": "gs://talkowski-sv-gnomad-output/zero/VaPoR/bed/__hg00513__58c7ec.vs_pb.bed.gz"
+}
