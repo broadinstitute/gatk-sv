@@ -54,12 +54,12 @@ def is_mcnv(record):
         return False
 
 
-def tokenize_numeric(svlen):
+def tokenize_numeric(x):
     """
     Translates log10-scaled numeric values (SVLEN, AF, etc.) into string keys for dicts
     """
 
-    return str(int(np.floor(svlen)))
+    return str(int(np.floor(x)))
 
 
 def tokenize_EV(EV):
@@ -183,7 +183,10 @@ def unify_records(record, record_matches, rules, homref_rules,
             af = record.info['AF']
         else:
             af = calc_af(record)
-        svaf = tokenize_numeric(np.log10(af))
+        if af > 0:
+            svaf = tokenize_numeric(np.log10(af))
+        else:
+            svaf = 'AF0'
     nocalls = 0
     nonref = 0
 
@@ -340,18 +343,31 @@ def main():
     next_records = {k : v.__next__() for k, v in filtered_vcfs.items()}
 
     # Iterate over records
-    k=0
-    k_out=0
+    k = 0
+    k_out = 0
+    seen_vids = set()
     if args.verbose:
         start_time = time()
     for record in raw_vcf:
         vid = record.id
+
+        # Check to ensure no duplicate variant IDs
+        if vid in seen_vids:
+            raise Exception('Encountered record ID in unfiltered VCF that ' + \
+                            'was already processed: ' + vid + '\n')
 
         # Check for matching records
         record_matches = {}
         for prefix, vcf in filtered_vcfs.items():
             record_matches[prefix] = None
             if next_records[prefix] is not None:
+                
+                # Check to ensure no duplicate variant IDs
+                if next_records[prefix].id in seen_vids:
+                    raise Exception('Encountered record ID in ' + prefix + \
+                                    ' VCF that was already processed: ' + \
+                                    next_records[prefix].id + '\n')
+
                 if next_records[prefix].id == vid:
                     record_matches[prefix] = next_records[prefix].copy()
                     try:
@@ -363,6 +379,9 @@ def main():
         record, n_nonref = \
             unify_records(record, record_matches, rules, homref_rules, 
                           homref_filter_models, bs_prefix, gqr_prefix)
+
+        # Update list of seen VIDs
+        seen_vids.add(vid)
 
         # Write updated record to output VCF if at least one non-reference GT was
         # retained (or unless overridden by --keep-empty-records)
