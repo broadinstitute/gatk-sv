@@ -3,8 +3,8 @@ def read_in(file_name, label):
     newlist = []
     wgsfile = file_name
     
-    with open(wgsfile) as file:
-        for line in file:
+    with tfio.gfile.GFile(file_name, "r") as inp:
+        for line in inp:
             intable = line.startswith(label)
             if intable == True:
                 started = True
@@ -161,8 +161,9 @@ def windows(table, window):
     
     if len(table.columns) == 7:
         return window_metrics_std(table, window)
- 
-def mainfile(index, localize=True):
+        
+
+def mainfile(index):
     allsamplecolumns = ['alignment_summary_metrics', 'base_distribution_by_cycle_table', 'gc_bias_summary_metrics', 
                         'insert_size_metrics', 'mean_quality_by_cycle_table', 
                         'sequencing_artifact_summary_metrics', 'quality_score_table', 'quality_yield_metrics', 
@@ -186,16 +187,24 @@ def mainfile(index, localize=True):
             if type(metric) == float and math.isnan(metric):
                 continue
             else:
-                if localize:
-                    ! gsutil cp $metric .
-                result.append(metric.split("/")[-1])
+                result.append(metric)
         if result != []:
-            key1 = result[0].split('.')[0]
+            key1 = result[0].split('.')[0].split('/')[-1]
             Dict[key1] = result
     return Dict
             
-
-sampledict = mainfile([325, 431], localize=False)
+#     for column in allsamplecolumns:
+#         for i in index:
+#             metric = dropemptycolumns[column][i]
+#             if metric == 'NaN':
+#                 continue
+#             else:
+#                 ! gsutil cp $metric .
+#                 result.append(metric.split("/")[-1])
+#         return result
+        
+    
+sampledict = mainfile(range(50))
 allsamplecolumns = ['alignment_summary_metrics', 'base_distribution_by_cycle_table', 'gc_bias_summary_metrics', 
                         'insert_size_metrics', 'mean_quality_by_cycle_table', 
                         'sequencing_artifact_summary_metrics', 'quality_score_table', 'quality_yield_metrics', 
@@ -262,4 +271,6 @@ def concattables():
         newrow = newrow.loc[:, ~newrow.columns.duplicated()].copy()
         result = pd.concat([result, newrow], ignore_index = True)
     return result
+        
 
+        
