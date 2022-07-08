@@ -54,8 +54,8 @@ workflow GatherBatchEvidence {
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
 
     # Condense read counts
-    Int? condense_num_bins
-    Int? condense_bin_size
+    Int? min_interval_size
+    Int? max_interval_size
 
     # gCNV inputs
     File contig_ploidy_model_tar
@@ -307,8 +307,8 @@ workflow GatherBatchEvidence {
       input:
         counts = counts[i],
         sample = samples[i],
-        num_bins = condense_num_bins,
-        expected_bin_size = condense_bin_size,
+        min_interval_size = min_interval_size,
+        max_interval_size = max_interval_size,
         condense_counts_docker = condense_counts_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }
