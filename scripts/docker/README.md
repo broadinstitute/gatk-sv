@@ -43,3 +43,5 @@ Conda packages `termcolor` and `pprint` are assumed to be available.
 * `test_build_docker.ipynb` is for debugging and testing purposes
 
 * Use `update_json_docker.sh` to update dockers tags across all json parameter files
+
+* When building on Apple Silicon macs (newer macs with e.g. the M1 or M2 chipset), ensure that Rosetta is installed: `softwareupdate --install-rosetta`. Note that docker software is still somewhat unstable on these devices, so we cannot fully support them. We have had the most success by restricting docker desktop to 1 CPU (otherwise builds often churn forever without progress).

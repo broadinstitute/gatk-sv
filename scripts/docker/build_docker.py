@@ -498,7 +498,7 @@ class ImageBuilder:  # class for building and pushing a single image
             print(f"skipping build of {self.local_image} because it is already built and --no-force-rebuild is set")
             return
         # standard build command
-        docker_build_command = "docker build --progress plain --network=host \\\n    "
+        docker_build_command = "docker build --platform linux/amd64 --progress plain --network=host \\\n    "
         docker_build_command += "-f " + f"{self.working_dir}/dockerfiles/{self.name}/Dockerfile" + " \\\n    "
         docker_build_command += "--tag " + self.local_image + " \\\n    "
         # parse extra args list
