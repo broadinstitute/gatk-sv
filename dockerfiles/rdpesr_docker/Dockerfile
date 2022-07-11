@@ -91,3 +91,9 @@ COPY Step3.apply_boost_filter.R /src/Step3.apply_boost_filter.R
 COPY integrate_Genomic_Content_annotations.R /src/integrate_Genomic_Content_annotations.R
 COPY extract_SVs_by_svtype_genomiccontect.py /src/extract_SVs_by_svtype_genomiccontect.py
 COPY TrainRandomForestModel.R /src/TrainRandomForestModel.R
+COPY integrate_per_sample_testdata.R /src/integrate_per_sample_testdata.R
+COPY integrate_per_sample_testdata.test.R /src/integrate_per_sample_testdata.test.R
+COPY apply_randon_forest_models.R /src/apply_randon_forest_models.R
+
+
+
