@@ -196,7 +196,7 @@ def convert(record: pysam.VariantRecord,
                 if svtype == 'DEL':
                     new_genotype['CN'] = 0
         if svtype == 'CNV':
-            new_genotype['GT'] = (None,)*new_genotype['ECN']
+            new_genotype['GT'] = (None,) * new_genotype['ECN']
     return new_record
 
 
