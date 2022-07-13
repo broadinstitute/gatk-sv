@@ -1,0 +1,1406 @@
+{
+  "workflowName": "BenchmarkGqFilter",
+  "rootWorkflowId": "7f320111-2df7-4ab5-9ab8-6c288a46b006",
+  "calls": {
+    "BenchmarkGqFilter.GetVcfSize": [
+      {
+        "executionStatus": "Done",
+        "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-GetVcfSize/stdout",
+        "compressedDockerSize": 200211135,
+        "shardIndex": -1,
+        "jes": {
+          "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh"
+        },
+        "outputs": {
+          "num_samples": 4151,
+          "num_records": 437931,
+          "num_entries": 1817851581
+        },
+        "runtimeAttributes": {
+          "preemptible": "3",
+          "failOnStderr": "false",
+          "bootDiskSizeGb": "10",
+          "disks": "local-disk 10 HDD",
+          "continueOnReturnCode": "0",
+          "docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+          "maxRetries": "0",
+          "cpu": "1",
+          "cpuMin": "1",
+          "noAddress": "false",
+          "zones": "us-central1-b",
+          "memoryMin": "2 GB",
+          "memory": "2 GB"
+        },
+        "callCaching": {
+          "allowResultReuse": true,
+          "hit": true,
+          "result": "Cache Hit: c9f3fd13-beff-4fd6-9f01-4e7e14208c29:GetTruthOverlap.GetTestVcfSize:0",
+          "hashes": {
+            "output count": "ECCBC87E4B5CE2FE28308FD9F2A7BAF3",
+            "runtime attribute": {
+              "docker": "5DCFCFA29B7F0EE187F46C097EA75563",
+              "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+              "failOnStderr": "68934A3E9455FA72420237EB05902327"
+            },
+            "output expression": {
+              "Int num_samples": "85B0039C4C83BC49645B905F543CA397",
+              "Int num_entries": "4E6400BB4C138777779ACD773B6FF025",
+              "Int num_records": "0D76ADD246802F9C860336AD7CF9BD51"
+            },
+            "input count": "8F14E45FCEEA167A5A36DEDD4BEA2543",
+            "backend name": "85D6F63859525E464173387636E20324",
+            "command template": "2707DDFBA8DE84612701DD6FB838C9D9",
+            "input": {
+              "String num_samples_file": "A936B541B82B3B295210E1AAA9BE797E",
+              "File vcf_index": "t0v5ow==",
+              "File vcf": "p5fedA==",
+              "String samtools_cloud_docker": "2D8A771A4D85E1AC5FE918016CBD9EB8",
+              "String automatic_vcf_index": "90B7574A16AFB75B4767664626EC4A04",
+              "String num_records_file": "07792D37A162CFF6370BDD3B476A67B7",
+              "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+            }
+          },
+          "effectiveCallCachingMode": "ReadAndWriteCache"
+        },
+        "inputs": {
+          "automatic_vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+          "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+          "num_records_file": "num_records.txt",
+          "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+          "disk_gb": 10,
+          "num_samples_file": "num_samples.txt",
+          "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz"
+        },
+        "returnCode": 0,
+        "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-GetVcfSize/monitoring.log",
+        "backend": "PAPIv2",
+        "end": "2022-07-06T12:36:59.804Z",
+        "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-GetVcfSize/stderr",
+        "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-GetVcfSize",
+        "attempt": 1,
+        "executionEvents": [
+          {
+            "startTime": "2022-07-06T12:36:39.576Z",
+            "description": "Pending",
+            "endTime": "2022-07-06T12:36:39.576Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:39.576Z",
+            "description": "RequestingExecutionToken",
+            "endTime": "2022-07-06T12:36:47.715Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:51.345Z",
+            "description": "CallCacheReading",
+            "endTime": "2022-07-06T12:36:56.412Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:47.715Z",
+            "description": "WaitingForValueStore",
+            "endTime": "2022-07-06T12:36:47.715Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:56.412Z",
+            "description": "UpdatingCallCache",
+            "endTime": "2022-07-06T12:36:58.823Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:58.823Z",
+            "description": "UpdatingJobStore",
+            "endTime": "2022-07-06T12:36:59.804Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:47.715Z",
+            "description": "PreparingJob",
+            "endTime": "2022-07-06T12:36:51.345Z"
+          }
+        ],
+        "backendLogs": {
+          "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-GetVcfSize/GetVcfSize.log"
+        },
+        "start": "2022-07-06T12:36:39.575Z"
+      }
+    ],
+    "BenchmarkGqFilter.PickleComparisonScores": [
+      {
+        "retryableFailure": false,
+        "executionStatus": "Failed",
+        "subWorkflowMetadata": {
+          "workflowName": "PickleComparisonScores",
+          "rootWorkflowId": "7f320111-2df7-4ab5-9ab8-6c288a46b006",
+          "calls": {
+            "PickleVcfProperties.GetVcfSize": [
+              {
+                "preemptible": true,
+                "executionStatus": "Done",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetVcfSize/stdout",
+                "backendStatus": "Success",
+                "compressedDockerSize": 200211135,
+                "commandLine": "set -euo pipefail\n\n# symlink vcf_index to current working dir\nln -s /cromwell_root/broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi .\n\nexport GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`\nbcftools query -l gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz | wc -w > num_samples.txt\n# get num records from index.\n{\n    bcftools index --nrecords gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz || {\n        # indices built by GATK are broken and won't work. If that happens:\n        #   rm symlink to vcf_index\n        #   build index on the fly\n        #   get records from good index\n        #   delete the good index (in case this is run locally)\n        rm /cromwell_root/broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi\n        bcftools index -f -t -o \"$(basename gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz).tbi\" gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz\n        bcftools index --nrecords gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz\n        rm \"$(basename gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz).tbi\"\n    }\n} > num_records.txt",
+                "shardIndex": -1,
+                "jes": {
+                  "endpointUrl": "https://genomics.googleapis.com/",
+                  "machineType": "custom-1-2048",
+                  "googleProject": "broad-dsde-methods",
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh",
+                  "executionBucket": "gs://broad-methods-cromwell-exec-bucket-instance-8",
+                  "zone": "us-central1-b",
+                  "instanceName": "google-pipelines-worker-c7dd58a582a613d6018b9b7f09075f1a"
+                },
+                "outputs": {
+                  "num_samples": 4151,
+                  "num_records": 0,
+                  "num_entries": 0
+                },
+                "runtimeAttributes": {
+                  "preemptible": "3",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "2 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "hit": false,
+                  "result": "Cache Miss",
+                  "hashes": {
+                    "output count": "ECCBC87E4B5CE2FE28308FD9F2A7BAF3",
+                    "runtime attribute": {
+                      "docker": "5DCFCFA29B7F0EE187F46C097EA75563",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "Int num_samples": "85B0039C4C83BC49645B905F543CA397",
+                      "Int num_entries": "4E6400BB4C138777779ACD773B6FF025",
+                      "Int num_records": "0D76ADD246802F9C860336AD7CF9BD51"
+                    },
+                    "input count": "8F14E45FCEEA167A5A36DEDD4BEA2543",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "2707DDFBA8DE84612701DD6FB838C9D9",
+                    "input": {
+                      "String num_samples_file": "A936B541B82B3B295210E1AAA9BE797E",
+                      "File vcf_index": "1MoFGw==",
+                      "File vcf": "IDV/5w==",
+                      "String samtools_cloud_docker": "2D8A771A4D85E1AC5FE918016CBD9EB8",
+                      "String automatic_vcf_index": "7B933A6D6876B90B97BCADEA5F0333A7",
+                      "String num_records_file": "07792D37A162CFF6370BDD3B476A67B7",
+                      "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "automatic_vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+                  "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "num_records_file": "num_records.txt",
+                  "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+                  "disk_gb": 10,
+                  "num_samples_file": "num_samples.txt",
+                  "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz"
+                },
+                "backendLabels": {
+                  "wdl-task-name": "getvcfsize",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "cromwell-sub-workflow-name": "picklevcfproperties"
+                },
+                "returnCode": 0,
+                "labels": {
+                  "cromwell-sub-workflow-name": "PickleVcfProperties",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "wdl-task-name": "GetVcfSize"
+                },
+                "jobId": "projects/broad-dsde-methods/operations/3939652769096375233",
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetVcfSize/monitoring.log",
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:40:23.805Z",
+                "dockerImageUsed": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud@sha256:c2c2f01ae71b626fe66c78837ee942db06ff9cd4f6786ac46d9455a47fe3a1b6",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetVcfSize/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetVcfSize",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:36:51.382Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.694Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:36:45.695Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:00.705Z",
+                    "description": "Worker \"google-pipelines-worker-c7dd58a582a613d6018b9b7f09075f1a\" assigned in \"us-central1-b\" on a \"custom-1-2048\" machine",
+                    "endTime": "2022-07-06T12:37:33.148Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.695Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  },
+                  {
+                    "description": "Localization",
+                    "startTime": "2022-07-06T12:38:16.654Z",
+                    "endTime": "2022-07-06T12:38:51.970Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:39:19.009Z",
+                    "description": "Complete in GCE / Cromwell Poll Interval",
+                    "endTime": "2022-07-06T12:40:21.413Z"
+                  },
+                  {
+                    "description": "UserAction",
+                    "startTime": "2022-07-06T12:38:51.970Z",
+                    "endTime": "2022-07-06T12:38:55.565Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:21.413Z",
+                    "description": "UpdatingCallCache",
+                    "endTime": "2022-07-06T12:40:22.838Z"
+                  },
+                  {
+                    "description": "Delocalization",
+                    "startTime": "2022-07-06T12:38:55.565Z",
+                    "endTime": "2022-07-06T12:39:19.009Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:52.591Z",
+                    "description": "waiting for quota",
+                    "endTime": "2022-07-06T12:37:00.705Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:22.838Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:40:23.805Z"
+                  },
+                  {
+                    "description": "Background",
+                    "startTime": "2022-07-06T12:38:15.881Z",
+                    "endTime": "2022-07-06T12:38:16.654Z"
+                  },
+                  {
+                    "description": "ContainerSetup",
+                    "startTime": "2022-07-06T12:38:12.310Z",
+                    "endTime": "2022-07-06T12:38:15.686Z"
+                  },
+                  {
+                    "description": "Pulling \"us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud@sha256:c2c2f01ae71b626fe66c78837ee942db06ff9cd4f6786ac46d9455a47fe3a1b6\"",
+                    "startTime": "2022-07-06T12:37:49.282Z",
+                    "endTime": "2022-07-06T12:38:12.310Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:39:19.009Z",
+                    "description": "Worker released",
+                    "endTime": "2022-07-06T12:39:19.009Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:51.393Z",
+                    "description": "RunningJob",
+                    "endTime": "2022-07-06T12:36:52.591Z"
+                  },
+                  {
+                    "description": "Pulling \"gcr.io/google.com/cloudsdktool/cloud-sdk:354.0.0-alpine\"",
+                    "startTime": "2022-07-06T12:37:33.148Z",
+                    "endTime": "2022-07-06T12:37:49.282Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:51.382Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:36:51.393Z"
+                  }
+                ],
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetVcfSize/GetVcfSize.log"
+                },
+                "start": "2022-07-06T12:36:45.694Z"
+              }
+            ],
+            "PickleVcfProperties.GetNeededMemGB": [
+              {
+                "executionStatus": "Done",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetNeededMemGB/stdout",
+                "compressedDockerSize": 47396567,
+                "shardIndex": -1,
+                "jes": {
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh"
+                },
+                "outputs": {
+                  "pickle_task_mem_gb": 0
+                },
+                "runtimeAttributes": {
+                  "preemptible": "1",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "python:slim",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "1.5 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "hit": true,
+                  "result": "Cache Hit: 47a15507-bda4-482d-8b8b-278eb6fd5951:PickleVcfProperties.GetNeededMemGB:-1",
+                  "hashes": {
+                    "output count": "C4CA4238A0B923820DCC509A6F75849B",
+                    "runtime attribute": {
+                      "docker": "5126C46FE6857596806D0C222AF1D996",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "Float pickle_task_mem_gb": "5EBA24E3FB92598F64C8BD20D45D0D02"
+                    },
+                    "input count": "A87FF679A2F3E71D9181A67B7542122C",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "526FED556470B9544433791DACAD1EC4",
+                    "input": {
+                      "String wanted_properties": [
+                        "9048FD1A61570E972D61F26DF1C45F90"
+                      ],
+                      "Int num_entries": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "Float mem_gb": "6008647277C4454CECD97D33C069F0CA",
+                      "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "num_entries": 0,
+                  "mem_gb": 1.5,
+                  "wanted_properties": [
+                    "sl"
+                  ],
+                  "disk_gb": 10
+                },
+                "returnCode": 0,
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetNeededMemGB/monitoring.log",
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:40:35.813Z",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetNeededMemGB/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetNeededMemGB",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:40:27.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:40:27.756Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:24.995Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:40:24.995Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:27.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:40:27.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:34.809Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:40:35.813Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:32.843Z",
+                    "description": "UpdatingCallCache",
+                    "endTime": "2022-07-06T12:40:34.809Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:27.756Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:40:32.843Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:24.995Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:40:27.715Z"
+                  }
+                ],
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-0/PickleVcfProperties/4ce6a387-79d3-4526-a8a8-49b23fc0e697/call-GetNeededMemGB/GetNeededMemGB.log"
+                },
+                "start": "2022-07-06T12:40:24.995Z"
+              }
+            ],
+            "PickleVcfProperties.ReadAndPickleProperties": [
+              {
+                "retryableFailure": false,
+                "executionStatus": "Failed",
+                "compressedDockerSize": 406487585,
+                "shardIndex": -1,
+                "callCaching": {
+                  "allowResultReuse": false,
+                  "hit": false,
+                  "result": "Cache Miss",
+                  "hashes": {
+                    "output count": "C4CA4238A0B923820DCC509A6F75849B",
+                    "runtime attribute": {
+                      "docker": "C1C257E8ACA244C25457D0D425B9AE2B",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "File pickled_properties": "51A3B9C660C7278F00C3D1BAFAA13323"
+                    },
+                    "input count": "1679091C5A880FAF6FB5E6087EB1B2DC",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "31BA903FCC555F34DA55332092B88019",
+                    "input": {
+                      "String vcf_basename": "9F23F165444CDC57A6BD979BADDDCE2B",
+                      "File vcf": "IDV/5w==",
+                      "String sv_utils_docker": "CC8E23A940E34A7EDB9CBD38A0DD3C1D",
+                      "Float mem_gb": "30565A8911A6BB487E3745C0EA3C8224",
+                      "String wanted_properties": [
+                        "9048FD1A61570E972D61F26DF1C45F90"
+                      ],
+                      "Int disk_gb": "FED33392D3A48AA149A87A38B875BA4A"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "vcf_basename": "hgdp_and_hgsv.cleaned_fixed_gq_recalibrated",
+                  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+                  "wanted_properties": [
+                    "sl"
+                  ],
+                  "disk_gb": 1004,
+                  "mem_gb": 0,
+                  "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz"
+                },
+                "failures": [
+                  {
+                    "causedBy": [
+                      {
+                        "causedBy": [
+                          {
+                            "causedBy": [],
+                            "message": "Expecting memory runtime attribute value greater than 0 but got 0.0"
+                          }
+                        ],
+                        "message": "Runtime attribute validation failed"
+                      }
+                    ],
+                    "message": "PipelinesApiAsyncBackendJobExecutionActor failed and didn't catch its exception. This condition has been handled and the job will be marked as failed."
+                  }
+                ],
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:40:41.799Z",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:40:41.498Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:40:41.799Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:37.704Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:40:37.705Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:37.705Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:40:41.484Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:41.497Z",
+                    "description": "RunningJob",
+                    "endTime": "2022-07-06T12:40:41.498Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:41.484Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:40:41.497Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:37.235Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:40:37.704Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:40:37.235Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:40:37.235Z"
+                  }
+                ],
+                "start": "2022-07-06T12:40:37.235Z"
+              }
+            ]
+          },
+          "workflowRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/",
+          "id": "4ce6a387-79d3-4526-a8a8-49b23fc0e697",
+          "inputs": {
+            "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+            "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+            "wanted_properties": [
+              "sl"
+            ],
+            "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+            "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz"
+          },
+          "status": "Failed",
+          "parentWorkflowId": "775d50ee-35b7-4305-b0ae-bd402edba5fc",
+          "end": "2022-07-06T12:40:43.355Z",
+          "start": "2022-07-06T12:36:43.656Z"
+        },
+        "shardIndex": 0,
+        "inputs": {
+          "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+          "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+          "wanted_properties": [
+            "sl"
+          ],
+          "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+          "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz"
+        },
+        "failures": [
+          {
+            "causedBy": [
+              {
+                "causedBy": [
+                  {
+                    "causedBy": [
+                      {
+                        "causedBy": [],
+                        "message": "Expecting memory runtime attribute value greater than 0 but got 0.0"
+                      }
+                    ],
+                    "message": "Runtime attribute validation failed"
+                  }
+                ],
+                "message": "PipelinesApiAsyncBackendJobExecutionActor failed and didn't catch its exception. This condition has been handled and the job will be marked as failed."
+              }
+            ],
+            "message": "Workflow failed"
+          }
+        ],
+        "end": "2022-07-06T12:40:43.784Z",
+        "attempt": 1,
+        "executionEvents": [
+          {
+            "startTime": "2022-07-06T12:36:43.659Z",
+            "description": "SubWorkflowRunningState",
+            "endTime": "2022-07-06T12:40:43.355Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.655Z",
+            "description": "SubWorkflowPendingState",
+            "endTime": "2022-07-06T12:36:43.655Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.655Z",
+            "description": "WaitingForValueStore",
+            "endTime": "2022-07-06T12:36:43.656Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.656Z",
+            "description": "SubWorkflowPreparingState",
+            "endTime": "2022-07-06T12:36:43.659Z"
+          }
+        ],
+        "start": "2022-07-06T12:36:43.655Z"
+      },
+      {
+        "executionStatus": "Running",
+        "subWorkflowMetadata": {
+          "workflowName": "PickleComparisonScores",
+          "rootWorkflowId": "7f320111-2df7-4ab5-9ab8-6c288a46b006",
+          "calls": {
+            "PickleVcfProperties.GetVcfSize": [
+              {
+                "preemptible": true,
+                "executionStatus": "Done",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetVcfSize/stdout",
+                "backendStatus": "Success",
+                "compressedDockerSize": 200211135,
+                "commandLine": "set -euo pipefail\n\n# symlink vcf_index to current working dir\nln -s /cromwell_root/broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi .\n\nexport GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`\nbcftools query -l gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz | wc -w > num_samples.txt\n# get num records from index.\n{\n    bcftools index --nrecords gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz || {\n        # indices built by GATK are broken and won't work. If that happens:\n        #   rm symlink to vcf_index\n        #   build index on the fly\n        #   get records from good index\n        #   delete the good index (in case this is run locally)\n        rm /cromwell_root/broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi\n        bcftools index -f -t -o \"$(basename gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz).tbi\" gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz\n        bcftools index --nrecords gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz\n        rm \"$(basename gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz).tbi\"\n    }\n} > num_records.txt",
+                "shardIndex": -1,
+                "jes": {
+                  "endpointUrl": "https://genomics.googleapis.com/",
+                  "machineType": "custom-1-2048",
+                  "googleProject": "broad-dsde-methods",
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh",
+                  "executionBucket": "gs://broad-methods-cromwell-exec-bucket-instance-8",
+                  "zone": "us-central1-b",
+                  "instanceName": "google-pipelines-worker-615dcdc0a862035dede7e32f401b0e8d"
+                },
+                "outputs": {
+                  "num_samples": 4151,
+                  "num_records": 366466,
+                  "num_entries": 1521200366
+                },
+                "runtimeAttributes": {
+                  "preemptible": "3",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "2 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "hit": false,
+                  "result": "Cache Miss",
+                  "hashes": {
+                    "output count": "ECCBC87E4B5CE2FE28308FD9F2A7BAF3",
+                    "runtime attribute": {
+                      "docker": "5DCFCFA29B7F0EE187F46C097EA75563",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "Int num_samples": "85B0039C4C83BC49645B905F543CA397",
+                      "Int num_entries": "4E6400BB4C138777779ACD773B6FF025",
+                      "Int num_records": "0D76ADD246802F9C860336AD7CF9BD51"
+                    },
+                    "input count": "8F14E45FCEEA167A5A36DEDD4BEA2543",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "2707DDFBA8DE84612701DD6FB838C9D9",
+                    "input": {
+                      "String num_samples_file": "A936B541B82B3B295210E1AAA9BE797E",
+                      "File vcf_index": "9O+XoA==",
+                      "File vcf": "ioLBxg==",
+                      "String samtools_cloud_docker": "2D8A771A4D85E1AC5FE918016CBD9EB8",
+                      "String automatic_vcf_index": "9CBF7D95FE0AF4479B21E77C1282D4DA",
+                      "String num_records_file": "07792D37A162CFF6370BDD3B476A67B7",
+                      "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "automatic_vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+                  "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "num_records_file": "num_records.txt",
+                  "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+                  "disk_gb": 10,
+                  "num_samples_file": "num_samples.txt",
+                  "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz"
+                },
+                "backendLabels": {
+                  "wdl-task-name": "getvcfsize",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "cromwell-sub-workflow-name": "picklevcfproperties"
+                },
+                "returnCode": 0,
+                "labels": {
+                  "cromwell-sub-workflow-name": "PickleVcfProperties",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "wdl-task-name": "GetVcfSize"
+                },
+                "jobId": "projects/broad-dsde-methods/operations/4193170530599127292",
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetVcfSize/monitoring.log",
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:39:50.806Z",
+                "dockerImageUsed": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud@sha256:c2c2f01ae71b626fe66c78837ee942db06ff9cd4f6786ac46d9455a47fe3a1b6",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetVcfSize/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetVcfSize",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:39:21.308Z",
+                    "description": "Worker released",
+                    "endTime": "2022-07-06T12:39:21.308Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:39:21.308Z",
+                    "description": "Complete in GCE / Cromwell Poll Interval",
+                    "endTime": "2022-07-06T12:39:47.241Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:02.034Z",
+                    "description": "Worker \"google-pipelines-worker-615dcdc0a862035dede7e32f401b0e8d\" assigned in \"us-central1-b\" on a \"custom-1-2048\" machine",
+                    "endTime": "2022-07-06T12:37:33.303Z"
+                  },
+                  {
+                    "description": "Pulling \"gcr.io/google.com/cloudsdktool/cloud-sdk:354.0.0-alpine\"",
+                    "startTime": "2022-07-06T12:37:33.303Z",
+                    "endTime": "2022-07-06T12:37:49.230Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:39:49.823Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:39:50.806Z"
+                  },
+                  {
+                    "description": "UserAction",
+                    "startTime": "2022-07-06T12:38:53.793Z",
+                    "endTime": "2022-07-06T12:38:57.285Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:39:47.241Z",
+                    "description": "UpdatingCallCache",
+                    "endTime": "2022-07-06T12:39:49.823Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.694Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:36:45.695Z"
+                  },
+                  {
+                    "description": "ContainerSetup",
+                    "startTime": "2022-07-06T12:38:12.636Z",
+                    "endTime": "2022-07-06T12:38:15.970Z"
+                  },
+                  {
+                    "description": "Localization",
+                    "startTime": "2022-07-06T12:38:17.076Z",
+                    "endTime": "2022-07-06T12:38:53.793Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:52.779Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:36:52.791Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:53.989Z",
+                    "description": "waiting for quota",
+                    "endTime": "2022-07-06T12:37:02.034Z"
+                  },
+                  {
+                    "description": "Delocalization",
+                    "startTime": "2022-07-06T12:38:57.285Z",
+                    "endTime": "2022-07-06T12:39:21.308Z"
+                  },
+                  {
+                    "description": "Pulling \"us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud@sha256:c2c2f01ae71b626fe66c78837ee942db06ff9cd4f6786ac46d9455a47fe3a1b6\"",
+                    "startTime": "2022-07-06T12:37:49.230Z",
+                    "endTime": "2022-07-06T12:38:12.636Z"
+                  },
+                  {
+                    "description": "Background",
+                    "startTime": "2022-07-06T12:38:16.059Z",
+                    "endTime": "2022-07-06T12:38:16.271Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:36:52.779Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:52.791Z",
+                    "description": "RunningJob",
+                    "endTime": "2022-07-06T12:36:53.989Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.695Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  }
+                ],
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetVcfSize/GetVcfSize.log"
+                },
+                "start": "2022-07-06T12:36:45.694Z"
+              }
+            ],
+            "PickleVcfProperties.GetNeededMemGB": [
+              {
+                "preemptible": true,
+                "executionStatus": "Running",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetNeededMemGB/stdout",
+                "backendStatus": "Success",
+                "compressedDockerSize": 47396567,
+                "commandLine": "    python - <<'____EoF'\nproperties=[\"sl\"]\nentries_cost_map={\"svtype\": 0.0, \"svlen\": 0.0, \"gt\": 1.4e-8, \"gq\": 5e-8, \"sl\": 5e-8}\nmem_gb = 1521200366 * sum(entries_cost_map.get(property, 5e-8) for property in properties)\nprint(mem_gb)\n____EoF",
+                "shardIndex": -1,
+                "jes": {
+                  "endpointUrl": "https://genomics.googleapis.com/",
+                  "machineType": "custom-1-1536",
+                  "googleProject": "broad-dsde-methods",
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh",
+                  "executionBucket": "gs://broad-methods-cromwell-exec-bucket-instance-8",
+                  "zone": "us-central1-b",
+                  "instanceName": "google-pipelines-worker-71319d49bb790bbbbe955bedda815853"
+                },
+                "runtimeAttributes": {
+                  "preemptible": "1",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "python:slim",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "1.5 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "effectiveCallCachingMode": "ReadAndWriteCache",
+                  "hit": false,
+                  "result": "Cache Miss"
+                },
+                "inputs": {
+                  "num_entries": 1521200366,
+                  "mem_gb": 1.5,
+                  "wanted_properties": [
+                    "sl"
+                  ],
+                  "disk_gb": 10
+                },
+                "backendLabels": {
+                  "wdl-task-name": "getneededmemgb",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "cromwell-sub-workflow-name": "picklevcfproperties"
+                },
+                "labels": {
+                  "cromwell-sub-workflow-name": "PickleVcfProperties",
+                  "cromwell-workflow-id": "cromwell-7f320111-2df7-4ab5-9ab8-6c288a46b006",
+                  "wdl-task-name": "GetNeededMemGB"
+                },
+                "jobId": "projects/broad-dsde-methods/operations/15302537401302601834",
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetNeededMemGB/monitoring.log",
+                "backend": "PAPIv2",
+                "dockerImageUsed": "python@sha256:df9e675c0f6f0f758f7d49ea1b4e12cf7b8688d78df7d9986085fa0f24933ade",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetNeededMemGB/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetNeededMemGB",
+                "attempt": 1,
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-1/PickleVcfProperties/89f707a7-44a2-4050-8e58-0a16943c7a78/call-GetNeededMemGB/GetNeededMemGB.log"
+                },
+                "start": "2022-07-06T12:39:52.355Z"
+              }
+            ]
+          },
+          "workflowRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/",
+          "id": "89f707a7-44a2-4050-8e58-0a16943c7a78",
+          "inputs": {
+            "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+            "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+            "wanted_properties": [
+              "sl"
+            ],
+            "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+            "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz"
+          },
+          "status": "Running",
+          "parentWorkflowId": "775d50ee-35b7-4305-b0ae-bd402edba5fc",
+          "start": "2022-07-06T12:36:43.656Z"
+        },
+        "shardIndex": 1,
+        "inputs": {
+          "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+          "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+          "wanted_properties": [
+            "sl"
+          ],
+          "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+          "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz"
+        },
+        "attempt": 1,
+        "start": "2022-07-06T12:36:43.655Z"
+      },
+      {
+        "retryableFailure": false,
+        "executionStatus": "Failed",
+        "subWorkflowMetadata": {
+          "workflowName": "PickleComparisonScores",
+          "rootWorkflowId": "7f320111-2df7-4ab5-9ab8-6c288a46b006",
+          "calls": {
+            "PickleVcfProperties.GetVcfSize": [
+              {
+                "executionStatus": "Done",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetVcfSize/stdout",
+                "compressedDockerSize": 200211135,
+                "shardIndex": -1,
+                "jes": {
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh"
+                },
+                "outputs": {
+                  "num_samples": 4151,
+                  "num_records": 0,
+                  "num_entries": 0
+                },
+                "runtimeAttributes": {
+                  "preemptible": "3",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "2 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "hit": true,
+                  "result": "Cache Hit: a98bc72d-bc00-4b3f-b678-cb5ce7aa9299:PickleVcfProperties.GetVcfSize:-1",
+                  "hashes": {
+                    "output count": "ECCBC87E4B5CE2FE28308FD9F2A7BAF3",
+                    "runtime attribute": {
+                      "docker": "5DCFCFA29B7F0EE187F46C097EA75563",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "Int num_samples": "85B0039C4C83BC49645B905F543CA397",
+                      "Int num_entries": "4E6400BB4C138777779ACD773B6FF025",
+                      "Int num_records": "0D76ADD246802F9C860336AD7CF9BD51"
+                    },
+                    "input count": "8F14E45FCEEA167A5A36DEDD4BEA2543",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "2707DDFBA8DE84612701DD6FB838C9D9",
+                    "input": {
+                      "String num_samples_file": "A936B541B82B3B295210E1AAA9BE797E",
+                      "File vcf_index": "qv+M3w==",
+                      "File vcf": "ugdy2g==",
+                      "String samtools_cloud_docker": "2D8A771A4D85E1AC5FE918016CBD9EB8",
+                      "String automatic_vcf_index": "932891D3C8B6A3182099305DF7CAE60F",
+                      "String num_records_file": "07792D37A162CFF6370BDD3B476A67B7",
+                      "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "automatic_vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+                  "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+                  "num_records_file": "num_records.txt",
+                  "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+                  "disk_gb": 10,
+                  "num_samples_file": "num_samples.txt",
+                  "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz"
+                },
+                "returnCode": 0,
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetVcfSize/monitoring.log",
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:37:02.809Z",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetVcfSize/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetVcfSize",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:37:01.813Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:37:02.809Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.694Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:36:45.695Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:47.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:36:51.463Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:01.415Z",
+                    "description": "UpdatingCallCache",
+                    "endTime": "2022-07-06T12:37:01.813Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:51.463Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:37:01.415Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:36:45.695Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:36:47.715Z"
+                  }
+                ],
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetVcfSize/GetVcfSize.log"
+                },
+                "start": "2022-07-06T12:36:45.694Z"
+              }
+            ],
+            "PickleVcfProperties.GetNeededMemGB": [
+              {
+                "executionStatus": "Done",
+                "stdout": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetNeededMemGB/stdout",
+                "compressedDockerSize": 47396567,
+                "shardIndex": -1,
+                "jes": {
+                  "monitoringScript": "gs://broad-dsde-methods-tbrookin/cromwell_monitoring_script2.sh"
+                },
+                "outputs": {
+                  "pickle_task_mem_gb": 0
+                },
+                "runtimeAttributes": {
+                  "preemptible": "1",
+                  "failOnStderr": "false",
+                  "bootDiskSizeGb": "10",
+                  "disks": "local-disk 10 HDD",
+                  "continueOnReturnCode": "0",
+                  "docker": "python:slim",
+                  "maxRetries": "0",
+                  "cpu": "1",
+                  "cpuMin": "1",
+                  "noAddress": "false",
+                  "zones": "us-central1-b",
+                  "memoryMin": "2 GB",
+                  "memory": "1.5 GB"
+                },
+                "callCaching": {
+                  "allowResultReuse": true,
+                  "hit": true,
+                  "result": "Cache Hit: a98bc72d-bc00-4b3f-b678-cb5ce7aa9299:PickleVcfProperties.GetNeededMemGB:-1",
+                  "hashes": {
+                    "output count": "C4CA4238A0B923820DCC509A6F75849B",
+                    "runtime attribute": {
+                      "docker": "5126C46FE6857596806D0C222AF1D996",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "Float pickle_task_mem_gb": "5EBA24E3FB92598F64C8BD20D45D0D02"
+                    },
+                    "input count": "A87FF679A2F3E71D9181A67B7542122C",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "526FED556470B9544433791DACAD1EC4",
+                    "input": {
+                      "String wanted_properties": [
+                        "61176BDDE51E819E0031B8E7EBEB09F0"
+                      ],
+                      "Int num_entries": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "Float mem_gb": "6008647277C4454CECD97D33C069F0CA",
+                      "Int disk_gb": "D3D9446802A44259755D38E6D163E820"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "num_entries": 0,
+                  "mem_gb": 1.5,
+                  "wanted_properties": [
+                    "gq"
+                  ],
+                  "disk_gb": 10
+                },
+                "returnCode": 0,
+                "monitoringLog": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetNeededMemGB/monitoring.log",
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:37:14.803Z",
+                "stderr": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetNeededMemGB/stderr",
+                "callRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetNeededMemGB",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:37:07.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:37:07.756Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:07.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:37:07.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:07.756Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:37:12.815Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:13.810Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:37:14.803Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:12.815Z",
+                    "description": "UpdatingCallCache",
+                    "endTime": "2022-07-06T12:37:13.810Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:04.055Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:37:04.055Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:04.055Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:37:07.715Z"
+                  }
+                ],
+                "backendLogs": {
+                  "log": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-BenchmarkGqFilter/BenchmarkGqFilter/775d50ee-35b7-4305-b0ae-bd402edba5fc/call-PickleComparisonScores/shard-2/PickleVcfProperties/b6d5a86d-0879-461d-ae25-195fd8a74ed2/call-GetNeededMemGB/GetNeededMemGB.log"
+                },
+                "start": "2022-07-06T12:37:04.055Z"
+              }
+            ],
+            "PickleVcfProperties.ReadAndPickleProperties": [
+              {
+                "retryableFailure": false,
+                "executionStatus": "Failed",
+                "compressedDockerSize": 406487585,
+                "shardIndex": -1,
+                "callCaching": {
+                  "allowResultReuse": false,
+                  "hit": false,
+                  "result": "Cache Miss",
+                  "hashes": {
+                    "output count": "C4CA4238A0B923820DCC509A6F75849B",
+                    "runtime attribute": {
+                      "docker": "C1C257E8ACA244C25457D0D425B9AE2B",
+                      "continueOnReturnCode": "CFCD208495D565EF66E7DFF9F98764DA",
+                      "failOnStderr": "68934A3E9455FA72420237EB05902327"
+                    },
+                    "output expression": {
+                      "File pickled_properties": "51A3B9C660C7278F00C3D1BAFAA13323"
+                    },
+                    "input count": "1679091C5A880FAF6FB5E6087EB1B2DC",
+                    "backend name": "85D6F63859525E464173387636E20324",
+                    "command template": "31BA903FCC555F34DA55332092B88019",
+                    "input": {
+                      "String vcf_basename": "02BF8F78FAA13435586A58622EF7F8CA",
+                      "File vcf": "ugdy2g==",
+                      "String sv_utils_docker": "CC8E23A940E34A7EDB9CBD38A0DD3C1D",
+                      "Float mem_gb": "30565A8911A6BB487E3745C0EA3C8224",
+                      "String wanted_properties": [
+                        "61176BDDE51E819E0031B8E7EBEB09F0"
+                      ],
+                      "Int disk_gb": "B8C37E33DEFDE51CF91E1E03E51657DA"
+                    }
+                  },
+                  "effectiveCallCachingMode": "ReadAndWriteCache"
+                },
+                "inputs": {
+                  "vcf_basename": "hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2",
+                  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+                  "wanted_properties": [
+                    "gq"
+                  ],
+                  "disk_gb": 1001,
+                  "mem_gb": 0,
+                  "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz"
+                },
+                "failures": [
+                  {
+                    "causedBy": [
+                      {
+                        "causedBy": [
+                          {
+                            "causedBy": [],
+                            "message": "Expecting memory runtime attribute value greater than 0 but got 0.0"
+                          }
+                        ],
+                        "message": "Runtime attribute validation failed"
+                      }
+                    ],
+                    "message": "PipelinesApiAsyncBackendJobExecutionActor failed and didn't catch its exception. This condition has been handled and the job will be marked as failed."
+                  }
+                ],
+                "backend": "PAPIv2",
+                "end": "2022-07-06T12:37:22.795Z",
+                "attempt": 1,
+                "executionEvents": [
+                  {
+                    "startTime": "2022-07-06T12:37:21.864Z",
+                    "description": "RunningJob",
+                    "endTime": "2022-07-06T12:37:21.866Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:17.715Z",
+                    "description": "PreparingJob",
+                    "endTime": "2022-07-06T12:37:21.852Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:21.866Z",
+                    "description": "UpdatingJobStore",
+                    "endTime": "2022-07-06T12:37:22.795Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:16.295Z",
+                    "description": "RequestingExecutionToken",
+                    "endTime": "2022-07-06T12:37:17.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:16.294Z",
+                    "description": "Pending",
+                    "endTime": "2022-07-06T12:37:16.295Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:17.715Z",
+                    "description": "WaitingForValueStore",
+                    "endTime": "2022-07-06T12:37:17.715Z"
+                  },
+                  {
+                    "startTime": "2022-07-06T12:37:21.852Z",
+                    "description": "CallCacheReading",
+                    "endTime": "2022-07-06T12:37:21.864Z"
+                  }
+                ],
+                "start": "2022-07-06T12:37:16.294Z"
+              }
+            ]
+          },
+          "workflowRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/",
+          "id": "b6d5a86d-0879-461d-ae25-195fd8a74ed2",
+          "inputs": {
+            "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+            "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+            "wanted_properties": [
+              "gq"
+            ],
+            "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+            "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz"
+          },
+          "status": "Failed",
+          "parentWorkflowId": "775d50ee-35b7-4305-b0ae-bd402edba5fc",
+          "end": "2022-07-06T12:37:24.455Z",
+          "start": "2022-07-06T12:36:43.656Z"
+        },
+        "shardIndex": 2,
+        "inputs": {
+          "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+          "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+          "wanted_properties": [
+            "gq"
+          ],
+          "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+          "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz"
+        },
+        "failures": [
+          {
+            "causedBy": [
+              {
+                "causedBy": [
+                  {
+                    "causedBy": [
+                      {
+                        "causedBy": [],
+                        "message": "Expecting memory runtime attribute value greater than 0 but got 0.0"
+                      }
+                    ],
+                    "message": "Runtime attribute validation failed"
+                  }
+                ],
+                "message": "PipelinesApiAsyncBackendJobExecutionActor failed and didn't catch its exception. This condition has been handled and the job will be marked as failed."
+              }
+            ],
+            "message": "Workflow failed"
+          }
+        ],
+        "end": "2022-07-06T12:37:24.784Z",
+        "attempt": 1,
+        "executionEvents": [
+          {
+            "startTime": "2022-07-06T12:36:43.655Z",
+            "description": "SubWorkflowPendingState",
+            "endTime": "2022-07-06T12:36:43.655Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.658Z",
+            "description": "SubWorkflowRunningState",
+            "endTime": "2022-07-06T12:37:24.455Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.656Z",
+            "description": "SubWorkflowPreparingState",
+            "endTime": "2022-07-06T12:36:43.658Z"
+          },
+          {
+            "startTime": "2022-07-06T12:36:43.655Z",
+            "description": "WaitingForValueStore",
+            "endTime": "2022-07-06T12:36:43.656Z"
+          }
+        ],
+        "start": "2022-07-06T12:36:43.655Z"
+      }
+    ]
+  },
+  "workflowRoot": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/",
+  "id": "775d50ee-35b7-4305-b0ae-bd402edba5fc",
+  "inputs": {
+    "ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+    "data_label": "HGDP and HGSV",
+    "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:7c8ed92",
+    "truth_overlap_info": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-TrainGqRecalibrator/TrainGqRecalibrator/4523bc4b-0672-4e15-a1fd-47a1c373bd32/call-GetTruthOverlap/GetTruthOverlap/c9f3fd13-beff-4fd6-9f01-4e7e14208c29/call-GetTruthOverlapTask/truth_overlap.json",
+    "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2022-06-10-v0.23-beta-9c6fbf56",
+    "pickled_variant_properties": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-PickleVariantData/PickleVcfProperties/8eac7193-4778-4081-b2bf-341b1f17aed6/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_fixed_svtype svlen gt.pickle.bz2",
+    "comparison_scores": [
+      {
+        "pickled_scores_file": null,
+        "label": "recalibrated",
+        "passing_score": 0,
+        "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+        "property": "sl",
+        "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-DirectGqRecalibrator/RecalibrateGq/ac62a4e8-cd1d-4aaf-9060-156da0722578/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz"
+      },
+      {
+        "pickled_scores_file": null,
+        "label": "cross-validated",
+        "passing_score": 0,
+        "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+        "property": "sl",
+        "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz"
+      },
+      {
+        "pickled_scores_file": null,
+        "label": "Xuefang",
+        "passing_score": 0,
+        "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+        "property": "gq",
+        "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz"
+      },
+      {
+        "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2",
+        "label": "Before-PR",
+        "passing_score": 0,
+        "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+        "property": "sl",
+        "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz"
+      }
+    ],
+    "benchmark_args": [],
+    "original_scores": {
+      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-PickleTrainScores/PickleVcfProperties/4074504b-bbf2-4b62-aee2-3e234d71a115/call-ReadAndPickleProperties/attempt-2/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2",
+      "label": "original",
+      "passing_score": 1,
+      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+      "property": "gq",
+      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/7f320111-2df7-4ab5-9ab8-6c288a46b006/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz"
+    }
+  },
+  "status": "Running",
+  "parentWorkflowId": "7f320111-2df7-4ab5-9ab8-6c288a46b006",
+  "start": "2022-07-06T12:36:37.536Z"
+}
+
