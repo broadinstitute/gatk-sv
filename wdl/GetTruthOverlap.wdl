@@ -90,13 +90,14 @@ task GetTruthOverlapTask {
 
     # High disk size for large throughput. A large proportion of run time is loading data from huge VCFs. Disk is cheap.
     Int disk_gb = round(100 + size(test_vcfs, "GiB") + size(truth_vcfs, "GiB") + size(ped_files, "GiB")
-                        + size(optimal_overlap_cutoffs, "GiB") + size(vapor_files, "GiB"))
+                        + size(optimal_overlap_cutoffs, "GiB")
+                        + (if defined(vapor_files) then size(select_first([vapor_files]), "GiB") else 0))
     String optimal_overlap_cutoffs_filename = if defined(optimal_overlap_cutoffs)
         then basename(select_first([optimal_overlap_cutoffs]))
         else "optimal_overlap_cutoffs.pickle"
 
     String truth_overlap_info_filename = "truth_overlap.json"
-    String args_str = if length(get_truth_overlap_args) > 0 then "~{sep=' ' get_truth_overlap_args}" else ""
+    Boolean use_vapor = length(select_first([vapor_files, []])) > 0
 
     Float mem_baseline = 1.0
     Float mem_scale = "3.5e-6"
@@ -117,21 +118,37 @@ task GetTruthOverlapTask {
     command <<<
         set -euo pipefail
 
-        ~{if defined(optimal_overlap_cutoffs) then "cp " + select_first([optimal_overlap_cutoffs]) + " ." else ""}
+        ~{if defined(optimal_overlap_cutoffs) then "ln " + select_first([optimal_overlap_cutoffs]) + " ." else ""}
 
-        # construct a vapor JSON file if vapor data was passed
-        ~{if defined(vapor_files) then
-          "echo '{' ; paste -d: ~{write_lines(vapor_sample_ids)} ~{write_lines(vapor_files)} | sed -e 's/^/\"/' -e 's/:/\":\"/' -e 's/$/\",/'; echo '}'; > ~{vapor_json}"
-          else ""}
+        if ~{use_vapor}; then
+            # construct a vapor JSON file if vapor data was passed
+            VAPOR_SAMPLE_IDS=~{if defined(vapor_sample_ids) then write_lines(select_first([vapor_sample_ids])) else ""}
+            VAPOR_FILES=~{if defined(vapor_files) then write_lines(select_first([vapor_files])) else ""}
+            # this is all horrible, but it's just taking text processing to turn the sample IDs and vapor files arrays
+            # into a json file that contains a map with sample IDs as keys, and corresponding vapor files as values
+            {
+                echo '{'
+                paste -d: $VAPOR_SAMPLE_IDS $VAPOR_FILES \
+                    | sed -e 's/^/\"/' -e 's/:/\":\"/' -e 's/$/\",/'
+                echo '}'
+            } \
+                | tr -d '\n' \
+                | sed 's/,}/}/' \
+                | sed -e 's/\(,\|{\)/\1\n/g' -e 's/"}/"\n}\n/' \
+                | sed 's/^"/  "/g' \
+                > ~{vapor_json}
+            printf "~{vapor_json}: "
+            cat ~{vapor_json}
+        fi
 
         sv-utils get-truth-overlap \
             --test-vcf ~{sep=" --test-vcf " test_vcfs} \
             --truth-vcf ~{sep=" --truth-vcf " truth_vcfs} \
-            ~{if defined(vapor_files) then "--vapor-json ~{vapor_json}" else ""} \
+            ~{if use_vapor then "--vapor-json ~{vapor_json}" else ""} \
             --ped-file ~{sep=" --ped-file " ped_files} \
             --optimal-overlap-cutoffs-file ~{optimal_overlap_cutoffs_filename} \
             --output ~{truth_overlap_info_filename} \
-            ~{args_str}
+            ~{sep=' ' get_truth_overlap_args}
     >>>
 
     output {
