@@ -50,7 +50,7 @@ workflow CrossValidateGqRecalibrator {
         }
     }
     File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
-    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf_index])
+    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
      call TrainGqRecalibrator.TrainGqRecalibrator {
         input:

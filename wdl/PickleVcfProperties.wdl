@@ -89,8 +89,8 @@ task ReadAndPickleProperties {
     #   strip .vcf.gz from end (if present)
     #   add wanted properties (separated by underscores)
     #   and add ".pickle.bz2"
-    String pickled_properties_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
-                                   + "_~{sep='_' wanted_properties}.pickle.bz2"
+    #   (sep doesn't work the way it's supposed to outside of command block, so move part of this logic to command)
+    String vcf_basename = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
 
     runtime {
         docker: sv_utils_docker
@@ -110,11 +110,11 @@ variants = genomics_io.vcf_to_pandas(
   "~{vcf}", wanted_properties=["~{sep='", "' wanted_properties}"], drop_trivial_multi_index=True
 )
 
-variants.to_pickle("~{pickled_properties_name}")
+variants.to_pickle("~{vcf_basename}_~{sep=' ' wanted_properties}.pickle.bz2")
 ____EoF
     >>>
 
     output {
-        File pickled_properties = pickled_properties_name
+        File pickled_properties = select_first(glob("*.pickle.bz2"))
     }
 }

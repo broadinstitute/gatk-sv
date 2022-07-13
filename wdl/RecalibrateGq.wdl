@@ -56,8 +56,6 @@ task RecalibrateGqTask {
         Float mem_gb_overhead = 1.5
     }
 
-    String args_str = if length(recalibrate_gq_args) > 0 then "~{sep=' ' recalibrate_gq_args}" else ""
-
     Int disk_gb = round(1000 + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB"))
     Float mem_gb = mem_gb_java + mem_gb_overhead
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
@@ -86,7 +84,10 @@ task RecalibrateGqTask {
           ~{if length(genome_tracks) > 0 then "--genome-track" else ""} ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{gq_recalibrator_model_file} \
           --output ~{filtered_vcf_name} \
-          ~{args_str}
+          ~{sep=' ' recalibrate_gq_args}
+
+        # gatk indices still have problems, overwrite with bcftools index
+        bcftools index --force --tbi --threads 2 ~{filtered_vcf_name}
     >>>
 
     output {
