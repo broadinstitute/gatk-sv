@@ -27,6 +27,8 @@ class Keys:
     begin = genomics_io.Keys.begin
     end = genomics_io.Keys.end
     gt = genomics_io.Keys.gt
+    cn = genomics_io.Keys.cn
+    rd_cn = genomics_io.Keys.rd_cn
     svtype = genomics_io.Keys.svtype
     svlen = genomics_io.Keys.svlen
     allele_frequency = genomics_io.Keys.allele_frequency
@@ -50,7 +52,9 @@ class Keys:
 
 
 class Default:
-    wanted_properties = interval_overlaps.Default.wanted_properties + (Keys.allele_frequency, Keys.gt)
+    wanted_properties = interval_overlaps.Default.wanted_properties + (
+        Keys.allele_frequency, Keys.gt, Keys.cn, Keys.rd_cn
+    )
     f_beta = 1.0
     min_overlap_cutoff_precision = 0.99
     min_vapor_precision = 0.99
@@ -349,26 +353,17 @@ def split_vcf_dataframe(
     """
     # variant properties are columns where sample = None (as opposed to sample properties)
     variant_properties = variants.xs(None, level=Keys.sample_id, axis=1)
-    try:
-        # get matrix of genotypes with column = sample id
-        variant_genotypes = genomics_io.get_genotype(variants)
-    except KeyError:
-        _log("gt not present in variants. Columns:")
-        _log(str(variants.columns))
-        raise ValueError("GT not present in variants")
 
-    if guarantee_allele_frequency:
-        if Keys.allele_frequency not in variant_properties:
-            num_non_ref = variant_genotypes.applymap(genomics_io.genotype_to_called_allele_count).sum(axis=1)
-            num_called = variant_genotypes.applymap(genomics_io.genotype_to_num_called_alleles).sum(axis=1)
-            variant_properties[Keys.allele_frequency] = num_non_ref / num_called
     for prop in [Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.svlen]:
         if prop not in variant_properties:
             raise ValueError(f"{prop} not present in variants")
         if variant_properties[prop].hasnans:
             raise ValueError(f"{prop} has missing values")
 
-    return variant_properties, variant_genotypes.applymap(genomics_io.genotype_to_carrier_status)
+    if guarantee_allele_frequency and Keys.allele_frequency not in variant_properties:
+        variant_properties[Keys.allele_frequency] = genomics_io.get_or_estimate_allele_frequency(variants)
+
+    return variant_properties, genomics_io.get_carrier_status(variants)
 
 
 def load_and_split_vcf(
@@ -415,13 +410,13 @@ def load_and_split_vcf(
 def _indices_where_carrier(carrier_status: pandas.Series) -> pandas.Index:
     """ return indices (generally variant IDs) where the sample is a carrier """
     # noinspection PyTypeChecker
-    return carrier_status[carrier_status > 0].index
+    return carrier_status[carrier_status].index
 
 
 def _is_called_where_not_ref(carrier_status: pandas.Series) -> pandas.Series:
     """ return Series containing only non-REF GTs, with bool values True if the GT is called, and False if no-call """
     # noinspection PyTypeChecker
-    return (carrier_status[carrier_status != 0] == 1).rename(Keys.is_called)
+    return (~carrier_status[carrier_status | carrier_status.isna()].isna()).rename(Keys.is_called)
 
 
 def quantify_overlap(
@@ -1010,7 +1005,7 @@ def _get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
     )
 
 
-def _get_sv_selectors(
+def get_sv_selectors(
         all_sv_types: Set[str],
         bnd_types: Iterable[str] = interval_overlaps.Default.breakend_types,
         size_ranges: Mapping[str, Tuple[float, float]] = Default.sv_selector_size_ranges
@@ -1117,7 +1112,7 @@ def get_optimal_overlap_cutoffs(
         for sample_overlap_stats in overlap_stats.values()
         for svtype in sample_overlap_stats[Keys.svtype].unique()
     )
-    sv_selectors = _get_sv_selectors(all_sv_types=all_sv_types, bnd_types=bnd_types, size_ranges=size_ranges)
+    sv_selectors = get_sv_selectors(all_sv_types=all_sv_types, bnd_types=bnd_types, size_ranges=size_ranges)
 
     def _get_optimal_cutoff(_cutoffs: List[SvTypeCutoffInfo], _good: bool) -> SvTypeCutoffInfo:
         def _precision(_cutoff: SvTypeCutoffInfo) -> float:

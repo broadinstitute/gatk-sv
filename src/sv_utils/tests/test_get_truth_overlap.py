@@ -94,6 +94,7 @@ def assert_all_variant_ids_valid(confident_variants: get_truth_overlap.Confident
 
 @pytest.mark.integration_test
 def test_get_truth_overlap(
+        capsys,
         short_reads_vcf,
         vapor_files: Iterable[str] = Default.vapor_files,
         long_reads_vcfs: Iterable[str] = Default.long_reads_vcfs,
@@ -126,3 +127,5 @@ def test_get_truth_overlap(
     assert_has_no_confident_variants(no_vapor_confident_variants, vapor_no_pacbio_sample_id)
     assert_has_confident_variants(no_vapor_confident_variants, pacbio_and_vapor_sample_id)
     assert_all_variant_ids_valid(no_vapor_confident_variants, valid_variant_ids)
+    with capsys.disabled():
+        get_truth_overlap.output_confident_variants(no_vapor_confident_variants, "-")

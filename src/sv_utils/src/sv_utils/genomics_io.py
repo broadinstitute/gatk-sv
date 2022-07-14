@@ -82,6 +82,8 @@ class VcfKeys:  # note: for convenience we use .lower() before processing to mak
     gt = "GT"
     gq = "GQ"
     end = "END"  # Note: don't use this, use stop instead
+    cn = "CN"
+    rd_cn = "RD_CN"
 
 
 class Keys:
@@ -110,7 +112,8 @@ class Keys:
     sample_id = "sample_id"
     property = "property"
     allele_count = "ac"
-    foo = "foo"
+    cn = "cn"
+    rd_cn = "rd_cn"
 
 
 VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRecordSample)
@@ -1429,7 +1432,42 @@ def has_missing(series: pandas.Series, missing_value: Any) -> bool:
 
 
 def get_genotype(variants: pandas.DataFrame) -> pandas.DataFrame:
-    return variants.xs(Keys.gt, level=Keys.property, axis=1)
+    """ Return genotype, or throw exception explaining that it's not present """
+    try:
+        return variants.xs(Keys.gt, level=Keys.property, axis=1)
+    except KeyError as key_error:
+        common.add_exception_context(
+            key_error,
+            f"Can't get genotype, {Keys.gt} missing from columns. Available properties: "
+            f"{','.join(set(variants.columns.get_level_values(Keys.property)))}"
+        )
+        raise
+
+
+def get_copy_number(variants: pandas.DataFrame) -> Optional[pandas.DataFrame]:
+    """ Return table of copy number if it is available, otherwise None """
+    available_props = set(variants.columns.get_level_values(Keys.property))
+    if Keys.cn in available_props:
+        cn = variants.xs(Keys.cn, level=Keys.property, axis=1)
+        if Keys.rd_cn in available_props:
+            # CN *and* RD_CN are available. Sometimes one is in the header but not listed, so return whichever is
+            # non-null, and if they're both non-null, prefer cn
+            def _select_best_copy_number(_cn_entry: int, _rd_cn_entry: int) -> int:
+                return _cn_entry if pandas.isnull(_cn_entry) \
+                    else _rd_cn_entry if pandas.isnull(_cn_entry) \
+                    else _cn_entry
+
+            def _combine_columns(_cn_column: pandas.Series, _rd_cn_column: pandas.Series) -> pandas.Series:
+                return _cn_column.combine(_rd_cn_column, _select_best_copy_number)
+
+            rd_cn = variants.xs(Keys.rd_cn, level=Keys.property, axis=1)
+            return cn.combine(rd_cn, _combine_columns)
+        else:
+            return cn
+    elif Keys.rd_cn in available_props:
+        return variants.xs(Keys.rd_cn, level=Keys.property, axis=1)
+    else:
+        return None
 
 
 @common.static_vars(genotype_to_carrier_status_map={})
@@ -1448,7 +1486,49 @@ def genotype_to_carrier_status(genotype: Genotype) -> Union[bool, NAType]:
 
 
 def get_carrier_status(variants: pandas.DataFrame) -> pandas.DataFrame:
-    return get_genotype(variants).applymap(genotype_to_carrier_status).astype(pandas.BooleanDtype())
+    """
+    return carrier status as num_variants x num_samples table, with each entry being a BooleanDType:
+      - True if the sample is called non-REF for that variant
+      - False if it is called REF
+      - Pandas.NA if it is not called
+    """
+    # get the carrier status as implied by the genotype
+    gt_carrier_status = get_genotype(variants).applymap(genotype_to_carrier_status).astype(pandas.BooleanDtype())
+    # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
+    copy_number = get_copy_number(variants)
+    if copy_number is None:
+        return gt_carrier_status
+    else:
+        # Compute copy number carrier status by assuming copy number 2 is REF. Currently our pipeline sets copy number
+        # to 2 for REF even on X and Y.
+        copy_number = (copy_number != 2).astype(pandas.BooleanDtype())
+        # where either one is NA, use the other. Where both are non-NA, use logical "or"
+        return gt_carrier_status.where(
+            copy_number.isna(),
+            copy_number.where(gt_carrier_status.isna(),
+                              gt_carrier_status | copy_number)
+        )
+
+
+def get_or_estimate_allele_frequency(variants: pandas.DataFrame) -> pandas.Series:
+    available_props = set(variants.columns.get_level_values(Keys.property))
+    if Keys.allele_frequency in available_props:
+        return variants.xs(Keys.allele_frequency, level=Keys.property, axis=1)
+    # get the allele_counts as implied by the genotype
+    gt_allele_counts = get_allele_count(variants).sum(axis=1, skipna=True)
+    gt_num_called_alleles = get_num_called_alleles(variants).sum(axis=1, skipna=True)
+    gt_allele_frequency = gt_allele_counts / gt_num_called_alleles
+    # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
+    copy_number = get_copy_number(variants)
+    if copy_number is None:
+        return gt_allele_frequency
+    else:
+        # Can't really get allele count from copy number. Estimate by assuming HWE
+        copy_number_carrier_freq = (copy_number != 2).mean(axis=1, skipna=True)
+        copy_number_allele_frequency = 1.0 - (1.0 - copy_number_carrier_freq) ** 0.5
+        # prefer GT based allele frequency, but where copy number estimate is better than nothing, use that
+        gt_no_info = gt_allele_frequency.isna() | ((gt_allele_frequency == 0) & ~(copy_number_carrier_freq.isna()))
+        return gt_allele_frequency.where(~gt_no_info, copy_number_allele_frequency)
 
 
 @common.static_vars(genotype_to_allele_count_map={})

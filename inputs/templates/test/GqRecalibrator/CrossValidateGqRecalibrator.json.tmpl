@@ -64,7 +64,16 @@
       "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
       "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
       "property": "gq",
-      "passing_score": 0
+      "passing_score": 0,
+      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-BenchmarkGqFilter/BenchmarkGqFilter/081ac44f-a3be-463d-a16c-3ce16284e123/call-PickleComparisonScores/shard-2/PickleVcfProperties/3301cc94-021b-44c1-9fa0-88cb7925a5ee/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2_gq.pickle.bz2"
+    },
+    {
+      "label": "previous x-validated",
+      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
+      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+      "property": "sl",
+      "passing_score": 0,
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2"
     }
   ],
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
