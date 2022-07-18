@@ -5,7 +5,6 @@ import "ResolveComplexVariants.wdl" as ComplexResolve
 import "GenotypeComplexVariants.wdl" as ComplexGenotype
 import "CleanVcf.wdl" as Clean
 import "MasterVcfQc.wdl" as VcfQc
-import "MakeCohortVcfMetrics.wdl" as metrics
 
 workflow MakeCohortVcf {
   input {
@@ -296,7 +295,7 @@ workflow MakeCohortVcf {
     input:
       cohort_name=cohort_name,
       merge_vcfs=merge_complex_resolve_vcfs,
-      cluster_vcfs=CombineBatches.vcfs,
+      cluster_vcfs=CombineBatches.combined_vcfs,
       cluster_bothside_pass_lists=CombineBatches.cluster_bothside_pass_lists,
       cluster_background_fail_lists=CombineBatches.cluster_background_fail_lists,
       disc_files=disc_files,
@@ -402,6 +401,15 @@ workflow MakeCohortVcf {
       outlier_samples_list=outlier_samples_list,
       use_hail=use_hail,
       gcs_project=gcs_project,
+      combine_batches_merged_vcf=CombineBatches.merged_vcf,
+      resolve_complex_merged_vcf=ResolveComplexVariants.merged_vcf,
+      genotype_complex_merged_vcf=GenotypeComplexVariants.merged_vcf,
+      baseline_cluster_vcf = baseline_cluster_vcf,
+      baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
+      baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
+      baseline_cleaned_vcf = baseline_cleaned_vcf,
+      primary_contigs_list=primary_contigs_list,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,
@@ -469,25 +477,6 @@ workflow MakeCohortVcf {
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
-  if (run_module_metrics_) {
-    call metrics.MakeCohortVcfMetrics {
-      input:
-        name = cohort_name,
-        cluster_vcf = CombineBatches.merged_vcf,
-        complex_resolve_vcf = ResolveComplexVariants.merged_vcf,
-        complex_genotype_vcf = GenotypeComplexVariants.merged_vcf,
-        cleaned_vcf = CleanVcf.cleaned_vcf,
-        baseline_cluster_vcf = baseline_cluster_vcf,
-        baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
-        baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
-        baseline_cleaned_vcf = baseline_cleaned_vcf,
-        contig_list = select_first([primary_contigs_list]),
-        linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
-        sv_base_mini_docker = sv_base_mini_docker
-    }
-  }
 
   output {
     File vcf = CleanVcf.cleaned_vcf
@@ -502,6 +491,6 @@ workflow MakeCohortVcf {
     File? complex_genotype_vcf = GenotypeComplexVariants.merged_vcf
     File? complex_genotype_vcf_index = GenotypeComplexVariants.merged_vcf_index
 
-    File? metrics_file_makecohortvcf = MakeCohortVcfMetrics.metrics_file
+    File? metrics_file_makecohortvcf = CleanVcf.metrics_file_makecohortvcf
   }
 }
