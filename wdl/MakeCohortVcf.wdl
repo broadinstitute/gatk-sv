@@ -401,9 +401,9 @@ workflow MakeCohortVcf {
       outlier_samples_list=outlier_samples_list,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      combine_batches_merged_vcf=CombineBatches.merged_vcf,
-      resolve_complex_merged_vcf=ResolveComplexVariants.merged_vcf,
-      genotype_complex_merged_vcf=GenotypeComplexVariants.merged_vcf,
+      combine_batches_merged_vcf=CombineBatches.combine_batches_merged_vcf,
+      resolve_complex_merged_vcf=ResolveComplexVariants.complex_resolve_merged_vcf,
+      genotype_complex_merged_vcf=GenotypeComplexVariants.complex_genotype_merged_vcf,
       baseline_cluster_vcf = baseline_cluster_vcf,
       baseline_complex_resolve_vcf = baseline_complex_resolve_vcf,
       baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
@@ -484,12 +484,12 @@ workflow MakeCohortVcf {
     File vcf_qc = MasterVcfQc.sv_vcf_qc_output
 
     # If merge_intermediate_vcfs enabled
-    File? cluster_vcf = CombineBatches.merged_vcf
-    File? cluster_vcf_index = CombineBatches.merged_vcf_index
-    File? complex_resolve_vcf = ResolveComplexVariants.merged_vcf
-    File? complex_resolve_vcf_index = ResolveComplexVariants.merged_vcf_index
-    File? complex_genotype_vcf = GenotypeComplexVariants.merged_vcf
-    File? complex_genotype_vcf_index = GenotypeComplexVariants.merged_vcf_index
+    File? cluster_vcf = CombineBatches.combine_batches_merged_vcf
+    File? cluster_vcf_index = CombineBatches.combine_batches_merged_vcf_index
+    File? complex_resolve_vcf = ResolveComplexVariants.complex_resolve_merged_vcf
+    File? complex_resolve_vcf_index = ResolveComplexVariants.complex_resolve_merged_vcf_index
+    File? complex_genotype_vcf = GenotypeComplexVariants.complex_genotype_merged_vcf
+    File? complex_genotype_vcf_index = GenotypeComplexVariants.complex_genotype_merged_vcf_index
 
     File? metrics_file_makecohortvcf = CleanVcf.metrics_file_makecohortvcf
   }

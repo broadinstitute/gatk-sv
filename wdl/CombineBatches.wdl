@@ -402,7 +402,7 @@ workflow CombineBatches {
     Array[File] combined_vcf_indexes = vcf_indexes_out_
     Array[File] cluster_bothside_pass_lists = UpdateBothsidePassSecond.updated_list
     Array[File] cluster_background_fail_lists = UpdateBackgroundFailSecond.updated_list
-    File? merged_vcf = ConcatVcfs.concat_vcf
-    File? merged_vcf_index = ConcatVcfs.concat_vcf_idx
+    File? combine_batches_merged_vcf = ConcatVcfs.concat_vcf
+    File? combine_batches_merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
