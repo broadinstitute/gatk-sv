@@ -72,6 +72,7 @@ class Default:
     )
     breakend_types = interval_overlaps.Default.breakend_types
     num_threads = common.num_physical_cpus  # by default, use all available cores for interval overlap tasks
+    use_copy_number = True
 
 
 class SvTypeCutoffInfo:
@@ -332,7 +333,8 @@ def _log(out: str, end='\n'):
 
 def split_vcf_dataframe(
         variants: pandas.DataFrame,
-        guarantee_allele_frequency: bool = False
+        guarantee_allele_frequency: bool = False,
+        use_copy_number: bool = Default.use_copy_number
 ) -> (pandas.DataFrame, pandas.DataFrame):
     f"""
     Split variant table into a location/properties table and a genotypes table
@@ -342,6 +344,8 @@ def split_vcf_dataframe(
         guarantee_allele_frequency: bool (default=False)
             If true and {Keys.allele_frequency} is not in variants, add it to variant_properties by counting the
             proportion of called alleles that are non-ref.
+        use_copy_number: bool (default={Default.use_copy_number})
+            Where genotype is insufficient, use copy number for estimating allele frequency and carrier status
     Returns:
         variant_properties: pandas.DataFrame
             Table of variant location and properties
@@ -361,16 +365,18 @@ def split_vcf_dataframe(
             raise ValueError(f"{prop} has missing values")
 
     if guarantee_allele_frequency and Keys.allele_frequency not in variant_properties:
-        variant_properties[Keys.allele_frequency] = genomics_io.get_or_estimate_allele_frequency(variants)
+        variant_properties[Keys.allele_frequency] = \
+            genomics_io.get_or_estimate_allele_frequency(variants, use_copy_number=use_copy_number)
 
-    return variant_properties, genomics_io.get_carrier_status(variants)
+    return variant_properties, genomics_io.get_carrier_status(variants, use_copy_number=use_copy_number)
 
 
 def load_and_split_vcf(
         vcf: str,
         wanted_properties: Optional[Collection[str]],
         restrict_samples: Optional[Iterable[str]],
-        guarantee_allele_frequency: bool = False
+        guarantee_allele_frequency: bool = False,
+        use_copy_number: bool = Default.use_copy_number
 ) -> (pandas.DataFrame, pandas.DataFrame):
     """
     load vcf data from file and split into non-genotype and genotype columns
@@ -385,6 +391,8 @@ def load_and_split_vcf(
         guarantee_allele_frequency: bool (default=False)
             If true and {Keys.allele_frequency} is not in variants, add it to variant_properties by counting the
             proportion of called alleles that are non-ref.
+        use_copy_number: bool (default={Default.use_copy_number})
+            Where genotype is insufficient, use copy number for estimating allele frequency and carrier status
     Returns:
         variant_properties: pandas.DataFrame
             Table of variant location and properties
@@ -400,7 +408,7 @@ def load_and_split_vcf(
             genomics_io.vcf_to_pandas(vcf, samples=restrict_samples, wanted_properties=wanted_properties,
                                       missing_properties_action=genomics_io.ErrorAction.Ignore,
                                       missing_samples_action=genomics_io.ErrorAction.Ignore),
-            guarantee_allele_frequency=guarantee_allele_frequency
+            guarantee_allele_frequency=guarantee_allele_frequency, use_copy_number=use_copy_number
         )
     except Exception as err:
         common.add_exception_context(err, f"Error loading {vcf}")
@@ -720,6 +728,7 @@ def get_test_truth_overlap_stats_from_vcfs(
         non_point_sv_scale_factor: float = Default.non_point_sv_scale_factor,
         breakend_types: Collection[str] = Default.breakend_types,
         overlap_func: interval_overlaps.OverlapFunc = quantify_overlap_by_svtype,
+        use_copy_number: bool = Default.use_copy_number,
         num_threads: int = Default.num_threads
 ) -> Dict[str, pandas.DataFrame]:
     """
@@ -747,6 +756,8 @@ def get_test_truth_overlap_stats_from_vcfs(
         overlap_func: interval_overlaps.OverlapFunc (default={quantify_overlap_by_svtype})
             Function that computes overlap statistics, given a test variant interval and table of overlapping truth
             variant intervals
+        use_copy_number: bool (default={Default.use_copy_number})
+            Where genotype is insufficient, use copy number for estimating allele frequency and carrier status
         num_threads: int (default = {Default.num_threads})
             Number of threads to use for interval overlap calculations
     Returns:
@@ -765,7 +776,7 @@ def get_test_truth_overlap_stats_from_vcfs(
 
         test_variant_locations, test_carrier_status = load_and_split_vcf(
             test_vcf, wanted_properties=wanted_properties, restrict_samples=restrict_samples,
-            guarantee_allele_frequency=True
+            guarantee_allele_frequency=True, use_copy_number=use_copy_number
         )
 
         if isinstance(truth_vcfs, str):
@@ -776,7 +787,7 @@ def get_test_truth_overlap_stats_from_vcfs(
                 continue
             truth_variant_locations, truth_carrier_status = load_and_split_vcf(
                 truth_vcf, wanted_properties=wanted_properties, restrict_samples=restrict_samples,
-                guarantee_allele_frequency=False
+                guarantee_allele_frequency=False, use_copy_number=use_copy_number
             )
             try:
                 overlap_stats.update(
@@ -1322,6 +1333,7 @@ def get_truth_overlap(
         inheritance_af_rareness: float = Default.inheritance_af_rareness,
         breakend_types: Collection[str] = Default.breakend_types,
         overlap_func: interval_overlaps.OverlapFunc = quantify_overlap_by_svtype,
+        use_copy_number: bool = Default.use_copy_number,
         num_threads: int = Default.num_threads
 ) -> ConfidentVariants:
     f"""
@@ -1373,6 +1385,8 @@ def get_truth_overlap(
         overlap_func: interval_overlaps.OverlapFunc (default={quantify_overlap_by_svtype})
             Function that computes overlap statistics, given a test variant interval and table of overlapping truth
             variant intervals
+        use_copy_number: bool (default={Default.use_copy_number})
+            Where genotype is insufficient, use copy number for estimating allele frequency and carrier status
         num_threads: int (default = {Default.num_threads})
             Number of threads to use for interval overlap calculations
     Returns:
@@ -1386,10 +1400,10 @@ def get_truth_overlap(
                              "a save file for previously calculated optimal overlap cutoffs.")
 
     overlap_stats = get_test_truth_overlap_stats_from_vcfs(
-        test_vcfs=test_vcfs, truth_vcfs=truth_vcfs,
-        expand_point_svs_bp=expand_point_svs_bp, point_sv_scale_factor=point_sv_scale_factor,
-        expand_non_point_svs_bp=expand_non_point_svs_bp, non_point_sv_scale_factor=non_point_sv_scale_factor,
-        breakend_types=breakend_types, overlap_func=overlap_func, num_threads=num_threads
+        test_vcfs=test_vcfs, truth_vcfs=truth_vcfs, expand_point_svs_bp=expand_point_svs_bp,
+        point_sv_scale_factor=point_sv_scale_factor, expand_non_point_svs_bp=expand_non_point_svs_bp,
+        non_point_sv_scale_factor=non_point_sv_scale_factor, breakend_types=breakend_types, overlap_func=overlap_func,
+        use_copy_number=use_copy_number, num_threads=num_threads
     )
     if not overlap_stats:
         raise ValueError("There were no samples in both the test and truth sets")
@@ -1487,6 +1501,9 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="beta factor for f-score, weighting importance of recall relative to precision")
     parser.add_argument("--inheritance-af-rareness", type=float, default=Default.inheritance_af_rareness,
                         help="Maximum allele frequency for a variant to use trio inheritance as a truth signal.")
+    parser.add_argument("--use-copy-number", type=bool, default=Default.use_copy_number,
+                        help="Where genotype is insufficient, use copy number for estimating allele frequency and "
+                             "carrier status")
     parser.add_argument("--num_threads", "-@", type=int, default=Default.num_threads,
                         help="number of threads for compressing output vcf")
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
@@ -1517,6 +1534,7 @@ def main(argv: Optional[List[Text]] = None) -> ConfidentVariants:
         min_overlap_cutoff_precision=arguments.min_overlap_cutoff_precision,
         min_vapor_precision=arguments.min_vapor_precision,
         inheritance_af_rareness=arguments.inheritance_af_rareness,
+        use_copy_number=arguments.use_copy_number,
         num_threads=arguments.num_threads
     )
     output_confident_variants(confident_variants, output_file=arguments.output)

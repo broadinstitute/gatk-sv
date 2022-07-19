@@ -32,6 +32,7 @@ Genotype = Optional[Tuple[Optional[int], ...]]
 
 
 # monkey-patch warnings to just display the warning
+# noinspection PyUnusedLocal
 def _showwarning(message, category=UserWarning, filename='', lineno=-1, file='', line=''):
     message = f"\n{category.__name__}  {filename}:{lineno}  {message}" if lineno > 0 \
         else f"\n{category.__name__}  {message}"
@@ -1453,9 +1454,7 @@ def get_copy_number(variants: pandas.DataFrame) -> Optional[pandas.DataFrame]:
             # CN *and* RD_CN are available. Sometimes one is in the header but not listed, so return whichever is
             # non-null, and if they're both non-null, prefer cn
             def _select_best_copy_number(_cn_entry: int, _rd_cn_entry: int) -> int:
-                return _cn_entry if pandas.isnull(_cn_entry) \
-                    else _rd_cn_entry if pandas.isnull(_cn_entry) \
-                    else _cn_entry
+                return _rd_cn_entry if pandas.isnull(_cn_entry) else _cn_entry
 
             def _combine_columns(_cn_column: pandas.Series, _rd_cn_column: pandas.Series) -> pandas.Series:
                 return _cn_column.combine(_rd_cn_column, _select_best_copy_number)
@@ -1485,15 +1484,19 @@ def genotype_to_carrier_status(genotype: Genotype) -> Union[bool, NAType]:
         return carrier_status
 
 
-def get_carrier_status(variants: pandas.DataFrame) -> pandas.DataFrame:
+def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = True) -> pandas.DataFrame:
     """
     return carrier status as num_variants x num_samples table, with each entry being a BooleanDType:
       - True if the sample is called non-REF for that variant
       - False if it is called REF
-      - Pandas.NA if it is not called
+      - pandas.NA if it is not called
+    If use_copy_number is True and the genotype is not called, examine copy number info to determine carrier status.
+    otherwise return pandas.NA
     """
     # get the carrier status as implied by the genotype
     gt_carrier_status = get_genotype(variants).applymap(genotype_to_carrier_status).astype(pandas.BooleanDtype())
+    if not use_copy_number:
+        return gt_carrier_status
     # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
     copy_number = get_copy_number(variants)
     if copy_number is None:
@@ -1510,7 +1513,23 @@ def get_carrier_status(variants: pandas.DataFrame) -> pandas.DataFrame:
         )
 
 
-def get_or_estimate_allele_frequency(variants: pandas.DataFrame) -> pandas.Series:
+def get_or_estimate_allele_frequency(variants: pandas.DataFrame, use_copy_number: bool = True) -> pandas.Series:
+    f"""
+    If {Keys.allele_frequency} is present in the variants, just return that. Otherwise estimate it:
+        -Estimate AF from cohort by counting called non-REF alleles and dividing by number of called alleles
+        -If use_copy_number is true *AND* there are no called alleles (or they were all called REF but there is copy
+         number info), then use copy number to estimate allele frequency. This is even dicier because we won't have
+         genotype, only carrier status. Estimate allele frequency assuming Hardy_Weinberg Equilibrium.
+    Args:
+        variants: pandas.DataFrame
+            Table of variant properties, genotypes, etc
+        use_copy_number: boolean (default=True)
+            If True, use copy number info (from {Keys.cn} and {Keys.rd_cn} fields) if it's helpful
+            If False, only use genotypes
+    Returns:
+        allele_frequency: pandas.Series
+            Estimated allele frequency for each variant            
+    """
     available_props = set(variants.columns.get_level_values(Keys.property))
     if Keys.allele_frequency in available_props:
         return variants.xs(Keys.allele_frequency, level=Keys.property, axis=1)
@@ -1518,12 +1537,14 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame) -> pandas.Serie
     gt_allele_counts = get_allele_count(variants).sum(axis=1, skipna=True)
     gt_num_called_alleles = get_num_called_alleles(variants).sum(axis=1, skipna=True)
     gt_allele_frequency = gt_allele_counts / gt_num_called_alleles
+    if not use_copy_number:
+        return gt_allele_frequency
     # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
     copy_number = get_copy_number(variants)
     if copy_number is None:
         return gt_allele_frequency
     else:
-        # Can't really get allele count from copy number. Estimate by assuming HWE
+        # Can't really get allele count from copy number. Estimate by assuming HWE and diploid genome
         copy_number_carrier_freq = (copy_number != 2).mean(axis=1, skipna=True)
         copy_number_allele_frequency = 1.0 - (1.0 - copy_number_carrier_freq) ** 0.5
         # prefer GT based allele frequency, but where copy number estimate is better than nothing, use that

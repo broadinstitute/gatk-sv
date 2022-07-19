@@ -2,9 +2,10 @@ import os
 import glob
 import numpy
 import pandas
-from typing import Sequence, Set
+from typing import Sequence, Set, Tuple
 
 from sv_utils import common, genomics_io
+import pysam
 import common_test_utils
 
 
@@ -169,6 +170,11 @@ def test_subset_vcf(
             )
 
 
+def _get_uncompressed_text(filename: str) -> Tuple[str, ...]:
+    with pysam.BGZFile(filename, "rb") as f_in:
+        return tuple(f_in)
+
+
 def test_read_write_bed(
         tmpdir,
         small_vcf: str = Default.small_vcf,
@@ -186,11 +192,13 @@ def test_read_write_bed(
     assert not set(small_vcf_variants.columns).symmetric_difference(small_bed_variants.columns)
     common_test_utils.assert_dataframes_equal(small_bed_variants, small_vcf_variants,
                                               context=f"vcf={small_vcf}, bed={small_bed}", check_column_order=False)
-    # check that writing the variants to a bed file is byte-identical to the existing bed file. check the
+    # check that writing the variants to a bed file is identical (when uncompressed) to the existing bed file. check the
     # re-ordering mechanism works to create a valid bed file
     temp_out_bed = os.path.join(temp_out_dir, os.path.basename(small_bed))
     genomics_io.pandas_to_bed(temp_out_bed, small_vcf_variants)
-    assert not common.command_results(f"zdiff {temp_out_bed} {small_bed}")
+    assert _get_uncompressed_text(temp_out_bed) == _get_uncompressed_text(small_bed)
+    # Ensure this isn't a trivial test (empty files, text getter somehow doesn't work). VCF and BED should be different
+    assert _get_uncompressed_text(temp_out_bed) != _get_uncompressed_text(small_vcf)
 
 
 def test_vcat_with_categoricals(small_vcfs: Sequence[str] = Default.small_vcfs,
