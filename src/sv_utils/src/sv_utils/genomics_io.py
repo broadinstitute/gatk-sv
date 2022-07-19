@@ -84,7 +84,9 @@ class VcfKeys:  # note: for convenience we use .lower() before processing to mak
     gq = "GQ"
     end = "END"  # Note: don't use this, use stop instead
     cn = "CN"
+    cnq = "CNQ"
     rd_cn = "RD_CN"
+    rd_gq = "RD_GQ"
 
 
 class Keys:
@@ -93,6 +95,7 @@ class Keys:
     begin = "begin"
     end = "end"
     gt = VcfKeys.gt.lower()
+    gq = VcfKeys.gq.lower()
     allele_frequency = "af"
     qual = "qual"
     ref = "ref"
@@ -113,8 +116,10 @@ class Keys:
     sample_id = "sample_id"
     property = "property"
     allele_count = "ac"
-    cn = "cn"
-    rd_cn = "rd_cn"
+    cn = VcfKeys.cn.lower()
+    cnq = VcfKeys.cnq.lower()
+    rd_cn = VcfKeys.rd_cn.lower()
+    rd_gq = VcfKeys.rd_gq.lower()
 
 
 VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRecordSample)
@@ -176,6 +181,7 @@ class Default:
     header_start = '#'  # most files use this as their header indicator
     log_progress = True
     location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
+    use_copy_number = False
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -418,6 +424,26 @@ class IntPropertyCollator(VcfPropertyCollator):
         return all(value is None or pandas.api.types.is_integer(value) for value in values)
 
     @staticmethod
+    def make_nullable_dtype(
+            dt: Union[numpy.dtype, pandas.api.extensions.ExtensionDtype]
+    ) -> pandas.api.extensions.ExtensionDtype:
+        """ convert to pandas dtype which supports pandas.NA (same class names with upper-case) """
+        return pandas.core.dtypes.cast.pandas_dtype(
+            dt.name.replace('i', 'I').replace('u', 'U')
+        )
+
+    @staticmethod
+    def range_to_min_int_dtype(
+            min_value: int, max_value: int, nullable: bool
+    ) -> Union[numpy.dtype, pandas.api.extensions.ExtensionDtype]:
+        # noinspection PyTypeChecker
+        min_type: numpy.dtype = numpy.min_scalar_type(
+            int(min(min_value, -max_value) if min_value < 0 else max_value)
+        )
+
+        return IntPropertyCollator.make_nullable_dtype(min_type) if nullable else min_type
+
+    @staticmethod
     def min_int_dtype(
             values: Union[Sequence[EncodedVcfField], numpy.ndarray, pandas.Series],
             prop_name: str,
@@ -443,16 +469,8 @@ class IntPropertyCollator(VcfPropertyCollator):
             # potential overflows in downstream computations
             min_val = min(min_val, numpy.iinfo(int_type).min)
             max_val = max(max_val, numpy.iinfo(int_type).max)
-        # noinspection PyTypeChecker
-        min_type: numpy.dtype = numpy.min_scalar_type(
-            int(min(min_val, -max_val) if min_val < 0 else max_val)
-        )
 
-        if _has_missing:  # convert to pandas dtype which supports pandas.NA (same class names with upper-case)
-            min_type = pandas.core.dtypes.cast.pandas_dtype(
-                min_type.name.replace('i', 'I').replace('u', 'U')
-            )
-        return min_type
+        return IntPropertyCollator.range_to_min_int_dtype(min_val, max_val, nullable=_has_missing)
 
     def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
         return IntPropertyCollator.min_int_dtype(values, self.table_prop_name, self.int_type)
@@ -1445,28 +1463,104 @@ def get_genotype(variants: pandas.DataFrame) -> pandas.DataFrame:
         raise
 
 
+def combine_call_properties(
+        preferred_properties: pandas.DataFrame,
+        alternate_properties: pandas.DataFrame,
+        use_alternate_properties: pandas.DataFrame
+) -> pandas.DataFrame:
+    """
+    Combine two call properties, by selecting preferred_properties where they are non-null, and otherwise using
+    alternate_properties (thus if both are non-null, preferred_properties will be selected).
+    Each of the input DataFrames must have the same indices and columns
+    Args:
+        preferred_properties: pandas.DataFrame
+            DataFrame of integer (possibly but not necessarily nullable) properties.
+        alternate_properties: pandas.DataFrame
+            DataFrame of integer (possibly but not necessarily nullable) properties.
+        use_alternate_properties: pandas.DataFrame
+            DataFrame of non-null bools specifying when to use each property
+    Returns:
+        combined_properties: pandas.DataFrame
+            DataFrame of combined preferred and alternate properties
+    """
+    # the fastest way to combine is using DataFrame.where, but it can't handle promoting dtypes, so we'll have to do
+    # that first
+    dtypes = {dt for df in (preferred_properties, alternate_properties) for dt in df.dtypes}
+    iinfos = [numpy.iinfo(dt.numpy_dtype if hasattr(dt, "numpy_dtype") else dt) for dt in dtypes]
+    min_type = IntPropertyCollator.range_to_min_int_dtype(
+        min_value=min(iinfo.min for iinfo in iinfos), max_value=max(iinfo.max for iinfo in iinfos), nullable=True
+    )
+    # convert to the minimum type that can handle all the values, then return DataFrame that is preferred_properties
+    # when that is not bad, and otherwise alternate_properties
+    return alternate_properties.astype(min_type).where(use_alternate_properties, preferred_properties)
+
+
 def get_copy_number(variants: pandas.DataFrame) -> Optional[pandas.DataFrame]:
     """ Return table of copy number if it is available, otherwise None """
     available_props = set(variants.columns.get_level_values(Keys.property))
     if Keys.cn in available_props:
-        cn = variants.xs(Keys.cn, level=Keys.property, axis=1)
+        cn = variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True)
         if Keys.rd_cn in available_props:
             # CN *and* RD_CN are available. Sometimes one is in the header but not listed, so return whichever is
-            # non-null, and if they're both non-null, prefer cn
-            def _select_best_copy_number(_cn_entry: int, _rd_cn_entry: int) -> int:
-                return _rd_cn_entry if pandas.isnull(_cn_entry) else _cn_entry
-
-            def _combine_columns(_cn_column: pandas.Series, _rd_cn_column: pandas.Series) -> pandas.Series:
-                return _cn_column.combine(_rd_cn_column, _select_best_copy_number)
-
-            rd_cn = variants.xs(Keys.rd_cn, level=Keys.property, axis=1)
-            return cn.combine(rd_cn, _combine_columns)
+            # non-null, and if they're both non-null, prefer CN
+            return combine_call_properties(
+                preferred_properties=cn,
+                alternate_properties=variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True),
+                use_alternate_properties=cn.isna()
+            )
         else:
             return cn
     elif Keys.rd_cn in available_props:
         return variants.xs(Keys.rd_cn, level=Keys.property, axis=1)
     else:
         return None
+
+
+def get_copy_number_and_quality(
+        variants: pandas.DataFrame
+) -> Union[Tuple[pandas.DataFrame, pandas.DataFrame], Tuple[None, None]]:
+    f"""
+    Return tables with copy number and associated phred-scaled quality if they are both available, otherwise None, None
+    There are two possible sources of copy-number data:
+        -{Keys.cn} with quality {Keys.cnq}
+        -{Keys.rd_cn} with quality {Keys.rd_gq}
+    The output table will choose whichever is available, and if both are, it will take whichever is non-null, preferring
+    {Keys.cn} if both are non-null. It will always use the above-listed quality metric. If the correct quality is not
+    available, that will cause an Exception.
+    
+    In order to make interacting with the results easier, the output columns will be a multi-index with {Keys.cn} and
+    {Keys.cnq} regardless of the origin of the input data.
+    """
+    available_props = set(variants.columns.get_level_values(Keys.property))
+    if Keys.cn in available_props:
+        if Keys.cnq not in available_props:
+            raise ValueError(f"{Keys.cn} in variants but not associated quality {Keys.cnq}")
+        if Keys.rd_cn in available_props:
+            if Keys.rd_gq not in available_props:
+                raise ValueError(f"{Keys.rd_cn} in variants but not associated quality {Keys.rd_gq}")
+            cn = variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True)
+            cn_is_null = cn.isna()
+            cn_calls = combine_call_properties(
+                preferred_properties=cn,
+                alternate_properties=variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True),
+                use_alternate_properties=cn_is_null
+            )
+            cn_qualities = combine_call_properties(
+                preferred_properties=variants.xs(Keys.cnq, level=Keys.property, axis=1, drop_level=True),
+                alternate_properties=variants.xs(Keys.rd_gq, level=Keys.property, axis=1, drop_level=True),
+                use_alternate_properties=cn_is_null
+            )
+            return cn_calls, cn_qualities
+        else:
+            return variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True), \
+                   variants.xs(Keys.cnq, level=Keys.property, axis=1, drop_level=True)
+    elif Keys.rd_cn in available_props:
+        if Keys.rd_gq not in available_props:
+            raise ValueError(f"{Keys.rd_cn} in variants but not associated quality {Keys.rd_gq}")
+        return variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True), \
+               variants.xs(Keys.rd_gq, level=Keys.property, axis=1, drop_level=True)
+    else:
+        return None, None
 
 
 @common.static_vars(genotype_to_carrier_status_map={})
@@ -1484,7 +1578,7 @@ def genotype_to_carrier_status(genotype: Genotype) -> Union[bool, NAType]:
         return carrier_status
 
 
-def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = True) -> pandas.DataFrame:
+def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number) -> pandas.DataFrame:
     """
     return carrier status as num_variants x num_samples table, with each entry being a BooleanDType:
       - True if the sample is called non-REF for that variant
@@ -1504,16 +1598,12 @@ def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = True)
     else:
         # Compute copy number carrier status by assuming copy number 2 is REF. Currently our pipeline sets copy number
         # to 2 for REF even on X and Y.
-        copy_number = (copy_number != 2).astype(pandas.BooleanDtype())
-        # where either one is NA, use the other. Where both are non-NA, use logical "or"
-        return gt_carrier_status.where(
-            copy_number.isna(),
-            copy_number.where(gt_carrier_status.isna(),
-                              gt_carrier_status | copy_number)
-        )
+        # Use copy number status only where gt_carrier_status is null
+        return (copy_number != 2).astype(pandas.BooleanDtype()).where(gt_carrier_status.isna(), gt_carrier_status)
 
 
-def get_or_estimate_allele_frequency(variants: pandas.DataFrame, use_copy_number: bool = True) -> pandas.Series:
+def get_or_estimate_allele_frequency(variants: pandas.DataFrame,
+                                     use_copy_number: bool = Default.use_copy_number) -> pandas.Series:
     f"""
     If {Keys.allele_frequency} is present in the variants, just return that. Otherwise estimate it:
         -Estimate AF from cohort by counting called non-REF alleles and dividing by number of called alleles
@@ -1523,7 +1613,7 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame, use_copy_number
     Args:
         variants: pandas.DataFrame
             Table of variant properties, genotypes, etc
-        use_copy_number: boolean (default=True)
+        use_copy_number: boolean (default={Default.use_copy_number})
             If True, use copy number info (from {Keys.cn} and {Keys.rd_cn} fields) if it's helpful
             If False, only use genotypes
     Returns:
@@ -1534,7 +1624,7 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame, use_copy_number
     if Keys.allele_frequency in available_props:
         return variants.xs(Keys.allele_frequency, level=Keys.property, axis=1)
     # get the allele_counts as implied by the genotype
-    gt_allele_counts = get_allele_count(variants).sum(axis=1, skipna=True)
+    gt_allele_counts = get_allele_counts(variants, use_copy_number=False).sum(axis=1, skipna=True)
     gt_num_called_alleles = get_num_called_alleles(variants).sum(axis=1, skipna=True)
     gt_allele_frequency = gt_allele_counts / gt_num_called_alleles
     if not use_copy_number:
@@ -1548,8 +1638,7 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame, use_copy_number
         copy_number_carrier_freq = (copy_number != 2).mean(axis=1, skipna=True)
         copy_number_allele_frequency = 1.0 - (1.0 - copy_number_carrier_freq) ** 0.5
         # prefer GT based allele frequency, but where copy number estimate is better than nothing, use that
-        gt_no_info = gt_allele_frequency.isna() | ((gt_allele_frequency == 0) & ~(copy_number_carrier_freq.isna()))
-        return gt_allele_frequency.where(~gt_no_info, copy_number_allele_frequency)
+        return copy_number_allele_frequency.where(gt_allele_frequency.isna(), gt_allele_frequency)
 
 
 @common.static_vars(genotype_to_allele_count_map={})
@@ -1567,8 +1656,48 @@ def genotype_to_allele_count(genotype: Genotype) -> Union[int, NAType]:
         return allele_count
 
 
-def get_allele_count(variants: pandas.DataFrame) -> pandas.DataFrame:
-    return get_genotype(variants).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
+def get_allele_counts(variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number) -> pandas.DataFrame:
+    gt_allele_count = get_genotype(variants).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
+    if not use_copy_number:
+        return gt_allele_count
+    copy_number = get_copy_number(variants)
+    if copy_number is None:
+        return gt_allele_count
+    # Use copy number where GT is no-call, otherwise use GT allele counts
+    use_cn_allele_count = gt_allele_count.isna() | ((gt_allele_count == 0) & ~copy_number.isna())
+    return combine_call_properties(
+        preferred_properties=gt_allele_count,
+        alternate_properties=(copy_number != 2).astype(pandas.UInt8Dtype()),
+        use_alternate_properties=gt_allele_count.isna()
+    )
+
+
+def get_allele_counts_and_quality(
+        variants: pandas.DataFrame,
+        use_copy_number: bool = Default.use_copy_number
+) -> (pandas.DataFrame, pandas.DataFrame):
+    # get genotype-only allele count (we'll combine with copy number along-side quality)
+    gt_allele_count = get_allele_counts(variants, use_copy_number = False)
+    gt_quality = variants.xs(Keys.gq, axis=1, level=Keys.property, drop_level=True)
+    if not use_copy_number:
+        return gt_allele_count, gt_quality
+    copy_number, copy_number_quality = get_copy_number_and_quality(variants)
+    if copy_number is None:
+        return gt_allele_count, gt_quality
+    # Use copy number where GT is no-call. Sometimes for copy-number calls, GT is set to HOMREF, so if GT is HOMREF and
+    # copy number is not no-call, use copy number
+    gt_allele_count_is_na = gt_allele_count.isna()
+    allele_count = combine_call_properties(
+        preferred_properties=gt_allele_count,
+        alternate_properties=(copy_number != 2).astype(pandas.UInt8Dtype()),
+        use_alternate_properties=gt_allele_count_is_na
+    )
+    allele_count_quality = combine_call_properties(
+        preferred_properties=gt_quality,
+        alternate_properties=copy_number_quality,
+        use_alternate_properties=gt_allele_count_is_na
+    )
+    return allele_count, allele_count_quality
 
 
 @common.static_vars(genotype_to_called_allele_count_map={})

@@ -78,6 +78,7 @@ workflow CrossValidateGqRecalibrator {
             genome_tracks=genome_tracks,
             gq_recalibrator_model_file=TrainGqRecalibrator.output_gq_recalibrator_model_file,
             standardize_vcf=false,
+            recalibrate_gq_args=recalibrate_gq_args,
             gatk_docker=gatk_docker,
             sv_utils_docker=sv_utils_docker
     }
@@ -123,6 +124,7 @@ workflow CrossValidateGqRecalibrator {
                 genome_tracks=genome_tracks,
                 gq_recalibrator_model_file=CrossTrainGqRecalibrator.output_gq_recalibrator_model_file,
                 standardize_vcf=false,
+                recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
                 sv_utils_docker=sv_utils_docker
         }

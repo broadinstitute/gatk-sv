@@ -130,7 +130,7 @@ task TrainGqRecalibratorTask {
         String gatk_docker
         Int? num_entries
         Float mem_scale_vcf_size = 25.2
-        Float mem_scale_num_entries = "3.6e-7"
+        Float mem_scale_num_entries = "3.7e-7"
         Float mem_gb_overhead = 1.5
     }
 
@@ -139,7 +139,8 @@ task TrainGqRecalibratorTask {
     Float mem_gb_java = if defined(num_entries)
         then 3.0 + mem_scale_num_entries * select_first([num_entries])
         else 3.0 + mem_scale_vcf_size * size(train_vcf, "GiB")
-    Float mem_gb = if mem_gb_java + mem_gb_overhead < 624.0 then mem_gb_java + mem_gb_overhead else 624.0
+    Float max_mem_gb = 624  # current max n1-highmem, which is what cromwell is willing to allocate
+    Float mem_gb = if mem_gb_java + mem_gb_overhead < max_mem_gb then mem_gb_java + mem_gb_overhead else max_mem_gb
     String model_file_name = if defined(gq_recalibrator_model_file)
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"

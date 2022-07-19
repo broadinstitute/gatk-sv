@@ -72,7 +72,7 @@ class Default:
     )
     breakend_types = interval_overlaps.Default.breakend_types
     num_threads = common.num_physical_cpus  # by default, use all available cores for interval overlap tasks
-    use_copy_number = True
+    use_copy_number = genomics_io.Default.use_copy_number
 
 
 class SvTypeCutoffInfo:
@@ -209,6 +209,7 @@ class PrecisionRecallCurve:
         # construct precision-recall curve (vs threshold)
         n_good = len(good_thresholds)
         if n_good == 0:
+            # noinspection PyTypeChecker
             return PrecisionRecallCurve.empty_curve
 
         n_bad = len(bad_thresholds)
@@ -319,7 +320,7 @@ class PrecisionRecallCurve:
 
     # noinspection PyMethodParameters
     @common.classproperty
-    def empty_curve(cls: type):
+    def empty_curve(cls: type) -> "PrecisionRecallCurve":
         return cls(
             pandas.DataFrame(None, columns=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key],
                              index=pandas.Index([], name=PrecisionRecallCurve.threshold_key, dtype=numpy.float64)),

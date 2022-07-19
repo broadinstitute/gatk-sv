@@ -61,7 +61,7 @@ task RecalibrateGqTask {
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
 
     runtime {
-        docker: gatk_docker
+        docker: "us.gcr.io/broad-dsde-methods/tbrookin/gatk:900ac4539"
         cpu: 1
         preemptible: 3
         max_retries: 1

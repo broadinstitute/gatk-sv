@@ -380,7 +380,7 @@ class ScoresDataSet:
                 axis=0
             )
             # extract allele_counts and metrics, and drop now-unneeded columns from vcf_data
-            allele_counts = genomics_io.get_allele_count(vcf_data)
+            allele_counts = genomics_io.get_allele_counts(vcf_data, use_copy_number=False)
             vcf_data.drop(Keys.gt, axis=1, level=Keys.property, inplace=True)
             metrics = vcf_data.xs(None, level=Keys.sample_id, axis=1)[[Keys.svtype, Keys.svlen]]
             vcf_data.drop([Keys.svtype, Keys.svlen], axis=1, level=Keys.property, inplace=True)
