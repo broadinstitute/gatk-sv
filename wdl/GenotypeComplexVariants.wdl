@@ -136,7 +136,7 @@ workflow GenotypeComplexVariants {
   output {
     Array[File] complex_genotype_vcfs = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf
     Array[File] complex_genotype_vcf_indexes = ScatterCpxGenotyping.cpx_depth_gt_resolved_vcf_idx
-    File? merged_vcf = ConcatVcfs.concat_vcf
-    File? merged_vcf_index = ConcatVcfs.concat_vcf_idx
+    File? complex_genotype_merged_vcf = ConcatVcfs.concat_vcf
+    File? complex_genotype_merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }

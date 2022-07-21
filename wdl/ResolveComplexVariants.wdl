@@ -223,8 +223,8 @@ workflow ResolveComplexVariants {
     Array[File] complex_resolve_background_fail_lists = UpdateBackgroundFail.updated_list
     Array[File] breakpoint_overlap_dropped_record_vcfs = BreakpointOverlap.dropped_record_vcf
     Array[File] breakpoint_overlap_dropped_record_vcf_indexes = BreakpointOverlap.dropped_record_vcf_index
-    File? merged_vcf = ConcatVcfs.concat_vcf
-    File? merged_vcf_index = ConcatVcfs.concat_vcf_idx
+    File? complex_resolve_merged_vcf = ConcatVcfs.concat_vcf
+    File? complex_resolve_merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
 

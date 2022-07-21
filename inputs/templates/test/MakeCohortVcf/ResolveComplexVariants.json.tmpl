@@ -1,0 +1,30 @@
+{
+  "ResolveComplexVariants.contig_list": {{ reference_resources.primary_contigs_fai | tojson }},
+  "ResolveComplexVariants.cytobands": {{ reference_resources.cytobands | tojson }},
+  "ResolveComplexVariants.mei_bed": {{ reference_resources.mei_bed | tojson }},
+  "ResolveComplexVariants.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
+  "ResolveComplexVariants.ref_dict": {{ reference_resources.reference_dict | tojson }},
+
+  "ResolveComplexVariants.max_shard_size" : 500,
+  "ResolveComplexVariants.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "ResolveComplexVariants.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+  "ResolveComplexVariants.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
+
+  "ResolveComplexVariants.cohort_name": {{ test_batch.name | tojson }},
+  "ResolveComplexVariants.disc_files": [
+    {{ test_batch.merged_disc_file | tojson }}
+  ],
+  "ResolveComplexVariants.rf_cutoff_files": [
+    {{ test_batch.cutoffs | tojson }}
+  ],
+  "ResolveComplexVariants.cluster_vcfs": [
+    {{ test_batch.combined_vcfs | tojson }}
+  ],
+  "ResolveComplexVariants.cluster_bothside_pass_lists": [
+    {{ test_batch.cluster_bothside_pass_lists | tojson }}
+  ],
+  "ResolveComplexVariants.cluster_background_fail_lists": [
+    {{ test_batch.cluster_background_fail_lists | tojson }}
+  ]
+
+}
