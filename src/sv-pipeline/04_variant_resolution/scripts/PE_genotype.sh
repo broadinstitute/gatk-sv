@@ -214,7 +214,7 @@ zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3==0) print $0 "\t" 999}'|gzip>nu
 ##null genotype but has PE reads determined by poisson test##
 zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3>0) print}' > null.wreads.txt
 if [ -s null.wreads.txt ]; then
-  zcat null.wreads.txt \
+  cat null.wreads.txt \
     | Rscript -e 'd<-read.table("stdin")' \
     -e "z<-cbind(d[1],d[,2],d[,3],d[,4],round(matrix(apply(d[,3,drop=F],1, function (x) -10*log10(1-ppois(0, lambda=x))* $normalization) ,ncol=1)) )" \
     -e 'write.table(z,"null.wreads.geno.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
