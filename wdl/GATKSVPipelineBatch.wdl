@@ -30,14 +30,12 @@ workflow GATKSVPipelineBatch {
     Array[File]? pe_files_input
     Array[File]? sr_files_input
     Array[File?]? baf_files_input
-    Array[File]? delly_vcfs_input
     Array[File]? manta_vcfs_input
     Array[File]? melt_vcfs_input
     Array[File]? scramble_vcfs_input
     Array[File]? wham_vcfs_input
 
     # Enable different callers
-    Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
     Boolean use_scramble = true
@@ -109,7 +107,6 @@ workflow GATKSVPipelineBatch {
     String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
-    String? delly_docker
     String? manta_docker
     String? melt_docker
     String? scramble_docker
@@ -128,13 +125,12 @@ workflow GATKSVPipelineBatch {
   Boolean collect_coverage_ = !defined(counts_files_input)
   Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input))
 
-  String? delly_docker_ = if (!defined(delly_vcfs_input) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(manta_vcfs_input) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(melt_vcfs_input) && use_melt) then melt_docker else NONE_STRING_
   String? scramble_docker_ = if (!defined(scramble_vcfs_input) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs_input) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidenceBatch {
@@ -156,7 +152,6 @@ workflow GATKSVPipelineBatch {
         linux_docker = linux_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        delly_docker=delly_docker_,
         manta_docker=manta_docker_,
         melt_docker=melt_docker_,
         scramble_docker=scramble_docker_,
@@ -173,9 +168,6 @@ workflow GATKSVPipelineBatch {
   Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files_input])
   Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files_input])
 
-  if (use_delly) {
-    Array[File] delly_vcfs_ = if defined(delly_vcfs_input) then select_first([delly_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.delly_vcf]))
-  }
   if (use_manta) {
     Array[File] manta_vcfs_ = if defined(manta_vcfs_input) then select_first([manta_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
   }
@@ -220,7 +212,6 @@ workflow GATKSVPipelineBatch {
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
-      delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,

@@ -10,7 +10,6 @@
 
   "GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
 
-  "GatherSampleEvidenceBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
   "GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
   "GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
 
@@ -33,5 +32,6 @@
   "GatherSampleEvidenceBatch.linux_docker": {{ dockers.linux_docker | tojson }},
 
   "GatherSampleEvidenceBatch.bam_or_cram_files": {{ test_batch.bam_or_cram_files | tojson }},
-  "GatherSampleEvidenceBatch.sample_ids": {{ test_batch.samples | tojson }}
+  "GatherSampleEvidenceBatch.sample_ids": {{ test_batch.samples | tojson }},
+  "GatherSampleEvidenceBatch.requester_pays_crams" : "true"
 }

@@ -34,14 +34,12 @@ workflow GATKSVPipelineSingleSample {
 
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
-    Boolean use_delly = false
     Boolean use_manta = true
     Boolean use_melt = true
     Boolean use_scramble = false
     Boolean use_wham = true
 
     # If GatherSampleEvidence outputs already prepared
-    File? case_delly_vcf
     File? case_manta_vcf
     File? case_melt_vcf
     File? case_scramble_vcf
@@ -82,7 +80,6 @@ workflow GATKSVPipelineSingleSample {
     String cloud_sdk_docker
 
     # Must be provided if corresponding use_* is true and case_*_vcf is not provided
-    String? delly_docker
     String? manta_docker
     String? melt_docker
     String? scramble_docker
@@ -594,7 +591,6 @@ workflow GATKSVPipelineSingleSample {
 
   }
 
-  String? delly_docker_ = if (!defined(case_delly_vcf) && use_delly) then delly_docker else NONE_STRING_
   String? manta_docker_ = if (!defined(case_manta_vcf) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(case_melt_vcf) && use_melt) then melt_docker else NONE_STRING_
   String? scramble_docker_ = if (!defined(case_scramble_vcf) && use_scramble) then scramble_docker else NONE_STRING_
@@ -603,7 +599,7 @@ workflow GATKSVPipelineSingleSample {
   Boolean collect_coverage = !defined(case_counts_file)
   Boolean collect_pesr = !defined(case_pe_file) || !defined(case_sr_file)
 
-  Boolean run_sampleevidence = defined(delly_docker_) || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
+  Boolean run_sampleevidence = defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidence as GatherSampleEvidence {
@@ -637,7 +633,6 @@ workflow GATKSVPipelineSingleSample {
         run_module_metrics = run_sampleevidence_metrics,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        delly_docker=delly_docker_,
         manta_docker=manta_docker_,
         melt_docker=melt_docker_,
         scramble_docker=scramble_docker_,
@@ -682,9 +677,6 @@ workflow GATKSVPipelineSingleSample {
       wgd_score_runtime_attr=wgd_score_runtime_attr
   }
 
-  if (use_delly) {
-    Array[File] delly_vcfs_ = [select_first([case_delly_vcf, GatherSampleEvidence.delly_vcf])]
-  }
   if (use_manta) {
     Array[File] manta_vcfs_ = [select_first([case_manta_vcf, GatherSampleEvidence.manta_vcf])]
   }
@@ -759,7 +751,6 @@ workflow GATKSVPipelineSingleSample {
       ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
       allosomal_contigs = allosomal_contigs,
       gcnv_qs_cutoff=gcnv_qs_cutoff,
-      delly_vcfs=delly_vcfs_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
@@ -908,16 +899,6 @@ workflow GATKSVPipelineSingleSample {
             runtime_attr_override=runtime_attr_filter_vcf_by_id
     }
   }
-  if (use_delly) {
-    call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDelly {
-        input :
-            vcf_gz=select_first([ClusterBatch.clustered_delly_vcf]),
-            sample_id=sample_id,
-            evidence="RD,PE,SR",
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_attr_filter_vcf_by_id
-    }
-  }
 
   call SingleSampleFiltering.FilterVcfBySampleGenotypeAndAddEvidenceAnnotation as FilterDepth {
     input :
@@ -934,7 +915,6 @@ workflow GATKSVPipelineSingleSample {
       wham_vcf=FilterWham.out,
       melt_vcf=FilterMelt.out,
       scramble_vcf=FilterScramble.out,
-      delly_vcf=FilterDelly.out,
       batch=batch,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_merge_pesr_vcfs

@@ -130,7 +130,6 @@ workflow GatherBatchEvidence {
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
-    Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
@@ -156,7 +155,6 @@ workflow GatherBatchEvidence {
     File? baseline_merged_dels  # baseline files are optional for metrics workflow
     File? baseline_merged_dups
     File? baseline_median_cov
-    Array[File]? baseline_std_delly_vcf
     Array[File]? baseline_std_manta_vcf
     Array[File]? baseline_std_melt_vcf
     Array[File]? baseline_std_scramble_vcf
@@ -469,7 +467,6 @@ workflow GatherBatchEvidence {
     input:
       samples = samples,
       manta_vcfs = manta_vcfs,
-      delly_vcfs = delly_vcfs,
       melt_vcfs = melt_vcfs,
       scramble_vcfs = scramble_vcfs,
       wham_vcfs = wham_vcfs,
@@ -526,7 +523,6 @@ workflow GatherBatchEvidence {
         merged_dels = MergeDepth.del,
         merged_dups = MergeDepth.dup,
         median_cov = MedianCov.medianCov,
-        std_delly_vcf = PreprocessPESR.std_delly_vcf,
         std_manta_vcf = PreprocessPESR.std_manta_vcf,
         std_melt_vcf = PreprocessPESR.std_melt_vcf,
         std_scramble_vcf = PreprocessPESR.std_scramble_vcf,
@@ -534,7 +530,6 @@ workflow GatherBatchEvidence {
         baseline_merged_dels = baseline_merged_dels,
         baseline_merged_dups = baseline_merged_dups,
         baseline_median_cov = baseline_median_cov,
-        baseline_std_delly_vcf = baseline_std_delly_vcf,
         baseline_std_manta_vcf = baseline_std_manta_vcf,
         baseline_std_melt_vcf = baseline_std_melt_vcf,
         baseline_std_scramble_vcf = baseline_std_scramble_vcf,
@@ -576,7 +571,6 @@ workflow GatherBatchEvidence {
     File median_cov = MedianCov.medianCov
 
     Array[File]? std_manta_vcf = PreprocessPESR.std_manta_vcf
-    Array[File]? std_delly_vcf = PreprocessPESR.std_delly_vcf
     Array[File]? std_melt_vcf = PreprocessPESR.std_melt_vcf
     Array[File]? std_scramble_vcf = PreprocessPESR.std_scramble_vcf
     Array[File]? std_wham_vcf = PreprocessPESR.std_wham_vcf
