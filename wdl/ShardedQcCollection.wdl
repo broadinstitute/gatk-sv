@@ -144,7 +144,7 @@ task PreprocessVcf {
 
     bcftools view \
       --no-update \
-      $bcftools_preprocessing_options \
+      ~{bcftools_preprocessing_options} \
       -l 1 -O z \
       -o ~{outvcf_fname} \
       ~{vcf}
