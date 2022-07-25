@@ -107,7 +107,6 @@ workflow GatherBatchEvidence {
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
-    Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
@@ -130,15 +129,13 @@ workflow GatherBatchEvidence {
     Boolean? run_module_metrics
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
-    File? baseline_merged_dels  # baseline files are optional for metrics workflow
+
+    # baseline files are optional for metrics workflow
+    # run ClusterBatch for vcf metrics
+    File? baseline_merged_dels
     File? baseline_merged_dups
     File? baseline_median_cov
-    Array[File]? baseline_std_delly_vcf
-    Array[File]? baseline_std_manta_vcf
-    Array[File]? baseline_std_melt_vcf
-    Array[File]? baseline_std_scramble_vcf
-    Array[File]? baseline_std_wham_vcf
-
+    
     # Runtime parameters
     String sv_base_mini_docker
     String sv_base_docker
@@ -173,6 +170,8 @@ workflow GatherBatchEvidence {
     RuntimeAttr? cnmops_clean_runtime_attr
     RuntimeAttr? matrix_qc_pesrbaf_runtime_attr
     RuntimeAttr? matrix_qc_rd_runtime_attr
+    RuntimeAttr? runtime_attr_tiny_untar
+    RuntimeAttr? runtime_attr_tiny_resolve
 
     RuntimeAttr? runtime_attr_ploidy
     RuntimeAttr? runtime_attr_case
@@ -392,12 +391,12 @@ workflow GatherBatchEvidence {
     input:
       samples = samples,
       manta_vcfs = manta_vcfs,
-      delly_vcfs = delly_vcfs,
       melt_vcfs = melt_vcfs,
       scramble_vcfs = scramble_vcfs,
       wham_vcfs = wham_vcfs,
       contigs = primary_contigs_fai,
       min_svsize = min_svsize,
+      batch = batch,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = preprocess_calls_runtime_attr
   }
@@ -405,12 +404,14 @@ workflow GatherBatchEvidence {
       call tiny.TinyResolve as TinyResolve {
         input:
           samples = samples,
-          manta_vcfs = select_first([PreprocessPESR.std_manta_vcf]),
+          manta_vcf_tar = select_first([PreprocessPESR.std_manta_vcf_tar]),
           cytoband=cytoband,
           discfile=PE_files,
           mei_bed=mei_bed,
           sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr = preprocess_calls_runtime_attr
+          linux_docker = linux_docker,
+          runtime_attr_resolve = runtime_attr_tiny_resolve,
+          runtime_attr_untar = runtime_attr_tiny_untar
       }
   }
   if (run_matrix_qc) {
@@ -447,19 +448,9 @@ workflow GatherBatchEvidence {
         merged_dels = MergeDepth.del,
         merged_dups = MergeDepth.dup,
         median_cov = MedianCov.medianCov,
-        std_delly_vcf = PreprocessPESR.std_delly_vcf,
-        std_manta_vcf = PreprocessPESR.std_manta_vcf,
-        std_melt_vcf = PreprocessPESR.std_melt_vcf,
-        std_scramble_vcf = PreprocessPESR.std_scramble_vcf,
-        std_wham_vcf = PreprocessPESR.std_wham_vcf,
         baseline_merged_dels = baseline_merged_dels,
         baseline_merged_dups = baseline_merged_dups,
         baseline_median_cov = baseline_median_cov,
-        baseline_std_delly_vcf = baseline_std_delly_vcf,
-        baseline_std_manta_vcf = baseline_std_manta_vcf,
-        baseline_std_melt_vcf = baseline_std_melt_vcf,
-        baseline_std_scramble_vcf = baseline_std_scramble_vcf,
-        baseline_std_wham_vcf = baseline_std_wham_vcf,
         contig_list = select_first([primary_contigs_list]),
         sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
         linux_docker = linux_docker
@@ -496,11 +487,10 @@ workflow GatherBatchEvidence {
 
     File median_cov = MedianCov.medianCov
 
-    Array[File]? std_manta_vcf = PreprocessPESR.std_manta_vcf
-    Array[File]? std_delly_vcf = PreprocessPESR.std_delly_vcf
-    Array[File]? std_melt_vcf = PreprocessPESR.std_melt_vcf
-    Array[File]? std_scramble_vcf = PreprocessPESR.std_scramble_vcf
-    Array[File]? std_wham_vcf = PreprocessPESR.std_wham_vcf
+    File? std_manta_vcf_tar = PreprocessPESR.std_manta_vcf_tar
+    File? std_melt_vcf_tar = PreprocessPESR.std_melt_vcf_tar
+    File? std_scramble_vcf_tar = PreprocessPESR.std_scramble_vcf_tar
+    File? std_wham_vcf_tar = PreprocessPESR.std_wham_vcf_tar
 
     File? PE_stats = MatrixQC.PE_stats
     File? RD_stats = MatrixQC.RD_stats

@@ -1,281 +1,156 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksClusterBatch.wdl" as tasks_cluster
+import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow ClusterDepth {
   input {
-    File contigs
-    Float frac
     File del_bed
-    String flags
     File dup_bed
     String batch
-    File? exclude_list
-    Float? exclude_list_frac_max
+    File ploidy_table
 
+    Int records_per_bed_shard
 
+    File contig_list
+    File sample_list
+    File exclude_intervals
+    Float exclude_overlap_fraction
+
+    String? clustering_algorithm
+    Float depth_interval_overlap
+
+    File? contig_subset_list
+    File? gatk_to_svtk_script
+    File? cnv_bed_to_gatk_vcf_script
+
+    File reference_fasta
+    File reference_fasta_fai
+    File reference_dict
+
+    String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_bed_cluster
-    RuntimeAttr? runtime_attr_concat
-    RuntimeAttr? runtime_attr_depth_vcf
-    RuntimeAttr? runtime_attr_rdtest_bed
+
+    Float? java_mem_fraction
+
+    RuntimeAttr? runtime_attr_scatter_bed
+    RuntimeAttr? runtime_attr_cnv_bed_to_gatk_vcf
+    RuntimeAttr? runtime_attr_exclude_intervals_depth
+    RuntimeAttr? runtime_attr_svcluster
+    RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
+    RuntimeAttr? runtime_override_concat_vcfs
   }
 
-  Array[Array[String]] contiglist = read_tsv(contigs)
+  call tasks_cluster.ScatterCompressedBedOmitHeaders as ScatterDel {
+    input:
+      bed=del_bed,
+      records_per_shard=records_per_bed_shard,
+      prefix="~{batch}.cluster_batch.depth.del.shard_",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_scatter_bed
+  }
 
-  scatter (contig in contiglist) {
-    call BedCluster as BedCluster_del {
+  call tasks_cluster.ScatterCompressedBedOmitHeaders as ScatterDup {
+    input:
+      bed=dup_bed,
+      records_per_shard=records_per_bed_shard,
+      prefix="~{batch}.cluster_batch.depth.dup.shard_",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_scatter_bed
+  }
+
+  scatter (i in range(length(ScatterDel.out))) {
+    call tasks_cluster.CNVBedToGatkVcf as DelBedToVcf {
       input:
-        batch = batch,
-        svtype = "DEL",
-        chrom = contig[0],
-        bed = del_bed,
-        frac = frac,
-        exclude_list=exclude_list,
-        exclude_list_frac_max=exclude_list_frac_max,
-        flags = flags,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_bed_cluster
+        bed=ScatterDel.out[i],
+        script=cnv_bed_to_gatk_vcf_script,
+        contig_list=contig_list,
+        sample_list=sample_list,
+        ploidy_table=ploidy_table,
+        reference_fasta_fai=reference_fasta_fai,
+        output_prefix="~{batch}.cluster_batch.depth.gatk_formatted.del.shard_~{i}",
+        vid_prefix="~{batch}_raw_depth_DEL_shard_~{i}_",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_cnv_bed_to_gatk_vcf
     }
+  }
 
-    call BedCluster as BedCluster_dup {
+  scatter (i in range(length(ScatterDup.out))) {
+    call tasks_cluster.CNVBedToGatkVcf as DupBedToVcf {
       input:
-        batch = batch,
-        svtype = "DUP",
-        chrom = contig[0],
-        bed = dup_bed,
-        frac = frac,
-        exclude_list=exclude_list,
-        exclude_list_frac_max=exclude_list_frac_max,
-        flags = flags,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_bed_cluster
+        bed=ScatterDup.out[i],
+        script=cnv_bed_to_gatk_vcf_script,
+        contig_list=contig_list,
+        sample_list=sample_list,
+        ploidy_table=ploidy_table,
+        reference_fasta_fai=reference_fasta_fai,
+        output_prefix="~{batch}.cluster_batch.depth.gatk_formatted.dup.shard_~{i}",
+        vid_prefix="~{batch}_raw_depth_DUP_shard_~{i}_",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_cnv_bed_to_gatk_vcf
     }
   }
 
-  call ConcatBeds as ConcatBeds_del {
+  Array[String] contigs = transpose(read_tsv(select_first([contig_subset_list, contig_list])))[0]
+  scatter (contig in contigs) {
+    call tasks_cluster.SVCluster {
+      input:
+        vcfs=flatten([DelBedToVcf.out, DupBedToVcf.out]),
+        ploidy_table=ploidy_table,
+        output_prefix="~{batch}.cluster_batch.depth.~{contig}.clustered",
+        contig=contig,
+        fast_mode=true,
+        algorithm=clustering_algorithm,
+        depth_sample_overlap=0,
+        depth_interval_overlap=depth_interval_overlap,
+        depth_breakend_window=0,
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        java_mem_fraction=java_mem_fraction,
+        variant_prefix="~{batch}_depth_~{contig}_",
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_svcluster
+    }
+    call tasks_cluster.ExcludeIntervalsByIntervalOverlap {
+      input:
+        vcf=SVCluster.out,
+        overlap_fraction=exclude_overlap_fraction,
+        reference_fasta_fai=reference_fasta_fai,
+        output_prefix="~{batch}.cluster_batch.depth.~{contig}.exclude_intervals",
+        intervals=exclude_intervals,
+        intervals_index=exclude_intervals + ".tbi",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_exclude_intervals_depth
+    }
+    call tasks_cluster.GatkToSvtkVcf {
+      input:
+        vcf=ExcludeIntervalsByIntervalOverlap.out,
+        output_prefix="~{batch}.cluster_batch.depth.~{contig}.svtk_formatted",
+        script=gatk_to_svtk_script,
+        source="depth",
+        contig_list=contig_list,
+        remove_formats="CN",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
+    }
+  }
+
+  call tasks_cohort.ConcatVcfs {
     input:
-      batch = batch,
-      svtype = "DEL",
-      beds = BedCluster_del.clustered_bed,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat
-  }
-
-  call ConcatBeds as ConcatBeds_dup {
-    input:
-      batch = batch,
-      svtype = "DUP",
-      beds = BedCluster_dup.clustered_bed,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat
-  }
-
-  call MakeRDTestBed {
-    input:
-      dels = ConcatBeds_del.merged_bed,
-      dups = ConcatBeds_dup.merged_bed,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rdtest_bed
-  }
-
-  call MakeDepthVCF {
-    input:
-      bed = MakeRDTestBed.bed,
-      contigs = contigs,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_depth_vcf
+      vcfs=GatkToSvtkVcf.out,
+      vcfs_idx=GatkToSvtkVcf.out_index,
+      naive=true,
+      outfile_prefix="~{batch}.cluster_batch.depth",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_vcfs
   }
 
   output {
-    File clustered_vcf = MakeDepthVCF.vcf
-    File clustered_vcf_index = MakeDepthVCF.vcf_index
+    File clustered_vcf = ConcatVcfs.concat_vcf
+    File clustered_vcf_index = ConcatVcfs.concat_vcf_idx
   }
-}
-
-task MakeRDTestBed {
-  input {
-    File dels
-    File dups
-    String batch
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File bed = "${batch}.depth.bed"
-  }
-  command <<<
-
-    set -euo pipefail
-    python3 /opt/sv-pipeline/scripts/make_depth_rdtest_bed.py ~{dels} | sed '1d' > del.bed
-    python3 /opt/sv-pipeline/scripts/make_depth_rdtest_bed.py ~{dups} | sed '1d' > dup.bed
-    echo -e "#chrom start end name samples svtype" | sed -e 's/ /\t/g' > ~{batch}.depth.bed
-    cat del.bed dup.bed | sort -k1,1V -k2,2n >> ~{batch}.depth.bed
-  
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
-}
-
-task MakeDepthVCF {
-  input {
-    File bed
-    File contigs
-    String batch
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File vcf = "${batch}.depth.vcf.gz"
-    File vcf_index = "${batch}.depth.vcf.gz.tbi"
-  }
-  command <<<
-
-    set -euo pipefail
-    cut -f5 ~{bed} | sed -e '1d' -e 's/,/\n/g' | sort -u > samples.list
-    svtk rdtest2vcf --contigs ~{contigs} ~{bed} samples.list ~{batch}.depth.vcf.gz
-  
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task BedCluster {
-  input {
-    String batch
-    String svtype
-    String chrom
-    File bed
-    File? exclude_list
-    Float? exclude_list_frac_max = 0.5
-    Float frac
-    String flags
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-
-  output {
-    File clustered_bed = "${batch}.${svtype}.${chrom}.bed"
-  }
-  command <<<
-
-    set -euo pipefail
-    tabix -p bed ~{bed};
-    svtk bedcluster ~{bed} -r ~{chrom} \
-      -p ~{batch}_depth_~{svtype}_~{chrom} \
-      -f ~{frac} \
-      ~{flags} \
-      > ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed
-
-    ~{if defined(exclude_list) then
-      "bedtools coverage -a ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed -b ~{exclude_list} | awk '$NF < ~{exclude_list_frac_max}' | rev | cut -f5- | rev > excluded.filtered.bed"
-      else
-      ""}
-    ~{if defined(exclude_list) then
-       "cat <(head -1 ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed) excluded.filtered.bed > ~{batch}.~{svtype}.~{chrom}.bed"
-      else
-       "mv ~{batch}.~{svtype}.~{chrom}.preexcludelist.bed ~{batch}.~{svtype}.~{chrom}.bed"}
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
-}
-
-task ConcatBeds {
-  input {
-    String batch
-    String svtype
-    Array[File] beds
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-
-  output {
-    File merged_bed = "${batch}.${svtype}.bed"
-  }
-  command <<<
-
-    awk 'FNR==1 && NR!=1 { while (/^#chrom/) getline; } 1 {print}' ~{sep=" "  beds} > ~{batch}.~{svtype}.bed
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
 }
 
