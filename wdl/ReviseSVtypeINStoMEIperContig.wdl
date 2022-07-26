@@ -71,7 +71,7 @@ task ReviseSVtypeMEI{
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2, 
-    disk_gb: 10 + ceil(size([vcf], "GB"))
+    disk_gb: 10 + ceil(size([vcf], "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

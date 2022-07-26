@@ -161,7 +161,7 @@ workflow Module07FilterGTsPart1 {
   scatter ( fam in SplitFamfile_PCRMINUS.famfile_shards ) {
     call minGQTasks.CollectTrioSVdat as CollectTrioSVdat_PCRMINUS {
       input:
-        vcf_shards = SplitPcrVcf.PCRMINUS_vcf,
+        vcf_shard_idxs = SplitPcrVcf.PCRMINUS_vcf_idx,
         famfile = fam,
         filter_metric = filter_metric,
         gather_trio_geno_options=gather_trio_geno_options,
@@ -192,7 +192,7 @@ workflow Module07FilterGTsPart1 {
     scatter ( fam in SplitFamfile_PCRPLUS.famfile_shards ) {
       call minGQTasks.CollectTrioSVdat as CollectTrioSVdat_PCRPLUS {
         input:
-          vcf_shards = SplitPcrVcf.PCRPLUS_vcf,
+          vcf_shard_idxs = SplitPcrVcf.PCRPLUS_vcf_idx,
           famfile = fam,
           filter_metric = filter_metric,
           gather_trio_geno_options=gather_trio_geno_options,
