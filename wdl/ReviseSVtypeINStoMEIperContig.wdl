@@ -59,7 +59,6 @@ workflow ReviseSVtypeINStoMEIperContig {
 }
 
 
-
 # revise svtype of MEIs to SVTYPE=MEI
 task ReviseSVtypeMEI{
   input{
@@ -71,8 +70,8 @@ task ReviseSVtypeMEI{
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 100,
+    mem_gb: 2, 
+    disk_gb: 10 + ceil(size([vcf], "GB"))
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -104,8 +103,4 @@ task ReviseSVtypeMEI{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
-
-
-
 

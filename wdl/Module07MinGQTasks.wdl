@@ -410,7 +410,7 @@ task SplitFamfile {
 # Collect a single table of all relevant variants for a single family
 task CollectTrioSVdat {
   input{
-    Array[File] vcf_shards
+    Array[File] vcf_shard_idxs
     File famfile
     String filter_metric = "GQ"
     Array[String] gather_trio_geno_options = []
@@ -420,7 +420,7 @@ task CollectTrioSVdat {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2, 
-    disk_gb: 50,
+    disk_gb: 20,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -429,15 +429,31 @@ task CollectTrioSVdat {
 
 
   command <<<
+    set -eu -o pipefail
+
+    # Make list of all samples in famfile
+    awk -v OFS="\n" '{ print $2, $3, $4 }' ~{famfile} > samples.list
+
     for wrapper in 1; do
       #Write header
       echo -e "#famID\tVID\tSVLEN\tAF\tSVTYPE\tFILTER\tpro_EV\tpro_AC\tfa_AC\tmo_AC\tpro_~{filter_metric}\tfa_~{filter_metric}\tmo_~{filter_metric}"
 
       #Iterate over list of VCF shards
-      while read vcf; do
+      while read vcf_idx; do
+
+        # Localize VCF from remote bucket while subsetting to samples in trios
+        vcf="$( echo $vcf_idx | sed 's/\.tbi$//g' )"
+        subset_vcf="$( basename $vcf | sed 's/\.vcf\.gz/\.subsetted\.vcf\.gz/g' )"
+        bcftools view \
+          -O z \
+          --output-file "$subset_vcf" \
+          --samples-file samples.list \
+          --min-ac 1 \
+          --no-update \
+          $vcf
 
         #Get list of sample IDs & column numbers from VCF header
-        zfgrep "#" $vcf | fgrep -v "##" | head -n1000 |sed 's/\t/\n/g' \
+        zfgrep "#" $subset_vcf | fgrep -v "##" | head -n1000 |sed 's/\t/\n/g' \
           | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
 
         #Iterate over families & subset VCF
@@ -450,9 +466,14 @@ task CollectTrioSVdat {
           if ! [ -z $pro_idx ] && ! [ -z $fa_idx ] && ! [ -z $mo_idx ]; then
 
             #Subset vcf to only non-ref or multiallelic sites in the family
-            zcat "$vcf" | cut -f1-9,"$pro_idx","$fa_idx","$mo_idx" \
-            | grep -e '\#\|[0-1]\/1\|MULTIALLELIC' \
-            | bgzip -c > $famID.vcf.gz
+            bcftools view \
+              -O z \
+              --output-file $famID.vcf.gz \
+              --samples "$pro","$fa","$mo" \
+              --min-ac 1 \
+              --exclude 'FILTER!="MULTIALLELIC"' \
+              --no-update \
+              "$subset_vcf"
 
             #Get list of CNVs in proband that are ≥5kb have ≥50% coverage in either parent
             svtk vcf2bed -i SVTYPE --no-header $famID.vcf.gz stdout \
@@ -494,7 +515,7 @@ task CollectTrioSVdat {
             | awk -v famID="$famID" -v OFS="\t" '{ print famID, $0 }'
           fi
         done < ~{famfile}
-      done < ~{write_lines(vcf_shards)}
+      done < ~{write_lines(vcf_shard_idxs)}
     done | gzip -c > "trio_variant_info.txt.gz"
   >>>
 
