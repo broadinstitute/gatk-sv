@@ -35,8 +35,8 @@ def read_ac_adj(infile, pro, fa, mo):
 
 
 def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ', 
-                fill_incomplete = False, default_metric_value = 999, 
-                no_header = False):
+                fill_incomplete = False, default_value_homref = 999, 
+                default_value_other = 999, no_header = False):
     GTs_to_skip = './. None/None 0/None None/0'.split()
     sex_chroms = 'X Y chrX chrY'.split()
 
@@ -98,11 +98,16 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ',
         GQs = [record.samples[ID][metric] for ID in trio_samples]
 
         # Fill missing quality metrics in any member of the trio with a default value
-        if len([g for g in GQs if g is None]) > 0:
+        missing_GQs = [i for i, g in enumerate(GQs) if g is None]
+        if len(missing_GQs) > 0:
             if not fill_incomplete:
                 continue
             else:
-                GQs = [default_metric_value if g is None else g for g in GQs]
+                for i in missing_GQs:
+                    if GTs[i] == '0/0':
+                        GQs[i] = default_value_homref
+                    else:
+                        GQs[i] = default_value_other
 
         if isinstance(GQs[0], float):
             GQs = [round(g, 4) for g in GQs]
@@ -159,8 +164,13 @@ def main():
                         help='Fill GT quality metrics with --default-metric-value ' +
                         'for samples missing quality metrics. Default: skip ' +
                         'sites with incomplete quality metrics.')
-    parser.add_argument('--default-metric-value', default=999, help='Default ' +
-                        'value to fill missing GT quality metrics. Only used if ' +
+    parser.add_argument('--default-value-homref', default=999, type=float, help='Default ' +
+                        'value to fill missing homozygous reference GT quality ' +
+                        'metrics. Only used if --fill-incomplete is provided. '
+                        'Default: 999.')
+    parser.add_argument('--default-value-other', default=999, type=float, help='Default ' +
+                        'value to fill missing GT quality metrics for all GTs ' +
+                        'other than homozygous reference. Only used if ' +
                         '--fill-incomplete is provided. Default: 999.')
     parser.add_argument('--no-header', help='Do not write header line.',
                         action='store_true', default=False)
@@ -183,7 +193,8 @@ def main():
         ac_adj = None
 
     gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.metric, 
-                args.fill_incomplete, args.default_metric_value, args.no_header)
+                args.fill_incomplete, args.default_value_homref, 
+                args.default_value_other, args.no_header)
 
     fout.close()
 
