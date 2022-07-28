@@ -73,6 +73,7 @@ task ComputeShardAFs {
     File? famfile
     File? par_bed
     File? allosomes_list
+    Boolean index_output = false
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -87,6 +88,7 @@ task ComputeShardAFs {
 
   command <<<
     set -euo pipefail
+    
     optionals=" "
     if [ ~{default="SKIP" sample_pop_assignments} != "SKIP" ]; then
       optionals="$( echo "$optionals" ) -p ~{sample_pop_assignments}"
@@ -106,10 +108,14 @@ task ComputeShardAFs {
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py $optionals "~{vcf}" stdout \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"
+    if [ "~{index_output}" == "true" ]; then
+      tabix -p vcf -f "~{prefix}.wAFs.vcf.gz"
+    fi
   >>>
 
   output {
     File shard_wAFs = "~{prefix}.wAFs.vcf.gz"
+    File? shard_wAFs_idx = "~{prefix}.wAFs.vcf.gz.tbi"
   }
   
   runtime {

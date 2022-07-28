@@ -13,6 +13,7 @@ workflow ReviseSVtypeINStoMEIperContig {
 
     Int max_shards_per_chrom_step1
     Int min_records_per_shard_step1
+    Boolean concat_shards = true
 
     String sv_base_mini_docker
     String sv_pipeline_updates_docker
@@ -26,23 +27,26 @@ workflow ReviseSVtypeINStoMEIperContig {
   call MiniTasks.ScatterVcf as SplitVcfReviseSVtypeMEI {
       input:
         vcf=vcf,
-        prefix="~{prefix}.~{contig}.shard_",
+        prefix="~{prefix}.~{contig}",
         records_per_shard=max_shards_per_chrom_step1,
         sv_pipeline_docker=sv_pipeline_updates_docker,
         runtime_attr_override=runtime_override_split_vcf_to_clean
   }
 
-  scatter (vcf_shard in SplitVcfReviseSVtypeMEI.shards) {
-      call ReviseSVtypeMEI{
+  Array[Pair[File, File]] vcf_shards = zip(SplitVcfReviseSVtypeMEI.shards, SplitVcfReviseSVtypeMEI.shards_idx)
+  scatter (vcf_shard in vcf_shards) {
+      call ReviseSVtypeMEI {
         input:
-          vcf = vcf_shard,
+          vcf = vcf_shard.left,
+          vcf_idx = vcf_shards.right,
           sv_base_mini_docker = sv_base_mini_docker,
-          prefix = "~{prefix}.~{contig}.SVtypeRevised.shard_",
+          prefix = basename(vcf_shard, ".vcf.gz") + ".SVtypeRevised",
           runtime_attr_override = runtime_attr_ReviseSVtypeMEI
       }
   }
 
-  call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
+  if (concat_shards) {
+    call MiniTasks.ConcatVcfs as CombineStep1Vcfs {
       input:
         vcfs=ReviseSVtypeMEI.updated_vcf,
         vcfs_idx=ReviseSVtypeMEI.updated_vcf_idx,
@@ -50,19 +54,23 @@ workflow ReviseSVtypeINStoMEIperContig {
         outfile_prefix="~{prefix}.~{contig}.SVtypeRevisedINStoMEI",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_combine_step_1_vcfs
+    }
   }
 
   output{
-      File updated_vcf = CombineStep1Vcfs.concat_vcf
-      File updated_vcf_idx = CombineStep1Vcfs.concat_vcf_idx
+      File? updated_vcf = CombineStep1Vcfs.concat_vcf
+      File? updated_vcf_idx = CombineStep1Vcfs.concat_vcf_idx
+      Array[File] updated_vcf_shards = ReviseSVtypeMEI.updated_vcf
+      Array[File] updated_vcf_shard_idxs = ReviseSVtypeMEI.updated_vcf_idx
   }
 }
 
 
-# revise svtype of MEIs to SVTYPE=MEI
-task ReviseSVtypeMEI{
-  input{
+# Revise svtype of MEIs to SVTYPE=MEI
+task ReviseSVtypeMEI {
+  input {
     File vcf
+    File vcf_idx
     String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -71,7 +79,7 @@ task ReviseSVtypeMEI{
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2, 
-    disk_gb: 10 + ceil(size([vcf], "GB")),
+    disk_gb: 10 + (3 * ceil(size([vcf], "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -80,12 +88,12 @@ task ReviseSVtypeMEI{
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   
   command <<<
-    zcat ~{vcf} | grep '#' > ~{prefix}.vcf
-    zcat ~{vcf} | grep -v '#' | grep "INS:ME" | sed -e "s/SVTYPE=INS/SVTYPE=MEI/" >> ~{prefix}.vcf
-    zcat ~{vcf} | grep -v '#' | grep -v "INS:ME"  >> ~{prefix}.vcf
-    mkdir tmp
-    vcf-sort -t tmp/ ~{prefix}.vcf | bgzip > ~{prefix}.vcf.gz
-    tabix -p vcf ~{prefix}.vcf.gz
+    set -eu -o pipefail
+
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/revise_MEI_svtypes.py \
+      ~{vcf} \
+      ~{prefix}.vcf.gz
+    tabix -p vcf -f ~{prefix}.vcf.gz
   >>>
 
   output{

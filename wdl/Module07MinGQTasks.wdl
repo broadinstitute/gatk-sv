@@ -442,8 +442,10 @@ task CollectTrioSVdat {
       while read vcf_idx; do
 
         # Localize VCF from remote bucket while subsetting to samples in trios
-        vcf="$( echo $vcf_idx | sed 's/\.tbi$//g' )"
+        vcf="$( echo $vcf_idx | sed 's/\.tbi$//g' | sed 's/\/cromwell_root/gs\:\//g' )"
         subset_vcf="$( basename $vcf | sed 's/\.vcf\.gz/\.subsetted\.vcf\.gz/g' )"
+        mv $vcf_idx ./ #VCF index must be in execution directory for remote streaming to work
+        export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
         bcftools view \
           -O z \
           --output-file "$subset_vcf" \
@@ -453,8 +455,8 @@ task CollectTrioSVdat {
           $vcf
 
         #Get list of sample IDs & column numbers from VCF header
-        zfgrep "#" $subset_vcf | fgrep -v "##" | head -n1000 |sed 's/\t/\n/g' \
-          | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
+        zfgrep "#" $subset_vcf | fgrep -v "##" | head -n1000 | sed 's/\t/\n/g' \
+        | awk -v OFS="\t" '{ print $1, NR }' > vcf_header_columns.txt
 
         #Iterate over families & subset VCF
         while read famID pro fa mo prosex pheno; do

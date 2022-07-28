@@ -84,7 +84,7 @@ ARG R_DEPENDENCIES="software-properties-common build-essential \
     ${R_DEP_TRANSIENT} libz-dev libncurses5-dev libbz2-dev liblzma-dev \
     libcurl4-openssl-dev libssl-dev libxml2-dev ca-certificates \
     apt-transport-https openssh-client"
-ARG R_RELEASE_VERSION="3.5.1"
+ARG R_RELEASE_VERSION="3.6.0"
 ARG SV_BASE_R_PKGS="optparse BiocManager"
 ARG SLIM_R_LIB_CMD="find .  -type d \\( -name \"help\" -o -name \"doc\" -o -name \"html\" -o -name \"htmlwidgets\" -o -name \"demo\" -o -name \"demodata\" -o -name \"examples\" -o -name \"exampleData\" -o -name \"unitTests\" -o -name \"tests\" -o -name \"testdata\" -o -name \"shiny\" \\) | xargs rm -rf"
 ARG DEBIAN_FRONTEND=noninteractive
