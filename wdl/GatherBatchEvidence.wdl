@@ -467,8 +467,8 @@ workflow GatherBatchEvidence {
     File merged_bincov = merged_bincov_
     File merged_bincov_index = merged_bincov_idx_
 
-    File? ploidy_matrix = Ploidy.ploidy_matrix
-    File? ploidy_plots = Ploidy.ploidy_plots
+    File? batch_ploidy_matrix = Ploidy.ploidy_matrix
+    File? batch_ploidy_plots = Ploidy.ploidy_plots
 
     File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
 

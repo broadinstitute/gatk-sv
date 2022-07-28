@@ -1501,8 +1501,8 @@ workflow GATKSVPipelineSingleSample {
     File pre_cleanup_vcf = AnnotateVcf.output_vcf
     File pre_cleanup_vcf_idx = AnnotateVcf.output_vcf_idx
 
-    File ploidy_matrix = select_first([GatherBatchEvidence.ploidy_matrix])
-    File ploidy_plots = select_first([GatherBatchEvidence.ploidy_plots])
+    File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
+    File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])
     File metrics_file = SingleSampleMetrics.metrics_file
     File qc_file = SingleSampleQC.out
 
