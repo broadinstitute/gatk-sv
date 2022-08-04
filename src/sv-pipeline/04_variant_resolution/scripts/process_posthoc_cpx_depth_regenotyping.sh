@@ -103,7 +103,7 @@ if ! [ -s ${INVCF} ]; then
   usage
   exit 0
 fi
-if [ $( file ${INVCF} | fgrep "gzip" | wc -l ) -lt 1 ]; then
+if [[ ${INVCF} != *.gz ]]; then
   echo -e "\nERROR: input VCF must be bgzipped\n"
   usage
   exit 0
@@ -118,7 +118,7 @@ if ! [ -s ${INTERVALS} ]; then
   usage
   exit 0
 fi
-if [ $( file ${INTERVALS} | fgrep "gzip" | wc -l ) -lt 1 ]; then
+if [[ ${INTERVALS} != *.gz ]]; then
   echo -e "\nERROR: intervals file must be bgzipped\n"
   usage
   exit 0
@@ -133,7 +133,7 @@ if ! [ -s ${GENOTYPES} ]; then
   usage
   exit 0
 fi
-if [ $( file ${GENOTYPES} | fgrep "gzip" | wc -l ) -lt 1 ]; then
+if [[ ${GENOTYPES} != *.gz ]]; then
   echo -e "\nERROR: melted genotypes file must be bgzipped\n"
   usage
   exit 0
@@ -171,7 +171,7 @@ GTDIR=`mktemp -d`
 
 ###PREPARE SAMPLE lists
 #Master lists of samples extracted from famfile
-if [ $( file ${FAMFILE} | fgrep "gzip" | wc -l ) -gt 0 ]; then
+if [[ ${FAMFILE} == *.gz ]]; then
   #All samples
   zcat ${FAMFILE} | fgrep -v "#" | cut -f2 | sort | uniq \
     > ${GTDIR}/all.samples.list
