@@ -5,7 +5,7 @@
 # Distributed under terms of the MIT license.
 
 """
-Apply per-sample filters on GQ (or another FORMAT field) to an input VCF
+Apply per-sample filters to one or more metrics in FORMAT field in an input VCF
 """
 
 import argparse
@@ -27,7 +27,8 @@ def _make_SVLEN_interval_dict(minMetricTable):
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -63,7 +64,8 @@ def _make_AF_interval_dict(minMetricTable, scalar=10000):
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -103,7 +105,8 @@ def _make_SVTYPE_dict(minMetricTable):
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -142,7 +145,8 @@ def _make_FILTER_dict(minMetricTable, vcf):
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -187,7 +191,8 @@ def _make_EV_dict(minMetricTable):
         reader = csv.reader(lt, delimiter = '\t')
 
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -233,14 +238,15 @@ def make_minMetric_dict(minMetricTable, SVLEN_table, AF_table, SVTYPE_table,
             return defaultdict(type)
         else:
             return defaultdict(lambda: _nested_dict(n-1, type))
-    minMetric_dict = _nested_dict(5, str)
+    minMetric_dict = _nested_dict(6, str)
 
     with open(minMetricTable) as lt:
         reader = csv.reader(lt, delimiter = '\t')
 
         #Enter each line in the lookup table into the dictionary
         for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, minMetric, source in reader:
+            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
+            source in reader:
 
             #Skip header line
             if "#" in cond_id:
@@ -267,7 +273,7 @@ def make_minMetric_dict(minMetricTable, SVLEN_table, AF_table, SVTYPE_table,
                 and AF_idx is not None \
                 and SVTYPE_idx is not None \
                 and FILTER_idx is not None:
-                    minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx][EV_idx] = int(minMetric)
+                    minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx][EV_idx][metric] = int(minMetric)
 
     return minMetric_dict
 
@@ -299,9 +305,11 @@ def _get_minMetric(record, minMetric_dict, SVLEN_table, AF_table, SVTYPE_table,
     return(minMetric)
 
 
-def apply_minMetric_filter(record, metric, minMetric_dict, SVLEN_table, AF_table, 
-                           SVTYPE_table, FILTER_table, EV_table, globalMin=0, 
-                           maxNCR=0.05, highNCR_filter="COHORT"):
+def apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
+                           SVTYPE_table, FILTER_table, EV_table, 
+                           filter_homref, filter_homalt, fail_missing_scores, 
+                           require_all_criteria, globalMin, annotate_ncr, max_ncr, 
+                           ncr_prefix="COHORT"):
     #Get minMetric dict down to EV for this variant
     minMetric_by_ev = _get_minMetric(record, minMetric_dict, SVLEN_table, 
                                      AF_table, SVTYPE_table, FILTER_table, 
@@ -311,25 +319,56 @@ def apply_minMetric_filter(record, metric, minMetric_dict, SVLEN_table, AF_table
 
     bl = 0
     for s in record.samples:
-        #Don't process homozygous genotypes
-        if record.samples[s]['GT'] == (1, 1):
+        # Handle certain genotypes differently based on inputs
+        samp_gt = record.samples[s]['GT']
+
+        # Don't need to process GTs already set to ./., but should be counted towards NCR
+        if samp_gt == (None, None):
+            bl += 1
+            continue
+
+        # Only filter homref GTs if optioned
+        if samp_gt == (0, 0) and not filter_homref:
+            continue
+
+        # Only filter homalt GTs if optioned
+        if samp_gt == (1, 1) and not filter_homalt:
             continue
             
-        #Get minMetric cutoff given that sample's evidence
+        # Check metric cutoff(s) given that sample's evidence
         EV = record.samples[s]['EV']
         if isinstance(EV, tuple):
             EV = ','.join(list(EV))
         EV_key = _lookup_EV_key(EV, EV_table)
-        minMetric = minMetric_by_ev.get(EV_key, globalMin)
-        if record.samples[s][metric] is not None:
-            if record.samples[s][metric] < minMetric:
-                record.samples[s]['GT'] = (None, None)
-                bl += 1
+        cutoffs = minMetric_by_ev.get(EV_key, globalMin)
+        samp_pass = []
+        for metric, cutoff in cutoffs.items():
+            samp_val = record.samples[s].get(metric)
+            if samp_val is None:
+                if fail_missing_scores:
+                    samp_pass.append(False)
+                else:
+                    samp_pass.append(True)
+            elif samp_val < cutoff:
+                samp_pass.append(False)
+            else:
+                samp_pass.append(True)
 
-    if n_samples > 0:
-        frac_bl = bl / n_samples
-        if frac_bl > maxNCR:
-            record.filter.add(highNCR_filter)
+        # Rewrite sample GT based on filter pass/fail
+        if require_all_criteria:
+            gt_pass = all(samp_pass)
+        else:
+            gt_pass = any(samp_pass)
+        if not gt_pass:
+            record.samples[s]['GT'] = (None, None)
+            bl += 1
+
+    if annotate_ncr:
+        if n_samples > 0:
+            ncr = bl / n_samples
+            record.info['{}_NCR'.format(ncr_prefix)] = ncr
+            if ncr > max_ncr:
+                record.filter.add('HIGH_{0}_NOCALL_RATE'.format(ncr_prefix))
 
 
 def _is_multiallelic(record):
@@ -352,22 +391,37 @@ def main():
                         'table in the same format as generated by ' +
                         'create_minGQ_lookup_table.R.')
     parser.add_argument('fout', help='Output file (supports "stdout").')
-    parser.add_argument('--metric', default='GQ', type=str, help='FORMAT field ' +
-                        'to which filtering should be applied [default: GQ]')
-    parser.add_argument('--globalMin', help='Global minimum metric value', 
-                        type=int, default=0)
     parser.add_argument('--multiallelics', default=False, action='store_true',
                         help='Also apply filtering to multiallelic sites ' + 
                         '(default: do not filter multiallelics).')
+    parser.add_argument('--filter-missing-svtypes', default=False, action='store_true',
+                        help='Apply filters to SVTYPEs not explicitly present in ' +
+                        'minMetricTable [default: skip filtering SVTYPEs if ' +
+                        'they are not present in minMetricTable]')
+    parser.add_argument('--filter-homref', default=False, action='store_true',
+                        help='Apply filters to homozygous reference GTs [default: ' +
+                        'do not filter any homref GTs]')
+    parser.add_argument('--filter-homalt', default=False, action='store_true',
+                        help='Apply filters to homozygous alternate GTs [default: ' +
+                        'do not filter any homalt GTs]')
+    parser.add_argument('--fail-missing-scores', default=False, action='store_true',
+                        help='Treat GTs with missing scores as failures [default: ' +
+                        'do not filter GTs with missing scores]')
     parser.add_argument('--dropEmpties', default=False, action='store_true',
                         help='After GT reassignments, drop any SV with no remaining ' + 
                         ' non-ref samples (default: keep all SV).')
+    parser.add_argument('--require-all-criteria', default=False, action='store_true',
+                        help='Require that each GT must pass all criteria When ' +
+                        'multiple criteria are specified in minMetricTable for the ' +
+                        'same variant. [default: require only one passing metric]')
     parser.add_argument('--simplify-INS-SVTYPEs', default=False, action='store_true',
                         help='Resets the SVTYPE of all INS variants, including MEIs, ' + 
-                        'to be SVTYPE=INS (default: keep original SVTYPEs).')    
-    parser.add_argument('--maxNCR', help='Max no-call rate among all ' + 
+                        'to be SVTYPE=INS (default: keep original SVTYPEs).')
+    parser.add_argument('--annotate-ncr', default=False, action='store_true',
+                        help='Annotate output VCF with no-call rates.')
+    parser.add_argument('--max-ncr', help='Max no-call rate among all ' + 
                         'samples before adding a flag to the record\'s FILTER field' + 
-                        ' (default: 0.05)', type=float, default=0.05, dest='maxNCR')
+                        ' (default: 0.05)', type=float, default=0.05)
     parser.add_argument('--cleanAFinfo', help='Remove all AF-related terms from ' + 
                         ' the INFO field and VCF header (default: keep all terms).', 
                         default=False, action='store_true')
@@ -382,12 +436,16 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
 
     #Add HIGH_NOCALL_RATE filter to vcf header
-    NEW_FILTER = '##FILTER=<ID=HIGH_{0}_NOCALL_RATE,Description="More than '.format(args.prefix) + \
-                 '{:.2%}'.format(args.maxNCR) + ' of {0} sample GTs were '.format(args.prefix) + \
-                 'masked as no-call GTs due to low {0}. '.format(args.metric) + \
-                 'Indicates a possibly noisy locus in {0} samples.>'.format(args.prefix)
-    vcf.header.add_line(NEW_FILTER)
-    filter_text = 'HIGH_{0}_NOCALL_RATE'.format(args.prefix)
+    if args.annotate_ncr:
+        if '{}_NCR'.format(args.prefix) not in vcf.header.info.keys():
+            NEW_INFO = '##INFO=<ID={0}_NCR,Number=1,Type=Float,Description="' + \
+                       'Fraction of {0} sample GTs that are no-calls.">'
+            vcf.header.add_line(NEW_INFO.format(args.prefix))
+        NEW_FILTER = '##FILTER=<ID=HIGH_{0}_NOCALL_RATE,Description="More than '.format(args.prefix) + \
+                     '{:.2%}'.format(args.max_ncr) + ' of {0} sample GTs were '.format(args.prefix) + \
+                     'masked as no-call GTs. Indicates a possibly noisy locus ' + \
+                     'in {0} samples.>'.format(args.prefix)
+        vcf.header.add_line(NEW_FILTER)
 
     # Check to ensure either AF or AC & AN are provided in input VCF header
     if 'AF' in vcf.header.info.keys():
@@ -415,20 +473,27 @@ def main():
 
     #Iterate over records in vcf and apply filter
     for record in vcf.fetch():
+
         #Do not process multiallelic variants, unless optioned
         if args.multiallelics or \
         (not args.multiallelics and 
          not _is_multiallelic(record)):
-            # Infer record's AF if AC & AN (but not AF) are provided
-            if 'AF' in record.info.keys():
-                pass
-            else:
-                AF = tuple([ac / record.info['AN'] for ac in record.info['AC']])
-                record.info['AF'] = AF
-            apply_minMetric_filter(record, args.metric, minMetric_dict, 
-                                   SVLEN_table, AF_table, SVTYPE_table, 
-                                   FILTER_table, EV_table, globalMin=args.globalMin, 
-                                   maxNCR=args.maxNCR, highNCR_filter=filter_text)
+
+            # Do not process SVTYPEs missing from SVTYPE_table, unless optioned
+            if record.info['SVTYPE'] in SVTYPE_table.keys() or args.filter_missing_svtypes:
+                # Infer record's AF if AC & AN (but not AF) are provided
+                if 'AF' in record.info.keys():
+                    pass
+                else:
+                    AF = tuple([ac / record.info['AN'] for ac in record.info['AC']])
+                    record.info['AF'] = AF
+                apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
+                                       SVTYPE_table, FILTER_table, EV_table, 
+                                       args.filter_homref, args.filter_homalt, 
+                                       args.fail_missing_scores, 
+                                       args.require_all_criteria, -10e10, 
+                                       args.annotate_ncr, args.max_ncr, 
+                                       ncr_prefix=args.prefix)
 
         if args.cleanAFinfo:
             # Clean biallelic AF annotation

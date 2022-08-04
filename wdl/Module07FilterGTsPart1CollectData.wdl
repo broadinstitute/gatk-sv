@@ -21,6 +21,7 @@ workflow Module07FilterGTsPart1 {
     Array[String] gather_trio_geno_options = []
     File? pcrplus_samples_list
     Boolean revise_mei_svtypes = true
+    Int n_max_trios = 1000
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -47,6 +48,7 @@ workflow Module07FilterGTsPart1 {
         vcf_idx = vcf_idx,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_base_docker = sv_pipeline_base_docker,
         sv_pipeline_updates_docker = sv_pipeline_updates_docker,
         prefix = prefix,
         contiglist = contiglist,
@@ -159,7 +161,7 @@ workflow Module07FilterGTsPart1 {
       vcf = SplitPcrVcf.PCRMINUS_vcf[0],
       vcf_idx = SplitPcrVcf.PCRMINUS_vcf_idx[0],
       famfile = SubsetFamfile.subsetted_famfile,
-      max_count_famfile_shards = 1000,
+      max_count_famfile_shards = n_max_trios,
       fams_per_shard = 1,
       prefix = "~{prefix}.PCRMINUS",
       sv_pipeline_docker = sv_pipeline_docker
@@ -191,7 +193,7 @@ workflow Module07FilterGTsPart1 {
         vcf_idx = SplitPcrVcf.PCRPLUS_vcf_idx[0],
         famfile = SubsetFamfile.subsetted_famfile,
         fams_per_shard = 1,
-        max_count_famfile_shards = 1000,
+        max_count_famfile_shards = n_max_trios,
         prefix = "~{prefix}.PCRPLUS",
         sv_pipeline_docker = sv_pipeline_docker
     }

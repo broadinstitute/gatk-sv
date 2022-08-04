@@ -346,6 +346,9 @@ order.tree <- build.tree(dat, fixed.f1="filt.SVTYPE")
 
 ###Create minGQ filtering lookup table
 minGQ.table <- prune.tree(dat, order.tree, metric)
+minGQ.table$metric <- metric
+colnames(minGQ.table)[which(colnames(minGQ.table) == paste("min", metric, sep="_"))] <- "min_metric"
+minGQ.table <- minGQ.table[, c(colnames(minGQ.table[1:11], "metric", "min_metric", "source"))]
 
 ###Write out final files
 colnames(order.tree)[1] <- "#filt.1"

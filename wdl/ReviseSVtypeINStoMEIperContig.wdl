@@ -16,6 +16,7 @@ workflow ReviseSVtypeINStoMEIperContig {
     Boolean concat_shards = true
 
     String sv_base_mini_docker
+    String sv_pipeline_base_docker
     String sv_pipeline_updates_docker
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -38,9 +39,9 @@ workflow ReviseSVtypeINStoMEIperContig {
       call ReviseSVtypeMEI {
         input:
           vcf = vcf_shard.left,
-          vcf_idx = vcf_shards.right,
-          sv_base_mini_docker = sv_base_mini_docker,
-          prefix = basename(vcf_shard, ".vcf.gz") + ".SVtypeRevised",
+          vcf_idx = vcf_shard.right,
+          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          prefix = basename(vcf_shard.left, ".vcf.gz") + ".SVtypeRevised",
           runtime_attr_override = runtime_attr_ReviseSVtypeMEI
       }
   }
@@ -72,7 +73,7 @@ task ReviseSVtypeMEI {
     File vcf
     File vcf_idx
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -106,7 +107,7 @@ task ReviseSVtypeMEI {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

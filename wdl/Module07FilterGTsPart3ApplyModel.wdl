@@ -1,11 +1,8 @@
 version 1.0
 
 import "Structs.wdl"
-import "CalcAF.wdl" as calcAF
-import "MinGQRocOpt.wdl" as roc_opt_sub
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Module07MinGQTasks.wdl" as minGQTasks
-import "ReviseSVtypeINStoMEI.wdl" as ReviseSVtype
 
 
 workflow Module07FilterGTsPart3 {
@@ -81,7 +78,7 @@ workflow Module07FilterGTsPart3 {
   }
 
   output {
-  File filtered_vcf = CombineVcfs.concat_vcf
-  File filtered_vcf_idx = CombineVcfs.concat_vcf_idx
+    File filtered_vcf = CombineVcfs.concat_vcf
+    File filtered_vcf_idx = CombineVcfs.concat_vcf_idx
   }
  }
