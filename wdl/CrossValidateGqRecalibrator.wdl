@@ -145,7 +145,7 @@ workflow CrossValidateGqRecalibrator {
             input:
                 vcf=train_vcf_,
                 vcf_index=train_vcf_index_,
-                wanted_properties=["svtype", "svlen", "gt"],
+                wanted_properties=["svtype", "svlen", "ac"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }

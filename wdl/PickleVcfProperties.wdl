@@ -104,13 +104,11 @@ task ReadAndPickleProperties {
     command <<<
 
     python - <<'____EoF'
-from sv_utils import genomics_io
+from sv_utils import benchmark_variant_filter
 
-variants = genomics_io.vcf_to_pandas(
-  "~{vcf}", wanted_properties=["~{sep='", "' wanted_properties}"], drop_trivial_multi_index=True
-)
-
-variants.to_pickle("~{vcf_basename}_~{sep=' ' wanted_properties}.pickle.bz2")
+benchmark_variant_filter.load_benchmark_properties_from_vcf_properties(
+  "$VCF", wanted_properties=["~{sep='", "' wanted_properties}"]
+).to_pickle("~{vcf_basename}_~{sep=' ' wanted_properties}.pickle.bz2")
 ____EoF
     >>>
 

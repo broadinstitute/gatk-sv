@@ -25,7 +25,7 @@ workflow BenchmarkGqFilter {
             input:
                 vcf=original_scores.vcf,
                 vcf_index=original_scores.vcf_index,
-                wanted_properties=["svtype", "svlen", "gt"],
+                wanted_properties=["svtype", "svlen", "ac"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }

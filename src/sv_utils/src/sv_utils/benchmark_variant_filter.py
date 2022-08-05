@@ -16,14 +16,15 @@ from sv_utils.get_truth_overlap \
 
 class Default:
     vcf_score_property = "gq"
-    num_precision_recall_curve_columns = 4
-    num_inheritance_stats_columns = 4
+    num_precision_recall_curve_rows = 3
+    num_inheritance_stats_rows = 3
     title_font_size = 6
     label_font_size = 6
     legend_font_size = 6
     tick_font_size = 4
     tick_labelrotation = -30
     plot_max_f1 = False
+    replot_unfiltered = False
     use_copy_number = genomics_io.Default.use_copy_number
     use_cn = genomics_io.Default.use_cn
 
@@ -897,11 +898,18 @@ def _draw_extra_legend_axis(
     ax.legend(fontsize=legend_font_size)
 
 
+def make_fig_and_gridspec(num_axes: int, num_rows: int) -> (pyplot.Figure, pyplot.GridSpec, int):
+    fig = pyplot.figure(num=plotting.next_fig(), constrained_layout=True)
+    num_columns = int(numpy.ceil(num_axes / num_rows))
+    gridspec = fig.add_gridspec(num_rows, num_columns)
+    return fig, gridspec, num_columns
+
+
 def get_precision_recall_curves_figure(
         truth_data: TruthData,
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
-        num_precision_recall_curve_columns: int = Default.num_precision_recall_curve_columns,
+        num_precision_recall_curve_rows: int = Default.num_precision_recall_curve_rows,
         title_font_size: int = Default.title_font_size,
         label_font_size: int = Default.label_font_size,
         legend_font_size: int = Default.legend_font_size,
@@ -927,11 +935,10 @@ def get_precision_recall_curves_figure(
         data_set.label: data_set.passing_score
         for data_set in scores_data_sets
     }
-    # construct figure
-    num_selections = len(precision_recall_curves) + 1  # add one for legend-only axis
-    num_rows = int(numpy.ceil(num_selections / num_precision_recall_curve_columns))
-    fig = pyplot.figure(num=plotting.next_fig(), constrained_layout=True)
-    gridspec = fig.add_gridspec(num_rows, num_precision_recall_curve_columns)
+
+    # construct figure add axis for legend
+    fig, gridspec, num_columns = make_fig_and_gridspec(num_axes=len(precision_recall_curves) + 1,
+                                                       num_rows=num_precision_recall_curve_rows)
     row, column = 0, 0
     for sv_category, category_pr_curves in precision_recall_curves.items():
         ax = fig.add_subplot(gridspec[row, column])
@@ -939,7 +946,7 @@ def get_precision_recall_curves_figure(
                                      title_font_size=title_font_size, label_font_size=label_font_size,
                                      tick_font_size=tick_font_size, plot_max_f1=plot_max_f1)
         column += 1
-        if column == num_precision_recall_curve_columns:
+        if column == num_columns:
             row, column = row + 1, 0
 
     # make extra axis with legend
@@ -1012,7 +1019,8 @@ def get_mendelian_stats_and_variants_per_sample(
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
         max_f1_thresholds: Mapping[str, float],
-        plot_max_f1: bool
+        plot_max_f1: bool,
+        replot_unfiltered: bool
 ) -> (Optional[Dict[str, pandas.DataFrame]], Dict[str, pandas.DataFrame],
       Optional[Dict[str, Dict[str, MendelianViolationCurve]]]):
     log("get_mendelian_stats_and_variants_per_sample() ...")
@@ -1021,6 +1029,7 @@ def get_mendelian_stats_and_variants_per_sample(
     inheritance_stats_dict = {}
     variants_per_sample_dict = {}
     mendelian_violation_curves_dict = {category: {} for category, __ in iter_categories(sv_selectors)}
+    calculate_unfiltered = True
     for data_set in scores_data_sets:
         for filter_label, filter_score in {
             Keys.unfiltered: None,
@@ -1042,6 +1051,8 @@ def get_mendelian_stats_and_variants_per_sample(
                     violation_curve = selected_filtered_data_set.get_mendelian_violation_curve(truth_data=truth_data)
                     if violation_curve is not None:
                         mendelian_violation_curves_dict[category][data_set.label] = violation_curve
+                    if not calculate_unfiltered:
+                        continue
 
                 log("\tsum inheritance stats ...")
                 inheritance_stats_dict[(data_set.label, filter_label, category)] = None if no_inheritance_data \
@@ -1050,6 +1061,10 @@ def get_mendelian_stats_and_variants_per_sample(
                 variants_per_sample_dict[(data_set.label, filter_label, category)] = \
                     selected_filtered_data_set.variants_per_sample
             log(f"get_inheritance_stats({data_set.label}:{filter_label}) COMPLETE")
+            if filter_label == Keys.unfiltered and not replot_unfiltered:
+                # don't re-compute unfiltered stats
+                if calculate_unfiltered:
+                    calculate_unfiltered = False
 
     filter_keys = (Keys.unfiltered, Keys.filtered, Keys.max_f1) if plot_max_f1 \
         else (Keys.unfiltered, Keys.filtered)
@@ -1061,6 +1076,7 @@ def get_mendelian_stats_and_variants_per_sample(
                     (data_set.label, filter_label): inheritance_stats_dict[(data_set.label, filter_label, category)]
                     for data_set in scores_data_sets
                     for filter_label in filter_keys
+                    if (data_set.label, filter_label, category) in inheritance_stats_dict
                 },
                 orient="index"
             )
@@ -1075,6 +1091,7 @@ def get_mendelian_stats_and_variants_per_sample(
                     (data_set.label, filter_label): variants_per_sample_dict[(data_set.label, filter_label, category)]
                     for data_set in scores_data_sets
                     for filter_label in filter_keys
+                    if (data_set.label, filter_label, category) in variants_per_sample_dict
                 },
                 orient="index"
             )
@@ -1202,6 +1219,7 @@ def plot_mendelian_violation_curves(
     ax.set_xscale("symlog")
     # noinspection PyTypeChecker
     ax.set_ylim([0.0, max_y])
+    ax.set_yscale("symlog", linthresh=5)  # linear to 5 %, then log scale
     if title_str:
         ax.set_title(title_str, fontsize=title_font_size, verticalalignment="top")
 
@@ -1274,37 +1292,43 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
         best_thresholds: Mapping[str, float],
-        num_inheritance_stats_columns: int = Default.num_inheritance_stats_columns,
+        num_inheritance_stats_rows: int = Default.num_inheritance_stats_rows,
         title_font_size: int = Default.title_font_size,
         label_font_size: int = Default.label_font_size,
         legend_font_size: int = Default.legend_font_size,
         tick_font_size: int = Default.tick_font_size,
         tick_labelrotation: float = Default.tick_labelrotation,
-        plot_max_f1: bool = Default.plot_max_f1
+        plot_max_f1: bool = Default.plot_max_f1,
+        replot_unfiltered: bool = Default.replot_unfiltered
 ) -> (Optional[pyplot.Figure], Optional[pyplot.Figure], pyplot.Figure):
     mendelian_inheritance_stats, variants_per_sample, mendelian_violation_curves = \
         get_mendelian_stats_and_variants_per_sample(
             truth_data=truth_data, scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
-            max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1
+            max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1, replot_unfiltered=replot_unfiltered
         )
 
     log("get_mendelian_inheritance_and_variants_per_sample_figures() ...")
 
     no_inheritance_data = truth_data.pedigree_file_info is None
     have_inheritance_data = not no_inheritance_data
-    # construct mendelian inheritance figure and variants per sample figure in the same loop
-    num_selections = len(mendelian_inheritance_stats) + 1  # add one for legend-only axis
-    num_rows = int(numpy.ceil(num_selections / num_inheritance_stats_columns))
     if have_inheritance_data:
-        mendelian_inheritance_fig = pyplot.figure(num=plotting.next_fig(), constrained_layout=True)
-        mendelian_inheritance_gridspec = mendelian_inheritance_fig.add_gridspec(num_rows, num_inheritance_stats_columns)
-        mendelian_violation_fig = pyplot.figure(num=plotting.next_fig(), constrained_layout=True)
-        mendelian_violation_gridspec = mendelian_violation_fig.add_gridspec(num_rows, num_inheritance_stats_columns)
+        # construct mendelian inheritance figure and variants per sample figure in the same loop,
+        # add extra axis for legend
+        mendelian_inheritance_fig, mendelian_inheritance_gridspec, __ = make_fig_and_gridspec(
+            num_axes=len(mendelian_inheritance_stats) + 1, num_rows=num_inheritance_stats_rows
+        )
+        mendelian_violation_fig, mendelian_violation_gridspec, __ = make_fig_and_gridspec(
+            num_axes=len(mendelian_violation_curves) + 1, num_rows=num_inheritance_stats_rows
+        )
     else:
         mendelian_inheritance_fig = None
         mendelian_inheritance_gridspec = None
         mendelian_violation_fig = None
         mendelian_violation_gridspec = None
+
+    variants_per_sample_fig, variants_per_sample_gridspec, num_columns = make_fig_and_gridspec(
+        num_axes=len(variants_per_sample) + 1, num_rows=num_inheritance_stats_rows
+    )
 
     # get the default thresholds
     default_thresholds = {
@@ -1312,8 +1336,6 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         for data_set in scores_data_sets
     }
 
-    variants_per_sample_fig = pyplot.figure(num=plotting.next_fig(), constrained_layout=True)
-    variants_per_sample_gridspec = variants_per_sample_fig.add_gridspec(num_rows, num_inheritance_stats_columns)
     row, column = 0, 0
     violation_curve_axes = []
     for sv_category, category_inheritance_stats in mendelian_inheritance_stats.items():
@@ -1339,7 +1361,7 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
             label_font_size=label_font_size, tick_font_size=tick_font_size, plot_max_f1=plot_max_f1
         )
         column += 1
-        if column == num_inheritance_stats_columns:
+        if column == num_columns:
             row, column = row + 1, 0
 
     filter_line_labels = [
@@ -1374,8 +1396,8 @@ def get_filter_quality_figures(
         truth_data: TruthData,
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
-        num_precision_recall_curve_columns: int = Default.num_precision_recall_curve_columns,
-        num_inheritance_stats_columns: int = Default.num_inheritance_stats_columns,
+        num_precision_recall_curve_rows: int = Default.num_precision_recall_curve_rows,
+        num_inheritance_stats_rows: int = Default.num_inheritance_stats_rows,
         title_font_size: int = Default.title_font_size,
         label_font_size: int = Default.label_font_size,
         legend_font_size: int = Default.legend_font_size,
@@ -1387,7 +1409,7 @@ def get_filter_quality_figures(
         truth_data=truth_data,
         scores_data_sets=scores_data_sets,
         sv_selectors=sv_selectors,
-        num_precision_recall_curve_columns=num_precision_recall_curve_columns,
+        num_precision_recall_curve_rows=num_precision_recall_curve_rows,
         title_font_size=title_font_size,
         label_font_size=label_font_size,
         legend_font_size=legend_font_size,
@@ -1401,7 +1423,7 @@ def get_filter_quality_figures(
             scores_data_sets=scores_data_sets,
             sv_selectors=sv_selectors,
             best_thresholds=best_thresholds,
-            num_inheritance_stats_columns=num_inheritance_stats_columns,
+            num_inheritance_stats_rows=num_inheritance_stats_rows,
             title_font_size=title_font_size,
             label_font_size=label_font_size,
             legend_font_size=legend_font_size,
