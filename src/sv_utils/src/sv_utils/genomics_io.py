@@ -83,7 +83,7 @@ class VcfKeys:  # note: for convenience we use .lower() before processing to mak
     gt = "GT"
     gq = "GQ"
     end = "END"  # Note: don't use this, use stop instead
-    cn = "CN"
+    cn = "CN"  # Note: By the end of CleanVcf, CN/CNQ are the same as RD_CN/RD_GQ
     cnq = "CNQ"
     rd_cn = "RD_CN"
     rd_gq = "RD_GQ"
@@ -182,6 +182,7 @@ class Default:
     log_progress = True
     location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
     use_copy_number = False
+    use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -1233,9 +1234,19 @@ def get_vcf_variant_ids(vcf: str) -> pandas.Index:
     return vcf_to_pandas(vcf, wanted_properties=(Keys.id,)).index
 
 
+def drop_trivial_columns_multi_index(variants: pandas.DataFrame) -> pandas.DataFrame:
+    if len(variants.columns) > 0:
+        for level in (Keys.sample_id, Keys.property):
+            level_values = variants.columns.get_level_values(level)
+            # noinspection PyUnresolvedReferences
+            if level_values.isnull().all() or (level_values == level_values[0]).all():
+                variants.columns = variants.columns.droplevel(level)  # drop this multi-index
+    return variants
+
+
 def vcf_to_pandas(
         vcf: str,
-        samples: Optional[Sequence[str]] = None,
+        samples: Optional[Collection[str]] = None,
         wanted_properties: Optional[Collection[str]] = None,
         genome_origin: int = Default.genome_origin,
         vcf_origin: int = Default.vcf_origin,
@@ -1411,12 +1422,8 @@ def vcf_to_pandas(
             if is_missing(variants[column], missing_value=missing_value).all():
                 variants.drop(columns=column, inplace=True)
 
-    if drop_trivial_multi_index and len(variants.columns) > 0:
-        for level in (Keys.sample_id, Keys.property):
-            level_values = variants.columns.get_level_values(level)
-            # noinspection PyUnresolvedReferences
-            if level_values.isnull().all() or (level_values == level_values[0]).all():
-                variants.columns = variants.columns.droplevel(level)  # drop this multi-index
+    if drop_trivial_multi_index:
+        drop_trivial_columns_multi_index(variants)
 
     variants = shift_origin(variants, desired_origin=genome_origin, current_origin=vcf_origin, copy_on_change=False)
 
@@ -1495,10 +1502,10 @@ def combine_call_properties(
     return alternate_properties.astype(min_type).where(use_alternate_properties, preferred_properties)
 
 
-def get_copy_number(variants: pandas.DataFrame) -> Optional[pandas.DataFrame]:
+def get_copy_number(variants: pandas.DataFrame, use_cn: bool = Default.use_cn) -> Optional[pandas.DataFrame]:
     """ Return table of copy number if it is available, otherwise None """
     available_props = set(variants.columns.get_level_values(Keys.property))
-    if Keys.cn in available_props:
+    if use_cn and Keys.cn in available_props:
         cn = variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True)
         if Keys.rd_cn in available_props:
             # CN *and* RD_CN are available. Sometimes one is in the header but not listed, so return whichever is
@@ -1517,22 +1524,30 @@ def get_copy_number(variants: pandas.DataFrame) -> Optional[pandas.DataFrame]:
 
 
 def get_copy_number_and_quality(
-        variants: pandas.DataFrame
+        variants: pandas.DataFrame, use_cn: bool = Default.use_cn
 ) -> Union[Tuple[pandas.DataFrame, pandas.DataFrame], Tuple[None, None]]:
     f"""
     Return tables with copy number and associated phred-scaled quality if they are both available, otherwise None, None
     There are two possible sources of copy-number data:
-        -{Keys.cn} with quality {Keys.cnq}
         -{Keys.rd_cn} with quality {Keys.rd_gq}
-    The output table will choose whichever is available, and if both are, it will take whichever is non-null, preferring
-    {Keys.cn} if both are non-null. It will always use the above-listed quality metric. If the correct quality is not
-    available, that will cause an Exception.
-    
-    In order to make interacting with the results easier, the output columns will be a multi-index with {Keys.cn} and
-    {Keys.cnq} regardless of the origin of the input data.
+        -{Keys.cn} with quality {Keys.cnq}
+    By the end of CleanVcf, {Keys.cn}/{Keys.cnq} are identical to {Keys.rd_cn}/{Keys.rd_gq} when they are present, so
+    these data are only examined if use_cn is set to True. In which case, the output table will choose whichever is
+    available, and if both are, it will take whichever is non-null, preferring {Keys.cn} if both are non-null. It will
+    always use the above-listed quality metric. If the correct quality is not available, that will cause an Exception.
+    Args:
+        variants: pandas.DataFrame
+            Table of raw properties loaded from VCF
+        use_cn: bool (default={Default.use_cn})
+            If False, ignore any {Keys.cn} data. If True, reconcile it as described above.
+    Returns:
+            copy_number: pandas.DataFrame
+                Table of copy-number with rows corresponding to variants and columns corresponding to sample IDs
+            copy_number_quality:
+                Corresponding table of copy-number qualities. 
     """
     available_props = set(variants.columns.get_level_values(Keys.property))
-    if Keys.cn in available_props:
+    if use_cn and Keys.cn in available_props:
         if Keys.cnq not in available_props:
             raise ValueError(f"{Keys.cn} in variants but not associated quality {Keys.cnq}")
         if Keys.rd_cn in available_props:
@@ -1578,21 +1593,35 @@ def genotype_to_carrier_status(genotype: Genotype) -> Union[bool, NAType]:
         return carrier_status
 
 
-def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number) -> pandas.DataFrame:
-    """
+def get_carrier_status(
+        variants: pandas.DataFrame,
+        use_copy_number: bool = Default.use_copy_number,
+        use_cn: bool = Default.use_cn
+) -> pandas.DataFrame:
+    f"""
     return carrier status as num_variants x num_samples table, with each entry being a BooleanDType:
       - True if the sample is called non-REF for that variant
       - False if it is called REF
       - pandas.NA if it is not called
-    If use_copy_number is True and the genotype is not called, examine copy number info to determine carrier status.
-    otherwise return pandas.NA
+    Args:
+        variants: pandas.DataFrame
+            Multi-index table of raw properties loaded from VCF
+        use_copy_number: bool (default={Default.use_copy_number})
+            If use_copy_number is True and the genotype is not called, examine copy number info to determine carrier
+            status. Otherwise return pandas.NA
+        use_cn: bool (default={Default.use_cn})
+            If False, ignore CN data, which duplicates RD_CN by the end of CleanVcf. If True, check CN *and* RD_CN*.
+            This value has no effect if use_copy_number is False.
+    Returns:
+        carrier_status: pandas.DataFrame
+            Normal (non-multi-index) table of carrier status
     """
     # get the carrier status as implied by the genotype
     gt_carrier_status = get_genotype(variants).applymap(genotype_to_carrier_status).astype(pandas.BooleanDtype())
     if not use_copy_number:
         return gt_carrier_status
     # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
-    copy_number = get_copy_number(variants)
+    copy_number = get_copy_number(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_carrier_status
     else:
@@ -1602,8 +1631,9 @@ def get_carrier_status(variants: pandas.DataFrame, use_copy_number: bool = Defau
         return (copy_number != 2).astype(pandas.BooleanDtype()).where(gt_carrier_status.isna(), gt_carrier_status)
 
 
-def get_or_estimate_allele_frequency(variants: pandas.DataFrame,
-                                     use_copy_number: bool = Default.use_copy_number) -> pandas.Series:
+def get_or_estimate_allele_frequency(
+        variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number, use_cn: bool = Default.use_cn
+) -> pandas.Series:
     f"""
     If {Keys.allele_frequency} is present in the variants, just return that. Otherwise estimate it:
         -Estimate AF from cohort by counting called non-REF alleles and dividing by number of called alleles
@@ -1612,10 +1642,13 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame,
          genotype, only carrier status. Estimate allele frequency assuming Hardy_Weinberg Equilibrium.
     Args:
         variants: pandas.DataFrame
-            Table of variant properties, genotypes, etc
+            Multi-index table of variant properties, genotypes, etc
         use_copy_number: boolean (default={Default.use_copy_number})
             If True, use copy number info (from {Keys.cn} and {Keys.rd_cn} fields) if it's helpful
             If False, only use genotypes
+        use_cn: bool (default={Default.use_cn})
+            If False, ignore CN data, which duplicates RD_CN by the end of CleanVcf. If True, check CN *and* RD_CN*.
+            This value has no effect if use_copy_number is False.
     Returns:
         allele_frequency: pandas.Series
             Estimated allele frequency for each variant            
@@ -1630,7 +1663,7 @@ def get_or_estimate_allele_frequency(variants: pandas.DataFrame,
     if not use_copy_number:
         return gt_allele_frequency
     # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
-    copy_number = get_copy_number(variants)
+    copy_number = get_copy_number(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_allele_frequency
     else:
@@ -1656,15 +1689,34 @@ def genotype_to_allele_count(genotype: Genotype) -> Union[int, NAType]:
         return allele_count
 
 
-def get_allele_counts(variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number) -> pandas.DataFrame:
+def get_allele_counts(
+        variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number, use_cn: bool = Default.use_cn
+) -> pandas.DataFrame:
+    f"""
+    return allele_counts as num_variants x num_samples table, with each entry being a Uint8DType:
+      - Number of non-REF counts if the sample GT is called for that variant
+      - pandas.NA if it is not called
+    Args:
+        variants: pandas.DataFrame
+            Multi-index table of raw properties loaded from VCF
+        use_copy_number: bool (default={Default.use_copy_number})
+            If use_copy_number is True and the genotype is not called, examine copy number info to determine carrier
+            status. If the CN is called and 2, set to ref (AC=0), otherwise assume HET (AC=1). If not called,
+            leave the AC as pandas.NA
+        use_cn: bool (default={Default.use_cn})
+            If False, ignore CN data, which duplicates RD_CN by the end of CleanVcf. If True, check CN *and* RD_CN*.
+            This value has no effect if use_copy_number is False.
+    Returns:
+        allele_counts:
+            Normal (non-multi-index) table of allele counts
+    """
     gt_allele_count = get_genotype(variants).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
     if not use_copy_number:
         return gt_allele_count
-    copy_number = get_copy_number(variants)
+    copy_number = get_copy_number(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_allele_count
     # Use copy number where GT is no-call, otherwise use GT allele counts
-    use_cn_allele_count = gt_allele_count.isna() | ((gt_allele_count == 0) & ~copy_number.isna())
     return combine_call_properties(
         preferred_properties=gt_allele_count,
         alternate_properties=(copy_number != 2).astype(pandas.UInt8Dtype()),
@@ -1674,14 +1726,37 @@ def get_allele_counts(variants: pandas.DataFrame, use_copy_number: bool = Defaul
 
 def get_allele_counts_and_quality(
         variants: pandas.DataFrame,
-        use_copy_number: bool = Default.use_copy_number
+        use_copy_number: bool = Default.use_copy_number,
+        use_cn: bool = Default.use_cn
 ) -> (pandas.DataFrame, pandas.DataFrame):
+    f"""
+    Form allele_counts as num_variants x num_samples table, with each entry being a Uint8DType:
+      - Number of non-REF counts if the sample GT is called for that variant
+      - pandas.NA if it is not called
+    Also compute corresponding qualities of the calls.
+    Args:
+        variants: pandas.DataFrame
+            Multi-index table of raw properties loaded from VCF
+        use_copy_number: bool (default={Default.use_copy_number})
+            If use_copy_number is True and the genotype is not called, examine copy number info to determine carrier
+            status. If the copy umber is called and 2, set to ref (AC=0), otherwise assume HET (AC=1). If not called,
+            leave the AC as pandas.NA. If the copy number is used, use the corresponding copy number quality rather than
+            GQ.
+        use_cn: bool (default={Default.use_cn})
+            If False, ignore CN data, which duplicates RD_CN by the end of CleanVcf. If True, check CN *and* RD_CN*.
+            This value has no effect if use_copy_number is False.
+    Returns:
+        allele_counts:
+            Normal (non-multi-index) table of allele counts
+        allele_counts_quality:
+            Corresponding table of qualities of the allele counts
+    """
     # get genotype-only allele count (we'll combine with copy number along-side quality)
-    gt_allele_count = get_allele_counts(variants, use_copy_number = False)
+    gt_allele_count = get_allele_counts(variants, use_copy_number=False)
     gt_quality = variants.xs(Keys.gq, axis=1, level=Keys.property, drop_level=True)
     if not use_copy_number:
         return gt_allele_count, gt_quality
-    copy_number, copy_number_quality = get_copy_number_and_quality(variants)
+    copy_number, copy_number_quality = get_copy_number_and_quality(variants, use_cn=use_cn)
     if copy_number is None:
         return gt_allele_count, gt_quality
     # Use copy number where GT is no-call. Sometimes for copy-number calls, GT is set to HOMREF, so if GT is HOMREF and
@@ -1732,3 +1807,48 @@ def genotype_to_num_called_alleles(genotype: Genotype) -> int:
 
 def get_num_called_alleles(variants: pandas.DataFrame) -> pandas.DataFrame:
     return get_genotype(variants).applymap(genotype_to_num_called_alleles).astype(numpy.uint8)
+
+
+def sort_multi_index_dataframe_columns(df: pandas.DataFrame):
+    df.sort_index(
+        axis=1, inplace=True, level=[0, 1],
+        key=lambda ind: pandas.Index(["" if isinstance(name, float) and numpy.isnan(name) else name for name in ind])
+    )
+
+
+def assign_dataframe_column(
+        df: pandas.DataFrame,
+        values: Union[pandas.DataFrame, pandas.Series],
+        name: str
+) -> pandas.DataFrame:
+    """ helper function to assign a column values to a DataFrame, potentially with multi-index columns """
+    if isinstance(values, pandas.Series):
+        # adding a single column (e.g. adding an info field to a variants DataFrame)
+        if isinstance(df.columns, pandas.MultiIndex):
+            values.name = (None, name)
+            is_new_prop = name in df.columns.get_level_values(level=Keys.property)
+            if is_new_prop:
+                df = df.join(values)
+            else:
+                df.loc[:, (None, name)] = values
+            # need to sort to put the table back into well-organized form
+            sort_multi_index_dataframe_columns(df)
+        else:
+            # Adding series to non-multi-index DataFrame, the usual deal:
+            df[name] = values
+    else:
+        # adding a multi-index property (e.g. adding a genotype field to a variants DataFrame)
+        if not isinstance(df.columns, pandas.MultiIndex):
+            # adding a multi-index property to a regular DataFrame: need to promote df to multi-index
+            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=[Keys.sample_id, Keys.property])
+
+        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=[Keys.sample_id, Keys.property])
+        is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
+        if is_new_prop:
+            df = df.join(values)
+        else:
+            df.loc[:, (slice(None), name)] = values
+        # need to sort to put the table back into well-organized form
+        sort_multi_index_dataframe_columns(df)
+
+    return df

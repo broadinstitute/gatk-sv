@@ -24,6 +24,8 @@ class Default:
     tick_font_size = 4
     tick_labelrotation = -30
     plot_max_f1 = False
+    use_copy_number = genomics_io.Default.use_copy_number
+    use_cn = genomics_io.Default.use_cn
 
 
 class Keys:
@@ -34,6 +36,13 @@ class Keys:
     svlen = genomics_io.Keys.svlen
     score = "score"
     gt = genomics_io.Keys.gt
+    gq = genomics_io.Keys.gq
+    allele_count = genomics_io.Keys.allele_count
+    rd_cn = genomics_io.Keys.rd_cn
+    rd_gq = genomics_io.Keys.rd_gq
+    cn = genomics_io.Keys.cn
+    cnq = genomics_io.Keys.cnq
+
     all_variant_types = "all"
     vcf_file = "vcf"
     scores_source = "scores_source"
@@ -58,6 +67,73 @@ class Keys:
 
 def log(text: str):
     print(f"{datetime.datetime.now().isoformat()}: {text}", file=sys.stderr, flush=True)
+
+
+def load_benchmark_properties_from_vcf_properties(
+        vcf: str,
+        wanted_properties: Collection[str],
+        wanted_sample_ids: Optional[Collection[str]] = None,
+        use_copy_number: bool = Default.use_copy_number,
+        use_cn: bool = Default.use_cn
+) -> pandas.DataFrame:
+    f"""
+    Load requested properties from VCF. If {Keys.allele_count} is among them, load properties needed to compute it.
+    Return table with only the requested properties
+    Args:
+        vcf: str
+            Path to VCF
+        wanted_properties: Collection[str]
+            List of desired properties 
+        wanted_sample_ids: Optional[Collection[str]] (default=None)
+            Restrict to desired samples if provided. Otherwise include data from all samples
+        use_copy_number: bool (default={Default.use_copy_number})
+            If True, when getting {Keys.allele_count} and/or {Keys.gq}, use copy number info if GT is no call and copy
+            number adds info 
+        use_cn: bool (default={Default.use_cn})
+            If True, when using copy number info, examine {Keys.cn} in addition to {Keys.rd_cn}. This value has no
+            effect if use_copy_number is false.
+    Returns:
+        variants:
+            Table of properties with rows corresponding to variants and (potentially multi-index) columns corresponding
+            to desired properties
+    """
+
+    # figure out if we need to compute allele counts and/or quality
+    if Keys.allele_count in wanted_properties:
+        need_allele_count = True
+    else:
+        need_allele_count = False
+    if use_copy_number and Keys.gq in wanted_properties:
+        need_quality = True
+    else:
+        need_quality = False
+    # determine any extra properties we need to be sure to load
+    extra_load_properties = []
+    if need_allele_count or need_quality:
+        if use_copy_number:
+            extra_load_properties = [Keys.gt, Keys.rd_cn, Keys.cn] if use_cn else [Keys.gt, Keys.rd_cn]
+            if need_quality:
+                extra_load_properties = extra_load_properties + ([Keys.rd_gq, Keys.cnq] if use_cn else [Keys.rd_gq])
+        elif need_allele_count:
+            extra_load_properties = [Keys.gt]
+    load_properties = [_property for _property in wanted_properties if _property != Keys.allele_count] + \
+                      [_property for _property in extra_load_properties if _property not in wanted_properties]
+    # load the wanted properties + any extras needed for computing allele_counts or quality
+    variants = genomics_io.vcf_to_pandas(vcf, samples=wanted_sample_ids, wanted_properties=load_properties,
+                                         drop_trivial_multi_index=False)
+    # compute any desired extra properties
+    if need_quality and use_copy_number:
+        allele_counts, quality = genomics_io.get_allele_counts_and_quality(
+            variants, use_copy_number=use_copy_number, use_cn=use_cn
+        )
+        variants = genomics_io.assign_dataframe_column(variants, quality, Keys.gt)
+        if need_allele_count:
+            variants = genomics_io.assign_dataframe_column(variants, allele_counts, Keys.allele_count)
+    elif need_allele_count:
+        allele_counts = genomics_io.get_allele_counts(variants, use_copy_number=use_copy_number, use_cn=use_cn)
+        variants = genomics_io.assign_dataframe_column(variants, allele_counts, Keys.allele_count)
+    # keep only the wanted properties, drop multi-index if it's not needed
+    return genomics_io.drop_trivial_columns_multi_index(variants.loc[:, (slice(None), wanted_properties)])
 
 
 class TruthData:
@@ -209,18 +285,26 @@ class ScoresSource:
     def has_empty_files(self) -> bool:
         return True if self.score_files is None or len(self.score_files) == 0 else False
 
+    @property
+    def failing_score(self) -> float:
+        # If we know the passing score, the failing score is one less. Otherwise return -1, which is a failing score in
+        # any scoring scheme I'm aware of.
+        return -1 if self.passing_score is None else self.passing_score - 1
+
     def _load_scores_file(
             self,
             scores_file: str,
             wanted_variant_ids: Optional[Collection[str]] = None,
             wanted_sample_ids: Optional[Iterable[str]] = None,
+            use_copy_number: bool = Default.use_copy_number,
+            use_cn: bool = Default.use_cn
     ) -> pandas.DataFrame:
         try:
             if scores_file.endswith(".vcf") or scores_file.endswith(".vcf.gz"):
                 # it's a VCF
-                scores = genomics_io.vcf_to_pandas(
-                    scores_file, samples=wanted_sample_ids, wanted_properties=(self.score_property,),
-                    drop_trivial_multi_index=True
+                scores = load_benchmark_properties_from_vcf_properties(
+                    vcf=scores_file, wanted_properties=(self.score_property,),
+                    use_copy_number=use_copy_number, use_cn=use_cn
                 )
                 return scores if wanted_variant_ids is None \
                     else scores.loc[_ordered_intersection(wanted_variant_ids, scores.index)]
@@ -344,8 +428,8 @@ class ScoresDataSet:
     ) -> pandas.DataFrame:
         try:
             if vcf.endswith(".vcf") or vcf.endswith(".vcf.gz"):
-                vcf_data = genomics_io.vcf_to_pandas(vcf, wanted_properties=wanted_properties,
-                                                     samples=wanted_sample_ids)
+                vcf_data = load_benchmark_properties_from_vcf_properties(vcf, wanted_properties=wanted_properties,
+                                                                         wanted_sample_ids=wanted_sample_ids)
                 return vcf_data if wanted_variant_ids is None \
                     else vcf_data.loc[_ordered_intersection(wanted_variant_ids, vcf_data.index)]
             elif ".pickle" in vcf:
@@ -365,7 +449,7 @@ class ScoresDataSet:
     ) -> Iterator["ScoresDataSet"]:
         if self.scores is None or self.allele_counts is None:
             # not already loaded, or need to load genotypes
-            wanted_properties = (Keys.svtype, Keys.svlen, Keys.gt)
+            wanted_properties = (Keys.svtype, Keys.svlen, Keys.allele_count)
             for scores_source in self.scores_sources.values():
                 if scores_source.has_empty_files:
                     wanted_properties += (scores_source.score_property,)
@@ -380,11 +464,12 @@ class ScoresDataSet:
                 axis=0
             )
             # extract allele_counts and metrics, and drop now-unneeded columns from vcf_data
-            allele_counts = genomics_io.get_allele_counts(vcf_data, use_copy_number=False)
             vcf_data.drop(Keys.gt, axis=1, level=Keys.property, inplace=True)
+            allele_counts = vcf_data.xs(Keys.allele_count, level=Keys.property, axis=1)
+            assert allele_counts.index.equals(vcf_data.index)
+            vcf_data.drop(Keys.allele_count, axis=1, level=Keys.property, inplace=True)
             metrics = vcf_data.xs(None, level=Keys.sample_id, axis=1)[[Keys.svtype, Keys.svlen]]
             vcf_data.drop([Keys.svtype, Keys.svlen], axis=1, level=Keys.property, inplace=True)
-            assert allele_counts.index.equals(vcf_data.index)
             assert metrics.index.equals(allele_counts.index)
 
             # yield one ScoresDataSet for each ScoresSource
@@ -397,25 +482,31 @@ class ScoresDataSet:
                     common.add_exception_context(exception, f"Loading {source_label}")
                     raise
 
-                if scores.index.equals(allele_counts.index):
-                    # this scores_source has the exact same variants as the vcfs, so keep the original allele_counts and
-                    # metrics objects
-                    source_allele_counts = allele_counts
-                    source_metrics = metrics
-                else:
-                    # this scores_source has different variants from the vcfs (presumably a subset). Need to subset
-                    # the other objects
-                    source_allele_counts = allele_counts.loc[scores.index]
-                    source_metrics = metrics.loc[scores.index]
+                if not scores.index.equals(allele_counts.index):
+                    # this scores_source has different variants from the vcfs
+                    # 1) could be a superset, caused by passing in a larger VCF for comparison
+                    #    - in which case remove "extra" variants
+                    # 2) most likely be a subset, caused by rejecting this missing variants and filtering them out
+                    #    - in which case, add failing scores for these variants
+                    extra_variants = scores.index.difference(allele_counts.index)
+                    if extra_variants.any():
+                        scores.drop(labels=extra_variants, inplace=True)
+                    missing_variants = allele_counts.index.difference(scores.index)
+                    if missing_variants.any():
+                        scores = pandas.concat(
+                            (scores, pandas.Series(scores_source.failing_score, index=missing_variants))
+                        )
+                    # now scores can be arranged with the same index as allele_counts
+                    scores = scores.loc[allele_counts.index]
 
                 yield ScoresDataSet(
                     vcfs=self.vcfs,
                     scores_sources={source_label: scores_source},
                     label=f"{self.label} {source_label}" if source_label else self.label,
                     scores=scores,
-                    allele_counts=source_allele_counts,
+                    allele_counts=allele_counts,
                     inheritance_stats=None,
-                    metrics=source_metrics,
+                    metrics=metrics,
                     category=self.category
                 )
         else:
