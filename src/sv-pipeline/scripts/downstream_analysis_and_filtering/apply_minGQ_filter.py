@@ -300,7 +300,7 @@ def _get_minGQ(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table,
         for key in list(set(EV_table.values())):
             minGQ[key] = int(globalMin)
 
-    return(minGQ)
+    return (minGQ)
 
 
 def apply_minGQ_filter(record, minGQ_dict, SVLEN_table, AF_table, SVTYPE_table,

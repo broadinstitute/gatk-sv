@@ -100,7 +100,7 @@ class PETest(PESRTest):
         i = 0
         for pair in pairs:
             pair = _DiscPair(*pair)
-            if(i > 1000000):
+            if (i > 1000000):
                 print(region)
                 counts = defaultdict(int)
                 break
