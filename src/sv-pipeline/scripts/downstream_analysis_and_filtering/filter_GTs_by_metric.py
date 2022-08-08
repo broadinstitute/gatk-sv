@@ -8,8 +8,10 @@
 Apply per-sample filters to one or more metrics in FORMAT field in an input VCF
 """
 
+
 import argparse
 import sys
+import pandas as pd
 from collections import defaultdict
 import csv
 import numpy as np
@@ -17,351 +19,137 @@ import pysam
 import svtk.utils as svu
 
 
-#Make dummy dict for all unique ranges of SVLEN
-def _make_SVLEN_interval_dict(minMetricTable):
-    #Prep lookup table
-    SVLEN_table = {}
-    i = 0
+def load_conditions(minMetricTable):
+    """
+    Loads conditions as a pandas DataFrame and a dict of FORMAT : value pairs keyed by condition ID
+    """
 
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
+    # Load table of conditions
+    conditions_table = pd.read_csv(minMetricTable, sep='\t')
+    conditions_table.rename(columns={'#condition' : 'condition'}, inplace=True)
 
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
+    # Load dictionary of FORMAT : value pairs
+    conditions_dict = {row.condition : {row.metric : row.min_metric} \
+                       for row in conditions_table.itertuples()}
 
-            #Skip header line
-            if "#" in cond_id:
-                continue
+    # Reformat table of conditions for quick lookups
+    conditions_table.set_index(keys='condition', drop=True, inplace=True)
+    set_cols = 'includeSVTYPE excludeSVTYPE includeFILTER excludeFILTER includeEV excludeEV'.split()
+    for col in set_cols:
+        conditions_table.loc[:, col] = \
+            conditions_table.loc[:, col].apply(lambda x: set(x.split(',')))
+    conditions_table.drop(columns='metric min_metric source'.split(), inplace=True)
 
-            #Add new range for minSVLEN to maxSVLEN if it doesn't already exist
-            newrange = range(int(minSVLEN), int(maxSVLEN))
-            if newrange not in SVLEN_table:
-                SVLEN_table[newrange] = str(i)
-                i += 1
-
-    #Return SVLEN lookup table
-    return SVLEN_table
+    return {'table' : conditions_table, 'dict' : conditions_dict}
 
 
-#Helper function to index into SVLEN dummy table
-def _lookup_SVLEN_key(SVLEN, SVLEN_table):
-    out = None
-    for key in SVLEN_table:
-        if SVLEN in key:
-            out = SVLEN_table[key]
-            break
-    return out
+def get_variant_conditions(record, conditions):
+    """
+    Find conditions that apply to a single VCF record
+    """
 
-
-#Make dummy dict for all unique ranges of AF
-def _make_AF_interval_dict(minMetricTable, scalar=10000):
-    #Prep lookup table
-    AF_table = {}
-    i = 0
-
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
-
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
-
-            #Skip header line
-            if "#" in cond_id:
-                continue
-
-            #Add new range for minAF to maxAF if it doesn't already exist
-            newrange = range(int(np.floor(scalar * float(minAF))), int(np.ceil(scalar * float(maxAF))))
-            if newrange not in AF_table:
-                AF_table[newrange] = str(i)
-                i += 1
-
-    #Return AF lookup table
-    return AF_table
-
-
-#Helper function to index into AF dummy table
-def _lookup_AF_key(AF, AF_table, scalar=10000):
-    val = int(np.round(scalar * float(AF)))
-    if val >= scalar:
-        val = scalar - 1
-    out = None
-    for key in AF_table:
-        if val in key:
-            out = AF_table[key]
-            break
-    return out
-
-
-#Make dummy dict for all SVTYPEs
-def _make_SVTYPE_dict(minMetricTable):
-    #Prep lookup table
-    SVTYPE_table = {}
-    i = 0
-
-    #Add all SVTYPE mappings from input minMetric table
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
-
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
-
-            #Skip header line
-            if "#" in cond_id:
-                continue
-
-            #Add new key for each SVTYPE to include specified that is not also excluded
-            SVTYPES = [s for s in includeSVTYPE.split(',') if s not in excludeSVTYPE.split(',')]
-            missing = len([s for s in SVTYPES if s not in SVTYPE_table])
-            if missing > 0:
-                for s in SVTYPES:
-                    if s not in SVTYPE_table:
-                        SVTYPE_table[s] = str(i)
-                i += 1  
-
-    #Return SVTYPE lookup table
-    return SVTYPE_table
-
-
-#Helper function to index into SVTYPE table
-def _lookup_SVTYPE_key(SVTYPE, SVTYPE_table):
-    out = SVTYPE_table.get(SVTYPE, None)
-    return out
-
-
-#Make dummy dict for all FILTER combinations
-def _make_FILTER_dict(minMetricTable, vcf):
-    #Prep lookup table
-    FILTER_table = {}
-    i = 0
-
-    #Get all FILTER statuses from VCF header
-    vcf_filters = vcf.header.filters.keys()
-
-    #Add all FILTER mappings from input minMetric table
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
-
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
-
-            #Skip header line
-            if "#" in cond_id:
-                continue
-
-            #Add new key for each FILTER to include specified that is not also excluded
-            #If no FILTERs are explicitly included, default to all FILTERs in VCF header
-            if includeFILTER == 'None':
-                includeFILTER = (',').join(vcf_filters)
-            FILTERS = [f for f in includeFILTER.split(',') if f not in excludeFILTER.split(',')]
-            missing = len([f for f in FILTERS if f not in FILTER_table])
-            if missing > 0:
-                for f in FILTERS:
-                    if f not in FILTER_table:
-                        FILTER_table[f] = str(i)
-                i += 1
-
-    #Return FILTER lookup table
-    return FILTER_table
-
-
-#Helper function to index into FILTER table and default to lowest value
-def _lookup_FILTER_key(FILTERs, FILTER_table):
-    maxkey = str(np.max(list(map(int, set(FILTER_table.values())))))
-    out = [FILTER_table.get(f, maxkey) for f in FILTERs.split(',')]
-    if len(out) > 0:
-        out = str(np.min(list(map(int, out))))
-    return out
-
-
-#Make dummy dict for all EV combinations
-def _make_EV_dict(minMetricTable):
-    #Prep lookup table
-    EV_table = {}
-    i = 0
-
-    #Get list of universe of possible combinations of evidence
-    ev_types = ['RD', 'PE', 'SR', 'RD,PE', 'RD,SR', 'PE,SR', 'RD,PE,SR']
-
-    #Add all EV mappings from input minMetric table
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
-
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
-
-            #Skip header line
-            if "#" in cond_id:
-                continue
-
-            #Add new key for each EV to include specified that is not also excluded
-            EVS = [e for e in includeEV.split(',') if e not in excludeEV.split(',')]
-            missing = len([f for f in EVS if f not in EV_table and f != "None"])
-            if missing > 0:
-                for e in EVS:
-                    if e not in EV_table:
-                        EV_table[e] = str(i)
-                i += 1
-
-    #Add a final key for all evidence classes not already in dict
-    for e in ev_types:
-        if e not in EV_table:
-            EV_table[e] = str(i)
-
-    #Return EV lookup table
-    return EV_table
-
-
-#Helper function to index into EV table
-def _lookup_EV_key(EV, EV_table):
-    #Reorder EV string to match expected
-    e = []
-    for c in ['RD', 'PE', 'SR']:
-        if c in EV:
-            e.append(c)
-    EV = ','.join(e)
-    maxkey = str(np.max(list(map(int, set(EV_table.values())))))
-    out = EV_table.get(EV, maxkey)
-    return out
-
-
-#Create master minMetric lookup table
-def make_minMetric_dict(minMetricTable, SVLEN_table, AF_table, SVTYPE_table, 
-                        FILTER_table, EV_table):
-    #Prep master minMetric lookup table
-    def _nested_dict(n, type):
-        if n == 1:
-            return defaultdict(type)
-        else:
-            return defaultdict(lambda: _nested_dict(n-1, type))
-    minMetric_dict = _nested_dict(6, str)
-
-    with open(minMetricTable) as lt:
-        reader = csv.reader(lt, delimiter = '\t')
-
-        #Enter each line in the lookup table into the dictionary
-        for cond_id, minSVLEN, maxSVLEN, minAF, maxAF, includeSVTYPE, excludeSVTYPE, \
-            includeFILTER, excludeFILTER, includeEV, excludeEV, metric, minMetric, \
-            source in reader:
-
-            #Skip header line
-            if "#" in cond_id:
-                continue
-
-            #Prep variables as needed
-            SVLEN = int(np.mean([int(minSVLEN), int(maxSVLEN)]))
-            SVLEN_idx = _lookup_SVLEN_key(SVLEN, SVLEN_table)
-            AF = np.mean([float(minAF), float(maxAF)])
-            AF_idx = _lookup_AF_key(AF, AF_table)
-            FILTERs = (',').join([f for f in includeFILTER.split(',') \
-                                  if f not in excludeFILTER.split(',')])
-            FILTER_idx = _lookup_FILTER_key(FILTERs, FILTER_table)
-            EV_idx = _lookup_EV_key(includeEV, EV_table)
-            minMetric = float(minMetric)
-
-            #Update one line for each qualifying SVTYPE
-            for SVTYPE in [s for s in includeSVTYPE.split(',') \
-                           if s not in excludeSVTYPE.split(',')]:
-                SVTYPE_idx = _lookup_SVTYPE_key(SVTYPE, SVTYPE_table)
-
-                #Add line to dict if all indexes are not None
-                if SVLEN_idx is not None \
-                and AF_idx is not None \
-                and SVTYPE_idx is not None \
-                and FILTER_idx is not None:
-                    minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx][EV_idx][metric] = int(minMetric)
-
-    return minMetric_dict
-
-
-#Query master minMetric lookup table
-def _get_minMetric(record, minMetric_dict, SVLEN_table, AF_table, SVTYPE_table, 
-                   FILTER_table, EV_table, globalMin=0):
-    #Get minMetric_dict indexes
-    if 'SVLEN' in record.info.keys():
-        SVLEN_idx = _lookup_SVLEN_key(record.info['SVLEN'], SVLEN_table)
-    AF_idx = _lookup_AF_key(record.info['AF'][0], AF_table)
-    if 'SVTYPE' in record.info.keys():
-        SVTYPE_idx = _lookup_SVTYPE_key(record.info['SVTYPE'], SVTYPE_table)
-    FILTER_query = ','.join(f for f in record.filter)
-    FILTER_idx = _lookup_FILTER_key(FILTER_query, FILTER_table) 
+    # Get variant info
+    SVTYPE = set([record.info.get('SVTYPE')])
+    SVLEN = int(record.info.get('SVLEN', 0))
+    AF = float(record.info.get('AF', [None])[0])
+    FILTER = set(record.filter.keys())
+    n_FILTER = len(FILTER)
     
-    #Get minMetric dict down to EV
-    if SVLEN_idx is not None \
-    and AF_idx is not None \
-    and SVTYPE_idx is not None \
-    and FILTER_idx is not None:
-        minMetric = minMetric_dict[SVLEN_idx][AF_idx][SVTYPE_idx][FILTER_idx]
-    #Otherwise, set all EV categories to globalMin
-    else:
-        minMetric = defaultdict(dict)
-        for key in list(set(EV_table.values())):
-            minMetric[key] = int(globalMin)
+    # Find conditions that apply to the record
+    SVTYPE_hits = np.logical_and(conditions['table'].includeSVTYPE.apply(lambda x: len(x.intersection(SVTYPE)) > 0), 
+                                 conditions['table'].excludeSVTYPE.apply(lambda x: len(x.intersection(SVTYPE)) == 0 or x == {'None'}))
+    SVLEN_hits = np.logical_and(SVLEN >= conditions['table'].minSVLEN, SVLEN <= conditions['table'].maxSVLEN)
+    AF_hits = np.logical_and(AF >= conditions['table'].minAF, AF <= conditions['table'].maxAF)
+    FILTER_hits = np.logical_and(conditions['table'].includeFILTER.apply(lambda x: len(x.intersection(FILTER)) == n_FILTER or x == {'None'}),
+                                 conditions['table'].excludeFILTER.apply(lambda x: len(x.intersection(FILTER)) == 0 or x == {'None'}))
+    all_hits = (SVTYPE_hits & SVLEN_hits & AF_hits & FILTER_hits)
+    cond_ids = set(list(conditions['table'].index[all_hits]))
     
-    return(minMetric)
+    return cond_ids
 
 
-def apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
-                           SVTYPE_table, FILTER_table, EV_table, 
-                           filter_homref, filter_homalt, fail_missing_scores, 
-                           require_all_criteria, globalMin, annotate_ncr, max_ncr, 
-                           ncr_prefix="COHORT"):
-    #Get minMetric dict down to EV for this variant
-    minMetric_by_ev = _get_minMetric(record, minMetric_dict, SVLEN_table, 
-                                     AF_table, SVTYPE_table, FILTER_table, 
-                                     EV_table, globalMin)
+def get_sample_conditions(record, sample, conditions):
+    """
+    Find conditions that apply to a single sample's GT for a given VCF record
+    """
+
+    # Get variant info
+    EV = set(record.samples[sample].get('EV', []))
+    n_EV = len(EV)
+    
+    # Find conditions that apply to the record
+    EV_hits = np.logical_and(conditions['table'].includeEV.apply(lambda x: len(x.intersection(EV)) == n_EV or x == {'None'}),
+                             conditions['table'].excludeEV.apply(lambda x: len(x.intersection(EV)) == 0 or x == {'None'}))
+    all_hits = EV_hits
+    cond_ids = set(list(conditions['table'].index[all_hits]))
+    
+    return cond_ids
+
+
+def apply_conditions(record, conditions, filter_homref, filter_homalt, 
+                     fail_missing_scores, require_all_criteria, annotate_ncr, 
+                     max_ncr, ncr_prefix="COHORT"):
+    """
+    Apply GT filtering conditions to a single record
+    """
+
+    # Get conditions that apply to all samples for this variant
+    variant_conditions = get_variant_conditions(record, conditions)
 
     n_samples = len(record.samples)
 
     bl = 0
-    for s in record.samples:
-        # Handle certain genotypes differently based on inputs
-        samp_gt = record.samples[s]['GT']
+    if len(variant_conditions) > 0:
+        for s in record.samples:
+            # Handle certain genotypes differently based on inputs
+            samp_gt = record.samples[s]['GT']
 
-        # Don't need to process GTs already set to ./., but should be counted towards NCR
-        if samp_gt == (None, None):
-            bl += 1
-            continue
+            # Don't need to process GTs already set to ./., but should be counted towards NCR
+            if samp_gt == (None, None):
+                bl += 1
+                continue
 
-        # Only filter homref GTs if optioned
-        if samp_gt == (0, 0) and not filter_homref:
-            continue
+            # Only filter homref GTs if optioned
+            if samp_gt == (0, 0) and not filter_homref:
+                continue
 
-        # Only filter homalt GTs if optioned
-        if samp_gt == (1, 1) and not filter_homalt:
-            continue
-            
-        # Check metric cutoff(s) given that sample's evidence
-        EV = record.samples[s]['EV']
-        if isinstance(EV, tuple):
-            EV = ','.join(list(EV))
-        EV_key = _lookup_EV_key(EV, EV_table)
-        cutoffs = minMetric_by_ev.get(EV_key, globalMin)
-        samp_pass = []
-        for metric, cutoff in cutoffs.items():
-            samp_val = record.samples[s].get(metric)
-            if samp_val is None:
-                if fail_missing_scores:
+            # Only filter homalt GTs if optioned
+            if samp_gt == (1, 1) and not filter_homalt:
+                continue
+
+            # Get conditions to apply to this particular sample
+            sample_conditions = get_sample_conditions(record, s, conditions)
+            relevant_conditions = \
+                [conditions['dict'][cid] for cid in \
+                 variant_conditions.intersection(sample_conditions)]
+
+
+            # Check metric cutoff(s) versus each condition
+            samp_pass = []
+            for cond in relevant_conditions:
+                metric, cutoff = list(cond.items())[0]
+                samp_val = record.samples[s].get(metric)
+                if samp_val is None:
+                    if fail_missing_scores:
+                        samp_pass.append(False)
+                    else:
+                        samp_pass.append(True)
+                elif samp_val < cutoff:
                     samp_pass.append(False)
                 else:
                     samp_pass.append(True)
-            elif samp_val < cutoff:
-                samp_pass.append(False)
-            else:
-                samp_pass.append(True)
 
-        # Rewrite sample GT based on filter pass/fail
-        if require_all_criteria:
-            gt_pass = all(samp_pass)
-        else:
-            gt_pass = any(samp_pass)
-        if not gt_pass:
-            record.samples[s]['GT'] = (None, None)
-            bl += 1
+            # Rewrite sample GT based on filter pass/fail
+            if require_all_criteria:
+                gt_pass = all(samp_pass)
+            else:
+                if len(samp_pass) > 0:
+                    gt_pass = any(samp_pass)
+                else:
+                    gt_pass = True
+            if not gt_pass:
+                record.samples[s]['GT'] = (None, None)
+                bl += 1
 
     if annotate_ncr:
         if n_samples > 0:
@@ -394,10 +182,6 @@ def main():
     parser.add_argument('--multiallelics', default=False, action='store_true',
                         help='Also apply filtering to multiallelic sites ' + 
                         '(default: do not filter multiallelics).')
-    parser.add_argument('--filter-missing-svtypes', default=False, action='store_true',
-                        help='Apply filters to SVTYPEs not explicitly present in ' +
-                        'minMetricTable [default: skip filtering SVTYPEs if ' +
-                        'they are not present in minMetricTable]')
     parser.add_argument('--filter-homref', default=False, action='store_true',
                         help='Apply filters to homozygous reference GTs [default: ' +
                         'do not filter any homref GTs]')
@@ -460,16 +244,8 @@ def main():
     else:
         fout = pysam.VariantFile(args.fout, 'w', header=vcf.header)
 
-    #Make dummy lookup tables for SVLEN, AF, SVTYPE, FILTER, and EV
-    SVLEN_table = _make_SVLEN_interval_dict(args.minMetricTable)
-    AF_table = _make_AF_interval_dict(args.minMetricTable)
-    SVTYPE_table = _make_SVTYPE_dict(args.minMetricTable)
-    FILTER_table = _make_FILTER_dict(args.minMetricTable, vcf)
-    EV_table = _make_EV_dict(args.minMetricTable)
-
-    #Make filtering lookup table
-    minMetric_dict = make_minMetric_dict(args.minMetricTable, SVLEN_table, AF_table, 
-                                         SVTYPE_table, FILTER_table, EV_table)
+    # Load filter table as pd.DataFrame
+    conditions = load_conditions(args.minMetricTable)
 
     #Iterate over records in vcf and apply filter
     for record in vcf.fetch():
@@ -479,21 +255,16 @@ def main():
         (not args.multiallelics and 
          not _is_multiallelic(record)):
 
-            # Do not process SVTYPEs missing from SVTYPE_table, unless optioned
-            if record.info['SVTYPE'] in SVTYPE_table.keys() or args.filter_missing_svtypes:
-                # Infer record's AF if AC & AN (but not AF) are provided
-                if 'AF' in record.info.keys():
-                    pass
-                else:
-                    AF = tuple([ac / record.info['AN'] for ac in record.info['AC']])
-                    record.info['AF'] = AF
-                apply_minMetric_filter(record, minMetric_dict, SVLEN_table, AF_table, 
-                                       SVTYPE_table, FILTER_table, EV_table, 
-                                       args.filter_homref, args.filter_homalt, 
-                                       args.fail_missing_scores, 
-                                       args.require_all_criteria, -10e10, 
-                                       args.annotate_ncr, args.max_ncr, 
-                                       ncr_prefix=args.prefix)
+            # Infer record's AF if AC & AN (but not AF) are provided
+            if 'AF' in record.info.keys():
+                pass
+            else:
+                AF = tuple([ac / record.info['AN'] for ac in record.info['AC']])
+                record.info['AF'] = AF
+            apply_conditions(record, conditions, args.filter_homref, 
+                             args.filter_homalt, args.fail_missing_scores, 
+                             args.require_all_criteria, args.annotate_ncr, 
+                             args.max_ncr, ncr_prefix=args.prefix)
 
         if args.cleanAFinfo:
             # Clean biallelic AF annotation

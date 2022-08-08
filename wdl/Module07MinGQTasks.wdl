@@ -726,11 +726,10 @@ task FilterGTs {
   input{
     File vcf
     File? minMetric_lookup_table
-    String filter_metric = "GQ"
     String prefix
     String PCR_status
     Float maxNCR
-    Int global_min_metric
+    Array[String] filter_GT_options = []
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override    
   }
@@ -745,17 +744,16 @@ task FilterGTs {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    set -euo pipefail
-    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/filter_GTs_by_metric.py \
-      --metric ~{filter_metric} \
-      --globalMin "~{global_min_metric}" \
-      --maxNCR "~{maxNCR}" \
-      --simplify-INS-SVTYPEs \
-      --cleanAFinfo \
-      --prefix "~{PCR_status}" \
-      "~{vcf}" \
-      "~{minMetric_lookup_table}" \
-      stdout \
+    set -eu -o pipefail
+
+    cmd="/opt/sv-pipeline/scripts/downstream_analysis_and_filtering/filter_GTs_by_metric.py "
+    cmd="$cmd ~{sep=' ' filter_GT_options} "
+    cmd="$cmd --max-ncr ~{maxNCR} --simplify-INS-SVTYPEs --cleanAFinfo "
+    cmd="$cmd --prefix \"~{PCR_status}\" ~{vcf} ~{minMetric_lookup_table} stdout"
+
+    echo -e "Filtering GTs with the following command:\n$cmd"
+    
+    eval $cmd \
     | fgrep -v "##INFO=<ID=AN," \
     | fgrep -v "##INFO=<ID=AC," \
     | fgrep -v "##INFO=<ID=AF," \

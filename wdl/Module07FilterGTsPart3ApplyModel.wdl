@@ -15,9 +15,8 @@ workflow Module07FilterGTsPart3 {
     Array[File]? PCRPLUS_vcf_lists
     Array[File]? PCRPLUS_vcf_idx_lists
 
+    Array[String] filter_GT_options = []
     Float max_noCallRate
-    String filter_metric = "GQ"
-    Int global_min_metric
 
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -33,11 +32,10 @@ workflow Module07FilterGTsPart3 {
       input:
       vcf=PCRMINUS_vcf_lists[i],
       minMetric_lookup_table=PCRMINUS_lookup_table,
-      filter_metric=filter_metric,
       prefix="~{prefix}.PCRMINUS",
       PCR_status="PCRMINUS",
       maxNCR=max_noCallRate,
-      global_min_metric=global_min_metric,
+      filter_GT_options=filter_GT_options,
       sv_pipeline_base_docker=sv_pipeline_base_docker
     }
 
@@ -47,11 +45,10 @@ workflow Module07FilterGTsPart3 {
       input:
         vcf=select_first([PCRPLUS_vcf_lists])[i],
         minMetric_lookup_table= PCRPLUS_lookup_table,
-        filter_metric=filter_metric,
         prefix="~{prefix}.PCRPLUS",
         PCR_status="PCRPLUS",
         maxNCR=max_noCallRate,
-        global_min_metric=global_min_metric,
+        filter_GT_options=filter_GT_options,
         sv_pipeline_base_docker=sv_pipeline_base_docker
       }
 
