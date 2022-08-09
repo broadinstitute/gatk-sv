@@ -23,7 +23,7 @@ readTrioDat <- function(dn_dat, metric){
                      paste("fa", metric, sep="_"),
                      paste("mo", metric, sep="_"))
   dat <- dat[which(!duplicated(paste(dat$fam, dat$VID, sep="_"))), ]
-  dat[, (ncol(dat)-2):ncol(dat)] <- apply(dat[, (ncol(dat)-2):ncol(dat)], 2, as.integer)
+  dat[, (ncol(dat)-2):ncol(dat)] <- apply(dat[, (ncol(dat)-2):ncol(dat)], 2, as.numeric)
   dat <- dat[which(dat$pro_AC==1), ]
   dat$label <- "inh"
   dat$label[which(dat$pro_AC - (dat$fa_AC + dat$mo_AC)>0)] <- "dn"
