@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Copyright (c) 2018 Talkowski Laboratory
+# Copyright (c) 2018-Present Talkowski Laboratory
 # Contact: Ryan Collins <rlcollins@g.harvard.edu>
 # Distributed under terms of the MIT license.
 
@@ -348,7 +348,7 @@ order.tree <- build.tree(dat, fixed.f1="filt.SVTYPE")
 minGQ.table <- prune.tree(dat, order.tree, metric)
 minGQ.table$metric <- metric
 colnames(minGQ.table)[which(colnames(minGQ.table) == paste("min", metric, sep="_"))] <- "min_metric"
-minGQ.table <- minGQ.table[, c(colnames(minGQ.table[1:11], "metric", "min_metric", "source"))]
+minGQ.table <- minGQ.table[, c(colnames(minGQ.table[1:11]), "metric", "min_metric", "source")]
 
 ###Write out final files
 colnames(order.tree)[1] <- "#filt.1"
