@@ -29,7 +29,7 @@
   "cnmops-virtual-env": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops-virtual-env:2022-06-10-v0.23-beta-9c6fbf56",
   "sv-pipeline-virtual-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-virtual-env:2022-06-10-v0.23-beta-9c6fbf56",
   "samtools-cloud-virtual-env": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud-virtual-env:2022-06-10-v0.23-beta-9c6fbf56",
-  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:0d606d3",
+  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:547f348",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/tbrookin/gatk:3969c7629",
-  "sv-utils-env": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils-env:b43d880"
+  "sv-utils-env": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils-env:547f348"
 }

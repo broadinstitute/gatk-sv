@@ -11,7 +11,7 @@ from matplotlib import patches
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from matplotlib.backends.backend_pdf import PdfPages
 import pandas
-from typing import Optional, Union, Tuple, List, Sequence, Mapping, Text, Any
+from typing import Optional, Union, Tuple, List, Sequence, Mapping, Text, Any, Callable
 from types import MethodType, MappingProxyType
 
 
@@ -23,25 +23,28 @@ ListLike = Union[List, pandas.Series, numpy.ndarray]
 
 class Default:
     tick_labelrotation = -30
-    num_1d_bins = 100
-    num_2d_bins = 50
+    num_1d_bins = 400
+    num_2d_bins = 200
     min_1d_hist_width = 1.0e-6
     title_fontsize = 16
     label_fontsize = 16
+    tick_fontsize = 12
     num_palette_colors = 12
     color_palette = "colorblind"
     # Default params overrides for matplotlib
     matplotlib_params = MappingProxyType({
         'savefig.dpi': 150,  # to adjust notebook inline plot size
-        'axes.labelsize': 12,
-        'axes.titlesize': 12,
-        'font.size': 10,
-        'legend.fontsize': 10,
-        'xtick.labelsize': 10,
-        'ytick.labelsize': 10,
+        'axes.labelsize': label_fontsize,
+        'axes.titlesize': title_fontsize,
+        'font.size': label_fontsize,
+        'legend.fontsize': label_fontsize,
+        'xtick.labelsize': tick_fontsize,
+        'ytick.labelsize': tick_fontsize,
         'figure.figsize': [9.75, 6]
     })
     use_seaborn = True
+    mask_color = 'k'
+    hist2d_colormap = "viridis"
 
 
 def init_plotting_environment(
@@ -85,11 +88,12 @@ def next_fig() -> int:
     return next_num
 
 
-def ordered_legend(ax: pyplot.Axes, labels_in_order: Sequence, **legend_kwargs):
+def ordered_legend(ax: pyplot.Axes, labels_in_order: Sequence, **legend_kwargs) -> matplotlib.legend.Legend:
+    """ get legend, specifying the order of the labels """
     handles, labels = ax.get_legend_handles_labels()
     # sort both labels and handles by labels
     labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: labels_in_order.index(t[0])))
-    ax.legend(handles, labels, **legend_kwargs)
+    return ax.legend(handles, labels, **legend_kwargs)
 
 
 def rectangle(ax, x_range, y_range, **kwargs):
@@ -127,10 +131,10 @@ def get_2d_roc(x, y, matches, n_div=500, match_style='either'):
             if 'both': a point is judged true if x > x_threshold AND
                        y > y_threshold.
     Returns:
-        false_positives: numpy.array
+        false_positives: numpy.ndarray
             Array of false_positives along ROC curve, obtained by varying 2D
             thresholds.
-        true_positives: numpy.array
+        true_positives: numpy.ndarray
             Array of true_positives along ROC curve, obtained by varying 2D
             thresholds.
         area_under_curve: float
@@ -280,61 +284,225 @@ def hist1d(ax, x, bins=Default.num_1d_bins, xlabel="x", ylabel="counts", xscale=
     return bin_counts, bins, hist_patches
 
 
-def hist2d(x, y, x_bins=None, y_bins=None,
-           xscale=None, yscale=None, zscale=None,
-           xlabel: Optional[str] = 'x', ylabel: Optional[str] = 'y', zlabel='Counts',
-           title='2D Histogram', mask=None, ax=None, cax=None,
-           colorbar=True, cmap="viridis", num_2d_bins=Default.num_2d_bins,
-           title_fontsize=Default.title_fontsize, label_fontsize=Default.label_fontsize):
-    if x_bins is None:
-        x_bins = min(max(10, int(len(x)**0.5)), num_2d_bins)
-    if y_bins is None:
-        y_bins = min(max(10, int(len(y)**0.5)), num_2d_bins)
-    hist_mat, x_edges, y_edges = numpy.histogram2d(x, y, bins=[x_bins, y_bins])
-    # rotate and flip hist_mat
-    hist_mat = numpy.flipud(numpy.rot90(hist_mat))
-    if mask is not None:
-        # mark masked value as masked, they will not be plotted
-        hist_mat = numpy.ma.masked_where(hist_mat == mask, hist_mat)
-    if ax is None:
-        fig, ax = pyplot.subplots(1, 1, num=next_fig())
-    if zscale == "log":
-        norm = colors.LogNorm()
+def _fast_hist2d(
+        x: numpy.ndarray,
+        y: numpy.ndarray,
+        x_edges: numpy.ndarray,
+        y_edges: numpy.ndarray
+):
+    def _avg_diff(_edges) -> float:
+        return (_edges[-1] - _edges[0]) / (len(_edges) - 1)
+
+    def _is_uniform_spaced(_edges: numpy.ndarray) -> bool:
+        return numpy.allclose(_avg_diff(_edges), numpy.diff(_edges))
+
+    num_x_bins = len(x_edges) - 1
+    num_y_bins = len(y_edges) - 1
+    max_ravel_bin = num_x_bins * num_y_bins - 1
+    bin_type = numpy.min_scalar_type(max_ravel_bin)
+
+    def _get_bin_indices(_values: numpy.ndarray, _edges, _flip: bool = False) -> numpy.ndarray:
+        _delta = _avg_diff(_edges)
+        return numpy.minimum(
+            numpy.floor(
+                ((_edges[-1] - _values) if _flip else (_values - _edges[0])) / _delta,
+            ).astype(bin_type),
+            len(_edges) - 2
+        )
+
+    def _get_ravel_indices():
+        # want to flip y and rotate 90 at *THIS* stage so we don't have to do that operation to hist_mat
+        return _get_bin_indices(x, x_edges) + num_x_bins * _get_bin_indices(y, y_edges)
+
+    if _is_uniform_spaced(x_edges) and _is_uniform_spaced(y_edges):
+        # can do faster 2d histogram
+        hist_mat = numpy.resize(
+            numpy.bincount(_get_ravel_indices()), (num_x_bins, num_y_bins)
+        )
     else:
-        norm = None
-    cmap = getattr(pyplot.cm, cmap)
-    cmap.set_bad('k')
-    mesh = ax.pcolormesh(x_edges, y_edges, hist_mat, norm=norm, cmap=cmap)
-    xlim = (x_edges[0], x_edges[-1])
-    ylim = (y_edges[0], y_edges[-1])
+        # have to do it slowly
+        hist_mat, x_edges, y_edges = numpy.histogram2d(x, y, bins=[x_edges, y_edges], density=False)
+        # rotate and flip hist_mat
+        hist_mat = numpy.flipud(numpy.rot90(hist_mat))
+    return hist_mat, x_edges, y_edges
+
+
+def hist2d(
+        ax: pyplot.Axes,
+        x: Union[numpy.ndarray, pandas.Series],
+        y: Union[numpy.ndarray, pandas.Series],
+        x_bins: Union[Sequence[int], int, None] = None,
+        y_bins: Union[Sequence[int], int, None] = None,
+        xscale: Optional[str] = None,
+        yscale: Optional[str] = None,
+        zscale: Optional[str] = None,
+        xlabel: Optional[str] = 'x',
+        ylabel: Optional[str] = 'y',
+        zlabel: Optional[str] = 'Counts',
+        xlim: Optional[Sequence[float]] = None,
+        ylim: Optional[Sequence[float]] = None,
+        title='2D Histogram',
+        mask_condition: Optional[Callable[[numpy.ndarray], numpy.ndarray]] = None,
+        mask_color: str = Default.mask_color,
+        colorbar_axes: Optional[pyplot.Axes] = None,
+        colorbar: bool = True,
+        cmap: Union[str, matplotlib.colors.Colormap] = Default.hist2d_colormap,
+        num_2d_bins: int = Default.num_2d_bins,
+        title_fontsize: int = Default.title_fontsize,
+        label_fontsize: int = Default.label_fontsize,
+        tick_fontsize: int = Default.tick_fontsize
+) -> (Optional[matplotlib.collections.QuadMesh], numpy.ndarray, numpy.ndarray, numpy.ndarray):
+    f"""
+    Plot a 2D histogram (heat map) on an axes
+    Args:
+        ax: pyplot.Axes
+            Axes to draw on
+        x: numpy.ndarray or pandas.Series
+            Array of x values
+        y: numpy.ndarray, or pandas.Series
+            Array of y values
+        x_bins: array-like, int, or None = None
+            if array, use directly as bin edges
+            if an int, specify number of bins to use for x coordinate, and space bins based on range and xscale
+            If None, try to select a reasonable number of bins automatically.
+        y_bins:  array-like, int, or None = None
+            if array, use directly as bin edges
+            if an int, specify number of bins to use for y coordinate, and space bins based on range and yscale
+            If None, try to select a reasonable number of bins automatically.
+        xscale: Optional[str] = None
+            String to pass through to ax.set_xscale(), e.g. "log", "symlog"
+        yscale: Optional[str] = None
+            String to pass through to ax.set_yscale(), e.g. "log", "symlog"
+        zscale: Optional[str] = NOne
+            Either "log" (log-scale the colors) or None.
+        xlabel: Optional[str] = None
+            label for x axis
+        ylabel: Optional[str] = None
+            label for y axis
+        zlabel: Optional[str] = None
+            label for intensity / colorbar
+        xlim: Optional[Sequence[float]] = None
+            If list/tuple of (min, max) values supplied, use these limits for x axis. Otherwise set from data range.
+        ylim: Optional[Sequence[float]] = None
+            If list/tuple of (min, max) values supplied, use these limits for x axis. Otherwise set from data range.
+        title: Optional[str] = None
+            title for axes
+        mask_condition: Optional[Callable] = None
+            If provided, should be a function that takes a matrix of histogram values as input, and outputs a matrix of
+            bool that is True everywhere that should be masked. e.g. `mask_condition = lambda x: x == my_masked_value`
+            will result in a plot that has values masked (set to mask_color) whenever the counts == my_masked_value.
+        mask_color: str = {Default.mask_color}
+            Color with which to paint masked regions of the heat map 
+        colorbar_axes: Optional[pyplot.Axes] = None
+            If non-None, draw colorbar onto this axes
+        colorbar: bool = True
+            If True, draw a colorbar
+        cmap: str = {Default.hist2d_colormap}
+        num_2d_bins: int = {Default.num_2d_bins}
+            Maximum number of bins for each axis, used when auto-determining number of bins
+        title_fontsize: int = {Default.title_fontsize}
+            Font size for title
+        label_fontsize: int = {Default.label_fontsize}
+            Font size for axis labels
+        tick_fontsize: int = {Default.tick_fontsize}
+    Returns:
+        mesh: matplotlib.Collections.QuadMesh
+            matplotlib object containing heatmap. Will be None if no drawable data is provided.
+    """
+    if isinstance(x, pandas.Series):
+        x = x.values
+    if isinstance(y, pandas.Series):
+        y = y.values
+    assert len(x) == len(y)
+    is_finite = numpy.logical_and(numpy.isfinite(x), numpy.isfinite(y))
+    x = x.compress(is_finite)
+    y = y.compress(is_finite)
+    num_points = len(x)
+    # it's faster to work with uniform bins, so transform data first, then scale edges for plot
+    if xscale == "log":
+        x = numpy.log10(x)
+    if yscale == "log":
+        y = numpy.log10(y)
+
+    def _get_edges_arr(
+            _bins: Union[None, int, Sequence[int]], _scale: Optional[str], _range: Tuple[float, float]
+    ) -> numpy.ndarray:
+        if _bins is None:
+            # want num_x_bins * num_y_bins ~ max(100, sqrt(num_points))
+            _bins = min(
+                max(10, int(num_points ** 0.25)),
+                num_2d_bins
+            )
+        # if _bins was supplied as a sequence, transform it into appropriate space, otherwise make uniform bins
+        if isinstance(_bins, int):
+            _bins = numpy.linspace(*_range, _bins + 1)
+        elif _scale == "log":
+            _bins = numpy.log10(_bins)
+        else:
+            _bins = numpy.array(_bins)
+        return _bins
+
+    if len(x) > 0:
+        # we have some sensible data
+        # noinspection PyTypeChecker
+        x_edges = _get_edges_arr(x_bins, xscale, (numpy.nanmin(x), numpy.nanmax(x)))
+        # noinspection PyTypeChecker
+        y_edges = _get_edges_arr(y_bins, yscale, (numpy.nanmin(y), numpy.nanmax(y)))
+        hist_mat, x_edges, y_edges = _fast_hist2d(x, y, x_edges=x_edges, y_edges=y_edges)
+        if mask_condition is not None:
+            # mark masked value as masked, they will not be plotted
+            hist_mat = numpy.ma.masked_where(mask_condition(hist_mat), hist_mat)
+        # transform edge coordinates back to correct values
+        if xscale == "log":
+            x_edges = 10 ** x_edges
+        if yscale == "log":
+            y_edges = 10 ** y_edges
+
+        mesh = ax.pcolormesh(
+            x_edges, y_edges, hist_mat, norm=colors.LogNorm() if zscale == "log" else colors.Normalize(),
+            cmap=cmap, edgecolors="face"
+        )
+    else:
+        hist_mat, x_edges, y_edges = numpy.array([]).reshape((0, 0)), numpy.array([]), numpy.array([])
+        mesh = None
+
+    if not isinstance(cmap, matplotlib.colors.Colormap):
+        cmap = getattr(pyplot.cm, cmap)
+    cmap.set_bad(mask_color)
+    if xlim is None and len(x_edges) > 0:
+        xlim = (min(x_edges[x_edges > 0]), max(x_edges[x_edges > 0])) if xscale == "log" else (x_edges[0], x_edges[-1])
+    if xlim is not None:
+        ax.set_xlim(*xlim)
+    if ylim is None and len(y_edges) > 0:
+        ylim = (min(y_edges[y_edges > 0]), max(y_edges[y_edges > 0])) if yscale == "log" else (y_edges[0], y_edges[-1])
+    if ylim is not None:
+        ax.set_ylim(*ylim)
     if xscale is not None:
         ax.set_xscale(xscale)
-        if xscale == "log":
-            xlim = (min(x_edges[x_edges > 0]), max(x_edges[x_edges > 0]))
     if yscale is not None:
         ax.set_yscale(yscale)
-        if yscale == "log":
-            ylim = (min(y_edges[y_edges > 0]), max(y_edges[y_edges > 0]))
-    ax.set_xlim(*xlim)
-    ax.set_ylim(*ylim)
     if xlabel is not None and len(xlabel):
         ax.set_xlabel(xlabel, fontsize=label_fontsize)
     if ylabel is not None and len(ylabel):
         ax.set_ylabel(ylabel, fontsize=label_fontsize)
     if title is not None and len(title):
         ax.set_title(title, fontsize=title_fontsize)
-    if colorbar:
-        cbar = add_colorbar(mesh, cax=cax)
-        # cbar = ax.figure.colorbar(mesh, ax=ax)
-        cbar.set_label(zlabel)
-    return mesh
+    if tick_fontsize is not None:
+        ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
+    if colorbar and mesh is not None:
+        cbar = add_colorbar(mesh, cax=ax if colorbar_axes is None else colorbar_axes)
+        if zlabel is not None:
+            cbar.set_label(zlabel)
+    return mesh, hist_mat, x_edges, y_edges
 
 
 def _sync_x(self, event):
+    """ Event handler for updates to x axis: set x axis to desired limits """
     self.set_xlim(event.get_xlim(), emit=False)
 
 
 def _sync_y(self, event):
+    """ Event handler for updates to y axis: set y axis to desired limits """
     self.set_ylim(event.get_ylim(), emit=False)
 
 
@@ -391,7 +559,7 @@ def hist2d_fig(x, y, num_1d_bins=Default.num_1d_bins, num_2d_bins=Default.num_2d
         title = "%s (%s, %s)" % (zlabel, xlabel, ylabel)
     hist2d(
         x, y, ax=ax0, xlabel=None, ylabel=None, zlabel=zlabel,
-        title=title, num_2d_bins=num_2d_bins, cax=cax, **kwargs
+        title=title, num_2d_bins=num_2d_bins, colorbar_axes=cax, **kwargs
     )
     ax0.set_xticklabels([])
     ax0.set_yticklabels([])
@@ -415,16 +583,6 @@ def hist2d_fig(x, y, num_1d_bins=Default.num_1d_bins, num_2d_bins=Default.num_2d
 
     sync_axes([ax0, ax1], sync_x=False, sync_y=True)
     sync_axes([ax0, ax2], sync_x=True, sync_y=False)
-
-    # ax0.update_xlim = MethodType(_sync_x, ax0)
-    # ax0.update_ylim = MethodType(_sync_y, ax0)
-    # ax1.update_ylim = MethodType(_sync_y, ax1)
-    # ax2.update_xlim = MethodType(_sync_x, ax2)
-    #
-    # ax0.callbacks.connect("ylim_changed", ax1.update_ylim)
-    # ax0.callbacks.connect("xlim_changed", ax2.update_xlim)
-    # ax1.callbacks.connect("ylim_changed", ax0.update_ylim)
-    # ax2.callbacks.connect("xlim_changed", ax0.update_xlim)
 
 
 def save_figures(figure_save_file: str, *figures: Optional[pyplot.Figure]):

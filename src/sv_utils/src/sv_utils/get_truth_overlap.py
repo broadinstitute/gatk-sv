@@ -147,12 +147,12 @@ ConfidentVariants = Mapping[str, SampleConfidentVariants]  # mapping from sample
 
 class PrecisionRecallCurve:
     """ Class to form, manipulate, and query data for precision vs recall curves """
-    __slots__ = ("dataframe", "num_good", "num_bad", "f_beta", "high_cutoff")
+    __slots__ = ("dataframe", "num_good", "num_bad", "f_beta", "is_high_cutoff")
     dataframe: pandas.DataFrame
     num_good: int
     num_bad: int
     f_beta: float
-    high_cutoff: bool
+    is_high_cutoff: bool
 
     f_score_key = "f"
     recall_key = "recall"
@@ -166,13 +166,13 @@ class PrecisionRecallCurve:
             num_bad: int,
             is_sorted: bool = False,
             f_beta: float = Default.f_beta,
-            high_cutoff: bool = True
+            is_high_cutoff: bool = True
     ):
         self.dataframe = dataframe if is_sorted else dataframe.sort_index()
         self.num_good = num_good
         self.num_bad = num_bad
         self.f_beta = f_beta
-        self.high_cutoff = high_cutoff
+        self.is_high_cutoff = is_high_cutoff
         if PrecisionRecallCurve.f_score_key not in self.dataframe:
             self._set_f_score()
 
@@ -186,7 +186,7 @@ class PrecisionRecallCurve:
             f_score: Optional[numpy.ndarray] = None,
             is_sorted: bool = False,
             f_beta: float = Default.f_beta,
-            high_cutoff: bool = True
+            is_high_cutoff: bool = True
     ) -> "PrecisionRecallCurve":
         dataframe = pandas.DataFrame(
             {PrecisionRecallCurve.precision_key: precision, PrecisionRecallCurve.recall_key: recall},
@@ -195,17 +195,18 @@ class PrecisionRecallCurve:
         if f_score is not None:
             dataframe[PrecisionRecallCurve.f_score_key] = f_score
         return PrecisionRecallCurve(dataframe=dataframe, num_good=num_good, num_bad=num_bad,
-                                    is_sorted=is_sorted, f_beta=f_beta, high_cutoff=high_cutoff)
+                                    is_sorted=is_sorted, f_beta=f_beta, is_high_cutoff=is_high_cutoff)
 
     @staticmethod
     def from_good_bad_thresholds(
             good_thresholds: numpy.ndarray,
             bad_thresholds: numpy.ndarray,
             f_beta: float = Default.f_beta,
-            high_cutoff: bool = True
+            is_high_cutoff: bool = True
     ) -> "PrecisionRecallCurve":
-        # map NaN thresholds to +inf, because they will never be selected
-        thresholds = numpy.nan_to_num(numpy.concatenate((good_thresholds, bad_thresholds)), nan=numpy.inf)
+        # map NaN thresholds to -inf/+inf (depending on high/low cutoff), because they will never be selected
+        nan_replacement = -numpy.inf if is_high_cutoff else numpy.inf
+        thresholds = numpy.nan_to_num(numpy.concatenate((good_thresholds, bad_thresholds)), nan=nan_replacement)
         # construct precision-recall curve (vs threshold)
         n_good = len(good_thresholds)
         if n_good == 0:
@@ -213,7 +214,7 @@ class PrecisionRecallCurve:
             return PrecisionRecallCurve.empty_curve
 
         n_bad = len(bad_thresholds)
-        sort_ind = numpy.argsort(thresholds)[::-1] if high_cutoff else numpy.argsort(thresholds)
+        sort_ind = numpy.argsort(thresholds)[::-1] if is_high_cutoff else numpy.argsort(thresholds)
         thresholds = thresholds.take(sort_ind)
         recall = numpy.concatenate(
             (numpy.full(n_good, 1.0 / n_good), numpy.zeros(n_bad))
@@ -223,7 +224,7 @@ class PrecisionRecallCurve:
         ).take(sort_ind).cumsum() \
             / numpy.arange(1, len(sort_ind) + 1)
 
-        if high_cutoff:
+        if is_high_cutoff:
             # de-duplicate thresholds, taking the *LAST* match to a threshold, since it's all-or-nothing if multiple
             # variants match
             __, de_dup_index = numpy.unique(thresholds[::-1], return_index=True)
@@ -242,7 +243,7 @@ class PrecisionRecallCurve:
         # return as a DataFrame for organization purposes
         return PrecisionRecallCurve.from_arrays(thresholds=thresholds, precision=precision, recall=recall,
                                                 num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
-                                                high_cutoff=high_cutoff)
+                                                is_high_cutoff=is_high_cutoff)
 
     def loc(self, indexer: pandas.api.indexers.BaseIndexer) -> "PrecisionRecallCurve":
         # note: don't know that the indexer leaves dataframe sorted, but presumably the point of doing the indexer is
@@ -284,7 +285,13 @@ class PrecisionRecallCurve:
 
     @property
     def is_empty(self) -> bool:
-        return self.dataframe.empty
+        """ return True if there is no data that could be selected with a finite threshold, False otherwise """
+        return self.dataframe.empty or (
+            self.dataframe.shape[0] == 1 and (
+                (self.is_high_cutoff and self.dataframe.index[0] == -numpy.inf) or
+                (not self.is_high_cutoff and self.dataframe.index[0] == numpy.inf)
+            )
+        )
 
     def get_point_at_max_f_score(self) -> Optional[pandas.Series]:
         if self.is_empty:
@@ -299,7 +306,8 @@ class PrecisionRecallCurve:
     def get_point_at_threshold(self, threshold: float) -> pandas.Series:
         """
         Get precision, recall, f-score at point on curve corresponding to given threshold. This will be the first row
-        with prec.threshold >= requested_threshold
+        with curve_threshold >= requested_threshold (for high cutoffs) or curve_threshold <= requested_threshold (for
+        low cutoffs)
         Args:
             threshold: float
                 Requested threshold on curve
@@ -309,13 +317,15 @@ class PrecisionRecallCurve:
                 as prc_point.name
         """
         if self.is_empty:
-            raise ValueError("No point at threshold: PrecisionRecallCurve is empty")
+            warnings.warn("No point at threshold: PrecisionRecallCurve is empty")
+            return PrecisionRecallCurve.empty_point(threshold)
         row_index = len(self.dataframe) - 1 - self.dataframe.index[::-1].searchsorted(threshold, side="left") \
-            if self.high_cutoff else self.dataframe.index.searchsorted(threshold, side="left")
+            if self.is_high_cutoff else self.dataframe.index.searchsorted(threshold, side="left")
 
         if row_index < 0 or row_index >= len(self.dataframe):
             _log(str(self.dataframe.index))
-            raise ValueError(f"No data at requested threshold ({threshold})")
+            warnings.warn(f"No data at requested threshold ({threshold})")
+            return PrecisionRecallCurve.empty_point(threshold)
         return self.dataframe.iloc[row_index].rename(threshold)
 
     # noinspection PyMethodParameters
@@ -326,6 +336,11 @@ class PrecisionRecallCurve:
                              index=pandas.Index([], name=PrecisionRecallCurve.threshold_key, dtype=numpy.float64)),
             num_good=0, num_bad=0, is_sorted=True
         )
+
+    @classmethod
+    def empty_point(cls: type, threshold: float = numpy.nan) -> pandas.Series:
+        return pandas.Series(numpy.nan, index=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key],
+                             name=threshold)
 
 
 def _log(out: str, end='\n'):
@@ -961,7 +976,7 @@ def _get_stat_optimal_overlap_cutoffs(
     )
     # make opposite PRC, trying to find *bad* overlaps
     decision_curve_bad = PrecisionRecallCurve.from_good_bad_thresholds(
-        good_thresholds=bad_cutoffs, bad_thresholds=good_cutoffs, f_beta=f_beta, high_cutoff=False
+        good_thresholds=bad_cutoffs, bad_thresholds=good_cutoffs, f_beta=f_beta, is_high_cutoff=False
     )
 
     good_cutoff_point = _choose_cutoff(decision_curve_good, default_cutoff=0.5,

@@ -4,11 +4,15 @@ import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
 import "RecalibrateGq.wdl" as RecalibrateGq
 import "BenchmarkGqFilter.wdl" as BenchmarkGqFilter
 import "PickleVcfProperties.wdl" as PickleVcfProperties
+import "Utils.wdl" as Utils
 
 workflow CrossValidateGqRecalibrator {
     input {
         File train_vcf
         File train_vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         String train_vcf_label
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
@@ -49,6 +53,18 @@ workflow CrossValidateGqRecalibrator {
                 sv_utils_docker=sv_utils_docker
         }
     }
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first(annotations_to_transfer),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
+
     File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
     File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
@@ -223,7 +239,7 @@ workflow CrossValidateGqRecalibrator {
         File benchmark_figure = BenchmarkGqFilter.benchmark_figure
         File variant_properties = BenchmarkGqFilter.variant_properties
         File pickled_original_scores = BenchmarkGqFilter.pickled_original_scores
-        Array[File] pickled_comparison_scores=BenchmarkGqFilter.pickled_comparison_scores
+        Array[File] pickled_comparison_scores = BenchmarkGqFilter.pickled_comparison_scores
         CrossValidationVcfs cross_validation_vcfs = cross_validation_vcfs_
     }
 }

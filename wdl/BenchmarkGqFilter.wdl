@@ -86,21 +86,62 @@ workflow BenchmarkGqFilter {
         "GiB"
     )
 
-    call BenchmarkFilter {
+    # Break up figure generation to speed up wall-clock time and make more resilient to preemption
+    call BenchmarkFilter as BenchmarkPrecisionRecall {
         input:
             data_label=data_label,
             variant_properties=pickled_variant_properties_,
             scores_data_sets=scores_data_sets_,
             truth_overlap_info=truth_overlap_info,
             ped_file=ped_file,
+            make_figure="precision-recall",
+            benchmark_figure_filename="benchmark-precision-recall.pdf",
             benchmark_args=benchmark_args,
             sv_utils_docker=sv_utils_docker,
             num_entries=GetVcfSize.num_entries,
             pickled_files_size=pickled_files_size
     }
 
+    call BenchmarkFilter as BenchmarkInheritance {
+        input:
+            data_label=data_label,
+            variant_properties=pickled_variant_properties_,
+            scores_data_sets=scores_data_sets_,
+            truth_overlap_info=truth_overlap_info,
+            ped_file=ped_file,
+            make_figure="inheritance",
+            benchmark_figure_filename="benchmark-inheritance.pdf",
+            benchmark_args=benchmark_args,
+            sv_utils_docker=sv_utils_docker,
+            num_entries=GetVcfSize.num_entries,
+            pickled_files_size=pickled_files_size
+    }
+
+    call BenchmarkFilter as BenchmarkHardyWeinberg {
+        input:
+            data_label=data_label,
+            variant_properties=pickled_variant_properties_,
+            scores_data_sets=scores_data_sets_,
+            truth_overlap_info=truth_overlap_info,
+            ped_file=ped_file,
+            make_figure="hardy-weinberg",
+            benchmark_figure_filename="benchmark-hardy-weinberg.pdf",
+            benchmark_args=benchmark_args,
+            sv_utils_docker=sv_utils_docker,
+            num_entries=GetVcfSize.num_entries,
+            pickled_files_size=pickled_files_size
+    }
+
+    call ConcatBenchmarkPdfs {
+        input:
+            input_pdfs=[BenchmarkPrecisionRecall.benchmark_figure,
+                        BenchmarkInheritance.benchmark_figure,
+                        BenchmarkHardyWeinberg.benchmark_figure],
+            concat_pdfs_docker=sv_utils_docker
+    }
+
     output {
-        File benchmark_figure = BenchmarkFilter.benchmark_figure
+        File benchmark_figure = ConcatBenchmarkPdfs.benchmark_figure
         File variant_properties=pickled_variant_properties_
         File pickled_original_scores=pickled_original_scores_
         Array[File] pickled_comparison_scores=pickled_comparison_scores_
@@ -132,6 +173,8 @@ task BenchmarkFilter {
         Array[PickledScoresDataSet] scores_data_sets
         File truth_overlap_info
         File ped_file
+        String make_figure
+        String benchmark_figure_filename = "quality-benchmark.pdf"
         Array[String] benchmark_args = []
         String sv_utils_docker
         Int num_entries
@@ -139,14 +182,13 @@ task BenchmarkFilter {
     }
 
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
-    Int disk_gb = round(1000 + pickled_files_size)
+    Int disk_gb = round(100 + pickled_files_size)
 
-    Float mem_scale_vcf_entries = "2.5e-8"
+    Float mem_scale_vcf_entries = "0.75e-8"
     Float mem_gb_overhead = 2.0
-    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries
+    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries * (1 + length(scores_data_sets))
 
     String scores_data_json = "scores_data.json"
-    String benchmark_figure_filename = "quality-benchmark.pdf"
 
     runtime {
         docker: sv_utils_docker
@@ -191,7 +233,38 @@ ____EoF
             --ped-file ~{ped_file} \
             --scores-data-json ~{scores_data_json} \
             --figure-save-file ~{benchmark_figure_filename} \
+            --make-figure ~{make_figure} \
             ~{sep=' ' benchmark_args}
+    >>>
+
+    output {
+        File benchmark_figure = benchmark_figure_filename
+    }
+}
+
+task ConcatBenchmarkPdfs {
+    input {
+        Array[String] input_pdfs
+        String concat_pdfs_docker
+        String benchmark_figure_filename = "quality-benchmark.pdf"
+    }
+
+    Float mem_gb = 2.0
+    Int disk_gb = round(100 + 2 * size(input_pdfs, "GiB"))
+
+    runtime {
+        docker: concat_pdfs_docker
+        cpu: 1
+        preemptible: 1
+        max_retries: 1
+        memory: mem_gb + " GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite  -dCompatibilityLevel=1.4 -dPDFSETTINGS=/default -r150 \
+            -sOutputFile="~{benchmark_figure_filename}" \
+            ~{sep=' ' input_pdfs}
     >>>
 
     output {

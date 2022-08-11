@@ -2,30 +2,29 @@
   "BenchmarkGqFilter.data_label":
     "HGDP and HGSV",
   "BenchmarkGqFilter.original_scores": {
-    "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-PickleTrainScores/PickleVcfProperties/65c4a46a-805e-47fa-9fea-43352fcadee5/call-ReadAndPickleProperties/attempt-2/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2",
     "label": "original",
-    "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
-    "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-StandardizeVcfForGatk/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+    "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
+    "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
     "property": "gq",
-    "passing_score": 1
+    "passing_score": 1,
+    "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2"
   },
   "BenchmarkGqFilter.comparison_scores": [
     {
       "label": "recalibrated",
-      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-DirectGqRecalibrator/RecalibrateGq/f6103cc2-6dbb-4d0a-bd00-bad7f456d19e/call-RecalibrateGqTask/attempt-2/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz",
-      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-DirectGqRecalibrator/RecalibrateGq/f6103cc2-6dbb-4d0a-bd00-bad7f456d19e/call-RecalibrateGqTask/attempt-2/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
       "property": "sl",
       "passing_score": 0,
-      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-BenchmarkGqFilter/BenchmarkGqFilter/081ac44f-a3be-463d-a16c-3ce16284e123/call-PickleComparisonScores/shard-0/PickleVcfProperties/568567df-96b3-42a4-8f15-42257b326b2e/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_sl.pickle.bz2"
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_sl.pickle.bz2"
     },
     {
       "label": "cross-validated",
-      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
-      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_cross_validated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_cross_validated.vcf.gz.tbi",
       "property": "sl",
       "passing_score": 0,
-      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-BenchmarkGqFilter/BenchmarkGqFilter/081ac44f-a3be-463d-a16c-3ce16284e123/call-PickleComparisonScores/shard-1/PickleVcfProperties/72c16fb3-ac0b-4b10-966b-027dcadb67e4/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2",
-      "label": "cross-validated"
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/hgdp_and_hgsv.cleaned_fixed_cross_validated_sl.pickle.bz2"
     },
     {
       "label": "Xuefang",
@@ -33,12 +32,12 @@
       "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
       "property": "gq",
       "passing_score": 0,
-      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-BenchmarkGqFilter/BenchmarkGqFilter/081ac44f-a3be-463d-a16c-3ce16284e123/call-PickleComparisonScores/shard-2/PickleVcfProperties/3301cc94-021b-44c1-9fa0-88cb7925a5ee/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2_gq.pickle.bz2"
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2_gq.pickle.bz2"
     },
     {
       "label": "previous x-validated",
-      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
-      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
       "property": "sl",
       "passing_score": 0,
       "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2"
@@ -47,9 +46,9 @@
   "BenchmarkGqFilter.benchmark_args":
     [],
   "BenchmarkGqFilter.truth_overlap_info":
-    "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-TrainGqRecalibrator/TrainGqRecalibrator/cae8cc9d-5446-4173-8016-8e577ef0a9f2/call-GetTruthOverlap/GetTruthOverlap/882f2b92-6e0f-46b9-a2e3-c8bc3cb9dc42/call-GetTruthOverlapTask/truth_overlap.json",
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-08_fix-genome-track-overlaps/truth_overlap.json",
   "BenchmarkGqFilter.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
   "BenchmarkGqFilter.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "BenchmarkGqFilter.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
-  "BenchmarkGqFilter.pickled_variant_properties": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-PickleVariantData/PickleVcfProperties/28f2f854-04e3-4952-9cb0-5ea1727ee02c/call-ReadAndPickleProperties/attempt-2/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned_fixed_svtype svlen gt.pickle.bz2"
+  "BenchmarkGqFilter.pickled_variant_properties": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_svtype_svlen_ac.pickle.bz2"
 }

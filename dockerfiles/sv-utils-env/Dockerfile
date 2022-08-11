@@ -6,11 +6,11 @@ ARG CONDA_ENV_NAME="gatk-sv"
 ############# get python environment and add to it
 FROM $PYTHON_VIRTUAL_ENV_IMAGE as python_virtual_env
 
-# install any build dependencies
+# install any build dependencies, plus ghostscript (needed for merging PDFs)
 ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-install-recommends $BUILD_DEPS
+    apt-get -qqy install --no-install-recommends $BUILD_DEPS ghostscript
 
 # install python packages
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda \

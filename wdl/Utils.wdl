@@ -441,3 +441,50 @@ task MaxInts {
         disks: "local-disk 10 HDD"
     }
 }
+
+
+task TransferVcfAnnotations {
+  input {
+    File vcf_to_annotate
+    File vcf_to_annotate_index
+    File vcf_with_annotations
+    File vcf_with_annotations_index
+    Array[String] annotations_to_transfer
+    String samtools_cloud_docker
+    String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
+  }
+
+  parameter_meta {
+    vcf_to_annotate: {
+      localization_optional: true
+    }
+    vcf_with_annotations: {
+      localization_optional: true
+    }
+  }
+
+  Int disk_gb = round(100 + size([vcf_to_annotate, vcf_to_annotate_index,
+                                 vcf_with_annotations, vcf_with_annotations_index], "GiB"))
+
+  runtime {
+      docker: samtools_cloud_docker
+      cpu: 1
+      preemptible: 3
+      max_retries: 1
+      memory: "2 GiB"
+      disks: "local-disk 10 HDD"
+  }
+
+  command <<<
+    bcftools annotate \
+      -a ~{vcf_with_annotations} \
+      -c ~{sep=',' annotations_to_transfer} \
+      -Oz -o ~{output_file_name} \
+      ~{vcf_to_annotate}
+  >>>
+
+  output {
+    File annotated_vcf = output_file_name
+    File annotated_vcf_index = output_file_name + ".tbi"
+  }
+}

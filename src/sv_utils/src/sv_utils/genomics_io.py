@@ -8,7 +8,7 @@ import warnings
 from enum import Enum
 from types import MappingProxyType
 from typing import Text, Union, Tuple, Mapping, Optional, Any, Dict, Callable, Sequence, List, Collection, ValuesView, \
-    Iterator, Set, Iterable
+    Iterator, Set, Iterable, TypeVar
 import numpy
 import pandas
 import pandas.core.dtypes.base
@@ -557,6 +557,21 @@ def _literal_eval(val: Any) -> Any:
     return val if isinstance(val, (float, int)) \
         else val if (isinstance(val, str) and not (val.startswith('(') and val.endswith(')'))) \
         else ast.literal_eval(val)
+
+
+PandasType = TypeVar("PandasType", pandas.Series, pandas.DataFrame)
+
+
+def make_nullable(pandas_obj: PandasType) -> PandasType:
+    if isinstance(pandas_obj, pandas.Series):
+        return pandas_obj.astype(IntPropertyCollator.make_nullable_dtype(pandas_obj.dtype))
+    else:
+        return pandas_obj.astype(
+            {
+                col_name: IntPropertyCollator.make_nullable_dtype(col_dtype)
+                for col_name, col_dtype in pandas_obj.dtypes.items()
+            }
+        )
 
 
 def compress_types(
