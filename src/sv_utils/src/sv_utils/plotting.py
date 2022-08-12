@@ -458,6 +458,7 @@ def hist2d(
         if yscale == "log":
             y_edges = 10 ** y_edges
 
+        ax.grid(False)
         mesh = ax.pcolormesh(
             x_edges, y_edges, hist_mat, norm=colors.LogNorm() if zscale == "log" else colors.Normalize(),
             cmap=cmap, edgecolors="face"
@@ -467,7 +468,7 @@ def hist2d(
         mesh = None
 
     if not isinstance(cmap, matplotlib.colors.Colormap):
-        cmap = getattr(pyplot.cm, cmap)
+        cmap = getattr(pyplot.cm, cmap).copy()
     cmap.set_bad(mask_color)
     if xlim is None and len(x_edges) > 0:
         xlim = (min(x_edges[x_edges > 0]), max(x_edges[x_edges > 0])) if xscale == "log" else (x_edges[0], x_edges[-1])

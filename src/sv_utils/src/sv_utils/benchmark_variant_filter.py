@@ -3,9 +3,6 @@ import sys
 import datetime
 import argparse
 import json
-from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar,\
-                   Sequence, Container
-
 import numpy
 import scipy
 import pandas
@@ -15,6 +12,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 from sv_utils import common, plotting, genomics_io, pedigree_tools, get_truth_overlap
 from sv_utils.get_truth_overlap \
     import SampleConfidentVariants, ConfidentVariants, PrecisionRecallCurve, SvTypeCutoffSelector
+
+from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar,\
+                   Sequence, Container
 
 
 class Keys:
@@ -57,7 +57,12 @@ class Keys:
     # keys for which figures to make
     precision_recall = "precision-recall"
     inheritance = "inheritance"
+    variants_per_sample = "variants-per-sample"
+    violation_curve = "violation-curve"
     hardy_weinberg = "hardy-weinberg"
+
+
+_all_make_figures = frozenset({Keys.precision_recall, Keys.inheritance, Keys.violation_curve, Keys.hardy_weinberg})
 
 
 class Default:
@@ -75,8 +80,9 @@ class Default:
     use_cn = genomics_io.Default.use_cn
     # calculate and plot only these keys in Mendelian violation curve plots
     plotted_mendelian_violation_trio_types = (Keys.mendelian,)
+    # only make HWE plots for these SV types:
     plotted_hardy_weinberg_categories = frozenset({Keys.non_bnd_types})
-    make_figures = frozenset({Keys.precision_recall, Keys.inheritance, Keys.hardy_weinberg})
+    make_figures = _all_make_figures
 
 
 def log(text: str):
@@ -371,6 +377,11 @@ class ScoresSource:
                 else scores.loc[_ordered_intersection(wanted_variant_ids, scores.index)]
 
 
+def get_dtype_info(dt: type) -> Union[numpy.iinfo, numpy.finfo]:
+    numpy_dt = dt.numpy_dtype if hasattr(dt, "numpy_dtype") else dt
+    return numpy.iinfo(numpy_dt) if numpy.issubdtype(numpy_dt, numpy.integer) else numpy.finfo(numpy_dt)
+
+
 class ScoresDataSet:
     """
     Class to hold data set with scores, metrics, allele counts, and inheritance stats for validation/benchmarking
@@ -386,7 +397,7 @@ class ScoresDataSet:
             vcfs: Union[str, Iterable[str]],
             scores_sources: Mapping[str, ScoresSource],
             label: str,
-            scores: Optional[pandas.Series] = None,
+            scores: Optional[pandas.DataFrame] = None,
             allele_counts: Optional[pandas.DataFrame] = None,
             inheritance_stats: Optional[pandas.DataFrame] = None,
             metrics: Optional[pandas.DataFrame] = None,
@@ -632,64 +643,95 @@ class ScoresDataSet:
                 allele_counts=allele_counts, inheritance_stats=None, metrics=self.metrics, category=self.category
             )
 
+    @staticmethod
+    def _dataframe_to_trio_3d_numpy(
+            truth_data: "TruthData",
+            samples_df: pandas.DataFrame,
+            numpy_dtype: Union[numpy.dtype, type]
+    ) -> (numpy.ndarray, List[str]):
+        """
+        briefly use 3D numpy array instead of pandas DataFrame, because we want to use vectorized reduction along the
+        3rd dimension (individual trios) and pandas provides no way to do this. Switching to numpy gives a big
+        speed-up, and if needed we can move the final results into a pandas DataFrame basically for free
+        Args:
+            truth_data: TruthData
+
+            samples_df:
+            numpy_dtype:
+
+        Returns:
+
+        """
+        sample_ids = set(samples_df.columns)
+        num_variants = samples_df.shape[0]
+        trio_probands = [
+            pedigree_line.proband_id for pedigree_line in truth_data.pedigree_file_info.pedigree_lines
+            if not pedigree_line.any_unknown and all(sample_id in sample_ids for sample_id in pedigree_line.trio_ids)
+        ]
+        num_trios = len(trio_probands)
+        numpy_trios_tensor = numpy.empty((num_variants, num_trios, 3), dtype=numpy.int8)
+        trio_ind = 0
+        null_value = get_dtype_info(numpy_dtype).min  # set null value to the min allowed value for this dtype
+        for pedigree_line in truth_data.pedigree_file_info.pedigree_lines:
+            if pedigree_line.any_unknown or not all(sample_id in sample_ids for sample_id in pedigree_line.trio_ids):
+                continue
+            numpy_trios_tensor[:, trio_ind, 0] = numpy.where(
+                samples_df[pedigree_line.proband_id].isna(), null_value, samples_df[pedigree_line.proband_id]
+            )
+            numpy_trios_tensor[:, trio_ind, 1] = numpy.where(
+                samples_df[pedigree_line.father_id].isna(), null_value, samples_df[pedigree_line.father_id]
+            )
+            numpy_trios_tensor[:, trio_ind, 2] = numpy.where(
+                samples_df[pedigree_line.mother_id].isna(), null_value, samples_df[pedigree_line.mother_id]
+            )
+            trio_ind += 1
+        return numpy_trios_tensor, trio_probands
+
     def _get_trio_categories(
             self,
             truth_data: "TruthData"
-    ) -> Dict[str, List[pandas.Series]]:
+    ) -> Dict[str, pandas.DataFrame]:
         f"""
-        return boolean pandas.Series that indicates whether each trio is
+        return boolean pandas.DataFrame (with variant_ids for index and trio_proband_ids as columns) that indicates
+        whether each trio is
             {Keys.num_trios}: "testable", aka every member is called
             {Keys.de_novo}: testable and inheritance pattern is de-novo
             {Keys.mendelian}: testable and inheritance pattern is mendelian
             {Keys.other}: testable and inheritance pattern is non-mendelian and not de-novo
         """
-        sample_ids = set(self.allele_counts.columns.get_level_values(Keys.sample_id))
-        # get dataframes for each complete trio in the data set, ordered proband, father, mother
-        trio_acs = [
-            self.allele_counts[[pedigree_line.proband_id, pedigree_line.father_id, pedigree_line.mother_id]]
-                .rename(columns={pedigree_line.proband_id: Keys.proband, pedigree_line.father_id: Keys.father,
-                                 pedigree_line.mother_id: Keys.mother})
-            for pedigree_line in truth_data.pedigree_file_info.pedigree_lines
-            if not pedigree_line.any_unknown and all(sample_id in sample_ids for sample_id in pedigree_line.trio_ids)
-        ]
-        # get inheritance stats for each trio
-        testable = [
-            ~trio_ac.isnull().any(axis=1) & (trio_ac > 0).any(axis=1)
-            for trio_ac in trio_acs
-        ]
-        de_novo = [
-            (trio_ac[Keys.proband] > 0) & (trio_ac[Keys.father] == 0) & (trio_ac[Keys.mother] == 0)
-            for trio_ac in trio_acs
-        ]
-        mendelian = [
-            ((trio_ac[Keys.father] // 2 + trio_ac[Keys.mother] // 2) <= trio_ac[Keys.proband]) &
-            (trio_ac[Keys.proband] <= ((trio_ac[Keys.father] > 0).astype(pandas.UInt8Dtype()) +
-                                       (trio_ac[Keys.mother] > 0).astype(pandas.UInt8Dtype())))
-            for trio_ac in trio_acs
-        ]
-        other_non_mendelian = [
-            ~(trio_mendelain | trio_de_novo)
-            for trio_mendelain, trio_de_novo in zip(mendelian, de_novo)
-        ]
+        # briefly use 3D numpy array instead of pandas DataFrame, because we want to use vectorized reduction along the
+        # 3rd dimension (individual trios) and pandas provides no way to do this. Switching to numpy gives a big
+        # speed-up, and we can move the final results into a pandas DataFrame basically for free
+        # form num_variants x num_trios x 3 tensor of allele counts, reserving -1 for no-calls
+        trio_acs, trio_probands = ScoresDataSet._dataframe_to_trio_3d_numpy(
+            truth_data=truth_data, samples_df=self.allele_counts, numpy_dtype=numpy.int8
+        )
 
-        # require each type of trio to also be testable
-        def _and_lists(_a: List[pandas.Series], _b: List[pandas.Series]) -> List[pandas.Series]:
-            return [_s_a & _s_b for _s_a, _s_b in zip(_a, _b)]
-
-        # noinspection PyTypeChecker
-        trio_categories = {
-            Keys.num_trios: testable,
-            Keys.de_novo: _and_lists(testable, de_novo),
-            Keys.mendelian: _and_lists(testable, mendelian),
-            Keys.other: _and_lists(testable, other_non_mendelian)
+        # testable if all members of a trio are defined, and at least one is called
+        testable = numpy.logical_and(
+            numpy.logical_and.reduce(trio_acs >= 0, axis=2),
+            numpy.logical_or.reduce(trio_acs > 0, axis=2)
+        )
+        # denovo if proband is called non-ref and parents are both called ref
+        de_novo = numpy.logical_and(
+            trio_acs[:, :, 0] > 0,
+            numpy.logical_and(trio_acs[:, :, 1] == 0, trio_acs[:, :, 2] == 0)
+        )
+        # mendelian if proband has neither too low nor too high allele count based on parents
+        mendelian = numpy.logical_and(
+            testable,
+            numpy.logical_and(
+                trio_acs[:, :, 1] // 2 + trio_acs[:, :, 2] // 2 <= trio_acs[:, :, 0],
+                trio_acs[:, :, 0] <= (trio_acs[:, :, 1] > 0) + (trio_acs[:, :, 2] > 0)
+            )
+        )
+        other_non_mendelian = numpy.logical_and(testable, numpy.logical_not(numpy.logical_or(de_novo, mendelian)))
+        return {
+            Keys.num_trios: pandas.DataFrame(testable, columns=trio_probands, index=self.allele_counts.index),
+            Keys.de_novo: pandas.DataFrame(de_novo, columns=trio_probands, index=self.allele_counts.index),
+            Keys.mendelian: pandas.DataFrame(mendelian, columns=trio_probands, index=self.allele_counts.index),
+            Keys.other: pandas.DataFrame(other_non_mendelian, columns=trio_probands, index=self.allele_counts.index)
         }
-        if any(len(trio_categories[Keys.num_trios]) != len(trio_categories[key])
-               for key in (Keys.de_novo, Keys.mendelian, Keys.other)):
-            lengths_str = ", ".join(f"{key}:{len(trio_categories[key])}"
-                                    for key in (Keys.num_trios, Keys.de_novo, Keys.mendelian, Keys.other))
-            raise ValueError(f"Unequal trio_categories lengths: {lengths_str}")
-
-        return trio_categories
 
     def get_inheritance_stats(
         self,
@@ -699,11 +741,8 @@ class ScoresDataSet:
             return self  # can't calculate anything
 
         # sum across trios and put into DataFrame
-        def _sum_list(_l: List[pandas.Series]) -> pandas.Series:
-            return sum(_s.astype(numpy.int64) for _s in _l)
-
         self.inheritance_stats = pandas.DataFrame(
-            {trio_category: _sum_list(trio_is_category)
+            {trio_category: trio_is_category.sum(axis=1)
              for trio_category, trio_is_category in self._get_trio_categories(truth_data).items()}
         )
         return self
@@ -734,36 +773,36 @@ class ScoresDataSet:
         """
         if truth_data.pedigree_file_info is None:
             return None
-        sample_ids = set(self.allele_counts.columns.get_level_values(Keys.sample_id))
-        # min_scores is a list of pandas.Series. Each element of list corresponds to a trio
-        #   the Series for that trio is the minimum score across the trio for each variant
-        min_scores = [
-            self.scores[[pedigree_line.proband_id, pedigree_line.father_id, pedigree_line.mother_id]]
-                .min(axis=1)
-            for pedigree_line in truth_data.pedigree_file_info.pedigree_lines
-            if not pedigree_line.any_unknown and all(sample_id in sample_ids for sample_id in pedigree_line.trio_ids)
-        ]
+        column_infos = [get_dtype_info(dt) for dt in set(self.scores.dtypes)]
+        min_value = min(column_info.min for column_info in column_infos)
+        min_type = genomics_io.IntPropertyCollator.range_to_min_int_dtype(
+            min_value=min_value, max_value=max(column_info.max for column_info in column_infos), nullable=False
+        )
+        # noinspection PyArgumentList
+        min_scores = ScoresDataSet._dataframe_to_trio_3d_numpy(
+            truth_data=truth_data, samples_df=self.scores, numpy_dtype=min_type
+        )[0].min(axis=2)
 
-        def _add_value_counts(value_counts_list: List[pandas.Series]) -> pandas.Series:
-            all_value_counts = value_counts_list[0]
-            for trio_value_counts in value_counts_list[1:]:
-                all_value_counts = all_value_counts.add(trio_value_counts, fill_value=0)
-            return all_value_counts
+        def _numpy_values_to_value_counts(_values: numpy.ndarray) -> pandas.Series:
+            if min_value >= 0:
+                _value_counts = pandas.Series(numpy.bincount(_values))
+                return _value_counts.loc[_value_counts > 0]
+            else:
+                return pandas.Series(_values).value_counts().sort_index()
 
         return MendelianViolationCurve.from_trio_category_scores(
             {
-                category: _add_value_counts(
-                    [min_trio_scores[trio_is_category].value_counts()
-                     for min_trio_scores, trio_is_category in zip(min_scores, is_category)]
-                ).sort_index()
-                for category, is_category in self._get_trio_categories(truth_data).items()
+                category: _numpy_values_to_value_counts(
+                    min_scores.ravel().compress(trios_are_category.values.ravel())
+                )
+                for category, trios_are_category in self._get_trio_categories(truth_data).items()
             },
             plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
         )
 
     @staticmethod
     def get_good_bad_thresholds(
-            confident_variants: SampleConfidentVariants, quality_scores: pandas.Series
+            confident_variants: SampleConfidentVariants, quality_scores: pandas.DataFrame
     ) -> (numpy.ndarray, numpy.ndarray):
         """ Return good quality_scores and bad_quality scores, by getting quality scores of confident variants """
         # noinspection PyTypeChecker
@@ -1153,36 +1192,15 @@ def get_mendelian_stats_and_variants_per_sample(
         truth_data: TruthData,
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
-        max_f1_thresholds: Optional[Mapping[str, float]],
+        max_f1_thresholds: Mapping[str, float],
         plot_max_f1: bool,
         replot_unfiltered: bool,
-        plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types
-) -> (Optional[Dict[str, pandas.DataFrame]], Dict[str, pandas.DataFrame],
-      Optional[Dict[str, Dict[str, MendelianViolationCurve]]]):
-    if max_f1_thresholds is None:
-        if plot_max_f1:
-            log("get max-f1 thresholds ...")
-            # need to calculate the max_f1_thresholds
-            # in this case, only need the non-bnd PRC, because we just want a point off of it
-            precision_recall_curves = get_precision_recall_curves(
-                truth_data=truth_data, scores_data_sets=scores_data_sets,
-                sv_selectors={Keys.all_variant_types: sv_selectors[Keys.non_bnd_types]}
-            )
-            # get the overall best thresholds
-            max_f1_thresholds = {
-                data_set_label: precision_recall_curve.get_point_at_max_f_score().name
-                for data_set_label, precision_recall_curve in precision_recall_curves.pop(Keys.all_variant_types).items()
-            }
-            log("COMPLETE: get max-f1 thresholds")
-        else:
-            max_f1_thresholds = {}
-
+) -> (Optional[Dict[str, pandas.DataFrame]], Dict[str, pandas.DataFrame]):
     log("get_mendelian_stats_and_variants_per_sample() ...")
     no_inheritance_data = truth_data.pedigree_file_info is None
 
     inheritance_stats_dict = {}
     variants_per_sample_dict = {}
-    mendelian_violation_curves_dict = {category: {} for category, __ in iter_categories(sv_selectors)}
     calculate_unfiltered = True
     for data_set in scores_data_sets:
         for filter_label, filter_score in {
@@ -1200,15 +1218,8 @@ def get_mendelian_stats_and_variants_per_sample(
                 log(f"\tselect_variants: {category} ...")
                 selected_filtered_data_set = filtered_data_set.select_category(category=category,
                                                                                sv_type_cutoff_selector=selector)
-                if filter_label == Keys.unfiltered:
-                    log("\tget violation curve ...")
-                    violation_curve = selected_filtered_data_set.get_mendelian_violation_curve(
-                        truth_data=truth_data, plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
-                    )
-                    if violation_curve is not None:
-                        mendelian_violation_curves_dict[category][data_set.label] = violation_curve
-                    if not calculate_unfiltered:
-                        continue
+                if filter_label == Keys.unfiltered and not calculate_unfiltered:
+                    continue
 
                 log("\tsum inheritance stats ...")
                 inheritance_stats_dict[(data_set.label, filter_label, category)] = None if no_inheritance_data \
@@ -1255,7 +1266,37 @@ def get_mendelian_stats_and_variants_per_sample(
         }
     )
     log("COMPLETE: get_mendelian_inheritance_stats_and_variants_per_sample()")
-    return mendelian_inheritance_stats, variants_per_sample, mendelian_violation_curves_dict
+    return mendelian_inheritance_stats, variants_per_sample
+
+
+def get_mendelian_violation_curves(
+        truth_data: TruthData,
+        scores_data_sets: Collection[ScoresDataSet],
+        sv_selectors: Mapping[str, SvTypeCutoffSelector],
+        plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types
+) -> Optional[Dict[str, Dict[str, MendelianViolationCurve]]]:
+    if truth_data.pedigree_file_info is None:
+        return None
+    log("get_mendelian_violation_curves() ...")
+
+    mendelian_violation_curves_dict = {category: {} for category, __ in iter_categories(sv_selectors)}
+    for data_set in scores_data_sets:
+        log(f"get_inheritance_stats({data_set.label}) ...")
+        filtered_data_set = data_set.get_inheritance_stats(truth_data=truth_data)
+
+        for category, selector in iter_categories(sv_selectors):
+            log(f"\tselect_variants: {category} ...")
+            selected_filtered_data_set = filtered_data_set.select_category(category=category,
+                                                                           sv_type_cutoff_selector=selector)
+            log("\tget violation curve ...")
+            violation_curve = selected_filtered_data_set.get_mendelian_violation_curve(
+                truth_data=truth_data, plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
+            )
+            if violation_curve is not None:
+                mendelian_violation_curves_dict[category][data_set.label] = violation_curve
+
+    log("COMPLETE: get_mendelian_violation_curves()")
+    return mendelian_violation_curves_dict
 
 
 def scale_inheritance_stats(
@@ -1334,8 +1375,8 @@ def plot_mendelian_violation_curves(
         plot_max_f1: bool = Default.plot_max_f1,
         plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types
 ):
-    min_x = numpy.inf
-    max_x = -numpy.inf
+    min_x = None
+    max_x = None
     max_y = 0
     ax.plot([], [])  # make empty line with no legend label, to sync colors across plot types
 
@@ -1363,6 +1404,10 @@ def plot_mendelian_violation_curves(
             else:
                 return mendelian_violation_curve.proportion_other_bad
 
+        if min_x is None:
+            dt_info = get_dtype_info(mendelian_violation_curve.thresholds.dtype)
+            min_x = dt_info.max  # set these values to totally wrong side of things, so final result is tight
+            max_x = dt_info.min  # on the data
         min_x = mendelian_violation_curve.thresholds.min(initial=min_x)
         max_x = mendelian_violation_curve.thresholds.max(initial=max_x)
         best_threshold = best_thresholds[label]
@@ -1477,14 +1522,12 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         tick_labelrotation: float = Default.tick_labelrotation,
         plot_max_f1: bool = Default.plot_max_f1,
         replot_unfiltered: bool = Default.replot_unfiltered,
-        plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types,
         pdf_writer: Optional[PdfPages] = None
-) -> (Optional[pyplot.Figure], Optional[pyplot.Figure], pyplot.Figure):
-    mendelian_inheritance_stats, variants_per_sample, mendelian_violation_curves = \
+) -> (Optional[pyplot.Figure], Optional[pyplot.Figure]):
+    mendelian_inheritance_stats, variants_per_sample = \
         get_mendelian_stats_and_variants_per_sample(
             truth_data=truth_data, scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
             max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1, replot_unfiltered=replot_unfiltered,
-            plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
         )
 
     log("get_mendelian_inheritance_and_variants_per_sample_figures() ...")
@@ -1497,27 +1540,15 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         mendelian_inheritance_fig, mendelian_inheritance_gridspec, __ = make_fig_and_gridspec(
             num_axes=len(mendelian_inheritance_stats) + 1, num_rows=num_inheritance_stats_rows
         )
-        mendelian_violation_fig, mendelian_violation_gridspec, __ = make_fig_and_gridspec(
-            num_axes=len(mendelian_violation_curves) + 1, num_rows=num_inheritance_stats_rows
-        )
     else:
         mendelian_inheritance_fig = None
         mendelian_inheritance_gridspec = None
-        mendelian_violation_fig = None
-        mendelian_violation_gridspec = None
 
     variants_per_sample_fig, variants_per_sample_gridspec, num_columns = make_fig_and_gridspec(
         num_axes=len(variants_per_sample) + 1, num_rows=num_inheritance_stats_rows
     )
 
-    # get the default thresholds
-    default_thresholds = {
-        data_set.label: data_set.passing_score
-        for data_set in scores_data_sets
-    }
-
     row, column = 0, 0
-    violation_curve_axes = []
     for sv_category, category_inheritance_stats in mendelian_inheritance_stats.items():
         if have_inheritance_data:
             inheritance_ax = mendelian_inheritance_fig.add_subplot(mendelian_inheritance_gridspec[row, column])
@@ -1525,15 +1556,6 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
                 inheritance_ax, category_inheritance_stats, title=sv_category, title_font_size=title_font_size,
                 label_font_size=label_font_size, tick_labelrotation=tick_labelrotation, tick_font_size=tick_font_size,
                 plot_max_f1=plot_max_f1
-            )
-            violation_curve_ax = mendelian_violation_fig.add_subplot(mendelian_violation_gridspec[row, column])
-            violation_curve_axes.append(violation_curve_ax)
-            category_violation_curves = mendelian_violation_curves[sv_category]
-            plot_mendelian_violation_curves(
-                violation_curve_ax, category_violation_curves, title_str=sv_category, title_font_size=title_font_size,
-                label_font_size=label_font_size, tick_font_size=tick_font_size, plot_max_f1=plot_max_f1,
-                default_thresholds=default_thresholds, best_thresholds=best_thresholds,
-                plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
             )
         variants_per_sample_ax = variants_per_sample_fig.add_subplot(variants_per_sample_gridspec[row, column])
         category_variants_per_sample = variants_per_sample[sv_category]
@@ -1556,13 +1578,6 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
             line_labels=filter_line_labels, markers=[],
             legend_font_size=legend_font_size
         )
-        plotting.sync_axes(violation_curve_axes, sync_x=True, sync_y=True, zoom_to_fit_all=True)
-        _draw_extra_legend_axis(
-            mendelian_violation_fig, mendelian_violation_gridspec, row, column,
-            line_labels=mendelian_violation_curves[Keys.all_variant_types].keys(),
-            markers=[("ks", "default"), ("ko", "f1-max")] if plot_max_f1 else [("ks", "default")],
-            legend_font_size=legend_font_size, advance_color_cycle=1
-        )
     _draw_extra_legend_axis(
         variants_per_sample_fig, variants_per_sample_gridspec, row, column,
         line_labels=filter_line_labels, markers=[],
@@ -1572,11 +1587,76 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
     log("COMPLETE: get_mendelian_inheritance_and_variants_per_sample_figures()")
     if pdf_writer is not None:
         pdf_writer.savefig(mendelian_inheritance_fig, bbox_inches="tight")
-        pdf_writer.savefig(mendelian_violation_fig, bbox_inches="tight")
         pdf_writer.savefig(variants_per_sample_fig, bbox_inches="tight")
-        return None, None, None
+        return None, None
     else:
-        return mendelian_inheritance_fig, mendelian_violation_fig, variants_per_sample_fig
+        return mendelian_inheritance_fig, variants_per_sample_fig
+
+
+def get_mendelian_violation_curve_figure(
+        truth_data: TruthData,
+        scores_data_sets: Collection[ScoresDataSet],
+        sv_selectors: Mapping[str, SvTypeCutoffSelector],
+        best_thresholds: Optional[Mapping[str, float]] = None,
+        num_inheritance_stats_rows: int = Default.num_inheritance_stats_rows,
+        title_font_size: int = Default.title_font_size,
+        label_font_size: int = Default.label_font_size,
+        legend_font_size: int = Default.legend_font_size,
+        tick_font_size: int = Default.tick_font_size,
+        plot_max_f1: bool = Default.plot_max_f1,
+        plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types,
+        pdf_writer: Optional[PdfPages] = None
+) -> Optional[pyplot.Figure]:
+    mendelian_violation_curves = get_mendelian_violation_curves(
+        truth_data=truth_data, scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
+        plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
+    )
+
+    log("get_mendelian_violation_curve_figure() ...")
+    if mendelian_violation_curves is None:
+        # no data to plot
+        return None
+
+    mendelian_violation_fig, mendelian_violation_gridspec, num_columns = make_fig_and_gridspec(
+        num_axes=len(mendelian_violation_curves) + 1, num_rows=num_inheritance_stats_rows
+    )
+
+    # get the default thresholds
+    default_thresholds = {
+        data_set.label: data_set.passing_score
+        for data_set in scores_data_sets
+    }
+
+    row, column = 0, 0
+    violation_curve_axes = []
+    for sv_category, category_violation_curves in mendelian_violation_curves.items():
+        violation_curve_ax = mendelian_violation_fig.add_subplot(mendelian_violation_gridspec[row, column])
+        violation_curve_axes.append(violation_curve_ax)
+        category_violation_curves = mendelian_violation_curves[sv_category]
+        plot_mendelian_violation_curves(
+            violation_curve_ax, category_violation_curves, title_str=sv_category, title_font_size=title_font_size,
+            label_font_size=label_font_size, tick_font_size=tick_font_size, plot_max_f1=plot_max_f1,
+            default_thresholds=default_thresholds, best_thresholds=best_thresholds,
+            plotted_mendelian_violation_keys=plotted_mendelian_violation_keys
+        )
+        column += 1
+        if column == num_columns:
+            row, column = row + 1, 0
+
+    plotting.sync_axes(violation_curve_axes, sync_x=True, sync_y=True, zoom_to_fit_all=True)
+    _draw_extra_legend_axis(
+        mendelian_violation_fig, mendelian_violation_gridspec, row, column,
+        line_labels=mendelian_violation_curves[Keys.all_variant_types].keys(),
+        markers=[("ks", "default"), ("ko", "f1-max")] if plot_max_f1 else [("ks", "default")],
+        legend_font_size=legend_font_size, advance_color_cycle=1
+    )
+
+    log("COMPLETE: get_mendelian_violation_curve_figure()")
+    if pdf_writer is not None:
+        pdf_writer.savefig(mendelian_violation_fig, bbox_inches="tight")
+        return None
+    else:
+        return mendelian_violation_fig
 
 
 def get_hardy_weinberg_figures(
@@ -1730,10 +1810,27 @@ def get_filter_quality_figures(
             pdf_writer=pdf_writer
         )
     else:
-        precision_recall_fig, best_thresholds = None, None
+        precision_recall_fig = None
+        if plot_max_f1:
+            log("get max-f1 thresholds ...")
+            # need to calculate the max_f1_thresholds
+            # in this case, only need the non-bnd PRC, because we just want a point off of it
+            precision_recall_curves = get_precision_recall_curves(
+                truth_data=truth_data, scores_data_sets=scores_data_sets,
+                sv_selectors={Keys.all_variant_types: sv_selectors[Keys.non_bnd_types]}
+            )
+            # get the overall best thresholds
+            best_thresholds = {
+                data_set_label: precision_recall_curve.get_point_at_max_f_score().name
+                for data_set_label, precision_recall_curve in
+                precision_recall_curves.pop(Keys.all_variant_types).items()
+            }
+            log("COMPLETE: get max-f1 thresholds")
+        else:
+            best_thresholds = {}
 
     if Keys.inheritance in make_figures:
-        mendelian_inheritance_fig, mendelian_violation_fig, variants_per_sample_fig = \
+        mendelian_inheritance_fig, variants_per_sample_fig = \
             get_mendelian_inheritance_and_variants_per_sample_figures(
                 truth_data=truth_data,
                 scores_data_sets=scores_data_sets,
@@ -1746,11 +1843,28 @@ def get_filter_quality_figures(
                 tick_font_size=tick_font_size,
                 tick_labelrotation=tick_labelrotation,
                 plot_max_f1=plot_max_f1,
+                pdf_writer=pdf_writer
+            )
+    else:
+        mendelian_inheritance_fig, variants_per_sample_fig = None, None
+
+    if Keys.violation_curve in make_figures:
+        mendelian_violation_curve_fig = get_mendelian_violation_curve_figure(
+                truth_data=truth_data,
+                scores_data_sets=scores_data_sets,
+                sv_selectors=sv_selectors,
+                best_thresholds=best_thresholds,
+                num_inheritance_stats_rows=num_inheritance_stats_rows,
+                title_font_size=title_font_size,
+                label_font_size=label_font_size,
+                legend_font_size=legend_font_size,
+                tick_font_size=tick_font_size,
+                plot_max_f1=plot_max_f1,
                 plotted_mendelian_violation_keys=plotted_mendelian_violation_keys,
                 pdf_writer=pdf_writer
             )
     else:
-        mendelian_inheritance_fig, mendelian_violation_fig, variants_per_sample_fig = None, None, None
+        mendelian_violation_curve_fig = None
 
     if Keys.hardy_weinberg in make_figures:
         hardy_weinberg_figs = get_hardy_weinberg_figures(
@@ -1765,7 +1879,7 @@ def get_filter_quality_figures(
     else:
         hardy_weinberg_figs = (None,)
 
-    return precision_recall_fig, mendelian_inheritance_fig, mendelian_violation_fig, variants_per_sample_fig, \
+    return precision_recall_fig, mendelian_inheritance_fig, mendelian_violation_curve_fig, variants_per_sample_fig, \
            *hardy_weinberg_figs
 
 
@@ -1827,9 +1941,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              f"{Keys.passing_score}: minimum score considered passing by default")
     parser.add_argument("--figure-save-file", "-f", type=str, required=True, help="path to save output .pdf")
     parser.add_argument("--plot-max-f1", action="store_true", help="Add point at maximum f1 score to plots")
-    all_figure_types = list(Default.make_figures)
     # noinspection PyTypeChecker
-    parser.add_argument("--make-figures", choices=all_figure_types, default=all_figure_types, type=str,
+    parser.add_argument("--make-figures", choices=_all_make_figures, default=Default.make_figures, type=str,
                         action=SplitArgs, help="Comma-separated list of which figures to make.")
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
