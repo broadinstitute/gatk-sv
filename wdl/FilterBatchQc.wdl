@@ -13,12 +13,8 @@ workflow FilterBatchQc {
     File? merged_pesr_vcf
     String batch
     File ped_file
-    Array[File]? thousand_genomes_benchmark_calls
-    Array[File]? hgsv_benchmark_calls
-    Array[File]? asc_benchmark_calls
-    File? sanders_2015_tarball
-    File? collins_2017_tarball
-    File? werling_2018_tarball
+    Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
+    Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
 
     File contig_list
     Int? random_seed
@@ -94,17 +90,13 @@ workflow FilterBatchQc {
     if (defined(vcfs_array[i])) {
       call vcf_qc.MainVcfQc as VcfQc {
         input:
-          vcf = select_first([vcfs_array[i]]),
+          vcfs = [select_first([vcfs_array[i]])],
           ped_file=SubsetPedFile.ped_subset_file,
           prefix="${batch}.${algorithms[i]}_FilterBatch_filtered_vcf",
-          sv_per_shard=10000,
-          samples_per_shard=100,
-          thousand_genomes_benchmark_calls=thousand_genomes_benchmark_calls,
-          hgsv_benchmark_calls=hgsv_benchmark_calls,
-          asc_benchmark_calls=asc_benchmark_calls,
-          sanders_2015_tarball=sanders_2015_tarball,
-          collins_2017_tarball=collins_2017_tarball,
-          werling_2018_tarball=werling_2018_tarball,
+          sv_per_shard=2500,
+          samples_per_shard=600,
+          site_level_comparison_datasets=site_level_comparison_datasets,
+          sample_level_comparison_datasets=sample_level_comparison_datasets,
           primary_contigs_fai=contig_list,
           random_seed=random_seed,
           max_gq=max_gq_,
