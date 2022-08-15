@@ -1,0 +1,19 @@
+{
+  "MainVcfQc.primary_contigs_fai": "${workspace.primary_contigs_fai}",
+
+  "MainVcfQc.thousand_genomes_benchmark_calls": {{ reference_resources.thousand_genomes_benchmark_calls | tojson }},
+
+  "MainVcfQc.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "MainVcfQc.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "MainVcfQc.sv_pipeline_qc_docker": "${workspace.sv_pipeline_qc_docker}",
+
+  "MainVcfQc.prefix": "${this.sample_set_id}",
+  "MainVcfQc.ped_file": "${workspace.cohort_ped_file}",
+
+  "MainVcfQc.vcfs": "${this.cleaned_vcf}",
+  "MainVcfQc.vcf_idxs": "${this.cleaned_vcf}",
+
+  "MainVcfQc.sv_per_shard": 2500,
+  "MainVcfQc.samples_per_shard": 600
+
+}

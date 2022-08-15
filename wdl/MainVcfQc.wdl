@@ -28,8 +28,9 @@ workflow MainVcfQc {
     Int samples_per_shard
     Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
-    Array[String] contigs
+    File primary_contigs_fai
     Int? random_seed
+    Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -71,6 +72,8 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
+
+  Array[String] contigs = transpose(read_tsv(primary_contigs_fai))[0]
 
   # Restrict to a subset of all samples, if optioned. This can be useful to 
   # exclude outlier samples, or restrict to males/females on X/Y (for example)
@@ -208,6 +211,7 @@ workflow MainVcfQc {
       runtime_attr_override=runtime_override_tar_shard_vid_lists
   }
   
+  Int max_gq_ = select_first([max_gq, 99])
   # Plot per-sample stats
   call PlotQcPerSample {
     input:
@@ -215,6 +219,7 @@ workflow MainVcfQc {
       samples_list=CollectQcVcfwide.samples_list[0],
       per_sample_tarball=TarShardVidLists.vid_lists,
       prefix=prefix,
+      max_gq=max_gq_,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
@@ -229,6 +234,7 @@ workflow MainVcfQc {
         max_trios=max_trios,
         per_sample_tarball=TarShardVidLists.vid_lists,
         prefix=prefix,
+        max_gq=max_gq_,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_plot_qc_per_family
     }
@@ -454,6 +460,7 @@ task PlotQcPerSample {
     File samples_list
     File per_sample_tarball
     String prefix
+    Int max_gq
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -497,7 +504,8 @@ task PlotQcPerSample {
       ~{vcf_stats} \
       ~{samples_list} \
       ~{prefix}_perSample/ \
-      ~{prefix}_perSample_plots/
+      ~{prefix}_perSample_plots/ \
+      --maxgq ~{max_gq}
 
     # Prepare output
     tar -czvf ~{prefix}.plotQC_perSample.tar.gz \
@@ -518,11 +526,13 @@ task PlotQcPerFamily {
     File ped_file
     File per_sample_tarball
     Int max_trios
-    Int? random_seed = 2021
+    Int? random_seed
     String prefix
+    Int max_gq
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
+  Int random_seed_ = select_first([random_seed, 0])
   RuntimeAttr runtime_default = object {
     mem_gb: 7.75,
     disk_gb: 50,
@@ -581,7 +591,7 @@ task PlotQcPerFamily {
         | awk '{ if ($2 != "0" && $2 != "." && \
                      $3 != "0" && $3 != "." && \
                      $4 != "0" && $4 != ".") print $0 }' \
-        | sort -R --random-source <( yes ~{random_seed} ) \
+        | sort -R --random-source <( yes ~{random_seed_} ) \
         > cleaned.shuffled.fam
         awk -v max_trios="~{max_trios}" 'NR <= max_trios' cleaned.shuffled.fam \
         | cat fam_header.txt - \
@@ -599,7 +609,8 @@ task PlotQcPerFamily {
         ~{vcf_stats} \
         cleaned.subset.fam \
         ~{prefix}_perSample/ \
-        ~{prefix}_perFamily_plots/
+        ~{prefix}_perFamily_plots/ \
+        --maxgq ~{max_gq}
 
     else
 
@@ -629,9 +640,10 @@ task PlotQcPerSampleBenchmarking {
     String prefix
     String sv_pipeline_qc_docker
     Int? max_samples = 3000
-    Int? random_seed = 2021
+    Int? random_seed
     RuntimeAttr? runtime_attr_override
   }
+  Int random_seed_ = select_first([random_seed, 0])
   RuntimeAttr runtime_default = object {
     mem_gb: 7.75,
     disk_gb: 50,
@@ -671,7 +683,7 @@ task PlotQcPerSampleBenchmarking {
     if [ $n_samples_all -gt ~{max_samples} ]; then
       echo -e "SUBSETTING TO ~{max_samples} SAMPLES"
       cat all_samples.list \
-      | sort -R --random-source <( yes ~{random_seed} ) \
+      | sort -R --random-source <( yes ~{random_seed_} ) \
       | awk -v max_samples=~{max_samples} '{ if (NR<=max_samples) print }' \
       > ~{prefix}.plotted_samples.list
     else

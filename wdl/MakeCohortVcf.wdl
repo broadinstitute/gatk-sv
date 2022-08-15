@@ -4,7 +4,7 @@ import "CombineBatches.wdl" as Cluster
 import "ResolveComplexVariants.wdl" as ComplexResolve
 import "GenotypeComplexVariants.wdl" as ComplexGenotype
 import "CleanVcf.wdl" as Clean
-import "MasterVcfQc.wdl" as VcfQc
+import "MainVcfQc.wdl" as VcfQc
 
 workflow MakeCohortVcf {
   input {
@@ -455,7 +455,7 @@ workflow MakeCohortVcf {
       runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
   }
 
-  call VcfQc.MasterVcfQc {
+  call VcfQc.MainVcfQc {
     input:
       vcf=CleanVcf.cleaned_vcf,
       vcf_idx=CleanVcf.cleaned_vcf_index,
@@ -481,7 +481,7 @@ workflow MakeCohortVcf {
   output {
     File vcf = CleanVcf.cleaned_vcf
     File vcf_index = CleanVcf.cleaned_vcf_index
-    File vcf_qc = MasterVcfQc.sv_vcf_qc_output
+    File vcf_qc = MainVcfQc.sv_vcf_qc_output
 
     # If merge_intermediate_vcfs enabled
     File? cluster_vcf = CombineBatches.combine_batches_merged_vcf
