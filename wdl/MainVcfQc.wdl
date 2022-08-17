@@ -2,9 +2,6 @@ version 1.0
 
 # Author: Ryan Collins <rlcollins@g.harvard.edu>
 
-# Note: this WDL has been customized specifically for the gnomAD-SV v3 callset
-# Some components of this WDL will not be generalizable for most cohorts
-
 import "ShardedQcCollection.wdl" as ShardedQcCollection
 import "CollectQcPerSample.wdl" as CollectQcPerSample
 import "ShardedCohortBenchmarking.wdl" as CohortExternalBenchmark
@@ -16,7 +13,7 @@ import "Utils.wdl" as Utils
 # an SV VCF output by GATK-SV
 workflow MainVcfQc {
   input {
-    Array[File] vcfs
+    Array[File] vcfs  # Option to provide a single GATK-SV VCF or an array of position-sharded SV VCFs
     Array[File] vcf_idxs
     Boolean vcf_format_has_cn = true
     String bcftools_preprocessing_options = ""

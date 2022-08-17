@@ -547,18 +547,16 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 
     # overrides for VcfQc
+    RuntimeAttr? runtime_override_site_level_benchmark_plot
+    RuntimeAttr? runtime_override_per_sample_benchmark_plot
+    RuntimeAttr? runtime_override_subset_vcf
+    RuntimeAttr? runtime_override_preprocess_vcf
+    RuntimeAttr? runtime_override_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
-    RuntimeAttr? runtime_override_thousand_g_benchmark
-    RuntimeAttr? runtime_override_thousand_g_plot
-    RuntimeAttr? runtime_override_asc_benchmark
-    RuntimeAttr? runtime_override_asc_plot
-    RuntimeAttr? runtime_override_hgsv_benchmark
-    RuntimeAttr? runtime_override_hgsv_plot
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
-    RuntimeAttr? runtime_override_sanders_per_sample_plot
-    RuntimeAttr? runtime_override_collins_per_sample_plot
-    RuntimeAttr? runtime_override_werling_per_sample_plot
     RuntimeAttr? runtime_override_sanitize_outputs
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
@@ -566,7 +564,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_split_vcf_to_qc
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
-    RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_collect_vids_per_sample
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_tar_shard_vid_lists
@@ -1306,18 +1303,16 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
+      runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,
+      runtime_override_per_sample_benchmark_plot=runtime_override_per_sample_benchmark_plot,
+      runtime_override_subset_vcf=runtime_override_subset_vcf,
+      runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
+      runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
+      runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark,
+      runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists,
       runtime_override_plot_qc_vcf_wide=runtime_override_plot_qc_vcf_wide,
-      runtime_override_thousand_g_benchmark=runtime_override_thousand_g_benchmark,
-      runtime_override_thousand_g_plot=runtime_override_thousand_g_plot,
-      runtime_override_asc_benchmark=runtime_override_asc_benchmark,
-      runtime_override_asc_plot=runtime_override_asc_plot,
-      runtime_override_hgsv_benchmark=runtime_override_hgsv_benchmark,
-      runtime_override_hgsv_plot=runtime_override_hgsv_plot,
       runtime_override_plot_qc_per_sample=runtime_override_plot_qc_per_sample,
       runtime_override_plot_qc_per_family=runtime_override_plot_qc_per_family,
-      runtime_override_sanders_per_sample_plot=runtime_override_sanders_per_sample_plot,
-      runtime_override_collins_per_sample_plot=runtime_override_collins_per_sample_plot,
-      runtime_override_werling_per_sample_plot=runtime_override_werling_per_sample_plot,
       runtime_override_sanitize_outputs=runtime_override_sanitize_outputs,
       runtime_override_merge_vcfwide_stat_shards=runtime_override_merge_vcfwide_stat_shards,
       runtime_override_merge_vcf_2_bed=runtime_override_merge_vcf_2_bed,
@@ -1325,7 +1320,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
       runtime_override_split_vcf_to_qc=runtime_override_split_vcf_to_qc,
       runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
-      runtime_override_merge_svtk_vcf_2_bed=runtime_override_merge_svtk_vcf_2_bed,
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
       runtime_override_split_samples_list=runtime_override_split_samples_list,
       runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
