@@ -32,6 +32,7 @@ workflow EvidenceQC {
     Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? wham_vcfs         # Wham VCF
+    Array[File]? scramble_vcfs     # Scramble VCF
 
     # WGD files
     File wgd_scoring_mask
@@ -147,6 +148,17 @@ workflow EvidenceQC {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
+    if (defined(scramble_vcfs) && (length(select_first([scramble_vcfs])) > 0)) {
+      call vcfqc.RawVcfQC as RawVcfQC_Scramble {
+        input:
+          vcfs = select_first([scramble_vcfs]),
+          prefix = batch,
+          caller = "Scramble",
+          runtime_attr_qc = runtime_attr_qc,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_outlier = runtime_attr_qc_outlier
+      }
+    }
   }
 
   output {
@@ -158,6 +170,8 @@ workflow EvidenceQC {
     File? melt_qc_high = RawVcfQC_Melt.high
     File? wham_qc_low = RawVcfQC_Wham.low
     File? wham_qc_high = RawVcfQC_Wham.high
+    File? scramble_qc_low = RawVcfQC_Scramble.low
+    File? scramble_qc_high = RawVcfQC_Scramble.high
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots

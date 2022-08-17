@@ -21,6 +21,7 @@ workflow Module10AnnoILFeatures {
         Array[File] raw_mantas
         Array[File] raw_whams
         Array[File] raw_melts
+        Array[File] raw_scrambles
 
         File denovo_list
         File ref_SegDup
@@ -76,8 +77,8 @@ workflow Module10AnnoILFeatures {
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
                 contig_list = contig_list,
-                raw_vcfs = [raw_mantas[i],raw_whams[i],raw_melts[i]],
-                raw_algorithms = ["manta","wham","melt"],
+                raw_vcfs = [raw_mantas[i],raw_whams[i],raw_melts[i],raw_scrambles[i]],
+                raw_algorithms = ["manta","wham","melt","scramble"],
 
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
                 vapor_docker = vapor_docker,
@@ -113,6 +114,7 @@ workflow Module10AnnoILFeatures {
                 raw_manta = anno_il_features.vs_raw[0],
                 raw_wham = anno_il_features.vs_raw[1],
                 raw_melt = anno_il_features.vs_raw[2],
+                raw_scramble = anno_il_features.vs_raw[3],
                 de_novo = denovo_list,
                 rdpesr_benchmark_docker = rdpesr_benchmark_docker,
                 runtime_attr_override = runtime_inte_anno
@@ -183,6 +185,7 @@ task IntegrateAnno{
         File raw_manta
         File raw_wham
         File raw_melt
+        File raw_scramble
         File de_novo
         String prefix
         String sample
@@ -222,6 +225,7 @@ task IntegrateAnno{
             --raw_manta ~{raw_manta} \
             --raw_wham ~{raw_wham} \
             --raw_melt ~{raw_melt} \
+            --raw_scramble ~{raw_scramble} \
             --denovo ~{de_novo} \
             --output ~{prefix}.anno.bed
         bgzip ~{prefix}.anno.bed
