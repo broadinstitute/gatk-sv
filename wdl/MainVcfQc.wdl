@@ -560,7 +560,7 @@ task PlotQcPerFamily {
     rm ~{ped_file} ~{samples_list}
 
     # Only run if any families remain after cleaning
-    n_fams=$( grep -Ev "^#" cleaned.fam | wc -l )
+    n_fams=$( grep -Ev "^#" cleaned.fam | wc -l ) || true
     echo -e "DETECTED $n_fams FAMILIES"
     if [ $n_fams -gt 0 ]; then
 
