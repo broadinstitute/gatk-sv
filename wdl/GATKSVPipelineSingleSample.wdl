@@ -309,10 +309,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_concat_vcfs_depth_cluster_batch
     RuntimeAttr? runtime_attr_exclude_intervals_pesr_cluster_batch
 
-    File? Sanders_2015_tarball
-    File? Werling_2018_tarball
-    File? Collins_2017_tarball
-
     # Run ClusterBatch metrics - default is off for single sample pipeline
     Boolean? run_clusterbatch_metrics = false
 
@@ -1161,9 +1157,6 @@ workflow GATKSVPipelineSingleSample {
       empty_file=empty_file,
 
       cohort_name=batch,
-      sanders_2015_tarball=Sanders_2015_tarball,
-      collins_2017_tarball=Collins_2017_tarball,
-      werling_2018_tarball=Werling_2018_tarball,
 
       rf_cutoff_files=[cutoffs],
       batches=[batch],
