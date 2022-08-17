@@ -15,7 +15,6 @@ option_list = list(
         make_option(c( "--raw_manta"), type="character", default=NULL, help="comparison results of SV vs. raw manta SVs", metavar="character"),
         make_option(c( "--raw_wham"), type="character", default=NULL, help="comparison results of SV vs. raw wham SVs", metavar="character"),
         make_option(c( "--raw_melt"), type="character", default=NULL, help="comparison results of SV vs. raw melt SVs", metavar="character"),
-        make_option(c( "--raw_scramble"), type="character", default=NULL, help="comparison results of SV vs. raw scramble SVs", metavar="character"),
         make_option(c( "--denovo"), type="character", default=NULL, help="two column file with SVID and de novo rate", metavar="character"),
         make_option(c( "--output"), type="character", default=NULL, help="output file", metavar="character")
  );
@@ -102,8 +101,5 @@ dat=merge(dat, vs_wham[,c(4,8,9)], by='SVID')
 vs_melt=read.table(opt$raw_melt, comment.char="", header=T, sep='\t')
 colnames(vs_melt)[c(4,8,9)]=c('SVID','vs_raw_melt_ovr1a','vs_raw_melt_ovr1b')
 dat=merge(dat, vs_melt[,c(4,8,9)], by='SVID')
-vs_scramble=read.table(opt$raw_scramble, comment.char="", header=T, sep='\t')
-colnames(vs_scramble)[c(4,8,9)]=c('SVID','vs_raw_scramble_ovr1a','vs_raw_scramble_ovr1b')
-dat=merge(dat, vs_scramble[,c(4,8,9)], by='SVID')
 
 write.table(dat[,c(2:4,1,5:ncol(dat))],opt$output, quote =F, sep='\t', col.names=T, row.names=F)
