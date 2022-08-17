@@ -44,6 +44,7 @@ task ConcatVaPoR {
   command <<<
     set -eu
 
+    zcat ~{shard_bed_files[0]} | head -n1 > header.txt
     # note head -n1 stops reading early and sends SIGPIPE to zcat,
     # so setting pipefail here would result in early termination
 
@@ -54,6 +55,7 @@ task ConcatVaPoR {
     zcat $SPLIT | tail -n+2
       done < ~{write_lines(shard_bed_files)} \
       | sort -Vk1,1 -k2,2n -k3,3n \
+      | cat header.txt - \
       | bgzip -c \
       > ~{output_file}
 
