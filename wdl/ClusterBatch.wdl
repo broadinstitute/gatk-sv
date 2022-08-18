@@ -5,6 +5,7 @@ import "DepthClustering.wdl" as depth
 import "ClusterBatchMetrics.wdl" as metrics
 import "TasksClusterBatch.wdl" as tasks
 import "Utils.wdl" as util
+import "PlotSVCountsPerSample.wdl" as sv_counts
 
 workflow ClusterBatch {
   input {
@@ -65,6 +66,8 @@ workflow ClusterBatch {
 
     Float? java_mem_fraction
 
+    Int outlier_cutoff_nIQR
+
     RuntimeAttr? runtime_attr_ids_from_vcf_list
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs
@@ -82,6 +85,9 @@ workflow ClusterBatch {
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_depth
     RuntimeAttr? runtime_override_concat_vcfs_depth
     RuntimeAttr? runtime_attr_exclude_intervals_pesr
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
   }
 
   call util.GetSampleIdsFromVcfTar {
@@ -282,9 +288,22 @@ workflow ClusterBatch {
     }
   }
 
+  call sv_counts.PlotSVCountsPerSample {
+    input:
+      prefix = batch,
+      vcfs = [select_first([ClusterPESR_manta.clustered_vcf]), select_first([ClusterPESR_wham.clustered_vcf]), select_first([ClusterPESR_melt.clustered_vcf]), select_first([ClusterPESR_scramble.clustered_vcf])],
+      N_IQR_cutoff = outlier_cutoff_nIQR,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
+  }
+
   output {
     File clustered_depth_vcf = ClusterDepth.clustered_vcf
     File clustered_depth_vcf_index = ClusterDepth.clustered_vcf_index
+    Array[File] sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File] sv_count_plots = PlotSVCountsPerSample.sv_count_plots
     File? clustered_manta_vcf = ClusterPESR_manta.clustered_vcf
     File? clustered_manta_vcf_index = ClusterPESR_manta.clustered_vcf_index
     File? clustered_wham_vcf = ClusterPESR_wham.clustered_vcf
