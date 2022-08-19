@@ -40,12 +40,7 @@ def main():
     parser.add_argument("files", nargs="+", help="The WDLs files to be checked.")
     args = parser.parse_args()
 
-    wdl_filenames = []
-    for filename in args.files:
-        if filename.endswith(".wdl"):
-            wdl_filenames.append(filename)
-    if len(wdl_filenames) != len(args.files):
-        print(f"Warning! Of {len(args.files)} provided files, {len(wdl_filenames)} are WDL.")
+    wdl_filenames = args.files
 
     exit_code = 0
     counter = 0
