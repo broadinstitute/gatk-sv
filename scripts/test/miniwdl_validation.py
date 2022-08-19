@@ -37,7 +37,7 @@ def check(wdl_filename):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("files", nargs="+", help="The WDLs files to be checked.")
+    parser.add_argument("files", nargs="+", help="The WDL files to be checked.")
     args = parser.parse_args()
 
     wdl_filenames = args.files
