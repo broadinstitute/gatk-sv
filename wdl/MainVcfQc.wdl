@@ -1,6 +1,6 @@
 version 1.0
 
-import "CollectQcVcfwide.wdl" as vcfwideqc
+import "CollectQcVcfWide.wdl" as vcfwideqc
 import "CollectQcPerSample.wdl" as persample
 import "CollectSiteLevelBenchmarking.wdl" as sitebench
 import "CollectPerSampleBenchmarking.wdl" as samplebench
