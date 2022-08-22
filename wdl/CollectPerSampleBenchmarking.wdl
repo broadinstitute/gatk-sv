@@ -1,11 +1,9 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 # Workflow to perform per-sample benchmarking from an SV VCF vs an external dataset
-workflow PerSampleExternalBenchmark {
+workflow CollectPerSampleBenchmarking {
   input {
     File vcf_stats
     File samples_list
@@ -29,11 +27,13 @@ workflow PerSampleExternalBenchmark {
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
 
+  String output_prefix = "~{prefix}.sample_benchmark"
+
   call MiniTasks.SplitUncompressed as SplitShuffledList {
       input:
         whole_file=samples_list,
         lines_per_shard=samples_per_shard,
-        shard_prefix=prefix + ".list_shard.",
+        shard_prefix="~{output_prefix}.list_shard.",
         shuffle_file=true,
         random_seed=random_seed,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -48,7 +48,7 @@ workflow PerSampleExternalBenchmark {
         samples_list=sublist,
         per_sample_tarball=per_sample_tarball,
         comparison_tarball=comparison_tarball,
-        prefix=prefix,
+        prefix=output_prefix,
         contigs=contigs,
         comparison_set_name=comparison_set_name,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -59,7 +59,7 @@ workflow PerSampleExternalBenchmark {
   call MergeTarballs as MergeTarredResults {
     input:
       in_tarballs=BenchmarkSamples.benchmarking_results,
-      folder_name=prefix + "_vs_" + comparison_set_name,
+      folder_name="~{output_prefix}_vs_~{comparison_set_name}",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_and_tar_shard_benchmarks
   }
@@ -89,13 +89,11 @@ task BenchmarkSamples {
 
   # Scale disk dynamically w/r/t input size
   Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
-  Float compression_factor = 3.5
-  Float base_disk_gb = 5.0
   RuntimeAttr runtime_default = object {
-    mem_gb: 3.5,
-    disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + input_size * 3.5),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -149,13 +147,11 @@ task MergeTarballs {
 
   # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
   Float input_size = size(in_tarballs, "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }

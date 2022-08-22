@@ -1,49 +1,50 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 # Workflow to scatter site-level benchmarking vs. an external dataset by chromosome
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow ShardedCohortBenchmarking {
+workflow CollectSiteLevelBenchmarking {
   input {
     File vcf_stats
     String prefix
     Array[String] contigs
-    String benchmarking_bucket
-    String comparator
+    String benchmark_url
+    String benchmark_name
     String sv_pipeline_qc_docker
     String sv_base_mini_docker
     RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_merge_site_level_benchmark
   }
+
+  String output_prefix="~{prefix}.site_benchmark"
 	
   # Collect site-level external benchmarking data per chromosome
   scatter ( contig in contigs ) {
-    call VcfExternalBenchmarkSingleChrom as CollectSiteLevelBenchmarking {
+    call VcfExternalBenchmarkSingleChrom {
       input:
         vcf_stats=vcf_stats,
-        prefix=prefix,
+        prefix=output_prefix,
         contig=contig,
-        benchmarking_bucket=benchmarking_bucket,
-        comparator=comparator,
+        benchmark_url=benchmark_url,
+        benchmark_name=benchmark_name,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
         runtime_attr_override=runtime_override_site_level_benchmark
     }
   }
 
   # Merge results across chromosomes
-  call MergeContigBenchmarks as MergeBenchmarking {
+  call MergeContigBenchmarks {
     input:
-      in_tarballs=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
-      comparator=comparator,
+      in_tarballs=VcfExternalBenchmarkSingleChrom.benchmarking_results_tarball,
+      prefix=output_prefix,
+      benchmark_name=benchmark_name,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_site_level_benchmark
   }
 
   output {
-    File benchmarking_results_tarball = MergeBenchmarking.merged_results_tarball
+    File benchmarking_results_tarball = MergeContigBenchmarks.merged_results_tarball
   }
 }
 
@@ -52,10 +53,10 @@ workflow ShardedCohortBenchmarking {
 task VcfExternalBenchmarkSingleChrom {
   input {
     File vcf_stats
-    String benchmarking_bucket
+    String benchmark_url
     String prefix
     String contig
-    String comparator
+    String benchmark_name
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -63,7 +64,7 @@ task VcfExternalBenchmarkSingleChrom {
     mem_gb: 3.75,
     disk_gb: 40,
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -83,7 +84,7 @@ task VcfExternalBenchmarkSingleChrom {
 
     # Copy benchmarking BED files to local directory
     mkdir benchmarks
-    gsutil -m cp ~{benchmarking_bucket}/*.bed.gz benchmarks/
+    gsutil -m cp ~{benchmark_url}/*.bed.gz benchmarks/
     
     # Run benchmarking script
     echo ~{contig} > contigs.list
@@ -92,15 +93,15 @@ task VcfExternalBenchmarkSingleChrom {
       /opt/sv-pipeline/scripts/vcf_qc/SV_colors.txt \
       contigs.list \
       benchmarks \
-      collectQC_benchmarking_~{comparator}_~{contig}_output/
+      collectQC_benchmarking_~{benchmark_name}_~{contig}_output/
     
     # Prep outputs
-    tar -czvf ~{prefix}.collectQC_benchmarking_~{comparator}_~{contig}_output.tar.gz \
-      collectQC_benchmarking_~{comparator}_~{contig}_output
+    tar -czvf ~{prefix}.collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz \
+      collectQC_benchmarking_~{benchmark_name}_~{contig}_output
   >>>
 
   output {
-    File benchmarking_results_tarball = "~{prefix}.collectQC_benchmarking_~{comparator}_~{contig}_output.tar.gz"
+    File benchmarking_results_tarball = "~{prefix}.collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz"
   }
 }
 
@@ -109,7 +110,8 @@ task VcfExternalBenchmarkSingleChrom {
 task MergeContigBenchmarks {
   input {
     Array[File] in_tarballs
-    String comparator
+    String benchmark_name
+    String prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -117,7 +119,7 @@ task MergeContigBenchmarks {
     mem_gb: 3.75,
     disk_gb: 40,
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -140,8 +142,8 @@ task MergeContigBenchmarks {
     done < ~{write_lines(in_tarballs)}
 
     # Create final output directory
-    mkdir collectQC_benchmarking_~{comparator}_output
-    mkdir collectQC_benchmarking_~{comparator}_output/data
+    mkdir ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output
+    mkdir ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data
 
     # Merge each unique BED
     find sharded_results/ -name "*.bed.gz" | xargs -I {} basename {} | sort -V | uniq > bed_filenames.list
@@ -150,17 +152,17 @@ task MergeContigBenchmarks {
       sed -n '1p' matching_beds.list | xargs -I {} zcat {} | sed -n '1p' > header.bed
       cat matching_beds.list | xargs -I {} zcat {} | fgrep -v "#" \
       | sort -Vk1,1 -k2,2n -k3,3n | cat header.bed - | bgzip -c \
-      > collectQC_benchmarking_~{comparator}_output/data/$fname
-      tabix -f collectQC_benchmarking_~{comparator}_output/data/$fname
+      > ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data/$fname
+      tabix -f ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data/$fname
     done < bed_filenames.list
 
     # Compress final output directory
     tar -czvf \
-      collectQC_benchmarking_~{comparator}_output.tar.gz \
-      collectQC_benchmarking_~{comparator}_output
+      ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output.tar.gz \
+      ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output
   >>>
 
   output {
-    File merged_results_tarball = "collectQC_benchmarking_~{comparator}_output.tar.gz"
+    File merged_results_tarball = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output.tar.gz"
   }
 }

@@ -1,18 +1,16 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 # Workflow to gather SV VCF summary stats for one or more input VCFs
 
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow ShardedQcCollection {
+workflow CollectQcVcfWide {
   input {
     Array[File] vcfs
     Array[File] vcf_idxs
     String contig
     Int sv_per_shard
-    String bcftools_preprocessing_options = ""
+    String? bcftools_preprocessing_options
     String prefix
 
     String sv_base_mini_docker
@@ -24,34 +22,37 @@ workflow ShardedQcCollection {
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
 
     # overrides for MiniTasks
-    RuntimeAttr? runtime_override_split_vcf_to_qc
+    RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
     RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
   }
 
+  String output_prefix = "~{prefix}.collect_qc_vcf_wide"
+
   # Tabix each VCF to chromosome of interest, and shard input VCF for stats collection
   scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
-    call MiniTasks.SplitVcf as SplitVcfToQc {
+    call MiniTasks.ScatterVcf {
       input:
         vcf=vcf_info.left,
-        vcf_idx=vcf_info.right,
+        vcf_index=vcf_info.right,
         contig=contig,
-        min_vars_per_shard=sv_per_shard,
-        prefix="vcf.shard.",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_split_vcf_to_qc
+        records_per_shard=sv_per_shard,
+        prefix="~{output_prefix}.scatter_vcf.shard",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_scatter_vcf
     }
   }
-  Array[File] vcf_shards = flatten(SplitVcfToQc.vcf_shards)
+  Array[File] vcf_shards = flatten(ScatterVcf.shards)
 
   # Scatter over VCF shards
   scatter (shard in vcf_shards) {
     # Preprocess VCF with bcftools, if optioned
-    if ( bcftools_preprocessing_options != "" ) {
+    if (defined(bcftools_preprocessing_options)) {
       call PreprocessVcf {
         input:
           vcf=shard,
-          bcftools_preprocessing_options=bcftools_preprocessing_options,
+          prefix="~{output_prefix}.preprocess",
+          bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_attr_override=runtime_override_preprocess_vcf
       }
@@ -62,7 +63,7 @@ workflow ShardedQcCollection {
     call CollectShardedVcfStats {
       input:
         vcf=filtered_vcf,
-        prefix=prefix + ".shard_",
+        prefix="~{output_prefix}.collect_stats.shard_",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_sharded_vcf_stats
       }
@@ -71,7 +72,7 @@ workflow ShardedQcCollection {
     call SvtkVcf2bed {
       input:
         vcf=filtered_vcf,
-        prefix="~{prefix}.shard",
+        prefix="~{output_prefix}.shard",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_2_bed
       }
@@ -81,7 +82,7 @@ workflow ShardedQcCollection {
   call MiniTasks.ConcatBeds as MergeSubvcfStatShards {
     input:
       shard_bed_files=CollectShardedVcfStats.vcf_stats,
-      prefix=prefix + ".VCF_sites.stats",
+      prefix="~{output_prefix}.VCF_sites.stats",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_subvcf_stat_shards
   }
@@ -90,7 +91,7 @@ workflow ShardedQcCollection {
   call MiniTasks.ConcatBeds as MergeSvtkVcf2bed {
     input:
       shard_bed_files=SvtkVcf2bed.vcf2bed_subworkflow_out,
-      prefix=prefix + ".vcf2bed_subworkflow",
+      prefix="~{output_prefix}.vcf2bed_subworkflow",
       index_output=false,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_svtk_vcf_2_bed
@@ -109,22 +110,18 @@ workflow ShardedQcCollection {
 task PreprocessVcf {
   input {
     File vcf
+    String prefix
     String bcftools_preprocessing_options = ""
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String outvcf_fname = basename(vcf, ".vcf.gz") + ".pass_only.vcf.gz"
-
   Float input_size = size(vcf, "GiB")
-  Float compression_factor = 2.0
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + (compression_factor * input_size),
-    disk_gb: ceil(base_disk_gb + (input_size * compression_factor)),
+    mem_gb: 2.0 + 2.0 * input_size,
+    disk_gb: ceil(10 + 2.0 * input_size),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -146,12 +143,14 @@ task PreprocessVcf {
       --no-update \
       ~{bcftools_preprocessing_options} \
       -l 1 -O z \
-      -o ~{outvcf_fname} \
+      -o ~{prefix}.vcf.gz \
       ~{vcf}
+    tabix ~{prefix}.vcf.gz
   >>>
 
   output {
-    File outvcf = outvcf_fname
+    File outvcf = "~{prefix}.vcf.gz"
+    File outvcf_index = "~{prefix}.vcf.gz.tbi"
   }
 }
 
@@ -167,14 +166,11 @@ task CollectShardedVcfStats {
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(vcf, "GiB")
-  Float compression_factor = 2.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 1.5
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb + (compression_factor * input_size),
-    disk_gb: ceil(base_disk_gb + (compression_factor * input_size)),
+    mem_gb: 1.5 + 2.0 * input_size,
+    disk_gb: ceil(10.0 + 2.0 * input_size),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -227,18 +223,16 @@ task SvtkVcf2bed {
     RuntimeAttr? runtime_attr_override
   }
 
-  String output_file = prefix + ".vcf2bed_subworkflow.bed.gz"
+  String output_file = "~{prefix}.vcf2bed_subworkflow.bed.gz"
   
   # simple record-by-record processing, overhead should be O(1), with disk space usage increased because the operation
   # is copying input into new format
   Float input_size = size(vcf, "GiB")
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }

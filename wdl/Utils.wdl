@@ -660,11 +660,9 @@ task SubsetVcfBySamplesList {
 
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
-  Float disk_scaling_factor = 1.5
-  Float base_disk_gb = 10.0
   RuntimeAttr default_attr = object {
     mem_gb: 3.75,
-    disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
+    disk_gb: ceil(10.0 + (input_size * 1.5)),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,

@@ -1,11 +1,9 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
-import "ShardedQcCollection.wdl" as ShardedQcCollection
-import "CollectQcPerSample.wdl" as CollectQcPerSample
-import "ShardedCohortBenchmarking.wdl" as CohortExternalBenchmark
-import "PerSampleExternalBenchmark.wdl" as PerSampleExternalBenchmark
+import "CollectQcVcfwide.wdl" as vcfwideqc
+import "CollectQcPerSample.wdl" as persample
+import "CollectSiteLevelBenchmarking.wdl" as sitebench
+import "CollectPerSampleBenchmarking.wdl" as samplebench
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "Utils.wdl" as Utils
 
@@ -16,7 +14,7 @@ workflow MainVcfQc {
     Array[File] vcfs  # Option to provide a single GATK-SV VCF or an array of position-sharded SV VCFs
     Array[File] vcf_idxs
     Boolean vcf_format_has_cn = true
-    String bcftools_preprocessing_options = ""
+    String? bcftools_preprocessing_options
     File? ped_file
     File? list_of_samples_to_include
     Int max_trios = 1000
@@ -36,7 +34,6 @@ workflow MainVcfQc {
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
     RuntimeAttr? runtime_override_site_level_benchmark_plot
-    RuntimeAttr? runtime_override_custom_external
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
     RuntimeAttr? runtime_override_per_sample_benchmark_plot
@@ -47,14 +44,14 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
-    # overrides for ShardedQcCollection
+    # overrides for CollectQcVcfWide
     RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
-    RuntimeAttr? runtime_override_split_vcf_to_qc
+    RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
 
-    # overrides for ShardedCohortBenchmarking
+    # overrides for CollectSiteLevelBenchmarking
     RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_merge_site_level_benchmark
 
@@ -64,7 +61,7 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_tar_shard_vid_lists
     RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
 
-    # overrides for PerSampleExternalBenchmark
+    # overrides for CollectPerSampleBenchmarking
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
@@ -77,7 +74,7 @@ workflow MainVcfQc {
 
   if (defined(list_of_samples_to_include)) {
     scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
-      call Utils.SubsetVcfBySamplesList as SubsetVcf {
+      call Utils.SubsetVcfBySamplesList {
         input:
           vcf=vcf_info.left,
           vcf_idx=vcf_info.right,
@@ -89,35 +86,36 @@ workflow MainVcfQc {
     }
   }
 
-  Array[File] vcfs_for_qc = select_first([SubsetVcf.vcf_subset, vcfs])
-  Array[File] vcf_idxs_for_qc = select_first([SubsetVcf.vcf_subset_idx, vcf_idxs])
+  Array[File] vcfs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])
+  Array[File] vcf_idxs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset_idx, vcf_idxs])
 
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
     # Collect VCF-wide summary stats
-    call ShardedQcCollection.ShardedQcCollection as CollectQcVcfwide {
+    call vcfwideqc.CollectQcVcfWide {
       input:
         vcfs=vcfs_for_qc,
         vcf_idxs=vcf_idxs_for_qc,
         contig=contig,
         sv_per_shard=sv_per_shard,
         bcftools_preprocessing_options=bcftools_preprocessing_options,
-        prefix="~{prefix}.~{contig}.shard",
+        prefix="~{prefix}.~{contig}",
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
+        runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
         runtime_override_collect_sharded_vcf_stats=runtime_override_collect_sharded_vcf_stats,
         runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
-        runtime_override_split_vcf_to_qc=runtime_override_split_vcf_to_qc,
+        runtime_override_scatter_vcf=runtime_override_scatter_vcf,
         runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
         runtime_override_merge_svtk_vcf_2_bed=runtime_override_merge_vcf_2_bed
     }
   }
 
   # Merge shards into single VCF stats file
-  call MiniTasks.ConcatBeds as MergeVcfwideStatShards {
+  call MiniTasks.ConcatBeds as MergeVcfWideStats {
     input:
-      shard_bed_files=CollectQcVcfwide.vcf_stats,
-      prefix=prefix + ".VCF_sites.stats",
+      shard_bed_files=CollectQcVcfWide.vcf_stats,
+      prefix="~{prefix}.VCF_sites.stats",
       index_output=true,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_vcfwide_stat_shards
@@ -126,8 +124,8 @@ workflow MainVcfQc {
   # Merge vcf2bed output
   call MiniTasks.ConcatBeds as MergeVcf2Bed {
     input:
-      shard_bed_files=CollectQcVcfwide.vcf2bed_out,
-      prefix=prefix + ".vcf2bed",
+      shard_bed_files=CollectQcVcfWide.vcf2bed_out,
+      prefix="~{prefix}.vcf2bed",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_vcf_2_bed
   }
@@ -135,8 +133,8 @@ workflow MainVcfQc {
   # Plot VCF-wide summary stats
   call PlotQcVcfWide {
     input:
-      vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-      samples_list=CollectQcVcfwide.samples_list[0],
+      vcf_stats=MergeVcfWideStats.merged_bed_file,
+      samples_list=CollectQcVcfWide.samples_list[0],
       prefix=prefix,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
@@ -148,13 +146,13 @@ workflow MainVcfQc {
                                                        [[], []]]) ) {
 
       # Collect site-level external benchmarking data
-      call CohortExternalBenchmark.ShardedCohortBenchmarking as CollectSiteLevelBenchmarking {
+      call sitebench.CollectSiteLevelBenchmarking {
         input:
-          vcf_stats=MergeVcfwideStatShards.merged_bed_file,
+          vcf_stats=MergeVcfWideStats.merged_bed_file,
           prefix=prefix,
           contigs=contigs,
-          benchmarking_bucket=comparison_dataset_info[1],
-          comparator=comparison_dataset_info[0],
+          benchmark_url=comparison_dataset_info[1],
+          benchmark_name=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
@@ -162,11 +160,11 @@ workflow MainVcfQc {
       }
 
       # Plot site-level benchmarking results
-      call PlotQcExternalBenchmarking as PlotSiteLevelBenchmarking {
+      call PlotSiteLevelBenchmarking {
         input:
           benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
           prefix=prefix,
-          comparator=comparison_dataset_info[0],
+          benchmark_name=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_site_level_benchmark_plot
       }
@@ -176,16 +174,16 @@ workflow MainVcfQc {
   # Shard sample list
   call MiniTasks.SplitUncompressed as SplitSamplesList {
     input:
-      whole_file=CollectQcVcfwide.samples_list[0],
+      whole_file=CollectQcVcfWide.samples_list[0],
       lines_per_shard=samples_per_shard,
-      shard_prefix=prefix + ".list_shard.",
+      shard_prefix="~{prefix}.list_shard.",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_samples_list
   }
 
   # Collect per-sample VID lists for each sample shard
   scatter ( shard in SplitSamplesList.shards ) {
-    call CollectQcPerSample.CollectQcPerSample as CollectPerSampleVidLists {
+    call persample.CollectQcPerSample {
       input:
         vcfs=vcfs,
         vcf_format_has_cn=vcf_format_has_cn,
@@ -201,9 +199,9 @@ workflow MainVcfQc {
   # Merge all VID lists into single output directory and tar it
   call TarShardVidLists {
     input:
-      in_tarballs=CollectPerSampleVidLists.vid_lists,
-      folder_name=prefix + "_perSample_VIDs_merged",
-      tarball_prefix=prefix + "_perSample_VIDs",
+      in_tarballs=CollectQcPerSample.vid_lists,
+      folder_name="~{prefix}_perSample_VIDs_merged",
+      tarball_prefix="~{prefix}_perSample_VIDs",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_tar_shard_vid_lists
   }
@@ -212,8 +210,8 @@ workflow MainVcfQc {
   # Plot per-sample stats
   call PlotQcPerSample {
     input:
-      vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-      samples_list=CollectQcVcfwide.samples_list[0],
+      vcf_stats=MergeVcfWideStats.merged_bed_file,
+      samples_list=CollectQcVcfWide.samples_list[0],
       per_sample_tarball=TarShardVidLists.vid_lists,
       prefix=prefix,
       max_gq=max_gq_,
@@ -225,8 +223,8 @@ workflow MainVcfQc {
   if (defined(ped_file)) {
     call PlotQcPerFamily {
       input:
-        vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-        samples_list=CollectQcVcfwide.samples_list[0],
+        vcf_stats=MergeVcfWideStats.merged_bed_file,
+        samples_list=CollectQcVcfWide.samples_list[0],
         ped_file=select_first([ped_file]),
         max_trios=max_trios,
         per_sample_tarball=TarShardVidLists.vid_lists,
@@ -243,10 +241,10 @@ workflow MainVcfQc {
                                                        [[], []]]) ) {
 
       # Collect per-sample external benchmarking data
-      call PerSampleExternalBenchmark.PerSampleExternalBenchmark as CollectPerSampleBenchmarking {
+      call samplebench.CollectPerSampleBenchmarking {
         input:
-          vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-          samples_list=CollectQcVcfwide.samples_list[0],
+          vcf_stats=MergeVcfWideStats.merged_bed_file,
+          samples_list=CollectQcVcfWide.samples_list[0],
           per_sample_tarball=TarShardVidLists.vid_lists,
           comparison_tarball=select_first([comparison_dataset_info[1]]),
           prefix=prefix,
@@ -263,10 +261,10 @@ workflow MainVcfQc {
       }
 
       # Plot per-sample benchmarking results
-      call PlotQcPerSampleBenchmarking as PlotPerSampleBenchmarking {
+      call PlotPerSampleBenchmarking {
         input:
           per_sample_benchmarking_tarball=CollectPerSampleBenchmarking.benchmarking_results_tarball,
-          samples_list=CollectQcVcfwide.samples_list[0],
+          samples_list=CollectQcVcfWide.samples_list[0],
           comparison_set_name=comparison_dataset_info[0],
           prefix=prefix,
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -279,9 +277,9 @@ workflow MainVcfQc {
   call SanitizeOutputs {
     input:
       prefix=prefix,
-      samples_list=CollectQcVcfwide.samples_list[0],
-      vcf_stats=MergeVcfwideStatShards.merged_bed_file,
-      vcf_stats_idx=MergeVcfwideStatShards.merged_bed_idx,
+      samples_list=CollectQcVcfWide.samples_list[0],
+      vcf_stats=MergeVcfWideStats.merged_bed_file,
+      vcf_stats_idx=MergeVcfWideStats.merged_bed_idx,
       plot_qc_vcfwide_tarball=PlotQcVcfWide.plots_tarball,
       plot_qc_site_level_external_benchmarking_tarballs=PlotSiteLevelBenchmarking.tarball_wPlots,
       plot_qc_per_sample_tarball=PlotQcPerSample.perSample_plots_tarball,
@@ -364,11 +362,9 @@ task TarShardVidLists {
 
   # Since the input files are often/always compressed themselves, assume compression factor for tarring is 1.0
   Float input_size = size(in_tarballs, "GB")
-  Float base_disk_gb = 10.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * 2.0),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + input_size * 2.0),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -404,11 +400,11 @@ task TarShardVidLists {
 
 
 # Plot external benchmarking results
-task PlotQcExternalBenchmarking {
+task PlotSiteLevelBenchmarking {
   input {
     File benchmarking_tarball
     String prefix
-    String comparator
+    String benchmark_name
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -437,15 +433,15 @@ task PlotQcExternalBenchmarking {
     # Plot benchmarking stats
     /opt/sv-pipeline/scripts/vcf_qc/plotQC.external_benchmarking.helper.sh \
       ~{benchmarking_tarball} \
-      ~{comparator}
+      ~{benchmark_name}
 
     # Prep outputs
-    tar -czvf ~{prefix}.collectQC_benchmarking_~{comparator}_output.wPlots.tar.gz \
-    collectQC_benchmarking_~{comparator}_output
+    tar -czvf ~{prefix}.collectQC_benchmarking_~{benchmark_name}_output.wPlots.tar.gz \
+    collectQC_benchmarking_~{benchmark_name}_output
   >>>
 
   output {
-    File tarball_wPlots = "~{prefix}.collectQC_benchmarking_~{comparator}_output.wPlots.tar.gz"
+    File tarball_wPlots = "~{prefix}.collectQC_benchmarking_~{benchmark_name}_output.wPlots.tar.gz"
   }
 }
 
@@ -623,13 +619,13 @@ task PlotQcPerFamily {
 
   output {
     File perFamily_plots_tarball = "~{prefix}.plotQC_perFamily.tar.gz"
-    File cleaned_fam_file = "cleaned.fam"
+    File cleaned_fam_file = "~{prefix}.cleaned.fam"
   }
 }
 
 
 # Plot per-sample benchmarking
-task PlotQcPerSampleBenchmarking {
+task PlotPerSampleBenchmarking {
   input {
     File per_sample_benchmarking_tarball
     File samples_list
@@ -734,12 +730,9 @@ task SanitizeOutputs {
   Float isize_3 = size(select_first([plot_qc_per_family_tarball, []]), "GiB")
   Float isize_4 = size(select_first([plot_qc_per_sample_external_benchmarking_tarballs, []]), "GiB")
   Float input_size = isize_1 + isize_2 + isize_3 + isize_4
-  Float compression_factor = 3.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-    mem_gb: base_mem_gb,
-    disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + input_size * 5.0),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -757,7 +750,7 @@ task SanitizeOutputs {
   }
   
   command <<<
-    set -eu -o pipefail
+    set -euxo pipefail
     
     # Prep output directory tree
     mkdir ~{prefix}_SV_VCF_QC_output/

@@ -1262,15 +1262,6 @@ svtypes.file <- opts$svtypes
 multiallelics <- opts$multiallelics
 maxgq <- opts$maxgq
 
-# #Dev parameters
-# dat.in <- "~/scratch/gnomAD-SV_v3.chr19_to_22.v1.VCF_sites.stats.bed.gz"
-# famfile.in <- "~/scratch/cleaned.fam"
-# perSampDir <- "~/scratch/gnomAD-SV_v3.chr19_to_22.v1_perSample_VIDs_merged/gnomAD-SV_v3.chr19_to_22.v1_perSample_VID_lists/"
-# OUTDIR <- "~/scratch/famQC_plots_test/"
-# # OUTDIR <- "~/scratch/VCF_plots_test/"
-# svtypes.file <- "/Users/collins/Desktop/Collins/Talkowski/NGS/SV_Projects/gnomAD_v3/gnomad-sv-v3-qc//src/sv-pipeline/scripts/vcf_qc/SV_colors.txt"
-# multiallelics <- F
-
 ###Prepares I/O files
 #Read & clean SV stats data
 dat <- read.table(dat.in,comment.char="",sep="\t",header=T,check.names=F)

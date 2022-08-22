@@ -45,15 +45,15 @@
   "gnomad_v2_collins_site_level_benchmarking_dataset" : ["gnomAD_v2_Collins", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins"],
   "hgsv_byrska_bishop_sample_level_benchmarking_dataset": ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"],
   "hgsv_byrska_bishop_site_level_benchmarking_dataset" : ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV"],
-  "hgsv_ebert_sample_level_benchmarking_dataset": ["HGSV_Ebert", "gs://gatk-sv-resources/resources/hg38_benchmarking/HGSV_Ebert_perSample.tar.gz"],
-  "ssc_belyeu_sample_level_benchmarking_dataset": ["SSC_Belyeu", "gs://talkowski-sv-gnomad-resources/resources/hg38_benchmarking/SSC_Belyeu_perSample.tar.gz"],
-  "ssc_belyeu_site_level_benchmarking_dataset" : ["SSC_Belyeu", "gs://talkowski-sv-gnomad-resources/resources/hg38_benchmarking/SSC_Belyeu"],
-  "ssc_sanders_sample_level_benchmarking_dataset": ["SSC_Sanders", "gs://talkowski-sv-gnomad-resources/resources/hg38_benchmarking/SSC_Sanders_perSample.v2.tar.gz"],
+  "hgsv_ebert_sample_level_benchmarking_dataset": ["HGSV_Ebert", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_Ebert_perSample.tar.gz"],
+  "ssc_belyeu_sample_level_benchmarking_dataset": ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu_perSample.tar.gz"],
+  "ssc_belyeu_site_level_benchmarking_dataset" : ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu"],
+  "ssc_sanders_sample_level_benchmarking_dataset": ["SSC_Sanders", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Sanders_perSample.v2.tar.gz"],
   "thousand_genomes_site_level_benchmarking_dataset" : ["1000G_Sudmant", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant"],
 
   "asc_site_level_benchmarking_dataset" : ["ASC_Werling","gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling"],
   "hgsv_site_level_benchmarking_dataset" : ["HGSV_Chaisson", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson"],
-  "collins_2017_sample_level_benchmarking_dataset" : ["Collins_2017", "gs://gatk-sv-resources-secure/resources/Collins_2017_hg38.tar.gz"],
-  "sanders_2015_sample_level_benchmarking_dataset" : ["Sanders_2015", "gs://gatk-sv-resources-secure/resources/Sanders_2015_hg38.tar.gz"],
-  "werling_2018_sample_level_benchmarking_dataset" : ["Werling_2018", "gs://gatk-sv-resources-secure/resources/Werling_2018_hg38.tar.gz"]
+  "collins_2017_sample_level_benchmarking_dataset" : ["Collins_2017", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Collins_2017_hg38.tar.gz"],
+  "sanders_2015_sample_level_benchmarking_dataset" : ["Sanders_2015", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Sanders_2015_hg38.tar.gz"],
+  "werling_2018_sample_level_benchmarking_dataset" : ["Werling_2018", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Werling_2018_hg38.tar.gz"]
 }

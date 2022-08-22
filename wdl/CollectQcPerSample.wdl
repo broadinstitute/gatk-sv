@@ -1,7 +1,5 @@
 version 1.0
 
-# Author: Ryan Collins <rlcollins@g.harvard.edu>
-
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
 # Workflow to gather lists of variant IDs per sample from one or more SV VCFs
@@ -23,6 +21,8 @@ workflow CollectQcPerSample {
     RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
   }
 
+  String output_prefix = "~{prefix}.per_sample_qc"
+
   # Collect VCF-wide summary stats per sample list per VCF
   scatter ( vcf in vcfs ) {
     call CollectVidsPerSample {
@@ -30,7 +30,7 @@ workflow CollectQcPerSample {
         vcf=vcf,
         vcf_format_has_cn=vcf_format_has_cn,
         samples_list=samples_list,
-        prefix=prefix,
+        prefix=output_prefix,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_vids_per_sample
     }
@@ -41,7 +41,7 @@ workflow CollectQcPerSample {
     input:
       tarballs=CollectVidsPerSample.vid_lists_tarball,
       samples_list=samples_list,
-      prefix=prefix,
+      prefix=output_prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_sharded_per_sample_vid_lists
   }
@@ -64,17 +64,15 @@ task CollectVidsPerSample {
     RuntimeAttr? runtime_attr_override
   }
 
-  String outdirprefix = prefix + "_perSample_VIDs"
+  String outdirprefix = "~{prefix}_perSample_VIDs"
   
   # Must scale disk proportionally to size of input VCF
   Float input_size = size([vcf, samples_list], "GiB")
-  Float disk_scaling_factor = 1.0
-  Float base_disk_gb = 10.0
   RuntimeAttr runtime_default = object {
     mem_gb: 1.5,
-    disk_gb: ceil(base_disk_gb + (input_size * disk_scaling_factor)),
+    disk_gb: ceil(10.0 + input_size),
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -143,7 +141,7 @@ task MergeShardedPerSampleVidLists {
     mem_gb: 3.75,
     disk_gb: 20,
     cpu_cores: 1,
-    preemptible_tries: 1,
+    preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
   }

@@ -231,7 +231,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_merge_vcf_2_bed
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
-    RuntimeAttr? runtime_override_split_vcf_to_qc
+    RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
     RuntimeAttr? runtime_override_collect_vids_per_sample
     RuntimeAttr? runtime_override_split_samples_list
@@ -478,7 +478,7 @@ workflow MakeCohortVcf {
       runtime_override_merge_vcf_2_bed=runtime_override_merge_vcf_2_bed,
       runtime_override_collect_sharded_vcf_stats=runtime_override_collect_sharded_vcf_stats,
       runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
-      runtime_override_split_vcf_to_qc=runtime_override_split_vcf_to_qc,
+      runtime_override_scatter_vcf=runtime_override_scatter_vcf,
       runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
       runtime_override_split_samples_list=runtime_override_split_samples_list,
