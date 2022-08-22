@@ -291,7 +291,7 @@ workflow ClusterBatch {
   call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs = [select_first([ClusterPESR_manta.clustered_vcf]), select_first([ClusterPESR_wham.clustered_vcf]), select_first([ClusterPESR_melt.clustered_vcf]), select_first([ClusterPESR_scramble.clustered_vcf])],
+      vcfs = select_all([ClusterDepth.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf]),
       N_IQR_cutoff = outlier_cutoff_nIQR,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
