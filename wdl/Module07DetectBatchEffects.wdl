@@ -15,10 +15,10 @@ workflow DetectBatchEffects {
     File vcf_idx
     File vcf_preMinGQ
     File vcf_preMinGQ_idx
-    File sample_batch_assignments
     File batches_list
     File pcrminus_batches_list
     File sample_pop_assignments
+    File sample_batch_assignments
     File excludesamples_list #empty file if need be
     File famfile
     File contiglist
@@ -30,12 +30,18 @@ workflow DetectBatchEffects {
     File? pcrplus_batches_list
     File? pcrplus_samples_list
 
+    String sv_base_mini_docker
+    String sv_benchmark_docker
     String sv_pipeline_docker
     String sv_pipeline_updates_docker
     String sv_pipeline_base_docker
-    String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
+    RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRMINUS
+    RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRPLUS
+    RuntimeAttr? runtime_attr_override_plus_minus_pv_integration
+    RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRMINUS
+    RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRPLUS
   }
 
   Array[String] batches = read_lines(batches_list)
@@ -110,6 +116,7 @@ workflow DetectBatchEffects {
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker
   }
+
   call MergeFreqTables as MergeFreqTables_allPops {
     input:
       tables=GetFreqTable.freq_data_allPops,
@@ -118,6 +125,7 @@ workflow DetectBatchEffects {
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker
   }
+
   call MergeFreqTables as MergeFreqTables_allPops_preMinGQ {
     input:
       tables=GetFreqTable_preMinGQ.freq_data_allPops,
@@ -150,10 +158,11 @@ workflow DetectBatchEffects {
         prefix="~{prefix}.PCRMINUS_cross_batch_test",
         sv_pipeline_base_docker=sv_pipeline_base_docker
     }
+  }
 
     # Tests 3 & 4 only run if pcrplus_batches_list is provided
     if ( defined(pcrplus_batches_list) ) {
-
+      scatter ( af_table_shard in MergeFreqTables.merged_table_shards ) {
         # Test 3: cross-batch comparison of frequencies for PCR- batches
         call CrossBatchPropTest as PlusPropTest {
           input:
@@ -168,7 +177,7 @@ workflow DetectBatchEffects {
           input:
             freq_table=af_table_shard,
             minus_batches_list=pcrminus_batches_list,
-            plus_batches_list=select_first([pcrminus_batches_list]),
+            plus_batches_list=select_first([pcrplus_batches_list]),
             prefix="~{prefix}.aggregated_PCRPLUS_vs_PCRMINUS_test",
             sv_pipeline_base_docker=sv_pipeline_base_docker
         }
@@ -201,7 +210,9 @@ workflow DetectBatchEffects {
         prefix="~{prefix}.PCRMINUS_one_vs_all",
         sv_pipeline_base_docker=sv_pipeline_base_docker
     }
-    if ( defined(pcrplus_batches_list) ) {
+  }
+  if ( defined(pcrplus_batches_list) ) {
+    scatter ( af_table_shard in MergeFreqTables.merged_table_shards ) {
       call CompareBatchPairs as OneVsAllPlus {
         input:
           freq_table=af_table_shard,
@@ -211,50 +222,84 @@ workflow DetectBatchEffects {
       }
     }
   }
-  # TODO: Collect results from one-vs-all pairwise batch effect detection
-  # Need to add task here
 
-  # TODO: need to update this task based on the revised outputs of the above tasks
-  # # Distill final table of variants to be reclassified
-  # call MakeReclassificationTable {
-  #   input:
-  #     freq_table=MergeFreqTables.merged_table,
-  #     pairwise_fails=merge_pairwise_checks.fails_per_variant_all,
-  #     onevsall_fails=merge_one_vs_all_checks.fails_per_variant_all,
-  #     prefix=prefix,
-  #     pairwise_cutoff = pairwise_cutoff,
-  #     onevsall_cutoff = onevsall_cutoff,
-  #     sv_pipeline_docker=sv_pipeline_docker
-  # }
+  # Integrate pariwise comparison results from all shards:
 
-  # TODO: need to update this task based on the revised outputs of the above tasks
-  # Apply batch effect labels
-  # scatter ( contig in contigs ) {
-  #   call ApplyBatchEffectLabels as apply_labels_perContig {
-  #     input:
-  #       vcf=vcf,
-  #       vcf_idx=vcf_idx,
-  #       contig=contig[0],
-  #       reclassification_table=MakeReclassificationTable.reclassification_table,
-  #       mingq_prePost_pcrminus_fails=CompareFreqsPrePostMinGQ.pcrminus_fails,
-  #       mingq_prePost_pcrplus_fails=CompareFreqsPrePostMinGQ.pcrplus_fails,
-  #       pcrplus_sample_ids=pcrplus_samples_list,
-  #       prefix="~{prefix}.~{contig[0]}",
-  #       sv_pipeline_docker=sv_pipeline_docker
-  #   }
-  # }
-  # call MiniTasks.ConcatVcfs as merge_labeled_vcfs {
-  #   input:
-  #     vcfs=apply_labels_perContig.labeled_vcf,
-  #     vcfs_idx=apply_labels_perContig.labeled_vcf_idx,
-  #     outfile_prefix="~{prefix}.batch_effects_labeled_merged",
-  #     sv_base_mini_docker=sv_pipeline_docker,
-  #     runtime_attr_override=runtime_attr_merge_labeled_vcfs
-  # }
+  call IntegratePairwiseComparisonPvaluesMINUS as IntegratePairwiseMinus{
+    input:
+      pairwise_comp_results = MinusPropTest.results,
+      prefix = "~{prefix}.pairwise_pv_integration_PCRMINUS",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override_pairwise_pv_integration_PCRMINUS
+  }
+
+  call IntegratePairwiseComparisonPvaluesPLUS as IntegratePairwisePlus{
+    input:
+      pairwise_comp_results = PlusPropTest.results,
+      prefix = "~{prefix}.pairwise_pv_integration_PCRPLUS",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override_pairwise_pv_integration_PCRPLUS
+  }
+
+  call IntegratePlusMinusFreqsPvalues{
+    input:
+      plus_minus_freq_results = ComparePlusMinusFreqs.results,
+      prefix = "~{prefix}.plus_minus_pv_integration",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override_plus_minus_pv_integration
+  }
+
+  call IntegrateOneVsAllPvaluesMINUS{
+    input:
+      one_vs_all_comp_results = OneVsAllMinus.results,
+      prefix = "~{prefix}.one_vs_all_integration_PCRMINUS",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override_one_vs_all_integration_PCRMINUS
+  }
+
+  call IntegrateOneVsAllPvaluesPLUS{
+    input:
+      one_vs_all_comp_results = OneVsAllPlus.results,
+      prefix = "~{prefix}.one_vs_all_integration_PCRPLUS",
+      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      runtime_attr_override = runtime_attr_override_one_vs_all_integration_PCRPLUS
+  }
+
+
+  # Integrate the Batch Effect statistics and annotate vcf accordingly
+
+  #call IntegrateBatchEffectPvalues{
+  #  input:
+  #    plus_vs_minus_pv = IntegratePlusMinusFreqsPvalues.results,
+  #    pre_vs_post_pv = CompareFreqsPrePostMinGQ.minGQ_prePost_comparison_data,
+  #    pairwise_minus_pv = IntegratePairwiseMinus.results,
+  #    pairwise_plus_pv = IntegratePairwisePlus.results,
+  #    one_vs_all_minus_pv = IntegrateOneVsAllPvaluesMINUS.results,
+  #    one_vs_all_plus_pv = IntegrateOneVsAllPvaluesPLUS.results,
+  #    prefix = prefix,
+  #    sv_benchmark_docker = sv_benchmark_docker,
+  #    runtime_attr_override = runtime_attr_override_integrate_batch_effect_pvalues
+  #}
+
+  #call AnnotateBatchEffect{
+  #  input:
+  #    vcf = vcf,
+  #    vcf_idx = vcf_idx,
+  #    sample_batch_assignments = sample_batch_assignments,
+  #    SVID_info = IntegrateBatchEffectPvalues.SVID_info,
+  #    SVID_filter = IntegrateBatchEffectPvalues.SVID_filter,
+  #    SVID_format = IntegrateBatchEffectPvalues.SVID_format,
+  #    sv_benchmark_docker = sv_benchmark_docker,
+  #    runtime_attr_override = runtime_attr_override_annotate_batch_effect
+  #}
 
   output {
-    # File labeled_vcf = merge_labeled_vcfs.concat_vcf
-    # File labeled_vcf_idx = merge_labeled_vcfs.concat_vcf_idx
+    File  plus_vs_minus_pv = IntegratePlusMinusFreqsPvalues.results
+    File  pre_vs_post_pv = CompareFreqsPrePostMinGQ.minGQ_prePost_comparison_data
+    File  pairwise_minus_pv = IntegratePairwiseMinus.results
+    File  pairwise_plus_pv = IntegratePairwisePlus.results
+    File  one_vs_all_minus_pv = IntegrateOneVsAllPvaluesMINUS.results
+    File  one_vs_all_plus_pv = IntegrateOneVsAllPvaluesPLUS.results
   }
 }
 
@@ -727,6 +772,444 @@ task CompareBatchPairs {
   }
 }
 
+# Integrate pvalues from pairwise comparisons across all shards
+task IntegratePairwiseComparisonPvaluesMINUS{
+  input{
+    Array[File] pairwise_comp_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{pairwise_comp_results[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2 
+    done < ~{write_lines(pairwise_comp_results)} \
+      | cat header.txt - \
+      | bgzip -c \
+      > ~{prefix}.pvalues.txt.gz
+
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task IntegratePairwiseComparisonPvaluesPLUS{
+  input{
+    Array[File]? pairwise_comp_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Array[File] pairwise_comp_result = select_first([pairwise_comp_results])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{pairwise_comp_result[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2 
+    done < ~{write_lines(pairwise_comp_result)} \
+      | cat header.txt - \
+      | bgzip -c \
+      > ~{prefix}.pvalues.txt.gz
+
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+# Integrate pvalues from one versus all comparisons across all shards
+task IntegrateOneVsAllPvaluesMINUS{
+  input{
+    Array[File] one_vs_all_comp_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 10,
+    disk_gb: 15,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{one_vs_all_comp_results[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2
+    done < ~{write_lines(one_vs_all_comp_results)} \
+      | cat header.txt - \
+      | bgzip -c \
+      > ~{prefix}.pre.txt.gz
+
+    python3 <<CODE
+    import os
+    fin = os.popen(r'''zcat %s'''%("~{prefix}.pre.txt.gz"))
+    svid_pv_hash = {}
+    for line in fin:
+      pin=line.strip().split()
+      if pin[0]=="VID":
+        continue
+      else:
+        if not pin[0] in svid_pv_hash.keys():
+          svid_pv_hash[pin[0]] = {}
+        if not pin[1] in svid_pv_hash[pin[0]].keys():
+          svid_pv_hash[pin[0]][pin[1]] = pin[6]
+    fin.close()
+
+    pcr_minus_batch_list = []
+    for i in list(range(1,11,1)):
+      pcr_minus_batch_list+=['mc'+str(i)+'b'+str(j) for j in list(range(1,26,1))] 
+
+    pcr_plus_batch_list = []
+    for i in list(range(1,6,1)):
+      pcr_plus_batch_list+=['pc'+str(i)+'b'+str(j) for j in list(range(1,7,1))] 
+
+    #pop_list=["afr","ami","amr","asj","eas","sas","fin","nfe","oth"]
+
+    out_header = ["VID"]
+    for j in pcr_minus_batch_list:
+      out_header.append('chisq_p_'+j)
+
+    fo = open("~{prefix}.pvalues.txt" , "w")
+    print('\t'.join(out_header), file=fo)
+    for i in svid_pv_hash.keys():
+      tmp = [i]
+      for k in pcr_minus_batch_list:
+        if 'gnomAD-SV_v3_'+k in svid_pv_hash[i].keys():
+          tmp.append(svid_pv_hash[i]['gnomAD-SV_v3_'+k])
+        else:
+          tmp.append('NA')
+      print('\t'.join(tmp), file=fo)
+    fo.close()
+
+    CODE
+
+    bgzip ~{prefix}.pvalues.txt
+
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task IntegrateOneVsAllPvaluesPLUS{
+  input{
+    Array[File]? one_vs_all_comp_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 10,
+    disk_gb: 15,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Array[File] one_vs_all_comp_result = select_first([one_vs_all_comp_results])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{one_vs_all_comp_result[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2 
+    done < ~{write_lines(one_vs_all_comp_result)} \
+      | cat header.txt - \
+      | bgzip -c \
+      > ~{prefix}.pre.txt.gz
+
+    python3 <<CODE
+    import os
+    fin = os.popen(r'''zcat %s'''%("~{prefix}.pre.txt.gz"))
+    svid_pv_hash = {}
+    for line in fin:
+      pin=line.strip().split()
+      if pin[0]=="VID":
+        continue
+      else:
+        if not pin[0] in svid_pv_hash.keys():
+          svid_pv_hash[pin[0]] = {}
+        if not pin[1] in svid_pv_hash[pin[0]].keys():
+          svid_pv_hash[pin[0]][pin[1]] = pin[6]
+    fin.close()
+
+    pcr_minus_batch_list = []
+    for i in list(range(1,11,1)):
+      pcr_minus_batch_list+=['mc'+str(i)+'b'+str(j) for j in list(range(1,26,1))] 
+
+    pcr_plus_batch_list = []
+    for i in list(range(1,6,1)):
+      pcr_plus_batch_list+=['pc'+str(i)+'b'+str(j) for j in list(range(1,7,1))] 
+
+    #pop_list=["afr","ami","amr","asj","eas","sas","fin","nfe","oth"]
+
+    out_header = ["VID"]
+    for j in pcr_plus_batch_list:
+      out_header.append('chisq_p_'+j)
+
+    fo = open("~{prefix}.pvalues.txt" , "w")
+    print('\t'.join(out_header), file=fo)
+    for i in svid_pv_hash.keys():
+      tmp = [i]
+      for k in pcr_plus_batch_list:
+        if 'gnomAD-SV_v3_'+k in svid_pv_hash[i].keys():
+          tmp.append(svid_pv_hash[i]['gnomAD-SV_v3_'+k])
+        else:
+          tmp.append('NA')
+      print('\t'.join(tmp), file=fo)
+    fo.close()
+
+    CODE
+
+    bgzip ~{prefix}.pvalues.txt
+
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Integrate pvalues from minus versus plus comparisons across all shards
+task IntegratePlusMinusFreqsPvalues_old{
+  input{
+    Array[File]? plus_minus_freq_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Array[File] plus_minus_freq_result = select_first([plus_minus_freq_results])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{plus_minus_freq_result[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2 
+    done < ~{write_lines(plus_minus_freq_result)} \
+      | cat header.txt - \
+      | bgzip -c \
+      > ~{prefix}.pre.txt.gz
+
+    python3 <<CODE
+    import os
+    fin = os.popen(r'''zcat %s'''%("~{prefix}.pre.txt.gz"))
+    svid_pv_hash = {}
+    for line in fin:
+      pin=line.strip().split()
+      if pin[0]=="VID":
+        continue
+      else:
+        if not pin[0] in svid_pv_hash.keys():
+          svid_pv_hash[pin[0]] = {}
+        if not pin[1] in svid_pv_hash[pin[0]].keys():
+          svid_pv_hash[pin[0]][pin[1]] = pin[4]
+        else:
+          print("Error: duplicated SVID for the same population")
+    fin.close()
+
+    pop_list=["afr","ami","amr","asj","eas","sas","fin","nfe","oth"]
+
+    fo = open("~{prefix}.pvalues.txt" , "w")
+    print('\t'.join(['VID']+ ['chisq_p_'+i for i in pop_list]), file=fo)
+    for i in svid_pv_hash.keys():
+      tmp = [i]+[svid_pv_hash[i][j] if j in svid_pv_hash[i].keys() else "NA" for j in pop_list]
+      print('\t'.join(tmp), file=fo)
+    fo.close()
+
+    CODE
+
+    bgzip ~{prefix}.pvalues.txt
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task IntegratePlusMinusFreqsPvalues{
+  input{
+    Array[File]? plus_minus_freq_results
+    String prefix
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Array[File] plus_minus_freq_result = select_first([plus_minus_freq_results])
+
+  command <<<
+    set -eux
+
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+    
+    zcat ~{plus_minus_freq_result[0]} | head -n1 > header.txt
+
+    # no more early stopping
+    set -o pipefail
+
+    while read SPLIT; do
+      zcat $SPLIT | tail -n+2 
+    done < ~{write_lines(plus_minus_freq_result)} \
+      | cat header.txt - \
+      | cut -f1,5 \
+      | bgzip -c \
+      > ~{prefix}.pvalues.txt.gz
+  >>>
+
+  output {
+    File results = "~{prefix}.pvalues.txt.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
 
 
 # Merge lists of batch effect checks and count total number of times each variant failed
@@ -892,3 +1375,9 @@ task ApplyBatchEffectLabels {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+
+
+
+
