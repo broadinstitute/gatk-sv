@@ -2,7 +2,7 @@
 # some basic bioinformatics utilities.
 
 # Start with linux base
-ARG SV_PIPELINE_BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-base:rlc_posthoc_filtering_cnv_mcnv_compatability_9a8561
+ARG SV_PIPELINE_BASE_IMAGE=us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2022-06-10-v0.23-beta-9c6fbf56
 FROM ${SV_PIPELINE_BASE_IMAGE}
 
 # Set environment variables.
@@ -55,7 +55,7 @@ RUN apt-get -qqy update --fix-missing && \
                  make cmake automake \
                  libssh2-1-dev \
                  libssl-dev && \
-    Rscript -e "install.packages(c('BiocManager', 'latticeExtra','optparse','data.table','lightgbm','pacman'), repos = 'https://cran.rstudio.com', quiet = TRUE)" && \
+    Rscript -e "install.packages(c('BiocManager', 'latticeExtra','optparse','data.table','caret','randomForest','lightgbm','pacman'), repos = 'https://cran.rstudio.com', quiet = TRUE)" && \
     Rscript -e "BiocManager::install(${SV_PIPELINE_BIOC_PKGS})" && \
     curl "${MNORMT_URL}" --output "${MNORMT_DEST}" && \
     curl "${DAAG_URL}" --output "${DAAG_DEST}" && \
@@ -87,8 +87,18 @@ COPY compare_callsets_V2.sh  /src/compare_callsets_V2.sh
 COPY compare_callsets_helper.V2.R /src/compare_callsets_helper.V2.R
 COPY split_bed_per_sample.py /src/split_bed_per_sample.py
 COPY split_gtgq_per_sample.py /src/split_gtgq_per_sample.py
-COPY Boost_Step1.Train_Boost_Model.R /src/Boost_Step1.Train_Boost_Model.R
-COPY Boost_Step1and2.Train_and_Apply_Boost.R /src/Boost_Step1and2.Train_and_Apply_Boost.R
-COPY Boost_Step2.Apply_Boost_Model.R /src/Boost_Step2.Apply_Boost_Model.R
-COPY Integrate_Boost_Score_across_Batches.R /src/Integrate_Boost_Score_across_Batches.R
-COPY Integrate_Boost_Score_across_Samples.py /src/Integrate_Boost_Score_across_Samples.py
+COPY Step3.apply_boost_filter.R /src/Step3.apply_boost_filter.R
+COPY integrate_Genomic_Content_annotations.R /src/integrate_Genomic_Content_annotations.R
+COPY extract_SVs_by_svtype_genomiccontect.py /src/extract_SVs_by_svtype_genomiccontect.py
+COPY TrainRandomForestModel.R /src/TrainRandomForestModel.R
+COPY integrate_per_sample_testdata.R /src/integrate_per_sample_testdata.R
+COPY integrate_per_sample_testdata.test.R /src/integrate_per_sample_testdata.test.R
+COPY apply_randon_forest_models.R /src/apply_randon_forest_models.R
+COPY filter_vcf_with_RF.py /src/filter_vcf_with_RF.py
+COPY add_random_forest_scores_to_vcf.py /src/add_random_forest_scores_to_vcf.py
+COPY annotate_vcf_with_BatchEffect.py /src/annotate_vcf_with_BatchEffect.py
+COPY identify_SVs_failed_BatchEffect.R /src/identify_SVs_failed_BatchEffect.R
+
+
+
+
