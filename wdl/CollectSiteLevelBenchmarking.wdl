@@ -17,7 +17,7 @@ workflow CollectSiteLevelBenchmarking {
     RuntimeAttr? runtime_override_merge_site_level_benchmark
   }
   String output_prefix = "~{prefix}_site_benchmark"
-  String tarball_dir_name = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output"
+  String tarball_dir = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output"
 	
   # Collect site-level external benchmarking data per chromosome
   scatter ( contig in contigs ) {
@@ -37,7 +37,7 @@ workflow CollectSiteLevelBenchmarking {
   call MergeContigBenchmarks {
     input:
       in_tarballs=VcfExternalBenchmarkSingleChrom.benchmarking_results_tarball,
-      tarball_dir_name=tarball_dir_name,
+      tarball_dir_name=tarball_dir,
       benchmark_name=benchmark_name,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_site_level_benchmark
@@ -45,7 +45,7 @@ workflow CollectSiteLevelBenchmarking {
 
   output {
     File benchmarking_results_tarball = MergeContigBenchmarks.merged_results_tarball
-    String tarball_dir_name = tarball_dir_name
+    String tarball_dir_name = tarball_dir
   }
 }
 
