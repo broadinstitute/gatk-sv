@@ -163,7 +163,7 @@ workflow MainVcfQc {
       call PlotSiteLevelBenchmarking {
         input:
           benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
-          prefix=prefix,
+          tarball_dir_name=CollectSiteLevelBenchmarking.tarball_dir_name,
           benchmark_name=comparison_dataset_info[0],
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_attr_override=runtime_override_site_level_benchmark_plot
@@ -403,7 +403,7 @@ task TarShardVidLists {
 task PlotSiteLevelBenchmarking {
   input {
     File benchmarking_tarball
-    String prefix
+    String tarball_dir_name
     String benchmark_name
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
@@ -433,15 +433,16 @@ task PlotSiteLevelBenchmarking {
     # Plot benchmarking stats
     /opt/sv-pipeline/scripts/vcf_qc/plotQC.external_benchmarking.helper.sh \
       ~{benchmarking_tarball} \
-      ~{benchmark_name}
+      ~{benchmark_name} \
+      ~{tarball_dir_name}
 
     # Prep outputs
-    tar -czvf ~{prefix}.collectQC_benchmarking_~{benchmark_name}_output.wPlots.tar.gz \
-    collectQC_benchmarking_~{benchmark_name}_output
+    tar -czvf ~{tarball_dir_name}.wPlots.tar.gz \
+      ~{tarball_dir_name}
   >>>
 
   output {
-    File tarball_wPlots = "~{prefix}.collectQC_benchmarking_~{benchmark_name}_output.wPlots.tar.gz"
+    File tarball_wPlots = "~{tarball_dir_name}.wPlots.tar.gz"
   }
 }
 
@@ -552,11 +553,11 @@ task PlotQcPerFamily {
     /opt/sv-pipeline/scripts/vcf_qc/cleanFamFile.sh \
       ~{samples_list} \
       ~{ped_file} \
-      cleaned.fam
+      ~{prefix}.cleaned.fam
     rm ~{ped_file} ~{samples_list}
 
     # Only run if any families remain after cleaning
-    n_fams=$( grep -Ev "^#" cleaned.fam | wc -l ) || true
+    n_fams=$( grep -Ev "^#" ~{prefix}.cleaned.fam | wc -l ) || true
     echo -e "DETECTED $n_fams FAMILIES"
     if [ $n_fams -gt 0 ]; then
 
@@ -572,15 +573,15 @@ task PlotQcPerFamily {
       done
 
       # Subset fam file, if optioned
-      n_trios=$( grep -Ev "^#" cleaned.fam \
+      n_trios=$( grep -Ev "^#" ~{prefix}.cleaned.fam \
                  | awk '{ if ($2 != "0" && $2 != "." && \
                               $3 != "0" && $3 != "." && \
                               $4 != "0" && $4 != ".") print $0 }' \
                  | wc -l )
       echo -e "DETECTED $n_trios COMPLETE TRIOS"
       if [ $n_trios -gt ~{max_trios} ]; then
-        grep -E '^#' cleaned.fam > fam_header.txt
-        grep -Ev "^#" cleaned.fam \
+        grep -E '^#' ~{prefix}.cleaned.fam > fam_header.txt
+        grep -Ev "^#" ~{prefix}.cleaned.fam \
         | awk '{ if ($2 != "0" && $2 != "." && \
                      $3 != "0" && $3 != "." && \
                      $4 != "0" && $4 != ".") print $0 }' \
@@ -592,7 +593,7 @@ task PlotQcPerFamily {
         echo -e "SUBSETTED TO $( cat cleaned.subset.fam | wc -l | awk '{ print $1-1 }' ) RANDOM FAMILIES"
       else
         echo -e "NUMBER OF TRIOS DETECTED ( $n_trios ) LESS THAN MAX_TRIOS ( ~{max_trios} ); PROCEEDING WITHOUT DOWNSAMPLING"
-        cp cleaned.fam cleaned.subset.fam
+        cp ~{prefix}.cleaned.fam cleaned.subset.fam
       fi
       
       # Run family analysis

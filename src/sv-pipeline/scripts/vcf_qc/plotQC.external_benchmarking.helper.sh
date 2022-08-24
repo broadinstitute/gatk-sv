@@ -27,6 +27,7 @@ EOF
 ###PARSE ARGS
 TARBALL=$1
 PREFIX=$2
+TARBALL_DIR=$3
 
 
 ###PROCESS ARGS & OPTIONS
@@ -47,6 +48,12 @@ if [ -z ${PREFIX} ]; then
   usage
   exit 0
 fi
+#Check for required input
+if [ -z ${TARBALL_DIR} ]; then
+  echo -e "\nERROR: tarball directory name not specified\n"
+  usage
+  exit 0
+fi
 
 
 ###SET BIN
@@ -57,7 +64,7 @@ BIN=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
 #Unarchive tarball
 tar -xzvf ${TARBALL} --directory `pwd`
 #Prep directory prefix
-OUTDIR=`pwd`/collectQC_benchmarking_${PREFIX}_output/
+OUTDIR=`pwd`/${TARBALL_DIR}
 #Prep plot directory
 if ! [ -e ${OUTDIR}/plots/ ]; then
   mkdir ${OUTDIR}/plots/

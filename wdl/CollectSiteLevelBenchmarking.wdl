@@ -16,8 +16,8 @@ workflow CollectSiteLevelBenchmarking {
     RuntimeAttr? runtime_override_site_level_benchmark
     RuntimeAttr? runtime_override_merge_site_level_benchmark
   }
-
-  String output_prefix="~{prefix}.site_benchmark"
+  String output_prefix = "~{prefix}_site_benchmark"
+  String tarball_dir_name = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output"
 	
   # Collect site-level external benchmarking data per chromosome
   scatter ( contig in contigs ) {
@@ -37,7 +37,7 @@ workflow CollectSiteLevelBenchmarking {
   call MergeContigBenchmarks {
     input:
       in_tarballs=VcfExternalBenchmarkSingleChrom.benchmarking_results_tarball,
-      prefix=output_prefix,
+      tarball_dir_name=tarball_dir_name,
       benchmark_name=benchmark_name,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_merge_site_level_benchmark
@@ -45,6 +45,7 @@ workflow CollectSiteLevelBenchmarking {
 
   output {
     File benchmarking_results_tarball = MergeContigBenchmarks.merged_results_tarball
+    String tarball_dir_name = tarball_dir_name
   }
 }
 
@@ -96,12 +97,12 @@ task VcfExternalBenchmarkSingleChrom {
       collectQC_benchmarking_~{benchmark_name}_~{contig}_output/
     
     # Prep outputs
-    tar -czvf ~{prefix}.collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz \
+    tar -czvf ~{prefix}_collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz \
       collectQC_benchmarking_~{benchmark_name}_~{contig}_output
   >>>
 
   output {
-    File benchmarking_results_tarball = "~{prefix}.collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz"
+    File benchmarking_results_tarball = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_~{contig}_output.tar.gz"
   }
 }
 
@@ -111,10 +112,11 @@ task MergeContigBenchmarks {
   input {
     Array[File] in_tarballs
     String benchmark_name
-    String prefix
+    String tarball_dir_name
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
+
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
     disk_gb: 40,
@@ -142,8 +144,8 @@ task MergeContigBenchmarks {
     done < ~{write_lines(in_tarballs)}
 
     # Create final output directory
-    mkdir ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output
-    mkdir ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data
+    mkdir ~{tarball_dir_name}
+    mkdir ~{tarball_dir_name}/data
 
     # Merge each unique BED
     find sharded_results/ -name "*.bed.gz" | xargs -I {} basename {} | sort -V | uniq > bed_filenames.list
@@ -152,17 +154,17 @@ task MergeContigBenchmarks {
       sed -n '1p' matching_beds.list | xargs -I {} zcat {} | sed -n '1p' > header.bed
       cat matching_beds.list | xargs -I {} zcat {} | fgrep -v "#" \
       | sort -Vk1,1 -k2,2n -k3,3n | cat header.bed - | bgzip -c \
-      > ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data/$fname
-      tabix -f ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output/data/$fname
+      > ~{tarball_dir_name}/data/$fname
+      tabix -f ~{tarball_dir_name}/data/$fname
     done < bed_filenames.list
 
     # Compress final output directory
     tar -czvf \
-      ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output.tar.gz \
-      ~{prefix}_collectQC_benchmarking_~{benchmark_name}_output
+      ~{tarball_dir_name}.tar.gz \
+      ~{tarball_dir_name}
   >>>
 
   output {
-    File merged_results_tarball = "~{prefix}_collectQC_benchmarking_~{benchmark_name}_output.tar.gz"
+    File merged_results_tarball = "~{tarball_dir_name}.tar.gz"
   }
 }
