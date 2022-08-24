@@ -10,13 +10,13 @@ FROM $PYTHON_VIRTUAL_ENV_IMAGE as python_virtual_env
 ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
-    apt-get -qqy install --no-install-recommends $BUILD_DEPS ghostscript
+    apt-get -qqy install --no-install-recommends $BUILD_DEPS
 
 # install python packages
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda \
           psutil=5.8.0 pympler=0.9 tqdm=4.62.3 \
           numpy=1.23.0 pandas=1.4.3 scipy=1.7.3 dill=0.3.5.1 \
-          seaborn=0.11.2 matplotlib-base=3.5.1 \
+          seaborn=0.11.2 matplotlib-base=3.5.1 ghostscript=9.54.0 \
           cython=0.29.28 \
           pytest=7.1.2 pytest-cov=3.0.0
 

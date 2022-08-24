@@ -60,13 +60,14 @@ workflow CrossValidateGqRecalibrator {
                 vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
                 vcf_with_annotations=select_first([annotations_vcf]),
                 vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first(annotations_to_transfer),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
                 samtools_cloud_docker=samtools_cloud_docker
         }
     }
 
-    File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
-    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
+    File train_vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, train_vcf])
+    File train_vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index,
+                                          StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
      call TrainGqRecalibrator.TrainGqRecalibrator {
         input:
@@ -95,8 +96,10 @@ workflow CrossValidateGqRecalibrator {
             gq_recalibrator_model_file=TrainGqRecalibrator.output_gq_recalibrator_model_file,
             standardize_vcf=false,
             recalibrate_gq_args=recalibrate_gq_args,
+            samtools_cloud_docker=samtools_cloud_docker,
             gatk_docker=gatk_docker,
-            sv_utils_docker=sv_utils_docker
+            sv_utils_docker=sv_utils_docker,
+            samtools_cloud_docker=samtools_cloud_docker
     }
 
     if(!defined(pre_computed_cross_validation_vcfs)) {
@@ -142,7 +145,8 @@ workflow CrossValidateGqRecalibrator {
                 standardize_vcf=false,
                 recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
-                sv_utils_docker=sv_utils_docker
+                sv_utils_docker=sv_utils_docker,
+                samtools_cloud_docker=samtools_cloud_docker
         }
     }
 

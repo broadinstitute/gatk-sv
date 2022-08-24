@@ -290,25 +290,27 @@ def _fast_hist2d(
         x_edges: numpy.ndarray,
         y_edges: numpy.ndarray
 ):
+    num_x_bins = len(x_edges) - 1
+    num_y_bins = len(y_edges) - 1
+    max_ravel_bin = num_x_bins * num_y_bins - 1
+    bin_type = numpy.min_scalar_type(max_ravel_bin)
+    eps = 0 if numpy.issubdtype(x.dtype, numpy.integer) \
+        else numpy.finfo(x.dtype).resolution
+
     def _avg_diff(_edges) -> float:
         return (_edges[-1] - _edges[0]) / (len(_edges) - 1)
 
     def _is_uniform_spaced(_edges: numpy.ndarray) -> bool:
         return numpy.allclose(_avg_diff(_edges), numpy.diff(_edges))
 
-    num_x_bins = len(x_edges) - 1
-    num_y_bins = len(y_edges) - 1
-    max_ravel_bin = num_x_bins * num_y_bins - 1
-    bin_type = numpy.min_scalar_type(max_ravel_bin)
-
-    def _get_bin_indices(_values: numpy.ndarray, _edges, _flip: bool = False) -> numpy.ndarray:
-        _delta = _avg_diff(_edges)
-        return numpy.minimum(
-            numpy.floor(
-                ((_edges[-1] - _values) if _flip else (_values - _edges[0])) / _delta,
-            ).astype(bin_type),
-            len(_edges) - 2
-        )
+    def _get_bin_indices(_values: numpy.ndarray, _edges: numpy.ndarray) -> numpy.ndarray:
+        """ Get indices corresponding to regularly-spaced bins """
+        # pad bins with eps to avoid rounding errors leading to invalid bin assignments (<=0 or >=num_bins)
+        _delta = 2 * eps + _avg_diff(_edges)
+        _base = _edges[0] - eps
+        return numpy.floor(
+            (_values - _base) / _delta
+        ).astype(bin_type)
 
     def _get_ravel_indices():
         # want to flip y and rotate 90 at *THIS* stage so we don't have to do that operation to hist_mat
@@ -316,9 +318,10 @@ def _fast_hist2d(
 
     if _is_uniform_spaced(x_edges) and _is_uniform_spaced(y_edges):
         # can do faster 2d histogram
-        hist_mat = numpy.resize(
-            numpy.bincount(_get_ravel_indices()), (num_x_bins, num_y_bins)
-        )
+        ravel_indices = _get_ravel_indices()
+        bin_counts = numpy.bincount(ravel_indices)
+        hist_mat = numpy.zeros((num_x_bins, num_y_bins), dtype=bin_type)
+        hist_mat.ravel()[:len(bin_counts)] = bin_counts
     else:
         # have to do it slowly
         hist_mat, x_edges, y_edges = numpy.histogram2d(x, y, bins=[x_edges, y_edges], density=False)
@@ -408,6 +411,12 @@ def hist2d(
     Returns:
         mesh: matplotlib.Collections.QuadMesh
             matplotlib object containing heatmap. Will be None if no drawable data is provided.
+        hist_mat: numpy.ndarray
+            num_x_bins x num_y_bins matrix of counts for each bin on the grid 
+        x_edges: numpy.ndarray
+            array of length num_x_bins + 1, with the edges of each x bin 
+        y_edges: numpy.ndarray
+            array of length num_y_bins + 1, with the edges of each y bin
     """
     if isinstance(x, pandas.Series):
         x = x.values
@@ -449,9 +458,6 @@ def hist2d(
         # noinspection PyTypeChecker
         y_edges = _get_edges_arr(y_bins, yscale, (numpy.nanmin(y), numpy.nanmax(y)))
         hist_mat, x_edges, y_edges = _fast_hist2d(x, y, x_edges=x_edges, y_edges=y_edges)
-        if mask_condition is not None:
-            # mark masked value as masked, they will not be plotted
-            hist_mat = numpy.ma.masked_where(mask_condition(hist_mat), hist_mat)
         # transform edge coordinates back to correct values
         if xscale == "log":
             x_edges = 10 ** x_edges
@@ -460,8 +466,9 @@ def hist2d(
 
         ax.grid(False)
         mesh = ax.pcolormesh(
-            x_edges, y_edges, hist_mat, norm=colors.LogNorm() if zscale == "log" else colors.Normalize(),
-            cmap=cmap, edgecolors="face"
+            x_edges, y_edges,
+            hist_mat if mask_condition is None else numpy.ma.masked_where(mask_condition(hist_mat), hist_mat),
+            norm=colors.LogNorm() if zscale == "log" else colors.Normalize(), cmap=cmap, edgecolors="face"
         )
     else:
         hist_mat, x_edges, y_edges = numpy.array([]).reshape((0, 0)), numpy.array([]), numpy.array([])
@@ -469,7 +476,8 @@ def hist2d(
 
     if not isinstance(cmap, matplotlib.colors.Colormap):
         cmap = getattr(pyplot.cm, cmap).copy()
-    cmap.set_bad(mask_color)
+    if mask_condition is not None:
+        cmap.set_bad(mask_color)
     if xlim is None and len(x_edges) > 0:
         xlim = (min(x_edges[x_edges > 0]), max(x_edges[x_edges > 0])) if xscale == "log" else (x_edges[0], x_edges[-1])
     if xlim is not None:
@@ -491,7 +499,9 @@ def hist2d(
     if tick_fontsize is not None:
         ax.tick_params(axis='both', which='major', labelsize=tick_fontsize)
     if colorbar and mesh is not None:
-        cbar = add_colorbar(mesh, cax=ax if colorbar_axes is None else colorbar_axes)
+        # noinspection PyArgumentList
+        cbar = add_colorbar(mesh, ax=[ax]) if colorbar_axes is None \
+            else add_colorbar(mesh, cax=colorbar_axes)
         if zlabel is not None:
             cbar.set_label(zlabel)
     return mesh, hist_mat, x_edges, y_edges

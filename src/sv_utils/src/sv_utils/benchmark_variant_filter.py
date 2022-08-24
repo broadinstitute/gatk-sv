@@ -5,6 +5,7 @@ import argparse
 import json
 import numpy
 import scipy
+import scipy.stats
 import pandas
 from matplotlib import pyplot
 from matplotlib.backends.backend_pdf import PdfPages
@@ -62,7 +63,8 @@ class Keys:
     hardy_weinberg = "hardy-weinberg"
 
 
-_all_make_figures = frozenset({Keys.precision_recall, Keys.inheritance, Keys.violation_curve, Keys.hardy_weinberg})
+_all_make_figures = frozenset({Keys.precision_recall, Keys.inheritance, Keys.variants_per_sample, Keys.violation_curve,
+                               Keys.hardy_weinberg})
 
 
 class Default:
@@ -390,7 +392,7 @@ class ScoresDataSet:
     static from_json() function.
     """
     __slots__ = ("vcfs", "scores_sources", "label", "scores", "allele_counts", "inheritance_stats", "metrics",
-                 "category")
+                 "category", "_num_called_genotypes")
 
     def __init__(
             self,
@@ -402,6 +404,7 @@ class ScoresDataSet:
             inheritance_stats: Optional[pandas.DataFrame] = None,
             metrics: Optional[pandas.DataFrame] = None,
             category: str = Keys.all_variant_types,
+            num_called_genotypes: Optional[pandas.Series] = None
     ):
         """
 
@@ -424,6 +427,7 @@ class ScoresDataSet:
         self.inheritance_stats = inheritance_stats
         self.metrics = metrics
         self.category = category
+        self._num_called_genotypes = num_called_genotypes
 
     @staticmethod
     def from_json(
@@ -553,21 +557,14 @@ class ScoresDataSet:
             sv_type_cutoff_selector: SvTypeCutoffSelector
     ) -> "ScoresDataSet":
         wanted = sv_type_cutoff_selector(self.metrics)
-        allele_counts = self.allele_counts.loc[wanted]
-        inheritance_stats = None if self.inheritance_stats is None else self.inheritance_stats[wanted]
-        metrics = self.metrics.loc[wanted]
-        scores = self.scores.loc[wanted]
-        assert allele_counts.index.equals(metrics.index)
-        assert allele_counts.index.equals(scores.index)
-        if inheritance_stats is not None:
-            assert allele_counts.index.equals(inheritance_stats.index)
         return ScoresDataSet(
             vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label,
-            scores=scores,
-            allele_counts=allele_counts,
-            inheritance_stats=inheritance_stats,
-            metrics=metrics,
-            category=category
+            scores=self.scores.loc[wanted],
+            allele_counts=self.allele_counts.loc[wanted],
+            inheritance_stats=None if self.inheritance_stats is None else self.inheritance_stats[wanted],
+            metrics=self.metrics.loc[wanted],
+            category=category,
+            num_called_genotypes=None if self._num_called_genotypes is None else self._num_called_genotypes[wanted]
         )
 
     @property
@@ -593,12 +590,22 @@ class ScoresDataSet:
         return (self.allele_counts > 0).sum(axis=0, skipna=True)
 
     @property
-    def num_het_samples(self) -> pandas.Series:
+    def num_het_genotypes(self) -> pandas.Series:
         return (self.allele_counts == 1).sum(axis=1, skipna=True)
 
     @property
+    def num_ref_genotypes(self) -> pandas.Series:
+        return (self.allele_counts == 0).sum(axis=1, skipna=True)
+
+    @property
+    def num_homvar_genotypes(self) -> pandas.Series:
+        return (self.allele_counts == 2).sum(axis=1, skipna=True)
+
+    @property
     def num_called_genotypes(self) -> pandas.Series:
-        return (~self.allele_counts.isna()).sum(axis=1, skipna=True)
+        if self._num_called_genotypes is None:
+            self._num_called_genotypes = self.allele_counts.shape[1] - (self.allele_counts.isna()).sum(axis=1)
+        return self._num_called_genotypes
 
     @property
     def num_variant_alleles(self) -> pandas.Series:
@@ -610,7 +617,7 @@ class ScoresDataSet:
 
     @property
     def het_proportion(self) -> pandas.Series:
-        return self.num_het_samples / self.num_called_genotypes
+        return self.num_het_genotypes / self.num_called_genotypes
 
     def apply_hard_filter(self, passing_score: Optional[float] = None) -> "ScoresDataSet":
         if passing_score is None:
@@ -623,10 +630,11 @@ class ScoresDataSet:
             return ScoresDataSet(
                 vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label, scores=self.scores.loc[wanted],
                 allele_counts=None if self.allele_counts is None else self.allele_counts[wanted],
-                inheritance_stats=None, metrics=self.metrics.loc[wanted], category=self.category
+                inheritance_stats=None, metrics=self.metrics.loc[wanted], category=self.category,
+                num_called_genotypes=None if self._num_called_genotypes is None
+                else self._num_called_genotypes.lloc[wanted]
             )
         else:  # this is a genotype filter
-            assert self.scores.index.equals(self.allele_counts.index)
             # noinspection PyTypeChecker
             # keep allele counts where score >= passing score, otherwise set to NA
             # NOTE: it is possible for some VCFs to have missing (i.e. NULL) scores, in which case we will filter
@@ -636,11 +644,10 @@ class ScoresDataSet:
                 pandas.NA
             )
 
-            assert allele_counts.index.equals(self.allele_counts.index)
-
             return ScoresDataSet(
                 vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label, scores=self.scores,
-                allele_counts=allele_counts, inheritance_stats=None, metrics=self.metrics, category=self.category
+                allele_counts=allele_counts, inheritance_stats=None, metrics=self.metrics, category=self.category,
+                num_called_genotypes=None
             )
 
     @staticmethod
@@ -669,7 +676,7 @@ class ScoresDataSet:
             if not pedigree_line.any_unknown and all(sample_id in sample_ids for sample_id in pedigree_line.trio_ids)
         ]
         num_trios = len(trio_probands)
-        numpy_trios_tensor = numpy.empty((num_variants, num_trios, 3), dtype=numpy.int8)
+        numpy_trios_tensor = numpy.empty((num_variants, num_trios, 3), dtype=numpy_dtype)
         trio_ind = 0
         null_value = get_dtype_info(numpy_dtype).min  # set null value to the min allowed value for this dtype
         for pedigree_line in truth_data.pedigree_file_info.pedigree_lines:
@@ -775,8 +782,10 @@ class ScoresDataSet:
             return None
         column_infos = [get_dtype_info(dt) for dt in set(self.scores.dtypes)]
         min_value = min(column_info.min for column_info in column_infos)
+        # for speed purposes, we're not using masked array, just setting nulled values to a low value and using that as
+        # null. So set null to be the min allowed value, and insist that it be at least as small as -1
         min_type = genomics_io.IntPropertyCollator.range_to_min_int_dtype(
-            min_value=min_value, max_value=max(column_info.max for column_info in column_infos), nullable=False
+            min_value=min(min_value, -1), max_value=max(column_info.max for column_info in column_infos), nullable=False
         )
         # noinspection PyArgumentList
         min_scores = ScoresDataSet._dataframe_to_trio_3d_numpy(
@@ -784,10 +793,15 @@ class ScoresDataSet:
         )[0].min(axis=2)
 
         def _numpy_values_to_value_counts(_values: numpy.ndarray) -> pandas.Series:
+            """ Get unique set of all non-null score values, and count of number of times each occurs """
+            # first get rid of null scores (set to minimum allowed value by _dataframe_to_trio_3d_numpy)
+            _values = _values.compress(_values != numpy.iinfo(_values.dtype).min)
             if min_value >= 0:
+                # if original scores data was strictly non-negative, we can use this faster routine
                 _value_counts = pandas.Series(numpy.bincount(_values))
                 return _value_counts.loc[_value_counts > 0]
             else:
+                # use general purpose routine
                 return pandas.Series(_values).value_counts().sort_index()
 
         return MendelianViolationCurve.from_trio_category_scores(
@@ -947,11 +961,13 @@ class MendelianViolationCurve:
         # because they are formed from pandas.Series.value_counts(), which returns the count of items with a unique
         # value
         thresholds = trio_category_score_counts[MendelianViolationCurve.num_trios_key].index.values
+        if not numpy.isfinite(thresholds).any():
+            return None  # the curve is empty
 
         if plotted_mendelian_violation_keys is not None and Keys.num_trios not in plotted_mendelian_violation_keys:
             # always need num_trios, because that's needed for normalization
             plotted_mendelian_violation_keys += (Keys.num_trios,)
-        return None if len(thresholds) == 0 else MendelianViolationCurve(
+        return MendelianViolationCurve(
             dataframe=pandas.DataFrame(
                 {
                     trio_category: MendelianViolationCurve._num_passing_at_thresholds(score_counts, thresholds)
@@ -1160,6 +1176,9 @@ def get_precision_recall_curves(
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector]
 ) -> Dict[str, Dict[str, PrecisionRecallCurve]]:
+    """
+    return dict from SV category to another mapping, that being a dict from data set label to precision-recall curve
+    """
     log("get_precision_recall_curves() ...")
     precision_recall_curves = _filter_null_curves_categories(
         {
@@ -1178,7 +1197,7 @@ def get_precision_recall_curves(
 
 def _filter_null_stats_categories(
         stats_by_category: Optional[Mapping[str, pandas.DataFrame]]
-) -> Optional[Mapping[str, pandas.DataFrame]]:
+) -> Optional[Dict[str, pandas.DataFrame]]:
     if stats_by_category is None:
         return None
     # noinspection PyUnresolvedReferences
@@ -1188,19 +1207,20 @@ def _filter_null_stats_categories(
     }
 
 
-def get_mendelian_stats_and_variants_per_sample(
+def get_mendelian_inheritance_stats(
         truth_data: TruthData,
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
         max_f1_thresholds: Mapping[str, float],
         plot_max_f1: bool,
         replot_unfiltered: bool,
-) -> (Optional[Dict[str, pandas.DataFrame]], Dict[str, pandas.DataFrame]):
-    log("get_mendelian_stats_and_variants_per_sample() ...")
-    no_inheritance_data = truth_data.pedigree_file_info is None
+) -> Optional[Dict[str, pandas.DataFrame]]:
+    log("get_mendelian_inheritance_stats() ...")
+    if truth_data.pedigree_file_info is None:
+        log("SKIPPED: get_mendelian_inheritance_stats(), no truth data")
+        return None
 
     inheritance_stats_dict = {}
-    variants_per_sample_dict = {}
     calculate_unfiltered = True
     for data_set in scores_data_sets:
         for filter_label, filter_score in {
@@ -1208,7 +1228,9 @@ def get_mendelian_stats_and_variants_per_sample(
             Keys.filtered: data_set.passing_score,
             Keys.max_f1: max_f1_thresholds.get(data_set.label, None)
         }.items():
-            if filter_label == Keys.max_f1 and not plot_max_f1:
+            if filter_label == Keys.unfiltered and not calculate_unfiltered:
+                continue
+            elif filter_label == Keys.max_f1 and not plot_max_f1:
                 continue  # don't need/want max-f1 so skip calculation
             log(f"get_inheritance_stats({data_set.label}:{filter_label}) ...")
             filtered_data_set = data_set.get_inheritance_stats(truth_data=truth_data) if filter_score is None \
@@ -1218,15 +1240,9 @@ def get_mendelian_stats_and_variants_per_sample(
                 log(f"\tselect_variants: {category} ...")
                 selected_filtered_data_set = filtered_data_set.select_category(category=category,
                                                                                sv_type_cutoff_selector=selector)
-                if filter_label == Keys.unfiltered and not calculate_unfiltered:
-                    continue
-
                 log("\tsum inheritance stats ...")
-                inheritance_stats_dict[(data_set.label, filter_label, category)] = None if no_inheritance_data \
-                    else selected_filtered_data_set.inheritance_stats.astype(pandas.UInt64Dtype()).sum(axis=0)
-                log("\tget variants per sample ...")
-                variants_per_sample_dict[(data_set.label, filter_label, category)] = \
-                    selected_filtered_data_set.variants_per_sample
+                inheritance_stats_dict[(data_set.label, filter_label, category)] = \
+                    selected_filtered_data_set.inheritance_stats.astype(pandas.UInt64Dtype()).sum(axis=0)
             log(f"get_inheritance_stats({data_set.label}:{filter_label}) COMPLETE")
             if filter_label == Keys.unfiltered and not replot_unfiltered:
                 # don't re-compute unfiltered stats
@@ -1236,8 +1252,7 @@ def get_mendelian_stats_and_variants_per_sample(
     filter_keys = (Keys.unfiltered, Keys.filtered, Keys.max_f1) if plot_max_f1 \
         else (Keys.unfiltered, Keys.filtered)
     mendelian_inheritance_stats = _filter_null_stats_categories(
-        None if no_inheritance_data
-        else {
+        {
             category: pandas.DataFrame.from_dict(
                 {
                     (data_set.label, filter_label): inheritance_stats_dict[(data_set.label, filter_label, category)]
@@ -1250,6 +1265,48 @@ def get_mendelian_stats_and_variants_per_sample(
             for category, __ in iter_categories(sv_selectors)
         }
     )
+    log("COMPLETE: get_mendelian_inheritance_stats()")
+    return mendelian_inheritance_stats
+
+
+def get_variants_per_sample(
+        scores_data_sets: Collection[ScoresDataSet],
+        sv_selectors: Mapping[str, SvTypeCutoffSelector],
+        max_f1_thresholds: Mapping[str, float],
+        plot_max_f1: bool,
+        replot_unfiltered: bool,
+) -> Dict[str, pandas.DataFrame]:
+    log("get_variants_per_sample() ...")
+
+    variants_per_sample_dict = {}
+    calculate_unfiltered = True
+    for data_set in scores_data_sets:
+        for filter_label, filter_score in {
+            Keys.unfiltered: None,
+            Keys.filtered: data_set.passing_score,
+            Keys.max_f1: max_f1_thresholds.get(data_set.label, None)
+        }.items():
+            if filter_label == Keys.unfiltered and not calculate_unfiltered:
+                continue
+            if filter_label == Keys.max_f1 and not plot_max_f1:
+                continue  # don't need/want max-f1 so skip calculation
+            log(f"get variants per sample({data_set.label}:{filter_label}) ...")
+            filtered_data_set = data_set if filter_score is None else data_set.apply_hard_filter(filter_score)
+
+            for category, selector in iter_categories(sv_selectors):
+                log(f"\tselect_variants: {category} ...")
+                selected_filtered_data_set = filtered_data_set.select_category(category=category,
+                                                                               sv_type_cutoff_selector=selector)
+                log("\tget variants per sample ...")
+                variants_per_sample_dict[(data_set.label, filter_label, category)] = \
+                    selected_filtered_data_set.variants_per_sample
+            if filter_label == Keys.unfiltered and not replot_unfiltered:
+                # don't re-compute unfiltered stats
+                if calculate_unfiltered:
+                    calculate_unfiltered = False
+
+    filter_keys = (Keys.unfiltered, Keys.filtered, Keys.max_f1) if plot_max_f1 \
+        else (Keys.unfiltered, Keys.filtered)
 
     variants_per_sample = _filter_null_stats_categories(
         {
@@ -1265,8 +1322,8 @@ def get_mendelian_stats_and_variants_per_sample(
             for category, __ in iter_categories(sv_selectors)
         }
     )
-    log("COMPLETE: get_mendelian_inheritance_stats_and_variants_per_sample()")
-    return mendelian_inheritance_stats, variants_per_sample
+    log("COMPLETE: get_variants_per_sample()")
+    return variants_per_sample
 
 
 def get_mendelian_violation_curves(
@@ -1283,7 +1340,6 @@ def get_mendelian_violation_curves(
     for data_set in scores_data_sets:
         log(f"get_inheritance_stats({data_set.label}) ...")
         filtered_data_set = data_set.get_inheritance_stats(truth_data=truth_data)
-
         for category, selector in iter_categories(sv_selectors):
             log(f"\tselect_variants: {category} ...")
             selected_filtered_data_set = filtered_data_set.select_category(category=category,
@@ -1296,7 +1352,11 @@ def get_mendelian_violation_curves(
                 mendelian_violation_curves_dict[category][data_set.label] = violation_curve
 
     log("COMPLETE: get_mendelian_violation_curves()")
-    return mendelian_violation_curves_dict
+    return {
+        sv_category : category_violation_curves
+        for sv_category, category_violation_curves in mendelian_violation_curves_dict.items()
+        if len(category_violation_curves) > 0
+    }
 
 
 def scale_inheritance_stats(
@@ -1358,6 +1418,9 @@ def plot_mendelian_inheritance_stats(
     ax.set_xlim([0.5, x + 0.5])
     # noinspection PyTypeChecker
     ax.set_ylim([0.0, 1.0])
+    ax.set_yscale("symlog", linthresh=0.01)
+    ax.set_yticks([0, 0.01, 0.1, 1.0])
+    ax.set_yticklabels(["0%", "1%", "10%", "100%"], fontsize=tick_font_size)
     unfiltered_num_trios = unfiltered_num_trios.values.max()
     title_str = f"{title}: {unfiltered_num_trios:d} trios" if title else f"{unfiltered_num_trios:d} trios"
     ax.set_title(title_str, fontsize=title_font_size, verticalalignment="top")
@@ -1410,7 +1473,7 @@ def plot_mendelian_violation_curves(
             max_x = dt_info.min  # on the data
         min_x = mendelian_violation_curve.thresholds.min(initial=min_x)
         max_x = mendelian_violation_curve.thresholds.max(initial=max_x)
-        best_threshold = best_thresholds[label]
+        best_threshold = best_thresholds[label] if plot_max_f1 else None
         default_threshold = default_thresholds[label]
         # noinspection PyTypeChecker
         p_default = mendelian_violation_curve.get_point_at_threshold(default_threshold, get_proportions=True)
@@ -1509,7 +1572,7 @@ def plot_variants_per_sample(
         ax.set_title(title, fontsize=title_font_size, verticalalignment="top")
 
 
-def get_mendelian_inheritance_and_variants_per_sample_figures(
+def get_mendelian_inheritance_figure(
         truth_data: TruthData,
         scores_data_sets: Collection[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
@@ -1523,45 +1586,29 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         plot_max_f1: bool = Default.plot_max_f1,
         replot_unfiltered: bool = Default.replot_unfiltered,
         pdf_writer: Optional[PdfPages] = None
-) -> (Optional[pyplot.Figure], Optional[pyplot.Figure]):
-    mendelian_inheritance_stats, variants_per_sample = \
-        get_mendelian_stats_and_variants_per_sample(
-            truth_data=truth_data, scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
-            max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1, replot_unfiltered=replot_unfiltered,
-        )
+) -> Optional[pyplot.Figure]:
+    mendelian_inheritance_stats = get_mendelian_inheritance_stats(
+        truth_data=truth_data, scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
+        max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1, replot_unfiltered=replot_unfiltered,
+    )
+    log("get_mendelian_inheritance_figure() ...")
+    if mendelian_inheritance_stats is None:
+        log("Skipped: get_mendelian_inheritance_figure(), no inheritance data")
+        return None
 
-    log("get_mendelian_inheritance_and_variants_per_sample_figures() ...")
-
-    no_inheritance_data = truth_data.pedigree_file_info is None
-    have_inheritance_data = not no_inheritance_data
-    if have_inheritance_data:
-        # construct mendelian inheritance figure and variants per sample figure in the same loop,
-        # add extra axis for legend
-        mendelian_inheritance_fig, mendelian_inheritance_gridspec, __ = make_fig_and_gridspec(
-            num_axes=len(mendelian_inheritance_stats) + 1, num_rows=num_inheritance_stats_rows
-        )
-    else:
-        mendelian_inheritance_fig = None
-        mendelian_inheritance_gridspec = None
-
-    variants_per_sample_fig, variants_per_sample_gridspec, num_columns = make_fig_and_gridspec(
-        num_axes=len(variants_per_sample) + 1, num_rows=num_inheritance_stats_rows
+    # construct mendelian inheritance figure and variants per sample figure in the same loop,
+    # add extra axis for legend
+    mendelian_inheritance_fig, mendelian_inheritance_gridspec, num_columns = make_fig_and_gridspec(
+        num_axes=len(mendelian_inheritance_stats) + 1, num_rows=num_inheritance_stats_rows
     )
 
     row, column = 0, 0
     for sv_category, category_inheritance_stats in mendelian_inheritance_stats.items():
-        if have_inheritance_data:
-            inheritance_ax = mendelian_inheritance_fig.add_subplot(mendelian_inheritance_gridspec[row, column])
-            plot_mendelian_inheritance_stats(
-                inheritance_ax, category_inheritance_stats, title=sv_category, title_font_size=title_font_size,
-                label_font_size=label_font_size, tick_labelrotation=tick_labelrotation, tick_font_size=tick_font_size,
-                plot_max_f1=plot_max_f1
-            )
-        variants_per_sample_ax = variants_per_sample_fig.add_subplot(variants_per_sample_gridspec[row, column])
-        category_variants_per_sample = variants_per_sample[sv_category]
-        plot_variants_per_sample(
-            variants_per_sample_ax, category_variants_per_sample, title=sv_category, title_font_size=title_font_size,
-            label_font_size=label_font_size, tick_font_size=tick_font_size, plot_max_f1=plot_max_f1
+        inheritance_ax = mendelian_inheritance_fig.add_subplot(mendelian_inheritance_gridspec[row, column])
+        plot_mendelian_inheritance_stats(
+            inheritance_ax, category_inheritance_stats, title=sv_category, title_font_size=title_font_size,
+            label_font_size=label_font_size, tick_labelrotation=tick_labelrotation, tick_font_size=tick_font_size,
+            plot_max_f1=plot_max_f1
         )
         column += 1
         if column == num_columns:
@@ -1572,25 +1619,72 @@ def get_mendelian_inheritance_and_variants_per_sample_figures(
         for data_label in mendelian_inheritance_stats[Keys.all_variant_types].index
         if plot_max_f1 or not "".join(data_label).endswith(Keys.max_f1)
     ]
-    if have_inheritance_data:
-        _draw_extra_legend_axis(
-            mendelian_inheritance_fig, mendelian_inheritance_gridspec, row, column,
-            line_labels=filter_line_labels, markers=[],
-            legend_font_size=legend_font_size
+    _draw_extra_legend_axis(
+        mendelian_inheritance_fig, mendelian_inheritance_gridspec, row, column,
+        line_labels=filter_line_labels, markers=[],
+        legend_font_size=legend_font_size
+    )
+
+    log("COMPLETE: get_mendelian_inheritance_figure()")
+    if pdf_writer is not None:
+        pdf_writer.savefig(mendelian_inheritance_fig, bbox_inches="tight")
+        return None
+    else:
+        return mendelian_inheritance_fig
+
+
+def get_variants_per_sample_figure(
+        scores_data_sets: Collection[ScoresDataSet],
+        sv_selectors: Mapping[str, SvTypeCutoffSelector],
+        best_thresholds: Optional[Mapping[str, float]] = None,
+        num_inheritance_stats_rows: int = Default.num_inheritance_stats_rows,
+        title_font_size: int = Default.title_font_size,
+        label_font_size: int = Default.label_font_size,
+        legend_font_size: int = Default.legend_font_size,
+        tick_font_size: int = Default.tick_font_size,
+        plot_max_f1: bool = Default.plot_max_f1,
+        replot_unfiltered: bool = Default.replot_unfiltered,
+        pdf_writer: Optional[PdfPages] = None
+) -> Optional[pyplot.Figure]:
+    variants_per_sample = get_variants_per_sample(
+        scores_data_sets=scores_data_sets, sv_selectors=sv_selectors,
+        max_f1_thresholds=best_thresholds, plot_max_f1=plot_max_f1, replot_unfiltered=replot_unfiltered,
+    )
+
+    log("get_variants_per_sample_figure() ...")
+
+    variants_per_sample_fig, variants_per_sample_gridspec, num_columns = make_fig_and_gridspec(
+        num_axes=len(variants_per_sample) + 1, num_rows=num_inheritance_stats_rows
+    )
+
+    row, column = 0, 0
+    for sv_category, category_variants_per_sample in variants_per_sample.items():
+        variants_per_sample_ax = variants_per_sample_fig.add_subplot(variants_per_sample_gridspec[row, column])
+        plot_variants_per_sample(
+            variants_per_sample_ax, category_variants_per_sample, title=sv_category, title_font_size=title_font_size,
+            label_font_size=label_font_size, tick_font_size=tick_font_size, plot_max_f1=plot_max_f1
         )
+        column += 1
+        if column == num_columns:
+            row, column = row + 1, 0
+
+    filter_line_labels = [
+        ' '.join(data_label)
+        for data_label in variants_per_sample[Keys.all_variant_types].index
+        if plot_max_f1 or not "".join(data_label).endswith(Keys.max_f1)
+    ]
     _draw_extra_legend_axis(
         variants_per_sample_fig, variants_per_sample_gridspec, row, column,
         line_labels=filter_line_labels, markers=[],
         legend_font_size=legend_font_size
     )
 
-    log("COMPLETE: get_mendelian_inheritance_and_variants_per_sample_figures()")
+    log("COMPLETE: variants_per_sample_figure()")
     if pdf_writer is not None:
-        pdf_writer.savefig(mendelian_inheritance_fig, bbox_inches="tight")
         pdf_writer.savefig(variants_per_sample_fig, bbox_inches="tight")
-        return None, None
+        return None
     else:
-        return mendelian_inheritance_fig, variants_per_sample_fig
+        return variants_per_sample_fig
 
 
 def get_mendelian_violation_curve_figure(
@@ -1615,6 +1709,7 @@ def get_mendelian_violation_curve_figure(
     log("get_mendelian_violation_curve_figure() ...")
     if mendelian_violation_curves is None:
         # no data to plot
+        log("SKIPPED: get_mendelian_violation_curve_figure(), no inheritance data")
         return None
 
     mendelian_violation_fig, mendelian_violation_gridspec, num_columns = make_fig_and_gridspec(
@@ -1742,6 +1837,188 @@ def get_hardy_weinberg_figure(
         return fig
 
 
+def _compute_hardy_weinberg_acceptance0(
+    allele_frequency: numpy.ndarray,
+    het_proportion: numpy.ndarray,
+    allele_frequency_grid_edges: numpy.ndarray,
+    proportion_het_grid_edges: numpy.ndarray,
+    histogram_mat: numpy.ndarray,
+    hardy_weinberg_rareness: float,
+    num_samples: int
+) -> (numpy.ndarray, numpy.ndarray, float):
+    grid_p_het_expected = 2 * allele_frequency_grid_edges * (1.0 - allele_frequency_grid_edges)
+    # compute acceptance lines to draw on top of histogram plot, using binomal :
+    p_het_low = scipy.stats.binom.ppf(hardy_weinberg_rareness, num_samples, grid_p_het_expected) / num_samples
+    p_het_high = scipy.stats.binom.ppf(1.0 - hardy_weinberg_rareness, num_samples, grid_p_het_expected) / num_samples
+
+    expected_het_proportion = 2 * allele_frequency * (1 - allele_frequency)
+    het_proportion_low = scipy.stats.binom.ppf(hardy_weinberg_rareness, num_samples, expected_het_proportion)\
+                         / num_samples
+    het_proportion_high = scipy.stats.binom.ppf(1.0 - hardy_weinberg_rareness, num_samples, expected_het_proportion) \
+                         / num_samples
+    proportion_accepted = numpy.logical_and(
+        het_proportion >= het_proportion_low,
+        het_proportion <= het_proportion_high
+        / num_samples,
+    ).mean()
+
+    print(f"proportion_accepted = {proportion_accepted}")
+
+    return p_het_low, p_het_high, proportion_accepted
+
+
+def _hardy_weinberg_chi_squared_to_num_hets_boundary(
+        hardy_weinberg_confidence: float,
+        alt_allele_frequency: numpy.ndarray,
+        num_ref_genotypes: numpy.ndarray,
+        num_called_genotypes: Union[numpy.ndarray, int]
+) -> (numpy.ndarray, numpy.ndarray):
+    """
+    Given a likelihood threshold and existing observed allele / genotype data, compute confidence interval on the number
+    of HET genotypes compatible with Hardy-Weinberg Equilibrium (HWE). Uses chi2 distribution as model of variability.
+    Args:
+        hardy_weinberg_confidence: float
+            Proportion of calls that should be in confidence interval for number of HET calls, assuming HWE
+        alt_allele_frequency: numpy.ndarray
+            num_variants length array of allele frequency for ALT allele
+        num_ref_genotypes: numpy.ndarray
+            number of genotypes called REF for each variant
+        num_called_genotypes: numpy.ndarray or int
+            number of genotypes called for each variant
+    Returns:
+        num_expected_het: numpy.ndarray
+            number of expected HET calls, if each variant was in HWE
+        het_delta: numpy.ndarray
+            +-delta to high/low boundary of confidence interval for HET calls in HWE
+    """
+    # get chi-squared threshold at desired rareness, with one degree of freedom (only #HETs varying)
+    chi_squared = scipy.stats.chi2.ppf(hardy_weinberg_confidence, df=1)
+    ref_allele_frequency = 1.0 - alt_allele_frequency
+    num_expected_ref = num_called_genotypes * ref_allele_frequency ** 2
+    num_expected_het = num_called_genotypes * 2 * ref_allele_frequency * alt_allele_frequency
+    # MATH and logic below
+    # num_expected_homvar = num_called_genotypes * alt_allele_frequency ** 2
+    # chi_squared = (
+    #     (num_ref_genotypes - num_expected_ref) ** 2 +
+    #     (num_homvar_genotypes - num_expected_homvar) ** 2 +
+    #     (num_het_genotypes - num_expected_het) ** 2
+    # ) / num_called_genotypes
+    # num_homvar_genotypes = (num_alt_alleles - num_het_genotypes) / 2
+    # num_homvar_genotypes = num_called_genotypes * alt_allele_frequency - num_het_genotypes / 2
+    # num_homvar_genotypes = num_expected_homvar / alt_allele_frequency - num_het_genotypes / 2
+    #      => num_homvar_genotypes - num_expected_homvar =
+    #               = num_expected_homvar * (1 - alt_allele_frequency) / alt_allele_frequency - num_het_genotypes / 2
+    #               = num_expected_homvar * ref_allele_frequency / alt_allele_frequency - num_het_genotypes / 2
+    #               = num_expected_het / 2 - num_het_genotypes / 2
+    # chi_squared = (
+    #     (num_ref_genotypes - num_expected_ref) ** 2 +
+    #     (num_expected_homvar * ref_allele_frequency / alt_allele_frequency - num_het_genotypes / 2) ** 2 +
+    #     (num_het_genotypes - num_expected_het) ** 2
+    # ) / num_called_genotypes
+    # chi_squared = (
+    #     (num_ref_genotypes - num_expected_ref) ** 2 +
+    #     1.25 * (num_het_genotypes - num_expected_het) ** 2
+    # ) / num_called_genotypes
+    het_delta = numpy.sqrt(
+        numpy.maximum(0.8 * (chi_squared * num_called_genotypes - (num_ref_genotypes - num_expected_ref) ** 2), 0)
+    )
+    return num_expected_het, het_delta
+
+
+def _compute_hardy_weinberg_proportion_accepted(
+        num_het_genotypes: numpy.ndarray,
+        num_ref_genotypes: numpy.ndarray,
+        alt_allele_frequency: numpy.ndarray,
+        num_called_genotypes: numpy.ndarray,
+        hardy_weinberg_confidence: float
+) -> float:
+    """ compute proportion of calls that are within """
+    # get confidence interval for number of HET calls for each variant
+    num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
+        hardy_weinberg_confidence=hardy_weinberg_confidence, alt_allele_frequency=alt_allele_frequency,
+        num_ref_genotypes=num_ref_genotypes, num_called_genotypes=num_called_genotypes
+    )
+    # compute proportion of calls inside their confidence interval
+    # noinspection PyUnresolvedReferences
+    return (numpy.abs(num_het_genotypes - num_expected_het) <= het_delta).mean()
+
+
+def _compute_hardy_weinberg_plotted_boundary(
+        proportion_het_grid: numpy.ndarray,
+        alt_allele_frequency_grid: numpy.ndarray,
+        num_samples: int,
+        hardy_weinberg_confidence: float
+) -> (numpy.ndarray, numpy.ndarray):
+    """
+    Compute confidence boundary for proportion of genotypes called HET on the Hardy-Weinberge Equilibrium (HWE) heat-map
+    plot.
+    Args:
+        proportion_het_grid: numpy.ndarray
+            Ed
+        alt_allele_frequency_grid:
+        num_samples:
+        hardy_weinberg_confidence:
+
+    Returns:
+        proportion_het_low: numpy.ndarray
+        proportion_het_high: numpy.ndarray
+    """
+    # We're working on a grid, where the number of REF calls is not defined. To visualize approximate confidence
+    # boundary, treat all no-calls as REF, in which case:
+    #   num_called_genotypes = num_samples
+    #   num_ref_genotypes = num_samples - num_het_genotypes - num_homvar_genotypes,
+    #           num_het_genotypes = num_samples * proportion_het
+    #           num_homvar_genotypes = (num_alt_alleles - num_het_genotypes) / 2
+    #           num_homvar_genotypes = (2 * num_samples * alt_allele_frequency - num_het_genotypes) / 2
+    #   => num_ref_genotypes = num_samples  - num_het_genotypes / 2 - alt_allele_frequency * num_samples
+    #                        = num_samples * (1 - proportion_het / 2 - alt_allele_frequency)
+
+    def _num_ref_genotypes(_proportion_het: numpy.ndarray) -> numpy.ndarray:
+        return num_samples * (1.0 - _proportion_het / 2 - alt_allele_frequency_grid)
+
+    log("\t_compute_hardy_weinberg_plotted_boundary() ...")
+
+    # don't know proportion_het at the boundary (that's what we're computing) so iterate
+    # start with low boundary, guess midway between the lowest possible and expected values
+    proportion_het_low = alt_allele_frequency_grid * (1.0 - alt_allele_frequency_grid)
+    previous = None
+    tol = 0.1 * numpy.diff(proportion_het_grid).mean()  # set tol to about 10% of a grid width
+    while previous is None or numpy.abs(proportion_het_low - previous).max() >= tol:
+        # to aid convergence, only take a half step each iteration:
+        num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
+            hardy_weinberg_confidence=hardy_weinberg_confidence,
+            alt_allele_frequency=alt_allele_frequency_grid,
+            num_ref_genotypes=_num_ref_genotypes(
+                proportion_het_low if previous is None else (previous + proportion_het_low) / 2
+            ),
+            num_called_genotypes=num_samples
+        )
+        previous = proportion_het_low
+        proportion_het_low = numpy.minimum(numpy.maximum(num_expected_het - het_delta, 0) / num_samples, 1)
+
+    # now do proportion_het_high, start midway between the highest possible and expected values
+    proportion_het_high = (
+            2 * alt_allele_frequency_grid * (1.0 - alt_allele_frequency_grid) +
+            1.0 - numpy.abs(2 * alt_allele_frequency_grid - 1)
+    ) / 2.0
+    previous = None
+    while previous is None or numpy.abs(proportion_het_high - previous).max() >= tol:
+        # to aid convergence, only take a half step each iteration:
+        num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
+            hardy_weinberg_confidence=hardy_weinberg_confidence,
+            alt_allele_frequency=alt_allele_frequency_grid,
+            num_ref_genotypes=_num_ref_genotypes(
+                proportion_het_high if previous is None else (previous + proportion_het_high) / 2
+            ),
+            num_called_genotypes=num_samples
+        )
+        previous = proportion_het_high
+        proportion_het_high = numpy.minimum(numpy.maximum(num_expected_het + het_delta, 0) / num_samples, 1)
+
+    log("\tCOMPLETE: _compute_hardy_weinberg_plotted_boundary()")
+    return proportion_het_low, proportion_het_high
+
+
 def plot_hardy_weinberg_proportions(
         ax: pyplot.Axes,
         scores_data_set: ScoresDataSet,
@@ -1750,30 +2027,39 @@ def plot_hardy_weinberg_proportions(
         label_font_size: int = Default.label_font_size,
         tick_font_size: int = Default.tick_font_size,
         colorbar_axes: Optional[pyplot.Axes] = None,
-        legend_axes: Optional[pyplot.Axes] = None
+        legend_axes: Optional[pyplot.Axes] = None,
 ):
-    mesh, histogram_mat, x_edges, y_edges = plotting.hist2d(
-        ax=ax, x=scores_data_set.allele_frequency.astype(numpy.float16),
-        y=scores_data_set.het_proportion.astype(numpy.float16),
-        xlabel="allele frequency", ylabel="proportion het", title=title, cmap="Reds", xlim=(0, 1), ylim=(0, 1),
+    log(f"\tplotting {title}")
+    num_het_genotypes = scores_data_set.num_het_genotypes
+    num_called_genotypes = scores_data_set.num_called_genotypes
+    alt_allele_frequency = scores_data_set.num_variant_alleles / (2 * num_called_genotypes)
+    het_proportion = num_het_genotypes / num_called_genotypes
+    __, histogram_mat, x_edges, y_edges = plotting.hist2d(
+        ax=ax, x=alt_allele_frequency, y=het_proportion,
+        xlabel="alt allele frequency", ylabel="proportion het", title=title, cmap="Reds", xlim=(0, 1), ylim=(0, 1),
         mask_condition=lambda hist_mat: hist_mat == 0, mask_color='w', colorbar=colorbar_axes is not None,
         colorbar_axes=colorbar_axes, zscale="log", zlabel="variant counts",
         title_fontsize=title_font_size, label_fontsize=label_font_size, tick_fontsize=tick_font_size,
         x_bins=50, y_bins=50
     )
-    grid_allele_frequency = x_edges
-    grid_p_het_expected = 2 * grid_allele_frequency * (1.0 - grid_allele_frequency)
-    hardy_weinberg_boundary_rareness: float = 1.0 / scores_data_set.num_samples
-    # noinspection PyUnresolvedReferences
-    p_het_low = scipy.stats.binom.ppf(
-        hardy_weinberg_boundary_rareness, scores_data_set.num_samples, grid_p_het_expected
-    ) / scores_data_set.num_samples
-    # noinspection PyUnresolvedReferences
-    p_het_high = scipy.stats.binom.ppf(
-        1.0 - hardy_weinberg_boundary_rareness, scores_data_set.num_samples, grid_p_het_expected
-    ) / scores_data_set.num_samples
-    ax.plot(grid_allele_frequency, p_het_high, ":b", label="acceptance region")
-    ax.plot(grid_allele_frequency, p_het_low, ":b", label="acceptance region")
+
+    hardy_weinberg_confidence = 1.0 - 5.0 / scores_data_set.num_samples
+    proportion_accepted = _compute_hardy_weinberg_proportion_accepted(
+        num_het_genotypes=num_het_genotypes.values, num_ref_genotypes=scores_data_set.num_ref_genotypes.values,
+        alt_allele_frequency=alt_allele_frequency, num_called_genotypes=num_called_genotypes.values,
+        hardy_weinberg_confidence=hardy_weinberg_confidence
+    )
+
+    proportion_het_low, proportion_het_high = _compute_hardy_weinberg_plotted_boundary(
+        proportion_het_grid=y_edges, alt_allele_frequency_grid=x_edges,
+        num_samples=scores_data_set.num_samples, hardy_weinberg_confidence=hardy_weinberg_confidence
+    )
+
+    ax.plot(x_edges, proportion_het_low, ":b", label="acceptance region")
+    ax.plot(x_edges, proportion_het_high, ":b", label="acceptance region")
+    ax.text(0.99, 0.99, f"{100 * proportion_accepted:.1f}% accepted",
+            horizontalalignment="right", verticalalignment="top", fontsize=label_font_size)
+
     if legend_axes is not None:
         legend_axes.plot([], [], "b:", label="acceptance region")
         legend_axes.legend(fontsize=label_font_size, loc="upper left")
@@ -1830,8 +2116,8 @@ def get_filter_quality_figures(
             best_thresholds = {}
 
     if Keys.inheritance in make_figures:
-        mendelian_inheritance_fig, variants_per_sample_fig = \
-            get_mendelian_inheritance_and_variants_per_sample_figures(
+        mendelian_inheritance_fig = \
+            get_mendelian_inheritance_figure(
                 truth_data=truth_data,
                 scores_data_sets=scores_data_sets,
                 sv_selectors=sv_selectors,
@@ -1846,7 +2132,24 @@ def get_filter_quality_figures(
                 pdf_writer=pdf_writer
             )
     else:
-        mendelian_inheritance_fig, variants_per_sample_fig = None, None
+        mendelian_inheritance_fig = None
+
+    if Keys.variants_per_sample in make_figures:
+        variants_per_sample_fig = \
+            get_variants_per_sample_figure(
+                scores_data_sets=scores_data_sets,
+                sv_selectors=sv_selectors,
+                best_thresholds=best_thresholds,
+                num_inheritance_stats_rows=num_inheritance_stats_rows,
+                title_font_size=title_font_size,
+                label_font_size=label_font_size,
+                legend_font_size=legend_font_size,
+                tick_font_size=tick_font_size,
+                plot_max_f1=plot_max_f1,
+                pdf_writer=pdf_writer
+            )
+    else:
+        variants_per_sample_fig = None
 
     if Keys.violation_curve in make_figures:
         mendelian_violation_curve_fig = get_mendelian_violation_curve_figure(
@@ -1911,7 +2214,7 @@ class SplitArgs(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         new_values = values.split(',')
         values = getattr(namespace, self.dest, set())
-        if isinstance(values, List):
+        if isinstance(values, frozenset):
             # this is the default, which we're overridding
             setattr(namespace, self.dest, set(new_values))
         else:
@@ -1964,7 +2267,7 @@ def main(argv: Optional[List[Text]] = None) -> (pyplot.Figure, pyplot.Figure):
     with PdfPages(arguments.figure_save_file) as pdf_writer:
         get_filter_quality_figures(
             truth_data=truth_data, sv_selectors=sv_selectors, scores_data_sets=scores_data_sets,
-            plot_max_f1=arguments.plot_max_f1, make_figures=arguments.make_figures, pdf_writer=pdf_writer
+            plot_max_f1=arguments.plot_max_f1, make_figures=set(arguments.make_figures), pdf_writer=pdf_writer
         )
 
 

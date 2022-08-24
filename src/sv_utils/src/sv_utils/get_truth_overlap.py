@@ -209,11 +209,11 @@ class PrecisionRecallCurve:
         thresholds = numpy.nan_to_num(numpy.concatenate((good_thresholds, bad_thresholds)), nan=nan_replacement)
         # construct precision-recall curve (vs threshold)
         n_good = len(good_thresholds)
-        if n_good == 0:
+        n_bad = len(bad_thresholds)
+        if n_good == 0 or n_bad == 0:
             # noinspection PyTypeChecker
             return PrecisionRecallCurve.empty_curve
 
-        n_bad = len(bad_thresholds)
         sort_ind = numpy.argsort(thresholds)[::-1] if is_high_cutoff else numpy.argsort(thresholds)
         thresholds = thresholds.take(sort_ind)
         recall = numpy.concatenate(
@@ -287,10 +287,7 @@ class PrecisionRecallCurve:
     def is_empty(self) -> bool:
         """ return True if there is no data that could be selected with a finite threshold, False otherwise """
         return self.dataframe.empty or (
-            self.dataframe.shape[0] == 1 and (
-                (self.is_high_cutoff and self.dataframe.index[0] == -numpy.inf) or
-                (not self.is_high_cutoff and self.dataframe.index[0] == numpy.inf)
-            )
+            self.dataframe.shape[0] == 1 and not numpy.isfinite(self.dataframe.index[0])
         )
 
     def get_point_at_max_f_score(self) -> Optional[pandas.Series]:

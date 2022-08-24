@@ -21,7 +21,19 @@ ENV CONDA_INSTALL_DIR=$CONDA_INSTALL_DIR
 ARG CONDA_ENV_BIN=$CONDA_INSTALL_DIR/envs/$CONDA_ENV_NAME/bin
 ENV PATH=$CONDA_ENV_BIN:$CONDA_BIN:$PATH
 
-# copy sv-utils and installed
+# install ghostscript, needed to copy
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy install --no-upgrade --no-install-recommends ghostscript && \
+    apt-get -qqy clean && \
+    rm -rf /tmp/* \
+           /var/tmp/* \
+           /var/cache/apt/* \
+           /var/lib/apt/lists/* \
+           /usr/share/man/?? \
+           /usr/share/man/??_*
+
+# copy sv-utils and install
 COPY src/sv_utils /opt/sv_utils
 RUN pip install -e /opt/sv_utils
 

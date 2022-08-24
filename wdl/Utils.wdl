@@ -476,11 +476,19 @@ task TransferVcfAnnotations {
   }
 
   command <<<
+    # if running in a local mode, this will fail, but it also won't be *needed*
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    set -euo pipefail
+
     bcftools annotate \
       -a ~{vcf_with_annotations} \
       -c ~{sep=',' annotations_to_transfer} \
-      -Oz -o ~{output_file_name} \
+      -Oz -o "~{output_file_name}" \
+      --threads 2 \
       ~{vcf_to_annotate}
+
+    bcftools index --tbi "~{output_file_name}" -o "~{output_file_name}.tbi"
   >>>
 
   output {

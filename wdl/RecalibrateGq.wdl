@@ -1,16 +1,21 @@
 version 1.0
 
 import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
+import "Utils.wdl" as Utils
 
 workflow RecalibrateGq {
     input {
         File vcf
         File vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         Array[File] genome_tracks
         File gq_recalibrator_model_file
         Boolean standardize_vcf = true
         Array[String] standardize_vcf_args = []
         Array[String] recalibrate_gq_args = []
+        String samtools_cloud_docker
         String gatk_docker
         String sv_utils_docker
     }
@@ -24,8 +29,21 @@ workflow RecalibrateGq {
         }
     }
 
-    File vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, vcf])
-    File vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, vcf_index])
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
+
+    File vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, vcf])
+    File vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index, StandardizeVcfForGatk.fixed_vcf_index,
+                                    vcf_index])
 
     call RecalibrateGqTask {
         input:

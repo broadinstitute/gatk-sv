@@ -7,6 +7,9 @@ workflow TrainGqRecalibrator {
     input {
         File train_vcf
         File train_vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
         Array[String]? vapor_sample_ids
@@ -33,8 +36,21 @@ workflow TrainGqRecalibrator {
         }
     }
 
-    File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
-    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
+
+    File train_vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, train_vcf])
+    File train_vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index,
+                                          StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
     call GetTruthOverlap.GetTruthOverlap {
         input:

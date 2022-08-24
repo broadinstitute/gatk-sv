@@ -76,6 +76,36 @@
       "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2"
     }
   ],
+  "CrossValidateGqRecalibrator.pre_computed_cross_validation_vcfs" : {
+      "train_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_4.vcf.gz"
+      ],
+      "train_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_4.vcf.gz.tbi"
+      ],
+      "test_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_4.vcf.gz"
+      ],
+      "test_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_4.vcf.gz.tbi"
+      ]
+  },
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
   "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},

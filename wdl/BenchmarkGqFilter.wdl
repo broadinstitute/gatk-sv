@@ -15,6 +15,13 @@ workflow BenchmarkGqFilter {
         Array[String] benchmark_args = []
         String sv_utils_docker
         String samtools_cloud_docker
+        # Overridable selection of which figures to make, and what order they'll appear in the final PDF. By default
+        # make all of them, but you could pass a subset of this list to make fewer (or change the order).
+        # Note on runtime: most of these plots take about one hour on a large (4151 samples x 437931 records) data set
+        # with original scores, recalibrated, cross-validated, and two additional comparison scores. However, the
+        # hardy-weinberg plot takes about 2.5 hours. All plots run independently via cromwell scatter.
+        Array[String] make_figures = ["precision-recall", "inheritance", "variants-per-sample", "violation-curve",
+                                      "hardy-weinberg"]
     }
 
     # extract properties from VCF and pickle them. It allows extraction on a cheaper (lower memory) machine in parallel
@@ -86,57 +93,26 @@ workflow BenchmarkGqFilter {
         "GiB"
     )
 
-    # Break up figure generation to speed up wall-clock time and make more resilient to preemption
-    call BenchmarkFilter as BenchmarkPrecisionRecall {
-        input:
+    scatter(make_figure in make_figures) {
+        call BenchmarkFilter {
+            input:
             data_label=data_label,
             variant_properties=pickled_variant_properties_,
             scores_data_sets=scores_data_sets_,
             truth_overlap_info=truth_overlap_info,
             ped_file=ped_file,
-            make_figure="precision-recall",
-            benchmark_figure_filename="benchmark-precision-recall.pdf",
+            make_figure=make_figure,
+            benchmark_figure_filename="benchmark-" + make_figure + ".pdf",
             benchmark_args=benchmark_args,
             sv_utils_docker=sv_utils_docker,
             num_entries=GetVcfSize.num_entries,
             pickled_files_size=pickled_files_size
-    }
-
-    call BenchmarkFilter as BenchmarkInheritance {
-        input:
-            data_label=data_label,
-            variant_properties=pickled_variant_properties_,
-            scores_data_sets=scores_data_sets_,
-            truth_overlap_info=truth_overlap_info,
-            ped_file=ped_file,
-            make_figure="inheritance",
-            benchmark_figure_filename="benchmark-inheritance.pdf",
-            benchmark_args=benchmark_args,
-            sv_utils_docker=sv_utils_docker,
-            num_entries=GetVcfSize.num_entries,
-            pickled_files_size=pickled_files_size
-    }
-
-    call BenchmarkFilter as BenchmarkHardyWeinberg {
-        input:
-            data_label=data_label,
-            variant_properties=pickled_variant_properties_,
-            scores_data_sets=scores_data_sets_,
-            truth_overlap_info=truth_overlap_info,
-            ped_file=ped_file,
-            make_figure="hardy-weinberg",
-            benchmark_figure_filename="benchmark-hardy-weinberg.pdf",
-            benchmark_args=benchmark_args,
-            sv_utils_docker=sv_utils_docker,
-            num_entries=GetVcfSize.num_entries,
-            pickled_files_size=pickled_files_size
+        }
     }
 
     call ConcatBenchmarkPdfs {
         input:
-            input_pdfs=[BenchmarkPrecisionRecall.benchmark_figure,
-                        BenchmarkInheritance.benchmark_figure,
-                        BenchmarkHardyWeinberg.benchmark_figure],
+            input_pdfs=BenchmarkFilter.benchmark_figure,
             concat_pdfs_docker=sv_utils_docker
     }
 
@@ -183,10 +159,15 @@ task BenchmarkFilter {
 
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
     Int disk_gb = round(100 + pickled_files_size)
-
-    Float mem_scale_vcf_entries = "0.75e-8"
-    Float mem_gb_overhead = 2.0
-    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries * (1 + length(scores_data_sets))
+    Float mem_scale_vcf_entries =
+        if make_figure == "precision-recall" then "4.1e-9" else
+        if make_figure == "inheritance" then "5.4e-9" else
+        if make_figure == "variants-per-sample" then "5.4e-9" else
+        if make_figure == "violation-curve" then "5.0e-9" else
+        if make_figure == "hardy-weinberg" then "1.05e-8" else
+        "1e-8"   # this last one should never hit, I just wanted to make all assignments explicit
+    Float mem_gb_overhead = 2.0 + size(truth_overlap_info, "GiB") + size(ped_file, "GiB")
+    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries * length(scores_data_sets)
 
     String scores_data_json = "scores_data.json"
 
@@ -244,7 +225,7 @@ ____EoF
 
 task ConcatBenchmarkPdfs {
     input {
-        Array[String] input_pdfs
+        Array[File] input_pdfs
         String concat_pdfs_docker
         String benchmark_figure_filename = "quality-benchmark.pdf"
     }
