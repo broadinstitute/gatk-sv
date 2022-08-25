@@ -36,7 +36,7 @@ workflow CollectQcVcfWide {
         vcf_index=vcf + ".tbi",
         contig=contig,
         records_per_shard=sv_per_shard,
-        prefix="~{output_prefix}.scatter_vcf.shard",
+        prefix="~{output_prefix}.scatter_vcf",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_scatter_vcf
     }
@@ -44,25 +44,25 @@ workflow CollectQcVcfWide {
   Array[File] vcf_shards = flatten(ScatterVcf.shards)
 
   # Scatter over VCF shards
-  scatter (shard in vcf_shards) {
+  scatter (i in range(length(vcf_shards))) {
     # Preprocess VCF with bcftools, if optioned
     if (defined(bcftools_preprocessing_options)) {
       call PreprocessVcf {
         input:
-          vcf=shard,
-          prefix="~{output_prefix}.preprocess",
+          vcf=vcf_shards[i],
+          prefix="~{output_prefix}.preprocess.shard_~{i}",
           bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_attr_override=runtime_override_preprocess_vcf
       }
     }
-    File filtered_vcf = select_first([PreprocessVcf.outvcf, shard])
+    File filtered_vcf = select_first([PreprocessVcf.outvcf, vcf_shards[i]])
 
     # Collect VCF-wide summary stats
     call CollectShardedVcfStats {
       input:
         vcf=filtered_vcf,
-        prefix="~{output_prefix}.collect_stats.shard_",
+        prefix="~{output_prefix}.collect_stats.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_collect_sharded_vcf_stats
       }
@@ -71,7 +71,7 @@ workflow CollectQcVcfWide {
     call SvtkVcf2bed {
       input:
         vcf=filtered_vcf,
-        prefix="~{output_prefix}.shard",
+        prefix="~{output_prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_2_bed
       }
