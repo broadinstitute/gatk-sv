@@ -7,7 +7,6 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 workflow CollectQcVcfWide {
   input {
     Array[File] vcfs
-    Array[File] vcf_idxs
     String contig
     Int sv_per_shard
     String? bcftools_preprocessing_options
@@ -30,11 +29,11 @@ workflow CollectQcVcfWide {
   String output_prefix = "~{prefix}.collect_qc_vcf_wide"
 
   # Tabix each VCF to chromosome of interest, and shard input VCF for stats collection
-  scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
+  scatter ( vcf in vcfs ) {
     call MiniTasks.ScatterVcf {
       input:
-        vcf=vcf_info.left,
-        vcf_index=vcf_info.right,
+        vcf=vcf,
+        vcf_index=vcf + ".tbi",
         contig=contig,
         records_per_shard=sv_per_shard,
         prefix="~{output_prefix}.scatter_vcf.shard",

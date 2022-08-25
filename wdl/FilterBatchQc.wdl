@@ -98,7 +98,6 @@ workflow FilterBatchQc {
       call vcf_qc.MainVcfQc as VcfQc {
         input:
           vcfs = [select_first([vcfs_array[i]])],
-          vcf_idxs = [select_first([vcf_indexes_array[i]])],
           ped_file=SubsetPedFile.ped_subset_file,
           prefix="${batch}.${algorithms[i]}_FilterBatch_filtered_vcf",
           sv_per_shard=2500,

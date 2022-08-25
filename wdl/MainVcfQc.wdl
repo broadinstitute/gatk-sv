@@ -11,8 +11,7 @@ import "Utils.wdl" as Utils
 # an SV VCF output by GATK-SV
 workflow MainVcfQc {
   input {
-    Array[File] vcfs  # Option to provide a single GATK-SV VCF or an array of position-sharded SV VCFs
-    Array[File] vcf_idxs
+    Array[File] vcfs  # Option to provide a single GATK-SV VCF or an array of position-sharded SV VCFs. Must be indexed
     Boolean vcf_format_has_cn = true
     String? bcftools_preprocessing_options
     File? ped_file
@@ -73,13 +72,13 @@ workflow MainVcfQc {
   # exclude outlier samples, or restrict to males/females on X/Y (for example)
 
   if (defined(list_of_samples_to_include)) {
-    scatter ( vcf_info in zip(vcfs, vcf_idxs) ) {
+    scatter ( vcf in vcfs ) {
       call Utils.SubsetVcfBySamplesList {
         input:
-          vcf=vcf_info.left,
-          vcf_idx=vcf_info.right,
+          vcf=vcf,
+          vcf_idx=vcf + ".tbi",
           list_of_samples_to_keep=select_first([list_of_samples_to_include]),
-          subset_name=basename(vcf_info.left, '.vcf.gz') + ".subsetted",
+          subset_name=basename(vcf, '.vcf.gz') + ".subsetted",
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_attr_override=runtime_override_subset_vcf
       }
@@ -87,7 +86,6 @@ workflow MainVcfQc {
   }
 
   Array[File] vcfs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])
-  Array[File] vcf_idxs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset_idx, vcf_idxs])
 
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
@@ -95,7 +93,6 @@ workflow MainVcfQc {
     call vcfwideqc.CollectQcVcfWide {
       input:
         vcfs=vcfs_for_qc,
-        vcf_idxs=vcf_idxs_for_qc,
         contig=contig,
         sv_per_shard=sv_per_shard,
         bcftools_preprocessing_options=bcftools_preprocessing_options,
