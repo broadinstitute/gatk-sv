@@ -21,6 +21,7 @@ import os
 import pkg_resources
 from collections import namedtuple
 import pysam
+from svtk.standardize import VCFStandardizer
 
 
 def RdtestParser(bed):
@@ -109,12 +110,17 @@ def main(argv):
         sys.exit(1)
     args = parser.parse_args(argv)
 
+    # Get list of samples
+    with open(args.samples) as slist:
+        samples = sorted([s.strip() for s in slist.readlines()])
+
     # Add contigs to header if provided
     if args.contigs:
         template = pkg_resources.resource_filename(
             'svtk', 'data/no_contigs_template.vcf')
-        template = pysam.VariantFile(template)
-        header = template.header
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        header = VCFStandardizer.get_header_from_template(template, samples)
         contig_line = '##contig=<ID={contig},length={length}>'
         for line in args.contigs:
             contig, length = line.split()[:2]
@@ -123,17 +129,10 @@ def main(argv):
     else:
         template = pkg_resources.resource_filename(
             'svtk', 'data/GRCh37_template.vcf')
-        template = pysam.VariantFile(template)
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        header = VCFStandardizer.get_header_from_template(template, samples)
         header = template.header
-
-    # Get list of samples
-    with open(args.samples) as slist:
-        samples = sorted([s.strip() for s in slist.readlines()])
-
-    # Template header includes all necessary FILTER, INFO, and FORMAT fields
-    # Just need to add list of samples
-    for sample in samples:
-        header.add_sample(sample)
 
     # Tag source in header
     meta = ('##FORMAT=<ID=depth,Number=1,Type=Integer,'

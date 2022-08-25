@@ -25,8 +25,7 @@ Parameters:
     --log-level LEVEL: specify level of logging information to print,
         ie. INFO, WARNING, ERROR - not case-sensitive)
 
-Outputs: If successful, last line of printout should read
-    "<N> of <N> Terra input JSONs exist and passed validation."
+Outputs: Final output lines will list number of JSONs that passed and number of JSONs that failed validation.
     Prior lines will detail the JSONs that were examined and any errors found.
 """
 
@@ -43,7 +42,7 @@ def list_jsons(inputs_paths, expected_num_jsons):
         jsons.extend([os.path.join(path, x) for x in listdir(path) if x.endswith(".json")])
     num_input_jsons = len(jsons)
     if num_input_jsons < expected_num_jsons:
-        raise Exception(f"Expected {expected_num_jsons} Terra input JSONs but found {num_input_jsons}.")
+        raise Exception(f"Expected {expected_num_jsons} Terra input JSONs but found {num_input_jsons}. To proceed anyway, edit the expected number of JSONs with the -n input.")
     jsons.sort()
     return jsons
 
@@ -84,21 +83,27 @@ def validate_terra_json(wdl, terra_json, womtool_jar):
     if valid:
         logging.info(f"PASS: {terra_json} is a valid Terra input JSON for {wdl_name}")
 
-    return int(valid)  # return 1 if valid, 0 if not valid
+    return valid
 
 
 def validate_all_terra_jsons(base_dir, womtool_jar, expected_num_inputs):
     successes = 0
+    failures = 0
     for wdl, json_file in get_wdl_json_pairs(os.path.join(base_dir, WDLS_PATH),
                                              [os.path.join(base_dir, x) for x in TERRA_INPUTS_PATHS],
                                              expected_num_inputs):
-        successes += validate_terra_json(wdl, json_file, womtool_jar)
+        valid = validate_terra_json(wdl, json_file, womtool_jar)
+        if valid:
+            successes += 1
+        else:
+            failures += 1
 
     print("\n")
-    if successes != expected_num_inputs:
-        raise RuntimeError(f"{successes} of {expected_num_inputs} Terra input JSONs passed validation.")
-    else:
-        print(f"{successes} of {expected_num_inputs} Terra input JSONs passed validation.")
+    if failures > 0:
+        raise RuntimeError(f"Some Terra input JSONs failed validation!\nPass: {successes}. Fail: {failures}.\nTotal validated: {successes + failures}. Expected number of JSONs: {expected_num_inputs}.")
+    if successes > expected_num_inputs:
+        logging.warning(f"Found more Terra input JSONs than expected! Validated: {successes}. Expected: {expected_num_inputs}.")
+    print(f"Success! All Terra input JSONs passed validation.\nPass: {successes}. Fail: {failures}.\nTotal: {successes + failures} out of {expected_num_inputs} passed.")
 
 
 # Main function
@@ -108,7 +113,7 @@ def main():
     parser.add_argument("-j", "--womtool-jar", help="Path to womtool jar", required=True)
     parser.add_argument("-n", "--num-input-jsons",
                         help="Number of Terra input JSONs expected",
-                        required=False, default=20, type=int)
+                        required=False, default=31, type=int)
     parser.add_argument("--log-level",
                         help="Specify level of logging information, ie. info, warning, error (not case-sensitive)",
                         required=False, default="INFO")

@@ -46,9 +46,9 @@ def ped_info_readin(ped_file):
         pin = line.strip().split()
         if not pin[1] in out.keys():
             out[pin[1]] = [pin[1]]
-        if not(pin[2]) == 0:
+        if not (pin[2]) == 0:
             out[pin[1]].append(pin[2])
-        if not(pin[3]) == 0:
+        if not (pin[3]) == 0:
             out[pin[1]].append(pin[3])
     fin.close()
     return out
@@ -62,7 +62,7 @@ def cram_info_readin(cram_file):
         if not pin[0] in out.keys():
             out[pin[0]] = pin[1:]
     fin.close()
-    return(out)
+    return (out)
 
 
 ped_info = ped_info_readin(args.ped)

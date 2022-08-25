@@ -216,7 +216,10 @@ class SVRecordCluster:
         new_record.info['CHR2'] = base_record.chrB
 
         # TODO: Check if strands should be merged
-        new_record.info['STRANDS'] = base_record.record.info['STRANDS']
+        if 'STRANDS' in base_record.record.info.keys():
+            new_record.info['STRANDS'] = base_record.record.info['STRANDS']
+        elif new_record.info['SVTYPE'] == 'BND':
+            raise ValueError(f"STRANDS not defined in base record {base_record.record.id} for the merged BND record")
 
         # Merge coordinates
         POS, END, CIPOS, CIEND = self.merge_pos()
@@ -279,31 +282,32 @@ class SVRecordCluster:
         """
         PROTECTED_INFOS = ('SVTYPE CHR2 END STRANDS SVLEN ALGORITHMS CIPOS '
                            'CIEND RMSSTD MEMBERS').split()
-        records = [r.record for r in self.records]
         infos = defaultdict(list)
 
-        for record in records:
-            for info, value in record.info.items():
-                if info not in PROTECTED_INFOS:
-                    infos[info].append(value)
+        for sv_record in self.records:
+            record = sv_record.record
+            for key, value in record.info.items():
+                if key not in PROTECTED_INFOS:
+                    infos[key].append(value)
 
-        for info, values in infos.items():
-            if header.info[info].type == 'Flag':
-                new_record.info[info] = True
-            elif header.info[info].type == 'String':
-                if header.info[info].number == '.':
-                    new_record.info[info] = sorted(
+        for key, values in infos.items():
+            header_info = header.info[key]
+            if header_info.type == 'Flag':
+                new_record.info[key] = True
+            elif header_info.type == 'String':
+                if header_info.number == '.':
+                    new_record.info[key] = sorted(
                         set([v for vlist in values for v in vlist]))
-                elif header.info[info].number == 1:
-                    new_record.info[info] = ','.join(
-                        sorted(set([v for vlist in values for v in vlist])))
+                elif header_info.number == 1:
+                    new_record.info[key] = ','.join(
+                        sorted(set(values)))
                 else:
-                    new_record.info[info] = [
+                    new_record.info[key] = [
                         ','.join(vlist) for vlist in zip(values)]
 
             # TODO merge numeric INFO
-            elif info == 'varGQ':
-                new_record.info[info] = max(values)
+            elif key == 'varGQ':
+                new_record.info[key] = max(values)
             else:
                 pass
 

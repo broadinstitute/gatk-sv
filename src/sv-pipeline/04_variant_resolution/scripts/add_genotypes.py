@@ -71,7 +71,7 @@ def add_genotypes(record, genotypes, varGQ):
         make_multiallelic_alts(record, max_CN, is_bca)
 
     cols = 'name sample GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
-    gt_matrix = genotypes.reset_index().as_matrix(columns=cols)
+    gt_matrix = genotypes.reset_index()[cols].to_numpy()
 
     # update genotype and other data for each sample
     for j, sample in enumerate(record.samples):
@@ -136,6 +136,13 @@ def update_vcf_header(header):
         if key not in 'GT GQ'.split():
             header.formats.remove_header(key)
 
+    if 'GT' not in header.formats.keys():
+        header.add_line(
+            '##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">')
+    if 'GQ' not in header.formats.keys():
+        header.add_line(
+            '##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype Quality">')
+
     header.add_line(
         '##FORMAT=<ID=RD_CN,Number=1,Type=Integer,Description="Predicted copy state">')
     header.add_line(
@@ -178,7 +185,7 @@ def main():
 
     names = ('key name sample RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ GT GQ EV').split()
     genotypes = pd.read_table(args.genotypes, names=names, dtype={
-                              'sample': str}, sep='\s+')
+        'sample': str}, sep='\s+')
     genotypes = genotypes.set_index('name sample'.split())
 
     # sort genotype table for faster indexing

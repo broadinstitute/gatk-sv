@@ -116,7 +116,7 @@ fi
 
 # remove repetitive breakpoints
 cat ${blacklist} \
-  | coverageBed -a <(awk '{print $1,$2,$2+1,$4 "\n" $1,$3,$3+1,$4}' cnv.bed | tr ' ' '\t')  -b - \
+  | bedtools coverage -a <(awk '{print $1,$2,$2+1,$4 "\n" $1,$3,$3+1,$4}' cnv.bed | tr ' ' '\t')  -b - \
   | awk '{if($NF>0) print $4}' \
   | sort -u \
   > repeat.breakpoint.fail.ids.txt;
@@ -136,7 +136,8 @@ awk '{if ($1!~"X" && $1!~"Y") print $4}' cnv.bed \
   > "$batch.pe.train.include.txt";
 
 # select training
-pe_pval=$( awk -F'\t' '{if ( $5=="PE_log_pval") print $2}' $RF_cutoffs)
+pe_pval=$(awk -F'\t' 'NR==1{for(i=1;i<=NF;i++) col[$i]=i; next}
+          {if ( $col["metric"]=="PE_log_pval") print $col["cutoff"]}' $RF_cutoffs)
 pe_count=$(/opt/sv-pipeline/04_variant_resolution/scripts/convert_poisson_p.py $pe_pval)
 zcat ${PE_counts} \
   | awk -v var=$pe_count '{if ($3>=var) print}' \
@@ -210,11 +211,16 @@ normalization=$(Rscript -e "print(-10*log10((1-pnorm(($median_hom/2)/$sd_het) ))
 ##null genotype get max quality score##
 zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3==0) print $0 "\t" 999}'|gzip>null.geno.txt.gz
 
-##null genotype but has SR reads determined by poisson test##
-zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3>0) print}' \
-  | Rscript -e 'd<-read.table("stdin")' \
-  -e "z<-cbind(d[1],d[,2],d[,3],d[,4],round(matrix(apply(d[,3,drop=F],1, function (x) -10*log10(1-ppois(0, lambda=x))* $normalization) ,ncol=1)) )" \
-  -e 'write.table(z,"null.wreads.geno.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
+##null genotype but has PE reads determined by poisson test##
+zcat pe.geno.final.txt.gz|awk '{if ($NF==0 && $3>0) print}' > null.wreads.txt
+if [ -s null.wreads.txt ]; then
+  cat null.wreads.txt \
+    | Rscript -e 'd<-read.table("stdin")' \
+    -e "z<-cbind(d[1],d[,2],d[,3],d[,4],round(matrix(apply(d[,3,drop=F],1, function (x) -10*log10(1-ppois(0, lambda=x))* $normalization) ,ncol=1)) )" \
+    -e 'write.table(z,"null.wreads.geno.txt",col.names=FALSE,quote=FALSE,row.names=FALSE,sep = "\t")'
+else
+  touch null.wreads.geno.txt
+fi
 
 ##genotype based on z score for observation with genotypes##
 zcat pe.geno.final.txt.gz|awk '{if ($NF>0) print}' \

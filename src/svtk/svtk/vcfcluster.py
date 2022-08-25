@@ -15,10 +15,10 @@ maximum individual clustering distance across the libraries being analyzed.
 import heapq
 import re
 import pkg_resources
-from pysam import VariantFile
 from svtk.svfile import SVFile, SVRecordCluster, SVRecord
 from svtk.genomeslink import GenomeSLINK
 from svtk.utils import samples_overlap
+from svtk.standardize import VCFStandardizer
 
 
 class VCFCluster(GenomeSLINK):
@@ -147,7 +147,11 @@ class VCFCluster(GenomeSLINK):
 
         # If strands are required to match and don't, skip remaining calcs
         if self.match_svtypes and self.match_strands:
-            if first.record.info['STRANDS'] != second.record.info['STRANDS']:
+            if ('STRANDS' in first.record.info.keys()) != ('STRANDS' in second.record.info.keys()):
+                raise ValueError(f"One of records {first.record.id} and {second.record.id} has "
+                                 f"STRANDS annotation assigned but the other does not")
+            elif 'STRANDS' in first.record.info.keys() \
+                    and first.record.info['STRANDS'] != second.record.info['STRANDS']:
                 return False
 
         clusters = (super().clusters_with(first, second) and
@@ -273,13 +277,9 @@ class VCFCluster(GenomeSLINK):
         template = pkg_resources.resource_filename(
             'svtk', 'data/vcfcluster_template.vcf')
 
-        # Make header
-        template = VariantFile(template)
-        header = template.header
-
-        # Add samples
-        for sample in self.samples:
-            header.add_sample(sample)
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        header = VCFStandardizer.get_header_from_template(template, self.samples)
 
         # Add contigs
         contigs = []

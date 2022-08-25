@@ -297,6 +297,7 @@ public class CleanVCFPart1 {
             final Pattern tabPattern = Pattern.compile("\\t");
             String line;
             while ( (line = pedRdr.readLine()) != null ) {
+                if ( line.startsWith("#") ) continue;
                 final Scanner scanner = new Scanner(line).useDelimiter(tabPattern);
                 scanner.next(); // family ignored
                 final String sampleName = scanner.next();
@@ -309,9 +310,10 @@ public class CleanVCFPart1 {
             throw new RuntimeException("can't read " + pedFilename, ioe);
         }
         for ( int col = 0; col < nCols; ++col ) {
-            final Integer sex = sexForSampleMap.get(sampleNames.get(col + 9));
+            final ByteSequence sampleName = sampleNames.get(col + 9);
+            final Integer sex = sexForSampleMap.get(sampleName);
             if ( sex == null ) {
-                throw new RuntimeException("can't determine sex for sample " + sampleNames.get(col));
+                throw new RuntimeException("can't determine sex for sample " + sampleName);
             }
             sexForSample[col] = sex;
         }

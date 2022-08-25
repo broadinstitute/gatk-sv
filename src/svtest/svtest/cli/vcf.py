@@ -180,23 +180,23 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
                 "One of the vcfs has the EVIDENCE field but the other does not")
         base_records = list(base_vcf.fetch())
         test_tree = iu.create_trees_from_records(
-            test_records, variant_types, contigs, padding=padding)
+            test_records, variant_types, contigs)
         test_pass_tree = iu.create_trees_from_records(
-            pass_records, variant_types, contigs, padding=padding)
+            pass_records, variant_types, contigs)
         base_tree = iu.create_trees_from_records(
-            base_records, variant_types, contigs, padding=padding)
+            base_records, variant_types, contigs)
         base_pass_records = [r for r in base_records if (
             "PASS" in r.filter or len(set(r.filter) - pass_filter_set) == 0)]
         base_pass_tree = iu.create_trees_from_records(
-            base_pass_records, variant_types, contigs, padding=padding)
+            base_pass_records, variant_types, contigs)
     elif fbase_bed is not None:
         base_records = parse_bed_file(fbase_bed)
         test_tree = iu.create_trees_from_records(
-            test_records, variant_types, contigs, padding=padding)
+            test_records, variant_types, contigs)
         test_pass_tree = iu.create_trees_from_records(
-            pass_records, variant_types, contigs, padding=padding)
+            pass_records, variant_types, contigs)
         base_tree = iu.create_trees_from_bed_records(
-            base_records, variant_types, contigs, padding=padding)
+            base_records, variant_types, contigs)
         base_pass_tree = None
     else:
         test_tree = None
@@ -206,14 +206,15 @@ def get_metrics(ftest, fbase_vcf, fbase_bed, contigs, variant_types, min_ro, pad
 
     if base_tree is not None:
         metrics, fp_intervals, fn_intervals = add_evaluation_metrics(
-            metrics, test_tree, base_tree, variant_types, min_ro, metric_prefix)
+            metrics, test_tree, base_tree, variant_types, min_ro, padding, metric_prefix)
     else:
         fp_intervals = None
         fn_intervals = None
 
     if base_pass_tree is not None:
         metrics, fp_intervals_pass, fn_intervals_pass = add_evaluation_metrics(
-            metrics, test_pass_tree, base_pass_tree, variant_types, min_ro, metric_prefix, metric_suffix="_pass")
+            metrics, test_pass_tree, base_pass_tree, variant_types, min_ro, padding,
+            metric_prefix, metric_suffix="_pass")
     else:
         fp_intervals_pass = None
         fn_intervals_pass = None
@@ -257,7 +258,8 @@ def add_error_count_metrics(metrics, error_counts, metric_prefix):
     return metrics
 
 
-def add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro, metric_prefix, metric_suffix=""):
+def add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro, padding,
+                           metric_prefix, metric_suffix=""):
     tp_test = {}
     fp_test = {}
     fp_intervals_test = {}
@@ -266,12 +268,12 @@ def add_evaluation_metrics(metrics, test_tree, base_tree, variant_types, min_ro,
     fp_intervals_base = {}
     for type in variant_types:
         tp_test_, fp_test_, fp_intervals_test_ = iu.evaluate_tree(
-            test_tree[type], base_tree[type], min_ro)
+            test_tree[type], base_tree[type], min_ro, padding=padding)
         tp_test[type] = tp_test_
         fp_test[type] = fp_test_
         fp_intervals_test[type] = fp_intervals_test_
         tp_base_, fp_base_, fp_intervals_base_ = iu.evaluate_tree(
-            base_tree[type], test_tree[type], min_ro)
+            base_tree[type], test_tree[type], min_ro, padding=padding)
         tp_base[type] = tp_base_
         fp_base[type] = fp_base_
         fp_intervals_base[type] = fp_intervals_base_
@@ -443,7 +445,7 @@ def get_distributions_by_type(records, variant_types, field, bins, exclude_types
     for record in records:
         type = vu.get_sv_type(record, types_set)
         if type not in exclude_types:
-            val = vu.get_info_field(record, field)
+            val = vu.get_info_field(record, field, singularize=True)
             idx = get_distribution_index(val, bins, num_bins)
             counts[type][idx] += 1
     return counts

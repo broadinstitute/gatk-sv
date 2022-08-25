@@ -108,57 +108,31 @@ class ProjectBuilder:
         "manta": ImageDependencies("dockerfiles/manta/*"),
         "melt": ImageDependencies("dockerfiles/melt/*"),
         "wham": ImageDependencies("dockerfiles/wham/*"),
+        "str": ImageDependencies(("dockerfiles/str/*", "src/str/*")),
         "sv-base-mini": ImageDependencies("dockerfiles/sv-base-mini/*"),
-        "samtools-cloud": ImageDependencies("dockerfiles/samtools-cloud/*", {"sv-base-mini": "MINIBASE_IMAGE"}),
+        "samtools-cloud-virtual-env": ImageDependencies("dockerfiles/samtools-cloud-virtual-env/*"),
+        "samtools-cloud": ImageDependencies(
+            "dockerfiles/samtools-cloud/*",
+            {"sv-base-mini": "MINIBASE_IMAGE", "samtools-cloud-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "sv-base-virtual-env": ImageDependencies("dockerfiles/sv-base-virtual-env/*"),
         "sv-base": ImageDependencies(
             "dockerfiles/sv-base/*",
-            {"sv-base-mini": "MINIBASE_IMAGE", "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "cnmops-virtual-env": ImageDependencies(
             "dockerfiles/cnmops-virtual-env/*",
             {"sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "cnmops": ImageDependencies(
             ("dockerfiles/cnmops/*", "src/WGD/*"),
             {"sv-base": "SVBASE_IMAGE", "cnmops-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-base-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-base-virtual-env/*",
-            {"sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-base": ImageDependencies(
-            ("dockerfiles/sv-pipeline-base/*", "src/*"),
-            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
         "sv-pipeline-virtual-env": ImageDependencies(
             "dockerfiles/sv-pipeline-virtual-env/*",
-            {"sv-pipeline-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            {"sv-base-mini": "SV_BASE_MINI_IMAGE",
+             "sv-base-virtual-env": "R_VIRTUAL_ENV_IMAGE",
+             "samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}),
         "sv-pipeline": ImageDependencies(
-            "dockerfiles/sv-pipeline/*",
-            {"sv-pipeline-base": "SV_PIPELINE_BASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-hail-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-hail-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-hail": ImageDependencies(
-            "dockerfiles/sv-pipeline-hail/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-hail-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-updates-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-updates-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-updates": ImageDependencies(
-            "dockerfiles/sv-pipeline-updates/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-updates-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-children-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-children-virtual-env/*",
-            {"sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-qc-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-qc-virtual-env/*",
-            {"sv-pipeline-children-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-qc": ImageDependencies(
-            "dockerfiles/sv-pipeline-qc/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-qc-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-rdtest-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-rdtest-virtual-env/*",
-            {"sv-pipeline-children-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-rdtest": ImageDependencies(
-            "dockerfiles/sv-pipeline-rdtest/*",
-            {"sv-pipeline": "SV_PIPELINE_IMAGE", "sv-pipeline-rdtest-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+            ("dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*", "src/svqc/*", "src/svtest/*",
+             "src/svtk/*", "src/WGD/*"),
+            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"})
     }
     non_public_images = frozenset({'melt'})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
@@ -251,12 +225,17 @@ class ProjectBuilder:
                 with open(output_json, 'w') as f_out:
                     json.dump(new_dockers_json, f_out, indent="  ")
 
-    def get_build_priority(self, target_name: str) -> int:
+    def get_build_priority(self, target_name: str) -> (int, str):
+        """
+        Return sort key that sorts targets so that:
+        1) ancestors are built before their descendants
+        2) after that, things are built in alphabetical order (for more repeatable behavior while debugging)
+        """
         if target_name not in self.build_priority:
             build_deps = ProjectBuilder.dependencies[target_name].docker_dependencies
             self.build_priority[target_name] = 0 if not build_deps \
-                else 1 + max((self.get_build_priority(build_dep) for build_dep in build_deps.keys()), default=0)
-        return self.build_priority[target_name]
+                else 1 + max((self.get_build_priority(build_dep)[0] for build_dep in build_deps.keys()), default=0)
+        return self.build_priority[target_name], target_name
 
     def _add_image_prereqs(self, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
@@ -398,6 +377,9 @@ class ProjectBuilder:
                     image_builder = ImageBuilder(target_name, self)
                     image_builder.build(build_time_args)
                     image_builder.push()
+                    if self.project_arguments.prune_after_each_image and not self.project_arguments.dry_run:
+                        # clean dangling images (i.e. those "<none>" images), stopped containers, etc
+                        os.system("docker system prune -f")
                     print(colored('#' * 50, 'magenta'))
 
                 print(colored('BUILD PROCESS SUCCESS!', 'green'))
@@ -516,7 +498,7 @@ class ImageBuilder:  # class for building and pushing a single image
             print(f"skipping build of {self.local_image} because it is already built and --no-force-rebuild is set")
             return
         # standard build command
-        docker_build_command = "docker build --progress plain \\\n    "
+        docker_build_command = "docker build --platform linux/amd64 --progress plain --network=host \\\n    "
         docker_build_command += "-f " + f"{self.working_dir}/dockerfiles/{self.name}/Dockerfile" + " \\\n    "
         docker_build_command += "--tag " + self.local_image + " \\\n    "
         # parse extra args list
@@ -678,6 +660,9 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
                              "this options specifies the current git commit to check for changes. If omitted,"
                              " use current status of git repo with uncommitted changes. Can be a SHA or other specifier"
                              " (e.g. HEAD)")
+    parser.add_argument('--prune-after-each-image', action='store_true',
+                        help='Do "docker system prune" after each image is successfully built, to save disk space. Only'
+                             ' necessary on cramped VMs')
 
     # parse and consistency check
     if len(args_list) <= 1:  # no arguments, print help and exit with success

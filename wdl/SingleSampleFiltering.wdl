@@ -23,26 +23,48 @@ task FilterVcfBySampleGenotypeAndAddEvidenceAnnotation {
 
   String filebase = basename(vcf_gz, ".vcf.gz")
   String outfile = "~{filebase}.~{sample_id}.vcf.gz"
-  Array[String] sample_array = [sample_id]
 
   output {
     File out = "~{outfile}"
+    File out_index = "~{outfile}.tbi"
   }
   command <<<
     set -euo pipefail
     sampleIndex=`gzip -cd ~{vcf_gz} | grep '^#CHROM' | cut -f10- | tr "\t" "\n" | awk '$1 == "~{sample_id}" {found=1; print NR - 1} END { if (found != 1) { print "sample not found"; exit 1; }}'`
 
-    bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t~{evidence}\n" ~{vcf_gz} | bgzip -c > evidence_annotations.tab.gz
-    tabix -s1 -b2 -e2 evidence_annotations.tab.gz
-
     echo '##INFO=<ID=EVIDENCE,Number=.,Type=String,Description="Classes of random forest support.">' > header_line.txt
 
+# a regression introduced in bcftools release 14.0 and present at least through 15.1, causes bcftools annotate to
+# NOT add the EVIDENCE field to info. Use a work-around until this regression is fixed:
+#    1) use bcftools to filter based on sample genotype and add the header line
+#    2) use awk to add EVIDENCE to INFO field (8th tab-delimited field)
+#
+#    ORIGINAL CODE, restore when bcftools is fixed:
+#    bcftools query -f "%CHROM\t%POS\t%REF\t%ALT\t~{evidence}\n" ~{vcf_gz} | bgzip -c > evidence_annotations.tab.gz
+#    tabix -s1 -b2 -e2 evidence_annotations.tab.gz
+#    bcftools annotate \
+#        -i "GT[${sampleIndex}]=\"alt\"" \
+#        -a evidence_annotations.tab.gz \
+#        -c CHROM,POS,REF,ALT,EVIDENCE \
+#        -h header_line.txt \
+#        -O z \
+#        -o ~{outfile} \
+#        ~{vcf_gz}
     bcftools annotate \
         -i "GT[${sampleIndex}]=\"alt\"" \
-        -a evidence_annotations.tab.gz \
-        -c CHROM,POS,REF,ALT,EVIDENCE \
         -h header_line.txt \
-        ~{vcf_gz} | bgzip -c > ~{outfile}
+        -O v \
+        ~{vcf_gz} \
+    | awk \
+        '$0 ~ /^#/ { print $0; next; }
+        { for(i=1; i<8; ++i) printf "%s\t", $i;
+          printf "%s;EVIDENCE=~{evidence}", $8;
+          for(i=9; i<=NF; ++i) printf "\t%s", $i;
+          printf "\n"
+        }' \
+    | bgzip -c \
+    > ~{outfile}
+    tabix ~{outfile}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -146,7 +168,7 @@ task GetUniqueNonGenotypedDepthCalls {
     bgzip -cd pass_depth_not_alt.vcf.gz | grep '#' > header.txt
 
     zcat ~{ref_panel_dels} ~{ref_panel_dups} | sort -k1,1V -k2,2n > ref_panel_depth_calls.bed
-    intersectBed -a pass_depth_not_alt.vcf.gz -b ref_panel_depth_calls.bed -r -f .5 -v > unique_depth_records.txt
+    bedtools intersect -a pass_depth_not_alt.vcf.gz -b ref_panel_depth_calls.bed -r -f .5 -v > unique_depth_records.txt
 
     cat header.txt unique_depth_records.txt | bgzip -c > ~{outfile}
 
@@ -245,10 +267,10 @@ task FilterLargePESRCallsWithoutRawDepthSupport {
     set -euo pipefail
 
     svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{if defined(min_large_pesr_call_size_for_filtering) then min_large_pesr_call_size_for_filtering else 1000000} && ($5 == "DEL")' \
-        | coverageBed -a stdin -b ~{raw_dels} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dels_without_raw_depth_support.list
+        | bedtools coverage -a stdin -b ~{raw_dels} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dels_without_raw_depth_support.list
 
     svtk vcf2bed ~{pesr_vcf} stdout | cut -f1-5 | awk '$3 - $2 > ~{if defined(min_large_pesr_call_size_for_filtering) then min_large_pesr_call_size_for_filtering else 1000000} && ($5 == "DUP")' \
-        | coverageBed -a stdin -b ~{raw_dups} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dups_without_raw_depth_support.list
+        | bedtools coverage -a stdin -b ~{raw_dups} | awk '$NF < ~{if defined(min_large_pesr_depth_overlap_fraction) then min_large_pesr_depth_overlap_fraction else "0.3"} {print $4}' > large_dups_without_raw_depth_support.list
 
     cat large_dels_without_raw_depth_support.list large_dups_without_raw_depth_support.list > large_pesr_without_raw_depth_support.list
 
@@ -305,8 +327,7 @@ task FilterVcfWithReferencePanelCalls {
   }
   command <<<
   set -euo pipefail
-  BCFTOOLS=/usr/local/bin/bcftools
-  $BCFTOOLS query -l ~{cohort_vcf} > ref_samples.list
+  bcftools query -l ~{cohort_vcf} > ref_samples.list
   maxRefSamples=$(wc -l ref_samples.list | awk '{print sprintf("%.0f", $1 * ~{default="0.01" max_ref_panel_carrier_freq})}')
 
   /opt/sv-pipeline/scripts/single_sample/apply_ref_panel_genotypes_filter.py \
@@ -315,14 +336,14 @@ task FilterVcfWithReferencePanelCalls {
     ~{case_sample_id} ~{default="0.5" required_cnv_coverage_pct} ${maxRefSamples} \
     del_dup_cpx_inv_filtered.vcf.gz
 
-  $BCFTOOLS query \
+  bcftools query \
       -i 'FILTER ~ "MULTIALLELIC"' \
       -f '%CHROM\t%POS\t%END\t%ID\t%SVLEN\n' \
       ~{cohort_vcf} | \
       awk '{OFS="\t"; $3 = $2 + $5; print}' \
       > cohort.gts.multiallelic.bed
 
-  $BCFTOOLS query \
+  bcftools query \
       -i 'FILTER ~ "MULTIALLELIC"' \
       -S ref_samples.list \
       -f '%CHROM\t%POS\t%END\t%ID\t%SVLEN\n' \
@@ -330,46 +351,46 @@ task FilterVcfWithReferencePanelCalls {
       awk '{OFS="\t"; $3 = $2 + $5; print}' \
       > case.ref_panel_variant.multiallelic.bed
 
-  intersectBed \
+  bedtools intersect \
       -a case.ref_panel_variant.multiallelic.bed \
       -b cohort.gts.multiallelic.bed \
       -f ~{default="0.5" required_reciprocal_overlap_match_pct} -r -v -wa | cut -f4 > multiallelics.list
 
-  $BCFTOOLS query -i 'SVTYPE="INS"' \
+  bcftools query -i 'SVTYPE="INS"' \
       -f '%CHROM\t%POS\t%END\t%ID\t%SVLEN\n' \
       ~{cohort_vcf} | \
       awk '{OFS="\t"; $3 = $2 + $5; print}' > cohort.gts.ins.bed
 
-  $BCFTOOLS query -i "SVTYPE == 'INS' && AC >= ${maxRefSamples}" \
+  bcftools query -i "SVTYPE == 'INS' && AC >= ${maxRefSamples}" \
       -S ref_samples.list \
       -f '%CHROM\t%POS\t%END\t%ID\t%SVLEN\n' \
       ~{single_sample_vcf} | \
       awk '{OFS="\t"; $3 = $2 + $5; print}'  > case.ref_panel_variant.ins.bed
 
-  intersectBed \
+  bedtools intersect \
       -a case.ref_panel_variant.ins.bed \
       -b cohort.gts.ins.bed \
       -f ~{default="0.5" required_reciprocal_overlap_match_pct} -r -v -wa | cut -f4 > case_variants_not_in_ref_panel.ins.list
 
-  $BCFTOOLS query -i 'SVTYPE="BND"' \
+  bcftools query -i 'SVTYPE="BND"' \
       -f '%CHROM\t%POS\t%INFO/CHR2\t%INFO/END\t%ID\t\n' \
       ~{cohort_vcf} | \
       awk '{OFS="\t"; print $1,$2-50,$2+50,$3,$4-50,$4+50,$5}' > cohort.gts.bnd.bedpe
 
-  $BCFTOOLS query -i "SVTYPE='BND' && AC >= ${maxRefSamples}" \
+  bcftools query -i "SVTYPE='BND' && AC >= ${maxRefSamples}" \
       -S ref_samples.list \
       -f '%CHROM\t%POS\t%INFO/CHR2\t%INFO/END\t%ID\t\n' \
       ~{single_sample_vcf} | \
       awk '{OFS="\t"; print $1,$2-50,$2+50,$3,$4-50,$4+50,$5}' > case.gts.bnd.bedpe
 
-  pairToPair -a case.gts.bnd.bedpe \
+  bedtools pairtopair -a case.gts.bnd.bedpe \
       -b cohort.gts.bnd.bedpe \
       -type both |\
       cut -f7 | sort -u > case_bnds_to_keep.list
 
   cp case_variants_not_in_ref_panel.ins.list case_variants_not_in_ref_panel.list
 
-  $BCFTOOLS filter \
+  bcftools filter \
       -e 'ID=@case_variants_not_in_ref_panel.list || ( SVTYPE="BND" && ID!=@case_bnds_to_keep.list ) || (FILTER ~ "MULTIALLELIC" && ID!=@multiallelics.list )' \
       -s REF_PANEL_GENOTYPES \
       -m + \

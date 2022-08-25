@@ -26,8 +26,8 @@ workflow TrainGCNV {
     Array[String]? sample_ids_training_subset
 
     # Condense read counts
-    Int? condense_num_bins
-    Int? condense_bin_size
+    Int? min_interval_size
+    Int? max_interval_size
 
     # gCNV common inputs
     Int ref_copy_number_autosomal_contigs
@@ -132,8 +132,8 @@ workflow TrainGCNV {
       input:
         counts = count_files[i],
         sample = samples[i],
-        num_bins = condense_num_bins,
-        expected_bin_size = condense_bin_size,
+        min_interval_size = min_interval_size,
+        max_interval_size = max_interval_size,
         condense_counts_docker = condense_counts_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }

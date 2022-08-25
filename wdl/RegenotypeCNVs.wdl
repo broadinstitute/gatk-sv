@@ -406,6 +406,7 @@ task MakeSampleLookupBeds {
   command <<<
     set -euxo pipefail
     # select rows of BED files pertaining to contig - chrom is 1st column of each BED file
+    touch ~{contig}.regeno.merged_depth.bed ~{contig}.regeno.merged_depth_clustered.bed
     awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.regeno.merged_depth.bed" } }' ~{regeno_merged_depth}
     awk -F "\t" -v OFS="\t" '{ if ($1 == "~{contig}") { print > "~{contig}.regeno.merged_depth_clustered.bed" } }' ~{regeno_merged_depth_clustered}
     python3 <<CODE

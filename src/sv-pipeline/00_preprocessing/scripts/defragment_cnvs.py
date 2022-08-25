@@ -62,8 +62,8 @@ def defragment_cnvs(cnvs, maxdist=0.25):
         cnv.start = np.min(ostarts)
         cnv.end = np.max(oends)
 
-        # Uniquify caller list
-        cnv[6] = ",".join(set(cnv[6].split(",")))
+        # Uniquify caller list (and sort so that output is repeatable)
+        cnv[6] = ",".join(sorted(set(cnv[6].split(","))))
 
         return cnv[:-2]
 

@@ -14,9 +14,13 @@ workflow ExpansionHunterScatter {
         File? reference_fasta_index
         File variant_catalog_json
         Int? variant_catalog_batch_size
+        Boolean? generate_realigned_bam
+        Boolean? generate_vcf
         String expansion_hunter_docker
         String python_docker
-        RuntimeAttr? runtime_attr
+        RuntimeAttr? runtime_split_var_catalog
+        RuntimeAttr? runtime_eh
+        RuntimeAttr? runtime_concat
     }
 
     parameter_meta {
@@ -26,12 +30,13 @@ workflow ExpansionHunterScatter {
 
     String variant_catalog_batch_size_ = select_first([variant_catalog_batch_size, 1000])
 
-    call SplitVariantCatalog as svc {
+    call SplitVariantCatalog {
         input:
             variant_catalog = variant_catalog_json,
             batch_size = variant_catalog_batch_size_,
             output_prefix = basename(variant_catalog_json, ".json"),
-            python_docker = python_docker
+            python_docker = python_docker,
+            runtime_override = runtime_split_var_catalog
     }
 
     scatter (i in range(length(bams_or_crams))) {
@@ -48,25 +53,30 @@ workflow ExpansionHunterScatter {
 
         String sample_id = sample_ids[i]
 
-        call ExpansionHunter.ExpansionHunter as expanionHunter {
+        call ExpansionHunter.ExpansionHunter  {
             input:
                 bam_or_cram=bam_or_cram_,
                 bam_or_cram_index=bam_or_cram_index_,
                 reference_fasta=reference_fasta,
                 reference_fasta_index=reference_fasta_index_,
-                split_variant_catalogs=svc.catalogs_json,
+                split_variant_catalogs=SplitVariantCatalog.catalogs_json,
                 sample_id=sample_id,
                 ped_file=ped_file,
+                generate_realigned_bam=generate_realigned_bam,
+                generate_vcf=generate_vcf,
                 expansion_hunter_docker=expansion_hunter_docker,
-                python_docker=python_docker
+                python_docker=python_docker,
+                runtime_eh=runtime_eh,
+                runtime_concat=runtime_concat
         }
     }
 
     output {
-        Array[File] jsons = expanionHunter.json
-        Array[File] vcfs_gz = expanionHunter.vcf_gz
-        Array[File] overlapping_reads = expanionHunter.overlapping_reads
-        Array[File] timing = expanionHunter.timing
+        Array[File] variants_tsv = ExpansionHunter.variants_tsv
+        Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
+        Array[File] vcfs_gz = ExpansionHunter.vcf_gz
+        Array[File] overlapping_reads = ExpansionHunter.overlapping_reads
+        Array[File] timing = ExpansionHunter.timing
     }
 }
 
@@ -76,7 +86,7 @@ task SplitVariantCatalog {
         Int batch_size
         String output_prefix
         String python_docker
-        RuntimeAttr? runtime_attr_override
+        RuntimeAttr? runtime_override
     }
 
     output {
@@ -119,23 +129,23 @@ task SplitVariantCatalog {
         CODE
     >>>
 
-    RuntimeAttr default_attr = object {
+    RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 3.75,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
-        disk_gb: 10
+        disk_gb: 10 + (2 * ceil(size(variant_catalog, "GiB")))
     }
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
     runtime {
         docker: python_docker
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     }
 }

@@ -5,7 +5,7 @@ Useful utilities for working with pysam variant objects
 """
 
 
-def get_info_field(record, name):
+def get_info_field(record, name, singularize=False):
     if name not in record.info:
         if name == 'SVLEN':
             if record.info['SVTYPE'] in ['DEL', 'DUP', 'INV']:
@@ -15,11 +15,19 @@ def get_info_field(record, name):
         else:
             raise ValueError("%s info field not found: %s" %
                              (name, record.info.keys()))
-    return record.info[name]
+
+    # Checks if the value is a tuple (such as for SVLEN)
+    val = record.info[name]
+    if singularize and isinstance(val, tuple):
+        if len(val) == 1:
+            return val[0]
+        else:
+            raise ValueError(f"Encountered value tuple containing multiple entries: {val}")
+    return val
 
 
 def get_record_length(record):
-    return get_info_field(record, "SVLEN")
+    return get_info_field(record, "SVLEN", singularize=True)
 
 
 def get_sv_type(record, expected_types):

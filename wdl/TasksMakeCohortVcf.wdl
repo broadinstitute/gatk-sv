@@ -207,19 +207,18 @@ task ConcatVcfs {
   String outfile_name = outfile_prefix + ".vcf.gz"
   String allow_overlaps_flag = if allow_overlaps then "--allow-overlaps" else ""
   String naive_flag = if naive then "--naive" else ""
-  String concat_output_type = if (sites_only) then "v" else "z"
-  String sites_only_command = if (sites_only) then "| bcftools view --no-version -G -Oz" else ""
-  String generate_index_command = if (generate_index) then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
+  String sites_only_command = if sites_only then "| bcftools view --no-version -G -Oz" else ""
+  String generate_index_command = if generate_index then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
 
   command <<<
     set -euo pipefail
-    VCFS="~{write_lines(vcfs)}"
     if ~{sort_vcf_list}; then
-      cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs.list
+      VCFS=vcfs.list
+      awk -F '/' '{print $NF"\t"$0}' ~{write_lines(vcfs)} | sort -k1,1V | awk '{print $2}' > $VCFS
     else
-      cp $VCFS vcfs.list
+      VCFS="~{write_lines(vcfs)}"
     fi
-    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} -O~{concat_output_type} --file-list vcfs.list \
+    bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} -Oz --file-list $VCFS \
       ~{sites_only_command} \
       > ~{outfile_name}
     ~{generate_index_command}

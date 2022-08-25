@@ -97,7 +97,7 @@ task GetCommonVCF {
     awk '{if ($NF > '$sample_count_cutoff' && $5=="DEL" && $3-$2<~{cnv_size_cutoff}) print}' info.V2.bed | cut -f4 >> common_SVID
     awk '{if ($NF > '$sample_count_cutoff' && $5=="DUP" && $3-$2<~{cnv_size_cutoff}) print}' info.V2.bed | cut -f4 >> common_SVID
 
-    /usr/local/bin/bcftools filter -i 'ID=@common_SVID' ~{vcf} > common_SVs.vcf
+    bcftools filter -i 'ID=@common_SVID' ~{vcf} > common_SVs.vcf
 
     vcf-sort common_SVs.vcf | bgzip > common_SVs.vcf.gz
     tabix common_SVs.vcf.gz

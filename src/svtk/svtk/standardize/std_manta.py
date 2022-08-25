@@ -35,8 +35,7 @@ class MantaStandardizer(VCFStandardizer):
                 # Track IDs of observed records
                 mate_IDs.append(record.id)
 
-            std_rec = self.std_vcf.new_record()
-            yield self.standardize_record(std_rec, record)
+            yield self.standardize_record(record)
 
     def standardize_info(self, std_rec, raw_rec):
         """

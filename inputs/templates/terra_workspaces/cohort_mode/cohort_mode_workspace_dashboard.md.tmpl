@@ -17,10 +17,9 @@ The following inputs must be provided for each sample in the cohort, via the sam
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier*|
 |`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
-|`File`|`gvcf`|Path to the GCS location of an indexed GVCF produced by GATK HaplotypeCaller.** Index `.tbi` files are located implicitly so must be present in the same directory. |
 |`Boolean`|`requester_pays_cram`|Set to `true` if the case data is stored in a requester-pays GCS bucket|
 
-*See **Sample ID requirements** below for specifications. 
+*See **Sample ID requirements** below for specifications.
 
 The following cohort-level or batch-level inputs are also required:
 
@@ -29,9 +28,6 @@ The following cohort-level or batch-level inputs are also required:
 |`String`|`sample_set_id`|Batch identifier|
 |`String`|`sample_set_set_id`|Cohort identifier|
 |`File`|`cohort_ped_file`|Path to the GCS location of a family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in `02-EvidenceQC`) should be entered as sex = 0.|
-|`Array[File]`|`snp_vcfs`|Paths to the GCS locations of a jointly-genotyped, position-sharded SNP VCF (may contain indels and multiallelic sites). Alternatively, provide a GCS path to a text file containing one SNP VCF shard path per line using the `File` input `snp_vcfs_shard_list`.**|
-
-**Only one of `gvcf` or `snp_vcfs` or `snp_vcfs_shard_list` is required
 
 ### Pipeline outputs
 
@@ -41,7 +37,7 @@ The following are the main pipeline outputs. For more information on the outputs
 |---------|--------|--------------|
 |`File`|`output_vcf`|Annotated SV VCF for the cohort***|
 |`File`|`output_vcf_idx`|Index for `output_vcf`|
-|`File`|`vcf_qc`|QC plots (bundled in a .tar.gz file)|
+|`File`|`sv_vcf_qc_output`|QC plots (bundled in a .tar.gz file)|
 
 ***Note that this VCF is not filtered
 
@@ -57,19 +53,23 @@ The following workflows are included in this workspace, to be executed in this o
 4. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 5. `05-ClusterBatch`: Per-batch variant clustering
 6. `06-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
-7. `07a-FilterBatchSites`: Per-batch variant filtering
-8. `07b-PlotSVCountsPerSample`: Plot SV counts per sample per SV type to enable choice of IQR cutoff for outlier filtration in `07c-FilterBatchSamples`
-9. `07c-FilterBatchSamples`: Per-batch outlier sample filtration
-10. (Skip for a single batch) `08-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
-11. `09-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `09-GenotypeBatch_SingleBatch` if you only have one batch.
-12. `10-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `10-RegenotypeCNVs_SingleBatch` if you only have one batch.
-13. `11-MakeCohortVcf`: Cohort-level cross-batch integration; complex variant resolution and re-genotyping; VCF cleanup. Use `11-MakeCohortVcf_SingleBatch` if you only have one batch.
-14. `12-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `12-AnnotateVcf_SingleBatch` if you only have one batch.
+7. `07-FilterBatchSites`: Per-batch variant filtering
+8. `08-PlotSVCountsPerSample`: Plot SV counts per sample per SV type to enable choice of IQR cutoff for outlier filtration in `09-FilterBatchSamples`
+9. `09-FilterBatchSamples`: Per-batch outlier sample filtration
+10. (Skip for a single batch) `10-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+11. `11-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `11-GenotypeBatch_SingleBatch` if you only have one batch.
+12. `12-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `12-RegenotypeCNVs_SingleBatch` if you only have one batch.
+13. `13-CombineBatches`: Cohort-level cross-batch integration and clustering. Use `13-CombineBatches_SingleBatch` if you only have one batch.
+14. `14-ResolveComplexVariants`: Complex variant resolution. Use `14-ResolveComplexVariants_SingleBatch` if you only have one batch.
+15. `15-GenotypeComplexVariants`: Complex variant re-genotyping. Use `15-GenotypeComplexVariants_SingleBatch` if you only have one batch.
+16. `16-CleanVcf`: VCF cleanup. Use `16-CleanVcf_SingleBatch` if you only have one batch.
+17. `17-MasterVcfQc`: Generates VCF QC reports. Use `17-MasterVcfQc_SingleBatch` if you only have one batch.
+18. `18-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `18-AnnotateVcf_SingleBatch` if you only have one batch.
 
 Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
-* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `07b-PlotSVCountsPerSample` beforehand (reconfigured with the single VCF you want to filter) to enable IQR cutoff choice.
+* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `08-PlotSVCountsPerSample` beforehand (reconfigured with the single VCF you want to filter) to enable IQR cutoff choice.
 
 For detailed instructions on running the pipeline in Terra, see **Step-by-step instructions** below.
 
@@ -123,7 +123,7 @@ If using a SNP VCF in `04-GatherBatchEvidence`, it does not need to be re-header
 2. In your new workspace, delete the sample, sample_set, and sample_set_set data tables. To do this, go to the *Data* tab of the workspace. Select the `sample` data table. Check the box to select all samples. Click the 3 blue dots that appear, and select "Delete Data". Confirm when prompted. Repeat for any remaining samples and for any remaining entries in the `sample_set` or `sample_set_set` tables. 
 <img alt="deleting data tables" title="How to delete the sample data table" src="https://i.imgur.com/jNSXAqj.png" width="600">
 
-3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column), `bam_or_cram_file`, and `requester_pays_cram` at minimum. If you are using GVCFs instead of a joint SNP VCF in `04-GatherBatchEvidence`, there should be an additional `gvcf` column (if using a joint SNP VCF, you will provide this directly in `04-GatherBatchEvidence` later on). See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
+3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column), `bam_or_cram_file`, and `requester_pays_cram` at minimum. See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
 <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/h0hj2fT.png" width="400">
 
 4. Edit the `cohort_ped_file` item in the Workspace Data table (as shown in the screenshot below) to provide the Google URI to the PED file for your cohort (make sure to share it with your Terra proxy account!). 
@@ -147,7 +147,7 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
-* If you only have one batch, you will need to skip `08-MergeBatchSites` and use the single-batch versions of all workflows after `09-GenotypeBatch`.
+* If you only have one batch, you will need to skip `10-MergeBatchSites` and use the single-batch versions of all workflows after `11-GenotypeBatch`.
 
 #### 01-GatherSampleEvidence
 
@@ -177,9 +177,6 @@ Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/g
 
 Read the full GatherBatchEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-batch-evidence).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV`.
-* The default configuration for `04-GatherBatchEvidence` in this workspace uses sample GVCFs. To use a position-sharded joint SNP VCF instead, delete the `gvcfs` input, provide your file(s) for `snp_vcfs`, and click "Save". The `snp_vcfs` argument should be formatted as an `Array[File]`, ie. `["gs://bucket/shard1.vcf.gz", "gs://bucket/shard2.vcf.gz"]`. Alternatively, provide the input `snp_vcfs_shard_list`: a GCS path to a text file containing one SNP VCF shard path per line (this option is useful if the `Array[File]` of `snp_vcfs` shards is too long for Terra to handle).
-	* Refer to **Sample ID requirements** above for guidance on what to do if your SNP VCF has different sample IDs than the ones being used for GATK-SV processing.
-* If you are using GVCFs in a requester-pays bucket, you must provide the Terra billing project for the workspace to the `gvcf_gcs_project_for_requester_pays` argument as a string, surrounded by double-quotes.
 
 #### 05-ClusterBatch and 06-GenerateBatchMetrics
 
@@ -187,34 +184,34 @@ Read the full documentation for these modules [here](https://github.com/broadins
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` and `04-GatherBatchEvidence`.
 
 
-#### 07a-FilterBatchSites, 07b-PlotSVCountsPerSample, 07c-FilterBatchSamples
+#### 07-FilterBatchSites, 08-PlotSVCountsPerSample, 09-FilterBatchSamples
 
 These three workflows make up FilterBatch; they are subdivided in this workspace to enable tuning of outlier filtration cutoffs. Read the full FilterBatch documentation [here](https://github.com/broadinstitute/gatk-sv#filter-batch).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `06-GenerateBatchMetrics`.
-* `07a-FilterBatchSites` does not require user intervention
-* `07b-PlotSVCountsPerSample` produces SV count plots and files, as well as a preview of the outlier samples to be filtered, but it does not perform any filtering of the VCFs. The input `N_IQR_cutoff` is used to visualize filtration thresholds on the SV count plots and preview the samples to be filtered; the default value is set to 6. You can adjust this value depending on your needs, and you can re-run the workflow with new `N_IQR_cutoff` values until the plots and outlier sample lists suit the purposes of your study. Once you have chosen an IQR cutoff, provide it to the `N_IQR_cutoff` input in `07c-FilterBatchSamples` to filter the VCFs using the chosen cutoff. 
-* `07c-FilterBatchSamples` performs outlier sample filtration, removing samples with an abnormal number of SV calls of at least one SV type. To tune the filtering threshold to your needs, edit the `N_IQR_cutoff` input value based on the plots and outlier sample preview lists from `07b-PlotSVCountsPerSample`. The default value for `N_IQR_cutoff` in this step is 10000, which essentially means that no samples are filtered.
+* `07-FilterBatchSites` does not require user intervention
+* `08-PlotSVCountsPerSample` produces SV count plots and files, as well as a preview of the outlier samples to be filtered, but it does not perform any filtering of the VCFs. The input `N_IQR_cutoff` is used to visualize filtration thresholds on the SV count plots and preview the samples to be filtered; the default value is set to 6. You can adjust this value depending on your needs, and you can re-run the workflow with new `N_IQR_cutoff` values until the plots and outlier sample lists suit the purposes of your study. Once you have chosen an IQR cutoff, provide it to the `N_IQR_cutoff` input in `09-FilterBatchSamples` to filter the VCFs using the chosen cutoff.
+* `09-FilterBatchSamples` performs outlier sample filtration, removing samples with an abnormal number of SV calls of at least one SV type. To tune the filtering threshold to your needs, edit the `N_IQR_cutoff` input value based on the plots and outlier sample preview lists from `08-PlotSVCountsPerSample`. The default value for `N_IQR_cutoff` in this step is 10000, which essentially means that no samples are filtered.
 
-#### 08-MergeBatchSites
+#### 10-MergeBatchSites
 
 Read the full MergeBatchSites documentation [here](https://github.com/broadinstitute/gatk-sv#merge-batch-sites).
 * If you only have one batch, skip this workflow.
-* For a multi-batch cohort, `08-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `08-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `07c-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**. 
+* For a multi-batch cohort, `10-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `10-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `09-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**.
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
-#### 09-GenotypeBatch
+#### 11-GenotypeBatch
 
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
-* Use the same `sample_set` definitions you used for `03-TrainGCNV` through `07c-FilterBatchSamples`.
-* If you only have one batch, use the `09-GenotypeBatch_SingleBatch` version of the workflow.
+* Use the same `sample_set` definitions you used for `03-TrainGCNV` through `09-FilterBatchSamples`.
+* If you only have one batch, use the `11-GenotypeBatch_SingleBatch` version of the workflow.
 
-#### 10-RegenotypeCNVs, 11-MakeCohortVcf, and 12-AnnotateVcf
+#### 12-RegenotypeCNVs, 13-CombineBatches, 14-ResolveComplexVariants, 15-GenotypeComplexVariants, 16-CleanVcf, 17-MasterVcfQc, and 18-AnnotateVcf
 
-Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
-* For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `08-MergeBatchSites`.
+Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`, `MasterVcfQc`), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
+* For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `10-MergeBatchSites`.
 * If you only have one batch, use the `[...]_SingleBatch` version of the workflow.
 
 #### Downstream steps
 
-Additional downstream steps are under development. Read about some of them on the README [here](https://github.com/broadinstitute/gatk-sv#module07). Please note that the VCF produced by `11-MakeCohortVcf` (and annotated by `12-AnnotateVcf`) prioritizes sensitivity, but additional downstream filtration is recommended to improve specificity. Filtration methods are under active development by the GATK-SV team; stay tuned for updates.
+Additional downstream steps are under development. Read about some of them on the README [here](https://github.com/broadinstitute/gatk-sv#module07). Please note that the VCF produced by `16-CleanVcf` (and annotated by `18-AnnotateVcf`) prioritizes sensitivity, but additional downstream filtration is recommended to improve specificity. Filtration methods are under active development by the GATK-SV team; stay tuned for updates.

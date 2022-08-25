@@ -61,33 +61,34 @@ def main(argv):
         sys.exit(1)
     args = parser.parse_args(argv)
 
-    # Add contigs to header if provided
-    if args.contigs:
-        template = pkg_resources.resource_filename(
-            'svtk', 'data/no_contigs_template.vcf')
-        template = VariantFile(template)
-        header = template.header
-        contig_line = '##contig=<ID={contig},length={length}>'
-        for line in args.contigs:
-            contig, length = line.split()[:2]
-            header.add_line(contig_line.format(**locals()))
-    # Use GRCh37 by default
-    else:
-        template = pkg_resources.resource_filename(
-            'svtk', 'data/GRCh37_template.vcf')
-        template = VariantFile(template)
-        header = template.header
-
     vcf = VariantFile(args.vcf)
-
     # Parse new sample names if provided
     if args.sample_names:
         sample_names_list = args.sample_names.split(',')
     else:
         sample_names_list = vcf.header.samples
 
+    # Add contigs to header if provided
+    if args.contigs:
+        template = pkg_resources.resource_filename(
+            'svtk', 'data/no_contigs_template.vcf')
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        header = VCFStandardizer.get_header_from_template(template, sample_names_list)
+        contig_line = '##contig=<ID={contig},length={length}>'
+        for line in args.contigs:
+            contig, length = line.split()[:2]
+            header.add_line(contig_line.format(contig=contig, length=length))
+    # Use GRCh37 by default
+    else:
+        template = pkg_resources.resource_filename(
+            'svtk', 'data/GRCh37_template.vcf')
+        # pysam can no longer open up a VCF header with FORMAT but no samples, so copy template to temporary file
+        # and add samples, then open and return header
+        header = VCFStandardizer.get_header_from_template(template, sample_names_list)
+
     # Tag source in header
-    meta = '##FORMAT=<ID={0},Number=1,Type=Integer,Description="Called by {1}"'
+    meta = '##FORMAT=<ID={0},Number=1,Type=Integer,Description="Called by {1}">'
     meta = meta.format(args.source, args.source.capitalize())
     header.add_line(meta)
     header.add_line('##source={0}'.format(args.source))
