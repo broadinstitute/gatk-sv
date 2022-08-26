@@ -108,6 +108,7 @@ task RunVaPoR{
     --output-path ~{prefix}.~{contig} \
     --output-file ~{prefix}.~{contig}.vapor \
     --reference ~{ref_fasta} \
+    --PB-supp 0 \
     --pacbio-input ~{bam_or_cram_file}
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
@@ -174,6 +175,7 @@ task RunVaPoRWithCram{
     --output-path ~{prefix}.~{contig} \
     --output-file ~{prefix}.~{contig}.vapor \
     --reference ~{ref_fasta} \
+    --PB-supp 0 \
     --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
