@@ -118,6 +118,14 @@ workflow FilterBatchSamples {
     File? outlier_filtered_melt_vcf = ExcludeOutliers.vcf_no_outliers[3]
     File? outlier_filtered_scramble_vcf = ExcludeOutliers.vcf_no_outliers[4]
     File? outlier_filtered_depth_vcf = ExcludeOutliers.vcf_no_outliers[5]
+
+    File? outlier_filtered_manta_vcf_index = ExcludeOutliers.vcf_no_outliers_index[0]
+    File? outlier_filtered_delly_vcf_index = ExcludeOutliers.vcf_no_outliers_index[1]
+    File? outlier_filtered_wham_vcf_index = ExcludeOutliers.vcf_no_outliers_index[2]
+    File? outlier_filtered_melt_vcf_index = ExcludeOutliers.vcf_no_outliers_index[3]
+    File? outlier_filtered_scramble_vcf_index = ExcludeOutliers.vcf_no_outliers_index[4]
+    File? outlier_filtered_depth_vcf_index = ExcludeOutliers.vcf_no_outliers_index[5]
+
     File outlier_filtered_pesr_vcf = MergePesrVcfs.concat_vcf
     File outlier_filtered_pesr_vcf_index = MergePesrVcfs.concat_vcf_idx
     Array[String] filtered_batch_samples_list = FilterSampleList.filtered_samples_list

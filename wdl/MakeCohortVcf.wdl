@@ -4,7 +4,7 @@ import "CombineBatches.wdl" as Cluster
 import "ResolveComplexVariants.wdl" as ComplexResolve
 import "GenotypeComplexVariants.wdl" as ComplexGenotype
 import "CleanVcf.wdl" as Clean
-import "MasterVcfQc.wdl" as VcfQc
+import "MainVcfQc.wdl" as VcfQc
 
 workflow MakeCohortVcf {
   input {
@@ -62,12 +62,8 @@ workflow MakeCohortVcf {
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
-    Array[File]? thousand_genomes_benchmark_calls
-    Array[File]? hgsv_benchmark_calls
-    Array[File]? asc_benchmark_calls
-    File? sanders_2015_tarball
-    File? collins_2017_tarball
-    File? werling_2018_tarball
+    Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
+    Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
@@ -220,26 +216,23 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 
     # overrides for VcfQc
+    RuntimeAttr? runtime_override_site_level_benchmark_plot
+    RuntimeAttr? runtime_override_per_sample_benchmark_plot
+    RuntimeAttr? runtime_override_subset_vcf
+    RuntimeAttr? runtime_override_preprocess_vcf
+    RuntimeAttr? runtime_override_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
-    RuntimeAttr? runtime_override_thousand_g_benchmark
-    RuntimeAttr? runtime_override_thousand_g_plot
-    RuntimeAttr? runtime_override_asc_benchmark
-    RuntimeAttr? runtime_override_asc_plot
-    RuntimeAttr? runtime_override_hgsv_benchmark
-    RuntimeAttr? runtime_override_hgsv_plot
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
-    RuntimeAttr? runtime_override_sanders_per_sample_plot
-    RuntimeAttr? runtime_override_collins_per_sample_plot
-    RuntimeAttr? runtime_override_werling_per_sample_plot
     RuntimeAttr? runtime_override_sanitize_outputs
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
-    RuntimeAttr? runtime_override_split_vcf_to_qc
+    RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
-    RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
     RuntimeAttr? runtime_override_collect_vids_per_sample
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_tar_shard_vid_lists
@@ -455,33 +448,50 @@ workflow MakeCohortVcf {
       runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
   }
 
-  call VcfQc.MasterVcfQc {
+  call VcfQc.MainVcfQc {
     input:
-      vcf=CleanVcf.cleaned_vcf,
-      vcf_idx=CleanVcf.cleaned_vcf_index,
+      vcfs=[CleanVcf.cleaned_vcf],
       ped_file=ped_file,
       prefix="~{cohort_name}.cleaned",
-      sv_per_shard=10000,
-      samples_per_shard=100,
-      thousand_genomes_benchmark_calls=thousand_genomes_benchmark_calls,
-      hgsv_benchmark_calls=hgsv_benchmark_calls,
-      asc_benchmark_calls=asc_benchmark_calls,
-      sanders_2015_tarball=sanders_2015_tarball,
-      collins_2017_tarball=collins_2017_tarball,
-      werling_2018_tarball=werling_2018_tarball,
+      sv_per_shard=2500,
+      samples_per_shard=600,
+      site_level_comparison_datasets=site_level_comparison_datasets,
+      sample_level_comparison_datasets=sample_level_comparison_datasets,
       primary_contigs_fai=contig_list,
       random_seed=random_seed,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
+      runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,
+      runtime_override_per_sample_benchmark_plot=runtime_override_per_sample_benchmark_plot,
+      runtime_override_subset_vcf=runtime_override_subset_vcf,
+      runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
+      runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
+      runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark,
+      runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists,
+      runtime_override_plot_qc_vcf_wide=runtime_override_plot_qc_vcf_wide,
+      runtime_override_plot_qc_per_sample=runtime_override_plot_qc_per_sample,
+      runtime_override_plot_qc_per_family=runtime_override_plot_qc_per_family,
+      runtime_override_sanitize_outputs=runtime_override_sanitize_outputs,
+      runtime_override_merge_vcfwide_stat_shards=runtime_override_merge_vcfwide_stat_shards,
+      runtime_override_merge_vcf_2_bed=runtime_override_merge_vcf_2_bed,
+      runtime_override_collect_sharded_vcf_stats=runtime_override_collect_sharded_vcf_stats,
+      runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
+      runtime_override_scatter_vcf=runtime_override_scatter_vcf,
+      runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
+      runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
+      runtime_override_split_samples_list=runtime_override_split_samples_list,
+      runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
+      runtime_override_benchmark_samples=runtime_override_benchmark_samples,
+      runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
+      runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
   }
 
 
   output {
     File vcf = CleanVcf.cleaned_vcf
     File vcf_index = CleanVcf.cleaned_vcf_index
-    File vcf_qc = MasterVcfQc.sv_vcf_qc_output
+    File vcf_qc = MainVcfQc.sv_vcf_qc_output
 
     # If merge_intermediate_vcfs enabled
     File? cluster_vcf = CombineBatches.combine_batches_merged_vcf
