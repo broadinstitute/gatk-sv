@@ -111,6 +111,19 @@ def rectangle(ax, x_range, y_range, **kwargs):
     )
 
 
+def barh(ax, x_baseline, edges, values, **kwargs):
+    y_low = edges[0]
+    for value, y_high in zip(values, edges[1:]):
+        # rectangle(ax, [x_baseline, x_baseline + value], [edges[0], edges[1]])
+        if numpy.isfinite(value):
+            ax.add_patch(
+                patches.Rectangle(
+                    (x_baseline, y_low), value, y_high - y_low, **kwargs
+                )
+            )
+        y_low = y_high
+
+
 def get_2d_roc(x, y, matches, n_div=500, match_style='either'):
     """
     Get ROC curve for 2D data with two independent thresholds.

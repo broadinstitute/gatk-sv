@@ -23,6 +23,7 @@ setup(
             "sv_utils=sv_utils.command_line:main"
         ]
     },
+    python_requires=">3.8",
     install_requires=[
         "numpy",
         "scipy",

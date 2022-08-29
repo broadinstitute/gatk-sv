@@ -110,7 +110,7 @@ def test_add_exception_context():
         except ValueError as error:
             common.add_exception_context(error, "context")
             raise
-    assert exception_info.value.args == ("context\nFoo",)
+    assert exception_info.value.args == ("context", "Foo")
 
     with pytest.raises(IOError) as exception_info:
         # check it's still an IOError

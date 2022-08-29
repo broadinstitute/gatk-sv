@@ -1,14 +1,8 @@
 {
-  "CrossValidateGqRecalibrator.train_vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
-  "CrossValidateGqRecalibrator.train_vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
+  "CrossValidateGqRecalibrator.train_vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz",
+  "CrossValidateGqRecalibrator.train_vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz.tbi",
   "CrossValidateGqRecalibrator.standardize_vcf": false,
-  "CrossValidateGqRecalibrator.annotations_vcf": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz",
-  "CrossValidateGqRecalibrator.annotations_vcf_index": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz.tbi",
-  "CrossValidateGqRecalibrator.annotations_to_transfer": [
-    "INFO/STATUS", "INFO/NON_REF_GENOTYPE_CONCORDANCE", "INFO/VAR_PPV", "INFO/VAR_SENSITIVITY", "INFO/TRUTH_AF",
-    "FORMAT/CONC_ST"
-  ],
-  "CrossValidateGqRecalibrator.pre_computed_pickled_variant_properties": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_svtype_svlen_ac.pickle.bz2",
+  "CrossValidateGqRecalibrator.pre_computed_pickled_variant_properties": null,
   "CrossValidateGqRecalibrator.pre_computed_pickled_original_scores": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2",
   "CrossValidateGqRecalibrator.train_vcf_label": "HGDP and HGSV",
   "CrossValidateGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
@@ -55,8 +49,8 @@
   "CrossValidateGqRecalibrator.get_truth_overlap_args": [
     "--expand-point-svs-bp 1000",
     "--point-sv-scale-factor 1.0",
-    "--expand-non-point-svs-bp 0",
-    "--non-point-sv-scale-factor 0.0",
+    "--expand-non-point-svs-bp 250",
+    "--non-point-sv-scale-factor 0.5",
     "--min-overlap-cutoff-precision 0.8",
     "--inheritance-af-rareness 0.05",
     "--use-copy-number false"
@@ -79,10 +73,40 @@
       "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz",
       "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
       "property": "sl",
-      "passing_score": 0,
-      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_sl.pickle.bz2"
+      "passing_score": 1,
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_sl.pickle"
     }
   ],
+  "CrossValidateGqRecalibrator.pre_computed_cross_validation_vcfs" : {
+      "train_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_4.vcf.gz"
+      ],
+      "train_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_4.vcf.gz.tbi"
+      ],
+      "test_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_4.vcf.gz"
+      ],
+      "test_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_4.vcf.gz.tbi"
+      ]
+  },
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
   "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},

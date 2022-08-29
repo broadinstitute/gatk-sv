@@ -13,6 +13,7 @@ from typing import List, Text, Optional, Iterator
 from sv_utils import genomics_io
 
 
+# noinspection PyArgumentList
 class FlippedIntervalStrategy(enum.Enum):
     end_to_pos = enum.auto()
     flip = enum.auto()
@@ -118,20 +119,8 @@ def fix_record(
             record.stop = record.pos + 1
         else:
             # not a break-end, figure out what's going on here...
-            chr2, end2 = str_to_loc(record.info[VcfKeys.source]) \
-                if VcfKeys.source in record.info.keys() else (None, None)
-            if chr2 is None:
-                # no alternate source and not a break-end
-                if record.info[VcfKeys.bnd_contig_2] != record.chrom:
-                    # use this somehow?
-                    # if record.info[VcfKeys.svtype] in "INS" and record.stop == record.pos:
-                    #     record.stop = record.pos + 1
-                    raise ValueError(
-                        f"Variant {record.id} has {VcfKeys.svtype}={record.info[VcfKeys.svtype]} but "
-                        f"{VcfKeys.bnd_contig_2}!=chrome ({record.info[VcfKeys.bnd_contig_2]}!={record.chrom})"
-                    )
-                record.info.pop(VcfKeys.bnd_contig_2)
-            else:
+            if VcfKeys.source in record.info.keys():
+                chr2, end2 = str_to_loc(record.info[VcfKeys.source])
                 if record.info[VcfKeys.bnd_contig_2] != chr2:
                     message = f"Variant {record.id} with {VcfKeys.svtype}={record.info[VcfKeys.svtype]} has " \
                         f"{VcfKeys.bnd_contig_2}!={VcfKeys.source} chrom ({record.info[VcfKeys.bnd_contig_2]}!={chr2})"
@@ -142,11 +131,22 @@ def fix_record(
                         record.info[VcfKeys.bnd_contig_2] = chr2
 
                 record.info[VcfKeys.bnd_end_2] = end2
+            else:
+                # no alternate source and not a break-end
+                if record.info[VcfKeys.bnd_contig_2] != record.chrom:
+                    # use this somehow?
+                    # if record.info[VcfKeys.svtype] in "INS" and record.stop == record.pos:
+                    #     record.stop = record.pos + 1
+                    raise ValueError(
+                        f"Variant {record.id} has {VcfKeys.svtype}={record.info[VcfKeys.svtype]} but "
+                        f"{VcfKeys.bnd_contig_2}!=chrome ({record.info[VcfKeys.bnd_contig_2]}!={record.chrom})"
+                    )
+                record.info.pop(VcfKeys.bnd_contig_2)
 
     if record.pos >= record.stop:
         if record.pos == record.stop:
             # empty interval, valid for INS, otherwise an error
-            if record.info[VcfKeys.svtype] not in GAIN_TYPES:
+            if record.info[VcfKeys.svtype] != "INS":
                 raise ValueError(
                     f"Variant {record.id} with {VcfKeys.svtype}={record.info[VcfKeys.svtype]} has pos=stop={record.pos}"
                 )
@@ -160,6 +160,7 @@ def fix_record(
                 record.pos, record.stop = record.stop, record.pos
 
     if record.alts == ('<DUP>',):
+        # some older VCFs had DUP alleles marked as 2 instead of 1
         num_bad_gt = 0
         for sample in record.samples.values():
             gt = sample[VcfKeys.gt]
@@ -184,12 +185,15 @@ def fix_record(
 def low_mem_cheat_sort(record_iterator: Iterator[pysam.VariantRecord]) -> Iterator[pysam.VariantRecord]:
     """
     Sort variants without storing whole VCF in memory. Fixing the records can alter start and end coordinates, but it
-    cannot alter the contig. Thus
+    cannot alter the contig. This is much faster than sorting the whole VCF afterwards, because most records will be
+    emitted as they are produced, with only a handful of records moving slightly in the order (and it is done in memory
+    without touching disk).
     Args:
-        record_iterator:
-
+        record_iterator: Iterator[pysam.VariantRecord]
+            Iterator of fixed records, almost in order
     Returns:
-
+        sorted_record_iterator: Iterator[pysam.VariantRecord]
+            Iterator of fixed records in order
     """
     chrom = "Dummy Start Contig"
     buffer = []

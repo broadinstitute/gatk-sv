@@ -2,6 +2,12 @@
   "CrossValidateGqRecalibrator.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
   "CrossValidateGqRecalibrator.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
   "CrossValidateGqRecalibrator.standardize_vcf": true,
+  "CrossValidateGqRecalibrator.annotations_vcf": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz",
+  "CrossValidateGqRecalibrator.annotations_vcf_index": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz.tbi",
+  "CrossValidateGqRecalibrator.annotations_to_transfer": [
+    "INFO/STATUS", "INFO/NON_REF_GENOTYPE_CONCORDANCE", "INFO/VAR_PPV", "INFO/VAR_SENSITIVITY", "INFO/TRUTH_AF",
+    "FORMAT/CONC_ST"
+  ],
   "CrossValidateGqRecalibrator.train_vcf_label": "HGDP and HGSV",
   "CrossValidateGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
   "CrossValidateGqRecalibrator.truth_vcfs": [
@@ -24,11 +30,8 @@
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_gaps.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s36.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s50.bed.gz"
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
   ],
   "CrossValidateGqRecalibrator.standardize_vcf_args": [
     "--gq-scale 0.1"
@@ -41,18 +44,20 @@
     "--subsample 0.8",
     "--colsample-by-tree 0.8",
     "--min-child-weight 1000",
-    "--truth-weight 0.25",
+    "--truth-weight 0.75",
     "--train-homref true",
     "--keep-homvar false",
-    "--keep-multiallelic true"
+    "--keep-multiallelic true",
+    "--validation-proportion 0.2"
   ],
   "CrossValidateGqRecalibrator.get_truth_overlap_args": [
     "--expand-point-svs-bp 1000",
     "--point-sv-scale-factor 1.0",
-    "--expand-non-point-svs-bp 0",
-    "--non-point-sv-scale-factor 0.0",
+    "--expand-non-point-svs-bp 250",
+    "--non-point-sv-scale-factor 0.5",
     "--min-overlap-cutoff-precision 0.8",
-    "--inheritance-af-rareness 0.05"
+    "--inheritance-af-rareness 0.05",
+    "--use-copy-number false"
   ],
   "CrossValidateGqRecalibrator.recalibrate_gq_args": [
     "--keep-homvar false",
@@ -72,40 +77,10 @@
       "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
       "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
       "property": "sl",
-      "passing_score": 0,
-      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_cross_validated_sl.pickle.bz2"
+      "passing_score": 1,
+      "pickled_scores_file": null
     }
   ],
-  "CrossValidateGqRecalibrator.pre_computed_cross_validation_vcfs" : {
-      "train_vcfs": [
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_0.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_1.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_2.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_3.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_4.vcf.gz"
-      ],
-      "train_vcf_indices": [
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_0.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_1.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_2.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_3.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/train_4.vcf.gz.tbi"
-      ],
-      "test_vcfs": [
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_0.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_1.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_2.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_3.vcf.gz",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_4.vcf.gz"
-      ],
-      "test_vcf_indices": [
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_0.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_1.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_2.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_3.vcf.gz.tbi",
-        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/test_4.vcf.gz.tbi"
-      ]
-  },
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
   "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},

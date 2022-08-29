@@ -329,14 +329,18 @@ class PrecisionRecallCurve:
     @common.classproperty
     def empty_curve(cls: type) -> "PrecisionRecallCurve":
         return cls(
-            pandas.DataFrame(None, columns=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key],
-                             index=pandas.Index([], name=PrecisionRecallCurve.threshold_key, dtype=numpy.float64)),
+            pandas.DataFrame(
+                None, columns=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key,
+                               PrecisionRecallCurve.f_score_key],
+                index=pandas.Index([], name=PrecisionRecallCurve.threshold_key, dtype=numpy.float64)
+            ),
             num_good=0, num_bad=0, is_sorted=True
         )
 
     @classmethod
     def empty_point(cls: type, threshold: float = numpy.nan) -> pandas.Series:
-        return pandas.Series(numpy.nan, index=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key],
+        return pandas.Series(numpy.nan, index=[PrecisionRecallCurve.precision_key, PrecisionRecallCurve.recall_key,
+                                               PrecisionRecallCurve.f_score_key],
                              name=threshold)
 
 

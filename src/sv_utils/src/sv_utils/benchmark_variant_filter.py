@@ -3,6 +3,8 @@ import sys
 import datetime
 import argparse
 import json
+import warnings
+
 import numpy
 import scipy
 import scipy.stats
@@ -22,6 +24,8 @@ class Keys:
     property = genomics_io.Keys.property
     sample_id = genomics_io.Keys.sample_id
     family_id = "family_id"
+    contig = genomics_io.Keys.contig
+    is_autosome = "is_autosome"
     svtype = genomics_io.Keys.svtype
     svlen = genomics_io.Keys.svlen
     score = "score"
@@ -60,17 +64,19 @@ class Keys:
     inheritance = "inheritance"
     variants_per_sample = "variants-per-sample"
     violation_curve = "violation-curve"
+    scores_histogram = "scores-histogram"
     hardy_weinberg = "hardy-weinberg"
 
 
 _all_make_figures = frozenset({Keys.precision_recall, Keys.inheritance, Keys.variants_per_sample, Keys.violation_curve,
-                               Keys.hardy_weinberg})
+                               Keys.scores_histogram, Keys.hardy_weinberg, })
 
 
 class Default:
     vcf_score_property = Keys.gq
     num_precision_recall_curve_rows = 3
     num_inheritance_stats_rows = 3
+    num_scores_histogram_rows = 3
     title_font_size = 6
     label_font_size = 6
     legend_font_size = 6
@@ -84,6 +90,9 @@ class Default:
     plotted_mendelian_violation_trio_types = (Keys.mendelian,)
     # only make HWE plots for these SV types:
     plotted_hardy_weinberg_categories = frozenset({Keys.non_bnd_types})
+    hardy_weinberg_confidence = 0.95
+    min_num_called_gt_hardy_weinberg = 5
+    histogram_width = 0.9
     make_figures = _all_make_figures
 
 
@@ -101,7 +110,7 @@ def load_benchmark_properties_from_vcf_properties(
     f"""
     Load requested properties from VCF. If {Keys.allele_count} and/or {Keys.gq} is among them, load properties needed to
     compute it ({Keys.gq} requires {Keys.allele_count}, because some algorithms set a GT to no call rather than updating
-    the quality score).
+    the quality score). If {Keys.is_autosome} is among them, load {Keys.contig} and compute it.
     Return table with only the requested properties
     Args:
         vcf: str
@@ -121,7 +130,7 @@ def load_benchmark_properties_from_vcf_properties(
             Table of properties with rows corresponding to variants and (potentially multi-index) columns corresponding
             to desired properties
     """
-
+    derived_properties = frozenset({Keys.allele_count, Keys.is_autosome})
     # figure out if we need to compute allele counts and/or quality
     if use_copy_number and Keys.gq in wanted_properties:
         need_quality = True
@@ -137,10 +146,12 @@ def load_benchmark_properties_from_vcf_properties(
         if use_copy_number:
             extra_load_properties = [Keys.gt, Keys.rd_cn, Keys.cn] if use_cn else [Keys.gt, Keys.rd_cn]
             if need_quality:
-                extra_load_properties = extra_load_properties + ([Keys.rd_gq, Keys.cnq] if use_cn else [Keys.rd_gq])
+                extra_load_properties += ([Keys.rd_gq, Keys.cnq] if use_cn else [Keys.rd_gq])
         else:
             extra_load_properties = [Keys.gt]
-    load_properties = [_property for _property in wanted_properties if _property != Keys.allele_count] + \
+    if Keys.is_autosome in wanted_properties:
+        extra_load_properties.append(Keys.contig)
+    load_properties = [_property for _property in wanted_properties if _property not in derived_properties] + \
                       [_property for _property in extra_load_properties if _property not in wanted_properties]
     # load the wanted properties + any extras needed for computing allele_counts or quality
     variants = genomics_io.vcf_to_pandas(vcf, samples=wanted_sample_ids, wanted_properties=load_properties,
@@ -160,6 +171,10 @@ def load_benchmark_properties_from_vcf_properties(
     elif need_allele_count:
         allele_counts = genomics_io.get_allele_counts(variants, use_copy_number=use_copy_number, use_cn=use_cn)
         variants = genomics_io.assign_dataframe_column(variants, allele_counts, Keys.allele_count)
+    if Keys.is_autosome in wanted_properties:
+        variants = genomics_io.assign_dataframe_column(
+            variants, genomics_io.get_is_autosome(variants), Keys.is_autosome
+        )
     # keep only the wanted properties, drop multi-index if it's not needed
     return genomics_io.drop_trivial_columns_multi_index(variants.loc[:, (slice(None), wanted_properties)])
 
@@ -365,7 +380,7 @@ class ScoresSource:
             wanted_sample_ids: Optional[Iterable[str]] = None,
     ) -> Union[pandas.Series, pandas.DataFrame]:
         if self.has_empty_files:
-            return vcf_data.xs(self.score_property, level=Keys.property, axis=1)
+            return genomics_io.get_format_property(vcf_data, self.score_property)
         else:
             scores = pandas.concat(
                 (
@@ -484,7 +499,7 @@ class ScoresDataSet:
     ) -> Iterator["ScoresDataSet"]:
         if self.scores is None or self.allele_counts is None:
             # not already loaded, or need to load genotypes
-            wanted_properties = (Keys.svtype, Keys.svlen, Keys.allele_count)
+            wanted_properties = (Keys.svtype, Keys.svlen, Keys.allele_count, Keys.is_autosome)
             for scores_source in self.scores_sources.values():
                 if scores_source.has_empty_files:
                     wanted_properties += (scores_source.score_property,)
@@ -500,12 +515,10 @@ class ScoresDataSet:
             )
             # extract allele_counts and metrics, and drop now-unneeded columns from vcf_data
             vcf_data.drop(Keys.gt, axis=1, level=Keys.property, inplace=True)
-            allele_counts = vcf_data.xs(Keys.allele_count, level=Keys.property, axis=1)
-            assert allele_counts.index.equals(vcf_data.index)
+            allele_counts = genomics_io.get_format_property(vcf_data, Keys.allele_count)
             vcf_data.drop(Keys.allele_count, axis=1, level=Keys.property, inplace=True)
-            metrics = vcf_data.xs(None, level=Keys.sample_id, axis=1)[[Keys.svtype, Keys.svlen]]
-            vcf_data.drop([Keys.svtype, Keys.svlen], axis=1, level=Keys.property, inplace=True)
-            assert metrics.index.equals(allele_counts.index)
+            metrics = genomics_io.get_info_property(vcf_data, [Keys.svtype, Keys.svlen, Keys.is_autosome])
+            vcf_data.drop([Keys.svtype, Keys.svlen, Keys.is_autosome], axis=1, level=Keys.property, inplace=True)
 
             # yield one ScoresDataSet for each ScoresSource
             for source_label, scores_source in self.scores_sources.items():
@@ -551,21 +564,39 @@ class ScoresDataSet:
         else:
             yield self
 
+    def filter_variants(self, variant_is_wanted: pandas.Series, new_category: Optional[str] = None) -> "ScoresDataSet":
+        return ScoresDataSet(
+            vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label,
+            scores=self.scores.loc[variant_is_wanted],
+            allele_counts=None if self.allele_counts is None else self.allele_counts[variant_is_wanted],
+            inheritance_stats=None if self.inheritance_stats is None else self.inheritance_stats[variant_is_wanted],
+            metrics=self.metrics.loc[variant_is_wanted],
+            category=self.category if new_category is None else new_category,
+            num_called_genotypes=None if self._num_called_genotypes is None
+            else self._num_called_genotypes.lloc[variant_is_wanted]
+        )
+
     def select_category(
             self,
             category: str,
             sv_type_cutoff_selector: SvTypeCutoffSelector
     ) -> "ScoresDataSet":
-        wanted = sv_type_cutoff_selector(self.metrics)
-        return ScoresDataSet(
-            vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label,
-            scores=self.scores.loc[wanted],
-            allele_counts=self.allele_counts.loc[wanted],
-            inheritance_stats=None if self.inheritance_stats is None else self.inheritance_stats[wanted],
-            metrics=self.metrics.loc[wanted],
-            category=category,
-            num_called_genotypes=None if self._num_called_genotypes is None else self._num_called_genotypes[wanted]
+        return self.filter_variants(
+            variant_is_wanted=sv_type_cutoff_selector(self.metrics), new_category=category
         )
+
+    def has_category_data(self, sv_type_cutoff_selector: SvTypeCutoffSelector) -> bool:
+        return sv_type_cutoff_selector(self.metrics).any()
+
+    def to_autosome(
+            self,
+            min_num_called_gt_hardy_weinberg: int = Default.min_num_called_gt_hardy_weinberg
+    ) -> "ScoresDataSet":
+        wanted = self.metrics[Keys.is_autosome] & \
+                 (self.num_ref_genotypes >= min_num_called_gt_hardy_weinberg) & \
+                 (self.num_non_ref_genotypes >= min_num_called_gt_hardy_weinberg) \
+                 if min_num_called_gt_hardy_weinberg > 0 else self.metrics[Keys.is_autosome]
+        return self.filter_variants(variant_is_wanted=wanted)
 
     @property
     def num_samples(self) -> int:
@@ -590,16 +621,20 @@ class ScoresDataSet:
         return (self.allele_counts > 0).sum(axis=0, skipna=True)
 
     @property
-    def num_het_genotypes(self) -> pandas.Series:
-        return (self.allele_counts == 1).sum(axis=1, skipna=True)
-
-    @property
     def num_ref_genotypes(self) -> pandas.Series:
         return (self.allele_counts == 0).sum(axis=1, skipna=True)
 
     @property
+    def num_het_genotypes(self) -> pandas.Series:
+        return (self.allele_counts == 1).sum(axis=1, skipna=True)
+
+    @property
     def num_homvar_genotypes(self) -> pandas.Series:
         return (self.allele_counts == 2).sum(axis=1, skipna=True)
+
+    @property
+    def num_non_ref_genotypes(self) -> pandas.Series:
+        return (self.allele_counts > 0).sum(axis=1, skipna=True)
 
     @property
     def num_called_genotypes(self) -> pandas.Series:
@@ -626,14 +661,7 @@ class ScoresDataSet:
         # noinspection PyTypeChecker
         if self.is_variant_filter:
             # noinspection PyTypeChecker
-            wanted = (self.scores >= passing_score).fillna(False).astype(bool)
-            return ScoresDataSet(
-                vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label, scores=self.scores.loc[wanted],
-                allele_counts=None if self.allele_counts is None else self.allele_counts[wanted],
-                inheritance_stats=None, metrics=self.metrics.loc[wanted], category=self.category,
-                num_called_genotypes=None if self._num_called_genotypes is None
-                else self._num_called_genotypes.lloc[wanted]
-            )
+            return self.filter_variants(variant_is_wanted=(self.scores >= passing_score).fillna(False).astype(bool))
         else:  # this is a genotype filter
             # noinspection PyTypeChecker
             # keep allele counts where score >= passing score, otherwise set to NA
@@ -643,7 +671,6 @@ class ScoresDataSet:
                 (self.scores >= passing_score).fillna(False).astype(bool),
                 pandas.NA
             )
-
             return ScoresDataSet(
                 vcfs=self.vcfs, scores_sources=self.scores_sources, label=self.label, scores=self.scores,
                 allele_counts=allele_counts, inheritance_stats=None, metrics=self.metrics, category=self.category,
@@ -1353,7 +1380,7 @@ def get_mendelian_violation_curves(
 
     log("COMPLETE: get_mendelian_violation_curves()")
     return {
-        sv_category : category_violation_curves
+        sv_category: category_violation_curves
         for sv_category, category_violation_curves in mendelian_violation_curves_dict.items()
         if len(category_violation_curves) > 0
     }
@@ -1509,6 +1536,29 @@ def plot_mendelian_violation_curves(
         ax.set_title(title_str, fontsize=title_font_size, verticalalignment="top")
 
 
+def _set_component_color(_plot_component, _color, _alpha=0.7):
+    if hasattr(_plot_component, "set_color"):
+        _plot_component.set_color(_color)
+    else:
+        if hasattr(_plot_component, "set_facecolor"):
+            _plot_component.set_facecolor(_color)
+        if hasattr(_plot_component, "set_edgecolor"):
+            _plot_component.set_edgecolor(_color)
+    if hasattr(_plot_component, "set_alpha"):
+        _plot_component.set_alpha(_alpha)
+
+
+def _set_violin_obj_color(violin_obj, color):
+    for pc in violin_obj["bodies"]:
+        _set_component_color(pc, color)
+    for component_name, component in violin_obj.items():
+        if isinstance(component, Iterable):
+            for pc in component:
+                _set_component_color(pc, color)
+        else:
+            _set_component_color(component, color)
+
+
 def plot_variants_per_sample(
         ax: pyplot.Axes,
         variants_per_sample: pandas.DataFrame,
@@ -1516,28 +1566,17 @@ def plot_variants_per_sample(
         title_font_size: int = Default.title_font_size,
         label_font_size: int = Default.label_font_size,
         tick_font_size: int = Default.tick_font_size,
-        plot_max_f1: bool = Default.plot_max_f1
+        plot_max_f1: bool = Default.plot_max_f1,
+        histogram_width: float = Default.histogram_width
 ):
     median_variants_per_sample = variants_per_sample.median(axis=1)
     # noinspection PyTypeChecker
-    # Draw an invisible line on the plot for each data set label, and collect the colors. This also preps the legend
+    # Draw an invisible line on the plot for each data set label, and collect the colors.
     data_colors = {
-        data_label: ax.plot([numpy.nan, numpy.nan], [numpy.nan, numpy.nan],
-                            label=f"{data_label}: {median_value} variants_per_sample")[0].get_color()
+        data_label: ax.plot([], [], label=f"{data_label}: {median_value} variants_per_sample")[0].get_color()
         for data_label, median_value in median_variants_per_sample.items()
         if plot_max_f1 or not "".join(data_label).endswith(Keys.max_f1)
     }
-
-    def _set_color(_plot_component, _color, _alpha=0.7):
-        if hasattr(_plot_component, "set_color"):
-            _plot_component.set_color(_color)
-        else:
-            if hasattr(_plot_component, "set_facecolor"):
-                _plot_component.set_facecolor(_color)
-            if hasattr(_plot_component, "set_edgecolor"):
-                _plot_component.set_edgecolor(_color)
-        if hasattr(_plot_component, "set_alpha"):
-            _plot_component.set_alpha(_alpha)
 
     x = 0
     max_y = 0
@@ -1547,17 +1586,9 @@ def plot_variants_per_sample(
             continue
         x += 1
         max_y = max(max_y, num_variants.max())
-        violin_obj = ax.violinplot(num_variants, positions=[x], widths=[0.9],
+        violin_obj = ax.violinplot(num_variants, positions=[x], widths=[histogram_width],
                                    showmeans=False, showmedians=True, showextrema=True)
-        color = data_colors[data_label]
-        for pc in violin_obj["bodies"]:
-            _set_color(pc, color)
-        for component_name, component in violin_obj.items():
-            if isinstance(component, Iterable):
-                for pc in component:
-                    _set_color(pc, color)
-            else:
-                _set_color(component, color)
+        _set_violin_obj_color(violin_obj, data_colors[data_label])
 
     ax.tick_params(axis='both', which='major', labelsize=tick_font_size)
     ax.set_xticks([])
@@ -1754,6 +1785,170 @@ def get_mendelian_violation_curve_figure(
         return mendelian_violation_fig
 
 
+def get_scores_histogram_figure(
+        scores_data_sets: Collection[ScoresDataSet],
+        sv_selectors: Mapping[str, SvTypeCutoffSelector],
+        num_scores_histogram_rows: int = Default.num_scores_histogram_rows,
+        histogram_width: float = Default.histogram_width,
+        title_font_size: int = Default.title_font_size,
+        label_font_size: int = Default.label_font_size,
+        legend_font_size: int = Default.legend_font_size,
+        tick_font_size: int = Default.tick_font_size,
+        tick_labelrotation: float = Default.tick_labelrotation,
+        pdf_writer: Optional[PdfPages] = None
+) -> Optional[pyplot.Figure]:
+    log("get_scores_histogram_figure() ...")
+
+    # Need to compute which sv_categories have scores
+    log("\tFind which SV categories have scores ....")
+    category_has_data = {
+        sv_category: any(scores_data_set.has_category_data(sv_selector) for scores_data_set in scores_data_sets)
+        for sv_category, sv_selector in iter_categories(sv_selectors)
+    }
+    # allocate one more axes than there are sv categories with data (for legend)
+    histogram_fig, histogram_gridspec, num_columns = make_fig_and_gridspec(
+        num_axes=sum(category_has_data.values(), start=1), num_rows=num_scores_histogram_rows
+    )
+
+    # get the colors from the color cycle, starting on index 1 (since there's no "unfiltered" scores set)
+    colors = pyplot.rcParams["axes.prop_cycle"].by_key()["color"]
+    data_colors = {scores_data_set.label: colors[ind] for ind, scores_data_set in enumerate(scores_data_sets, start=1)}
+    row, column = 0, 0
+    for sv_category, sv_selector in iter_categories(sv_selectors):
+        if not category_has_data[sv_category]:
+            continue
+        ax = histogram_fig.add_subplot(histogram_gridspec[row, column])
+        # noinspection PyUnboundLocalVariable
+        plot_scores_histogram(
+            ax=ax, sv_category=sv_category, sv_selector=sv_selector, scores_data_sets=scores_data_sets,
+            data_colors=data_colors, histogram_width=histogram_width, title_font_size=title_font_size,
+            label_font_size=label_font_size, tick_font_size=tick_font_size, tick_labelrotation = tick_labelrotation
+        )
+        column += 1
+        if column == num_columns:
+            row, column = row + 1, 0
+
+    _draw_extra_legend_axis(
+        histogram_fig, histogram_gridspec, row, column,
+        line_labels=[scores_data_set.label for scores_data_set in scores_data_sets], markers=[],
+        legend_font_size=legend_font_size, advance_color_cycle=1
+    )
+
+    log("COMPLETE: get_scores_histogram_figure()")
+    if pdf_writer is not None:
+        pdf_writer.savefig(histogram_fig, bbox_inches="tight")
+        return None
+    else:
+        return histogram_fig
+
+
+def _get_scores_hisogram(
+        scores: pandas.DataFrame,
+        scores_label: str,
+        null_sentinal: float,
+        num_bins: int = 100
+) -> (numpy.ndarray, numpy.ndarray):
+    # return counts, edges
+    if scores.empty:
+        log(f"\t\t{scores_label}: no data")
+        # no data, so return empty histogram
+        return numpy.empty(0), numpy.empty(0)
+    # basically want to:
+    # 1) convert scores to int64 numpy array and call ravel to get as a 1D array
+    # 2) call histogram to get the histogram
+    # however there are some fiddly bits with point 1, because:
+    #    -scores may or may not be a nullable dtype, and
+    #    -scores may be signed or unsigned
+    # These problems interact if we need to change a nulled value to a negative number, but the values are unsigned
+
+    if any(pandas.api.types.is_float_dtype(_dt) for _dt in scores.dtypes):
+        # At least some scores are float scores that may contain NaN. Convert all to float and then use histogram
+        scores = scores.astype(numpy.float64).fillna(null_sentinal)
+    elif any(isinstance(_dt, pandas.api.extensions.ExtensionDtype) for _dt in scores.dtypes):
+        # scores are nullable integers. If null_sentinal is non-negative, there's no problem, otherwise we'll need to
+        # convert all unsigned nullable types to signed
+        if null_sentinal < 0:
+            for _column, _dt in list(scores.dtypes.items()):
+                if isinstance(_dt, pandas.api.extensions.ExtensionDtype) and \
+                        pandas.api.types.is_unsigned_integer_dtype(_dt):
+                    # convert nullable unsigned int to nullable signed int
+                    # noinspection PyUnresolvedReferences
+                    _signed_dt = pandas.core.dtypes.cast.pandas_dtype(_dt.name.replace('UInt', 'Int'))
+                    scores.loc[:, _column] = scores.loc[:, _column].astype(_signed_dt)
+
+        scores = scores.fillna(int(numpy.floor(null_sentinal))).astype(numpy.int64)
+
+    log(f"\t\t{scores_label}: {scores.size} scores")
+    return numpy.histogram(scores.values.ravel(), bins=num_bins, density=False)
+
+
+def plot_scores_histogram(
+        ax: pyplot.Axes,
+        sv_category: str,
+        sv_selector: SvTypeCutoffSelector,
+        scores_data_sets: Collection[ScoresDataSet],
+        data_colors: Mapping[str, str],
+        histogram_width: float = Default.histogram_width,
+        title_font_size: int = Default.title_font_size,
+        label_font_size: int = Default.label_font_size,
+        tick_font_size: int = Default.tick_font_size,
+        tick_labelrotation: float = Default.tick_labelrotation,
+) -> pyplot.Axes:
+    log(f"\tPlot scores for {sv_category} ...")
+    min_y, max_y = 0, 0
+    pad = (1.0 - histogram_width) / 2
+    x_ticks = []
+    x_tick_labels = []
+    for data_set_index, scores_data_set in enumerate(scores_data_sets):
+        counts, edges = _get_scores_hisogram(
+            scores=scores_data_set.select_category(sv_category, sv_selector).scores,
+            scores_label=scores_data_set.label,
+            null_sentinal=scores_data_set.passing_score - 1, num_bins=100
+        )
+        if counts.size > 0:
+            log_max_counts = numpy.log10(counts.max(initial=0))
+            if log_max_counts >= 2:  # can make three ticks at nice even numbers
+                ticks = [1, 10 ** round(log_max_counts / 2), 10 ** int(numpy.floor(log_max_counts))]
+                ticks_str = ["1", f"10^{round(log_max_counts / 2)}", f"10^{int(numpy.floor(log_max_counts))}"]
+            elif log_max_counts >= 1:
+                ticks = [1, 10 ** int(numpy.floor(log_max_counts))]
+                ticks_str = ["1", f"10^{int(numpy.floor(log_max_counts))}"]
+            elif log_max_counts >= 0:
+                ticks = [1, round(10 ** log_max_counts)]
+                ticks_str = ["1", str(ticks[-1])]
+            else:
+                ticks = [1]
+                ticks_str = ["1"]
+            x_tick_labels.extend(ticks_str)
+
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                values = numpy.log(counts)
+            scale = (histogram_width / values.max(initial=0))
+            values = scale * values
+            x_baseline = data_set_index - 0.5 + pad
+            x_ticks.extend(x_baseline + scale * numpy.log(tick) for tick in ticks)
+
+            plotting.barh(ax, values=values, edges=edges, x_baseline=x_baseline,
+                          color=data_colors[scores_data_set.label], fill=True)
+            min_y = min(edges[0], min_y)
+            max_y = max(edges[-1], max_y)
+
+    ax.tick_params(axis='both', which='major', labelsize=tick_font_size)
+    ax.set_title(sv_category, fontsize=title_font_size)
+    ax.set_ylabel("score", fontsize=label_font_size)
+    ax.set_xlabel("variant density", fontsize=label_font_size)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_tick_labels)
+    ax.tick_params(axis='x', labelrotation=tick_labelrotation)
+    ax.set_xlim(-0.5, len(scores_data_sets) - 0.5)
+    if max_y > min_y:
+        ax.set_ylim(min_y, max_y)
+    else:
+        ax.set_ylim(-0.5, 0.5)
+    return ax
+
+
 def get_hardy_weinberg_figures(
         scores_data_sets: Sequence[ScoresDataSet],
         sv_selectors: Mapping[str, SvTypeCutoffSelector],
@@ -1761,6 +1956,8 @@ def get_hardy_weinberg_figures(
         label_font_size: int = Default.label_font_size,
         tick_font_size: int = Default.tick_font_size,
         plotted_hardy_weinberg_categories: Optional[Container[str]] = Default.plotted_hardy_weinberg_categories,
+        min_num_called_gt_hardy_weinberg: int = Default.min_num_called_gt_hardy_weinberg,
+        hardy_weinberg_confidence: float = Default.hardy_weinberg_confidence,
         pdf_writer: Optional[PdfPages] = None
 ) -> Tuple[pyplot.Figure, ...]:
     return tuple(
@@ -1771,6 +1968,8 @@ def get_hardy_weinberg_figures(
             title_font_size=title_font_size,
             label_font_size=label_font_size,
             tick_font_size=tick_font_size,
+            min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg,
+            hardy_weinberg_confidence=hardy_weinberg_confidence,
             pdf_writer=pdf_writer
         )
         for category, selector in iter_categories(sv_selectors)
@@ -1784,6 +1983,8 @@ def get_hardy_weinberg_figure(
         title_font_size: int = Default.title_font_size,
         label_font_size: int = Default.label_font_size,
         tick_font_size: int = Default.tick_font_size,
+        min_num_called_gt_hardy_weinberg: int = Default.min_num_called_gt_hardy_weinberg,
+        hardy_weinberg_confidence: float = Default.hardy_weinberg_confidence,
         pdf_writer: Optional[PdfPages] = None
 ) -> Optional[pyplot.Figure]:
     log(f"Getting figure for {figure_title}")
@@ -1812,9 +2013,12 @@ def get_hardy_weinberg_figure(
     ax = fig.add_subplot(gridspec[row, column])
     ax.grid(visible=False, which="both")
     plot_hardy_weinberg_proportions(
-        ax, scores_data_sets[0], title=f"{scores_data_sets[0].label} {Keys.unfiltered}",
-        title_font_size=title_font_size, label_font_size=label_font_size, tick_font_size=tick_font_size,
-        colorbar_axes=colorbar_axes, legend_axes=legend_axes
+        ax,
+        scores_data_sets[0].to_autosome(min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg),
+        title=f"{scores_data_sets[0].label} {Keys.unfiltered}", title_font_size=title_font_size,
+        label_font_size=label_font_size, tick_font_size=tick_font_size, colorbar_axes=colorbar_axes,
+        legend_axes=legend_axes, min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg,
+        hardy_weinberg_confidence=hardy_weinberg_confidence
     )
     column += 1
     if column == num_columns:
@@ -1822,8 +2026,12 @@ def get_hardy_weinberg_figure(
     for scores_data_set in scores_data_sets:
         ax = fig.add_subplot(gridspec[row, column])
         plot_hardy_weinberg_proportions(
-            ax, scores_data_set.apply_hard_filter(), title=scores_data_set.label, title_font_size=title_font_size,
-            label_font_size=label_font_size, tick_font_size=tick_font_size
+            ax,
+            scores_data_set.to_autosome(min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg)
+            .apply_hard_filter(),
+            title=scores_data_set.label, title_font_size=title_font_size, label_font_size=label_font_size,
+            tick_font_size=tick_font_size, min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg,
+            hardy_weinberg_confidence=hardy_weinberg_confidence
         )
         column += 1
         if column == num_columns:
@@ -1835,36 +2043,6 @@ def get_hardy_weinberg_figure(
         return None
     else:
         return fig
-
-
-def _compute_hardy_weinberg_acceptance0(
-    allele_frequency: numpy.ndarray,
-    het_proportion: numpy.ndarray,
-    allele_frequency_grid_edges: numpy.ndarray,
-    proportion_het_grid_edges: numpy.ndarray,
-    histogram_mat: numpy.ndarray,
-    hardy_weinberg_rareness: float,
-    num_samples: int
-) -> (numpy.ndarray, numpy.ndarray, float):
-    grid_p_het_expected = 2 * allele_frequency_grid_edges * (1.0 - allele_frequency_grid_edges)
-    # compute acceptance lines to draw on top of histogram plot, using binomal :
-    p_het_low = scipy.stats.binom.ppf(hardy_weinberg_rareness, num_samples, grid_p_het_expected) / num_samples
-    p_het_high = scipy.stats.binom.ppf(1.0 - hardy_weinberg_rareness, num_samples, grid_p_het_expected) / num_samples
-
-    expected_het_proportion = 2 * allele_frequency * (1 - allele_frequency)
-    het_proportion_low = scipy.stats.binom.ppf(hardy_weinberg_rareness, num_samples, expected_het_proportion)\
-                         / num_samples
-    het_proportion_high = scipy.stats.binom.ppf(1.0 - hardy_weinberg_rareness, num_samples, expected_het_proportion) \
-                         / num_samples
-    proportion_accepted = numpy.logical_and(
-        het_proportion >= het_proportion_low,
-        het_proportion <= het_proportion_high
-        / num_samples,
-    ).mean()
-
-    print(f"proportion_accepted = {proportion_accepted}")
-
-    return p_het_low, p_het_high, proportion_accepted
 
 
 def _hardy_weinberg_chi_squared_to_num_hets_boundary(
@@ -1912,15 +2090,16 @@ def _hardy_weinberg_chi_squared_to_num_hets_boundary(
     #               = num_expected_het / 2 - num_het_genotypes / 2
     # chi_squared = (
     #     (num_ref_genotypes - num_expected_ref) ** 2 +
-    #     (num_expected_homvar * ref_allele_frequency / alt_allele_frequency - num_het_genotypes / 2) ** 2 +
+    #     1/4 * (num_het_genotypes - num_expected_het) ** 2 +
     #     (num_het_genotypes - num_expected_het) ** 2
     # ) / num_called_genotypes
-    # chi_squared = (
-    #     (num_ref_genotypes - num_expected_ref) ** 2 +
-    #     1.25 * (num_het_genotypes - num_expected_het) ** 2
-    # ) / num_called_genotypes
+    # het_delta = +/- abs(num_het_genotypes - num_expected_het)
+    #           = sqrt(4/5 * (chi_squared * num_called_genotypes - (num_ref_genotypes - num_expected_ref) ** 2)
     het_delta = numpy.sqrt(
-        numpy.maximum(0.8 * (chi_squared * num_called_genotypes - (num_ref_genotypes - num_expected_ref) ** 2), 0)
+        numpy.maximum(
+            0.8 * (chi_squared * num_called_genotypes - (num_ref_genotypes - num_expected_ref) ** 2),
+            0
+        )
     )
     return num_expected_het, het_delta
 
@@ -1985,6 +2164,7 @@ def _compute_hardy_weinberg_plotted_boundary(
     tol = 0.1 * numpy.diff(proportion_het_grid).mean()  # set tol to about 10% of a grid width
     while previous is None or numpy.abs(proportion_het_low - previous).max() >= tol:
         # to aid convergence, only take a half step each iteration:
+        # noinspection PyUnresolvedReferences
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
             hardy_weinberg_confidence=hardy_weinberg_confidence,
             alt_allele_frequency=alt_allele_frequency_grid,
@@ -2004,6 +2184,7 @@ def _compute_hardy_weinberg_plotted_boundary(
     previous = None
     while previous is None or numpy.abs(proportion_het_high - previous).max() >= tol:
         # to aid convergence, only take a half step each iteration:
+        # noinspection PyTypeChecker
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
             hardy_weinberg_confidence=hardy_weinberg_confidence,
             alt_allele_frequency=alt_allele_frequency_grid,
@@ -2028,8 +2209,11 @@ def plot_hardy_weinberg_proportions(
         tick_font_size: int = Default.tick_font_size,
         colorbar_axes: Optional[pyplot.Axes] = None,
         legend_axes: Optional[pyplot.Axes] = None,
+        hardy_weinberg_confidence: float = Default.hardy_weinberg_confidence,
+        min_num_called_gt_hardy_weinberg: int = Default.min_num_called_gt_hardy_weinberg
 ):
     log(f"\tplotting {title}")
+
     num_het_genotypes = scores_data_set.num_het_genotypes
     num_called_genotypes = scores_data_set.num_called_genotypes
     alt_allele_frequency = scores_data_set.num_variant_alleles / (2 * num_called_genotypes)
@@ -2043,7 +2227,6 @@ def plot_hardy_weinberg_proportions(
         x_bins=50, y_bins=50
     )
 
-    hardy_weinberg_confidence = 1.0 - 5.0 / scores_data_set.num_samples
     proportion_accepted = _compute_hardy_weinberg_proportion_accepted(
         num_het_genotypes=num_het_genotypes.values, num_ref_genotypes=scores_data_set.num_ref_genotypes.values,
         alt_allele_frequency=alt_allele_frequency, num_called_genotypes=num_called_genotypes.values,
@@ -2079,6 +2262,8 @@ def get_filter_quality_figures(
         plot_max_f1: bool = Default.plot_max_f1,
         plotted_mendelian_violation_keys: Optional[Iterable[str]] = Default.plotted_mendelian_violation_trio_types,
         plotted_hardy_weinberg_categories: Optional[Container[str]] = Default.plotted_hardy_weinberg_categories,
+        min_num_called_gt_hardy_weinberg: int = Default.min_num_called_gt_hardy_weinberg,
+        hardy_weinberg_confidence: float = Default.hardy_weinberg_confidence,
         make_figures: Set[str] = Default.make_figures,
         pdf_writer: Optional[PdfPages] = None
 ) -> Tuple[Optional[pyplot.Figure], ...]:
@@ -2169,6 +2354,19 @@ def get_filter_quality_figures(
     else:
         mendelian_violation_curve_fig = None
 
+    if Keys.scores_histogram in make_figures:
+        scores_histogram_fig = get_scores_histogram_figure(
+            scores_data_sets=scores_data_sets,
+            sv_selectors=sv_selectors,
+            title_font_size=title_font_size,
+            label_font_size=label_font_size,
+            tick_font_size=tick_font_size,
+            tick_labelrotation=tick_labelrotation,
+            pdf_writer=pdf_writer
+        )
+    else:
+        scores_histogram_fig = None
+
     if Keys.hardy_weinberg in make_figures:
         hardy_weinberg_figs = get_hardy_weinberg_figures(
             scores_data_sets=scores_data_sets,
@@ -2177,13 +2375,15 @@ def get_filter_quality_figures(
             label_font_size=label_font_size,
             tick_font_size=tick_font_size,
             plotted_hardy_weinberg_categories=plotted_hardy_weinberg_categories,
+            min_num_called_gt_hardy_weinberg=min_num_called_gt_hardy_weinberg,
+            hardy_weinberg_confidence=hardy_weinberg_confidence,
             pdf_writer=pdf_writer
         )
     else:
         hardy_weinberg_figs = (None,)
 
     return precision_recall_fig, mendelian_inheritance_fig, mendelian_violation_curve_fig, variants_per_sample_fig, \
-           *hardy_weinberg_figs
+        scores_histogram_fig, *hardy_weinberg_figs
 
 
 def load_quality_data(

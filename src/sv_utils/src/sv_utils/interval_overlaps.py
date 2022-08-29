@@ -51,6 +51,7 @@ _overlap_required_properties = (Keys.contig, Keys.begin, Keys.end)
 
 class Default:
     breakend_types = frozenset({"BND", "CTX"})
+    expand_non_point_types = frozenset({"DUP"})
     ins_types = frozenset({"INS", "INS:ME", "DUP"})
     expand_point_svs_bp = 300  # when checking overlap, expand point SVs by this many BP in each direction
     point_sv_scale_factor = 1.0  # when checking overlap, expand point SVs this * SVLEN in each direction
@@ -79,6 +80,7 @@ def fix_variants(
         expand_non_point_svs_bp: int = Default.expand_non_point_svs_bp,
         point_sv_scale_factor: float = Default.point_sv_scale_factor,
         non_point_sv_scale_factor: float = Default.non_point_sv_scale_factor,
+        expand_non_point_types: Collection[str] = Default.expand_non_point_types,
         breakend_types: Collection[str] = Default.breakend_types,
         needed_columns: Iterable[str] = ()
 ) -> pandas.DataFrame:
@@ -128,16 +130,19 @@ def fix_variants(
         variants.loc[is_point_sv, Keys.end] = variants.loc[is_point_sv, Keys.end] + point_sv_half_w
     if (svlen is not None and non_point_sv_scale_factor > 0) or expand_non_point_svs_bp > 0:
         # expand non-point SVs too
+        is_expand_non_point = ~is_point_sv
+        if Keys.svtype in variants and expand_non_point_types is not None:
+            is_expand_non_point = is_expand_non_point & variants[Keys.svtype].isin(expand_non_point_types)
         if svlen is None:
             non_point_sv_half_w = expand_non_point_svs_bp
         else:
             non_point_sv_half_w = (
-                expand_non_point_svs_bp + non_point_sv_scale_factor * svlen[~is_point_sv].abs()
+                expand_non_point_svs_bp + non_point_sv_scale_factor * svlen[is_expand_non_point].abs()
             ).round().astype(numpy.int32)
-        variants.loc[~is_point_sv, Keys.begin] = \
-            numpy.maximum(variants.loc[~is_point_sv, Keys.begin], non_point_sv_half_w + 1) \
+        variants.loc[is_expand_non_point, Keys.begin] = \
+            numpy.maximum(variants.loc[is_expand_non_point, Keys.begin], non_point_sv_half_w + 1) \
             - non_point_sv_half_w
-        variants.loc[~is_point_sv, Keys.end] = variants.loc[~is_point_sv, Keys.end] + non_point_sv_half_w
+        variants.loc[is_expand_non_point, Keys.end] = variants.loc[is_expand_non_point, Keys.end] + non_point_sv_half_w
 
     #   keep only needed columns for overlap detection and reduction to original intervals
     needed_columns = {Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.primary_id, Keys.is_single_interval}.union(

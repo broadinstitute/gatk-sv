@@ -1037,6 +1037,29 @@ def bed_to_pandas(
     )
 
 
+@common.static_vars(is_autosome_map={})
+def is_autosome(contig: Text) -> bool:
+    _is_autosome = is_autosome.is_autosome_map.get(contig, None)
+    if _is_autosome is None:
+        if contig.startswith("chr"):
+            try:
+                contig_num = int(contig[3:])
+                _is_autosome = True
+            except ValueError:  # pragma: no cover
+                _is_autosome = False
+        else:
+            _is_autosome = False
+        is_autosome.is_autosome_map[contig] = _is_autosome
+    return _is_autosome
+
+
+def get_is_autosome(variants: pandas.DataFrame) -> pandas.Series:
+    """ Get boolean Series specifying if each variant is in the autosome (standard diploid/non-sex chromosomes) """
+    return variants[
+        (None, Keys.contig) if variants.columns.nlevels == 2 else Keys.contig
+    ].map(is_autosome).astype(bool)
+
+
 def contig_sort_key(contig: Text) -> str:
     """
     Used to put contigs (including alt contigs) into a sensible sorted order.
@@ -1472,15 +1495,42 @@ def has_missing(series: pandas.Series, missing_value: Any) -> bool:
         series.hasnans or (series == missing_value).any()
 
 
-def get_genotype(variants: pandas.DataFrame) -> pandas.DataFrame:
-    """ Return genotype, or throw exception explaining that it's not present """
+def list_info_properties(variants: pandas.DataFrame) -> Sequence[str]:
+    info_columns = variants.loc[:, (None, slice(None))].columns.droplevel(Keys.sample_id)
+    return info_columns
+
+def list_format_properties(variants: pandas.DataFrame) -> Set[str]:
+    return set(variants.columns.droplevel(Keys.sample_id)).difference(list_info_properties(variants))
+
+
+def get_format_property(variants: pandas.DataFrame, property_name: str) -> pandas.DataFrame:
+    """ """
     try:
-        return variants.xs(Keys.gt, level=Keys.property, axis=1)
+        prop_df = variants.loc[:, (slice(None), property_name)]
+        prop_df.columns = prop_df.columns.droplevel(Keys.property)
+        return prop_df
     except KeyError as key_error:
         common.add_exception_context(
             key_error,
-            f"Can't get genotype, {Keys.gt} missing from columns. Available properties: "
-            f"{','.join(set(variants.columns.get_level_values(Keys.property)))}"
+            f"{property_name} missing from columns. Available properties: "
+            f"{','.join(list_format_properties(variants))}"
+        )
+        raise
+
+
+def get_info_property(variants: pandas.DataFrame, property_name: Union[str, Iterable[str]]) -> Union[pandas.Series, pandas.DataFrame]:
+    try:
+        if isinstance(property_name, str):
+            return variants.loc[(None, property_name)].rename(property_name)
+        else:
+            prop_df = variants.loc[:, (None, list(property_name))]
+            prop_df.columns = prop_df.columns.droplevel(Keys.sample_id)
+            return prop_df
+    except KeyError as key_error:
+        common.add_exception_context(
+            key_error,
+            f"{property_name} missing from columns. Available properties: "
+            f"{','.join(list_info_properties(variants))}"
         )
         raise
 
@@ -1521,19 +1571,19 @@ def get_copy_number(variants: pandas.DataFrame, use_cn: bool = Default.use_cn) -
     """ Return table of copy number if it is available, otherwise None """
     available_props = set(variants.columns.get_level_values(Keys.property))
     if use_cn and Keys.cn in available_props:
-        cn = variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True)
+        cn = get_format_property(variants, Keys.cn)
         if Keys.rd_cn in available_props:
             # CN *and* RD_CN are available. Sometimes one is in the header but not listed, so return whichever is
             # non-null, and if they're both non-null, prefer CN
             return combine_call_properties(
                 preferred_properties=cn,
-                alternate_properties=variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True),
+                alternate_properties=get_format_property(variants, Keys.rd_cn),
                 use_alternate_properties=cn.isna()
             )
         else:
             return cn
     elif Keys.rd_cn in available_props:
-        return variants.xs(Keys.rd_cn, level=Keys.property, axis=1)
+        return get_format_property(variants, Keys.rd_cn)
     else:
         return None
 
@@ -1568,27 +1618,26 @@ def get_copy_number_and_quality(
         if Keys.rd_cn in available_props:
             if Keys.rd_gq not in available_props:
                 raise ValueError(f"{Keys.rd_cn} in variants but not associated quality {Keys.rd_gq}")
-            cn = variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True)
+            cn = get_format_property(variants, Keys.cn)
             cn_is_null = cn.isna()
             cn_calls = combine_call_properties(
                 preferred_properties=cn,
-                alternate_properties=variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True),
+                alternate_properties=get_format_property(variants, Keys.rd_cn),
                 use_alternate_properties=cn_is_null
             )
             cn_qualities = combine_call_properties(
-                preferred_properties=variants.xs(Keys.cnq, level=Keys.property, axis=1, drop_level=True),
-                alternate_properties=variants.xs(Keys.rd_gq, level=Keys.property, axis=1, drop_level=True),
+                preferred_properties=get_format_property(variants, Keys.cnq),
+                alternate_properties=get_format_property(variants, Keys.rd_gq),
                 use_alternate_properties=cn_is_null
             )
             return cn_calls, cn_qualities
         else:
-            return variants.xs(Keys.cn, level=Keys.property, axis=1, drop_level=True), \
-                   variants.xs(Keys.cnq, level=Keys.property, axis=1, drop_level=True)
+            return get_format_property(variants, Keys.cn), \
+                   get_format_property(variants, Keys.cnq)
     elif Keys.rd_cn in available_props:
         if Keys.rd_gq not in available_props:
             raise ValueError(f"{Keys.rd_cn} in variants but not associated quality {Keys.rd_gq}")
-        return variants.xs(Keys.rd_cn, level=Keys.property, axis=1, drop_level=True), \
-               variants.xs(Keys.rd_gq, level=Keys.property, axis=1, drop_level=True)
+        return get_format_property(variants, Keys.rd_cn), get_format_property(variants, Keys.rd_gq)
     else:
         return None, None
 
@@ -1632,7 +1681,9 @@ def get_carrier_status(
             Normal (non-multi-index) table of carrier status
     """
     # get the carrier status as implied by the genotype
-    gt_carrier_status = get_genotype(variants).applymap(genotype_to_carrier_status).astype(pandas.BooleanDtype())
+    gt_carrier_status = get_format_property(variants, Keys.gt)\
+        .applymap(genotype_to_carrier_status)\
+        .astype(pandas.BooleanDtype())
     if not use_copy_number:
         return gt_carrier_status
     # genotypes are often left no-call or REF for multi-allelic CNVs, so check if we can get copy number
@@ -1670,7 +1721,7 @@ def get_or_estimate_allele_frequency(
     """
     available_props = set(variants.columns.get_level_values(Keys.property))
     if Keys.allele_frequency in available_props:
-        return variants.xs(Keys.allele_frequency, level=Keys.property, axis=1)
+        return get_info_property(variants, Keys.allele_frequency)
     # get the allele_counts as implied by the genotype
     gt_allele_counts = get_allele_counts(variants, use_copy_number=False).sum(axis=1, skipna=True)
     gt_num_called_alleles = get_num_called_alleles(variants).sum(axis=1, skipna=True)
@@ -1725,7 +1776,7 @@ def get_allele_counts(
         allele_counts:
             Normal (non-multi-index) table of allele counts
     """
-    gt_allele_count = get_genotype(variants).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
+    gt_allele_count = get_format_property(variants, Keys.gt).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
     if not use_copy_number:
         return gt_allele_count
     copy_number = get_copy_number(variants, use_cn=use_cn)
@@ -1768,7 +1819,7 @@ def get_allele_counts_and_quality(
     """
     # get genotype-only allele count (we'll combine with copy number along-side quality)
     gt_allele_count = get_allele_counts(variants, use_copy_number=False)
-    gt_quality = variants.xs(Keys.gq, axis=1, level=Keys.property, drop_level=True)
+    gt_quality = get_format_property(variants, Keys.gq)
     if not use_copy_number:
         return gt_allele_count, gt_quality
     copy_number, copy_number_quality = get_copy_number_and_quality(variants, use_cn=use_cn)
@@ -1804,7 +1855,7 @@ def genotype_to_called_allele_count(genotype: Genotype) -> int:
 
 
 def get_called_allele_count(variants: pandas.DataFrame) -> pandas.DataFrame:
-    return get_genotype(variants).applymap(genotype_to_called_allele_count).astype(numpy.uint8)
+    return get_format_property(variants, Keys.gt).applymap(genotype_to_called_allele_count).astype(numpy.uint8)
 
 
 @common.static_vars(genotype_to_num_called_alleles_map={})
@@ -1821,7 +1872,7 @@ def genotype_to_num_called_alleles(genotype: Genotype) -> int:
 
 
 def get_num_called_alleles(variants: pandas.DataFrame) -> pandas.DataFrame:
-    return get_genotype(variants).applymap(genotype_to_num_called_alleles).astype(numpy.uint8)
+    return get_format_property(variants, Keys.gt).applymap(genotype_to_num_called_alleles).astype(numpy.uint8)
 
 
 def sort_multi_index_dataframe_columns(df: pandas.DataFrame):

@@ -108,11 +108,11 @@ from sv_utils import benchmark_variant_filter
 
 benchmark_variant_filter.load_benchmark_properties_from_vcf_properties(
   "~{vcf}", wanted_properties=["~{sep='", "' wanted_properties}"]
-).to_pickle("~{vcf_basename}_~{sep='_' wanted_properties}.pickle.bz2")
+).to_pickle("~{vcf_basename}_~{sep='_' wanted_properties}.pickle")
 ____EoF
     >>>
 
     output {
-        File pickled_properties = select_first(glob("*.pickle.bz2"))
+        File pickled_properties = select_first(glob("*.pickle"))
     }
 }

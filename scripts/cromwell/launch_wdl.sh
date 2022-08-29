@@ -48,7 +48,7 @@ while read INPUT_JSON; do
   printf "%d\t%s\n" $n "$INPUT_JSON"
   JSON_ARRAY["$n"]="$INPUT_JSON"
   n=$((n+1))
-done < <(find "$GATK_SV_ROOT/inputs/build" -name "$WDL_NAME"*.json)
+done < <(find "$GATK_SV_ROOT/inputs/build" -name "$WDL_NAME"*.json | sort)
 
 read -p "Select input json number: " INPUT_JSON_NUMBER
 if [[ $INPUT_JSON_NUMBER == 0 ]]; then

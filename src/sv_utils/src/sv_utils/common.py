@@ -168,7 +168,7 @@ def add_exception_context(exception: Exception, context: str):
             Original exeption with annotated context.
     """
     if len(exception.args) == 1 and type(exception.args[0]) is str:
-        exception.args = (context + '\n' + exception.args[0],)
+        exception.args = (context, exception.args[0])
     else:
         exception.args = (context,) + exception.args
 

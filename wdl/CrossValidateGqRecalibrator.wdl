@@ -33,7 +33,7 @@ workflow CrossValidateGqRecalibrator {
         Array[String] recalibrate_gq_args = []
         Array[String] get_truth_overlap_args = []
         Array[String] benchmark_args = []
-        Int new_pipeline_passing_score = 0
+        Int new_pipeline_passing_score = 1
         String new_pipeline_score_property = "sl"
         Int old_pipeline_passing_score = 1
         String old_pipeline_score_property = "gq"
@@ -165,7 +165,7 @@ workflow CrossValidateGqRecalibrator {
             input:
                 vcf=train_vcf_,
                 vcf_index=train_vcf_index_,
-                wanted_properties=["svtype", "svlen", "ac"],
+                wanted_properties=["svtype", "svlen", "ac", "is_autosome"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }

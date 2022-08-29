@@ -21,7 +21,7 @@ workflow BenchmarkGqFilter {
         # with original scores, recalibrated, cross-validated, and two additional comparison scores. However, the
         # hardy-weinberg plot takes about 2.5 hours. All plots run independently via cromwell scatter.
         Array[String] make_figures = ["precision-recall", "inheritance", "variants-per-sample", "violation-curve",
-                                      "hardy-weinberg"]
+                                      "scores-histogram", "hardy-weinberg"]
     }
 
     # extract properties from VCF and pickle them. It allows extraction on a cheaper (lower memory) machine in parallel
@@ -32,7 +32,7 @@ workflow BenchmarkGqFilter {
             input:
                 vcf=original_scores.vcf,
                 vcf_index=original_scores.vcf_index,
-                wanted_properties=["svtype", "svlen", "ac"],
+                wanted_properties=["svtype", "svlen", "ac", "is_autosome"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }
@@ -160,14 +160,15 @@ task BenchmarkFilter {
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
     Int disk_gb = round(100 + pickled_files_size)
     Float mem_scale_vcf_entries =
-        if make_figure == "precision-recall" then "4.1e-9" else
-        if make_figure == "inheritance" then "5.4e-9" else
-        if make_figure == "variants-per-sample" then "5.4e-9" else
-        if make_figure == "violation-curve" then "5.0e-9" else
-        if make_figure == "hardy-weinberg" then "1.05e-8" else
-        "1e-8"   # this last one should never hit, I just wanted to make all assignments explicit
+        if make_figure == "precision-recall" then "2.1e-8" else
+        if make_figure == "inheritance" then "2.7e-8" else
+        if make_figure == "variants-per-sample" then "2.7e-8" else
+        if make_figure == "violation-curve" then "2.5e-8" else
+        if make_figure == "scores-histogram" then "5.3e-8" else
+        if make_figure == "hardy-weinberg" then "5.3e-8" else
+        "5.3e-8"   # this last one should never hit, I just wanted to make all assignments explicit
     Float mem_gb_overhead = 2.0 + size(truth_overlap_info, "GiB") + size(ped_file, "GiB")
-    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries * length(scores_data_sets)
+    Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries
 
     String scores_data_json = "scores_data.json"
 
