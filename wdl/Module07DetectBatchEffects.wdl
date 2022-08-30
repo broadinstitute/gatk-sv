@@ -265,34 +265,6 @@ workflow DetectBatchEffects {
       runtime_attr_override = runtime_attr_override_one_vs_all_integration_PCRPLUS
   }
 
-
-  # Integrate the Batch Effect statistics and annotate vcf accordingly
-
-  #call IntegrateBatchEffectPvalues{
-  #  input:
-  #    plus_vs_minus_pv = IntegratePlusMinusFreqsPvalues.results,
-  #    pre_vs_post_pv = CompareFreqsPrePostMinGQ.minGQ_prePost_comparison_data,
-  #    pairwise_minus_pv = IntegratePairwiseMinus.results,
-  #    pairwise_plus_pv = IntegratePairwisePlus.results,
-  #    one_vs_all_minus_pv = IntegrateOneVsAllPvaluesMINUS.results,
-  #    one_vs_all_plus_pv = IntegrateOneVsAllPvaluesPLUS.results,
-  #    prefix = prefix,
-  #    sv_benchmark_docker = sv_benchmark_docker,
-  #    runtime_attr_override = runtime_attr_override_integrate_batch_effect_pvalues
-  #}
-
-  #call AnnotateBatchEffect{
-  #  input:
-  #    vcf = vcf,
-  #    vcf_idx = vcf_idx,
-  #    sample_batch_assignments = sample_batch_assignments,
-  #    SVID_info = IntegrateBatchEffectPvalues.SVID_info,
-  #    SVID_filter = IntegrateBatchEffectPvalues.SVID_filter,
-  #    SVID_format = IntegrateBatchEffectPvalues.SVID_format,
-  #    sv_benchmark_docker = sv_benchmark_docker,
-  #    runtime_attr_override = runtime_attr_override_annotate_batch_effect
-  #}
-
   output {
     File  plus_vs_minus_pv = IntegratePlusMinusFreqsPvalues.results
     File  pre_vs_post_pv = CompareFreqsPrePostMinGQ.minGQ_prePost_comparison_data

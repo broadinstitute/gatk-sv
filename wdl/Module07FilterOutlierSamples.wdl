@@ -51,7 +51,7 @@ workflow FilterOutlierSamplesPostHoc {
     input:
       vcf=vcf,
       vcf_idx=vcf_idx,
-      prefix=prefix,
+      prefix=prefix + "shard",
       min_vars_per_shard=records_per_shard,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_overide_shard_vcf

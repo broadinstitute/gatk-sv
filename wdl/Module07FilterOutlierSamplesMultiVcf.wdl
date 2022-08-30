@@ -42,7 +42,7 @@ workflow FilterOutlierSamplesPostHocMultiVcf {
         vcf_idx=vcf_info.right,
         pcrplus_samples_list=pcrplus_samples_list,
         records_per_shard=records_per_shard,
-        prefix=basename(vcf_info.left, ".vcf.gz"),
+        prefix=basename(vcf_info.left, "vcf.gz"),
         autosomes_fai=autosomes_fai,
         collect_data_only=true,
         output_sharded_vcf=true,
