@@ -122,7 +122,14 @@ def main():
             try:
                 json_contents = parse_json_file(json_path)
             except Exception as e:
-                logging.info(f"Skipping {json_path}... Unable to parse json: {e}")
+                logging.warning(f"Skipping {json_path}... Unable to parse json: {e}")
+                continue
+
+            if "LocusResults" not in json_contents:
+                logging.warning(f"Skipping {json_path} as it does not contain `LocusResults`. "
+                                f"One possible cause is running EH on male samples with default "
+                                f"value of the `--sex` argument, which defaults to female. "
+                                f"Rerunning EH with a correct value of `--sex` argument may fix this issue.")
                 continue
 
             if not isinstance(json_contents, dict) or "SampleParameters" not in json_contents:
