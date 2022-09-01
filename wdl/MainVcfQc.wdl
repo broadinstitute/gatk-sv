@@ -28,6 +28,7 @@ workflow MainVcfQc {
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
     String sv_base_mini_docker
+    String samtools_cloud_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
@@ -87,7 +88,20 @@ workflow MainVcfQc {
     }
   }
 
-  Array[File] vcfs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])
+  if (defined(sample_renaming_json)) {
+    scatter (vcf in select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])) {
+      call Utils.RenameVcfSamples {
+        input:
+          vcf=vcf,
+          vcf_idx=vcf + ".tbi",
+          sample_renaming_json=select_first([sample_renaming_json]),
+          samtools_cloud_docker=samtools_cloud_docker,
+          runtime_attr_override=runtime_override_rename_vcf_samples
+      }
+    }
+  }
+
+  Array[File] vcfs_for_qc = select_first([RenameVcfSamples.vcf_renamed, SubsetVcfBySamplesList.vcf_subset, vcfs])
 
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {

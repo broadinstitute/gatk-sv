@@ -7,16 +7,22 @@
     {{ reference_resources.hgsv_byrska_bishop_site_level_benchmarking_dataset | tojson }},
     {{ reference_resources.thousand_genomes_site_level_benchmarking_dataset | tojson }}
   ],
+  "MainVcfQc.sample_level_comparison_datasets": [
+    ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"]
+  ],
+  "MainVcfQc.sample_renaming_json": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/rename_sample_ids_HGSV_ByrskaBishop.json",
+
   "MainVcfQc.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "MainVcfQc.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "MainVcfQc.samtools_cloud_docker":{{ dockers.samtools_cloud_docker | tojson }},
   "MainVcfQc.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
-  "MainVcfQc.prefix": {{ test_batch.name | tojson }},
-  "MainVcfQc.ped_file": {{ test_batch.ped_file | tojson }},
+  "MainVcfQc.prefix": "HGDP and HGSV",
+  "MainVcfQc.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
 
-  "MainVcfQc.vcfs": [ {{ test_batch.clean_vcf | tojson }} ],
+  "MainVcfQc.vcfs": [ "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/749b2884-08c3-4b73-9c1e-da32c99c5d61/call-DirectGqRecalibrator/RecalibrateGq/50849ff4-3f30-4b02-829e-eb9b34ceea61/call-RecalibrateGqTask/cacheCopy/hgdp_and_hgsv.cleaned_fixed_annotated_gq_recalibrated.vcf.gz" ],
 
   "MainVcfQc.sv_per_shard": 2500,
   "MainVcfQc.samples_per_shard": 600
+
 }
