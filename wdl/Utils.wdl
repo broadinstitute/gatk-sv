@@ -782,7 +782,7 @@ task RenameVcfSamples {
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
-    mem_gb: 3.75,
+    mem_gb: 2.0,
     disk_gb: ceil(10.0 + input_size),
     cpu_cores: 1,
     preemptible_tries: 3,

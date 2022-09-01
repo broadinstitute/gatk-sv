@@ -17,12 +17,15 @@
   "MainVcfQc.samtools_cloud_docker":{{ dockers.samtools_cloud_docker | tojson }},
   "MainVcfQc.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
-  "MainVcfQc.prefix": "HGDP and HGSV",
+  "MainVcfQc.prefix": "HGDP_and_HGSV",
   "MainVcfQc.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
 
   "MainVcfQc.vcfs": [ "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/749b2884-08c3-4b73-9c1e-da32c99c5d61/call-DirectGqRecalibrator/RecalibrateGq/50849ff4-3f30-4b02-829e-eb9b34ceea61/call-RecalibrateGqTask/cacheCopy/hgdp_and_hgsv.cleaned_fixed_annotated_gq_recalibrated.vcf.gz" ],
 
   "MainVcfQc.sv_per_shard": 2500,
-  "MainVcfQc.samples_per_shard": 600
-
+  "MainVcfQc.samples_per_shard": 600,
+  "MainVcfQc.runtime_override_per_sample_benchmark_plot": {
+    "mem_gb": 15,
+    "disk_gb": 100
+  }
 }
