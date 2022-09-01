@@ -991,14 +991,14 @@ task ScatterVcf {
   command <<<
     set -euo pipefail
     # in case the file is empty create an empty shard
-    bcftools view -h ~{vcf} | bgzip -c > ~{prefix}.0.vcf.gz
-    bcftools +scatter ~{vcf} -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
+    bcftools view -h ~{vcf} | bgzip -c > "~{prefix}.0.vcf.gz"
+    bcftools +scatter ~{vcf} -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
 
-    ls ~{prefix}.*.vcf.gz | sort -k1,1V > vcfs.list
+    ls "~{prefix}".*.vcf.gz | sort -k1,1V > vcfs.list
     i=0
-    while read vcf; do
+    while read VCF; do
       shard_no=`printf %06d $i`
-      mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
+      mv "$VCF" "~{prefix}.shard_${shard_no}.vcf.gz"
       i=$((i+1))
     done < vcfs.list
   >>>
