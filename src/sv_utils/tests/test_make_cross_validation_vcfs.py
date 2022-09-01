@@ -2,7 +2,7 @@ import os
 import glob
 import pytest
 import numpy
-from typing import List, Set
+from typing import List, Set, Optional
 
 from sv_utils import make_cross_validation_vcfs, genomics_io, pedigree_tools
 
@@ -32,9 +32,14 @@ def _select_unrelated_sample(candidate_samples: Set[str], pedigree_file_info: pe
     candidate_samples.difference_update(related)
 
 
-def _choose_random_unrelated(sample_ids: List[str], num_selected: int,
-                             pedigree_file_info: pedigree_tools.PedigreeFileInfo) -> List[str]:
+def _choose_random_unrelated(
+        sample_ids: List[str],
+        num_selected: int,
+        pedigree_file_info: Optional[pedigree_tools.PedigreeFileInfo]
+) -> List[str]:
     candidate_sample_ids = set(sample_ids)
+    if pedigree_file_info is None:
+        return numpy.random.choice(candidate_sample_ids, num_selected, replace=False).tolist()
     truth_sample_ids = []
     for __ in range(num_selected):
         _select_unrelated_sample(candidate_sample_ids, pedigree_file_info, truth_sample_ids)
@@ -45,7 +50,7 @@ def _choose_random_unrelated(sample_ids: List[str], num_selected: int,
 def test_make_cross_validation_vcfs(
         tmpdir,
         vcf: str = Default.small_vcf,
-        ped_file: str = Default.ped_file,
+        ped_file: Optional[str] = Default.ped_file,
         num_splits: int = Default.num_splits,
         index_output_vcf: bool = Default.index_output_vcf,
         num_threads: int = Default.num_threads
@@ -59,10 +64,13 @@ def test_make_cross_validation_vcfs(
     temp_out_dir = tmpdir.mkdir("test_make_cross_validation_vcfs")
 
     # load trio data
-    pedigree_file_info = pedigree_tools.PedigreeFileInfo.load(ped_file)
-    # noinspection PyTypeChecker
-    num_trios = pedigree_file_info.subset_participants(sample_ids).num_trios
-    expected_num_test_trios = num_trios / num_splits
+    if ped_file is None:
+        pedigree_file_info, num_trios, expected_num_test_trios = None, 0, 0
+    else:
+        pedigree_file_info = pedigree_tools.PedigreeFileInfo.load(ped_file)
+        # noinspection PyTypeChecker
+        num_trios = pedigree_file_info.subset_participants(sample_ids).num_trios
+        expected_num_test_trios = num_trios / num_splits
 
     # randomly select num_splits samples to be "truth samples" that should be evenly distributed in the folds
     # Normally you'd pass any samples that had truth data, e.g. pacbio data. NOTE that make_cross_validation_vcfs
@@ -105,6 +113,7 @@ def test_make_cross_validation_vcfs(
         #     -there's one truth sample in the test VCF
         assert len(set(test_sample_ids).intersection(truth_sample_ids)) == 1
         #     -the trios are divided up appropriately
-        # noinspection PyTypeChecker
-        num_test_trios = pedigree_file_info.subset_participants(test_sample_ids).num_trios
-        assert expected_num_test_trios / 2 <= num_test_trios <= expected_num_test_trios * 2
+        if pedigree_file_info is not None:
+            # noinspection PyTypeChecker
+            num_test_trios = pedigree_file_info.subset_participants(test_sample_ids).num_trios
+            assert expected_num_test_trios / 2 <= num_test_trios <= expected_num_test_trios * 2

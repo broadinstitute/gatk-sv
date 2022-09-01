@@ -601,7 +601,9 @@ class ImageBuilder:  # class for building and pushing a single image
             docker_build_command += "--build-arg " + key + "=" + value + " \\\n    "
 
         will_push = 0 != len(self.remote_docker_repos) and any(e is not None for e in self.remote_docker_repos)
-        docker_build_command += "--squash . " if will_push else ". "
+        docker_build_command += (
+            "--squash . " if will_push and not self.project_builder.project_arguments else ". "
+        )
 
         # build and time it
         print(docker_build_command)
@@ -838,6 +840,11 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
              "in the git repo. When auto-determining build targets, this options specifies the baseline "
              "git commit to check for changes, i.e. only files altered since this commit should be "
              "considered changed. Can be a SHA or other  specifier (e.g. HEAD)."
+    )
+
+    parser.add_argument(
+        "--no-squash", default=False, action="store_true",
+        help="If set, don't 'squash' image after docker build. If omitted, squash"
     )
 
     parser.add_argument(

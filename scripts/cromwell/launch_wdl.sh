@@ -6,10 +6,12 @@ CONFIG_FILE=${2:-"$HOME/code/cromwell/cromwell_workflow_options.json"}
 VALIDATE=${VALIDATE:-false}
 
 
-SCRIPT_DIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+SCRIPT_DIR="$( cd -- "$( dirname -- "$(realpath "${BASH_SOURCE[0]}")" )" &> /dev/null && pwd )"
 GATK_SV_ROOT=$SCRIPT_DIR
+echo "$GATK_SV_ROOT"
 while [ $(basename "$GATK_SV_ROOT") != gatk-sv ]; do
     GATK_SV_ROOT=$(dirname "$GATK_SV_ROOT")
+    echo "$GATK_SV_ROOT"
 done
 
 WDL_FILENAME=$(basename "$WDL")

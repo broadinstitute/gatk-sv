@@ -156,5 +156,3 @@ task GetTruthOverlapTask {
         File truth_overlap_info = truth_overlap_info_filename
     }
 }
-
-

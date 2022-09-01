@@ -1,21 +1,21 @@
 {
-  "TrainGqRecalibrator.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
-  "TrainGqRecalibrator.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
-  "TrainGqRecalibrator.standardize_vcf": true,
-  "TrainGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
-  "TrainGqRecalibrator.truth_vcfs": [
+  "TrainGqRecalibratorXgBoost.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
+  "TrainGqRecalibratorXgBoost.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
+  "TrainGqRecalibratorXgBoost.standardize_vcf": true,
+  "TrainGqRecalibratorXgBoost.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "TrainGqRecalibratorXgBoost.truth_vcfs": [
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
     "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
     "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
   ],
-  "TrainGqRecalibrator.truth_vcf_indices": [
+  "TrainGqRecalibratorXgBoost.truth_vcf_indices": [
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz.tbi",
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz.tbi",
     "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz.tbi",
     "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz.tbi"
   ],
-  "TrainGqRecalibrator.vapor_sample_ids": [
+  "TrainGqRecalibratorXgBoost.vapor_sample_ids": [
     "HG00512",
     "HG00513",
     "HG00514",
@@ -26,7 +26,7 @@
     "NA19239",
     "NA19240"
   ],
-  "TrainGqRecalibrator.vapor_files": [
+  "TrainGqRecalibratorXgBoost.vapor_files": [
     "gs://broad-dsde-methods-tbrookin/vapor/HG00512_CCS.bed.gz",
     "gs://broad-dsde-methods-tbrookin/vapor/HG00513_CCS.bed.gz",
     "gs://broad-dsde-methods-tbrookin/vapor/HG00514_CCS.bed.gz",
@@ -37,7 +37,7 @@
     "gs://broad-dsde-methods-tbrookin/vapor/NA19239_CCS.bed.gz",
     "gs://broad-dsde-methods-tbrookin/vapor/NA19240_CCS.bed.gz"
   ],
-  "TrainGqRecalibrator.genome_tracks": [
+  "TrainGqRecalibratorXgBoost.genome_tracks": [
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
@@ -47,10 +47,10 @@
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s36.bed.gz",
     "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s50.bed.gz"
   ],
-  "TrainGqRecalibrator.standardize_vcf_args": [
+  "TrainGqRecalibratorXgBoost.standardize_vcf_args": [
     "--gq-scale 0.1"
   ],
-  "TrainGqRecalibrator.train_args": [
+  "TrainGqRecalibratorXgBoost.train_args": [
     "--target-precision 0.95",
     "--max-inheritance-af 0.1",
     "--large-af-weight-penalty 0.05",
@@ -63,7 +63,7 @@
     "--keep-homvar false",
     "--keep-multiallelic true"
   ],
-  "TrainGqRecalibrator.get_truth_overlap_args": [
+  "TrainGqRecalibratorXgBoost.get_truth_overlap_args": [
     "--expand-point-svs-bp 1000",
     "--point-sv-scale-factor 1.0",
     "--expand-non-point-svs-bp 0",
@@ -71,7 +71,7 @@
     "--min-overlap-cutoff-precision 0.8",
     "--inheritance-af-rareness 0.05"
   ],
-  "TrainGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
-  "TrainGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
-  "TrainGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+  "TrainGqRecalibratorXgBoost.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "TrainGqRecalibratorXgBoost.gatk_docker": {{ dockers.gatk_recalibrator_docker | tojson }},
+  "TrainGqRecalibratorXgBoost.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
 }

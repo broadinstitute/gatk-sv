@@ -1,7 +1,7 @@
 {
-  "BenchmarkGqFilter.data_label":
+  "BenchmarkGqFilterXgBoost.data_label":
     "HGDP and HGSV",
-  "BenchmarkGqFilter.original_scores": {
+  "BenchmarkGqFilterXgBoost.original_scores": {
     "label": "original",
     "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz",
     "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed.vcf.gz.tbi",
@@ -9,7 +9,7 @@
     "passing_score": 1,
     "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2"
   },
-  "BenchmarkGqFilter.comparison_scores": [
+  "BenchmarkGqFilterXgBoost.comparison_scores": [
     {
       "label": "recalibrated",
       "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-09-05_fixed-gq-bug/hgdp_and_hgsv.cleaned_fixed_annotated_gq_recalibrated.vcf.gz",
@@ -44,12 +44,12 @@
     }
 
   ],
-  "BenchmarkGqFilter.benchmark_args":
+  "BenchmarkGqFilterXgBoost.benchmark_args":
     [],
-  "BenchmarkGqFilter.truth_overlap_info":
+  "BenchmarkGqFilterXgBoost.truth_overlap_info":
     "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-09-05_fixed-gq-bug/truth_overlap.json",
-  "BenchmarkGqFilter.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
-  "BenchmarkGqFilter.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
-  "BenchmarkGqFilter.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
-  "BenchmarkGqFilter.pickled_variant_properties": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-09-05_fixed-gq-bug/hgdp_and_hgsv.cleaned_fixed_annotated_svtype_svlen_ac_is_autosome.pickle"
+  "BenchmarkGqFilterXgBoost.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "BenchmarkGqFilterXgBoost.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "BenchmarkGqFilterXgBoost.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
+  "BenchmarkGqFilterXgBoost.pickled_variant_properties": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-09-05_fixed-gq-bug/hgdp_and_hgsv.cleaned_fixed_annotated_svtype_svlen_ac_is_autosome.pickle"
 }

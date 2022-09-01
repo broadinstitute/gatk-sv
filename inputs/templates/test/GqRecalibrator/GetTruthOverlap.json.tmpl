@@ -1,0 +1,28 @@
+{
+  "GetTruthOverlap.test_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz"
+  ],
+  "GetTruthOverlap.test_vcf_indices": [
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz.tbi"
+  ],
+  "GetTruthOverlap.truth_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
+  ],
+  "GetTruthOverlap.truth_vcf_indices": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz.tbi"
+  ],
+  "GetTruthOverlap.ped_files": [
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped"
+  ],
+  "GetTruthOverlap.vapor_sample_ids": [],
+  "GetTruthOverlap.vapor_files": [],
+  "GetTruthOverlap.get_truth_overlap_args": [],
+  "GetTruthOverlap.sv_utils_docker":  {{ dockers.sv_utils_docker | tojson }},
+  "GetTruthOverlap.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+}

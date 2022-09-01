@@ -1,0 +1,15 @@
+{
+  "PreprocessVcfForGqRecalibrator.input_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
+  "PreprocessVcfForGqRecalibrator.input_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
+  "PreprocessVcfForGqRecalibrator.annotations_vcf": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz",
+  "PreprocessVcfForGqRecalibrator.annotations_vcf_index": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz.tbi",
+  "PreprocessVcfForGqRecalibrator.annotations_to_transfer": [
+    "INFO/STATUS", "INFO/NON_REF_GENOTYPE_CONCORDANCE", "INFO/VAR_PPV", "INFO/VAR_SENSITIVITY", "INFO/TRUTH_AF",
+    "FORMAT/CONC_ST"
+  ],
+  "PreprocessVcfForGqRecalibrator.standardize_vcf": true,
+  "PreprocessVcfForGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "PreprocessVcfForGqRecalibrator.gatk_recalibrator_docker": {{ dockers.gatk_recalibrator_docker | tojson }},
+  "PreprocessVcfForGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "PreprocessVcfForGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+}

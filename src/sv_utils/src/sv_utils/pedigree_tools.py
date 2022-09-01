@@ -1,3 +1,4 @@
+from pathlib import Path
 import collections.abc
 import numpy
 from typing import Union, Iterable, Tuple, List, Set, Dict, Text, Iterator, Optional, Sequence, Collection
@@ -181,7 +182,7 @@ class PedigreeFileInfo:
         self.pedigree_lines = pedigree_lines  # note: this will trigger setting of indices
 
     @staticmethod
-    def _read_pedigree_file(pedigree_file: str) -> Iterator[PedigreeLine]:
+    def _read_pedigree_file(pedigree_file: str | Path) -> Iterator[PedigreeLine]:
         """ Private method that reads pedigree files and yields PedigreeLines, used internally by the class """
         with open(pedigree_file, 'r') as f_in:
             for line_number, pedigree_file_line in enumerate(f_in):
@@ -197,9 +198,9 @@ class PedigreeFileInfo:
                 yield pedigree_line
 
     @staticmethod
-    def load(pedigree_files: Union[str, Iterable[str]]) -> "PedigreeFileInfo":
+    def load(pedigree_files: str | Path | Iterable[str | Path]) -> "PedigreeFileInfo":
         """ Load one or more pedigree files from disk, and return PedigreeFileInfo object """
-        if isinstance(pedigree_files, str):
+        if isinstance(pedigree_files, (str, Path)):
             pedigree_files = (pedigree_files,)
         return PedigreeFileInfo([
             pedigree_line
@@ -271,11 +272,17 @@ class PedigreeFileInfo:
         """
         return len(self.parents_ids)
 
-    def subset_participants(self, participant_ids: Collection[ParticipantId]) -> "PedigreeFileInfo":
+    def subset_participants(
+        self,
+        participant_ids: Collection[ParticipantId],
+        allow_unknown: bool = True
+    ) -> "PedigreeFileInfo":
         """
         Return subset of these data by including only the supplied participant IDs. Note that some participant IDs
         """
-        allowed_participant_ids = set(participant_ids).union({ParticipantId.UNKNOWN})
+        allowed_participant_ids = set(participant_ids)
+        if allow_unknown:
+            allowed_participant_ids.add(ParticipantId.UNKNOWN)
         return PedigreeFileInfo(
             [pedigree_line for pedigree_line in self.pedigree_lines
              if all(participant_id in allowed_participant_ids for participant_id in pedigree_line.trio_ids)]
@@ -404,12 +411,15 @@ class PedigreeFileInfo:
             participant_ids: Sequence[ParticipantId]
                 The participant ids to get TrioIndices from
         """
-        check_ids = set(participant_ids)
+        ids_lookup = {
+            participant_id: ind
+            for ind, participant_id in enumerate(participant_ids)
+        }
         return tuple(
-            TrioIndices(mother=participant_ids.index(pedigree_line.mother_id),
-                        father=participant_ids.index(pedigree_line.father_id),
-                        proband=participant_ids.index(pedigree_line.proband_id))
+            TrioIndices(mother=ids_lookup[pedigree_line.mother_id],
+                        father=ids_lookup[pedigree_line.father_id],
+                        proband=ids_lookup[pedigree_line.proband_id])
             for pedigree_line in self.pedigree_lines
             if (not pedigree_line.any_unknown) and
-            all(participant_id in check_ids for participant_id in pedigree_line.trio_ids)
+            all(participant_id in ids_lookup for participant_id in pedigree_line.trio_ids)
         )

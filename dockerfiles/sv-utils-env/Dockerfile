@@ -13,19 +13,24 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-install-recommends $BUILD_DEPS
 
 # install python packages
-RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda \
-          psutil=5.8.0 pympler=0.9 tqdm=4.62.3 \
-          numpy=1.23.0 pandas=1.4.3 scipy=1.7.3 dill=0.3.5.1 \
-          seaborn=0.11.2 matplotlib-base=3.5.1 ghostscript=9.54.0 \
-          cython=0.29.28 \
-          pytest=7.1.2 pytest-cov=3.0.0
+# notes on extra packages:
+#   - cython needed for building pysam
+#   - ghostscript needed for concatenating PDFs in benchmarking
+RUN mamba install -qy -n $CONDA_ENV_NAME -c conda-forge -c bioconda -c pytorch \
+          attrs=22.1.0 cython=0.29.28 dask=2023.7.0 dill=0.3.5.1 ghostscript=9.54.0 \
+          matplotlib-base=3.5.1 numpy=1.22.4 pandas=1.5.3 psutil=5.8.0 pyarrow=12.0.0 pympler=0.9 \
+          pytest=7.1.2 pytest-cov=3.0.0 scipy=1.10.1 seaborn=0.11.2 tqdm=4.62.3
 
-# As of March 29, 2022 the newest pysam version is 0.19.0, however that version does not allow setting END < POS, which
-# causes a problem for our BND handling. The newest version that is compatible with our BND processing is 0.15.4
-# In general, pysam needs to be pip installed or built, because you want to use the installed HTSLIB rather than copy in
-# duplicate libraries. The older pysam that needs to be installed for BND issues has problems with cython during pip
-# install, so must be built from source. One last pysam wrinkle: it's install can't handle the newest versions of
-# setuptools, so we're going to downgrade then re-upgrade them just for pysam
+RUN pip install torch==1.13.1
+
+
+# As of March 29, 2022 the newest pysam version is 0.19.0, however that version does not allow
+# setting END < POS, which causes a problem for our BND handling. The newest version that is
+# compatible with our BND processing is 0.15.4. In general, pysam needs to be pip installed or
+# built, because you want to use the installed HTSLIB rather than copy in duplicate libraries. The
+# older pysam that needs to be installed for BND issues has problems with cython during pip install,
+# so must be built from source. One last pysam wrinkle: it's install can't handle the newest
+# versions of setuptools, so we're going to downgrade then re-upgrade them just for pysam
 ARG PYSAM_VERSION=0.15.4
 RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools.__version__)') && \
     pip install setuptools==57.5.0 && \
@@ -40,7 +45,7 @@ RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools._
 RUN conda clean -ay --force-pkgs-dirs
 
 #################### build changes here, then copy the completed changes into the final image
-FROM ubuntu:$UBUNTU_RELEASE
+FROM --platform=linux/amd64 ubuntu:$UBUNTU_RELEASE
 ARG CONDA_INSTALL_DIR
 COPY --from=python_virtual_env $CONDA_INSTALL_DIR $CONDA_INSTALL_DIR
 ARG CONDA_BIN=$CONDA_INSTALL_DIR/bin

@@ -2,16 +2,18 @@
 
 import sys
 import os
+from pathlib import Path
+import enum
 import argparse
 import json
 import warnings
-
 import dill
 import numpy
 import pandas
-
+import scipy
+import scipy.stats
 from sv_utils import common, genomics_io, pedigree_tools, interval_overlaps
-from typing import List, Text, Optional, Dict, Tuple, TypeVar, Union, Collection, Callable, Iterable, Set, Mapping
+from typing import List, Text, Optional, Dict, Tuple, TypeVar, Union, Collection, Callable, Iterable, Iterator, Set, Mapping
 from types import MappingProxyType
 
 EncodedVcfField = Union[int, str]
@@ -34,8 +36,8 @@ class Keys:
     allele_frequency = genomics_io.Keys.allele_frequency
     bnd_contig_2 = genomics_io.Keys.bnd_contig_2
     bnd_end_2 = genomics_io.Keys.bnd_end_2
-    vapor_gt = genomics_io.VaporKeys.gt
-    vapor_gq = genomics_io.VaporKeys.gq
+    gq = genomics_io.Keys.gq
+    vapor_read_scores = genomics_io.Keys.vapor_read_scores
     vapor_p_non_ref = "p_non_ref"
     father = "father"
     mother = "mother"
@@ -49,6 +51,7 @@ class Keys:
     sample_id = genomics_io.Keys.sample_id
     property = genomics_io.Keys.property
     bnd_types = "BND types"
+    inversion = "INV"
 
 
 class Default:
@@ -64,8 +67,6 @@ class Default:
     point_sv_scale_factor = interval_overlaps.Default.point_sv_scale_factor
     expand_non_point_svs_bp = interval_overlaps.Default.expand_non_point_svs_bp
     non_point_sv_scale_factor = interval_overlaps.Default.non_point_sv_scale_factor
-    dev_module_03_dir = os.path.dirname(os.path.realpath(__file__))
-    project_dir = os.path.realpath(os.path.join(dev_module_03_dir, "..", ".."))
     check_some_overlap_key = f"max_{Keys.all_overlappers}_{Keys.overlap_support}"
     sv_selector_size_ranges = MappingProxyType(
         {"off-size": (-numpy.inf, 50), "small": (50, 500), "large": (500, numpy.inf)}
@@ -73,6 +74,9 @@ class Default:
     breakend_types = interval_overlaps.Default.breakend_types
     num_threads = common.num_physical_cpus  # by default, use all available cores for interval overlap tasks
     use_copy_number = genomics_io.Default.use_copy_number
+    p_misaligned_long_read = 0.1
+    vapor_good_alt_reads_threshold = 2
+    min_ref_reads_threshold = 6
 
 
 class SvTypeCutoffInfo:
@@ -119,6 +123,17 @@ class SvTypeCutoffInfo:
 CutoffInfo = Dict[str, SvTypeCutoffInfo]
 
 
+class ConfidentVariantsCombineStrategy(enum.Enum):
+    PreferFirst = "prefer-first"
+    PreferLast = "prefer-last"
+    OmitConflicting = "omit-conflicting"
+
+    # noinspection PyTypeChecker,PyMethodParameters
+    @common.classproperty
+    def choices(cls) -> list[str]:
+        return [kind.value for kind in cls]
+
+
 class SampleConfidentVariants:
     __slots__ = ("good_variant_ids", "bad_variant_ids")
     good_variant_ids: Tuple[str, ...]
@@ -132,21 +147,94 @@ class SampleConfidentVariants:
     def __dict__(self) -> Dict[str, Tuple[str, ...]]:
         return {"good_variant_ids": self.good_variant_ids, "bad_variant_ids": self.bad_variant_ids}
 
+    @classmethod
+    def from_json(cls, json_dict: dict[str, list[float]]) -> "SampleConfidentVariants":
+        return SampleConfidentVariants(**json_dict)
+
     @property
     def all_confident_variant_ids(self) -> Set[str]:
         return set(self.good_variant_ids).union(self.bad_variant_ids)
 
-    def select(self, selector: SvTypeCutoffSelector, metrics: pandas.DataFrame) -> "SampleConfidentVariants":
+    def select(
+        self, selector: SvTypeCutoffSelector, metrics: pandas.DataFrame
+    ) -> "SampleConfidentVariants":
         selected_ids = set(metrics.index[selector(metrics)])
         return SampleConfidentVariants(selected_ids.intersection(self.good_variant_ids),
                                        selected_ids.intersection(self.bad_variant_ids))
 
+    def append_good(self, variant_id: str):
+        self.good_variant_ids += (variant_id,)
 
-ConfidentVariants = Mapping[str, SampleConfidentVariants]  # mapping from sample ID to SampleConfidentVariants
+    def append_bad(self, variant_id: str):
+        self.bad_variant_ids += (variant_id,)
+
+    def combine(
+        self: "SampleConfidentVariants",
+        other: "SampleConfidentVariants",
+        combine_strategy: ConfidentVariantsCombineStrategy
+    ) -> "SampleConfidentVariants":
+        if combine_strategy == ConfidentVariantsCombineStrategy.PreferFirst:
+            good_variant_ids = set(other.good_variant_ids) \
+                .difference(self.bad_variant_ids).union(self.good_variant_ids)
+            bad_variant_ids = set(other.bad_variant_ids) \
+                .difference(self.good_variant_ids).union(self.bad_variant_ids)
+        elif combine_strategy == ConfidentVariantsCombineStrategy.PreferLast:
+            good_variant_ids = set(self.good_variant_ids) \
+                .difference(other.bad_variant_ids).union(other.good_variant_ids)
+            bad_variant_ids = set(self.bad_variant_ids) \
+                .difference(other.good_variant_ids).union(other.bad_variant_ids)
+        else:
+            good_variant_ids = set(self.good_variant_ids).difference(other.bad_variant_ids).union(
+                set(other.good_variant_ids).difference(self.bad_variant_ids)
+            )
+            bad_variant_ids = set(self.bad_variant_ids).difference(other.good_variant_ids).union(
+                set(other.bad_variant_ids).difference(self.good_variant_ids)
+            )
+        return SampleConfidentVariants(
+            good_variant_ids=tuple(sorted(good_variant_ids)),
+            bad_variant_ids=tuple(sorted(bad_variant_ids))
+        )
+
+
+# mapping from sample ID to SampleConfidentVariants
+class ConfidentVariants(dict[str, SampleConfidentVariants]):
+
+    @classmethod
+    def from_json(
+        cls, json_dict: dict[str, list[float]] | dict[str, SampleConfidentVariants]
+    ) -> Union[SampleConfidentVariants, "ConfidentVariants"]:
+        if isinstance(next(iter(json_dict.values())), SampleConfidentVariants):
+            return ConfidentVariants(json_dict)
+        else:
+            return SampleConfidentVariants.from_json(json_dict)
+
+    def combine(
+        self,
+        other: "ConfidentVariants",
+        combine_strategy: ConfidentVariantsCombineStrategy
+    ) -> "ConfidentVariants":
+        confident_variants = ConfidentVariants(self.copy())
+        for sample_id, other_sample_confident_variants in other.items():
+            confident_variants[sample_id] = confident_variants[sample_id].combine(
+                other=other_sample_confident_variants, combine_strategy=combine_strategy
+            ) if sample_id in confident_variants else other_sample_confident_variants
+        return confident_variants
 
 
 class PrecisionRecallCurve:
-    """ Class to form, manipulate, and query data for precision vs recall curves """
+    """
+    Class to form, manipulate, and query data for precision vs recall curves
+
+    Attributes:
+        dataframe: Table with precision and recall values
+        num_good: total number of confidently good variants
+        num_bad: total number of confidently bad variants
+        f_beta: beta parameter for f-score calculation
+        is_high_cutoff: If True, for each threshold on the precision-recall curve, selected points
+                        are those with scores HIGHER than that threshold.
+                        If False, selected points are those with scores LOWER than that threshold.
+                        i.e. if is_high_cutoff is True, good scores are LARGER than bad scores.
+    """
     __slots__ = ("dataframe", "num_good", "num_bad", "f_beta", "is_high_cutoff")
     dataframe: pandas.DataFrame
     num_good: int
@@ -198,52 +286,73 @@ class PrecisionRecallCurve:
                                     is_sorted=is_sorted, f_beta=f_beta, is_high_cutoff=is_high_cutoff)
 
     @staticmethod
+    def from_good_bad_value_counts(
+        good_value_counts: pandas.Series,
+        bad_value_counts: pandas.Series,
+        f_beta: float = Default.f_beta,
+        is_high_cutoff: bool = True
+    ) -> "PrecisionRecallCurve":
+        n_good = good_value_counts.sum()
+        n_bad = bad_value_counts.sum()
+        if n_good == 0 or n_bad == 0:
+            # noinspection PyTypeChecker
+            return PrecisionRecallCurve.empty_curve
+
+        def _replace_nan_value(_s: pandas.Series) -> pandas.Series:
+            # map NaN thresholds to -inf/+inf (depending on high/low cutoff), because they will
+            # never be selected
+            _nan_replacement = numpy.inf if is_high_cutoff else -numpy.inf
+            if _s.index.hasnans:
+                if _nan_replacement in _s.index:
+                    _s[_nan_replacement] += _s[_s.index.isna()]
+                    _s = _s[~_s.index.isna()]
+                else:
+                    _s.index = _s.index.fillna(_nan_replacement)
+            return _s
+
+        good_value_counts = _replace_nan_value(good_value_counts)
+        bad_value_counts = _replace_nan_value(bad_value_counts)
+
+        # form combined counts of good and bad values, sort them into correct order (by index, i.e.
+        # the underlying values), and keep the sorting index
+        # compute all the counts (good or bad) at each threshold
+        threshold_counts = good_value_counts.add(bad_value_counts, fill_value=0).sort_index(ascending=not is_high_cutoff)
+        # move good_value_counts onto that same index
+        good_value_counts = good_value_counts.reindex(threshold_counts.index, fill_value=0)
+        # recall is the cumulative proportion of good values less than a given threshold
+        recall = good_value_counts.cumsum() / n_good
+        # precision is the proportion of total counts that are good, for values less than a given
+        # threshold
+        precision = good_value_counts.cumsum() / threshold_counts.cumsum()
+        if is_high_cutoff:
+            # flip arrays so they are in ascending order again
+            print(threshold_counts.index[::-1])
+            return PrecisionRecallCurve.from_arrays(
+                thresholds=threshold_counts.index[::-1], precision=precision.values[::-1], recall=recall.values[::-1],
+                num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
+                is_high_cutoff=is_high_cutoff
+            )
+        else:
+            print("WTF should not happend")
+            return PrecisionRecallCurve.from_arrays(
+                thresholds=threshold_counts.index, precision=precision.values, recall=recall.values,
+                num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
+                is_high_cutoff=is_high_cutoff
+            )
+
+    @staticmethod
     def from_good_bad_thresholds(
             good_thresholds: numpy.ndarray,
             bad_thresholds: numpy.ndarray,
             f_beta: float = Default.f_beta,
             is_high_cutoff: bool = True
     ) -> "PrecisionRecallCurve":
-        # map NaN thresholds to -inf/+inf (depending on high/low cutoff), because they will never be selected
-        nan_replacement = -numpy.inf if is_high_cutoff else numpy.inf
-        thresholds = numpy.nan_to_num(numpy.concatenate((good_thresholds, bad_thresholds)), nan=nan_replacement)
-        # construct precision-recall curve (vs threshold)
-        n_good = len(good_thresholds)
-        n_bad = len(bad_thresholds)
-        if n_good == 0 or n_bad == 0:
-            # noinspection PyTypeChecker
-            return PrecisionRecallCurve.empty_curve
-
-        sort_ind = numpy.argsort(thresholds)[::-1] if is_high_cutoff else numpy.argsort(thresholds)
-        thresholds = thresholds.take(sort_ind)
-        recall = numpy.concatenate(
-            (numpy.full(n_good, 1.0 / n_good), numpy.zeros(n_bad))
-        ).take(sort_ind).cumsum()
-        precision = numpy.concatenate(
-            (numpy.ones(n_good), numpy.zeros(n_bad))
-        ).take(sort_ind).cumsum() \
-            / numpy.arange(1, len(sort_ind) + 1)
-
-        if is_high_cutoff:
-            # de-duplicate thresholds, taking the *LAST* match to a threshold, since it's all-or-nothing if multiple
-            # variants match
-            __, de_dup_index = numpy.unique(thresholds[::-1], return_index=True)
-
-            def _de_dup(_arr):
-                return _arr[::-1].take(de_dup_index)[::-1]
-        else:
-            # de-duplicate thresholds, taking the *FIRST* match to a threshold, since it's all-or-nothing if multiple
-            # variants match
-            __, de_dup_index = numpy.unique(thresholds, return_index=True)
-
-            def _de_dup(_arr):
-                return _arr.take(de_dup_index)
-
-        thresholds, recall, precision = _de_dup(thresholds), _de_dup(recall), _de_dup(precision)
-        # return as a DataFrame for organization purposes
-        return PrecisionRecallCurve.from_arrays(thresholds=thresholds, precision=precision, recall=recall,
-                                                num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
-                                                is_high_cutoff=is_high_cutoff)
+        return PrecisionRecallCurve.from_good_bad_value_counts(
+            good_value_counts=pandas.Series(good_thresholds).value_counts(dropna=False),
+            bad_value_counts=pandas.Series(bad_thresholds).value_counts(dropna=False),
+            f_beta=f_beta,
+            is_high_cutoff=is_high_cutoff
+        )
 
     def loc(self, indexer: pandas.api.indexers.BaseIndexer) -> "PrecisionRecallCurve":
         # note: don't know that the indexer leaves dataframe sorted, but presumably the point of doing the indexer is
@@ -257,15 +366,15 @@ class PrecisionRecallCurve:
 
     @property
     def precision(self) -> numpy.ndarray:
-        return self.dataframe[PrecisionRecallCurve.precision_key]
+        return self.dataframe[PrecisionRecallCurve.precision_key].to_numpy()
 
     @property
     def recall(self) -> numpy.ndarray:
-        return self.dataframe[PrecisionRecallCurve.recall_key]
+        return self.dataframe[PrecisionRecallCurve.recall_key].to_numpy()
 
     @property
     def f_score(self) -> numpy.ndarray:
-        return self.dataframe[PrecisionRecallCurve.f_score_key]
+        return self.dataframe[PrecisionRecallCurve.f_score_key].to_numpy()
 
     @staticmethod
     def get_f_score(
@@ -274,7 +383,9 @@ class PrecisionRecallCurve:
             f_beta: float = Default.f_beta
     ) -> numpy.ndarray:
         f_beta_2 = f_beta * f_beta
-        return numpy.nan_to_num((1.0 + f_beta_2) * precision * recall / (f_beta_2 * precision + recall), nan=0.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return numpy.nan_to_num((1.0 + f_beta_2) * precision * recall / (f_beta_2 * precision + recall), nan=0.0)
 
     @f_score.setter
     def f_score(self, value):
@@ -316,8 +427,12 @@ class PrecisionRecallCurve:
         if self.is_empty:
             warnings.warn("No point at threshold: PrecisionRecallCurve is empty")
             return PrecisionRecallCurve.empty_point(threshold)
-        row_index = len(self.dataframe) - 1 - self.dataframe.index[::-1].searchsorted(threshold, side="left") \
-            if self.is_high_cutoff else self.dataframe.index.searchsorted(threshold, side="left")
+        row_index = self.dataframe.index.searchsorted(threshold, side="left" if self.is_high_cutoff else "right")
+        # row_index = (
+        #     len(self.dataframe) - 1 - self.dataframe.index[::-1].searchsorted(threshold, side="right")
+        #     if self.is_high_cutoff
+        #     else self.dataframe.index.searchsorted(threshold, side="left")
+        # )
 
         if row_index < 0 or row_index >= len(self.dataframe):
             _log(str(self.dataframe.index))
@@ -373,6 +488,7 @@ def split_vcf_dataframe(
                pandas.NA: carrier status is unknown (due to no-calls)
     """
     # variant properties are columns where sample = None (as opposed to sample properties)
+    # noinspection PyTypeChecker
     variant_properties = variants.xs(None, level=Keys.sample_id, axis=1)
 
     for prop in [Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.svlen]:
@@ -1021,12 +1137,58 @@ def get_trios_overlap_info(
     )
 
 
-def _get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
+def _get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
-    p_gt_bad = 10 ** -vapor_variants[Keys.vapor_gq]
+    p_gt_bad = 10 ** -vapor_variants[Keys.gq]
     return pandas.DataFrame(
         numpy.where(
-            vapor_variants[Keys.vapor_gt] == "0/0", p_gt_bad, 1.0 - p_gt_bad
+            vapor_variants[Keys.gt] == "0/0", p_gt_bad, 1.0 - p_gt_bad
+        ),
+        columns=[Keys.vapor_p_non_ref],
+        index=vapor_variants.index
+    )
+
+
+def _get_vapor_p_non_ref(
+        vapor_variants: pandas.DataFrame,
+        p_misaligned: float = Default.p_misaligned_long_read
+) -> pandas.DataFrame:
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
+        lambda scores: [float(score) for score in scores.split(',')] if scores else []
+    )
+    num_reads = vapor_read_scores.apply(len)
+    num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
+    # model het likelihood as binomial distribution with 50/50 chance a read is ALT or REF
+    likelihood_het = scipy.stats.binom.pmf(num_alt_reads, num_reads, 0.5)
+    # model homref likelihood as binomial distribution with p_misaligned chance that read looks ALT
+    likelihood_ref = scipy.stats.binom.pmf(num_alt_reads, num_reads, p_misaligned)
+    # model homvar likelihood as binomial distribution with p_misaligned chance that read looks REF
+    likelihood_homvar = scipy.stats.binom.pmf(num_reads - num_alt_reads, num_reads, p_misaligned)
+    # set flat priors on true genotype, just allow likelihoods to dominate prediction
+    return pandas.DataFrame(
+        1.0 - likelihood_ref / (likelihood_ref + likelihood_het + likelihood_homvar),
+        columns=[Keys.vapor_p_non_ref],
+        index=vapor_variants.index
+    )
+
+
+def _get_vapor_p_non_ref_threshold(
+        vapor_variants: pandas.DataFrame,
+        good_alt_reads_threshold: int = Default.vapor_good_alt_reads_threshold,
+        min_ref_reads_threshold: int = Default.min_ref_reads_threshold
+) -> pandas.DataFrame:
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
+        lambda scores: [float(score) for score in scores.split(',')] if scores else []
+    )
+    num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
+    num_reads = vapor_read_scores.apply(len)
+    return pandas.DataFrame(
+        numpy.where(
+            numpy.logical_and(num_alt_reads == 0, num_reads >= min_ref_reads_threshold),
+            0.0,
+            numpy.where(num_alt_reads >= good_alt_reads_threshold, 1.0, 0.5)
         ),
         columns=[Keys.vapor_p_non_ref],
         index=vapor_variants.index
@@ -1036,8 +1198,8 @@ def _get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
 def get_sv_selectors(
         all_sv_types: Set[str],
         bnd_types: Iterable[str] = interval_overlaps.Default.breakend_types,
-        size_ranges: Mapping[str, Tuple[float, float]] = Default.sv_selector_size_ranges
-) -> Dict[str, SvTypeCutoffSelector]:
+        size_ranges: Mapping[str, Tuple[float, float]] = Default.sv_selector_size_ranges,
+) -> Iterator[Tuple[str, SvTypeCutoffSelector]]:
     """
     Return Dict with key = SV category and value = SVTypeCutoffSelector (a function that selects only the variants from
     the desired category)
@@ -1045,21 +1207,16 @@ def get_sv_selectors(
     def _get_selector(_svtype: str, _low: float, _high: float) -> SvTypeCutoffSelector:
         return lambda info: (info[Keys.svtype] == _svtype) & (info[Keys.svlen] >= _low) & (info[Keys.svlen] < _high)
 
-    # don't break down BNDs (and similar types) by size because it doesn't make sense to
-    # don't break down INV by size because there are too few
-    size_divided_types = all_sv_types.difference(bnd_types).difference({"INV"})
-    return {
-        **{
-            Keys.bnd_types: lambda info: info[Keys.svtype].isin(bnd_types)
-        },
-        **{
-            "INV": lambda info: info[Keys.svtype] == "INV"
-        },
-        **{
-            f"{size_name} {svtype}": _get_selector(svtype, low, high)
-            for svtype in size_divided_types for size_name, (low, high) in size_ranges.items()
-        }
-    }
+    if len(all_sv_types.intersection(bnd_types)) > 0:
+        # don't break down BNDs (and similar types) by size because it doesn't make sense to
+        yield Keys.bnd_types, lambda info: info[Keys.svtype].isin(bnd_types)
+    if Keys.inversion in all_sv_types:
+        # don't break down INV by size because there are too few
+        yield Keys.inversion, lambda info: info[Keys.svtype] == Keys.inversion
+    size_divided_types = all_sv_types.difference(bnd_types).difference({Keys.inversion})
+    for svtype in size_divided_types:
+        for size_name, (low, high) in size_ranges.items():
+            yield f"{size_name} {svtype}", _get_selector(svtype, low, high)
 
 
 def get_optimal_overlap_cutoffs(
@@ -1140,7 +1297,6 @@ def get_optimal_overlap_cutoffs(
         for sample_overlap_stats in overlap_stats.values()
         for svtype in sample_overlap_stats[Keys.svtype].unique()
     )
-    sv_selectors = get_sv_selectors(all_sv_types=all_sv_types, bnd_types=bnd_types, size_ranges=size_ranges)
 
     def _get_optimal_cutoff(_cutoffs: List[SvTypeCutoffInfo], _good: bool) -> SvTypeCutoffInfo:
         def _precision(_cutoff: SvTypeCutoffInfo) -> float:
@@ -1179,7 +1335,9 @@ def get_optimal_overlap_cutoffs(
         else:
             all_stats_linked[base_stat] = all_stats_linked.get(base_stat, (None, None))[:1] + (stat,)
     overlap_cutoffs = {}
-    for selector_name, selector in sv_selectors.items():
+    for selector_name, selector in get_sv_selectors(
+        all_sv_types=all_sv_types, bnd_types=bnd_types, size_ranges=size_ranges
+    ):
         stats_overlap_cutoff_info = [
             _get_stat_optimal_overlap_cutoffs(
                 trios_overlap_info, vapor_info, selector, stat_good, stat_bad, f_beta=f_beta,
@@ -1315,17 +1473,17 @@ def reconcile_confident_variants(
 
 
 def output_confident_variants(
-        overlap_info: ConfidentVariants,
+        confident_variants: ConfidentVariants,
         output_file: str
 ):
     """ Output the confident variants, either to a json file or stdout """
     if output_file == '-':
-        json.dump(overlap_info, sys.stdout, indent=2, default=lambda x: x.__dict__)
+        json.dump(confident_variants, sys.stdout, indent=2, default=lambda x: x.__dict__)
         sys.stdout.flush()
     else:
         _log(f"Saving overlaps to {output_file} ...", end='')
         with open(output_file, 'w') as f_out:
-            json.dump(overlap_info, f_out, default=lambda x: x.__dict__)
+            json.dump(confident_variants, f_out, default=lambda x: x.__dict__)
         _log(" okay")
 
 
@@ -1518,7 +1676,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="beta factor for f-score, weighting importance of recall relative to precision")
     parser.add_argument("--inheritance-af-rareness", type=float, default=Default.inheritance_af_rareness,
                         help="Maximum allele frequency for a variant to use trio inheritance as a truth signal.")
-    parser.add_argument("--use-copy-number", type=bool, default=Default.use_copy_number,
+    parser.add_argument("--use-copy-number", type=common.argparse_bool, default=Default.use_copy_number,
                         help="Where genotype is insufficient, use copy number for estimating allele frequency and "
                              "carrier status")
     parser.add_argument("--num_threads", "-@", type=int, default=Default.num_threads,

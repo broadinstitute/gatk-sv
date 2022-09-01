@@ -7,13 +7,17 @@ import numpy
 import pandas
 import collections
 import psutil
-from typing import Text, Any, Union, List, Optional, Iterable, Iterator, Tuple, Generic, Callable, TypeVar
-from types import ModuleType
+from typing import (
+    Text, Any, Union, List, Optional, Iterable, Iterator, Tuple, Generic, Callable, TypeVar
+)
+from types import ModuleType, NoneType
 
 
 Vector = Union[List, pandas.Series, numpy.array]
 Numeric = Union[int, float, numpy.integer, numpy.floating]
 TypeT = TypeVar("TypeT")
+BitGeneratorState = dict[str, Any]
+GeneratorInit = Union[int, None, BitGeneratorState, numpy.random.Generator]
 
 
 def deref_iterable_with_sorted_indices(base_list: Iterable[TypeT], sorted_indices: Iterable[int]) -> Iterator[TypeT]:
@@ -50,6 +54,23 @@ def true(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
     return numpy.ones(size, dtype=bool)
 
 
+def init_generator(generator_init: GeneratorInit) -> numpy.random.Generator:
+    """
+    Initialize and return a new numpy.random.Generator, of the current default type
+    if a seed is provided (either an int or None), create new generator initialized to that seed
+    if a saved state is provided, create a new generated and restore the state
+    if a Generator is provided, create a new generator with identical state
+    """
+    if isinstance(generator_init, (NoneType, int, numpy.integer)):
+        return numpy.random.default_rng(seed=generator_init)
+    elif isinstance(generator_init, numpy.random.Generator):
+        return init_generator(generator_init=generator_init.bit_generator.state)
+    else:
+        generator = numpy.random.default_rng(seed=0)
+        generator.bit_generator.state = generator_init
+        return generator
+
+
 def false(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
     """
     Syntactic sugar to get a bool array of all false.
@@ -61,6 +82,37 @@ def false(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
             bool array of all false
     """
     return numpy.zeros(size, dtype=bool)
+
+
+def elapsed_time(delta_t: float, seconds_precision: int = 3) -> str:
+    """
+    Given time interval in seconds, return time interval as human-readable string
+    Args:
+        delta_t: float
+            interval in seconds
+        seconds_precision: int
+            number of digits of precision for seconds
+    Returns:
+        t_str: str
+            human-readable string describing interval
+    """
+    m, s = divmod(delta_t, 60.0)
+    t_str = '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, s)
+    # edge-case: s is just less than 60 but rounds up to 60 at requested precision
+    if t_str == '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, 60):
+        t_str = '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, 0)
+        m += 1
+    if m <= 0:
+        return t_str
+    h, m = divmod(m, 60)
+    t_str = '%2dm ' % m + t_str
+    if h <= 0:
+        return t_str
+    d, h = divmod(h, 24)
+    t_str = '%2dh ' % h + t_str
+    if d > 0:
+        t_str = '%dd ' % d + t_str
+    return t_str
 
 
 class PeekableIter(Generic[TypeT]):
@@ -197,6 +249,17 @@ def static_vars(**kwargs):
             setattr(func, key, val)
         return func
     return _decorate
+
+
+def argparse_bool(arg: Union[str, bool]) -> bool:
+    if isinstance(arg, bool):
+        return arg
+    if arg.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif arg.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ValueError('Boolean value expected.')
 
 
 # noinspection PyPep8Naming

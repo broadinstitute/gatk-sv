@@ -1,0 +1,9 @@
+{
+  "CombineTruthJsons.input_truth_jsons": [
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-09-28_change-early-stopping/truth_overlap.json",
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2023-04-18_GetTruthInheritance/hgdp_and_hgsv_ped_truth.json"
+  ],
+  "CombineTruthJsons.combined_truth_json_file_name": "pacbio_and_inheritance_truth.json",
+  "CombineTruthJsons.combine_strategy": "omit-conflicting",
+  "CombineTruthJsons.sv_utils_docker":  {{ dockers.sv_utils_docker | tojson }}
+}

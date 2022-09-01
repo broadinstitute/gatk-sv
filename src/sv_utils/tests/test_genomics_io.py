@@ -71,43 +71,56 @@ def test_intervals_sort(num_scrambled_trials: int = Default.num_scrambled_trials
         if test_method == 0:  # for test_method == 0 just leave the sorted_intervals as-is
             method_str = "object contig"
         else:   # make contig categorical
-            categories = sorted_intervals[Keys.contig].unique()  # <- delivers in order of appearance, so sorted
+            # .unique() delivers in order of appearance so categories are sorted:
+            categories = sorted_intervals[Keys.contig].unique()
             if test_method == 2:  # scramble the order so the categories are not in sorted order
                 categories = categories[get_nontrivial_permutation(len(categories))]
                 method_str = "unordered category contig"
             else:
+                # note that sort_intervals_table() sorts the contigs in the CategoricalDtype, so
+                # only this method will cause the dtypes to match up
                 method_str = "ordered category contig"
             sorted_intervals[Keys.contig] = pandas.Categorical(
                 sorted_intervals[Keys.contig].values, categories=categories, ordered=True
             )
 
         for trail_ind in range(num_scrambled_trials):
-            # get a non-identity permutation (should be basically every time, but this makes it deterministic):
+            # get a non-identity permutation (should be basically every time, but this makes it
+            # deterministic):
             permutation = get_nontrivial_permutation(len(sorted_intervals))
 
             scrambled_intervals = sorted_intervals.iloc[permutation]
-            assert not scrambled_intervals.equals(sorted_intervals)  # the scramble should have done something
+            assert not scrambled_intervals.equals(sorted_intervals), \
+                "The scramble didn't alter data"
             common_test_utils.assert_dataframes_equal(
-                genomics_io.sort_intervals_table(scrambled_intervals, inplace=False, drop_index=False),
+                genomics_io.sort_intervals_table(scrambled_intervals, inplace=False,
+                                                 drop_index=False),
                 sorted_intervals,
-                f"{method_str}, inplace=False, drop_index=False"
+                f"{method_str}, inplace=False, drop_index=False",
+                dtypes_equal=(test_method == 3)
             )
             common_test_utils.assert_dataframes_equal(
-                genomics_io.sort_intervals_table(scrambled_intervals, inplace=False, drop_index=True),
+                genomics_io.sort_intervals_table(scrambled_intervals, inplace=False,
+                                                 drop_index=True),
                 sorted_intervals.reset_index(drop=True, inplace=False),
-                f"{method_str}, inplace=False, drop_index=True"
+                f"{method_str}, inplace=False, drop_index=True",
+                dtypes_equal=(test_method == 3)
             )
 
             genomics_io.sort_intervals_table(scrambled_intervals, inplace=True, drop_index=False)
-            common_test_utils.assert_dataframes_equal(scrambled_intervals, sorted_intervals,
-                                                      f"{method_str}, inplace=True, drop_index=False")
+            common_test_utils.assert_dataframes_equal(
+                scrambled_intervals, sorted_intervals,
+                f"{method_str}, inplace=True, drop_index=False",
+                dtypes_equal=(test_method == 3)
+            )
 
             # re-scramble and try again with drop_index=True
             scrambled_intervals = sorted_intervals.iloc[permutation]
             genomics_io.sort_intervals_table(scrambled_intervals, inplace=True, drop_index=True)
             common_test_utils.assert_dataframes_equal(
                 scrambled_intervals, sorted_intervals.reset_index(drop=True, inplace=False),
-                f"{method_str}, inplace=True, drop_index=True"
+                f"{method_str}, inplace=True, drop_index=True",
+                dtypes_equal=(test_method == 3)
             )
 
 
@@ -170,7 +183,7 @@ def test_subset_vcf(
             )
 
 
-def _get_uncompressed_text(filename: str) -> Tuple[str, ...]:
+def get_uncompressed_text(filename: str) -> Tuple[str, ...]:
     with pysam.BGZFile(filename, "rb") as f_in:
         return tuple(f_in)
 
@@ -184,21 +197,27 @@ def test_read_write_bed(
     temp_out_dir = tmpdir.mkdir("test_write_bed")
     # check that reading in the same variants as BED files or VCFs yields the same variants
     # for the VCF, restrict to variant-level data (no genotype / FORMAT data)
-    # also: don't try to deal with breaking complex/BND into multiple intervals, just take the primary interval
-    small_vcf_variants = genomics_io.vcf_to_pandas(small_vcf, samples={}, drop_missing_columns=True,
-                                                   drop_trivial_multi_index=True)
-    small_bed_variants = genomics_io.bed_to_pandas(small_bed, literal_eval_columns=test_bed_literal_eval_columns)
+    # also: don't try to deal with breaking complex/BND into multiple intervals, just take the
+    #       primary interval
+    small_bed_variants = genomics_io.bed_to_pandas(
+        small_bed, literal_eval_columns=test_bed_literal_eval_columns
+    )
+    small_vcf_variants = genomics_io.vcf_to_pandas(
+        small_vcf, samples={}, drop_missing_columns=True, drop_trivial_multi_index=True
+    )
     # note that the order of columns is likely to be different
-    assert not set(small_vcf_variants.columns).symmetric_difference(small_bed_variants.columns)
-    common_test_utils.assert_dataframes_equal(small_bed_variants, small_vcf_variants,
-                                              context=f"vcf={small_vcf}, bed={small_bed}", check_column_order=False)
-    # check that writing the variants to a bed file is identical (when uncompressed) to the existing bed file. check the
-    # re-ordering mechanism works to create a valid bed file
+    common_test_utils.assert_dataframes_equal(
+        small_bed_variants, small_vcf_variants, context=f"vcf={small_vcf}, bed={small_bed}",
+        check_column_order=False
+    )
+    # check that writing the variants to a bed file is identical (when uncompressed) to the
+    # existing bed file. check the re-ordering mechanism works to create a valid bed file
     temp_out_bed = os.path.join(temp_out_dir, os.path.basename(small_bed))
     genomics_io.pandas_to_bed(temp_out_bed, small_vcf_variants)
-    assert _get_uncompressed_text(temp_out_bed) == _get_uncompressed_text(small_bed)
-    # Ensure this isn't a trivial test (empty files, text getter somehow doesn't work). VCF and BED should be different
-    assert _get_uncompressed_text(temp_out_bed) != _get_uncompressed_text(small_vcf)
+    assert get_uncompressed_text(temp_out_bed) == get_uncompressed_text(small_bed)
+    # Ensure this isn't a trivial test (empty files, text getter somehow doesn't work). VCF and BED
+    # should be different
+    assert get_uncompressed_text(temp_out_bed) != get_uncompressed_text(small_vcf)
 
 
 def test_vcat_with_categoricals(small_vcfs: Sequence[str] = Default.small_vcfs,
@@ -209,11 +228,13 @@ def test_vcat_with_categoricals(small_vcfs: Sequence[str] = Default.small_vcfs,
     small_dataframes = [
         genomics_io.vcf_to_pandas(small_vcf, samples=subset_samples) for small_vcf in small_vcfs
     ]
-    # note the main purpose of this method (vs just calling pandas.concat) is managing concatenation of potentially
-    # incompatible categoricals. The small vcfs were chosen to have non-overlapping contigs, so the main "test" is that
-    # this runs with no exception
+    # note the main purpose of this method (vs just calling pandas.concat) is managing
+    # concatenation of potentially incompatible categoricals. The small vcfs were chosen to have
+    # non-overlapping contigs, so the main "test" is that this runs with no exception
     joint_dataframe = genomics_io.vcat_with_categoricals(small_dataframes)
     assert sum(len(small_dataframe) for small_dataframe in small_dataframes) == len(joint_dataframe)
     for small_vcf, small_dataframe in zip(small_vcfs, small_dataframes):
-        common_test_utils.assert_dataframes_equal(small_dataframe, joint_dataframe.loc[small_dataframe.index],
-                                                  f"inclusion of {small_vcf} variants")
+        common_test_utils.assert_dataframes_equal(
+            small_dataframe, joint_dataframe.loc[small_dataframe.index],
+            f"inclusion of {small_vcf} variants", dtypes_equal=False
+        )

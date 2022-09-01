@@ -502,6 +502,43 @@ task GetVcfSize {
     }
 }
 
+task IndexVcf {
+    input {
+        File vcf
+        String samtools_cloud_docker
+    }
+
+    parameter_meta {
+        vcf: {
+          localization_optional: true
+        }
+    }
+    String vcf_index_filename = basename(vcf) + ".tbi"
+    Int disk_gb = 10
+
+    runtime {
+        docker: samtools_cloud_docker
+        cpu: 1
+        preemptible: 3
+        max_retries: 1
+        memory: "2 GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        # if running in a local mode, this will fail, but it also won't be *needed*
+        export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+        set -euo pipefail
+
+        bcftools index -f -t -o "~{vcf_index_filename}" "~{vcf}"
+    >>>
+
+    output {
+        File vcf_index = vcf_index_filename
+    }
+}
+
 
 task MaxInts {
     input {
@@ -755,4 +792,41 @@ task TransferVcfAnnotations {
     File annotated_vcf = output_file_name
     File annotated_vcf_index = output_file_name + ".tbi"
   }
+}
+
+
+task StandardizeVcfForGatk {
+    input {
+        File vcf
+        Array[String] standardize_vcf_args
+        String sv_utils_docker
+    }
+
+    String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
+    String index_file_name = fixed_vcf_name + ".tbi"
+
+    Int disk_gb = 100 + round(2 * size(vcf, "GiB"))
+    Int mem_gb_overhead = 2
+    Float mem_scale = 2.0
+    Float mem_gb = mem_gb_overhead + mem_scale * size(vcf, "GiB")
+
+    runtime {
+        docker: sv_utils_docker
+        cpu: 1
+        preemptible: 3
+        max_retries: 1
+        memory: mem_gb + " GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        set -euo pipefail
+
+        sv-utils fix-vcf ~{vcf} ~{fixed_vcf_name} --index-output-vcf true ~{sep=' ' standardize_vcf_args}
+    >>>
+
+    output {
+        File fixed_vcf = fixed_vcf_name
+        File fixed_vcf_index = index_file_name
+    }
 }

@@ -71,10 +71,10 @@ def _command_help_func(
         help_str = _get_help_summary(package, command_name)
         if help_str is None:
             continue
-        print(f"{indent1}{_snake_to_kebab(command_name)}:", file=file_descriptor)
+        print(f"{indent1}{_snake_to_kebab(command_name)}:", file=file_descriptor, flush=True)
         help_str = help_str.strip()
         if len(indent2 + help_str) <= max_width:
-            print(f"{indent2}{help_str}", file=file_descriptor)
+            print(f"{indent2}{help_str}", file=file_descriptor, flush=True)
         else:
             help_words = help_str.split()
             help_line = indent2 + help_words[0]
@@ -82,10 +82,10 @@ def _command_help_func(
                 if len(help_line + " " + next_word) <= max_width:
                     help_line += " " + next_word
                 else:
-                    print(str(help_line), file=file_descriptor)
+                    print(str(help_line), file=file_descriptor, flush=True)
                     help_line = indent2 + next_word
-            print(str(help_line), file=file_descriptor)
-    print("", file=file_descriptor)
+            print(str(help_line), file=file_descriptor, flush=True)
+    print("", file=file_descriptor, flush=True)
 
 
 def _bad_command_func(

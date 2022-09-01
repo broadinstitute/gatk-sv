@@ -37,5 +37,6 @@ RUN apt-get -qqy update --fix-missing && \
 COPY src/sv_utils /opt/sv_utils
 RUN pip install -e /opt/sv_utils
 
-# show that sv-utils is installed
+# show that sv-utils and gq-recalibrator are installed
 RUN sv-utils --help
+RUN gq-recalibrator --help

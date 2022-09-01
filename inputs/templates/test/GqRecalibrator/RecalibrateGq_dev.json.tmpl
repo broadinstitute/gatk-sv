@@ -1,0 +1,16 @@
+{
+  "RecalibrateGq.vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz",
+  "RecalibrateGq.vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz.tbi",
+  "RecalibrateGq.model_file": NULL, needs to be filled,
+  "RecalibrateGq.genome_tracks": [
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
+  ],
+  "RecalibrateGq.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "RecalibrateGq.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
+  "RecalibrateGq.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "RecalibrateGq.gatk_recalibrator_docker": {{ dockers.gatk_recalibrator_docker | tojson }}
+}

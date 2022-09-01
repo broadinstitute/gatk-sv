@@ -8,7 +8,7 @@ ARG VCFTOOLS_VERSION="0.1.16"
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
 
 ############### stage 0: download and build tools
-FROM ubuntu:$UBUNTU_RELEASE as build
+FROM --platform=linux/amd64 ubuntu:$UBUNTU_RELEASE as build
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
@@ -53,7 +53,7 @@ RUN wget -q https://github.com/arq5x/bedtools2/releases/download/v$BEDTOOLS_VERS
 
 
 ############### stage 1: copy tools and install needed non-dev libraries
-FROM ubuntu:$UBUNTU_RELEASE
+FROM --platform=linux/amd64 ubuntu:$UBUNTU_RELEASE
 
 ENV HOME=/root
 
