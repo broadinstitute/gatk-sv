@@ -1,8 +1,8 @@
 {
   "GATKSVPipelineBatch.use_manta": "true",
   "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "true",
-  "GATKSVPipelineBatch.use_scramble": "false",
+  "GATKSVPipelineBatch.use_melt": "false",
+  "GATKSVPipelineBatch.use_scramble": "true",
 
   "GATKSVPipelineBatch.name": {{ test_batch.name | tojson }},
   "GATKSVPipelineBatch.ped_file": {{ test_batch.ped_file | tojson }},
@@ -11,15 +11,14 @@
   "GATKSVPipelineBatch.qc_definitions" : {{ test_batch.qc_definitions | tojson }},
   "GATKSVPipelineBatch.requester_pays_crams" : {{ test_batch.requester_pays_crams | tojson }},
 
-  "GATKSVPipelineBatch.counts_files_input": {{ test_batch.counts | tojson }},
   "GATKSVPipelineBatch.pe_files_input": {{ test_batch.PE_files | tojson }},
   "GATKSVPipelineBatch.sr_files_input": {{ test_batch.SR_files | tojson }},
   "GATKSVPipelineBatch.sd_files_input": {{ test_batch.SD_files | tojson }},
+  "GATKSVPipelineBatch.rd_files_input": {{ test_batch.RD_files | tojson }},
   "GATKSVPipelineBatch.manta_vcfs_input": {{ test_batch.manta_vcfs | tojson }},
-  "GATKSVPipelineBatch.melt_vcfs_input": {{ test_batch.melt_vcfs | tojson }},
+  "GATKSVPipelineBatch.scramble_vcfs_input": {{ test_batch.scramble_vcfs | tojson }},
   "GATKSVPipelineBatch.wham_vcfs_input": {{ test_batch.wham_vcfs | tojson }},
 
-  "GATKSVPipelineBatch.melt_docker" : {{ dockers.melt_docker | tojson }},
   "GATKSVPipelineBatch.scramble_docker" : {{ dockers.scramble_docker | tojson }},
   "GATKSVPipelineBatch.manta_docker": {{ dockers.manta_docker | tojson }},
   "GATKSVPipelineBatch.wham_docker": {{ dockers.wham_docker | tojson }},
@@ -27,7 +26,6 @@
   "GATKSVPipelineBatch.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineBatch.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "GATKSVPipelineBatch.gatk_docker_pesr_override" : {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelineBatch.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "GATKSVPipelineBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
@@ -55,7 +53,6 @@
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
-  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
 

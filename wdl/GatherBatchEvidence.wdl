@@ -40,7 +40,6 @@ workflow GatherBatchEvidence {
     # PE/SR/BAF/bincov files
     # If neither SD_files nor ref_panel_SD_files is present, BAF_files must be supplied
     # If BAF_files is absent, SD_files and/or ref_panel_SD_files and sd_locs_vcf must be supplied
-    Array[File] counts
     File? ref_panel_bincov_matrix
     File? bincov_matrix
     File? bincov_matrix_index
@@ -49,6 +48,7 @@ workflow GatherBatchEvidence {
     Array[File]? ref_panel_PE_files
     Array[File] SR_files
     Array[File]? ref_panel_SR_files
+    Array[File] RD_files
     Array[File]? SD_files	# required unless BAF_files or ref_panel_SD_files is supplied
     Array[File]? ref_panel_SD_files	# required unless BAF_files or SD_files is supplied
     File? sd_locs_vcf	# must be same sd_locs_vcf that was presented to GatherSampleEvidence
@@ -142,7 +142,6 @@ workflow GatherBatchEvidence {
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
     String linux_docker
-    String condense_counts_docker
     String gatk_docker
     String? gcnv_gatk_docker
     String cnmops_docker
@@ -186,13 +185,11 @@ workflow GatherBatchEvidence {
      || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
     call mbm.MakeBincovMatrix as MakeBincovMatrix {
       input:
-        samples = samples,
-        count_files = counts,
+        rd_files = RD_files,
         bincov_matrix = ref_panel_bincov_matrix,
-        bincov_matrix_samples = ref_panel_samples,
+        reference_dict = ref_dict,
         batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_base_docker = sv_base_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_override = evidence_merging_bincov_runtime_attr
     }
   }
@@ -298,18 +295,18 @@ workflow GatherBatchEvidence {
   scatter (i in range(length(samples))) {
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
-        counts = counts[i],
-        sample = samples[i],
+        rd_file = RD_files[i],
+        ref_dict = ref_dict,
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,
-        condense_counts_docker = condense_counts_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }
   }
 
   call gcnv.CNVGermlineCaseWorkflow as gCNVCase {
     input:
-      counts = CondenseReadCounts.out,
+      counts = CondenseReadCounts.counts,
       count_entity_ids = samples,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,

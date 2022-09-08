@@ -6,11 +6,11 @@ import "CramToBam.wdl" as ctb
 import "GermlineCNVCohort.wdl" as gcnv_cohort
 import "Utils.wdl" as util
 
-# Trains gCNV model on a cohort with counts already collected
+# Trains gCNV model on a cohort with counts already collected as DepthEvidence
 workflow TrainGCNV {
   input {
     Array[String] samples
-    Array[File] count_files
+    Array[File] rd_files
 
     # Common parameters
     String cohort
@@ -88,7 +88,6 @@ workflow TrainGCNV {
     String sv_base_mini_docker
     String linux_docker
     String gatk_docker
-    String condense_counts_docker
     String? sv_pipeline_base_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
 
     # Runtime configuration overrides
@@ -130,18 +129,18 @@ workflow TrainGCNV {
     String sample_ids_ = samples[i]
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
-        counts = count_files[i],
-        sample = samples[i],
+        rd_file = rd_files[i],
+        ref_dict = reference_dict,
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,
-        condense_counts_docker = condense_counts_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_override=condense_counts_runtime_attr
     }
   }
 
   call cov.CountsToIntervals {
     input:
-      counts = CondenseReadCounts.out[0],
+      counts = CondenseReadCounts.counts[0],
       output_name = "condensed_intervals",
       linux_docker = linux_docker,
       runtime_attr_override = counts_to_intervals_runtime_attr
@@ -149,9 +148,9 @@ workflow TrainGCNV {
 
   call gcnv_cohort.CNVGermlineCohortWorkflow {
     input:
-      preprocessed_intervals = CountsToIntervals.out,
+      preprocessed_intervals = CountsToIntervals.interval_list,
       filter_intervals = filter_intervals,
-      counts = CondenseReadCounts.out,
+      counts = CondenseReadCounts.counts,
       count_entity_ids = sample_ids_,
       cohort_entity_id = cohort,
       contig_ploidy_priors = contig_ploidy_priors,

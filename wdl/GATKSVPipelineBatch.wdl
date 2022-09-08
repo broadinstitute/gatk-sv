@@ -26,10 +26,10 @@ workflow GATKSVPipelineBatch {
     Boolean requester_pays_crams = false
 
     # Optionally provide calls and evidence (override caller flags below)
-    Array[File]? counts_files_input
     Array[File]? pe_files_input
     Array[File]? sr_files_input
     Array[File]? sd_files_input
+    Array[File]? rd_files_input
     Array[File?]? baf_files_input
     Array[File]? manta_vcfs_input
     Array[File]? melt_vcfs_input
@@ -97,7 +97,6 @@ workflow GATKSVPipelineBatch {
     String gatk_docker
     String? gatk_docker_pesr_override
     String? gcnv_gatk_docker
-    String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String? manta_docker
@@ -115,15 +114,14 @@ workflow GATKSVPipelineBatch {
     String? NONE_STRING_
   }
 
-  Boolean collect_coverage_ = !defined(counts_files_input)
-  Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input) && defined(sd_files_input))
+  Boolean collect_pesr_ = !(defined(pe_files_input) && defined(sr_files_input) && defined(sd_files_input) && defined(rd_files_input))
 
   String? manta_docker_ = if (!defined(manta_vcfs_input) && use_manta) then manta_docker else NONE_STRING_
   String? melt_docker_ = if (!defined(melt_vcfs_input) && use_melt) then melt_docker else NONE_STRING_
   String? scramble_docker_ = if (!defined(scramble_vcfs_input) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(wham_vcfs_input) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean run_sampleevidence = collect_coverage_ || collect_pesr_ || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
+  Boolean run_sampleevidence = collect_pesr_ || defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_)
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidenceBatch {
@@ -131,7 +129,6 @@ workflow GATKSVPipelineBatch {
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
         requester_pays_crams=requester_pays_crams,
-        collect_coverage=collect_coverage_,
         collect_pesr=collect_pesr_,
         sample_ids=samples,
         primary_contigs_list=primary_contigs_list,
@@ -157,10 +154,10 @@ workflow GATKSVPipelineBatch {
     }
   }
 
-  Array[File] counts_files_ = if collect_coverage_ then select_all(select_first([GatherSampleEvidenceBatch.coverage_counts])) else select_first([counts_files_input])
-  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_disc])) else select_first([pe_files_input])
-  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_split])) else select_first([sr_files_input])
-  Array[File] sd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pesr_sd])) else select_first([sd_files_input])
+  Array[File] pe_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.pe_files])) else select_first([pe_files_input])
+  Array[File] sr_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.sr_files])) else select_first([sr_files_input])
+  Array[File] sd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.sd_files])) else select_first([sd_files_input])
+  Array[File] rd_files_ = if collect_pesr_ then select_all(select_first([GatherSampleEvidenceBatch.rd_files])) else select_first([rd_files_input])
 
   if (use_manta) {
     Array[File] manta_vcfs_ = if defined(manta_vcfs_input) then select_first([manta_vcfs_input]) else select_all(select_first([GatherSampleEvidenceBatch.manta_vcf]))
@@ -180,12 +177,13 @@ workflow GATKSVPipelineBatch {
       batch=name,
       samples=samples,
       genome_file=genome_file,
-      counts=counts_files_,
+      rd_files=rd_files_,
+      reference_dict=reference_dict,
       run_ploidy = false,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_base_docker=sv_base_docker
+      gatk_docker=gatk_docker
   }
 
   call phase1.GATKSVPipelinePhase1 {
@@ -203,12 +201,12 @@ workflow GATKSVPipelineBatch {
       contig_ploidy_model_tar=contig_ploidy_model_tar,
       gcnv_model_tars=gcnv_model_tars,
       BAF_files=baf_files_input,
-      counts=counts_files_,
       bincov_matrix=EvidenceQC.bincov_matrix,
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
       PE_files=pe_files_,
       SR_files=sr_files_,
       SD_files=sd_files_,
+      RD_files=rd_files_,
       manta_vcfs=manta_vcfs_,
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
@@ -231,8 +229,7 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
-      gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker
+      gcnv_gatk_docker=gcnv_gatk_docker
   }
 
   call genotypebatch.GenotypeBatch as GenotypeBatch {
@@ -352,11 +349,6 @@ workflow GATKSVPipelineBatch {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  scatter (i in range(length(samples))) {
-    File pe_files_index_ = pe_files_[i] + ".tbi"
-    File sr_files_index_ = sr_files_[i] + ".tbi"
-  }
-
   if (defined(manta_vcfs_)) {
     scatter (i in range(length(samples))) {
       File manta_vcfs_index_ = select_first([manta_vcfs_])[i] + ".tbi"
@@ -384,11 +376,8 @@ workflow GATKSVPipelineBatch {
     File final_sample_outlier_list = GATKSVPipelinePhase1.outlier_samples_excluded_file
 
     # Additional outputs for creating a reference panel
-    Array[File] counts = counts_files_
     Array[File] PE_files = pe_files_
-    Array[File] PE_files_index = pe_files_index_
     Array[File] SR_files = sr_files_
-    Array[File] SR_files_index = sr_files_index_
     Array[File]? manta_vcfs = manta_vcfs_
     Array[File]? manta_vcfs_index = manta_vcfs_index_
     Array[File]? melt_vcfs = melt_vcfs_

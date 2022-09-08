@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "CollectCoverage.wdl" as cov
 import "CramToBam.wdl" as ctb
 import "CramToBam.ReviseBase.wdl" as ctb_revise
 import "Manta.wdl" as manta
@@ -21,11 +20,11 @@ workflow GatherSampleEvidence {
     # Use only for crams in requester pays buckets
     Boolean requester_pays_crams = false
 
-    # Provide path to service account credentials JSON if required to access CRAM file. 
+    # Provide path to service account credentials JSON if required to access CRAM file.
     # Not supported for requester pays CRAMs, BAM access, or revising bases
     String? service_account_json
 
-    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
+    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input
     # May be more expensive - use only if necessary
     Boolean revise_base_cram_to_bam = false
     File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
@@ -34,7 +33,6 @@ workflow GatherSampleEvidence {
     String sample_id
 
     # Evidence collection flags
-    Boolean collect_coverage = true
     Boolean collect_pesr = true
 
     # If true, any intermediate BAM files will be deleted after the algorithms have completed.
@@ -48,19 +46,15 @@ workflow GatherSampleEvidence {
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     String? reference_version   # Either "38" or "19"
 
-    # Coverage collection inputs
-    File preprocessed_intervals
-    Float? mem_gb_for_collect_counts
-    Int? disk_space_gb_for_collect_counts
-
     # Manta inputs
-    File manta_region_bed
+    File? manta_region_bed
     File? manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
 
     # PESR inputs
     File sd_locs_vcf
+    File preprocessed_intervals
 
     # Melt inputs
     File? melt_standard_vcf_header # required if run_melt True
@@ -74,16 +68,16 @@ workflow GatherSampleEvidence {
     Int? pf_reads_improper_pairs
 
     # Wham inputs
-    File wham_include_list_bed_file
+    File? wham_include_list_bed_file
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
-    Boolean? run_module_metrics
+    Boolean run_module_metrics = true
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
-    File? baseline_manta_vcf # baseline files are optional for metrics workflow
-    File? baseline_wham_vcf
+    File? baseline_manta_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
+    File? baseline_wham_vcf
 
     # Docker
     String sv_pipeline_docker
@@ -113,11 +107,6 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_ReviseBaseInBam
     RuntimeAttr? runtime_attr_ConcatBam
     RuntimeAttr? runtime_attr_localize_cram
-
-    # Never assign these values! (workaround until None type is implemented)
-    Float? NONE_FLOAT_
-    Int? NONE_INT_
-    File? NONE_FILE_
   }
 
   Boolean run_manta = defined(manta_docker)
@@ -165,23 +154,6 @@ workflow GatherSampleEvidence {
   File bam_file_ = select_first([CramToBam.bam_file, CramToBamReviseBase.bam_file, bam_or_cram_file])
   File bam_index_ = select_first([CramToBam.bam_index, CramToBamReviseBase.bam_index, bam_or_cram_index_])
 
-  if (collect_coverage) {
-    call cov.CollectCounts {
-      input:
-        intervals = preprocessed_intervals,
-        bam = bam_file_,
-        bam_idx = bam_index_,
-        sample_id = sample_id,
-        ref_fasta = reference_fasta,
-        ref_fasta_fai = reference_index,
-        ref_fasta_dict = reference_dict,
-        gatk_docker = gatk_docker,
-        mem_gb = mem_gb_for_collect_counts,
-        disk_space_gb = disk_space_gb_for_collect_counts,
-        disabled_read_filters = ["MappingQualityReadFilter"]
-    }
-  }
-
   if (run_manta) {
     call manta.Manta {
       input:
@@ -190,7 +162,7 @@ workflow GatherSampleEvidence {
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
-        region_bed = manta_region_bed,
+        region_bed = select_first([manta_region_bed]),
         region_bed_index = manta_region_bed_index,
         jobs_per_cpu = manta_jobs_per_cpu,
         mem_gb_per_job = manta_mem_gb_per_job,
@@ -199,16 +171,14 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (collect_pesr) {
+  if (collect_pesr || run_melt || run_module_metrics) {
     call coev.CollectSVEvidence {
       input:
-        cram = bam_file_,
-        cram_index = bam_index_,
+        bam_or_cram_file = bam_file_,
         sample_id = sample_id,
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        reference_dict = reference_dict,
+        primary_contigs_list = primary_contigs_list,
         sd_locs_vcf = sd_locs_vcf,
+        preprocessed_intervals = preprocessed_intervals,
         gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
         runtime_attr_override = runtime_attr_pesr
     }
@@ -219,7 +189,7 @@ workflow GatherSampleEvidence {
       input:
         bam_or_cram_file = bam_file_,
         bam_or_cram_index = bam_index_,
-        counts_file = select_first([CollectCounts.counts]),
+        rd_file = select_first([CollectSVEvidence.rd_file]),
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
@@ -263,7 +233,7 @@ workflow GatherSampleEvidence {
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
-        include_bed_file = wham_include_list_bed_file,
+        include_bed_file = select_first([wham_include_list_bed_file]),
         chr_file = primary_contigs_list,
         samtools_cloud_docker = samtools_cloud_docker,
         wham_docker = select_first([wham_docker]),
@@ -275,7 +245,7 @@ workflow GatherSampleEvidence {
   # Avoid storage costs
   if (!is_bam_) {
     if (delete_intermediate_bam) {
-      Array[File] ctb_dummy = select_all([CollectCounts.counts, Manta.vcf, CollectSVEvidence.disc_out, CollectSVEvidence.split_out, CollectSVEvidence.sd_out, MELT.vcf, Scramble.vcf, Whamg.vcf])
+      Array[File] ctb_dummy = select_all([Manta.vcf, CollectSVEvidence.pe_file, MELT.vcf, Scramble.vcf, Whamg.vcf])
       call DeleteIntermediateFiles {
         input:
           intermediates = select_all([CramToBam.bam_file, MELT.filtered_bam]),
@@ -285,14 +255,12 @@ workflow GatherSampleEvidence {
     }
   }
 
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
-  if (run_module_metrics_) {
+  if (run_module_metrics) {
     call metrics.GatherSampleEvidenceMetrics {
       input:
         sample = sample_id,
-        coverage_counts = CollectCounts.counts,
-        pesr_disc = CollectSVEvidence.disc_out,
-        pesr_split = CollectSVEvidence.split_out,
+        pe_file = CollectSVEvidence.pe_file,
+        sr_file = CollectSVEvidence.sr_file,
         manta_vcf = Manta.vcf,
         melt_vcf = MELT.vcf,
         scramble_vcf = Scramble.vcf,
@@ -308,9 +276,6 @@ workflow GatherSampleEvidence {
   }
 
   output {
-    File? coverage_counts = CollectCounts.counts
-
-
     File? manta_vcf = Manta.vcf
     File? manta_index = Manta.index
 
@@ -323,17 +288,16 @@ workflow GatherSampleEvidence {
     File? scramble_vcf = Scramble.vcf
     File? scramble_index = Scramble.index
 
-    File? pesr_disc = CollectSVEvidence.disc_out
-    File? pesr_disc_index = CollectSVEvidence.disc_out_index
-    File? pesr_split = CollectSVEvidence.split_out
-    File? pesr_split_index = CollectSVEvidence.split_out_index
-    File? pesr_sd = CollectSVEvidence.sd_out
-    File? pesr_sd_index = CollectSVEvidence.sd_out_index
+    File? pe_file = CollectSVEvidence.pe_file
+    File? sr_file = CollectSVEvidence.sr_file
+    File? sd_file = CollectSVEvidence.sd_file
+    File? rd_file = CollectSVEvidence.rd_file
+    File? rd_metrics = CollectSVEvidence.rd_metrics
 
     File? wham_vcf = Whamg.vcf
     File? wham_index = Whamg.index
 
-    Array[File]? sample_metrics_files = GatherSampleEvidenceMetrics.sample_metrics_files
+    Array[File]? sample_metrics_files = select_all(flatten(select_all([GatherSampleEvidenceMetrics.sample_metrics_files, [CollectSVEvidence.rd_metrics]])))
   }
 }
 

@@ -45,10 +45,11 @@ workflow GATKSVPipelineSingleSample {
     File? case_melt_vcf
     File? case_scramble_vcf
     File? case_wham_vcf
-    File? case_counts_file
     File? case_pe_file
     File? case_sr_file
     File? case_sd_file
+    File? case_rd_file
+    File? case_rd_metrics
 
     # Global files
     File ref_ped_file
@@ -76,7 +77,6 @@ workflow GATKSVPipelineSingleSample {
     String gatk_docker
     String? gcnv_gatk_docker
     String? gatk_docker_pesr_override
-    String condense_counts_docker
     String genomes_in_the_cloud_docker
     String samtools_cloud_docker
     String cloud_sdk_docker
@@ -608,10 +608,9 @@ workflow GATKSVPipelineSingleSample {
   String? scramble_docker_ = if (!defined(case_scramble_vcf) && use_scramble) then scramble_docker else NONE_STRING_
   String? wham_docker_ = if (!defined(case_wham_vcf) && use_wham) then wham_docker else NONE_STRING_
 
-  Boolean collect_coverage = !defined(case_counts_file)
-  Boolean collect_pesr = !defined(case_pe_file) || !defined(case_sr_file) || !defined(case_sd_file)
+  Boolean collect_pesr = !defined(case_pe_file) || !defined(case_sr_file) || !defined(case_sd_file) || !defined(case_rd_file)
 
-  Boolean run_sampleevidence = defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_coverage || collect_pesr
+  Boolean run_sampleevidence = defined(manta_docker_) || defined(melt_docker_) || defined(scramble_docker_) || defined(wham_docker_) || collect_pesr
 
   if (run_sampleevidence) {
     call sampleevidence.GatherSampleEvidence as GatherSampleEvidence {
@@ -620,7 +619,6 @@ workflow GATKSVPipelineSingleSample {
         bam_or_cram_index=bam_or_cram_index,
         requester_pays_crams=requester_pays_cram,
         sample_id=sample_id,
-        collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
         primary_contigs_list=primary_contigs_list,
         reference_fasta=reference_fasta,
@@ -667,10 +665,11 @@ workflow GATKSVPipelineSingleSample {
     }
   }
 
-  File case_counts_file_ = select_first([case_counts_file, GatherSampleEvidence.coverage_counts])
-  File case_pe_file_ = select_first([case_pe_file, GatherSampleEvidence.pesr_disc])
-  File case_sr_file_ = select_first([case_sr_file, GatherSampleEvidence.pesr_split])
-  File case_sd_file_ = select_first([case_sd_file, GatherSampleEvidence.pesr_sd])
+  File case_pe_file_ = select_first([case_pe_file, GatherSampleEvidence.pe_file])
+  File case_sr_file_ = select_first([case_sr_file, GatherSampleEvidence.sr_file])
+  File case_sd_file_ = select_first([case_sd_file, GatherSampleEvidence.sd_file])
+  File case_rd_file_ = select_first([case_rd_file, GatherSampleEvidence.rd_file])
+  File case_rd_metrics_ = select_first([case_rd_metrics, GatherSampleEvidence.rd_metrics])
 
   call evidenceqc.EvidenceQC as EvidenceQC {
     input:
@@ -678,13 +677,14 @@ workflow GATKSVPipelineSingleSample {
       samples=[sample_id],
       run_vcf_qc=run_vcf_qc,
       genome_file=genome_file,
-      counts=[case_counts_file_],
+      rd_files=[case_rd_file_],
+      reference_dict=reference_dict,
       run_ploidy = false,
       wgd_scoring_mask=wgd_scoring_mask,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_base_docker=sv_base_docker,
+      gatk_docker=gatk_docker,
       runtime_attr_qc=runtime_attr_qc,
       runtime_attr_qc_outlier=runtime_attr_qc_outlier,
       wgd_build_runtime_attr=wgd_build_runtime_attr,
@@ -716,7 +716,6 @@ workflow GATKSVPipelineSingleSample {
       genome_file=genome_file,
       primary_contigs_fai=primary_contigs_fai,
       ref_dict=reference_dict,
-      counts=[case_counts_file_],
       ref_panel_bincov_matrix=ref_panel_bincov_matrix,
       bincov_matrix=EvidenceQC.bincov_matrix,
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
@@ -729,6 +728,7 @@ workflow GATKSVPipelineSingleSample {
       SD_files=[case_sd_file_],
       ref_panel_SD_files=read_lines(ref_pesr_sd_files_list),
       sd_locs_vcf=sd_locs_vcf,
+      RD_files=[case_rd_file_],
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = read_lines(gcnv_model_tars_list),
       gatk4_jar_override = gatk4_jar_override,
@@ -784,7 +784,6 @@ workflow GATKSVPipelineSingleSample {
       cnmops_docker=cnmops_docker,
       gatk_docker = gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker = condense_counts_docker,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
@@ -1366,7 +1365,6 @@ workflow GATKSVPipelineSingleSample {
       ref_samples = ref_samples,
       case_sample = sample_id,
       wgd_scores = EvidenceQC.WGD_scores,
-      sample_counts = case_counts_file_,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
       sv_pipeline_base_docker = sv_pipeline_base_docker
@@ -1443,7 +1441,7 @@ workflow GATKSVPipelineSingleSample {
       wgd_scores = EvidenceQC.WGD_scores,
       sample_pe = case_pe_file_,
       sample_sr = case_sr_file_,
-      sample_counts = case_counts_file_,
+      rd_metrics = case_rd_metrics_,
       cleaned_vcf = MakeCohortVcf.vcf,
       final_vcf = UpdateBreakendRepresentation.out,
       genotyped_pesr_vcf = ConvertCNVsWithoutDepthSupportToBNDs.out_vcf,

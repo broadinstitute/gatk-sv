@@ -5,9 +5,8 @@ import "TestUtils.wdl" as tu
 workflow GatherSampleEvidenceMetrics {
   input {
     String sample
-    File? coverage_counts
-    File? pesr_disc
-    File? pesr_split
+    File? pe_file
+    File? sr_file
     File? manta_vcf
     File? melt_vcf
     File? scramble_vcf
@@ -70,6 +69,7 @@ workflow GatherSampleEvidenceMetrics {
         runtime_attr_override = runtime_attr_manta_metrics
     }
   }
+
   if (defined(melt_vcf)) {
     call tu.StandardizeVCF as Melt_Std {
       input:
@@ -105,6 +105,7 @@ workflow GatherSampleEvidenceMetrics {
         runtime_attr_override = runtime_attr_melt_metrics
     }
   }
+
   if (defined(scramble_vcf) && defined(baseline_scramble_vcf)) {
     call tu.VCFMetrics as Scramble_Metrics {
       input:
@@ -118,6 +119,7 @@ workflow GatherSampleEvidenceMetrics {
         runtime_attr_override = runtime_attr_scramble_metrics
     }
   }
+
   if (defined(wham_vcf)) {
     call tu.StandardizeVCF as Wham_Std {
       input:
@@ -153,35 +155,28 @@ workflow GatherSampleEvidenceMetrics {
         runtime_attr_override = runtime_attr_wham_metrics
     }
   }
-  if (defined(pesr_split)) {
+
+  if (defined(sr_file)) {
     call tu.SRMetrics {
       input:
-        sr_file = select_first([pesr_split]),
+        sr_file = select_first([sr_file]),
         samples = [sample],
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_sr_metrics
     }
   }
-  if (defined(pesr_disc)) {
+
+  if (defined(pe_file)) {
     call tu.PEMetrics {
       input:
-        pe_file = select_first([pesr_disc]),
+        pe_file = select_first([pe_file]),
         samples = [sample],
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_pe_metrics
     }
   }
-  if (defined(coverage_counts)) {
-    call tu.CountsMetrics {
-      input:
-        counts_file = select_first([coverage_counts]),
-        sample_id = sample,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_counts_metrics
-    }
-  }
 
   output {
-    Array[File] sample_metrics_files = select_all([Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
+    Array[File] sample_metrics_files = select_all([Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out])
   }
 }

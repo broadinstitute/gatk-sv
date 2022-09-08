@@ -1,5 +1,5 @@
 ## Author: Ryan L. Collins <rlcollins@g.harvard.edu>
-## 
+##
 ## This WDL pipeline runs MELT for mobile element insertion/deletion discovery
 ## Note: runs patched v2.0.5, obtained directly from the MELT authors
 ##
@@ -20,7 +20,7 @@ workflow MELT {
   input {
     File bam_or_cram_file
     File? bam_or_cram_index
-    File counts_file
+    File rd_file
     String sample_id
     String reference_fasta
     String? reference_index
@@ -47,7 +47,7 @@ workflow MELT {
     RuntimeAttr? runtime_attr_cram_to_bam
     RuntimeAttr? runtime_attr_melt
   }
-  
+
   parameter_meta {
       bam_or_cram_file: ".bam or .cram file to search for SVs. bams are preferable, crams will be converted to bams."
       bam_or_cram_index: "[optional] associated index file. If omitted, the WDL will look for an index file by appending .bai/.crai to the .bam/.cram file"
@@ -147,7 +147,7 @@ workflow MELT {
       sample = sample_id,
       bam_file = raw_bam_file,
       bam_index = raw_bam_index,
-      counts_file = counts_file,
+      rd_file = rd_file,
       gatk_docker = gatk_docker
   }
 
@@ -195,7 +195,7 @@ task FilterHighCoverageIntervals {
     String sample
     File bam_file
     File? bam_index
-    File counts_file
+    File rd_file
     Int? count_threshold
     Int? padding
     String gatk_docker
@@ -216,11 +216,10 @@ task FilterHighCoverageIntervals {
   Float mem_size_gb = num_cpu * 4.0
   Int java_mem_mb = round(mem_size_gb * 0.8 * 1000)
   Float bam_size = size(bam_file, "GiB")
-  Float counts_file_size = size(counts_file, "GiB")
   Float disk_overhead = 20.0
   # occasionally the output bam is very large. Put in 2x safety factor since disk is cheap
   Float bam_size_safety_factor = 2.0
-  Int vm_disk_size = ceil(bam_size_safety_factor * bam_size + counts_file_size + disk_overhead)
+  Int vm_disk_size = ceil(bam_size_safety_factor * bam_size + disk_overhead)
 
   Int interval_padding = select_first([padding, 100])
   Int threshold = select_first([count_threshold, 1000])
@@ -243,7 +242,9 @@ task FilterHighCoverageIntervals {
 
     set -euo pipefail
 
-    zgrep -v -E "^@|^CONTIG" ~{counts_file} | awk -F "\t" -v OFS="\t" '{if ($4 > ~{threshold}) {print $1,$2,$3}}' > highCountIntervals.bed
+    ln -s /dev/stdout tmp.rd.txt
+    gatk PrintSVEvidence -F ~{rd_file} -O tmp.rd.txt | sed 1d |\
+        awk 'BEGIN(FS=OFS="\t"}{if ($4 > ~{threshold}) print $1,$2+1,$3}' > highCountIntervals.bed
 
     gatk --java-options -Xmx~{java_mem_mb}m PrintReads \
       -XL highCountIntervals.bed \
@@ -303,8 +304,8 @@ task GetMultipleMetrics {
   String metrics_table_filename=metrics_base + "_table.tsv"
 
   RuntimeAttr default_attr = object {
-    cpu_cores: num_cpu, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: num_cpu,
+    mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -325,7 +326,7 @@ task GetMultipleMetrics {
   command <<<
 
     set -Eeuo pipefail
-    
+
     gatk --java-options -Xmx~{java_mem_mb}m CollectMultipleMetrics \
       -I "~{bam_or_cram_file}" \
       -O "~{metrics_base}" \
@@ -436,8 +437,8 @@ task GetWgsMetrics {
   Int vm_disk_size = ceil(bam_or_cram_size + ref_size + disk_overhead)
 
   RuntimeAttr default_attr = object {
-    cpu_cores: num_cpu, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: num_cpu,
+    mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 0,
@@ -457,7 +458,7 @@ task GetWgsMetrics {
   command <<<
 
     set -Eeuo pipefail
-    
+
     # calculate coverage
     java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
       CollectWgsMetrics \
@@ -570,7 +571,7 @@ task RunMELT {
   Float disk_per_improper_pairs = "3.901e-7"
   Float disk_per_bam_size = 0.3088
   Float disk__offset = 32.57
-  Float disk_overhead = 
+  Float disk_overhead =
     disk__offset + disk_per_improper_pairs * pf_reads_improper_pairs + disk_per_bam_size * raw_bam_size
 
   Float bam_size = size(bam_file, "GiB")
@@ -582,8 +583,8 @@ task RunMELT {
 
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: 1,
+    mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: preemptible_tries,
@@ -619,7 +620,7 @@ task RunMELT {
                 f[substr($1, 1, length($1)-1)] = $2
             } END {
                 printf "%.2fG", f[MEM_FIELD] * ~{java_mem_fraction} / 1048576
-            }'     
+            }'
     }
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
@@ -634,7 +635,7 @@ task RunMELT {
       "$MELT_ROOT" \
       "$CROMWELL_ROOT" \
       ~{ref_version}
-    
+
     # combine different mobile element VCFs into a single sample VCF
     # then sort into position order and compress with bgzip
     cat SVA.final_comp.vcf | grep "^#" > "~{sample_id}.header.txt"
@@ -644,7 +645,7 @@ task RunMELT {
     cat ~{sample_id}.header.txt ~{sample_id}.sva.vcf \
       ~{sample_id}.line1.vcf ~{sample_id}.alu.vcf \
       | vcf-sort -c | bgzip -c > ~{sample_id}.melt.vcf.gz
-    
+
     # fix three known problems with MELT output vcf:
     # 1) header sometimes doesn't have all chromosomes, and misses
     #    some INF annotations;
@@ -668,10 +669,10 @@ task RunMELT {
     mv ~{sample_id}.melt.vcf.gz temp.vcf.gz
     bcftools reheader -s <(echo "~{sample_id}") temp.vcf.gz > ~{sample_id}.melt.vcf.gz
     rm temp.vcf.gz
-    
+
     # index vcf
     tabix -p vcf "~{sample_id}.melt.vcf.gz"
-    
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

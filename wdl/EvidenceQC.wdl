@@ -25,7 +25,8 @@ workflow EvidenceQC {
     File genome_file
 
     # Coverage files
-    Array[File] counts
+    Array[File] rd_files
+    File reference_dict
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
@@ -38,9 +39,9 @@ workflow EvidenceQC {
 
     # Runtime parameters
     String sv_base_mini_docker
-    String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
+    String gatk_docker
 
     Int? disk_overhead_bincov_gb
 
@@ -64,12 +65,11 @@ workflow EvidenceQC {
 
   call mbm.MakeBincovMatrix as MakeBincovMatrix {
     input:
-      samples = samples,
-      count_files = counts,
+      rd_files = rd_files,
+      reference_dict = reference_dict,
       batch = batch,
       disk_overhead_gb = disk_overhead_bincov_gb,
-      sv_base_mini_docker = sv_base_mini_docker,
-      sv_base_docker = sv_base_docker,
+      gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_bincov_attr
   }
 

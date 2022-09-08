@@ -11,8 +11,7 @@ workflow SingleSampleMetrics {
     File? wgd_scores
     File? sample_pe
     File? sample_sr
-    File? sample_counts
-
+    File? rd_metrics
     File? cleaned_vcf
     File? final_vcf
     File? genotyped_pesr_vcf
@@ -31,7 +30,6 @@ workflow SingleSampleMetrics {
 
     RuntimeAttr? runtime_attr_sr_metrics
     RuntimeAttr? runtime_attr_pe_metrics
-    RuntimeAttr? runtime_attr_counts_metrics
     RuntimeAttr? runtime_attr_vcf_metrics
     RuntimeAttr? runtime_attr_pesr_metrics
     RuntimeAttr? runtime_attr_depth_metrics
@@ -59,16 +57,6 @@ workflow SingleSampleMetrics {
         samples = [case_sample],
         sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_override = runtime_attr_pe_metrics
-    }
-  }
-
-  if (defined(sample_counts)) {
-    call tu.CountsMetrics {
-      input:
-        counts_file = select_first([sample_counts]),
-        sample_id = case_sample,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_counts_metrics
     }
   }
 
@@ -154,7 +142,7 @@ workflow SingleSampleMetrics {
   call tu.CatMetrics {
     input:
       prefix = "single_sample." + name,
-      metric_files = select_all([SingleSampleWGDMetrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out, Genotyped_PESR_VCF_Metrics.out, Genotyped_Depth_VCF_Metrics.out, Cleaned_VCF_Metrics.out, Final_VCF_Metrics.out, NonGenotypedUniqueDepthCallsVCFMetrics.out]),
+      metric_files = select_all([SingleSampleWGDMetrics.out, SRMetrics.out, PEMetrics.out, rd_metrics, Genotyped_PESR_VCF_Metrics.out, Genotyped_Depth_VCF_Metrics.out, Cleaned_VCF_Metrics.out, Final_VCF_Metrics.out, NonGenotypedUniqueDepthCallsVCFMetrics.out]),
       search_string = case_sample,
       replace_string = "sample",
       linux_docker = linux_docker,

@@ -27,7 +27,6 @@
   "TrainGCNV.gcnv_log_emission_sampling_median_rel_error": "0.001",
 
   "TrainGCNV.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
-  "TrainGCNV.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   "TrainGCNV.gatk_docker": {{ dockers.gatk_docker | tojson }},
   "TrainGCNV.linux_docker" : {{ dockers.linux_docker | tojson }},
 
@@ -58,6 +57,6 @@
   "TrainGCNV.ploidy_sample_psi_scale" : 0.001,
 
   "TrainGCNV.cohort": {{ test_batch.name | tojson }},
-  "TrainGCNV.count_files": {{ test_batch.counts | tojson }},
+  "TrainGCNV.rd_files": {{ test_batch.RD_files | tojson }},
   "TrainGCNV.samples": {{ test_batch.samples | tojson }}
 }

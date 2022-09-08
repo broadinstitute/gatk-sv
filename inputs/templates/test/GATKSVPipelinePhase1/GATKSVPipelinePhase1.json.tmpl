@@ -8,7 +8,6 @@
   "GATKSVPipelinePhase1.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelinePhase1.cnmops_docker": {{ dockers.cnmops_docker | tojson }},
   "GATKSVPipelinePhase1.gatk_docker": {{ dockers.gatk_docker | tojson }},
-  "GATKSVPipelinePhase1.condense_counts_docker" : {{ dockers.condense_counts_docker | tojson }},
   
   "GATKSVPipelinePhase1.cnmops_allo_file": {{ reference_resources.allosome_file | tojson }},
   "GATKSVPipelinePhase1.cnmops_exclude_list": {{ reference_resources.cnmops_exclude_list | tojson }},
@@ -83,7 +82,7 @@
   "GATKSVPipelinePhase1.PE_files": {{ test_batch.PE_files | tojson }},
   "GATKSVPipelinePhase1.SR_files": {{ test_batch.SR_files | tojson }},
   "GATKSVPipelinePhase1.SD_files": {{ test_batch.SD_files | tojson }},
-  "GATKSVPipelinePhase1.counts": {{ test_batch.counts | tojson }},
+  "GATKSVPipelinePhase1.RD_files": {{ test_batch.RD_files | tojson }},
   "GATKSVPipelinePhase1.manta_vcfs": {{ test_batch.manta_vcfs | tojson }},
   "GATKSVPipelinePhase1.melt_vcfs": {{ test_batch.melt_vcfs | tojson }},
   "GATKSVPipelinePhase1.wham_vcfs": {{ test_batch.wham_vcfs | tojson }}

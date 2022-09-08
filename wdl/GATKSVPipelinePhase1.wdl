@@ -34,7 +34,6 @@ workflow GATKSVPipelinePhase1 {
     String cnmops_docker
     String gatk_docker
     String? gcnv_gatk_docker
-    String condense_counts_docker
 
     ############################################################
     ## GatherBatchEvidence
@@ -47,7 +46,7 @@ workflow GATKSVPipelinePhase1 {
     Array[File] SR_files
     Array[File]? SD_files
     File? sd_locs_vcf
-    Array[File] counts
+    Array[File] RD_files
     File? bincov_matrix
     File? bincov_matrix_index
 
@@ -251,10 +250,10 @@ workflow GATKSVPipelinePhase1 {
       SR_files = SR_files,
       SD_files = SD_files,
       sd_locs_vcf = sd_locs_vcf,
+      RD_files = RD_files,
       ref_dict = reference_dict,
       cytoband = cytoband,
       mei_bed = mei_bed,
-      counts = counts,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
@@ -310,7 +309,6 @@ workflow GATKSVPipelinePhase1 {
       cnmops_docker=cnmops_docker,
       gatk_docker=gatk_docker,
       gcnv_gatk_docker=gcnv_gatk_docker,
-      condense_counts_docker=condense_counts_docker,
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
       cnmops_sample10_runtime_attr=cnmops_sample10_runtime_attr,
       cnmops_sample3_runtime_attr=cnmops_sample3_runtime_attr,

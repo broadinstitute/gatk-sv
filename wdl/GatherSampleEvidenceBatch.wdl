@@ -18,7 +18,6 @@ workflow GatherSampleEvidenceBatch {
     File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
 
     # Caller flags
-    Boolean collect_coverage = true
     Boolean collect_pesr = true
 
     # If true, any intermediate BAM files will be deleted after the algorithms have completed.
@@ -38,7 +37,7 @@ workflow GatherSampleEvidenceBatch {
     Int? disk_space_gb_for_collect_counts
 
     # Manta inputs
-    File manta_region_bed
+    File? manta_region_bed
     File? manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
@@ -58,7 +57,7 @@ workflow GatherSampleEvidenceBatch {
     Array[Int]? pf_reads_improper_pairs
 
     # Wham inputs
-    File wham_include_list_bed_file
+    File? wham_include_list_bed_file
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
@@ -86,7 +85,6 @@ workflow GatherSampleEvidenceBatch {
 
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_merge_vcfs
-    RuntimeAttr? runtime_attr_baf_sample
     RuntimeAttr? runtime_attr_cram_to_bam
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
@@ -101,7 +99,6 @@ workflow GatherSampleEvidenceBatch {
     RuntimeAttr? runtime_attr_cat_metrics
 
     File? NONE_FILE_
-    String? NONE_STRING_
     Float? NONE_FLOAT_
     Int? NONE_INT_
   }
@@ -113,26 +110,23 @@ workflow GatherSampleEvidenceBatch {
       input:
         bam_or_cram_file = bam_or_cram_files[i],
         bam_or_cram_index = if defined(bam_or_cram_indexes) then select_first([bam_or_cram_indexes])[i] else NONE_FILE_,
-        sample_id = sample_ids[i],
         requester_pays_crams = requester_pays_crams,
         revise_base_cram_to_bam = revise_base_cram_to_bam,
-        collect_coverage = collect_coverage,
+        primary_contigs_fai = primary_contigs_fai,
+        sample_id = sample_ids[i],
         collect_pesr = collect_pesr,
         delete_intermediate_bam = delete_intermediate_bam,
         primary_contigs_list = primary_contigs_list,
-        primary_contigs_fai = primary_contigs_fai,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
         reference_version = reference_version,
-        preprocessed_intervals = preprocessed_intervals,
-        mem_gb_for_collect_counts = mem_gb_for_collect_counts,
-        disk_space_gb_for_collect_counts = disk_space_gb_for_collect_counts,
         manta_region_bed = manta_region_bed,
         manta_region_bed_index = manta_region_bed_index,
         manta_jobs_per_cpu = manta_jobs_per_cpu,
         manta_mem_gb_per_job = manta_mem_gb_per_job,
         sd_locs_vcf = sd_locs_vcf,
+        preprocessed_intervals = preprocessed_intervals,
         melt_standard_vcf_header = melt_standard_vcf_header,
         melt_metrics_intervals = melt_metrics_intervals,
         insert_size = if defined(insert_size) then select_first([insert_size])[i] else NONE_FLOAT_,
@@ -187,8 +181,6 @@ workflow GatherSampleEvidenceBatch {
   }
 
   output {
-    Array[File?] coverage_counts = GatherSampleEvidence.coverage_counts
-
     Array[File?] manta_vcf = GatherSampleEvidence.manta_vcf
     Array[File?] manta_index = GatherSampleEvidence.manta_index
 
@@ -201,12 +193,10 @@ workflow GatherSampleEvidenceBatch {
     Array[File?] scramble_vcf = GatherSampleEvidence.scramble_vcf
     Array[File?] scramble_index = GatherSampleEvidence.scramble_index
 
-    Array[File?] pesr_disc = GatherSampleEvidence.pesr_disc
-    Array[File?] pesr_disc_index = GatherSampleEvidence.pesr_disc_index
-    Array[File?] pesr_split = GatherSampleEvidence.pesr_split
-    Array[File?] pesr_split_index = GatherSampleEvidence.pesr_split_index
-    Array[File?] pesr_sd = GatherSampleEvidence.pesr_sd
-    Array[File?] pesr_sd_index = GatherSampleEvidence.pesr_sd_index
+    Array[File?] pe_files = GatherSampleEvidence.pe_file
+    Array[File?] sr_files = GatherSampleEvidence.sr_file
+    Array[File?] sd_files = GatherSampleEvidence.sd_file
+    Array[File?] rd_files = GatherSampleEvidence.rd_file
 
     Array[File?] wham_vcf = GatherSampleEvidence.wham_vcf
     Array[File?] wham_index = GatherSampleEvidence.wham_index
