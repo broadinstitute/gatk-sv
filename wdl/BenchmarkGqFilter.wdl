@@ -162,25 +162,25 @@ task BenchmarkFilter {
         set -euo pipefail
 
         # transform scores_data_sets into input format expected by benchmark_variant_filter
-        python - <<'____EoF'
-import json
-with open("~{write_json(scores_data_sets)}", 'r') as f_in:
-  input_json = json.load(f_in)
-output_json={
-  "~{data_label}" : {
-    "vcf" : "~{variant_properties}",
-    "scores_source": {
-      scores_source["label"] : {
-        key: value for key, value in scores_source.items()
-        if key != "label"
-      }
-      for scores_source in input_json
-    }
-  }
-}
-with open("~{scores_data_json}", 'w') as f_out:
-  json.dump(output_json, f_out, indent=2)
-____EoF
+        python <<CODE
+        import json
+        with open("~{write_json(scores_data_sets)}", 'r') as f_in:
+          input_json = json.load(f_in)
+        output_json={
+          "~{data_label}" : {
+            "vcf" : "~{variant_properties}",
+            "scores_source": {
+              scores_source["label"] : {
+                key: value for key, value in scores_source.items()
+                if key != "label"
+              }
+              for scores_source in input_json
+            }
+          }
+        }
+        with open("~{scores_data_json}", 'w') as f_out:
+          json.dump(output_json, f_out, indent=2)
+        CODE
 
         # just for debugging:
         echo "~{scores_data_json}:"
