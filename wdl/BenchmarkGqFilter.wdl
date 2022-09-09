@@ -147,7 +147,6 @@ task BenchmarkFilter {
 
     String scores_data_json = "scores_data.json"
     String benchmark_figure_filename = "quality-benchmark.pdf"
-    String args_str = if length(benchmark_args) > 0 then "~{sep=' ' benchmark_args}" else ""
 
     runtime {
         docker: sv_utils_docker
@@ -192,7 +191,7 @@ task BenchmarkFilter {
             --ped-file ~{ped_file} \
             --scores-data-json ~{scores_data_json} \
             --figure-save-file ~{benchmark_figure_filename} \
-            ~{args_str}
+            ~{sep=' ' benchmark_args}
     >>>
 
     output {
