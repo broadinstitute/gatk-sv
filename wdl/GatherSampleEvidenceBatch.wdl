@@ -37,10 +37,6 @@ workflow GatherSampleEvidenceBatch {
     Float? mem_gb_for_collect_counts
     Int? disk_space_gb_for_collect_counts
 
-    # Delly inputs
-    File? delly_exclude_intervals_file  # Required if run_delly True
-    Array[String]? delly_sv_types
-
     # Manta inputs
     File manta_region_bed
     File? manta_region_bed_index
@@ -70,8 +66,7 @@ workflow GatherSampleEvidenceBatch {
     String? batch  # required if run_module_metrics = true
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
     String? linux_docker  # required if run_module_metrics = true
-    File? baseline_delly_vcf  # baseline files are optional for metrics workflow
-    File? baseline_manta_vcf
+    File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
@@ -80,7 +75,6 @@ workflow GatherSampleEvidenceBatch {
     String sv_pipeline_docker
     String sv_base_mini_docker
     String samtools_cloud_docker
-    String? delly_docker
     String? manta_docker
     String? melt_docker
     String? scramble_docker
@@ -94,8 +88,6 @@ workflow GatherSampleEvidenceBatch {
     RuntimeAttr? runtime_attr_merge_vcfs
     RuntimeAttr? runtime_attr_baf_sample
     RuntimeAttr? runtime_attr_cram_to_bam
-    RuntimeAttr? runtime_attr_delly
-    RuntimeAttr? runtime_attr_delly_gather
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
@@ -136,8 +128,6 @@ workflow GatherSampleEvidenceBatch {
         preprocessed_intervals = preprocessed_intervals,
         mem_gb_for_collect_counts = mem_gb_for_collect_counts,
         disk_space_gb_for_collect_counts = disk_space_gb_for_collect_counts,
-        delly_exclude_intervals_file = delly_exclude_intervals_file,
-        delly_sv_types = delly_sv_types,
         manta_region_bed = manta_region_bed,
         manta_region_bed_index = manta_region_bed_index,
         manta_jobs_per_cpu = manta_jobs_per_cpu,
@@ -155,7 +145,6 @@ workflow GatherSampleEvidenceBatch {
         wham_include_list_bed_file = wham_include_list_bed_file,
         run_module_metrics = run_module_metrics_,
         sv_pipeline_base_docker = sv_pipeline_base_docker,
-        baseline_delly_vcf = baseline_delly_vcf,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_melt_vcf = baseline_melt_vcf,
         baseline_scramble_vcf = baseline_scramble_vcf,
@@ -163,7 +152,6 @@ workflow GatherSampleEvidenceBatch {
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,
-        delly_docker = delly_docker,
         manta_docker = manta_docker,
         melt_docker = melt_docker,
         scramble_docker = scramble_docker,
@@ -174,8 +162,6 @@ workflow GatherSampleEvidenceBatch {
         cloud_sdk_docker = cloud_sdk_docker,
         runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,
         runtime_attr_cram_to_bam = runtime_attr_cram_to_bam,
-        runtime_attr_delly = runtime_attr_delly,
-        runtime_attr_delly_gather = runtime_attr_delly_gather,
         runtime_attr_manta = runtime_attr_manta,
         runtime_attr_melt_coverage = runtime_attr_melt_coverage,
         runtime_attr_melt_metrics = runtime_attr_melt_metrics,
@@ -202,9 +188,6 @@ workflow GatherSampleEvidenceBatch {
 
   output {
     Array[File?] coverage_counts = GatherSampleEvidence.coverage_counts
-
-    Array[File?] delly_vcf = GatherSampleEvidence.delly_vcf
-    Array[File?] delly_index = GatherSampleEvidence.delly_index
 
     Array[File?] manta_vcf = GatherSampleEvidence.manta_vcf
     Array[File?] manta_index = GatherSampleEvidence.manta_index
