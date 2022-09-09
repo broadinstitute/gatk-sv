@@ -18,6 +18,8 @@ workflow CalcAF {
     File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
     String? contig                #Restrict to a single contig, if desired
     String? drop_empty_records
+
+    RuntimeAttr? runtime_attr_override_combine_sharded_vcfs
   }
 
 
@@ -53,7 +55,8 @@ workflow CalcAF {
       vcfs=ComputeShardAFs.shard_wAFs,
       sv_pipeline_docker=sv_pipeline_docker,
       prefix=prefix,
-      drop_empty_records=drop_empty_records
+      drop_empty_records=drop_empty_records,
+      runtime_attr_override=runtime_attr_override_combine_sharded_vcfs
   }
 
   # Final output
@@ -142,7 +145,7 @@ task CombineShardedVcfs {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2,
-    disk_gb: 10 + ceil(size(vcfs, "GB")),
+    disk_gb: 20 + (10 * ceil(size(vcfs, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1

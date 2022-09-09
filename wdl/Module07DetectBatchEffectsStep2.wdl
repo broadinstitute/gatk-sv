@@ -2,88 +2,59 @@
 ## EXPERIMENTAL WORKFLOW
 ##########################
 
+# This experimental workflow is the second in a two-part process to identify and label
+# variants discovered by GATK-SV that exhibit evidence of allele frequency distortions
+# specific to an individual batch (or subset of batches) of samples
+
+
+### TODO: modify inputs to accept data pre-computed from Step 1
+
 
 version 1.0
 
 import "prune_add_af.wdl" as calcAF
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "Module07DetectBatchEffects.wdl" as DetectBatchEffects
 
 workflow DetectBatchEffectsGenomeWide {
   input {
-    Array[File] vcf_list
-    Array[File] vcf_idx_list
-    Array[File] vcf_preMinGQ_list
-    Array[File] vcf_preMinGQ_idx_list
-    Array[File] contiglists
-    File batches_list
-    File pcrminus_batches_list
-    File sample_pop_assignments
-    File sample_batch_assignments
-    File excludesamples_list #empty file if need be
-    File famfile
-    File? par_bed
-    Int variants_per_shard
-    String prefix
+    # Array[File] vcf_list
+    # Array[File] vcf_idx_list
+    # Array[File] vcf_preMinGQ_list
+    # Array[File] vcf_preMinGQ_idx_list
+    # Array[File] contiglists
+    # File batches_list
+    # File pcrminus_batches_list
+    # File sample_pop_assignments
+    # File sample_batch_assignments
+    # File excludesamples_list #empty file if need be
+    # File famfile
+    # File? par_bed
+    # Int variants_per_shard
+    # String prefix
 
-    # Optional inputs if PCR+ samples are in callset  
-    File? pcrplus_batches_list
-    File? pcrplus_samples_list
+    # # Optional inputs if PCR+ samples are in callset  
+    # File? pcrplus_batches_list
+    # File? pcrplus_samples_list
 
-    String sv_base_mini_docker
-    String sv_benchmark_docker
-    String sv_pipeline_docker
-    String sv_pipeline_updates_docker
-    String sv_pipeline_base_docker
+    # String sv_base_mini_docker
+    # String sv_benchmark_docker
+    # String sv_pipeline_docker
+    # String sv_pipeline_updates_docker
+    # String sv_pipeline_base_docker
 
-    RuntimeAttr? runtime_attr_override_concat_stat
-    RuntimeAttr? runtime_attr_merge_labeled_vcfs
-    RuntimeAttr? runtime_attr_override_annotate_batch_effect
-    RuntimeAttr? runtime_attr_override_integrate_batch_effect_pvalues
-    RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRMINUS
-    RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRPLUS
-    RuntimeAttr? runtime_attr_override_plus_minus_pv_integration
-    RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRMINUS
-    RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRPLUS
+    # RuntimeAttr? runtime_attr_override_get_batch_samples_list
+    # RuntimeAttr? runtime_attr_override_concat_stat
+    # RuntimeAttr? runtime_attr_merge_labeled_vcfs
+    # RuntimeAttr? runtime_attr_override_annotate_batch_effect
+    # RuntimeAttr? runtime_attr_override_integrate_batch_effect_pvalues
+    # RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRMINUS
+    # RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRPLUS
+    # RuntimeAttr? runtime_attr_override_plus_minus_pv_integration
+    # RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRMINUS
+    # RuntimeAttr? runtime_attr_override_one_vs_all_integration_PCRPLUS
    }
 
-
-  scatter (i in range(length(vcf_list))) {
-    call DetectBatchEffects.DetectBatchEffects as DetectBatchEffects{
-      input:
-        vcf = vcf_list[i],
-        vcf_idx = vcf_idx_list[i],
-        vcf_preMinGQ = vcf_preMinGQ_list[i],
-        vcf_preMinGQ_idx = vcf_preMinGQ_idx_list[i],
-        batches_list = batches_list,
-        pcrminus_batches_list = pcrminus_batches_list,
-        sample_pop_assignments = sample_pop_assignments,
-        sample_batch_assignments = sample_batch_assignments,
-        excludesamples_list = excludesamples_list,
-        famfile = famfile,
-        contiglist = contiglists[i], 
-        par_bed = par_bed,
-        variants_per_shard = variants_per_shard,
-        prefix = prefix,
-        pcrplus_batches_list = pcrplus_batches_list,
-        pcrplus_samples_list = pcrplus_samples_list,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
-        sv_benchmark_docker = sv_benchmark_docker,
-        sv_pipeline_updates_docker = sv_pipeline_updates_docker,
-
-        runtime_attr_merge_labeled_vcfs = runtime_attr_merge_labeled_vcfs,
-        runtime_attr_override_pairwise_pv_integration_PCRMINUS = runtime_attr_override_pairwise_pv_integration_PCRMINUS,
-        runtime_attr_override_pairwise_pv_integration_PCRPLUS = runtime_attr_override_pairwise_pv_integration_PCRPLUS,
-        runtime_attr_override_plus_minus_pv_integration = runtime_attr_override_plus_minus_pv_integration,
-        runtime_attr_override_one_vs_all_integration_PCRMINUS = runtime_attr_override_one_vs_all_integration_PCRMINUS,
-        runtime_attr_override_one_vs_all_integration_PCRPLUS = runtime_attr_override_one_vs_all_integration_PCRPLUS
-    }
-  }
-
-
-   # Integrate the Batch Effect statistics and annotate vcf accordingly
+# Integrate the Batch Effect statistics and annotate vcf accordingly
   call MiniTasks.ConcatStats as concat_plus_vs_minus_pv {
        input:
          shard_bed_files = DetectBatchEffects.plus_vs_minus_pv,
@@ -160,11 +131,10 @@ workflow DetectBatchEffectsGenomeWide {
   }
 
   output{
-    Array[File] annotated_vcf = AnnotateBatchEffect.anno_vcf
-    Array[File] annotated_vcf_ids = AnnotateBatchEffect.anno_vcf_idx
+    Array[File] annotated_vcfs = AnnotateBatchEffect.anno_vcf
+    Array[File] annotated_vcf_idxs = AnnotateBatchEffect.anno_vcf_idx
   }
 }
-
 
 
 # Integrate batch effect statistics from different comparisons
@@ -277,6 +247,3 @@ task AnnotateBatchEffect{
   }
 }
 
-
-
- 

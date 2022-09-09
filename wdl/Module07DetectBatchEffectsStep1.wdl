@@ -2,14 +2,17 @@
 ## EXPERIMENTAL WORKFLOW
 ##########################
 
-## Base script:   https://portal.firecloud.org/#workspaces/gnomad-v3-sv/1KGP_2504/method-configs/Talkowski-SV/check_batch_effects_CMC_copy
+# This experimental workflow is the first in a two-part process to identify and label
+# variants discovered by GATK-SV that exhibit evidence of allele frequency distortions
+# specific to an individual batch (or subset of batches) of samples
+
 
 version 1.0
 
 import "prune_add_af.wdl" as calcAF
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow DetectBatchEffects {
+workflow DetectBatchEffectsStep1 {
   input{
     File vcf
     File vcf_idx
@@ -36,6 +39,8 @@ workflow DetectBatchEffects {
     String sv_pipeline_updates_docker
     String sv_pipeline_base_docker
 
+    RuntimeAttr? runtime_attr_override_combine_af_vcfs
+    RuntimeAttr? runtime_attr_override_get_batch_samples_list
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
     RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRMINUS
     RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRPLUS
@@ -57,7 +62,8 @@ workflow DetectBatchEffects {
         batch=batch,
         sample_batch_assignments=sample_batch_assignments,
         probands_list=excludesamples_list,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_override_get_batch_samples_list
     }
     # Prune VCFs to samples 
     call calcAF.prune_and_add_vafs as getAFs {
@@ -73,7 +79,8 @@ workflow DetectBatchEffects {
         drop_empty_records="FALSE",
         par_bed=par_bed,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+        runtime_attr_override_combine_sharded_vcfs=runtime_attr_override_combine_af_vcfs
     }
     call calcAF.prune_and_add_vafs as getAFs_preMinGQ {
       input:
@@ -183,9 +190,6 @@ workflow DetectBatchEffects {
         }
     }
   }
-  # TODO: Combine results from tests 1-4 into single tsv with P-values per test
-  # Need to add task here
-
 
   # Test 5: Perform one-vs-all comparison of AFs per batch to find batch-specific sites
   call PrepOneVsAllPairsList as PrepMinusPairs {
@@ -225,7 +229,7 @@ workflow DetectBatchEffects {
 
   # Integrate pariwise comparison results from all shards:
 
-  call IntegratePairwiseComparisonPvaluesMINUS as IntegratePairwiseMinus{
+  call IntegratePairwiseComparisonPvaluesMINUS as IntegratePairwiseMinus {
     input:
       pairwise_comp_results = MinusPropTest.results,
       prefix = "~{prefix}.pairwise_pv_integration_PCRMINUS",
@@ -233,7 +237,7 @@ workflow DetectBatchEffects {
       runtime_attr_override = runtime_attr_override_pairwise_pv_integration_PCRMINUS
   }
 
-  call IntegratePairwiseComparisonPvaluesPLUS as IntegratePairwisePlus{
+  call IntegratePairwiseComparisonPvaluesPLUS as IntegratePairwisePlus {
     input:
       pairwise_comp_results = PlusPropTest.results,
       prefix = "~{prefix}.pairwise_pv_integration_PCRPLUS",
@@ -241,7 +245,7 @@ workflow DetectBatchEffects {
       runtime_attr_override = runtime_attr_override_pairwise_pv_integration_PCRPLUS
   }
 
-  call IntegratePlusMinusFreqsPvalues{
+  call IntegratePlusMinusFreqsPvalues {
     input:
       plus_minus_freq_results = ComparePlusMinusFreqs.results,
       prefix = "~{prefix}.plus_minus_pv_integration",
@@ -249,7 +253,7 @@ workflow DetectBatchEffects {
       runtime_attr_override = runtime_attr_override_plus_minus_pv_integration
   }
 
-  call IntegrateOneVsAllPvaluesMINUS{
+  call IntegrateOneVsAllPvaluesMINUS {
     input:
       one_vs_all_comp_results = OneVsAllMinus.results,
       prefix = "~{prefix}.one_vs_all_integration_PCRMINUS",
@@ -257,7 +261,7 @@ workflow DetectBatchEffects {
       runtime_attr_override = runtime_attr_override_one_vs_all_integration_PCRMINUS
   }
 
-  call IntegrateOneVsAllPvaluesPLUS{
+  call IntegrateOneVsAllPvaluesPLUS {
     input:
       one_vs_all_comp_results = OneVsAllPlus.results,
       prefix = "~{prefix}.one_vs_all_integration_PCRPLUS",
@@ -291,7 +295,7 @@ task GetBatchSamplesList {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 4,
-    disk_gb: 50,
+    disk_gb: ceil(3 * size(vcf, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -523,7 +527,7 @@ task CompareFreqsPrePostMinGQ {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 8,
-    disk_gb: 30,
+    disk_gb: 10 + (2 * ceil(size([AF_preMinGQ_table, AF_postMinGQ_table], "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -1347,9 +1351,3 @@ task ApplyBatchEffectLabels {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
-
-
-
-
-

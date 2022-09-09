@@ -27,6 +27,8 @@ workflow prune_and_add_vafs {
     Int sv_per_shard
     File contiglist
     String? drop_empty_records  
+
+    RuntimeAttr? runtime_attr_override_combine_sharded_vcfs
     
   }
   Array[Array[String]] contigs=read_tsv(contiglist)
@@ -55,7 +57,8 @@ workflow prune_and_add_vafs {
         par_bed=par_bed,
         drop_empty_records=drop_empty_records,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+        runtime_attr_override_combine_sharded_vcfs=runtime_attr_override_combine_sharded_vcfs
     }
   }
 
@@ -87,8 +90,8 @@ task PruneVcf {
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 250,
+    mem_gb: 1.5,
+    disk_gb: (5 * ceil(size(vcf, "GB"))) + 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
