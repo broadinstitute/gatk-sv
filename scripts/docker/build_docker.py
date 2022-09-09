@@ -104,7 +104,6 @@ class ProjectBuilder:
     #   each dependency is either None, or a mapping from each dependency name to the docker ARG it is passed via
     #   currently each image has zero or one dependencies, but multiple dependencies are allowed
     dependencies = {
-        "delly": ImageDependencies("dockerfiles/delly/*"),
         "manta": ImageDependencies("dockerfiles/manta/*"),
         "melt": ImageDependencies("dockerfiles/melt/*"),
         "wham": ImageDependencies("dockerfiles/wham/*"),
