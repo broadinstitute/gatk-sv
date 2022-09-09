@@ -59,12 +59,12 @@ task GetNeededMemGB {
     }
 
     command <<<
-    python - <<'____EoF'
+    python - <<'CODE'
 properties=["~{sep='", "' wanted_properties}"]
 entries_cost_map={"svtype": 0.0, "svlen": 0.0, "gt": 1.4e-8, "gq": 5e-8, "sl": 5e-8}
 mem_gb = ~{num_entries} * sum(entries_cost_map.get(property, 5e-8) for property in properties)
 print(mem_gb)
-____EoF
+CODE
     >>>
 
     output {
@@ -89,8 +89,8 @@ task ReadAndPickleProperties {
     #   strip .vcf.gz from end (if present)
     #   add wanted properties (separated by underscores)
     #   and add ".pickle.bz2"
-    String pickled_properties_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
-                                   + "_~{sep='_' wanted_properties}.pickle.bz2"
+    #   (sep doesn't work the way it's supposed to outside of command block, so move part of this logic to command)
+    String vcf_basename = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "")
 
     runtime {
         docker: sv_utils_docker
@@ -103,18 +103,16 @@ task ReadAndPickleProperties {
 
     command <<<
 
-    python - <<'____EoF'
-from sv_utils import genomics_io
+    python - <<'CODE'
+from sv_utils import benchmark_variant_filter
 
-variants = genomics_io.vcf_to_pandas(
-  "~{vcf}", wanted_properties=["~{sep='", "' wanted_properties}"], drop_trivial_multi_index=True
-)
-
-variants.to_pickle("~{pickled_properties_name}")
-____EoF
+benchmark_variant_filter.load_benchmark_properties_from_vcf_properties(
+  "~{vcf}", wanted_properties=["~{sep='", "' wanted_properties}"]
+).to_pickle("~{vcf_basename}_~{sep='_' wanted_properties}.pickle")
+CODE
     >>>
 
     output {
-        File pickled_properties = pickled_properties_name
+        File pickled_properties = select_first(glob("*.pickle"))
     }
 }

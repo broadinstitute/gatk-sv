@@ -7,6 +7,9 @@ workflow TrainGqRecalibrator {
     input {
         File train_vcf
         File train_vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
         Array[String]? vapor_sample_ids
@@ -33,8 +36,21 @@ workflow TrainGqRecalibrator {
         }
     }
 
-    File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
-    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
+
+    File train_vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, train_vcf])
+    File train_vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index,
+                                          StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
     call GetTruthOverlap.GetTruthOverlap {
         input:
@@ -90,7 +106,6 @@ task StandardizeVcfForGatk {
 
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
     String index_file_name = fixed_vcf_name + ".tbi"
-    String args_str = if length(standardize_vcf_args) > 0 then "~{sep=' ' standardize_vcf_args}" else ""
 
     Int disk_gb = 100 + round(2 * size(vcf, "GiB"))
     Int mem_gb_overhead = 2
@@ -109,7 +124,7 @@ task StandardizeVcfForGatk {
     command <<<
         set -euo pipefail
 
-        sv-utils fix-vcf ~{vcf} ~{fixed_vcf_name} --index-output-vcf true ~{args_str}
+        sv-utils fix-vcf ~{vcf} ~{fixed_vcf_name} --index-output-vcf true ~{sep=' ' standardize_vcf_args}
     >>>
 
     output {
@@ -131,7 +146,7 @@ task TrainGqRecalibratorTask {
         String gatk_docker
         Int? num_entries
         Float mem_scale_vcf_size = 25.2
-        Float mem_scale_num_entries = "3.6e-7"
+        Float mem_scale_num_entries = "3.7e-7"
         Float mem_gb_overhead = 1.5
     }
 
@@ -140,11 +155,11 @@ task TrainGqRecalibratorTask {
     Float mem_gb_java = if defined(num_entries)
         then 3.0 + mem_scale_num_entries * select_first([num_entries])
         else 3.0 + mem_scale_vcf_size * size(train_vcf, "GiB")
-    Float mem_gb = if mem_gb_java + mem_gb_overhead < 624.0 then mem_gb_java + mem_gb_overhead else 624.0
+    Float max_mem_gb = 624  # current max n1-highmem, which is what cromwell is willing to allocate
+    Float mem_gb = if mem_gb_java + mem_gb_overhead < max_mem_gb then mem_gb_java + mem_gb_overhead else max_mem_gb
     String model_file_name = if defined(gq_recalibrator_model_file)
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"
-    String args_str = if length(train_args) > 0 then "~{sep=' ' train_args}" else ""
 
     runtime {
         docker: gatk_docker
@@ -160,7 +175,9 @@ task TrainGqRecalibratorTask {
         ln -s ~{train_vcf} .
         ln -s ~{train_vcf_index} .
         if ~{defined(gq_recalibrator_model_file)}; then
-            cp ~{gq_recalibrator_model_file} .
+            # if defined, copy exiting model file to working directory
+            GQ_RECALIBRATOR_MODEL_FILE="~{if defined(gq_recalibrator_model_file) then select_first([gq_recalibrator_model_file]) else ""}"
+            cp $GQ_RECALIBRATOR_MODEL_FILE ./~{model_file_name}
         fi
 
         mem_kb_java_actual=$(grep -m1 MemTotal /proc/meminfo \
@@ -176,7 +193,7 @@ task TrainGqRecalibratorTask {
           --genome-track ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{model_file_name} \
           --n-threads-xgboost $NUM_PHYSICAL_CPUS \
-          ~{args_str}
+          ~{sep=' ' train_args}
     >>>
 
     output {

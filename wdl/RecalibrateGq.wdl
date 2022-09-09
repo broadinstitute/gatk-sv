@@ -1,16 +1,21 @@
 version 1.0
 
 import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
+import "Utils.wdl" as Utils
 
 workflow RecalibrateGq {
     input {
         File vcf
         File vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         Array[File] genome_tracks
         File gq_recalibrator_model_file
         Boolean standardize_vcf = true
         Array[String] standardize_vcf_args = []
         Array[String] recalibrate_gq_args = []
+        String samtools_cloud_docker
         String gatk_docker
         String sv_utils_docker
     }
@@ -24,8 +29,21 @@ workflow RecalibrateGq {
         }
     }
 
-    File vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, vcf])
-    File vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf_index, vcf_index])
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
+
+    File vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, vcf])
+    File vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index, StandardizeVcfForGatk.fixed_vcf_index,
+                                    vcf_index])
 
     call RecalibrateGqTask {
         input:
@@ -56,8 +74,6 @@ task RecalibrateGqTask {
         Float mem_gb_overhead = 1.5
     }
 
-    String args_str = if length(recalibrate_gq_args) > 0 then "~{sep=' ' recalibrate_gq_args}" else ""
-
     Int disk_gb = round(1000 + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB"))
     Float mem_gb = mem_gb_java + mem_gb_overhead
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
@@ -86,7 +102,10 @@ task RecalibrateGqTask {
           ~{if length(genome_tracks) > 0 then "--genome-track" else ""} ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{gq_recalibrator_model_file} \
           --output ~{filtered_vcf_name} \
-          ~{args_str}
+          ~{sep=' ' recalibrate_gq_args}
+
+        # gatk indices still have problems, overwrite with bcftools index
+        bcftools index --force --tbi --threads 2 ~{filtered_vcf_name}
     >>>
 
     output {
