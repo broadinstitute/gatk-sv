@@ -47,7 +47,7 @@ The following are the main pipeline outputs. For more information on the outputs
 
 The following workflows are included in this workspace, to be executed in this order:
 
-1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+1. `01-GatherSampleEvidence`: Per-sample SV evidence collection, including calls from a configurable set of algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 2. `02-EvidenceQC`: Dosage bias scoring and ploidy estimation, run on preliminary batches
 3. `03-TrainGCNV`: Per-batch training of a gCNV model for use in `04-GatherBatchEvidence`
 4. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation

@@ -6,14 +6,12 @@ import "Utils.wdl" as util
 workflow FilterBatchQc {
   input {
     File? manta_vcf_noOutliers
-    File? delly_vcf_noOutliers
     File? melt_vcf_noOutliers
     File? wham_vcf_noOutliers
     File? depth_vcf_noOutliers
     File? merged_pesr_vcf
 
     File? manta_vcf_noOutliers_index
-    File? delly_vcf_noOutliers_index
     File? melt_vcf_noOutliers_index
     File? wham_vcf_noOutliers_index
     File? depth_vcf_noOutliers_index
@@ -70,9 +68,9 @@ workflow FilterBatchQc {
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
 
-  Array[String] algorithms = ["manta", "delly", "melt", "wham", "depth", "pesr"]
-  Array[File?] vcfs_array = [manta_vcf_noOutliers, delly_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
-  Array[File?] vcf_indexes_array = [manta_vcf_noOutliers_index, delly_vcf_noOutliers_index, melt_vcf_noOutliers_index, wham_vcf_noOutliers_index, depth_vcf_noOutliers_index, merged_pesr_vcf_index]
+  Array[String] algorithms = ["manta", "melt", "wham", "depth", "pesr"]
+  Array[File?] vcfs_array = [manta_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
+  Array[File?] vcf_indexes_array = [manta_vcf_noOutliers_index, melt_vcf_noOutliers_index, wham_vcf_noOutliers_index, depth_vcf_noOutliers_index, merged_pesr_vcf_index]
   Int num_algorithms = length(algorithms)
 
   call util.GetSampleIdsFromVcf {
@@ -139,11 +137,10 @@ workflow FilterBatchQc {
 
   output {
     File? filtered_manta_vcf_qc = VcfQc.sv_vcf_qc_output[0]
-    File? filtered_delly_vcf_qc = VcfQc.sv_vcf_qc_output[1]
-    File? filtered_melt_vcf_qc = VcfQc.sv_vcf_qc_output[2]
-    File? filtered_wham_vcf_qc = VcfQc.sv_vcf_qc_output[3]
-    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[4]
-    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[5]
+    File? filtered_melt_vcf_qc = VcfQc.sv_vcf_qc_output[1]
+    File? filtered_wham_vcf_qc = VcfQc.sv_vcf_qc_output[2]
+    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[3]
+    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[4]
   }
 
 }

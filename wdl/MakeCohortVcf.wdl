@@ -403,6 +403,7 @@ workflow MakeCohortVcf {
       baseline_cleaned_vcf = baseline_cleaned_vcf,
       primary_contigs_list=primary_contigs_list,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
+      run_module_metrics=run_module_metrics,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,

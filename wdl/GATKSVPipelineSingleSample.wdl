@@ -1177,6 +1177,9 @@ workflow GATKSVPipelineSingleSample {
 
       run_module_metrics = run_makecohortvcf_metrics,
 
+      primary_contigs_list=primary_contigs_list,
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,

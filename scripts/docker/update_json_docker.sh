@@ -50,7 +50,7 @@ if [[ ! -d "$BASE_DIR" ]]; then
 fi
 
 if [[ ${DOCKER_NAME} == "ALL" ]]; then
-  DOCKER_NAME_ARR=("cnmops" "delly" "manta" "samtools-cloud" "sv-base" "sv-base-mini" "sv-pipeline" "sv-pipeline-base" \
+  DOCKER_NAME_ARR=("cnmops" "manta" "samtools-cloud" "sv-base" "sv-base-mini" "sv-pipeline" "sv-pipeline-base" \
     "sv-pipeline-qc" "sv-pipeline-rdtest" "wham")
   echo "Warning: MELT dockers will not be updated."
 else
