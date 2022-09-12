@@ -402,6 +402,7 @@ workflow MakeCohortVcf {
       baseline_complex_genotype_vcf = baseline_complex_genotype_vcf,
       baseline_cleaned_vcf = baseline_cleaned_vcf,
       primary_contigs_list=primary_contigs_list,
+      run_module_metrics=run_module_metrics,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
       run_module_metrics=run_module_metrics,
       linux_docker=linux_docker,
