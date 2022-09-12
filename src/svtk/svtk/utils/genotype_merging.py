@@ -2,9 +2,11 @@
 # -*- coding: utf-8 -*-
 #
 
-"""
+from functools import reduce
+import math
 
-"""
+# Caches genotype carrier status for _is_non_ref()
+_carrier_map = {}
 
 
 def choose_best_genotype(sample, records):
@@ -21,41 +23,22 @@ def choose_best_genotype(sample, records):
     best_record : pysam.VariantRecord
     """
 
-    best_GT = (0, 0)
-    best_GQ = 0
-    best_record = None
-
-    if not any(['GQ' in record.samples[sample].keys() for record in records]):
-        for record in records:
-            if record.samples[sample]['GT'] != (0, 0):
-                return record
-        return records[0]
-
-    # Pick best non-reference genotype
-    # for record in records:
-    #    if record.samples[sample]['GQ'] >= best_GQ:
-        # if record is non-reference , use it
-        # or if it's a higher GQ for a reference call, use it
-    #        if record.samples[sample]['GT'] != (0, 0) or best_GT == (0, 0):
-    #            best_GT = record.samples[sample]['GT']
-    #            best_GQ = record.samples[sample]['GQ']
-    #            best_record = record
-
-    for record in records:
-        # if found non-ref GT, replace GT and GQ together
-        if record.samples[sample]['GT'] != (0, 0) and best_GT == (0, 0):
-            best_GT = record.samples[sample]['GT']
-            best_GQ = record.samples[sample]['GQ']
-            best_record = record
-        elif record.samples[sample]['GT'] == (0, 0) and best_GT != (0, 0):
-            continue
-        # if new GT  = best_GT, while found a higher GQ, replace GQ
+    # Returns true if the GT is called and non-ref
+    # TODO: does not handle multi-allelic CNVs
+    def _is_non_ref(format_fields):
+        gt = format_fields.get('GT', None)
+        if gt in _carrier_map:
+            return _carrier_map[gt]
         else:
-            if record.samples[sample]['GQ'] >= best_GQ:
-                best_GQ = record.samples[sample]['GQ']
-                best_record = record
+            is_carrier = gt is not None and any(a is not None and a > 0 for a in gt)
+            _carrier_map[gt] = is_carrier
+            return is_carrier
 
-    return best_record
+    # find record with max GQ, prioritizing non-ref GTs if any exist
+    def _record_key(record):
+        format_field = record.samples[sample]
+        return _is_non_ref(format_field), format_field.get('GQ', -math.inf)
+    return max(records, key=_record_key)
 
 
 def check_multiallelic(records):
@@ -118,6 +101,12 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
         If any record is multiallelic, make all genotypes multiallelic
     """
 
+    def _binary_or(x, y):
+        return x | y
+
+    def _str_to_tuple(x):
+        return (x,) if type(x) is str else x
+
     if preserve_multiallelic:
         is_multiallelic = check_multiallelic(records)
     else:
@@ -143,23 +132,24 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                         else:
                             new_record.samples[sample][key] = GT
                     else:
-                        GT = tuple([min(x, 1) for x in GT])
+                        GT = tuple([x if x is None else min(x, 1) for x in GT])
                         new_record.samples[sample][key] = GT
                 elif key == 'EV':
-                    if 'EV' in new_record.samples[sample].keys():
-                        curr_ev = new_record.samples[sample][key]
+                    ev_values = [r.samples[sample][key] for r in records]
+                    ev_values = [_str_to_tuple(v) for v in ev_values]
+                    ev_types = list(set(type(v) for v in ev_values if v is not None))
+                    if len(ev_types) == 0:
+                        new_record.samples[sample][key] = None
+                    elif len(ev_types) > 1:
+                        raise ValueError(f"Found multiple EV types: {str(ev_types)}")
                     else:
-                        curr_ev = 0
-
-                    if curr_ev is None:
-                        curr_ev = 0
-
-                    for record in records:
-                        if 'EV' in record.samples[sample].keys():
-                            ev = record.samples[sample][key]
-                            if ev is None:
-                                ev = 0
-                            curr_ev = curr_ev | ev
-                    new_record.samples[sample][key] = curr_ev
+                        ev_type = ev_types[0]
+                        if ev_type is tuple:
+                            new_record.samples[sample][key] = ",".join(
+                                sorted(tuple(set(t for ev in ev_values for t in ev))))
+                        elif ev_type is int:
+                            new_record.samples[sample][key] = reduce(_binary_or, ev_values)
+                        else:
+                            raise ValueError(f"Unsupported EV type: {str(ev_type)}")
                 else:
                     new_record.samples[sample][key] = best_record.samples[sample][key]

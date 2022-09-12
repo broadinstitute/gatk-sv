@@ -80,8 +80,8 @@ task CondenseReadCounts {
   input {
     File counts
     String sample
-    Int? num_bins
-    Int? expected_bin_size
+    Int? max_interval_size
+    Int? min_interval_size
     File? gatk4_jar_override
 
     # Runtime parameters
@@ -91,7 +91,7 @@ task CondenseReadCounts {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 1.0,
+    mem_gb: 3.0,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -99,25 +99,24 @@ task CondenseReadCounts {
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  Float machine_mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int command_mem_mb = floor(machine_mem_gb*1000) - 500
-
   command <<<
-    set -e
+    set -euo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
-    gunzip -c ~{counts} > counts.tsv
-    gatk --java-options "-Xmx~{command_mem_mb}m" CondenseReadCounts \
-      -I counts.tsv \
-      -O condensed_counts.~{sample}.tsv \
-      --factor ~{select_first([num_bins, 20])} \
-      --out-bin-length ~{select_first([expected_bin_size, 2000])}
-    sed -ri "s/^@RG\tID:GATKCopyNumber\tSM:.+/@RG\tID:GATKCopyNumber\tSM:~{sample}/g" condensed_counts.~{sample}.tsv
-    bgzip condensed_counts.~{sample}.tsv
+
+    zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
+    zcat ~{counts} | grep -v '^@' | sed -e 1d | \
+        awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz 
+    tabix -0 -s1 -b2 -e3 in.rd.txt.gz 
+    gatk --java-options -Xmx2g CondenseDepthEvidence -F in.rd.txt.gz -O out.rd.txt.gz --sequence-dictionary ref.dict \
+        --max-interval-size ~{default=2000 max_interval_size} --min-interval-size ~{default=101 min_interval_size}
+    cat ref.dict <(zcat out.rd.txt.gz | \
+        awk 'BEGIN{FS=OFS="\t";print "@RG\tID:GATKCopyNumber\tSM:~{sample}\nCONTIG\tSTART\tEND\tCOUNT"}{if(NR>1)print $1,$2+1,$3,$4}') | \
+        bgzip > condensed_counts.~{sample}.tsv.gz
   >>>
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: machine_mem_gb + " GiB"
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: condense_counts_docker

@@ -1224,10 +1224,10 @@ masterInhWrapper <- function(fam.dat.list,fam.type, gq=T,max.GQ=99){
 ###RSCRIPT FUNCTIONALITY
 ########################
 ###Load libraries as needed
-require(optparse)
-require(beeswarm)
-require(vioplot)
-require(zoo)
+require(optparse, quietly=T)
+require(beeswarm, quietly=T)
+require(vioplot, quietly=T)
+require(zoo, quietly=T)
 
 ###List of command-line options
 option_list <- list(
@@ -1262,22 +1262,13 @@ svtypes.file <- opts$svtypes
 multiallelics <- opts$multiallelics
 maxgq <- opts$maxgq
 
-# #Dev parameters
-# dat.in <- "~/scratch/xfer/gnomAD_v2_SV_MASTER_resolved_VCF.VCF_sites.stats.bed.gz"
-# famfile.in <- "~/scratch/xfer/cleaned.fam"
-# perSampDir <- "~/scratch/xfer/gnomAD_v2_SV_MASTER_resolved_VCF_perSample_VIDs_merged/"
-# OUTDIR <- "~/scratch/famQC_plots_test/"
-# # OUTDIR <- "~/scratch/VCF_plots_test/"
-# svtypes.file <- "~/Desktop/Collins/Talkowski/code/sv-pipeline/ref/vcf_qc_refs/SV_colors.txt"
-# multiallelics <- F
-
 ###Prepares I/O files
 #Read & clean SV stats data
 dat <- read.table(dat.in,comment.char="",sep="\t",header=T,check.names=F)
 colnames(dat)[1] <- "chr"
 #Restrict data to autosomes only, and exclude multiallelics (if optioned)
 allosome.exclude.idx <- which(!(dat$chr %in% c(1:22,paste("chr",1:22,sep=""))))
-multi.exclude.idx <- which(dat$other_gts>0)
+multi.exclude.idx <- which(dat$other_gts>0 | dat$svtype %in% c("CNV", "MCNV"))
 cat(paste("NOTE: only autosomes considered during transmission analyses. Excluded ",
           prettyNum(length(allosome.exclude.idx),big.mark=","),"/",
           prettyNum(nrow(dat),big.mark=",")," (",
@@ -1295,10 +1286,11 @@ if(multiallelics==F){
             prettyNum(nrow(dat),big.mark=",")," (",
             round(100*length(all.exclude.idx)/nrow(dat),1),
             "%) of all variants due to autosomal and/or multiallelic filters.\n",sep=""))
-  
-  dat <- dat[-all.exclude.idx,]
 }else{
-  dat <- dat[-allosome.exclude.idx,]
+  all.exclude.idx <- allosome.exclude.idx
+}
+if(length(all.exclude.idx) > 0){
+  dat <- dat[-all.exclude.idx,]
 }
 cat(paste("NOTE: retained ",
           prettyNum(nrow(dat),big.mark=","),
@@ -1337,14 +1329,10 @@ if(!dir.exists(paste(OUTDIR,"/supporting_plots/sv_inheritance_plots/",sep=""))){
 
 ###Performs trio analyses, if any trios exist
 if(nrow(trios)>0){
-  #Downsample to 100 trios if necessary
-  if(nrow(trios)>100){
-    trios <- trios[sample(1:nrow(trios),100,replace=F),]
-  }
   #Read data
   trio.dat <- apply(trios[,2:4],1,function(IDs){
     IDs <- as.character(IDs)
-    return(getFamDat(dat=dat,proband=IDs[1],father=IDs[2],mother=IDs[3],biallelic=!multiallelics,max.GQ=maxgq))
+    return(getFamDat(dat=dat,proband=IDs[1], father=IDs[2], mother=IDs[3], biallelic=!multiallelics, max.GQ=maxgq))
   })
   names(trio.dat) <- trios[,1]
   

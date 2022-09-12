@@ -1,0 +1,114 @@
+{
+  "CrossValidateGqRecalibrator.train_vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz",
+  "CrossValidateGqRecalibrator.train_vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/hgdp_and_hgsv.cleaned_fixed_annotated.vcf.gz.tbi",
+  "CrossValidateGqRecalibrator.standardize_vcf": false,
+  "CrossValidateGqRecalibrator.pre_computed_pickled_variant_properties": null,
+  "CrossValidateGqRecalibrator.pre_computed_pickled_original_scores": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned_fixed_gq.pickle.bz2",
+  "CrossValidateGqRecalibrator.train_vcf_label": "HGDP and HGSV",
+  "CrossValidateGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "CrossValidateGqRecalibrator.truth_vcfs": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
+  ],
+  "CrossValidateGqRecalibrator.truth_vcf_indices": [
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz.tbi",
+    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz.tbi"
+  ],
+  "CrossValidateGqRecalibrator.vapor_sample_ids": [
+  ],
+  "CrossValidateGqRecalibrator.vapor_files": [
+  ],
+  "CrossValidateGqRecalibrator.genome_tracks": [
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
+  ],
+  "CrossValidateGqRecalibrator.standardize_vcf_args": [
+    "--gq-scale 0.1"
+  ],
+  "CrossValidateGqRecalibrator.train_args": [
+    "--target-precision 0.95",
+    "--max-inheritance-af 0.1",
+    "--large-af-weight-penalty 0.05",
+    "--max-depth 12",
+    "--subsample 0.8",
+    "--colsample-by-tree 0.8",
+    "--min-child-weight 1000",
+    "--truth-weight 0.75",
+    "--train-homref true",
+    "--keep-homvar false",
+    "--keep-multiallelic true",
+    "--validation-proportion 0.2"
+  ],
+  "CrossValidateGqRecalibrator.get_truth_overlap_args": [
+    "--expand-point-svs-bp 1000",
+    "--point-sv-scale-factor 1.0",
+    "--expand-non-point-svs-bp 250",
+    "--non-point-sv-scale-factor 0.5",
+    "--min-overlap-cutoff-precision 0.8",
+    "--inheritance-af-rareness 0.05",
+    "--use-copy-number false"
+  ],
+  "CrossValidateGqRecalibrator.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-multiallelic true"
+  ],
+  "CrossValidateGqRecalibrator.comparison_scores": [
+    {
+      "label": "Xuefang",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
+      "property": "gq",
+      "passing_score": 0,
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2_gq.pickle.bz2"
+    },
+    {
+      "label": "previous recalibrated",
+      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz",
+      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated.vcf.gz.tbi",
+      "property": "sl",
+      "passing_score": 1,
+      "pickled_scores_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-03-29_down-scaled-gq/hgdp_and_hgsv.cleaned_fixed_gq_recalibrated_sl.pickle"
+    }
+  ],
+  "CrossValidateGqRecalibrator.pre_computed_cross_validation_vcfs" : {
+      "train_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_4.vcf.gz"
+      ],
+      "train_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/train_4.vcf.gz.tbi"
+      ],
+      "test_vcfs": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_0.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_1.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_2.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_3.vcf.gz",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_4.vcf.gz"
+      ],
+      "test_vcf_indices": [
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_0.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_1.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_2.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_3.vcf.gz.tbi",
+        "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-08-18_more-annotations/test_4.vcf.gz.tbi"
+      ]
+  },
+  "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
+  "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "CrossValidateGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+}

@@ -9,7 +9,12 @@
   "MakeCohortVcf.empty_file" : "${workspace.empty_file}",
   "MakeCohortVcf.ref_dict": "${workspace.reference_dict}",
 
-  "MakeCohortVcf.thousand_genomes_benchmark_calls": {{ reference_resources.thousand_genomes_benchmark_calls | tojson }},
+  "MakeCohortVcf.site_level_comparison_datasets": [
+    {{ reference_resources.ccdg_abel_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.gnomad_v2_collins_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.hgsv_byrska_bishop_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.thousand_genomes_site_level_benchmarking_dataset | tojson }}
+  ],
 
   "MakeCohortVcf.min_sr_background_fail_batches": 0.5,
   "MakeCohortVcf.max_shards_per_chrom_clean_vcf_step1": 200,

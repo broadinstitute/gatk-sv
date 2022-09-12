@@ -47,6 +47,9 @@ workflow GatherSampleEvidenceBatch {
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
 
+    # PESR inputs
+    File sd_locs_vcf
+
     # Melt inputs
     File? melt_standard_vcf_header # required if use_melt True
     File? melt_metrics_intervals
@@ -139,6 +142,7 @@ workflow GatherSampleEvidenceBatch {
         manta_region_bed_index = manta_region_bed_index,
         manta_jobs_per_cpu = manta_jobs_per_cpu,
         manta_mem_gb_per_job = manta_mem_gb_per_job,
+        sd_locs_vcf = sd_locs_vcf,
         melt_standard_vcf_header = melt_standard_vcf_header,
         melt_metrics_intervals = melt_metrics_intervals,
         insert_size = if defined(insert_size) then select_first([insert_size])[i] else NONE_FLOAT_,
@@ -218,6 +222,8 @@ workflow GatherSampleEvidenceBatch {
     Array[File?] pesr_disc_index = GatherSampleEvidence.pesr_disc_index
     Array[File?] pesr_split = GatherSampleEvidence.pesr_split
     Array[File?] pesr_split_index = GatherSampleEvidence.pesr_split_index
+    Array[File?] pesr_sd = GatherSampleEvidence.pesr_sd
+    Array[File?] pesr_sd_index = GatherSampleEvidence.pesr_sd_index
 
     Array[File?] wham_vcf = GatherSampleEvidence.wham_vcf
     Array[File?] wham_index = GatherSampleEvidence.wham_index

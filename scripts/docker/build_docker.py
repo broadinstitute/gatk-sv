@@ -132,7 +132,13 @@ class ProjectBuilder:
         "sv-pipeline": ImageDependencies(
             ("dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*", "src/svqc/*", "src/svtest/*",
              "src/svtk/*", "src/WGD/*"),
-            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"})
+            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+        "sv-utils-env": ImageDependencies(
+            "dockerfiles/sv-utils-env/*",
+            {"samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-utils": ImageDependencies(("dockerfiles/sv-utils/*", "src/sv_utils/src/*", "src/sv_utils/setup.py"),
+                                      {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-utils-env": "VIRTUAL_ENV_IMAGE"})
     }
     non_public_images = frozenset({'melt'})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
@@ -498,7 +504,7 @@ class ImageBuilder:  # class for building and pushing a single image
             print(f"skipping build of {self.local_image} because it is already built and --no-force-rebuild is set")
             return
         # standard build command
-        docker_build_command = "docker build --progress plain --network=host \\\n    "
+        docker_build_command = "docker build --platform linux/amd64 --progress plain --network=host \\\n    "
         docker_build_command += "-f " + f"{self.working_dir}/dockerfiles/{self.name}/Dockerfile" + " \\\n    "
         docker_build_command += "--tag " + self.local_image + " \\\n    "
         # parse extra args list

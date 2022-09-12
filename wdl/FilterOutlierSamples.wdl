@@ -98,6 +98,7 @@ task ExcludeOutliers {
 
   output {
     File vcf_no_outliers = "${outfile}"
+    File vcf_no_outliers_index = "${outfile}.tbi"
   }
   command <<<
 
@@ -115,6 +116,7 @@ task ExcludeOutliers {
     else
       cp ~{vcf} ~{outfile}
     fi
+    tabix ~{outfile}
   
   >>>
   runtime {

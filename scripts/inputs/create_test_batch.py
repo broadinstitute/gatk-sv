@@ -18,7 +18,6 @@ INPUT_KEYS = set([
     "samples",
     "bam_or_cram_files",
     "requester_pays_crams",
-    "gvcfs",
     "ped_file",
     "contig_ploidy_model_tar",
     "gcnv_model_tars",
