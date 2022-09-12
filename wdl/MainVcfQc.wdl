@@ -28,7 +28,6 @@ workflow MainVcfQc {
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
 
     String sv_base_mini_docker
-    String samtools_cloud_docker
     String sv_pipeline_docker
     String sv_pipeline_qc_docker
 
@@ -95,7 +94,7 @@ workflow MainVcfQc {
           vcf=vcf,
           vcf_idx=vcf + ".tbi",
           sample_renaming_json=select_first([sample_renaming_json]),
-          samtools_cloud_docker=samtools_cloud_docker,
+          samtools_cloud_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_rename_vcf_samples
       }
     }
