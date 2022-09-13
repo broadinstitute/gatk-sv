@@ -91,13 +91,18 @@ def main():
         contig = record.contig
         svtype = record.info['SVTYPE']
         if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= min_size:
+            pesr_support = has_sr_or_pe_support(record, case_sample)
+            if record.samples[case_sample]['RD_CN'] is None:
+                if not pesr_support:
+                    sys.stderr.write("Record {} has a missing depth genotype and no PE/SR support; dropping\n".format(record.id))
+                    continue
             if contig not in allosome_contigs:
-                if not has_depth_support_autosome(record, case_sample) and has_sr_or_pe_support(record, case_sample):
+                if not has_depth_support_autosome(record, case_sample) and pesr_support:
                     record.info['SVTYPE'] = 'BND'
                     record.alts = ['<BND>']
             else:
                 if not has_depth_support_allosome(record, case_sample, samples_by_sex[case_sample_sex]) \
-                        and has_sr_or_pe_support(record, case_sample):
+                        and pesr_support:
                     record.info['SVTYPE'] = 'BND'
                     record.alts = ['<BND>']
         fout.write(record)
