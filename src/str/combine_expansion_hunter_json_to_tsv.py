@@ -14,6 +14,17 @@ from combine_json_to_tsv import get_sample_id_column_index
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s: %(message)s")
 ALREADY_WARNED_ABOUT = set()  # used for logging
 
+MISSING_LOCUS_RESULTS_WARNING_MESSAGE = \
+    "Skipping {json_path} as it does not contain `LocusResults`. " \
+    "One possible cause is running ExpansionHunter on male samples with default " \
+    "value of the `--sex` argument, which defaults to female. " \
+    "Rerunning EH with a correct value of `--sex` argument may fix this issue. " \
+    "Another issue could be running ExpansionHunter on female samples with a variant " \
+    "catalog that only contains sites on ChrY; or in more general sense, running " \
+    "ExpansionHunter on a sample that contains no reads on none of the chromosomes " \
+    "specified in the variant catalog (e.g., the sample only contains reads on Chr1 " \
+    "while variant catalog contains sites on Chr2 only)."
+
 
 def parse_args(args_list=None):
     """Parse command line args and return the argparse args object"""
@@ -126,10 +137,7 @@ def main():
                 continue
 
             if "LocusResults" not in json_contents:
-                logging.warning(f"Skipping {json_path} as it does not contain `LocusResults`. "
-                                f"One possible cause is running EH on male samples with default "
-                                f"value of the `--sex` argument, which defaults to female. "
-                                f"Rerunning EH with a correct value of `--sex` argument may fix this issue.")
+                logging.warning(MISSING_LOCUS_RESULTS_WARNING_MESSAGE.format(json_path=json_path))
                 continue
 
             if not isinstance(json_contents, dict) or "SampleParameters" not in json_contents:
@@ -269,6 +277,9 @@ def convert_expansion_hunter_json_to_tsv_columns(
         variant_info["SampleId"] = json_contents["SampleParameters"]["SampleId"]
         locus_results_list = json_contents["LocusResults"].values()
     except KeyError as e:
+        if "LocusResults" not in json_contents:
+            logging.warning(MISSING_LOCUS_RESULTS_WARNING_MESSAGE.format(json_path=json_file_path))
+            return []
         raise ValueError(f"Key {e} not found in json file {json_file_path}")
 
     if sample_metadata_lookup:
