@@ -21,7 +21,7 @@ MISSING_LOCUS_RESULTS_WARNING_MESSAGE = \
     "Rerunning EH with a correct value of `--sex` argument may fix this issue. " \
     "Another issue could be running ExpansionHunter on female samples with a variant " \
     "catalog that only contains sites on ChrY; or in more general sense, running " \
-    "ExpansionHunter on a sample that contains no reads on none of the chromosomes " \
+    "ExpansionHunter on a sample that contains no reads on any of the chromosomes " \
     "specified in the variant catalog (e.g., the sample only contains reads on Chr1 " \
     "while variant catalog contains sites on Chr2 only)."
 
