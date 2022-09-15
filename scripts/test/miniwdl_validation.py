@@ -13,9 +13,13 @@ import sys
 import WDL
 
 
-def format_error_message(error_type, message, pos, tips=None):
+def format_error_message(error_type, message, pos=None, tips=None):
     tips = f"Tips: {tips}" if tips else ""
-    return f"{error_type}: '{message}' at {pos.abspath}, Line: {pos.line}, Col: {pos.column}. {tips}"
+    msg = f"{error_type}: '{message}'"
+    if pos:
+        msg += f"at {pos.abspath}, Line: {pos.line}, Col: {pos.column}."
+    msg += tips
+    return msg
 
 
 def check(wdl_filename, imports_dir, import_max_depth):
@@ -25,10 +29,10 @@ def check(wdl_filename, imports_dir, import_max_depth):
     except WDL.Error.SyntaxError as e:
         print(format_error_message("Syntax Error", e, e.pos))
     except WDL.Error.ValidationError as e:
-        print(format_error_message("Validation Error", e, e.node.pos))
+        print(format_error_message("Validation Error", e, e.node.pos if e.node else None))
     except WDL.Error.MultipleValidationErrors as e:
         for ex in e.exceptions:
-            print(format_error_message("Validation Error", ex, ex.node.pos))
+            print(format_error_message("Validation Error", ex, ex.node.pos if ex.node else None))
     except WDL.Error.ImportError as e:
         print(format_error_message(
             "Import Error", e, e.pos,
