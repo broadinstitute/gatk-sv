@@ -41,7 +41,8 @@ workflow DetectBatchEffectsStep1 {
 
     RuntimeAttr? runtime_attr_override_combine_af_vcfs
     RuntimeAttr? runtime_attr_override_get_batch_samples_list
-    RuntimeAttr? runtime_attr_merge_labeled_vcfs
+    RuntimeAttr? runtime_attr_override_merge_freq_tables
+    RuntimeAttr? runtime_attr_override_compare_pre_post_mingq
     RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRMINUS
     RuntimeAttr? runtime_attr_override_pairwise_pv_integration_PCRPLUS
     RuntimeAttr? runtime_attr_override_plus_minus_pv_integration
@@ -95,7 +96,8 @@ workflow DetectBatchEffectsStep1 {
         drop_empty_records="FALSE",
         par_bed=par_bed,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
+        runtime_attr_override_combine_sharded_vcfs=runtime_attr_override_combine_af_vcfs
     }
     # Get minimal table of AF data per batch, split by ancestry
     call GetFreqTable {
@@ -121,7 +123,8 @@ workflow DetectBatchEffectsStep1 {
       batches_list=batches_list,
       rows_per_shard=variants_per_shard,
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_override_merge_freq_tables
   }
 
   call MergeFreqTables as MergeFreqTables_allPops {
@@ -130,7 +133,8 @@ workflow DetectBatchEffectsStep1 {
       batches_list=batches_list,
       rows_per_shard=variants_per_shard,
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_override_merge_freq_tables
   }
 
   call MergeFreqTables as MergeFreqTables_allPops_preMinGQ {
@@ -139,7 +143,8 @@ workflow DetectBatchEffectsStep1 {
       batches_list=batches_list,
       rows_per_shard=variants_per_shard,
       prefix=prefix + "_preMinGQ",
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_override_merge_freq_tables
   }
 
   # Test 1: compare frequencies before and after minGQ, and generate list 
@@ -151,7 +156,8 @@ workflow DetectBatchEffectsStep1 {
       minus_batches_list=pcrminus_batches_list,
       plus_batches_list=pcrplus_batches_list,
       prefix=prefix,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_base_docker=sv_pipeline_base_docker,
+      runtime_attr_override=runtime_attr_override_compare_pre_post_mingq
   }
 
   # Compute AF stats per pair of batches & determine variants with batch effects
