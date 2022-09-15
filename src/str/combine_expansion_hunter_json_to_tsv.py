@@ -106,7 +106,7 @@ def main():
     if args.sample_metadata:
         sample_metadata_df = pd.read_table(args.sample_metadata)
         sample_id_column_idx = get_sample_id_column_index(sample_metadata_df, column_name=args.sample_metadata_key)
-        if sample_id_column_idx is -1:
+        if sample_id_column_idx == -1:
             raise ValueError(f"'sample_id' column not found in sample metadata table. The columns found were: {sample_metadata_df.columns}")
         sample_id_column = sample_metadata_df.columns[sample_id_column_idx]
         for _, row in sample_metadata_df.iterrows():
