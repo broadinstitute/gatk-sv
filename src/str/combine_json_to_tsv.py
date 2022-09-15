@@ -167,11 +167,11 @@ def join_with_sample_metadata(df, df_sample_id_columns, sample_metadata_df, samp
         pandas.DataFrame: The DataFrame resulting from a LEFT join between df and sample_metadata_df
     """
     sample_id_column_idx1 = get_sample_id_column_index(df, column_name=df_sample_id_columns)
-    if sample_id_column_idx1 is -1:
+    if sample_id_column_idx1 == -1:
         raise ValueError(f"'sample_id' field not found in json files. The fields found were: {df.columns}")
 
     sample_id_column_idx2 = get_sample_id_column_index(sample_metadata_df, column_name=sample_metadata_df_sample_id_column)
-    if sample_id_column_idx2 is -1:
+    if sample_id_column_idx2 == -1:
         raise ValueError(f"'sample_id' column not found in sample metadata table. The columns found were: {sample_metadata_df.columns}")
 
     sample_id_column1 = df.columns[sample_id_column_idx1]
