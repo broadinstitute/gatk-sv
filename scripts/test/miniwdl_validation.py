@@ -55,13 +55,14 @@ def main():
 
     wdl_filenames = args.files
     imports_dir = args.imports_dir
+    max_import_depth = int(args.max_import_depth)
 
     exit_code = 0
     counter = 0
     for wdl_filename in wdl_filenames:
         # print text in yellow.
         print("\033[93m" + f"\nValidating file {wdl_filename}" + "\033[0m")
-        if not check(wdl_filename, imports_dir, args.max_import_depth):
+        if not check(wdl_filename, imports_dir, max_import_depth):
             exit_code = 1
             counter += 1
 
