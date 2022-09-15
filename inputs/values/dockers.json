@@ -31,5 +31,5 @@
   "sv-utils-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils-env:2022-09-09-v0.25.1-beta-cd5ce7e0",
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2022-09-09-v0.25.1-beta-cd5ce7e0",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/tbrookin/gatk:0a7e1d86f",
-  "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2022-08-31-v0.25-beta-988db564"
+  "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2022-09-15-v0.25.1-beta-b53e58af"
 }
