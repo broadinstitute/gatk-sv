@@ -11,7 +11,6 @@
   "copy_number_autosomal_contigs" : 2,
   "cytobands" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
   "sd_locs_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "delly_exclude_intervals_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/delly_human.hg38.excl.tsv",
   "depth_exclude_list" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
   "empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
   "exclude_intervals_for_gcnv_filter_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",

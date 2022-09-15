@@ -149,7 +149,7 @@ where `cromwell_config.json` is a Cromwell [workflow options file](https://cromw
 
 ## <a name="overview">Pipeline Overview</a>
 The pipeline consists of a series of modules that perform the following:
-* [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Delly, Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+* [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 * [EvidenceQC](#evidence-qc): Dosage bias scoring and ploidy estimation
 * [GatherBatchEvidence](#gather-batch-evidence): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 * [ClusterBatch](#cluster-batch): Variant clustering
@@ -249,7 +249,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. Delly can be enabled but is no longer officially supported. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
+Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -257,7 +257,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
 
 #### Outputs:
-* Caller VCFs (Delly, Manta, MELT, and/or Wham)
+* Caller VCFs (Manta, MELT, and/or Wham)
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file

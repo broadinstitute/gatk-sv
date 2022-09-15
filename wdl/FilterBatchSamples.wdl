@@ -11,13 +11,11 @@ workflow FilterBatchSamples {
   input {
     String batch
     File? manta_vcf
-    File? delly_vcf
     File? wham_vcf
     File? melt_vcf
     File? scramble_vcf
     File? depth_vcf
     File? manta_counts  # SV counts files from PlotSVCountsPerSample. If not provided, SV counts will be calculated as part of this workflow
-    File? delly_counts
     File? wham_counts
     File? melt_counts
     File? scramble_counts
@@ -36,10 +34,10 @@ workflow FilterBatchSamples {
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
   }
 
-  Array[File?] vcfs = [manta_vcf, delly_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
-  Array[String] algorithms = ["manta", "delly", "wham", "melt", "scramble", "depth"]  # fixed algorithms to enable File outputs to be determined
+  Array[File?] vcfs = [manta_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
+  Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]  # fixed algorithms to enable File outputs to be determined
   Int num_algorithms = length(algorithms)
-  Array[File?] sv_counts_ = [manta_counts, delly_counts, wham_counts, melt_counts, scramble_counts, depth_counts]
+  Array[File?] sv_counts_ = [manta_counts, wham_counts, melt_counts, scramble_counts, depth_counts]
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
@@ -113,18 +111,16 @@ workflow FilterBatchSamples {
 
   output {
     File? outlier_filtered_manta_vcf = ExcludeOutliers.vcf_no_outliers[0]
-    File? outlier_filtered_delly_vcf = ExcludeOutliers.vcf_no_outliers[1]
-    File? outlier_filtered_wham_vcf = ExcludeOutliers.vcf_no_outliers[2]
-    File? outlier_filtered_melt_vcf = ExcludeOutliers.vcf_no_outliers[3]
-    File? outlier_filtered_scramble_vcf = ExcludeOutliers.vcf_no_outliers[4]
-    File? outlier_filtered_depth_vcf = ExcludeOutliers.vcf_no_outliers[5]
+    File? outlier_filtered_wham_vcf = ExcludeOutliers.vcf_no_outliers[1]
+    File? outlier_filtered_melt_vcf = ExcludeOutliers.vcf_no_outliers[2]
+    File? outlier_filtered_scramble_vcf = ExcludeOutliers.vcf_no_outliers[3]
+    File? outlier_filtered_depth_vcf = ExcludeOutliers.vcf_no_outliers[4]
 
     File? outlier_filtered_manta_vcf_index = ExcludeOutliers.vcf_no_outliers_index[0]
-    File? outlier_filtered_delly_vcf_index = ExcludeOutliers.vcf_no_outliers_index[1]
-    File? outlier_filtered_wham_vcf_index = ExcludeOutliers.vcf_no_outliers_index[2]
-    File? outlier_filtered_melt_vcf_index = ExcludeOutliers.vcf_no_outliers_index[3]
-    File? outlier_filtered_scramble_vcf_index = ExcludeOutliers.vcf_no_outliers_index[4]
-    File? outlier_filtered_depth_vcf_index = ExcludeOutliers.vcf_no_outliers_index[5]
+    File? outlier_filtered_wham_vcf_index = ExcludeOutliers.vcf_no_outliers_index[1]
+    File? outlier_filtered_melt_vcf_index = ExcludeOutliers.vcf_no_outliers_index[2]
+    File? outlier_filtered_scramble_vcf_index = ExcludeOutliers.vcf_no_outliers_index[3]
+    File? outlier_filtered_depth_vcf_index = ExcludeOutliers.vcf_no_outliers_index[4]
 
     File outlier_filtered_pesr_vcf = MergePesrVcfs.concat_vcf
     File outlier_filtered_pesr_vcf_index = MergePesrVcfs.concat_vcf_idx
