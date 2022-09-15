@@ -96,7 +96,6 @@ workflow CrossValidateGqRecalibrator {
             gq_recalibrator_model_file=TrainGqRecalibrator.output_gq_recalibrator_model_file,
             standardize_vcf=false,
             recalibrate_gq_args=recalibrate_gq_args,
-            samtools_cloud_docker=samtools_cloud_docker,
             gatk_docker=gatk_docker,
             sv_utils_docker=sv_utils_docker,
             samtools_cloud_docker=samtools_cloud_docker
