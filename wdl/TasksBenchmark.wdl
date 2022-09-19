@@ -185,10 +185,11 @@ task LocalizeCramRequestPay{
   }
 
 #extract specific contig from vcf
-task SplitBed{
-  input{
+task SplitBed {
+  input {
     String contig
-    File? bed_file
+    String? sample_to_extract
+    File bed_file
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -204,15 +205,15 @@ task SplitBed{
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  output{
+  output {
     File contig_bed = "~{contig}.bed"
   }
 
   command <<<
     if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
+      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
     else
-      awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
+      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
     fi
   >>>
 
@@ -226,11 +227,12 @@ task SplitBed{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
-  }
-task SplitVcf{
-  input{
+}
+
+task SplitVcf {
+  input {
     String contig
-    File? vcf_file
+    File vcf_file
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -273,10 +275,10 @@ task SplitVcf{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
-task vcf2bed{
-  input{
+task vcf2bed {
+  input {
     File vcf
     File? vcf_index
     String sv_pipeline_docker
@@ -326,7 +328,7 @@ task vcf2bed{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
 
 

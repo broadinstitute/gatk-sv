@@ -8,7 +8,7 @@ workflow VaPoRVcf {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
-    File? vcf_file
+    File vcf_file
     File ref_fasta
     File ref_fai
     File ref_dict
