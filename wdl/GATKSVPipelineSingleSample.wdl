@@ -495,7 +495,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_concat_cleaned_vcfs
     RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -1254,7 +1253,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
-      runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
       runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
       runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
       runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
