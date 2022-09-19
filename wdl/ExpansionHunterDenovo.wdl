@@ -233,7 +233,7 @@ task STRAnalyze {
   Int cases_length = length(case_jsons)
   Int controls_length = length(control_jsons)
   String output_prefix = "merged"
-  String multisample_profile = output_prefix + postfixes.merged_profile
+  String merged_multisample_profile = output_prefix + postfixes.merged_profile
 
   # Defining this varialbe is requires since it
   # will trigger localization of the file. The
@@ -313,7 +313,7 @@ task STRAnalyze {
       for comparison_type in "${comparison_types[@]}"; do
         python ${SCRIPTS_DIR}/${analysis_type}.py ${comparison_type} \
           --manifest $manifest_filename \
-          --multisample-profile ~{multisample_profile} \
+          --multisample-profile ~{merged_multisample_profile} \
           --output result_${analysis_type}_${comparison_type}.tsv
       done
     done
