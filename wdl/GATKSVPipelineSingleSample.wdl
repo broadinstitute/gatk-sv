@@ -451,7 +451,6 @@ workflow GATKSVPipelineSingleSample {
     # overrides for ResolveComplexVariants
     RuntimeAttr? runtime_override_update_sr_list_pass
     RuntimeAttr? runtime_override_update_sr_list_fail
-    RuntimeAttr? runtime_override_rename_variants
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_subset_inversions
     RuntimeAttr? runtime_override_concat_resolve
@@ -1220,7 +1219,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_concat_large_pesr_depth=runtime_override_concat_large_pesr_depth,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
-      runtime_override_rename_variants=runtime_override_rename_variants,
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat_resolve=runtime_override_concat_resolve,
