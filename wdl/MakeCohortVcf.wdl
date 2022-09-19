@@ -324,8 +324,8 @@ workflow MakeCohortVcf {
       runtime_override_hail_merge=runtime_override_hail_merge_resolve,
       runtime_override_fix_header=runtime_override_fix_header_resolve,
 
-      runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
-      runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx_inv,
+      runtime_override_get_se_cutoff_inv=runtime_override_get_se_cutoff_inv,
+      runtime_override_shard_vcf_cpx_inv=runtime_override_shard_vcf_cpx_inv,
       runtime_override_shard_vids=runtime_override_shard_vids_resolve_inv,
       runtime_override_resolve_prep=runtime_override_resolve_prep_inv,
       runtime_override_resolve_cpx_per_shard=runtime_override_resolve_cpx_per_shard_inv,
