@@ -576,7 +576,7 @@ task UntarFiles {
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String glob_arg = "out/*" + glob_suffix
+  String glob_arg = "out/*" + select_first([glob_suffix, ""])
 
   command <<<
     set -euo pipefail

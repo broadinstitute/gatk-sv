@@ -1030,8 +1030,8 @@ task FixEndsRescaleGQ {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   String outfile = "~{prefix}.vcf.gz"
-  Boolean fix_ends_ = if defined(fix_ends) then fix_ends else true
-  Boolean rescale_gq_ = if defined(rescale_gq) then rescale_gq else true
+  Boolean fix_ends_ = select_first([fix_ends, true])
+  Boolean rescale_gq_ = select_first([rescale_gq, true])
 
   output {
     File out = "~{outfile}"
