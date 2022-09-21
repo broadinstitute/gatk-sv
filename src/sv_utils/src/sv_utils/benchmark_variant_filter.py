@@ -2343,6 +2343,7 @@ def get_filter_quality_figures(
             sv_selectors=sv_selectors,
             best_thresholds=best_thresholds,
             num_inheritance_stats_rows=num_inheritance_stats_rows,
+
             title_font_size=title_font_size,
             label_font_size=label_font_size,
             legend_font_size=legend_font_size,

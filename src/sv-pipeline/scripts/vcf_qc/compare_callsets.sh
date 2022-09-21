@@ -94,11 +94,11 @@ elif ! [ -s ${SET2} ]; then
 fi
 #Check for required list of contigs
 if [ -z ${CONTIGS} ]; then
-  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list not specified\n"
+  echo -e "\ncompare_callsets.sh ERROR: input contig list not specified\n"
   usage
   exit 1
 elif ! [ -s ${CONTIGS} ]; then
-  echo -e "\ncompare_callsets_perSample.sh ERROR: input contig list either empty or not found\n"
+  echo -e "\ncompare_callsets.sh ERROR: input contig list either empty or not found\n"
   usage
   exit 1
 fi

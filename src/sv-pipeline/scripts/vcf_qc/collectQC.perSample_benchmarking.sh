@@ -154,15 +154,15 @@ while read ID; do
   VIDlist=$( find ${OVRTMP}/persamp/ -name "${ID}.VIDs_genotypes.txt.gz" )
   if [ ! -z ${VIDlist} ] && [ -s ${VIDlist} ]; then
     echo $ID
-    zcat ${VCFSTATS} | head -n1 > \
-    ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
-    zcat ${VIDlist} | cut -f1 | fgrep -wf - <( zcat ${VCFSTATS} ) >> \
-    ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
+    zcat ${VCFSTATS} | head -n1 > ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
+    zcat ${VIDlist} | cut -f1 | fgrep -wf - <( zcat ${VCFSTATS} ) >> ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     bgzip -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
+    rm -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed
     tabix -f ${OVRTMP}/SET1_calls/${ID}.SET1.SV_calls.bed.gz
   fi
 done < ${SAMPLES}
 tar -czvf ${OVRTMP}/SET1_calls.tar.gz ${OVRTMP}/SET1_calls
+rm -rf ${OVRTMP}/SET1_calls
 
 
 ###RUN COMPARISONS
