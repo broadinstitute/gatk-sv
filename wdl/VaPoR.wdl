@@ -71,7 +71,7 @@ workflow VaPoR {
                 runtime_attr_ConcatBeds = runtime_attr_ConcatBeds
         }
     }
-    output{
+    output {
             File? vcf_out = VaPoR_vcf.bed
             File? bed_out = VaPoR_bed.bed
             File? vcf_plots = VaPoR_vcf.plots
