@@ -99,7 +99,7 @@ task GetSampleIdsFromVcfTar {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 0.9,
-                               disk_gb: 10 + ceil(size(vcf_tar, "GiB")),
+                               disk_gb: 10 + 4 * ceil(size(vcf_tar, "GiB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -109,19 +109,17 @@ task GetSampleIdsFromVcfTar {
   command <<<
 
     set -euo pipefail
-    # Using a named pipe keeps pipefail from triggering
-    mkfifo tmppipe
-    while read f
-    do
-      tar -Ozxf ~{vcf_tar} $f &>2 /dev/null > tmppipe &
-      bcftools query -l tmppipe
-    done < <(tar -tzf ~{vcf_tar} | grep '\.vcf\.gz$') | sort -u > ~{prefix}.txt
+    mkdir vcfs
+    tar -zxf ~{vcf_tar} -C vcfs/
 
+    for f in vcfs/*.vcf.gz
+    do
+      bcftools query -l $f
+    done | sort -u > ~{prefix}.txt
   >>>
 
   output {
     File out_file = "~{prefix}.txt"
-    Array[String] out_array = read_lines("~{prefix}.txt")
   }
 
   runtime {
