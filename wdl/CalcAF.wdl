@@ -1,11 +1,11 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksMakeCohortVcf.wdl" as tasks
 import "CleanVcf5.wdl" as cleanvcf5
-import "TasksMakeCohortVcf.wdl" as tmc
 
 workflow CalcAF {
-  input {
+  input{
     File vcf
     File vcf_idx
     Int sv_per_shard
@@ -16,23 +16,25 @@ workflow CalcAF {
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
     File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
-    String sv_pipeline_docker
+    String? contig                #Restrict to a single contig, if desired
     String? drop_empty_records
 
-    RuntimeAttr? runtime_attr_compute_shard_af
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_compute_shard_af
     RuntimeAttr? runtime_attr_combine_sharded_vcfs
   }
 
 
   # Tabix to chromosome of interest, and shard input VCF for stats collection
-  call tmc.ScatterVcf {
+  call tasks.ScatterVcf {
     input:
       vcf=vcf,
+      vcf_idx=vcf_idx,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_updates_docker,
       records_per_shard=sv_per_shard,
-      runtime_attr_override = runtime_attr_scatter_vcf
+      contig=contig,
+      runtime_attr_override=runtime_attr_scatter_vcf
   }
 
   # Scatter over VCF shards
@@ -47,7 +49,7 @@ workflow CalcAF {
         famfile=famfile,
         par_bed=par_bed,
         allosomes_list=allosomes_list,
-        runtime_attr_override = runtime_attr_compute_shard_af
+        runtime_attr_override=runtime_attr_compute_shard_af
       }
   	}
 
@@ -58,7 +60,7 @@ workflow CalcAF {
       sv_pipeline_docker=sv_pipeline_docker,
       prefix=prefix,
       drop_empty_records=drop_empty_records,
-      runtime_attr_override = runtime_attr_combine_sharded_vcfs
+      runtime_attr_override=runtime_attr_combine_sharded_vcfs
   }
 
   # Final output
@@ -70,7 +72,7 @@ workflow CalcAF {
 
 # Subset a vcf to a single chromosome, and add global AF information (no subpop)
 task ComputeShardAFs {
-  input {
+  input{
     File vcf
     String prefix
     String sv_pipeline_docker
@@ -78,6 +80,7 @@ task ComputeShardAFs {
     File? famfile
     File? par_bed
     File? allosomes_list
+    Boolean index_output = false
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -92,6 +95,7 @@ task ComputeShardAFs {
 
   command <<<
     set -euo pipefail
+    
     optionals=" "
     if [ ~{default="SKIP" sample_pop_assignments} != "SKIP" ]; then
       optionals="$( echo "$optionals" ) -p ~{sample_pop_assignments}"
@@ -111,10 +115,14 @@ task ComputeShardAFs {
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py $optionals "~{vcf}" stdout \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"
+    if [ "~{index_output}" == "true" ]; then
+      tabix -p vcf -f "~{prefix}.wAFs.vcf.gz"
+    fi
   >>>
 
   output {
     File shard_wAFs = "~{prefix}.wAFs.vcf.gz"
+    File? shard_wAFs_idx = "~{prefix}.wAFs.vcf.gz.tbi"
   }
   
   runtime {
@@ -131,7 +139,7 @@ task ComputeShardAFs {
 
 # Merge VCF shards & drop records with zero remaining non-ref alleles
 task CombineShardedVcfs {
-  input {
+  input{
     Array[File] vcfs
     String prefix
     String sv_pipeline_docker
@@ -140,8 +148,8 @@ task CombineShardedVcfs {
   }
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 50,
+    mem_gb: 2,
+    disk_gb: 20 + (10 * ceil(size(vcfs, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
