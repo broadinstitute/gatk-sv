@@ -153,10 +153,8 @@ workflow GatherBatchEvidence {
     RuntimeAttr? evidence_merging_bincov_runtime_attr
     RuntimeAttr? runtime_attr_bem
 
-    RuntimeAttr? cnmops_sample10_runtime_attr   # Memory ignored if cnmops_mem_gb_override_sample10 given
-    RuntimeAttr? cnmops_sample3_runtime_attr    # Memory ignored if cnmops_mem_gb_override_sample3 given
-    Float? cnmops_mem_gb_override_sample10
-    Float? cnmops_mem_gb_override_sample3
+    RuntimeAttr? cnmops_sample10_runtime_attr
+    RuntimeAttr? cnmops_sample3_runtime_attr
 
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
@@ -263,8 +261,6 @@ workflow GatherBatchEvidence {
       ref_dict = ref_dict,
       prefix = "header",
       stitch_and_clean_large_events = false,
-      mem_gb_override_sample10 = cnmops_mem_gb_override_sample10,
-      mem_gb_override_sample3 = cnmops_mem_gb_override_sample3,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       cnmops_docker = cnmops_docker,
@@ -290,8 +286,6 @@ workflow GatherBatchEvidence {
       prefix = "large",
       min_size=cnmops_large_min_size,
       stitch_and_clean_large_events = true,
-      mem_gb_override_sample10 = cnmops_mem_gb_override_sample10,
-      mem_gb_override_sample3 = cnmops_mem_gb_override_sample3,
       linux_docker = linux_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       cnmops_docker = cnmops_docker,
