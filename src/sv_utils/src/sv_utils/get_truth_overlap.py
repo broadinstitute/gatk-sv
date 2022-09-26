@@ -1021,7 +1021,7 @@ def get_trios_overlap_info(
     )
 
 
-def _get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
+def get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
     p_gt_bad = 10 ** -vapor_variants[Keys.vapor_gq]
     return pandas.DataFrame(
@@ -1126,7 +1126,7 @@ def get_optimal_overlap_cutoffs(
     # augment overlap stats with probability the variant is non-ref, as estimated by VaPoR:
     vapor_info = {
         sample_id:
-            _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+            get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
             .join(overlap_stats[sample_id], how="inner")
         for sample_id, vapor_file in vapor_files.items()
         if sample_id in overlap_stats
@@ -1274,7 +1274,7 @@ def select_confident_vapor_variants(
         sample_confident_variants: SampleConfidentVariants
             Object holding the confident variants for this sample
     """
-    vapor_p_non_ref = _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+    vapor_p_non_ref = get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
     return SampleConfidentVariants(
         good_variant_ids=sorted(
             valid_variant_ids.intersection(

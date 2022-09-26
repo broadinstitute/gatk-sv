@@ -142,11 +142,16 @@ class BedKeys:
 
 
 class VaporKeys:
-    gt = "gt"
-    gq = "gq"
-    qs = "qs"
-    gs = "gs"
-    read_scores = "read_scores"
+    contig = "CHR"
+    begin = "POS"
+    end = "END"
+    svtype = "SVTYPE"
+    id = "SVID"
+    gt = "VaPoR_GT"
+    gq = "VaPoR_GQ"
+    qs = "VaPoR_QS"
+    gs = "VaPoR_GS"
+    read_scores = "VaPoR_Rec"
 
 
 class Default:
@@ -1198,9 +1203,17 @@ def vcat_with_categoricals(
 def vapor_to_pandas(vapor_file: Text) -> pandas.DataFrame:
     return bed_to_pandas(
         vapor_file,
-        columns=(Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.id, VaporKeys.qs, VaporKeys.gs, VaporKeys.gt,
-                 VaporKeys.gq, VaporKeys.read_scores),
-        require_header=False
+        columns={VaporKeys.contig:Keys.contig,
+                 VaporKeys.begin:Keys.begin,
+                 VaporKeys.end:Keys.end,
+                 VaporKeys.svtype:Keys.svtype,
+                 VaporKeys.id:Keys.id,
+                 VaporKeys.qs:VaporKeys.qs,
+                 VaporKeys.gs:VaporKeys.gs,
+                 VaporKeys.gt:VaporKeys.gt,
+                 VaporKeys.gq:VaporKeys.gq,
+                 VaporKeys.read_scores:VaporKeys.read_scores},
+        require_header=True
     )
 
 
