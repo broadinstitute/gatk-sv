@@ -123,10 +123,8 @@ workflow GATKSVPipelinePhase1 {
 
     RuntimeAttr? evidence_merging_bincov_runtime_attr # Disk space ignored, use evidence_merging_bincov_size_mb
 
-    RuntimeAttr? cnmops_sample10_runtime_attr   # Memory ignored if cnmops_mem_gb_override_sample10 given
-    RuntimeAttr? cnmops_sample3_runtime_attr    # Memory ignored if cnmops_mem_gb_override_sample3 given
-    Float? cnmops_mem_gb_override_sample10
-    Float? cnmops_mem_gb_override_sample3
+    RuntimeAttr? cnmops_sample10_runtime_attr
+    RuntimeAttr? cnmops_sample3_runtime_attr
 
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
@@ -316,8 +314,6 @@ workflow GATKSVPipelinePhase1 {
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
       cnmops_sample10_runtime_attr=cnmops_sample10_runtime_attr,
       cnmops_sample3_runtime_attr=cnmops_sample3_runtime_attr,
-      cnmops_mem_gb_override_sample10=cnmops_mem_gb_override_sample10,
-      cnmops_mem_gb_override_sample3=cnmops_mem_gb_override_sample3,
       median_cov_runtime_attr=median_cov_runtime_attr,
       median_cov_mem_gb_per_sample=median_cov_mem_gb_per_sample,
       preprocess_calls_runtime_attr=preprocess_calls_runtime_attr,

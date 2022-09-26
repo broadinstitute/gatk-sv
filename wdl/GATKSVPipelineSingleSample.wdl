@@ -232,10 +232,8 @@ workflow GATKSVPipelineSingleSample {
 
     RuntimeAttr? evidence_merging_bincov_runtime_attr # Disk space ignored, use evidence_merging_bincov_size_mb
 
-    RuntimeAttr? cnmops_sample10_runtime_attr   # Memory ignored if cnmops_mem_gb_override_sample10 given
-    RuntimeAttr? cnmops_sample3_runtime_attr    # Memory ignored if cnmops_mem_gb_override_sample3 given
-    Float? cnmops_mem_gb_override_sample10
-    Float? cnmops_mem_gb_override_sample3
+    RuntimeAttr? cnmops_sample10_runtime_attr
+    RuntimeAttr? cnmops_sample3_runtime_attr
 
     RuntimeAttr? add_sample_to_ped_runtime_attr
     RuntimeAttr? preprocess_calls_runtime_attr
@@ -792,8 +790,6 @@ workflow GATKSVPipelineSingleSample {
       evidence_merging_bincov_runtime_attr=evidence_merging_bincov_runtime_attr,
       cnmops_sample10_runtime_attr=cnmops_sample10_runtime_attr,
       cnmops_sample3_runtime_attr=cnmops_sample3_runtime_attr,
-      cnmops_mem_gb_override_sample10=cnmops_mem_gb_override_sample10,
-      cnmops_mem_gb_override_sample3=cnmops_mem_gb_override_sample3,
       preprocess_calls_runtime_attr=preprocess_calls_runtime_attr,
       depth_merge_set_runtime_attr=depth_merge_set_runtime_attr,
       depth_merge_sample_runtime_attr=depth_merge_sample_runtime_attr,

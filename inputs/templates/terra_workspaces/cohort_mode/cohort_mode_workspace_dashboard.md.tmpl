@@ -63,7 +63,7 @@ The following workflows are included in this workspace, to be executed in this o
 14. `14-ResolveComplexVariants`: Complex variant resolution. Use `14-ResolveComplexVariants_SingleBatch` if you only have one batch.
 15. `15-GenotypeComplexVariants`: Complex variant re-genotyping. Use `15-GenotypeComplexVariants_SingleBatch` if you only have one batch.
 16. `16-CleanVcf`: VCF cleanup. Use `16-CleanVcf_SingleBatch` if you only have one batch.
-17. `17-MasterVcfQc`: Generates VCF QC reports. Use `17-MasterVcfQc_SingleBatch` if you only have one batch.
+17. `17-MainVcfQc`: Generates VCF QC reports. Use `17-MainVcfQc_SingleBatch` if you only have one batch.
 18. `18-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `18-AnnotateVcf_SingleBatch` if you only have one batch.
 
 Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
@@ -86,7 +86,7 @@ There are three modes for this pipeline according to the number of samples you n
 
 #### What is the maximum number of samples the pipeline can handle?
 
-In Terra, we have tested batch sizes of up to 500 samples and cohort sizes of up to 1000 samples. On a separate cromwell server, we have tested the pipeline on cohorts of up to ~140,000 samples, but Terra's metadata handling will likely limit cohort sizes further.
+In Terra, we have tested batch sizes of up to 500 samples and cohort sizes of up to 11,000 samples (and 40,000 samples with the final steps split by chromosome). On a separate cromwell server, we have tested the pipeline on cohorts of up to ~140,000 samples, but Terra's metadata handling will likely limit cohort sizes further.
 
 
 ### Time and cost estimates
@@ -108,12 +108,10 @@ Refer to [the Sample ID Requirements section of the README](https://github.com/b
 
 The same requirements apply to family IDs in the PED file, batch IDs (`sample_set_id`), and the cohort ID (`sample_set_set_id`).
 
-Sample IDs are provided to `01-GatherSampleEvidence` directly and need not match sample names from the BAM/CRAM headers or GVCFs. We recommend transforming sample IDs using [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) prior to uploading your sample data table. (Currently, sample IDs can be replaced again in `04-GatherBatchEvidence`.) The following files will need to be updated with the transformed sample IDs:
+Sample IDs are provided to `01-GatherSampleEvidence` directly and need not match sample names from the BAM/CRAM headers. We recommend transforming sample IDs using [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) prior to uploading your sample data table. (Currently, sample IDs can be replaced again in `04-GatherBatchEvidence`.) The following files will need to be updated with the transformed sample IDs:
 * Sample data table (for Terra)
 * PED file
 * Sample set membership file (for Terra)
-
-If using a SNP VCF in `04-GatherBatchEvidence`, it does not need to be re-headered; simply provide the `vcf_samples` argument. An easy way to provide these sample IDs is to add a column `vcf_sample_id` to the sample TSV you upload to the workspace (see **Workspace setup** step 2 below), then reference this column as `this.samples.vcf_sample_id` in the `04-GatherBatchEvidence` inputs.
 
 
 ### Workspace setup
@@ -177,6 +175,7 @@ Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/g
 
 Read the full GatherBatchEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-batch-evidence).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV`.
+* Before running this workflow, ensure that you have updated the `cohort_ped_file` attribute in Workspace Data with your cohort's PED file, with sex assignments updated based on ploidy detection from `02-EvidenceQC`.
 
 #### 05-ClusterBatch and 06-GenerateBatchMetrics
 
@@ -206,9 +205,9 @@ Read the full GenotypeBatch documentation [here](https://github.com/broadinstitu
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `09-FilterBatchSamples`.
 * If you only have one batch, use the `11-GenotypeBatch_SingleBatch` version of the workflow.
 
-#### 12-RegenotypeCNVs, 13-CombineBatches, 14-ResolveComplexVariants, 15-GenotypeComplexVariants, 16-CleanVcf, 17-MasterVcfQc, and 18-AnnotateVcf
+#### 12-RegenotypeCNVs, 13-CombineBatches, 14-ResolveComplexVariants, 15-GenotypeComplexVariants, 16-CleanVcf, 17-MainVcfQc, and 18-AnnotateVcf
 
-Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`, `MasterVcfQc`), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
+Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`, `MainVcfQc`), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
 * For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `10-MergeBatchSites`.
 * If you only have one batch, use the `[...]_SingleBatch` version of the workflow.
 

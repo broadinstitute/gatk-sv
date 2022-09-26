@@ -21,8 +21,6 @@ workflow CNMOPS {
     String prefix
     Int? min_size
     Boolean? stitch_and_clean_large_events = false
-    Float? mem_gb_override_sample10
-    Float? mem_gb_override_sample3
     String linux_docker
     String sv_pipeline_docker
     String cnmops_docker
@@ -45,7 +43,6 @@ workflow CNMOPS {
         ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
-        mem_gb_override = mem_gb_override_sample10,
         cnmops_docker = cnmops_docker,
         runtime_attr_override = runtime_attr_sample10
     }
@@ -60,7 +57,6 @@ workflow CNMOPS {
         ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
-        mem_gb_override = mem_gb_override_sample3,
         cnmops_docker = cnmops_docker,
         runtime_attr_override = runtime_attr_sample3
     }
@@ -77,7 +73,6 @@ workflow CNMOPS {
         ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
-        mem_gb_override = mem_gb_override_sample10,
         cnmops_docker = cnmops_docker,
         runtime_attr_override = runtime_attr_sample10
     }
@@ -92,7 +87,6 @@ workflow CNMOPS {
         ref_dict = ref_dict,
         bincov_matrix = bincov_matrix,
         bincov_matrix_index = bincov_matrix_index,
-        mem_gb_override = mem_gb_override_sample3,
         cnmops_docker = cnmops_docker,
         runtime_attr_override = runtime_attr_sample3
     }
@@ -108,7 +102,6 @@ workflow CNMOPS {
       ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
-      mem_gb_override = mem_gb_override_sample10,
       cnmops_docker = cnmops_docker,
       runtime_attr_override = runtime_attr_sample10
   }
@@ -123,7 +116,6 @@ workflow CNMOPS {
       ref_dict = ref_dict,
       bincov_matrix = bincov_matrix,
       bincov_matrix_index = bincov_matrix_index,
-      mem_gb_override = mem_gb_override_sample3,
       cnmops_docker = cnmops_docker,
       runtime_attr_override = runtime_attr_sample3
   }
@@ -301,7 +293,6 @@ task CNSampleNormal {
     File ref_dict
     File bincov_matrix
     File bincov_matrix_index
-    Float? mem_gb_override
     String cnmops_docker
     RuntimeAttr? runtime_attr_override
   }

@@ -9,6 +9,7 @@ workflow CollectPerSampleBenchmarking {
     File samples_list
     File per_sample_tarball
     File comparison_tarball
+    File? sample_renaming_tsv
     String prefix
     Array[String] contigs
     String comparison_set_name
@@ -29,6 +30,17 @@ workflow CollectPerSampleBenchmarking {
 
   String output_prefix = "~{prefix}.sample_benchmark"
 
+  if(defined(sample_renaming_tsv)) {
+    # rename samples in external benchmarking data
+    call RenameBenchmarkTarfileSamples {
+      input:
+        benchmark_tarfile=comparison_tarball,
+        sample_renaming_tsv=select_first([sample_renaming_tsv]),
+        sv_base_mini_docker=sv_base_mini_docker
+    }
+  }
+  File comparison_tarball_=select_first([RenameBenchmarkTarfileSamples.benchmark_renamed_samples, comparison_tarball])
+
   call MiniTasks.SplitUncompressed as SplitShuffledList {
       input:
         whole_file=samples_list,
@@ -47,7 +59,7 @@ workflow CollectPerSampleBenchmarking {
         vcf_stats=vcf_stats,
         samples_list=sublist,
         per_sample_tarball=per_sample_tarball,
-        comparison_tarball=comparison_tarball,
+        comparison_tarball=comparison_tarball_,
         prefix=output_prefix,
         contigs=contigs,
         comparison_set_name=comparison_set_name,
@@ -67,6 +79,81 @@ workflow CollectPerSampleBenchmarking {
   # Return tarball of results
   output {
     File benchmarking_results_tarball = MergeTarredResults.tarball
+  }
+}
+
+
+# rename samples in comparison benchmark to match the cohort VCF
+task RenameBenchmarkTarfileSamples {
+  input {
+    File benchmark_tarfile
+    File sample_renaming_tsv  # TSV file with original sample IDs in 1st column, and desired sample IDs in 2nd column
+    String sv_base_mini_docker
+    String renamed_suffix = "renamed_samples"
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String benchmark_renamed_samples_filename = basename(benchmark_tarfile, ".tar.gz") + "_~{renamed_suffix}.tar.gz"
+
+  # Disk must be scaled proportionally to the size of the archive. Since the archive contains compressed files, the
+  # extracted files should be sized comparably to the archive
+  Float input_size = size(benchmark_tarfile, "GiB")
+  RuntimeAttr default_attr = object {
+    mem_gb: 2.0,
+    disk_gb: ceil(10.0 + 3 * input_size),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    # find the folder the benchmark tarfile will extract to
+    ARCHIVE_DIR=$(basename $(tar --list -f "~{benchmark_tarfile}" | head -n1))
+    # extrct archive
+    tar -xf "~{benchmark_tarfile}"
+
+    # define function to rename the sample IDs
+    function rename_file() {
+      filename=$1
+      original_id=$2
+      renamed_id=$3
+      if [ "$original_id" != "$renamed_id" ]; then
+        new_filename=$(echo "$filename" | sed "s/$original_id/$renamed_id/")
+        mv "$filename" "$new_filename"
+      fi
+    }
+    export -f rename_file
+
+    # loop over sample IDs to rename and do the renaming
+    cd "$ARCHIVE_DIR"
+    while read ORIGINAL_SAMPLE_ID RENAMED_SAMPLE_ID; do
+      find . -name "$ORIGINAL_SAMPLE_ID.*.bed.gz*" \
+        | xargs -I{} bash -c "rename_file {} $ORIGINAL_SAMPLE_ID $RENAMED_SAMPLE_ID"
+    done < "~{sample_renaming_tsv}"
+    cd ..
+
+    # archive the new files
+    tar cz -f "~{benchmark_renamed_samples_filename}" "$ARCHIVE_DIR"
+
+    # remove the unarchived files (in case this is being run in local mode)
+    rm -r "$ARCHIVE_DIR"
+  >>>
+
+  output {
+    File benchmark_renamed_samples = benchmark_renamed_samples_filename
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -91,7 +178,7 @@ task BenchmarkSamples {
   Float input_size = size([vcf_stats, samples_list, per_sample_tarball, comparison_tarball], "GiB")
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
-    disk_gb: ceil(10.0 + input_size * 3.5),
+    disk_gb: ceil(10.0 + input_size * 15),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,

@@ -16,6 +16,7 @@ workflow MainVcfQc {
     String? bcftools_preprocessing_options
     File? ped_file
     File? list_of_samples_to_include
+    File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
     Int max_trios = 1000
     String prefix
     Int sv_per_shard
@@ -40,6 +41,7 @@ workflow MainVcfQc {
 
     # overrides for MiniTasks or Utils
     RuntimeAttr? runtime_override_subset_vcf
+    RuntimeAttr? runtime_override_rename_vcf_samples
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
@@ -141,7 +143,6 @@ workflow MainVcfQc {
   if (defined(site_level_comparison_datasets)) {
     scatter ( comparison_dataset_info in select_first([site_level_comparison_datasets, 
                                                        [[], []]]) ) {
-
       # Collect site-level external benchmarking data
       call sitebench.CollectSiteLevelBenchmarking {
         input:
@@ -182,7 +183,7 @@ workflow MainVcfQc {
   scatter ( shard in SplitSamplesList.shards ) {
     call persample.CollectQcPerSample {
       input:
-        vcfs=vcfs,
+        vcfs=vcfs_for_qc,
         vcf_format_has_cn=vcf_format_has_cn,
         samples_list=shard,
         prefix=prefix,
@@ -236,14 +237,14 @@ workflow MainVcfQc {
   if (defined(sample_level_comparison_datasets)) {
     scatter ( comparison_dataset_info in select_first([sample_level_comparison_datasets, 
                                                        [[], []]]) ) {
-
       # Collect per-sample external benchmarking data
       call samplebench.CollectPerSampleBenchmarking {
         input:
           vcf_stats=MergeVcfWideStats.merged_bed_file,
           samples_list=CollectQcVcfWide.samples_list[0],
           per_sample_tarball=TarShardVidLists.vid_lists,
-          comparison_tarball=select_first([comparison_dataset_info[1]]),
+          comparison_tarball=comparison_dataset_info[1],
+          sample_renaming_tsv=sample_renaming_tsv,
           prefix=prefix,
           contigs=contigs,
           comparison_set_name=comparison_dataset_info[0],
