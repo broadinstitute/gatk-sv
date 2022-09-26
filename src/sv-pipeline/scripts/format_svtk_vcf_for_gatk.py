@@ -253,8 +253,8 @@ def add_cn_ecn(record: pysam.VariantRecord,
         record with CN and ECN fields added"""
     svtype = record.info['SVTYPE']
     contig = record.contig
-    new_record = vcf_out.new_record(id=record.id, info=record.info, samples=record.samples,
-                                    contig=contig, start=record.start, stop=record.stop, alleles=record.alleles)
+    new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=record.stop,
+                                    alleles=record.alleles, info=record.info)
 
     # copy FORMAT fields
     for sample in record.samples:
