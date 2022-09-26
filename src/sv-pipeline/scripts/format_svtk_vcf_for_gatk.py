@@ -144,10 +144,6 @@ def convert(record: pysam.VariantRecord,
     header: pysam.VariantRecord
         gatk-style record
     """
-    # info fields we drop by default (unless needed for certain SV types)
-    default_remove_infos = set(["SVLEN", "STRANDS", "CHR2"])
-    if bnd_end_dict is not None:
-        default_remove_infos.add("END2")
     svtype = record.info['SVTYPE']
     # Force symbolic BND alleles
     if svtype == 'BND':
@@ -155,11 +151,8 @@ def convert(record: pysam.VariantRecord,
     else:
         alleles = record.alleles
     contig = record.contig
-    new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=record.stop, alleles=alleles)
-    # copy INFO fields
-    for key in record.info:
-        if key not in default_remove_infos and key not in remove_infos:
-            new_record.info[key] = record.info[key]
+    new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=record.stop, alleles=alleles,
+                                    info={key: value for key, value in record.info.items() if key not in remove_infos})
     # fix SVLEN, STRANDS, CHR2, and END2 where needed
     if svtype == 'INS':
         new_record.info['SVLEN'] = record.info['SVLEN']
@@ -325,6 +318,13 @@ def _process(vcf_in: pysam.VariantFile,
     else:
         bnd_end_dict = None
     ploidy_dict = _parse_ploidy_table(arguments.ploidy_table)
+
+    # info fields we drop by default (unless needed for certain SV types)
+    default_remove_infos = set(["SVLEN", "STRANDS", "CHR2"])
+    if bnd_end_dict is not None:
+        default_remove_infos.add("END2")
+    remove_infos = remove_infos.union(default_remove_infos)
+
     for record in vcf_in:
         if arguments.filter_unsupported_types and filter_unsupported_type(record):
             if vcf_filter is not None:
