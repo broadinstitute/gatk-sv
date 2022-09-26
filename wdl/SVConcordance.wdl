@@ -11,10 +11,13 @@ workflow SVConcordance {
     File ploidy_table
     String cohort
 
-    Boolean? preprocess_truth_vcf
-    String? preprocess_truth_args
-    Boolean? preprocess_eval_vcf
-    String? preprocess_eval_args
+    Boolean? run_svutils_truth_vcf
+    Boolean? run_formatter_truth_vcf
+    String? formatter_truth_args
+
+    Boolean? run_svutils_eval_vcf
+    Boolean? run_formatter_eval_vcf
+    String? formatter_eval_args
 
     # For testing
     File? svtk_to_gatk_script
@@ -30,17 +33,21 @@ workflow SVConcordance {
     Float? java_mem_fraction
 
     RuntimeAttr? runtime_attr_svutils_truth
-    RuntimeAttr? runtime_attr_prepare_truth
-    RuntimeAttr? runtime_attr_prepare_eval
+    RuntimeAttr? runtime_attr_format_truth
+    RuntimeAttr? runtime_attr_svutils_eval
+    RuntimeAttr? runtime_attr_format_eval
     RuntimeAttr? runtime_attr_sv_concordance
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_concat_shards
   }
 
-  Boolean preprocess_truth_vcf_ = select_first([preprocess_truth_vcf, true])
-  Boolean preprocess_eval_vcf_ = select_first([preprocess_eval_vcf, true])
+  Boolean run_svutils_truth_vcf_ = select_first([run_svutils_truth_vcf, true])
+  Boolean run_formatter_truth_vcf_ = select_first([run_formatter_truth_vcf, true])
 
-  if (preprocess_truth_vcf_) {
+  Boolean run_svutils_eval_vcf_ = select_first([run_svutils_eval_vcf, true])
+  Boolean run_formatter_eval_vcf_ = select_first([run_formatter_eval_vcf, true])
+
+  if (run_svutils_truth_vcf_) {
     call SvutilsFixVcf as SvutilsTruth {
       input:
         vcf=truth_vcf,
@@ -48,35 +55,39 @@ workflow SVConcordance {
         sv_utils_docker=sv_utils_docker,
         runtime_attr_override=runtime_attr_svutils_truth
     }
-    call PreprocessVcf as PreprocessTruth {
+  }
+  if (run_formatter_truth_vcf_) {
+    call PreprocessVcf as FormatTruth {
       input:
-        vcf=SvutilsTruth.out,
+        vcf=select_first([SvutilsTruth.out, truth_vcf]),
         ploidy_table=ploidy_table,
-        args=preprocess_truth_args,
-        output_prefix="~{cohort}.preprocess_truth",
+        args=formatter_truth_args,
+        output_prefix="~{cohort}.format_truth",
         script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_prepare_truth
+        runtime_attr_override=runtime_attr_format_truth
     }
   }
 
-  if (preprocess_eval_vcf_) {
+  if (run_svutils_eval_vcf_) {
     call SvutilsFixVcf as SvutilsEval {
       input:
         vcf=eval_vcf,
         output_prefix="~{cohort}.svutils_eval",
         sv_utils_docker=sv_utils_docker,
-        runtime_attr_override=runtime_attr_svutils_truth
+        runtime_attr_override=runtime_attr_svutils_eval
     }
-    call PreprocessVcf as PreprocessEval {
+  }
+  if (run_formatter_eval_vcf_) {
+    call PreprocessVcf as FormatEval {
       input:
-        vcf=SvutilsEval.out,
+        vcf=select_first([SvutilsEval.out, eval_vcf]),
         ploidy_table=ploidy_table,
-        args=preprocess_eval_args,
-        output_prefix="~{cohort}.preprocess_eval",
+        args=formatter_eval_args,
+        output_prefix="~{cohort}.format_eval",
         script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_prepare_eval
+        runtime_attr_override=runtime_attr_format_eval
     }
   }
 
@@ -84,8 +95,8 @@ workflow SVConcordance {
   scatter (contig in contigs) {
     call SVConcordance {
       input:
-        eval_vcf=select_first([PreprocessEval.out, eval_vcf]),
-        truth_vcf=select_first([PreprocessTruth.out, truth_vcf]),
+        eval_vcf=select_first([FormatEval.out, SvutilsEval.out, eval_vcf]),
+        truth_vcf=select_first([FormatTruth.out, SvutilsTruth.out, truth_vcf]),
         output_prefix="~{cohort}.concordance.~{contig}",
         contig=contig,
         reference_dict=reference_dict,
@@ -108,10 +119,10 @@ workflow SVConcordance {
   output {
     File concordance_vcf = ConcatVcfs.concat_vcf
     File concordance_vcf_index = ConcatVcfs.concat_vcf_idx
-    File? filtered_eval_records_vcf = PreprocessEval.filtered
-    File? filtered_eval_records_index = PreprocessEval.filtered_index
-    File? filtered_truth_records_vcf = PreprocessTruth.filtered
-    File? filtered_truth_records_index = PreprocessTruth.filtered_index
+    File? filtered_eval_records_vcf = FormatEval.filtered
+    File? filtered_eval_records_index =FormatEval.filtered_index
+    File? filtered_truth_records_vcf = FormatTruth.filtered
+    File? filtered_truth_records_index = FormatTruth.filtered_index
   }
 }
 

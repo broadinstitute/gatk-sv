@@ -1,7 +1,6 @@
 #!/bin/env python
 
 import argparse
-import contextlib
 import pysam
 import sys
 import gzip
