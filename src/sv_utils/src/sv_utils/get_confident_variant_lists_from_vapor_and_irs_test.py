@@ -57,7 +57,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--irs-test-report", type=str,
                         help="IRS results file", required=True)
     parser.add_argument("--irs-pvalue-threshold", type=float, default=0.001,
-                        help="IRS results file")
+                        help="Maximum pvalue to choose a good record from the IRS report")
     parser.add_argument("--irs-min-probes", type=int, default=4,
                         help="IRS results file")
     parser.add_argument("--irs-min-cnv-size", type=int, default="50000",
