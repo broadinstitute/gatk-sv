@@ -4,7 +4,7 @@
   "SVConcordance.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "SVConcordance.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
 
-  "SVConcordance.eval_vcf" : {{ test_batch.merged_depth_vcf | tojson }},
+  "SVConcordance.eval_vcf" : {{ test_batch.clean_vcf | tojson }},
   "SVConcordance.truth_vcf" : {{ test_batch.joined_raw_calls_vcf | tojson }},
 
   "SVConcordance.ploidy_table": {{ test_batch.ploidy_table | tojson }},
