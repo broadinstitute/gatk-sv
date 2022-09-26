@@ -48,7 +48,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="GATK-SV VCF file.", required=True)
     parser.add_argument("--vapor-json", "-j", type=str,
                         help="Json file with mapping from sample ID to corresponding VaPoR file.", required=True)
-    parser.add_argument("--min-vapor-precision", type=float, default=get_truth_overlap.Default.min_vapor_precision,
+    parser.add_argument("--vapor-min-precision", type=float, default=get_truth_overlap.Default.min_vapor_precision,
                         help="Minimum allowed precision for selecting good or bad variants from VaPoR")
     parser.add_argument("--output", "-O", type=str, default="-",
                         help="File to output results to. If omitted or set to '-', print to stdout")
@@ -88,7 +88,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
 
     vapor_confident_variants = get_confident_variants_vapor(
         vapor_files=vapor_files,
-        precision=arguments.min_vapor_precision,
+        precision=arguments.vapor_min_precision,
         valid_variant_ids=valid_vapor_variant_ids
     )
 
@@ -150,8 +150,7 @@ def get_good_variant_ids_from_irs_report(irs_test_report: str,
     irs_results = genomics_io.tsv_to_pandas(data_file=irs_test_report, require_header=True, header_start='')
     irs_results.set_index("ID", inplace=True)
     irs_good_variant_ids = valid_irs_variant_ids.intersection(
-        irs_results.loc[((irs_results["END"] - irs_results["START"]) >= min_size) &
-                        (irs_results["NPROBES"] >= min_probes) &
+        irs_results.loc[(irs_results["NPROBES"] >= min_probes) &
                         (pd.notna(irs_results["PVALUE"])) &
                         (irs_results["PVALUE"] <= irs_pvalue_threshold)].index
     )
