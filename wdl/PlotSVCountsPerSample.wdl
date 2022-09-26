@@ -6,7 +6,7 @@ import "Structs.wdl"
 workflow PlotSVCountsPerSample {
   input {
     String prefix
-    Array[File?] vcfs  # in order of vcf_identifiers array. To skip one, use null keyword
+    Array[File?] vcfs
     Int N_IQR_cutoff
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_count_svs
