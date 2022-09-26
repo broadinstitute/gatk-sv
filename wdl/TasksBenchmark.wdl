@@ -20,11 +20,9 @@ task ConcatVaPoR {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size(shard_bed_files, "GB")
   Float compression_factor = 5.0
-  Float base_disk_gb = 5.0
-  Float base_mem_gb = 2.0
   RuntimeAttr runtime_default = object {
-                                  mem_gb: base_mem_gb + compression_factor * input_size,
-                                  disk_gb: ceil(base_disk_gb + input_size * (2.0 + compression_factor)),
+                                  mem_gb: 2.0 + compression_factor * input_size,
+                                  disk_gb: ceil(10.0 + input_size * (2.0 + compression_factor)),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -81,7 +79,7 @@ task ConcatVaPoR {
 
 #localize a specific contig of a bam/cram file
 task LocalizeCram {
-  input{
+  input {
     String contig
     File ref_fasta
     File ref_fai
@@ -105,7 +103,7 @@ task LocalizeCram {
   Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
-  output{
+  output {
     File local_bam = "~{contig}.bam"
     File local_bai = "~{contig}.bam.bai"
   }
@@ -129,10 +127,10 @@ task LocalizeCram {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
-task LocalizeCramRequestPay{
-  input{
+task LocalizeCramRequestPay {
+  input {
     String contig
     File ref_fasta
     File ref_fai
@@ -182,13 +180,14 @@ task LocalizeCramRequestPay{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
 #extract specific contig from vcf
-task SplitBed{
-  input{
+task SplitBed {
+  input {
     String contig
-    File? bed_file
+    String? sample_to_extract
+    File bed_file
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -204,15 +203,15 @@ task SplitBed{
 
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  output{
+  output {
     File contig_bed = "~{contig}.bed"
   }
 
   command <<<
     if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
+      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
     else
-      awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
+      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
     fi
   >>>
 
@@ -226,11 +225,12 @@ task SplitBed{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
-  }
-task SplitVcf{
-  input{
+}
+
+task SplitVcf {
+  input {
     String contig
-    File? vcf_file
+    File vcf_file
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -273,10 +273,10 @@ task SplitVcf{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
-task vcf2bed{
-  input{
+task vcf2bed {
+  input {
     File vcf
     File? vcf_index
     String sv_pipeline_docker
@@ -326,7 +326,7 @@ task vcf2bed{
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-  }
+}
 
 
 

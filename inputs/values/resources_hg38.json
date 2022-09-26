@@ -43,6 +43,7 @@
   "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins_perSample.tar.gz"],
   "gnomad_v2_collins_site_level_benchmarking_dataset" : ["gnomAD_v2_Collins", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins"],
   "hgsv_byrska_bishop_sample_level_benchmarking_dataset": ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"],
+  "hgsv_byrska_bishop_sample_renaming_tsv": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/rename_sample_ids_HGSV_ByrskaBishop.tsv",
   "hgsv_byrska_bishop_site_level_benchmarking_dataset" : ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV"],
   "hgsv_ebert_sample_level_benchmarking_dataset": ["HGSV_Ebert", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_Ebert_perSample.tar.gz"],
   "ssc_belyeu_sample_level_benchmarking_dataset": ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu_perSample.tar.gz"],

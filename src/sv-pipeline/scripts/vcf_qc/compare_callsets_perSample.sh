@@ -140,12 +140,13 @@ fi
 mkdir ${OVRTMP}/SET1/
 mkdir ${OVRTMP}/SET1/original/
 tar -xzvf ${SET1} --directory ${OVRTMP}/SET1/original/
+rm -f ${SET1}
 #Get list of all samples in SET1
 find ${OVRTMP}/SET1/original/ -name "*.SV_calls.bed.gz" > \
-${OVRTMP}/SET1/original/SET1_paths.list
+  ${OVRTMP}/SET1/original/SET1_paths.list
 sed 's/\//\t/g' ${OVRTMP}/SET1/original/SET1_paths.list | \
-awk '{ print $NF }' | sed 's/\./\t/g' | awk '{ print $1 }' > \
-${OVRTMP}/SET1/original/SET1_samples.list
+  awk '{ print $NF }' | sed 's/\./\t/g' | awk '{ print $1 }' > \
+  ${OVRTMP}/SET1/original/SET1_samples.list
 paste ${OVRTMP}/SET1/original/SET1_samples.list \
   ${OVRTMP}/SET1/original/SET1_paths.list > \
   ${OVRTMP}/SET1/original/SET1_samples_and_paths.list
@@ -153,16 +154,17 @@ paste ${OVRTMP}/SET1/original/SET1_samples.list \
 mkdir ${OVRTMP}/SET2/
 mkdir ${OVRTMP}/SET2/original/
 tar -xzvf ${SET2} --directory ${OVRTMP}/SET2/original/
+
 #Get list of all samples in SET2
 #Print status
 if [ ${QUIET} == 0 ]; then
   echo -e "$( date ) - PER-SAMPLE COMPARISON STATUS: Determining samples present in SET1, SET2, and sample list."
 fi
 find ${OVRTMP}/SET2/original/ -name "*.SV_calls.bed.gz" > \
-${OVRTMP}/SET2/original/SET2_paths.list
+  ${OVRTMP}/SET2/original/SET2_paths.list
 sed 's/\//\t/g' ${OVRTMP}/SET2/original/SET2_paths.list | \
-awk '{ print $NF }' | sed 's/\./\t/g' | awk '{ print $1 }' > \
-${OVRTMP}/SET2/original/SET2_samples.list
+  awk '{ print $NF }' | sed 's/\./\t/g' | awk '{ print $1 }' > \
+  ${OVRTMP}/SET2/original/SET2_samples.list
 paste ${OVRTMP}/SET2/original/SET2_samples.list \
   ${OVRTMP}/SET2/original/SET2_paths.list > \
   ${OVRTMP}/SET2/original/SET2_samples_and_paths.list
@@ -170,7 +172,7 @@ paste ${OVRTMP}/SET2/original/SET2_samples.list \
 fgrep -wf ${OVRTMP}/SET1/original/SET1_samples.list \
           ${OVRTMP}/SET2/original/SET2_samples.list | \
   fgrep -wf ${SAMPLES} > \
-${OVRTMP}/int_samples.list || true
+  ${OVRTMP}/int_samples.list || true
 
 
 ###ONLY RUN COMPARISONS IF ANY SAMPLES FOUND IN SET1, SET2, AND SAMPLE LIST
@@ -193,23 +195,20 @@ else
   while read ID; do
     echo -e "${ID}"
     awk -v ID=${ID} '{ if ($1==ID) print $2 }' \
-    ${OVRTMP}/SET1/original/SET1_samples_and_paths.list
+      ${OVRTMP}/SET1/original/SET1_samples_and_paths.list
     awk -v ID=${ID} '{ if ($1==ID) print $2 }' \
-    ${OVRTMP}/SET2/original/SET2_samples_and_paths.list
+      ${OVRTMP}/SET2/original/SET2_samples_and_paths.list
   done < ${OVRTMP}/int_samples.list | paste - - - > \
   ${OVRTMP}/int_samples_and_paths.list
 
   #Iterate over samples and run compare_callsets.sh for sensitivity & specificity
   i=0
-  j=0
   while read ID SET1s SET2s; do
     #Clean callsets for sensitivity analysis
-    zcat ${SET1s} | awk -v OFS="\t" '{ if ($3!="end" && $3<$2) $3=$2; print }' > \
-    ${OVRTMP}/${ID}.SET1.sens.cleaned.bed
-    bgzip -f ${OVRTMP}/${ID}.SET1.sens.cleaned.bed
-    zcat ${SET2s} | awk -v OFS="\t" '{ if ($3!="end" && $3<$2) $3=$2; print }' > \
-    ${OVRTMP}/${ID}.SET2.sens.cleaned.bed
-    bgzip -f ${OVRTMP}/${ID}.SET2.sens.cleaned.bed
+    zcat ${SET1s} | awk -v OFS="\t" '{ if ($3!="end" && $3<$2) $3=$2; print }' | \
+      bgzip -c > ${OVRTMP}/${ID}.SET1.sens.cleaned.bed.gz
+    zcat ${SET2s} | awk -v OFS="\t" '{ if ($3!="end" && $3<$2) $3=$2; print }' | \
+      bgzip -c > ${OVRTMP}/${ID}.SET2.sens.cleaned.bed.gz
 
     #Run sensitivity analysis
     ${BIN}/compare_callsets.sh \
@@ -225,16 +224,17 @@ else
 
     #Clean callsets for specificity analysis
     echo -e "#chr\tstart\tend\tsvtype\tlength\tAF" > \
-    ${OVRTMP}/${ID}.SET1.spec.cleaned.bed
+      ${OVRTMP}/${ID}.SET1.spec.cleaned.bed
     zcat ${SET1s} | fgrep -v "#" | awk -v OFS="\t" \
-    '{ if ($3!="end" && $3<$2) $3=$2; print $1, $2, $3, $5, $6, $NF }' >> \
-    ${OVRTMP}/${ID}.SET1.spec.cleaned.bed
+      '{ if ($3!="end" && $3<$2) $3=$2; print $1, $2, $3, $5, $6, $NF }' >> \
+      ${OVRTMP}/${ID}.SET1.spec.cleaned.bed
     bgzip -f ${OVRTMP}/${ID}.SET1.spec.cleaned.bed
+
     echo -e "#chr\tstart\tend\tVID\tsvtype\tlength\tAF" > \
-    ${OVRTMP}/${ID}.SET2.spec.cleaned.bed
+      ${OVRTMP}/${ID}.SET2.spec.cleaned.bed
     zcat ${SET2s} | fgrep -v "#" | awk -v OFS="\t" -v ID=${ID} -v PREFIX=${PREFIX} \
-    '{ if ($3!="end" && $3<$2) $3=$2; print $1, $2, $3, ID"_"PREFIX"_"NR, $4, $5, $6 }' >> \
-    ${OVRTMP}/${ID}.SET2.spec.cleaned.bed
+      '{ if ($3!="end" && $3<$2) $3=$2; print $1, $2, $3, ID"_"PREFIX"_"NR, $4, $5, $6 }' >> \
+      ${OVRTMP}/${ID}.SET2.spec.cleaned.bed
     bgzip -f ${OVRTMP}/${ID}.SET2.spec.cleaned.bed
 
     #Run specificity analysis
@@ -251,11 +251,10 @@ else
 
     #Report counter, if relevant
     i=$(( ${i} + 1 ))
-    j=$(( ${j} + 1 ))
     if [ ${i} -eq 10 ]; then
       i=0
       if [ ${QUIET} == 0 ]; then
-        echo -e "$( date ) - PER-SAMPLE COMPARISON STATUS: Finished comparisons for ${j}/${nsamps} samples..."
+        echo -e "$( date ) - PER-SAMPLE COMPARISON STATUS: Finished comparisons for ${i}/${nsamps} samples..."
       fi
     fi
   done < ${OVRTMP}/int_samples_and_paths.list

@@ -21,6 +21,7 @@ workflow FilterBatchQc {
     File ped_file
     Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
+    File? sample_renaming_tsv # File with mapping to rename sample IDs for compatibility with sample_level_comparison_datasets
 
     File contig_list
     Int? random_seed
@@ -102,6 +103,7 @@ workflow FilterBatchQc {
           samples_per_shard=600,
           site_level_comparison_datasets=site_level_comparison_datasets,
           sample_level_comparison_datasets=sample_level_comparison_datasets,
+          sample_renaming_tsv=sample_renaming_tsv,
           primary_contigs_fai=contig_list,
           random_seed=random_seed,
           max_gq=max_gq_,

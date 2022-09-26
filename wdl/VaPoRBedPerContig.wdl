@@ -8,7 +8,8 @@ workflow VaPoRBed {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
-    File? bed_file
+    File bed_file
+    String? sample_to_extract
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -29,6 +30,7 @@ workflow VaPoRBed {
     call tasks10.SplitBed as SplitBed{
       input:
         contig = contig,
+        sample_to_extract = sample_to_extract,
         bed_file = bed_file,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override=runtime_attr_SplitVcf
@@ -67,8 +69,8 @@ workflow VaPoRBed {
   }
 
 
-task RunVaPoR{
-  input{
+task RunVaPoR {
+  input {
     String prefix
     String contig
     File bam_or_cram_file
@@ -84,7 +86,7 @@ task RunVaPoR{
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 5,
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
@@ -125,8 +127,8 @@ task RunVaPoR{
   }
 }
 
-task RunVaPoRWithCram{
-  input{
+task RunVaPoRWithCram {
+  input {
     String prefix
     String contig
     String bam_or_cram_file
