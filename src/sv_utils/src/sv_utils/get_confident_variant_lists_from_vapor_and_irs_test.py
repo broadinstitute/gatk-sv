@@ -18,8 +18,9 @@ def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
                                  valid_variant_ids: set) -> get_truth_overlap.ConfidentVariants:
     vapor_info = {
         sample_id:
-            get_truth_overlap.select_confident_vapor_variants(vapor_file=vapor_file, valid_variant_ids=valid_variant_ids,
-                                                                                    precision=precision)
+            get_truth_overlap.select_confident_vapor_variants(vapor_file=vapor_file,
+                                                              valid_variant_ids=valid_variant_ids,
+                                                              precision=precision)
         for sample_id, vapor_file in vapor_files.items()
     }
     return vapor_info
@@ -35,6 +36,55 @@ def get_called_samples(record: VariantRecord) -> set:
         if record.samples[sample]['GT'] not in NULL_GT:
             samples.add(sample)
     return samples
+
+
+def get_irs_sample_confident_variants(vcf: str,
+                                      irs_good_variant_ids: set,
+                                      samples_list_to_report_mapping: Mapping[Set[str], Set[str]]) \
+        -> get_truth_overlap.ConfidentVariants:
+    irs_confident_variants = {}
+    with VariantFile(vcf) as vcf:
+        for record in vcf:
+            if record.id in irs_good_variant_ids:
+                called_samples = get_called_samples(record)
+                for sample_list in samples_list_to_report_mapping:
+                    if record.id in samples_list_to_report_mapping[sample_list]:
+                        for sample in called_samples:
+                            if sample in sample_list:
+                                if sample not in irs_confident_variants:
+                                    irs_confident_variants[sample] = \
+                                        get_truth_overlap.SampleConfidentVariants(good_variant_ids={record.id},
+                                                                                  bad_variant_ids=set())
+                                else:
+                                    new_good_ids = set(irs_confident_variants[sample].__dict__['good_variant_ids'])
+                                    new_good_ids.add(record.id)
+                                    irs_confident_variants[sample] = \
+                                        get_truth_overlap.SampleConfidentVariants(
+                                            good_variant_ids=new_good_ids,
+                                            bad_variant_ids=set())
+    return irs_confident_variants
+
+
+def get_good_variant_ids_from_irs_report(irs_test_report: str,
+                                         irs_pvalue_threshold: float,
+                                         min_probes: int,
+                                         valid_irs_variant_ids: set):
+    irs_results = genomics_io.tsv_to_pandas(data_file=irs_test_report, require_header=True, header_start='')
+    irs_results.set_index("ID", inplace=True)
+    irs_good_variant_ids = valid_irs_variant_ids.intersection(
+        irs_results.loc[(irs_results["NPROBES"] >= min_probes) &
+                        (pd.notna(irs_results["PVALUE"])) &
+                        (irs_results["PVALUE"] <= irs_pvalue_threshold)].index
+    )
+    return irs_good_variant_ids
+
+
+def read_list_file(path: str) -> Iterable[str]:
+    with open(path, 'r') as f:
+        items = [line for line in f.read().splitlines() if line]
+    if len(items) == 0:
+        raise ValueError("list empty")
+    return items
 
 
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
@@ -54,8 +104,10 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="File to output results to. If omitted or set to '-', print to stdout")
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
                         help="Maximum size CNV to trust vapor results for")
-    parser.add_argument("--irs-test-report", type=str,
-                        help="IRS results file", required=True)
+    parser.add_argument("--irs-sample-batch-lists", type=str,
+                        help="list of lists of samples used in each IRS test batch", required=True)
+    parser.add_argument("--irs-test-report-list", type=str,
+                        help="list of IRS results files", required=True)
     parser.add_argument("--irs-pvalue-threshold", type=float, default=0.001,
                         help="Maximum pvalue to choose a good record from the IRS report")
     parser.add_argument("--irs-min-probes", type=int, default=4,
@@ -64,8 +116,6 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Minimum size CNV to trust IRS results for")
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
-    if parsed_arguments.vapor_json is None:
-        raise ValueError("Must supply one or more --vapor-json")
     return parsed_arguments
 
 
@@ -92,18 +142,22 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         valid_variant_ids=valid_vapor_variant_ids
     )
 
-    # read the IRS table
-    irs_good_variant_ids = get_good_variant_ids_from_irs_report(arguments.irs_test_report,
-                                                                arguments.irs_pvalue_threshold,
-                                                                arguments.irs_min_probes,
-                                                                arguments.irs_min_cnv_size,
-                                                                valid_irs_variant_ids)
+    sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
+                                                  read_list_file(arguments.irs_test_report_list))
+
+    samples_list_to_valid_variant_ids_mapping = {
+        frozenset(read_list_file(sample_list)): frozenset(get_good_variant_ids_from_irs_report(report_list,
+                                                                                               arguments.irs_pvalue_threshold,
+                                                                                               arguments.irs_min_probes,
+                                                                                               valid_irs_variant_ids))
+        for sample_list, report_list in sample_list_file_to_report_file_mapping
+    }
 
     # for each variant in the IRS table that passes filters as good,
     # find all non ref samples and add variant ID to good list
     irs_confident_variants = get_irs_sample_confident_variants(arguments.vcf,
-                                                               irs_good_variant_ids,
-                                                               )
+                                                               valid_irs_variant_ids,
+                                                               samples_list_to_valid_variant_ids_mapping)
 
     all_confident_variants = {}
     for sample in set(irs_confident_variants.keys()).union(vapor_confident_variants.keys()):
@@ -118,43 +172,6 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
 
     get_truth_overlap.output_confident_variants(all_confident_variants, output_file=arguments.output)
     return all_confident_variants
-
-
-def get_irs_sample_confident_variants(vcf: str,
-                                      irs_good_variant_ids: set) -> get_truth_overlap.ConfidentVariants:
-    irs_confident_variants = {}
-    with VariantFile(vcf) as vcf:
-        for record in vcf:
-            if record.id in irs_good_variant_ids:
-                samples = get_called_samples(record)
-                for sample in samples:
-                    if sample not in irs_confident_variants:
-                        irs_confident_variants[sample] = \
-                            get_truth_overlap.SampleConfidentVariants(good_variant_ids={record.id},
-                                                                      bad_variant_ids=set())
-                    else:
-                        new_good_ids = set(irs_confident_variants[sample].__dict__['good_variant_ids'])
-                        new_good_ids.add(record.id)
-                        irs_confident_variants[sample] = \
-                            get_truth_overlap.SampleConfidentVariants(
-                                good_variant_ids=new_good_ids,
-                                bad_variant_ids=set())
-    return irs_confident_variants
-
-
-def get_good_variant_ids_from_irs_report(irs_test_report: str,
-                                         irs_pvalue_threshold: float,
-                                         min_probes: int,
-                                         min_size: int,
-                                         valid_irs_variant_ids: set):
-    irs_results = genomics_io.tsv_to_pandas(data_file=irs_test_report, require_header=True, header_start='')
-    irs_results.set_index("ID", inplace=True)
-    irs_good_variant_ids = valid_irs_variant_ids.intersection(
-        irs_results.loc[(irs_results["NPROBES"] >= min_probes) &
-                        (pd.notna(irs_results["PVALUE"])) &
-                        (irs_results["PVALUE"] <= irs_pvalue_threshold)].index
-    )
-    return irs_good_variant_ids
 
 
 if __name__ == "__main__":
