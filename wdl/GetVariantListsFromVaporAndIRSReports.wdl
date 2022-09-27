@@ -14,7 +14,8 @@ workflow GetVariantListsFromVaporAndIRSReports {
     Float? vapor_min_precision = 0.01
     Int? vapor_max_cnv_size = 5000
     Int? irs_min_cnv_size = 50000
-    Float? irs_min_pvalue = 0.001
+    Float? irs_good_pvalue_threshold = 0.001
+    Float? irs_bad_pvalue_threshold = 0.6
     Int? irs_min_probes = 5
     String? output_prefix
     String sv_utils_docker
@@ -38,7 +39,8 @@ workflow GetVariantListsFromVaporAndIRSReports {
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
       irs_min_cnv_size=irs_min_cnv_size,
-      irs_min_pvalue=irs_min_pvalue,
+      irs_good_pvalue_threshold=irs_good_pvalue_threshold,
+      irs_bad_pvalue_threshold=irs_bad_pvalue_threshold,
       irs_min_probes=irs_min_probes,
       output_prefix=output_prefix_,
       sv_utils_docker=sv_utils_docker,
@@ -61,7 +63,8 @@ task GetVariantListsFromVaporAndIRSReports {
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
     Int? irs_min_cnv_size
-    Float? irs_min_pvalue
+    Float? irs_good_pvalue_threshold
+    Float? irs_bad_pvalue_threshold
     Int? irs_min_probes
     String output_prefix
     String sv_utils_docker
@@ -107,7 +110,8 @@ task GetVariantListsFromVaporAndIRSReports {
       ~{"--vapor-min-precision " + vapor_min_precision} \
       ~{"--irs-min-cnv-size " + irs_min_cnv_size} \
       ~{"--irs-min-probes " + irs_min_probes} \
-      ~{"--irs-pvalue-threshold " + irs_min_pvalue} \
+      ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
+      ~{"--irs-bad-pvalue-threshold " + irs_bad_pvalue_threshold} \
       -O ~{output_prefix}.json
   >>>
 
