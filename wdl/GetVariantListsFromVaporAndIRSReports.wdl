@@ -10,6 +10,7 @@ workflow GetVariantListsFromVaporAndIRSReports {
     Array[File] vapor_files
     Array[File] irs_sample_batches
     Array[File] irs_test_reports
+    File? irs_contigs_fai
     Float? vapor_min_precision = 0.01
     Int? vapor_max_cnv_size = 5000
     Int? irs_min_cnv_size = 50000
@@ -33,6 +34,7 @@ workflow GetVariantListsFromVaporAndIRSReports {
       vapor_files=vapor_files,
       irs_sample_batches=irs_sample_batches,
       irs_test_reports=irs_test_reports,
+      irs_contigs_fai=irs_contigs_fai,
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
       irs_min_cnv_size=irs_min_cnv_size,
@@ -55,6 +57,7 @@ task GetVariantListsFromVaporAndIRSReports {
     Array[File] vapor_files
     Array[File] irs_sample_batches
     Array[File] irs_test_reports
+    File? irs_contigs_fai
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
     Int? irs_min_cnv_size
@@ -99,6 +102,7 @@ task GetVariantListsFromVaporAndIRSReports {
       --vcf ~{vcf} \
       --irs-sample-batch-lists ~{write_lines(irs_sample_batches)} \
       --irs-test-report-list ~{write_lines(irs_test_reports)} \
+      ~{"--irs-contigs-file " + irs_contigs_fai} \
       ~{"--vapor-max-cnv-size " + vapor_max_cnv_size} \
       ~{"--vapor-min-precision " + vapor_min_precision} \
       ~{"--irs-min-cnv-size " + irs_min_cnv_size} \

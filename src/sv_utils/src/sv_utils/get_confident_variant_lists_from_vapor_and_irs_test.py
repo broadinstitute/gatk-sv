@@ -106,6 +106,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--irs-sample-batch-lists", type=str,
                         help="list of lists of samples used in each IRS test batch", required=True)
+    parser.add_argument("--irs-contigs-file", type=str,
+                        help="list of contigs to restrict IRS variants to")
     parser.add_argument("--irs-test-report-list", type=str,
                         help="list of IRS results files", required=True)
     parser.add_argument("--irs-pvalue-threshold", type=float, default=0.001,
@@ -125,13 +127,19 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     valid_vapor_variant_ids = set()
     valid_irs_variant_ids = set()
 
+    if arguments.irs_contigs_file is not None:
+        irs_contigs = frozenset([line.split("\t")[0] for line in read_list_file(arguments.irs_contigs_file)])
+    else:
+        irs_contigs = None
+
     # scan the vcf to get a list of valid variants
     with VariantFile(arguments.vcf) as vcf:
         for record in vcf:
             svtype = record.info['SVTYPE']
             if not (svtype == 'DEL' or svtype == 'DUP') or record.info['SVLEN'] <= arguments.vapor_max_cnv_size:
                 valid_vapor_variant_ids.add(record.id)
-            if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= arguments.irs_min_cnv_size:
+            if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= arguments.irs_min_cnv_size \
+                    and (irs_contigs is None or record.contig in irs_contigs):
                 valid_irs_variant_ids.add(record.id)
 
     vapor_files = get_truth_overlap.get_vapor_files(arguments.vapor_json)
