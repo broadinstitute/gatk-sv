@@ -36,8 +36,9 @@ class VcfKeys:
     source = genomics_io.VcfKeys.source
 
 
-BND_TYPES = {"BND", "CTX"}
-GAIN_TYPES = {"INS", "CPX", "MEI", "DUP"}
+BND_TYPES = frozenset({"BND", "CTX"})
+GAIN_TYPES = frozenset({"INS", "CPX", "MEI", "DUP"})
+VALID_EMPTY_INTERVAL_TYPES = frozenset({"INS", "BND", "CPX", "CTX"})
 
 
 def str_to_loc(loc: str) -> (str, int):
@@ -146,7 +147,7 @@ def fix_record(
     if record.pos >= record.stop:
         if record.pos == record.stop:
             # empty interval, valid for INS, otherwise an error
-            if record.info[VcfKeys.svtype] != "INS":
+            if record.info[VcfKeys.svtype] not in ["INS", "BND", "CPX", "CTX"]:
                 raise ValueError(
                     f"Variant {record.id} with {VcfKeys.svtype}={record.info[VcfKeys.svtype]} has pos=stop={record.pos}"
                 )
