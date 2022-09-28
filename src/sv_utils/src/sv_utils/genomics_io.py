@@ -183,6 +183,7 @@ class Default:
     location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
     use_copy_number = False
     use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
+    column_levels = (Keys.sample_id, Keys.property)
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -1274,7 +1275,7 @@ def get_vcf_variant_ids(vcf: str) -> pandas.Index:
 
 def drop_trivial_columns_multi_index(variants: pandas.DataFrame) -> pandas.DataFrame:
     if len(variants.columns) > 0:
-        for level in (Keys.sample_id, Keys.property):
+        for level in Default.column_levels:
             level_values = variants.columns.get_level_values(level)
             # noinspection PyUnresolvedReferences
             if level_values.isnull().all() or (level_values == level_values[0]).all():
@@ -1447,7 +1448,7 @@ def vcf_to_pandas(
         variants = pandas.DataFrame(
             {property_collator.column_name: property_collator.get_pandas_series(property_values)
              for property_collator, property_values in zip(property_collators, zip(*encoded_rows_iter))}
-        ).rename_axis(columns=(Keys.sample_id, Keys.property))\
+        ).rename_axis(columns=Default.column_levels)\
             .sort_index(axis=1, level=Keys.sample_id)
 
     if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
@@ -1906,9 +1907,9 @@ def assign_dataframe_column(
         # adding a multi-index property (e.g. adding a genotype field to a variants DataFrame)
         if not isinstance(df.columns, pandas.MultiIndex):
             # adding a multi-index property to a regular DataFrame: need to promote df to multi-index
-            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=[Keys.sample_id, Keys.property])
+            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=Default.column_levels)
 
-        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=[Keys.sample_id, Keys.property])
+        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=Default.column_levels)
         is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
         if is_new_prop:
             df = df.join(values)
