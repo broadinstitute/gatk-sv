@@ -150,7 +150,7 @@ task TrainGqRecalibratorTask {
         Float mem_gb_overhead = 1.5
     }
 
-    Int disk_gb = round(1000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
+    Int disk_gb = round(100 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
                         size(genome_tracks, "GiB") + size(gq_recalibrator_model_file, "GiB"))
     Float mem_gb_java = if defined(num_entries)
         then 3.0 + mem_scale_num_entries * select_first([num_entries])
@@ -164,7 +164,7 @@ task TrainGqRecalibratorTask {
     runtime {
         docker: gatk_docker
         cpu: 1
-        preemptible: 3
+        preemptible: 0
         max_retries: 1
         memory: mem_gb + " GiB"
         disks: "local-disk " + disk_gb + " HDD"

@@ -33,18 +33,21 @@
     "--gq-scale 0.1"
   ],
   "CrossValidateGqRecalibrator.train_args": [
+    "--learning-rate 0.05",
     "--target-precision 0.95",
     "--max-inheritance-af 0.1",
     "--large-af-weight-penalty 0.05",
-    "--max-depth 12",
+    "--max-depth 7",
     "--subsample 0.8",
     "--colsample-by-tree 0.8",
-    "--min-child-weight 1000",
-    "--truth-weight 0.75",
+    "--min-child-weight 5000",
+    "--gamma 0.2",
+    "--truth-weight 0.90",
     "--train-homref true",
     "--keep-homvar false",
     "--keep-multiallelic true",
-    "--validation-proportion 0.2"
+    "--validation-proportion 0.2",
+    "--early-stopping-loss Training"
   ],
   "CrossValidateGqRecalibrator.get_truth_overlap_args": [
     "--expand-point-svs-bp 1000",
@@ -57,8 +60,10 @@
   ],
   "CrossValidateGqRecalibrator.recalibrate_gq_args": [
     "--keep-homvar false",
-    "--keep-multiallelic true"
+    "--keep-multiallelic true",
+    "--min-scaled-logits -50"
   ],
+  "CrossValidateGqRecalibrator.new_pipeline_passing_score": -50,
   "CrossValidateGqRecalibrator.comparison_scores": [
     {
       "label": "Xuefang",
