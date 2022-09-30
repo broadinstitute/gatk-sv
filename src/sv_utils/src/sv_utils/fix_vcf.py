@@ -10,7 +10,7 @@ import pysam
 from typing import List, Text, Optional, Iterator
 
 
-from sv_utils import genomics_io
+from sv_utils import common, genomics_io
 
 
 # noinspection PyArgumentList
@@ -283,9 +283,10 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("output_vcf", type=str, help='in-spec output vcf')
     parser.add_argument("--num_threads", "-@", type=int, default=Default.num_threads,
                         help="number of threads for compressing output vcf")
-    parser.add_argument("--index-output-vcf", type=bool, default=Default.index_output_vcf,
+    parser.add_argument("--index-output-vcf", type=common.argparse_bool, default=Default.index_output_vcf,
                         help="if true, create tabix index for output vcf")
-    parser.add_argument("--error-on-mismatched-chr2", type=bool, default=Default.error_on_mismatched_chr2,
+    parser.add_argument("--error-on-mismatched-chr2", type=common.argparse_bool,
+                        default=Default.error_on_mismatched_chr2,
                         help=f"If {VcfKeys.bnd_contig_2} does not match info in SOURCE, then throw an error if true, "
                              "otherwise warn")
     parser.add_argument("--flipped-interval-strategy", type=str, default=Default.flipped_interval_strategy.name,

@@ -169,9 +169,9 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              "between folds of the cross-validation.")
     parser.add_argument("--output-folder", '-o', type=str, default=Default.output_folder,
                         help="Path to save output VCFs")
-    parser.add_argument("--num_splits", '-k', type=int, default=Default.num_splits,
+    parser.add_argument("--num-splits", '-k', type=int, default=Default.num_splits,
                         help="Number of splits for cross-validation")
-    parser.add_argument("--index-output-vcf", type=bool, default=Default.index_output_vcf,
+    parser.add_argument("--index-output-vcf", type=common.argparse_bool, default=Default.index_output_vcf,
                         help="if true, create tabix index for output vcf")
     parser.add_argument("--num-threads", type=int, default=Default.num_threads,
                         help="Number of threads for reading/writing compressed VCFs")

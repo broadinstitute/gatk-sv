@@ -199,6 +199,17 @@ def static_vars(**kwargs):
     return _decorate
 
 
+def argparse_bool(arg: Union[str, bool]) -> bool:
+    if isinstance(arg, bool):
+        return arg
+    if arg.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif arg.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise ValueError('Boolean value expected.')
+
+
 # noinspection PyPep8Naming
 class classproperty(object):
     """
