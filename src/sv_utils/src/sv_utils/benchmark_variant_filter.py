@@ -440,6 +440,8 @@ class ScoresDataSet:
         self.scores = scores
         self.allele_counts = allele_counts
         self.inheritance_stats = inheritance_stats
+        if metrics is not None and Keys.is_autosome not in metrics:
+            raise ValueError("no is_autosome")
         self.metrics = metrics
         self.category = category
         self._num_called_genotypes = num_called_genotypes

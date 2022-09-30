@@ -1898,6 +1898,7 @@ def assign_dataframe_column(
                 df = df.join(values)
             else:
                 df.loc[:, (None, name)] = values
+
             # need to sort to put the table back into well-organized form
             sort_multi_index_dataframe_columns(df)
         else:
