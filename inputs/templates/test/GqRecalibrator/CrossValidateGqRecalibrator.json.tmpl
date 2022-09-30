@@ -4,10 +4,8 @@
   "CrossValidateGqRecalibrator.standardize_vcf": true,
   "CrossValidateGqRecalibrator.annotations_vcf": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz",
   "CrossValidateGqRecalibrator.annotations_vcf_index": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz.tbi",
-  "CrossValidateGqRecalibrator.annotations_to_transfer": [
-    "INFO/STATUS", "INFO/NON_REF_GENOTYPE_CONCORDANCE", "INFO/VAR_PPV", "INFO/VAR_SENSITIVITY", "INFO/TRUTH_AF",
-    "FORMAT/CONC_ST"
-  ],
+  "CrossValidateGqRecalibrator.info_keys_to_transfer": "STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF",
+  "CrossValidateGqRecalibrator.format_keys_to_transfer": "CONC_ST",
   "CrossValidateGqRecalibrator.train_vcf_label": "HGDP and HGSV",
   "CrossValidateGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
   "CrossValidateGqRecalibrator.truth_vcfs": [
@@ -83,6 +81,7 @@
   ],
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
+  "CrossValidateGqRecalibrator.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "CrossValidateGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
 }

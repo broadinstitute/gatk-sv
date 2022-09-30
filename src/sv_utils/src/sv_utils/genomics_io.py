@@ -89,6 +89,19 @@ class VcfKeys:  # note: for convenience we use .lower() before processing to mak
     rd_gq = "RD_GQ"
 
 
+class VaporKeys:
+    chr = "CHR"
+    pos = "POS"
+    end = "END"
+    svtype = "SVTYPE"
+    svid = "SVID"
+    qs = "VaPoR_QS"
+    gs = "VaPoR_GS"
+    gt = "VaPoR_GT"
+    gq = "VaPoR_GQ"
+    read_scores = "VaPoR_Rec"
+
+
 class Keys:
     id = "id"
     contig = "contig"
@@ -120,6 +133,9 @@ class Keys:
     cnq = VcfKeys.cnq.lower()
     rd_cn = VcfKeys.rd_cn.lower()
     rd_gq = VcfKeys.rd_gq.lower()
+    vapor_qs = VaporKeys.qs.lower()
+    vapor_gs = VaporKeys.gs.lower()
+    vapor_read_scores = VaporKeys.read_scores.lower()
 
 
 VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRecordSample)
@@ -141,14 +157,6 @@ class BedKeys:
     name = "name"
 
 
-class VaporKeys:
-    gt = "gt"
-    gq = "gq"
-    qs = "qs"
-    gs = "gs"
-    read_scores = "read_scores"
-
-
 class Default:
     int_type = numpy.int32
     float_type = numpy.float32
@@ -164,6 +172,11 @@ class Default:
         BedKeys.chrom: Keys.contig, BedKeys.chrom_start: Keys.begin, BedKeys.chrom_end: Keys.end, BedKeys.name: Keys.id,
         BedKeys.other_chrom: Keys.other_contig, BedKeys.other_start: Keys.other_begin,
         BedKeys.other_end: Keys.other_end
+    })
+    load_vapor_columns = MappingProxyType({
+        VaporKeys.chr: Keys.contig, VaporKeys.pos: Keys.begin, VaporKeys.end: Keys.end, VaporKeys.svtype: Keys.svtype,
+        VaporKeys.svid: Keys.id, VaporKeys.qs: Keys.vapor_qs, VaporKeys.gs: Keys.vapor_gs, VaporKeys.gt: Keys.gt,
+        VaporKeys.gq: Keys.gq, VaporKeys.read_scores: Keys.vapor_read_scores
     })
     save_bed_columns = MappingProxyType(
         {val: key for key, val in load_bed_columns.items()}
@@ -183,6 +196,7 @@ class Default:
     location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
     use_copy_number = False
     use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
+    column_levels = (Keys.sample_id, Keys.property)
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -1195,13 +1209,11 @@ def vcat_with_categoricals(
     return pandas.concat(dataframes, axis=0, **kwargs)
 
 
-def vapor_to_pandas(vapor_file: Text) -> pandas.DataFrame:
-    return bed_to_pandas(
-        vapor_file,
-        columns=(Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.id, VaporKeys.qs, VaporKeys.gs, VaporKeys.gt,
-                 VaporKeys.gq, VaporKeys.read_scores),
-        require_header=False
-    )
+def vapor_to_pandas(
+        vapor_file: Text,
+        columns: Union[Sequence[Text], Mapping[Text, Text], None] = Default.load_vapor_columns
+) -> pandas.DataFrame:
+    return bed_to_pandas(vapor_file, columns=columns, missing_value="")
 
 
 def _get_all_properties(
@@ -1274,7 +1286,7 @@ def get_vcf_variant_ids(vcf: str) -> pandas.Index:
 
 def drop_trivial_columns_multi_index(variants: pandas.DataFrame) -> pandas.DataFrame:
     if len(variants.columns) > 0:
-        for level in (Keys.sample_id, Keys.property):
+        for level in Default.column_levels:
             level_values = variants.columns.get_level_values(level)
             # noinspection PyUnresolvedReferences
             if level_values.isnull().all() or (level_values == level_values[0]).all():
@@ -1447,7 +1459,7 @@ def vcf_to_pandas(
         variants = pandas.DataFrame(
             {property_collator.column_name: property_collator.get_pandas_series(property_values)
              for property_collator, property_values in zip(property_collators, zip(*encoded_rows_iter))}
-        ).rename_axis(columns=(Keys.sample_id, Keys.property))\
+        ).rename_axis(columns=Default.column_levels)\
             .sort_index(axis=1, level=Keys.sample_id)
 
     if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
@@ -1892,11 +1904,12 @@ def assign_dataframe_column(
         # adding a single column (e.g. adding an info field to a variants DataFrame)
         if isinstance(df.columns, pandas.MultiIndex):
             values.name = (None, name)
-            is_new_prop = name in df.columns.get_level_values(level=Keys.property)
+            is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
             if is_new_prop:
-                df = df.join(values)
+                df = pandas.concat((df, values), axis=1)
             else:
                 df.loc[:, (None, name)] = values
+
             # need to sort to put the table back into well-organized form
             sort_multi_index_dataframe_columns(df)
         else:
@@ -1906,12 +1919,12 @@ def assign_dataframe_column(
         # adding a multi-index property (e.g. adding a genotype field to a variants DataFrame)
         if not isinstance(df.columns, pandas.MultiIndex):
             # adding a multi-index property to a regular DataFrame: need to promote df to multi-index
-            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=[Keys.sample_id, Keys.property])
+            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=Default.column_levels)
 
-        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=[Keys.sample_id, Keys.property])
+        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=Default.column_levels)
         is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
         if is_new_prop:
-            df = df.join(values)
+            df = pandas.concat((df, values), axis=1)
         else:
             df.loc[:, (slice(None), name)] = values
         # need to sort to put the table back into well-organized form

@@ -1,5 +1,6 @@
 version 1.0
 
+import "TransferVcfAnnotations.wdl" as transfer_annot
 import "GetTruthOverlap.wdl" as GetTruthOverlap
 import "Utils.wdl" as Utils
 
@@ -9,12 +10,15 @@ workflow TrainGqRecalibrator {
         File train_vcf_index
         File? annotations_vcf
         File? annotations_vcf_index
-        Array[String]? annotations_to_transfer
+        Int? transfer_annotations_shard_size
+        String? info_keys_to_transfer
+        String? format_keys_to_transfer
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
         Array[String]? vapor_sample_ids
         Array[File]? vapor_files
-        File ped_file
+        File? ped_file
+        File? truth_json
         Array[File] genome_tracks
         File? optimal_overlap_cutoffs
         File? gq_recalibrator_model_file
@@ -24,6 +28,8 @@ workflow TrainGqRecalibrator {
         Boolean standardize_vcf = true
         String sv_utils_docker
         String gatk_docker
+        String sv_base_mini_docker
+        String sv_pipeline_docker
         String samtools_cloud_docker
     }
 
@@ -37,14 +43,16 @@ workflow TrainGqRecalibrator {
     }
 
     if(defined(annotations_vcf)) {
-        call Utils.TransferVcfAnnotations {
+        call transfer_annot.TransferVcfAnnotations {
             input:
-                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
-                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
                 vcf_with_annotations=select_first([annotations_vcf]),
-                vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first([annotations_to_transfer]),
-                samtools_cloud_docker=samtools_cloud_docker
+                shard_size=select_first([transfer_annotations_shard_size, 20000]),
+                info_keys_list=info_keys_to_transfer,
+                format_keys_list=format_keys_to_transfer,
+                prefix=basename(train_vcf, ".vcf.gz") + ".transfer_annot",
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker
         }
     }
 
@@ -52,20 +60,23 @@ workflow TrainGqRecalibrator {
     File train_vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index,
                                           StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
 
-    call GetTruthOverlap.GetTruthOverlap {
-        input:
-            test_vcfs=[train_vcf_],
-            test_vcf_indices=[train_vcf_index_],
-            truth_vcfs=truth_vcfs,
-            truth_vcf_indices=truth_vcf_indices,
-            vapor_sample_ids=vapor_sample_ids,
-            vapor_files=vapor_files,
-            ped_files=[ped_file],
-            optimal_overlap_cutoffs=optimal_overlap_cutoffs,
-            get_truth_overlap_args=get_truth_overlap_args,
-            sv_utils_docker=sv_utils_docker,
-            samtools_cloud_docker=samtools_cloud_docker
+    if(!defined(truth_json)) {
+        call GetTruthOverlap.GetTruthOverlap {
+            input:
+                test_vcfs=[train_vcf_],
+                test_vcf_indices=[train_vcf_index_],
+                truth_vcfs=truth_vcfs,
+                truth_vcf_indices=truth_vcf_indices,
+                vapor_sample_ids=vapor_sample_ids,
+                vapor_files=vapor_files,
+                ped_files=select_all([ped_file]),
+                optimal_overlap_cutoffs=optimal_overlap_cutoffs,
+                get_truth_overlap_args=get_truth_overlap_args,
+                sv_utils_docker=sv_utils_docker,
+                samtools_cloud_docker=samtools_cloud_docker
+        }
     }
+    File truth_overlap_info_ = select_first([truth_json, GetTruthOverlap.truth_overlap_info])
 
     call Utils.GetVcfSize {
         input:
@@ -79,7 +90,7 @@ workflow TrainGqRecalibrator {
             train_vcf=train_vcf_,
             train_vcf_index=train_vcf_index_,
             ped_file=ped_file,
-            truth_file=GetTruthOverlap.truth_overlap_info,
+            truth_file=truth_overlap_info_,
             genome_tracks=genome_tracks,
             gq_recalibrator_model_file=gq_recalibrator_model_file,
             train_args=train_args,
@@ -90,8 +101,8 @@ workflow TrainGqRecalibrator {
     output {
         File clean_vcf=train_vcf_
         File clean_vcf_index=train_vcf_index_
-        File truth_overlap_info = GetTruthOverlap.truth_overlap_info
-        File output_optimal_overlap_cutoffs = GetTruthOverlap.output_optimal_overlap_cutoffs
+        File truth_overlap_info = truth_overlap_info_
+        Array[File] output_optimal_overlap_cutoffs = select_all([GetTruthOverlap.output_optimal_overlap_cutoffs])
         File output_gq_recalibrator_model_file = TrainGqRecalibratorTask.output_gq_recalibrator_model_file
     }
 }
@@ -138,7 +149,7 @@ task TrainGqRecalibratorTask {
     input {
         File train_vcf
         File train_vcf_index
-        File ped_file
+        File? ped_file
         File truth_file
         Array[File] genome_tracks
         File? gq_recalibrator_model_file # can be passed to do extra rounds of training on existing model
@@ -160,6 +171,9 @@ task TrainGqRecalibratorTask {
     String model_file_name = if defined(gq_recalibrator_model_file)
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"
+    String pedigree_arg = if defined(ped_file)
+        then "--pedigree " + ped_file
+        else ""
 
     runtime {
         docker: gatk_docker
@@ -188,7 +202,7 @@ task TrainGqRecalibratorTask {
         gatk --java-options "-Xmx${mem_kb_java_actual}K" XGBoostMinGqVariantFilter \
           --mode "Train" \
           --variant ./$(basename ~{train_vcf}) \
-          --pedigree ~{ped_file} \
+          ~{pedigree_arg} \
           --truth-file ~{truth_file} \
           --genome-track ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{model_file_name} \
