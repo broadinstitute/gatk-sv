@@ -552,6 +552,44 @@ task WriteLines {
   }
 }
 
+task TarFiles {
+  input {
+    String prefix
+    Array[File] files
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1.0,
+                               disk_gb: ceil(10 + 2 * size(files, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    tar czf ~{prefix}.tar.gz -T ~{write_lines(files)}
+  >>>
+
+  output {
+    File out = "~{prefix}.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task UntarFiles {
   input {
     File tar
@@ -638,7 +676,6 @@ task CombineTars {
   }
 }
 
-
 # Subset a VCF to a specific subset of samples
 task SubsetVcfBySamplesList {
   input {
@@ -648,6 +685,7 @@ task SubsetVcfBySamplesList {
     String? outfile_name
     Boolean remove_samples = false  # If false (default), keep samples in provided list. If true, remove them.
     Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
+    Boolean keep_af = true  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -655,7 +693,8 @@ task SubsetVcfBySamplesList {
   String vcf_subset_filename = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".subset.vcf.gz"])
   String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
 
-  String remove_private_sites_flag = if remove_private_sites then " | bcftools +fill-tags -- -t AC | bcftools view -i 'SVTYPE==\"CNV\" || AC>0' " else ""
+  String remove_private_sites_flag = if remove_private_sites then " | bcftools view -e 'SVTYPE!=\"CNV\" && COUNT(GT=\"alt\")==0' " else ""
+  String keep_af_flag = if keep_af then "--no-update" else ""
   String complement_flag = if remove_samples then "^" else ""
 
   # Disk must be scaled proportionally to the size of the VCF
@@ -677,6 +716,7 @@ task SubsetVcfBySamplesList {
     bcftools view \
       -S ~{complement_flag}~{list_of_samples} \
       --force-samples \
+      ~{keep_af_flag} \
       ~{vcf} \
       ~{remove_private_sites_flag} \
       -O z \
@@ -702,57 +742,55 @@ task SubsetVcfBySamplesList {
   }
 }
 
-
-task TransferVcfAnnotations {
+task ShardVcfPair {
   input {
-    File vcf_to_annotate
-    File vcf_to_annotate_index
-    File vcf_with_annotations
-    File vcf_with_annotations_index
-    Array[String] annotations_to_transfer
-    String samtools_cloud_docker
-    String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
+    File vcf_a
+    File vcf_b
+    Int shard_size  # Max records per shard
+    String prefix_a
+    String prefix_b
+    Boolean drop_a  # Drop records in vcf_a that don't have matching vid in vcf_b
+    Boolean drop_b  # Drop records in vcf_b that don't have matching vid in vcf_a
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    vcf_to_annotate: {
-      localization_optional: true
-    }
-    vcf_with_annotations: {
-      localization_optional: true
-    }
-  }
-
-  Int disk_gb = round(100 + size([vcf_to_annotate, vcf_to_annotate_index,
-                                 vcf_with_annotations, vcf_with_annotations_index], "GiB"))
+  RuntimeAttr default_attr = object {
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10.0 + size([vcf_a, vcf_b], "GB") * 2),
+                               cpu_cores: 1,
+                               preemptible_tries: 3,
+                               max_retries: 1,
+                               boot_disk_gb: 10
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   runtime {
-      docker: samtools_cloud_docker
-      cpu: 1
-      preemptible: 3
-      max_retries: 1
-      memory: "2 GiB"
-      disks: "local-disk 10 HDD"
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
-    # if running in a local mode, this will fail, but it also won't be *needed*
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-
     set -euo pipefail
-
-    bcftools annotate \
-      -a ~{vcf_with_annotations} \
-      -c ~{sep=',' annotations_to_transfer} \
-      -Oz -o "~{output_file_name}" \
-      --threads 2 \
-      ~{vcf_to_annotate}
-
-    bcftools index --tbi "~{output_file_name}" -o "~{output_file_name}.tbi"
+    mkdir shards/
+    python /opt/sv-pipeline/scripts/shard_vcf_pair.py \
+      --shard-size ~{shard_size} \
+      ~{if drop_a then "--drop-a" else ""} \
+      ~{if drop_b then "--drop-b" else ""} \
+      --out-dir ./shards \
+      --prefix-a ~{prefix_a} \
+      --prefix-b ~{prefix_b} \
+      ~{vcf_a} \
+      ~{vcf_b}
   >>>
 
   output {
-    File annotated_vcf = output_file_name
-    File annotated_vcf_index = output_file_name + ".tbi"
+    Array[File] shards_a = glob("shards/~{prefix_a}*.vcf.gz")
+    Array[File] shards_b = glob("shards/~{prefix_b}*.vcf.gz")
   }
 }

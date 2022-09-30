@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as tasks10
 
-workflow VaPoRVcf {
+workflow VaporVcf {
   input {
     String prefix
     String bam_or_cram_file
@@ -12,25 +12,25 @@ workflow VaPoRVcf {
     File ref_fasta
     File ref_fai
     File ref_dict
-    Array[String] contigs
+    File contigs
     String vapor_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_Vapor 
+    RuntimeAttr? runtime_attr_vapor 
     RuntimeAttr? runtime_attr_bcf2vcf
     RuntimeAttr? runtime_attr_vcf2bed
-    RuntimeAttr? runtime_attr_SplitVcf
-    RuntimeAttr? runtime_attr_ConcatBeds
+    RuntimeAttr? runtime_attr_split_vcf
+    RuntimeAttr? runtime_attr_concat_beds
   }
 
-  scatter ( contig in contigs ) {
+  scatter ( contig in read_lines(contigs) ) {
 
       call tasks10.SplitVcf as SplitVcf{
         input:
           contig = contig,
           vcf_file = vcf_file,
           sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_SplitVcf
+          runtime_attr_override=runtime_attr_split_vcf
       }
 
       call tasks10.vcf2bed as vcf2bed{
@@ -43,7 +43,7 @@ workflow VaPoRVcf {
 
       File contig_bed = vcf2bed.bed
  
-      call RunVaPoRWithCram as RunVaPoR{
+      call RunVaporWithCram as RunVapor{
         input:
           prefix = prefix,
           contig = contig,
@@ -54,28 +54,28 @@ workflow VaPoRVcf {
           ref_fai = ref_fai,
           ref_dict = ref_dict,
           vapor_docker = vapor_docker,
-          runtime_attr_override = runtime_attr_Vapor
+          runtime_attr_override = runtime_attr_vapor
       }
   }
 
-  call tasks10.ConcatVaPoR as ConcatVaPoR{
+  call tasks10.ConcatVapor as ConcatVapor{
     input:
-      shard_bed_files=RunVaPoR.vapor,
-      shard_plots = RunVaPoR.vapor_plot,
+      shard_bed_files=RunVapor.vapor,
+      shard_plots = RunVapor.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_ConcatBeds
+      runtime_attr_override=runtime_attr_concat_beds
       }
 
   output{
-      File bed = ConcatVaPoR.merged_bed_file
-      File plots = ConcatVaPoR.merged_bed_plot
-      #Array[File] plots = RunVaPoR.vapor_plot
+      File bed = ConcatVapor.merged_bed_file
+      File plots = ConcatVapor.merged_bed_plot
+      #Array[File] plots = RunVapor.vapor_plot
     }
   }
 
 
-task RunVaPoR{
+task RunVapor{
   input{
     String prefix
     String contig
@@ -112,12 +112,12 @@ task RunVaPoR{
     mkdir ~{prefix}.~{contig}
   
     vapor bed \
-    --sv-input ~{bed} \
-    --output-path ~{prefix}.~{contig} \
-    --output-file ~{prefix}.~{contig}.vapor \
-    --reference ~{ref_fasta} \
-    --PB-supp 0 \
-    --pacbio-input ~{bam_or_cram_file}
+      --sv-input ~{bed} \
+      --output-path ~{prefix}.~{contig} \
+      --output-file ~{prefix}.~{contig}.vapor \
+      --reference ~{ref_fasta} \
+      --PB-supp 0 \
+      --pacbio-input ~{bam_or_cram_file}
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
     bgzip  ~{prefix}.~{contig}.vapor
@@ -133,7 +133,7 @@ task RunVaPoR{
   }
 }
 
-task RunVaPoRWithCram{
+task RunVaporWithCram{
   input{
     String prefix
     String contig
@@ -152,7 +152,7 @@ task RunVaPoRWithCram{
     mem_gb: 15, 
     disk_gb: 30,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
@@ -178,12 +178,12 @@ task RunVaPoRWithCram{
     mkdir ~{prefix}.~{contig}
 
     vapor bed \
-    --sv-input ~{bed} \
-    --output-path ~{prefix}.~{contig} \
-    --output-file ~{prefix}.~{contig}.vapor \
-    --PB-supp 0 \
-    --reference ~{ref_fasta} \
-    --pacbio-input ~{contig}.bam
+      --sv-input ~{bed} \
+      --output-path ~{prefix}.~{contig} \
+      --output-file ~{prefix}.~{contig}.vapor \
+      --PB-supp 0 \
+      --reference ~{ref_fasta} \
+      --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
     bgzip  ~{prefix}.~{contig}.vapor

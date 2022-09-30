@@ -1,5 +1,6 @@
 version 1.0
 
+import "TransferVcfAnnotations.wdl" as transfer_annot
 import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
 import "RecalibrateGq.wdl" as RecalibrateGq
 import "BenchmarkGqFilter.wdl" as BenchmarkGqFilter
@@ -12,19 +13,24 @@ workflow CrossValidateGqRecalibrator {
         File train_vcf_index
         File? annotations_vcf
         File? annotations_vcf_index
-        Array[String]? annotations_to_transfer
+        Int? transfer_annotations_shard_size
+        File? transfer_script
+        String? info_keys_to_transfer
+        String? format_keys_to_transfer
         String train_vcf_label
-        Array[File] truth_vcfs
-        Array[File] truth_vcf_indices
+        Array[File] truth_vcfs = []
+        Array[File] truth_vcf_indices = []
         Array[String]? vapor_sample_ids
         Array[File]? vapor_files
-        File ped_file
+        File? ped_file
+        File? truth_json
         Array[File] genome_tracks
         File? optimal_overlap_cutoffs
-        Boolean standardize_vcf = true
+        Boolean standardize_vcf = false
         Int num_splits = 5
         String sv_utils_docker
         String gatk_docker
+        String sv_pipeline_docker
         String sv_base_mini_docker
         String samtools_cloud_docker
         # optional arguments for overriding default tool behaviors
@@ -54,14 +60,17 @@ workflow CrossValidateGqRecalibrator {
         }
     }
     if(defined(annotations_vcf)) {
-        call Utils.TransferVcfAnnotations {
+        call transfer_annot.TransferVcfAnnotations {
             input:
-                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
-                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
                 vcf_with_annotations=select_first([annotations_vcf]),
-                vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first([annotations_to_transfer]),
-                samtools_cloud_docker=samtools_cloud_docker
+                shard_size=select_first([transfer_annotations_shard_size, 20000]),
+                transfer_script=transfer_script,
+                info_keys_list=info_keys_to_transfer,
+                format_keys_list=format_keys_to_transfer,
+                prefix=basename(train_vcf, ".vcf.gz") + ".transfer_annot",
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker
         }
     }
 
@@ -78,6 +87,7 @@ workflow CrossValidateGqRecalibrator {
             vapor_sample_ids=vapor_sample_ids,
             vapor_files=vapor_files,
             ped_file=ped_file,
+            truth_json=truth_json,
             genome_tracks=genome_tracks,
             optimal_overlap_cutoffs=optimal_overlap_cutoffs,
             standardize_vcf=false,
@@ -85,6 +95,8 @@ workflow CrossValidateGqRecalibrator {
             get_truth_overlap_args=get_truth_overlap_args,
             sv_utils_docker=sv_utils_docker,
             gatk_docker=gatk_docker,
+            sv_base_mini_docker=sv_base_mini_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             samtools_cloud_docker=samtools_cloud_docker
     }
 
@@ -98,6 +110,8 @@ workflow CrossValidateGqRecalibrator {
             recalibrate_gq_args=recalibrate_gq_args,
             gatk_docker=gatk_docker,
             sv_utils_docker=sv_utils_docker,
+            sv_base_mini_docker=sv_base_mini_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             samtools_cloud_docker=samtools_cloud_docker
     }
 
@@ -107,6 +121,7 @@ workflow CrossValidateGqRecalibrator {
                 vcf=train_vcf_,
                 ped_file=ped_file,
                 truth_vcfs=truth_vcfs,
+                truth_json=truth_json,
                 vapor_sample_ids=if defined(vapor_files) then select_first([vapor_sample_ids]) else [],
                 num_splits=num_splits,
                 sv_utils_docker=sv_utils_docker
@@ -125,6 +140,7 @@ workflow CrossValidateGqRecalibrator {
                 vapor_sample_ids=vapor_sample_ids,
                 vapor_files=vapor_files,
                 ped_file=ped_file,
+                truth_json=truth_json,
                 genome_tracks=genome_tracks,
                 optimal_overlap_cutoffs=optimal_overlap_cutoffs,
                 standardize_vcf=false,
@@ -132,6 +148,8 @@ workflow CrossValidateGqRecalibrator {
                 get_truth_overlap_args=get_truth_overlap_args,
                 sv_utils_docker=sv_utils_docker,
                 gatk_docker=gatk_docker,
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
                 samtools_cloud_docker=samtools_cloud_docker
         }
 
@@ -145,6 +163,8 @@ workflow CrossValidateGqRecalibrator {
                 recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
                 sv_utils_docker=sv_utils_docker,
+                sv_base_mini_docker=sv_base_mini_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
                 samtools_cloud_docker=samtools_cloud_docker
         }
     }
@@ -213,13 +233,14 @@ workflow CrossValidateGqRecalibrator {
     Array[ScoresDataSet] comparison_scores_ = flatten([scores_0, comparison_scores])
 
     # actually call BenchmarkFilter workflow
+    File truth_overlap_info_ = select_first([truth_json, TrainGqRecalibrator.truth_overlap_info])
     call BenchmarkGqFilter.BenchmarkGqFilter {
         input:
             data_label=train_vcf_label,
             original_scores=original_scores,
             pickled_variant_properties=pickled_variant_properties_,
             comparison_scores=comparison_scores_,
-            truth_overlap_info=TrainGqRecalibrator.truth_overlap_info,
+            truth_overlap_info=truth_overlap_info_,
             ped_file=ped_file,
             benchmark_args=benchmark_args,
             sv_utils_docker=sv_utils_docker,
@@ -229,8 +250,8 @@ workflow CrossValidateGqRecalibrator {
     output {
         File clean_vcf = TrainGqRecalibrator.clean_vcf
         File clean_vcf_index = TrainGqRecalibrator.clean_vcf_index
-        File truth_overlap_info = TrainGqRecalibrator.truth_overlap_info
-        File output_optimal_overlap_cutoffs = TrainGqRecalibrator.output_optimal_overlap_cutoffs
+        File truth_overlap_info = truth_overlap_info_
+        Array[File] output_optimal_overlap_cutoffs = TrainGqRecalibrator.output_optimal_overlap_cutoffs
         File output_gq_recalibrator_model_file = TrainGqRecalibrator.output_gq_recalibrator_model_file
         File filtered_vcf = DirectGqRecalibrator.filtered_vcf
         File filtered_vcf_index = DirectGqRecalibrator.filtered_vcf_index
@@ -254,26 +275,37 @@ struct CrossValidationVcfs {
 task MakeCrossValidationVcfs {
     input {
         File vcf
-        File ped_file
+        File? ped_file
         Array[File] truth_vcfs
         Array[String] vapor_sample_ids
+        File? truth_json
         Int num_splits = 5
         String sv_utils_docker
+        RuntimeAttr? runtime_attr_override
     }
+
+    Int disk_gb = 1000 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
+    RuntimeAttr default_attr = object {
+                                   cpu_cores: 1,
+                                   mem_gb: 2,
+                                   disk_gb: disk_gb,
+                                   boot_disk_gb: 10,
+                                   preemptible_tries: 3,
+                                   max_retries: 1
+                               }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
     String index_file_name = fixed_vcf_name + ".tbi"
 
-    Int disk_gb = 1000 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
-    Float mem_gb = 2.0
-
     runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
         docker: sv_utils_docker
-        cpu: 1
-        preemptible: 3
-        max_retries: 1
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
@@ -282,14 +314,26 @@ task MakeCrossValidationVcfs {
         # create TRUTH_SAMPLES_FILE, with one sample ID per line that has VaPoR/PacBio data (duplicates are okay)
         # The cross-validated VCFs will attempt to distribute these truth samples evenly across batches
         TRUTH_SAMPLES_FILE=~{write_lines(vapor_sample_ids)}
-        cat ~{write_lines(truth_vcfs)} | while read TRUTH_VCF; do
-            zgrep -m1 ^#[^#] "$TRUTH_VCF" | cut -f10- | tr '\t' '\n'
-        done >> "$TRUTH_SAMPLES_FILE"
+        sed -e 's/[[:space:]]*#.*// ; /^[[:space:]]*$/d' ~{write_lines(truth_vcfs)} \
+            | while read TRUTH_VCF; do
+                zgrep -m1 ^#[^#] "$TRUTH_VCF" | cut -f10- | tr '\t' '\n'
+            done >> "$TRUTH_SAMPLES_FILE"
+
+        { python - <<'CODE'
+import json
+input_json="~{truth_json}"
+if input_json:
+    with open(input_json, 'r') as f_in:
+        truth_overlap = json.load(f_in)
+        for sample_id in truth_overlap.keys():
+            print(sample_id)
+CODE
+} >> "$TRUTH_SAMPLES_FILE"
 
         sv-utils make-cross-validation-vcfs ~{vcf} \
-            --ped-file ~{ped_file} \
+            ~{"--ped-file " + ped_file} \
             --truth-samples-file "$TRUTH_SAMPLES_FILE" \
-            --num_splits ~{num_splits} \
+            --num-splits ~{num_splits} \
             --index-output-vcf true
     >>>
 
@@ -310,25 +354,36 @@ task MergeRecalibratedTestVcfs {
         Array[File] filtered_vcf_indices
         String merged_name
         String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
     }
 
     Int disk_gb = 1000 + 2 * round(size(filtered_vcfs, "GiB") + size(filtered_vcf_indices, "GiB"))
-    Float mem_gb = 4.0
+    RuntimeAttr default_attr = object {
+                                   cpu_cores: 1,
+                                   mem_gb: 4,
+                                   disk_gb: disk_gb,
+                                   boot_disk_gb: 10,
+                                   preemptible_tries: 3,
+                                   max_retries: 1
+                               }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     String merged_index = merged_name + ".tbi"
 
     runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
         docker: sv_base_mini_docker
-        cpu: 1
-        preemptible: 3
-        max_retries: 1
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
         set -euo pipefail
 
-        bcftools merge --threads $(nproc) -m both -O z -o ~{merged_name} ~{sep=" " filtered_vcfs}
+        bcftools merge --threads $(nproc) -m id -O z -o ~{merged_name} ~{sep=" " filtered_vcfs}
 
         bcftools index --tbi -o ~{merged_index} ~{merged_name}
     >>>

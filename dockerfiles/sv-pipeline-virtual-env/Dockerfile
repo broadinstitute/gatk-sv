@@ -20,7 +20,7 @@ RUN apt-get -qqy update --fix-missing && \
 # install conda packages
 # NOTE: need to use scipy=1.7.3 instead of scipy=1.8.0 because it makes hail angry
 ARG CONDA_PKGS="cython=0.29.28 numpy=1.22.3 pandas=1.4.2 scipy=1.7.3 scikit-learn=1.0.2 intervaltree=3.1.0 \
-                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2"
+                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2"
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda $CONDA_PKGS
 
 # copy in HTSLIB install so that pysam uses same version as is available in pipeline
@@ -49,7 +49,7 @@ RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools._
 
 # pybedtools needs to be installed via pip because it doesn't like the updated python
 # hail's latest version is only available via pip or local build
-ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93"
+ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93 more-itertools==9.0.0"
 RUN pip3 --no-cache-dir install $PIP_PKGS
 
 # clean unneeded stuff

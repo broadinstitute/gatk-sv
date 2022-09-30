@@ -1,0 +1,10 @@
+{
+  "FormatVcfForGatk.vcf": {{ test_batch.clean_vcf | tojson }},
+  "FormatVcfForGatk.prefix": {{ test_batch.name | tojson }},
+  "FormatVcfForGatk.ploidy_table": {{ test_batch.ploidy_table | tojson }},
+  "FormatVcfForGatk.records_per_shard": "40000",
+  "FormatVcfForGatk.formatter_args": {{ test_batch.clean_vcf_gatk_formatter_args | tojson }},
+  "FormatVcfForGatk.contigs_header": {{ reference_resources.contigs_header | tojson }},
+  "FormatVcfForGatk.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "FormatVcfForGatk.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}
