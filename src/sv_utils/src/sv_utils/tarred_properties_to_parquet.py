@@ -45,7 +45,11 @@ class Keys:
     byte_type = "byte"
     short_type = "short"
     int_type = "int"
+    string_type = "String"
+    string_set_type = "StringSet"
     row = "row"
+    category = "category"
+    one_hot = "one-hot"
 
 
 class CompressionAlgorithms:
@@ -74,9 +78,10 @@ class Default:
     remove_input_tar = False
     column_levels = genomics_io.Default.column_levels
     dask_partition_size_mb = 75.0
-    compression_algorithm = CompressionAlgorithms.zstd,
+    compression_algorithm = CompressionAlgorithms.zstd
     error_on_missing_property = True
     error_on_missing_sample = True
+    category_encoding = Keys.category
 
 
 _dtype_map = MappingProxyType({
@@ -110,6 +115,10 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                         help="approximate in-memory size of dask partitions, in MiB")
     parser.add_argument("--compression-algorithm", type=str, default=Default.compression_algorithm,
                         choices=CompressionAlgorithms.list(), help="compression algorithm for parquet data")
+    parser.add_argument("--category-encoding", type=str, default=Default.category_encoding,
+                        choices=[Keys.category, Keys.one_hot],
+                        help=f"Method to encode categorical data: {Keys.category}: as pandas Categorical, or "
+                             f"{Keys.one_hot}: one-hot encode")
     return parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
 
 
@@ -121,7 +130,8 @@ def main(argv: Optional[list[str]] = None):
         temp_dir=args.temp_dir,
         remove_input_tar=args.remove_input_tar,
         dask_partition_size_mb=args.dask_partition_size_mb,
-        compression_algorithm=args.compression_algorithm
+        compression_algorithm=args.compression_algorithm,
+        category_encoding=args.category_encoding
     )
 
 
@@ -131,7 +141,8 @@ def tarred_properties_to_parquet(
         temp_dir: str = Default.temp_dir,
         remove_input_tar: bool = Default.remove_input_tar,
         dask_partition_size_mb: float = Default.dask_partition_size_mb,
-        compression_algorithm: str = Default.compression_algorithm
+        compression_algorithm: str = Default.compression_algorithm,
+        category_encoding: str = Default.category_encoding
 ):
     CompressionAlgorithms.assert_valid(compression_algorithm)
     properties_summaries, sample_ids, input_folders = _get_gzipped_metadata(
@@ -141,7 +152,7 @@ def tarred_properties_to_parquet(
     with dask.config.set(temporary_directory=temp_dir, scheduler='processes'):
         properties = load_properties_from_map(
             input_folder=input_folders, properties_summary=properties_summaries, sample_ids=sample_ids,
-            dask_partition_size_mb=dask_partition_size_mb
+            dask_partition_size_mb=dask_partition_size_mb, category_encoding=category_encoding
         )
         with warnings.catch_warnings():
             warnings.filterwarnings(action="ignore", category=FutureWarning)
@@ -160,6 +171,7 @@ def _get_gzipped_metadata(
     properties_summaries = []
     sample_ids = None
     input_folders = []
+    global_codes_map = {}
     for input_tar in input_tars:
         try:
             print(f"\tdecompress {input_tar}")
@@ -174,10 +186,25 @@ def _get_gzipped_metadata(
                     raise ValueError(f"sample IDs in {input_tar} differ from those in {input_tars[0]}")
             properties_summary = _get_property_summaries(input_folder)
             _validate_properties_summary(properties_summary, properties_summaries, len(sample_ids))
+            # if there are multiple tar files, some codes may not be present in some of them: if a particular variant
+            # type was not present in a chunk of the VCF. The order will bary too, but we can ensure that every codes
+            # dict at least has all the same codes.
+            for prop_name, property_summary in properties_summary.items():
+                codes = property_summary.get(Keys.codes, [])
+                if codes:
+                    global_codes_map[prop_name] = global_codes_map.get(prop_name, set()).union(codes)
             properties_summaries.append(properties_summary)
         except (Exception, IsADirectoryError) as exception:
             common.add_exception_context(exception, f"Getting metadata from {input_tar}")
             raise
+
+    # add any missing codes
+    for prop_name, all_codes in global_codes_map.items():
+        for properties_summary in properties_summaries:
+            existing_codes = properties_summary[prop_name].get(Keys.codes, [])
+            missing_codes = all_codes.difference(existing_codes)
+            if missing_codes:
+                properties_summary[prop_name][Keys.codes] = existing_codes + sorted(missing_codes)
 
     print("\tgetting metadata complete.")
     return properties_summaries, sample_ids, input_folders
@@ -230,6 +257,7 @@ def _validate_properties_summary(
         previous_properties_summaries: list[PropertiesSummary],
         num_samples: int
 ):
+    global_codes_map = {}
     num_rows = None
     first_row_prop = None
     for prop_name, prop_summary in properties_summary.items():
@@ -245,9 +273,13 @@ def _validate_properties_summary(
                 raise ValueError(
                     f"Property {prop_name} has {num_cols} columns but there are {num_samples} samples"
                 )
+        codes = prop_summary.get(Keys.codes, [])
+        if codes:
+            if len(set(codes)) != len(codes):
+                raise ValueError(f"Property {prop_name} has non-unique codes {codes}")
 
     if previous_properties_summaries:
-        # ensure that property names, columns, and types are consistent
+        # ensure that property names, columns, types, and codes are consistent
         compare_summary = previous_properties_summaries[0]
         if set(compare_summary.keys()) != set(properties_summary.keys()):
             raise ValueError("Property names are not consistent")
@@ -258,13 +290,20 @@ def _validate_properties_summary(
                 raise ValueError(
                     f"Inconsistent {Keys.num_columns} between data sets for {prop_name}: {compare_cols} -> {num_cols}"
                 )
+            type_name = properties_summary[prop_name][Keys.type_name]
+            compare_type = prop_summary[Keys.type_name]
+            if type_name != compare_type:
+                raise ValueError(
+                    f"Inconsistent {Keys.type_name} between data sets for {prop_name}: {type_name} -> {compare_type}"
+                )
 
 
 def load_properties_from_map(
         input_folder: Union[str, list[str]],
         properties_summary: Union[PropertiesSummary, list[PropertiesSummary]],
         sample_ids: list[str],
-        dask_partition_size_mb: float = Default.dask_partition_size_mb
+        dask_partition_size_mb: float = Default.dask_partition_size_mb,
+        category_encoding: str = Default.category_encoding
 ) -> DataFrame:
     if isinstance(input_folder, str):
         if not isinstance(properties_summary, Mapping):
@@ -305,7 +344,8 @@ def load_properties_from_map(
         map_parameters,
         divisions=divisions,
         sample_ids=sample_ids,
-        total_num_rows=start_row
+        total_num_rows=start_row,
+        category_encoding=category_encoding
     )
 
 
@@ -347,7 +387,8 @@ def _get_bytes_per_row(property_name: str, property_summary: PropertySummary) ->
 def _tsvs_to_df_partition(
         division_parameters: tuple[int, int, int, str, Mapping[str, PropertySummary]],
         sample_ids: list[str],
-        total_num_rows: int
+        total_num_rows: int,
+        category_encoding: str
 ) -> pandas.DataFrame:
     row_start, row_end, data_set_row_start, input_folder, property_summaries = division_parameters
 
@@ -358,7 +399,7 @@ def _tsvs_to_df_partition(
         tuple(
             _read_csv_chunk(
                 input_folder=input_folder, property_name=property_name, property_summary=property_summary,
-                sample_ids=sample_ids, row_start=row_start, row_end=row_end
+                sample_ids=sample_ids, row_start=row_start, row_end=row_end, category_encoding=category_encoding
             )
             for property_name, property_summary in sorted(property_summaries.items(), key=_summary_sort_key)
         ),
@@ -377,10 +418,12 @@ def _read_csv_chunk(
         property_summary: PropertySummary,
         sample_ids: list[str],
         row_start: int,
-        row_end: int
+        row_end: int,
+        category_encoding: str
 ) -> pandas.DataFrame:
     tsv = os.path.join(input_folder, f"{property_name}.tsv")
-    if property_summary[Keys.num_columns] > 1:
+    is_format_property = property_summary[Keys.num_columns] > 1  # bad proxy, should be encoded
+    if is_format_property:
         # this is a format / per-sample property
         column_names = sample_ids
         columns = pandas.MultiIndex.from_product([sample_ids, [property_name]], names=Default.column_levels)
@@ -389,14 +432,69 @@ def _read_csv_chunk(
         column_names = [property_name]
         columns = pandas.MultiIndex.from_product([[None], [property_name]], names=Default.column_levels)
     type_name = property_summary[Keys.type_name]
-    _dtype = "string[pyarrow]" if property_name == "ID" else _dtype_map.get(type_name, numpy.uint8)
+    codes = property_summary.get(Keys.codes, [])
+    _dtype = "string[pyarrow]" if property_name == "ID" else \
+        _dtype_map.get(type_name, numpy.min_scalar_type(len(codes)))
     dtypes = {column_name: _dtype for column_name in column_names}
     df = pandas.read_csv(
         tsv, sep='\t', low_memory=True, engine='c', memory_map=False, names=column_names,
         dtype=dtypes, nrows=row_end - row_start, skiprows=row_start
     )
-    df.columns = columns
+    if codes:
+        if category_encoding == Keys.category:
+            # need to do convert ordinal ints to pandas Categorical
+            df = pandas.DataFrame(
+                pandas.Categorical.from_codes(df, categories=codes),
+                index=df.index, columns=columns
+            )
+        else:
+            # need to one-hot this DataFrame
+            codewords_map = _get_codewords_map(codes=codes, type_name=type_name)
+            df = codes_to_one_hot(df, codewords_map=codewords_map, property_name=property_name,
+                                  is_format_property=is_format_property)
+    else:
+        df.columns = columns
     return df
+
+
+def _get_codewords_map(codes: list[str], type_name: str) -> dict[str, numpy.array]:
+    if type_name == Keys.string_type:
+        # easy: the nth code is all false except for the nth value in the map
+        num_codewords = len(codes)
+
+        def _basis(_ind: int) -> numpy.ndarray:
+            _arr = numpy.zeros(num_codewords, dtype=bool)
+            _arr[_ind] = True
+            return _arr
+        return {code: _basis(ind) for ind, code in enumerate(codes)}
+    else:
+        code_sets = [set(code.split(',')) for code in codes]
+        all_codewords = sorted(set.union(*code_sets))
+
+        def _contains(_codeword: str) -> numpy.ndarray:
+            return numpy.array([_codeword in code_set for code_set in code_sets], dtype=bool)
+        return {codeword: _contains(codeword) for codeword in all_codewords}
+
+
+def codes_to_one_hot(
+        df: DataFrame,
+        codewords_map: dict[str, numpy.array],
+        property_name: str,
+        is_format_property: bool
+) -> DataFrame:
+    mapped_dfs = {codeword: df.applymap(lambda code: code_included[code])
+                  for codeword, code_included in codewords_map.items()}
+    for codeword, mapped_df in mapped_dfs.items():
+        one_hot_property_name = f"{property_name}={codeword}"
+        mapped_df.columns = pandas.MultiIndex.from_product(
+            [df.columns.tolist(), [one_hot_property_name]] if is_format_property else [[None], [one_hot_property_name]],
+            names=Default.column_levels
+        )
+
+    return pandas.concat(
+        [mapped_df for __, mapped_df in sorted(mapped_dfs.items(), key=lambda _item: _item[0])],
+        axis=1
+    )
 
 
 def df_to_parquet(
