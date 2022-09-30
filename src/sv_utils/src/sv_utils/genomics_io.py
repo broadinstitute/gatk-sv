@@ -89,6 +89,19 @@ class VcfKeys:  # note: for convenience we use .lower() before processing to mak
     rd_gq = "RD_GQ"
 
 
+class VaporKeys:
+    chr = "CHR"
+    pos = "POS"
+    end = "END"
+    svtype = "SVTYPE"
+    svid = "SVID"
+    qs = "VaPoR_QS"
+    gs = "VaPoR_GS"
+    gt = "VaPoR_GT"
+    gq = "VaPoR_GQ"
+    read_scores = "VaPoR_Rec"
+
+
 class Keys:
     id = "id"
     contig = "contig"
@@ -120,6 +133,10 @@ class Keys:
     cnq = VcfKeys.cnq.lower()
     rd_cn = VcfKeys.rd_cn.lower()
     rd_gq = VcfKeys.rd_gq.lower()
+    vapor_gt = VaporKeys.gt.lower()
+    vapor_qs = VaporKeys.qs.lower()
+    vapor_gs = VaporKeys.gs.lower()
+    vapor_read_scores = VaporKeys.read_scores.lower()
 
 
 VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRecordSample)
@@ -142,14 +159,6 @@ class BedKeys:
     name = "name"
 
 
-class VaporKeys:
-    gt = "gt"
-    gq = "gq"
-    qs = "qs"
-    gs = "gs"
-    read_scores = "read_scores"
-
-
 class Default:
     int_type = numpy.int32
     float_type = numpy.float32
@@ -165,6 +174,11 @@ class Default:
         BedKeys.chrom: Keys.contig, BedKeys.chrom_start: Keys.begin, BedKeys.chrom_end: Keys.end, BedKeys.name: Keys.id,
         BedKeys.other_chrom: Keys.other_contig, BedKeys.other_start: Keys.other_begin,
         BedKeys.other_end: Keys.other_end
+    })
+    load_vapor_columns = MappingProxyType({
+        VaporKeys.chr: Keys.contig, VaporKeys.pos: Keys.begin, VaporKeys.end: Keys.end, VaporKeys.svtype: Keys.svtype,
+        VaporKeys.svid: Keys.id, VaporKeys.qs: Keys.vapor_qs, VaporKeys.gs: Keys.vapor_gs, VaporKeys.gt: Keys.gt,
+        VaporKeys.gq: Keys.gq, VaporKeys.read_scores: Keys.vapor_read_scores
     })
     save_bed_columns = MappingProxyType(
         {val: key for key, val in load_bed_columns.items()}
@@ -1224,13 +1238,11 @@ def vcat_with_categoricals(
     return pandas.concat(dataframes, axis=0, **kwargs)
 
 
-def vapor_to_pandas(vapor_file: Text) -> pandas.DataFrame:
-    return bed_to_pandas(
-        vapor_file,
-        columns=(Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.id, VaporKeys.qs, VaporKeys.gs, VaporKeys.gt,
-                 VaporKeys.gq, VaporKeys.read_scores),
-        require_header=False
-    )
+def vapor_to_pandas(
+        vapor_file: Text,
+        columns: Union[Sequence[Text], Mapping[Text, Text], None] = Default.load_vapor_columns
+) -> pandas.DataFrame:
+    return bed_to_pandas(vapor_file, columns=columns, missing_value="")
 
 
 def _get_all_properties(

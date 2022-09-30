@@ -20,7 +20,7 @@ RUN apt-get -qqy update --fix-missing && \
 # install conda packages
 # NOTE: need to use scipy=1.7.3 instead of scipy=1.8.0 because it makes hail angry
 ARG CONDA_PKGS="cython=0.29.28 numpy=1.22.3 pandas=1.4.2 scipy=1.7.3 scikit-learn=1.0.2 intervaltree=3.1.0 \
-                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2"
+                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2"
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda $CONDA_PKGS
 
 # copy in HTSLIB install so that pysam uses same version as is available in pipeline
@@ -49,7 +49,7 @@ RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools._
 
 # pybedtools needs to be installed via pip because it doesn't like the updated python
 # hail's latest version is only available via pip or local build
-ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93"
+ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93 more-itertools==9.0.0"
 RUN pip3 --no-cache-dir install $PIP_PKGS
 
 # clean unneeded stuff
@@ -79,7 +79,7 @@ RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) &
 
 # install R packages
 ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table devtools digest dplyr e1071 fansi fpc \
-                generics gert glue HardyWeinberg hash latticeExtra magrittr MASS Matrix metap mnormt nlme nloptr nnet \
+                generics gert glue HardyWeinberg hash latticeExtra magrittr Matrix metap mnormt nlme nloptr nnet \
                 numDeriv perm pillar pkgconfig plogr plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
@@ -88,6 +88,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
     install_bioconductor_packages.R $BIOCONDUCTOR_PKGS && \
+    install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/MASS/MASS_7.3-58.tar.gz" && \
     install_R_packages.R $R_PACKAGES && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \

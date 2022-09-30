@@ -1,77 +1,35 @@
 {
-  "TrainGqRecalibrator.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
-  "TrainGqRecalibrator.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
-  "TrainGqRecalibrator.standardize_vcf": true,
-  "TrainGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
-  "TrainGqRecalibrator.truth_vcfs": [
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
-  ],
-  "TrainGqRecalibrator.truth_vcf_indices": [
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz.tbi"
-  ],
-  "TrainGqRecalibrator.vapor_sample_ids": [
-    "HG00512",
-    "HG00513",
-    "HG00514",
-    "HG00731",
-    "HG00732",
-    "HG00733",
-    "NA19238",
-    "NA19239",
-    "NA19240"
-  ],
-  "TrainGqRecalibrator.vapor_files": [
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00512_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00513_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00514_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00731_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00732_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/HG00733_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/NA19238_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/NA19239_CCS.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/vapor/NA19240_CCS.bed.gz"
-  ],
-  "TrainGqRecalibrator.genome_tracks": [
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_gaps.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s36.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s50.bed.gz"
-  ],
-  "TrainGqRecalibrator.standardize_vcf_args": [
-    "--gq-scale 0.1"
-  ],
+  "TrainGqRecalibrator.train_vcf": {{ test_batch.pacbio_sample_concordance_vcf | tojson }},
+  "TrainGqRecalibrator.train_vcf_index": {{ test_batch.pacbio_sample_concordance_vcf_index | tojson }},
+  "TrainGqRecalibrator.truth_json": {{ test_batch.vapor_irs_training_json | tojson }},
+  "TrainGqRecalibrator.ped_file": {{ test_batch.ped_file | tojson }},
+  "TrainGqRecalibrator.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+
   "TrainGqRecalibrator.train_args": [
-    "--target-precision 0.95",
+    "--learning-rate 0.002",
+    "--target-precision 0.8",
     "--max-inheritance-af 0.1",
     "--large-af-weight-penalty 0.05",
-    "--max-depth 12",
+    "--max-depth 11",
     "--subsample 0.8",
     "--colsample-by-tree 0.8",
-    "--min-child-weight 1000",
-    "--truth-weight 0.25",
-    "--train-homref true",
+    "--min-child-weight 200",
+    "--gamma 0.5",
+    "--truth-weight 0.90",
     "--keep-homvar false",
-    "--keep-multiallelic true"
+    "--keep-homref false",
+    "--keep-multiallelic true",
+    "--validation-proportion 0.2",
+    "--early-stopping-loss Training",
+    "--error-on-no-trios false",
+    "--override-min-gq true",
+    "--max-training-rounds 200",
+    "--early-stopping-rounds 40"
   ],
-  "TrainGqRecalibrator.get_truth_overlap_args": [
-    "--expand-point-svs-bp 1000",
-    "--point-sv-scale-factor 1.0",
-    "--expand-non-point-svs-bp 0",
-    "--non-point-sv-scale-factor 0.0",
-    "--min-overlap-cutoff-precision 0.8",
-    "--inheritance-af-rareness 0.05"
-  ],
+
   "TrainGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "TrainGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "TrainGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
-  "TrainGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+  "TrainGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "TrainGqRecalibrator.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
 }

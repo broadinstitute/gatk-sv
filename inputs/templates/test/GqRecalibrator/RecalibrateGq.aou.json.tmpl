@@ -1,0 +1,18 @@
+{
+  "RecalibrateGq.vcf": {{ test_batch.concordance_vcf | tojson }},
+  "RecalibrateGq.vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
+  "RecalibrateGq.gq_recalibrator_model_file":  {{ test_batch.aou_recalibrate_gq_model_file | tojson }},
+  "RecalibrateGq.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+  "RecalibrateGq.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-homref true",
+    "--keep-multiallelic true",
+    "--skip-genotype-filtering true",
+    "--min-samples-to-estimate-allele-frequency -1"
+  ],
+  "RecalibrateGq.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "RecalibrateGq.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
+  "RecalibrateGq.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
+  "RecalibrateGq.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "RecalibrateGq.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+}
