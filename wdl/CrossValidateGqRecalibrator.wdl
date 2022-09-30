@@ -291,9 +291,10 @@ task MakeCrossValidationVcfs {
         # create TRUTH_SAMPLES_FILE, with one sample ID per line that has VaPoR/PacBio data (duplicates are okay)
         # The cross-validated VCFs will attempt to distribute these truth samples evenly across batches
         TRUTH_SAMPLES_FILE=~{write_lines(vapor_sample_ids)}
-        cat ~{write_lines(truth_vcfs)} | while read TRUTH_VCF; do
-            zgrep -m1 ^#[^#] "$TRUTH_VCF" | cut -f10- | tr '\t' '\n'
-        done >> "$TRUTH_SAMPLES_FILE"
+        sed -e 's/[[:space:]]*#.*// ; /^[[:space:]]*$/d' ~{write_lines(truth_vcfs)} \
+            | while read TRUTH_VCF; do
+                zgrep -m1 ^#[^#] "$TRUTH_VCF" | cut -f10- | tr '\t' '\n'
+            done >> "$TRUTH_SAMPLES_FILE"
 
         { python - <<'CODE'
 import json
