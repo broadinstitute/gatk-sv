@@ -213,13 +213,16 @@ task SplitBed {
     set -euo pipefail
     if [[ ~{bed_file} == *.gz ]] ;  then
       zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
+      # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
+      set +o pipefail
+      svlen=$(zcat ~{bed_file} | head -1 | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
     else
       ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
+      # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
+      set +o pipefail
+      svlen=$(head -1 ~{bed_file} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
     fi
 
-    # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
-    set +o pipefail
-    svlen=$(head -1 ~{contig}.bed | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
     set -o pipefail
     # reformat BED for VaPoR with the following columns: chrom, pos, end, SVID, SVTYPE/description
     # remove BND, CNV, and CPX and reformat INS SVTYPE to include SVLEN
