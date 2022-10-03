@@ -416,8 +416,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_rename_variants
     RuntimeAttr? runtime_override_rename_cleaned_samples
 
-    RuntimeAttr? runtime_override_breakpoint_overlap_filter
-
     # overrides for mini tasks
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_make_cpx_cnv_input_file
@@ -449,10 +447,7 @@ workflow GATKSVPipelineSingleSample {
     # overrides for ResolveComplexVariants
     RuntimeAttr? runtime_override_update_sr_list_pass
     RuntimeAttr? runtime_override_update_sr_list_fail
-    RuntimeAttr? runtime_override_integrate_resolved_vcfs
-    RuntimeAttr? runtime_override_rename_variants
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
-    RuntimeAttr? runtime_override_subset_inversions
     RuntimeAttr? runtime_override_concat_resolve
 
     RuntimeAttr? runtime_override_get_se_cutoff
@@ -462,7 +457,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_resolve_cpx_per_shard
     RuntimeAttr? runtime_override_restore_unresolved_cnv_per_shard
     RuntimeAttr? runtime_override_concat_resolved_per_shard
-    RuntimeAttr? runtime_override_pull_vcf_shard
     RuntimeAttr? runtime_override_preconcat_resolve
     RuntimeAttr? runtime_override_hail_merge_resolve
     RuntimeAttr? runtime_override_fix_header_resolve
@@ -499,7 +493,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_concat_cleaned_vcfs
     RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -1193,7 +1186,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
       runtime_override_make_cpx_cnv_input_file=runtime_override_make_cpx_cnv_input_file,
-      runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat_merged_vcfs=runtime_override_concat_merged_vcfs,
       runtime_override_concat_cpx_vcfs=runtime_override_concat_cpx_vcfs,
       runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
@@ -1217,9 +1209,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_concat_large_pesr_depth=runtime_override_concat_large_pesr_depth,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
-      runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
-      runtime_override_rename_variants=runtime_override_rename_variants,
-      runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat_resolve=runtime_override_concat_resolve,
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
@@ -1229,7 +1218,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_resolve_cpx_per_shard=runtime_override_resolve_cpx_per_shard,
       runtime_override_restore_unresolved_cnv_per_shard=runtime_override_restore_unresolved_cnv_per_shard,
       runtime_override_concat_resolved_per_shard=runtime_override_concat_resolved_per_shard,
-      runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard,
       runtime_override_preconcat_resolve=runtime_override_preconcat_resolve,
       runtime_override_hail_merge_resolve=runtime_override_hail_merge_resolve,
       runtime_override_fix_header_resolve=runtime_override_fix_header_resolve,
@@ -1261,7 +1249,6 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
-      runtime_override_concat_cleaned_vcfs=runtime_override_concat_cleaned_vcfs,
       runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
       runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
       runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
