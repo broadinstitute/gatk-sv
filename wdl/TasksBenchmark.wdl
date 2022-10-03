@@ -215,12 +215,12 @@ task SplitBed {
       zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
       # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
       set +o pipefail
-      svlen=$(zcat ~{bed_file} | head -1 | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
+      svlen=$(zcat ~{bed_file} | head -1 | ~{if defined(sample_to_extract) then "cut -f1-5,7- |" else ""} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
     else
       ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
       # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
       set +o pipefail
-      svlen=$(head -1 ~{bed_file} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
+      svlen=$(head -1 ~{bed_file} | ~{if defined(sample_to_extract) then "cut -f1-5,7- |" else ""} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
     fi
 
     set -o pipefail
