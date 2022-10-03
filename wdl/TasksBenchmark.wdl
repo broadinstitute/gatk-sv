@@ -204,15 +204,26 @@ task SplitBed {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File contig_bed = "~{contig}.bed"
+    File contig_bed = "~{contig}.vapor.bed"
   }
 
   command <<<
+    # extract contig of interest
+    # and extract sample of interest if provided & remove sample column to save on storage
+    set -euo pipefail
     if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
+      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
     else
-      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
+      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
     fi
+
+    # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
+    set +o pipefail
+    svlen=$(head -1 ~{contig}.bed | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
+    set -o pipefail
+    # reformat BED for VaPoR with the following columns: chrom, pos, end, SVID, SVTYPE/description
+    # remove BND, CNV, and CPX and reformat INS SVTYPE to include SVLEN
+    cut -f1-5,$svlen ~{contig}.bed | sed '1d' | grep -v -e "BND" -e "CNV" -e "CPX" | sed -e 's/INS\t/INS_/' | sed -e 's/MEI\t/INS_/' | cut -f1-5 > ~{contig}.vapor.bed
   >>>
 
   runtime {
