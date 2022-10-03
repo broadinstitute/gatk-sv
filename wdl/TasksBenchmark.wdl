@@ -224,7 +224,7 @@ task SplitBed {
     # reformat BED for VaPoR with the following columns: chrom, pos, end, SVID, SVTYPE/description
     # remove BND, CNV, and CPX and reformat INS SVTYPE to include SVLEN
     if [[ -z "$svlen"  ]]; then
-      cut -f1-5 ~{contig}.bed > ~{contig}.vapor.bed
+      cut -f1-5 ~{contig}.bed | sed '1d' | grep -v -e "BND" -e "CNV" -e "CPX" > ~{contig}.vapor.bed
     else
       cut -f1-5,$svlen ~{contig}.bed | sed '1d' | grep -v -e "BND" -e "CNV" -e "CPX" | sed -e 's/INS\t/INS_/' | sed -e 's/MEI\t/INS_/' | cut -f1-5 > ~{contig}.vapor.bed
     fi
