@@ -120,7 +120,7 @@ task RunVaPoRWithCram{
     mem_gb: 15, 
     disk_gb: 30,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 1,
     max_retries: 1
   }
 

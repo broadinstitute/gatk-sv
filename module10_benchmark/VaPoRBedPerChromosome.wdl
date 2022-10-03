@@ -85,7 +85,7 @@ workflow VaPoRBedPerChromosome{
             runtime_attr_override=runtime_attr_ConcatBeds
     }
 
-    call mini_tasks.ConcatBeds as concat_beds{
+    call mini_tasks.ConcatVaPoRBeds as concat_beds{
         input:
             shard_bed_files=RunVaPoR.vapor,
             prefix = prefix,
@@ -118,7 +118,7 @@ task RunVaPoRWithCram{
     mem_gb: 15, 
     disk_gb: 30,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 1,
     max_retries: 1
   }
 

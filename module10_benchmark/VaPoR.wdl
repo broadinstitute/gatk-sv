@@ -34,7 +34,6 @@ workflow VaPoR{
         File ref_fasta
         File ref_fai
         File ref_dict
-        Array[String] contigs
         Int min_shard_size
         String vapor_docker
         String sv_base_mini_docker
@@ -47,6 +46,15 @@ workflow VaPoR{
     }
 
     if (defined(vcf_file)) {
+        call ExtractContigList as extract_contig_vcf{
+            input:
+                input_file = vcf_file,
+                sv_base_mini_docker = sv_base_mini_docker
+
+        }
+
+        Array[String] contigs_vcf = transpose(read_tsv(extract_contig_vcf.contig_file))[0]
+
         call vapor_vcf.VaPoRVcf as VaPoR_vcf{
             input:
                 prefix = prefix,
@@ -57,7 +65,7 @@ workflow VaPoR{
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
-                contigs = contigs,
+                contigs = contigs_vcf,
                 min_shard_size = min_shard_size,
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
@@ -71,6 +79,15 @@ workflow VaPoR{
     }
 
     if (defined(bed_file)) {
+        call ExtractContigList as extract_contig_bed{
+            input:
+                input_file = bed_file,
+                sv_base_mini_docker = sv_base_mini_docker
+
+        }
+
+        Array[String] contigs_bed = transpose(read_tsv(extract_contig_bed.contig_file))[0]
+
         call vapor_bed.VaPoRBed as VaPoR_bed{
             input:
                 prefix = prefix,
@@ -81,7 +98,7 @@ workflow VaPoR{
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
-                contigs = contigs,
+                contigs = contigs_bed,
                 min_shard_size = min_shard_size,
                 vapor_docker = vapor_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
@@ -101,4 +118,52 @@ workflow VaPoR{
         File bed_plots = select_first([VaPoR_vcf.plots, VaPoR_bed.plots])
     }
 }
+
+task ExtractContigList{
+  input{
+    File? input_file
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 1, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 1,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  output {
+    File contig_file = "contig.tsv"
+  }
+
+
+  command <<<
+
+    set -Eeuo pipefail
+
+    if [[ ~{input_file} == *.gz ]] ;  then
+      zcat ~{input_file} | grep -v "#" | cut -f1 | sort | uniq  > "contig.tsv"
+    else
+      grep -v "#" ~{input_file} | cut -f1 | sort | uniq > "contig.tsv"
+    fi
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 

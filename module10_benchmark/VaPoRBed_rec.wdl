@@ -79,7 +79,7 @@ task RunVaPoR{
     mem_gb: 15, 
     disk_gb: 50,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 1,
     max_retries: 1
   }
 
@@ -136,7 +136,7 @@ task RunVaPoRContig{
     mem_gb: 3.75, 
     disk_gb: 5,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 1,
     max_retries: 1
   }
 
@@ -193,7 +193,7 @@ task RunVaPoRWithCram{
     mem_gb: 15, 
     disk_gb: 30,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 1,
     max_retries: 1
   }
 
