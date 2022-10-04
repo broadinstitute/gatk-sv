@@ -208,29 +208,46 @@ task SplitBed {
   }
 
   command <<<
-    # extract contig of interest
-    # and extract sample of interest if provided & remove sample column to save on storage
-    set -euo pipefail
-    if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
-      # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
-      set +o pipefail
-      svlen=$(zcat ~{bed_file} | head -1 | ~{if defined(sample_to_extract) then "cut -f1-5,7- |" else ""} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
-    else
-      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5,7- |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
-      # get column number of SVLEN column. head -1 sends sigpipe so ignore for this command
-      set +o pipefail
-      svlen=$(head -1 ~{bed_file} | ~{if defined(sample_to_extract) then "cut -f1-5,7- |" else ""} | awk -v b="SVLEN" '{for (i=1;i<=NF;i++) { if ($i == b) { print i } }}')
-    fi
+    python3 <<CODE
+    import gzip
 
-    set -o pipefail
-    # reformat BED for VaPoR with the following columns: chrom, pos, end, SVID, SVTYPE/description
-    # remove BND, CNV, and CPX and reformat INS SVTYPE to include SVLEN
-    if [[ -z "$svlen"  ]]; then
-      cut -f1-5 ~{contig}.bed | grep -v -e "BND" -e "CNV" -e "CPX" > ~{contig}.vapor.bed
-    else
-      cut -f1-5,$svlen ~{contig}.bed | grep -v -e "BND" -e "CNV" -e "CPX" | awk -F '\t' -v OFS="\t" '$5 ~ /INS/ { print $1,$2,$3,$4,"INS",$6; next} { print }' | sed -e 's/INS\t/INS_/' | sed -e 's/MEI\t/INS_/' | cut -f1-5 > ~{contig}.vapor.bed
-    fi
+    def is_gzipped(path):
+      return path.endswith(".gz")
+
+
+    open_fn = gzip.open if is_gzipped("~{bed_file}") else open
+    open_mode = 'rt' if is_gzipped("~{bed_file}") else 'r'
+
+    remove_types = {"BND", "CPX", "CNV"}
+
+    default_columns = "chrom start end name svtype".split()
+    default_num_columns = len(default_columns)
+    columns = dict(zip(default_columns, range(default_num_columns)))
+    first = True
+    with open_fn("~{bed_file}", open_mode) as inp, open("~{contig}.vapor.bed", 'w') as out:
+      for line in inp:
+        fields = line.lstrip("#").rstrip('\n').split('\t')
+        if first:
+          if line.startswith("#"):
+            for i, name in enumerate(fields[default_num_columns:]):
+              columns[name] = default_num_columns + i  # get column names beyond first default ones from header if available
+          else:
+            if len(fields) >= default_num_columns:
+              columns['samples'] = default_num_columns  # if no header but extra fields, assume samples is next column
+        if fields[columns["chrom"]] != "~{contig}":
+          continue  # extract only contig of interest
+        if fields[columns["svtype"]] in remove_types:
+          continue  # drop BND, CNV, CPX
+        if "~{sample_to_extract}" != "" and "samples" in columns and "~{sample_to_extract}" not in fields[columns["samples"]]:
+          continue  # extract events in sample of interest if provided
+        svtype_write = fields[columns["svtype"]]
+        if "INS" in svtype_write or "MEI" in svtype_write:
+          if "SVLEN" in columns:
+            svtype_write = f"INS_{fields[columns['SVLEN']]}"  # for INS, format svtype as INS_SVLEN for VaPoR if SVLEN column in input BED
+        # write chrom, pos, end, SVID, svtype/description for vapor
+        out.write("\t".join([fields[columns["chrom"]], fields[columns["start"]], fields[columns["end"]], fields[columns["name"]], svtype_write]) + "\n")
+    CODE
+
   >>>
 
   runtime {
