@@ -12,6 +12,7 @@ workflow VaPoR {
         String bam_or_cram_index
         File? vcf_file
         File? bed_file
+        String? sample_to_extract_from_bed  # provide sample ID to extact if bed_file contains multiple samples
         File ref_fasta
         File ref_fai
         File ref_dict
@@ -32,7 +33,7 @@ workflow VaPoR {
                 prefix = prefix,
                 bam_or_cram_file = bam_or_cram_file,
                 bam_or_cram_index = bam_or_cram_index,
-                vcf_file = vcf_file,
+                vcf_file = select_first([vcf_file]),
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
@@ -54,7 +55,8 @@ workflow VaPoR {
                 prefix = prefix,
                 bam_or_cram_file = bam_or_cram_file,
                 bam_or_cram_index = bam_or_cram_index,
-                bed_file = bed_file,
+                bed_file = select_first([bed_file]),
+                sample_to_extract = sample_to_extract_from_bed,
                 ref_fasta = ref_fasta,
                 ref_fai = ref_fai,
                 ref_dict = ref_dict,
@@ -69,7 +71,7 @@ workflow VaPoR {
                 runtime_attr_ConcatBeds = runtime_attr_ConcatBeds
         }
     }
-    output{
+    output {
             File? vcf_out = VaPoR_vcf.bed
             File? bed_out = VaPoR_bed.bed
             File? vcf_plots = VaPoR_vcf.plots

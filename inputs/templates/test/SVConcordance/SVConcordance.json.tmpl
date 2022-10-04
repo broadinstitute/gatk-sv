@@ -1,0 +1,22 @@
+{
+  "SVConcordance.gatk_docker":{{ dockers.gatk_docker_concordance | tojson }},
+  "SVConcordance.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
+  "SVConcordance.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "SVConcordance.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+
+  "SVConcordance.eval_vcf" : {{ test_batch.clean_vcf | tojson }},
+  "SVConcordance.truth_vcf" : {{ test_batch.joined_raw_calls_vcf | tojson }},
+
+  "SVConcordance.ploidy_table": {{ test_batch.ploidy_table | tojson }},
+  "SVConcordance.cohort": {{ test_batch.name | tojson }},
+
+  "SVConcordance.run_svutils_truth_vcf": "false",
+  "SVConcordance.run_formatter_truth_vcf": "false",
+
+  "SVConcordance.run_svutils_eval_vcf": "true",
+  "SVConcordance.run_formatter_eval_vcf": "true",
+  "SVConcordance.formatter_eval_args": "--only-add-cn-fields --replace-ev-format --filter-unsupported-types",
+
+  "SVConcordance.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "SVConcordance.reference_dict": {{ reference_resources.reference_dict | tojson }}
+}
