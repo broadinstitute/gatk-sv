@@ -182,12 +182,12 @@ task LocalizeCramRequestPay {
   }
 }
 
-#extract specific contig from vcf
+#extract specific contig from BED
 task SplitBed {
   input {
     String contig
     String? sample_to_extract
-    File bed_file
+    File bed_file  # first 5 columns must be chrom, start, end, name, svtype (or VaPoR description). if >5 columns, use header or assume samples is 6th. Need header & SVLEN column unless already appended to INS descriptions
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -235,7 +235,7 @@ task SplitBed {
             if len(fields) >= default_num_columns:
               columns['samples'] = default_num_columns  # if no header but extra fields, assume samples is next column
         if fields[columns["chrom"]] != "~{contig}":
-          continue  # extract only contig of interest
+          continue  # extract only contig of interest. also drops header if exists
         if fields[columns["svtype"]] in remove_types:
           continue  # drop BND, CNV, CPX
         if "~{sample_to_extract}" != "" and "samples" in columns and "~{sample_to_extract}" not in fields[columns["samples"]]:
