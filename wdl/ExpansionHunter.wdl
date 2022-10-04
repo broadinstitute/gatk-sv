@@ -144,16 +144,16 @@ task RunExpansionHunter {
             --record-timing \
             $sex
 
-        if ~{generate_realigned_bam}; then
+        if [ ~{generate_realigned_bam} = false ]; then
             rm ~{sample_id}_realigned.bam
             touch ~{sample_id}_realigned.bam
         fi
 
         if ~{generate_vcf}; then
+            bgzip ~{sample_id}.vcf
+        else
             rm ~{sample_id}.vcf
             touch ~{sample_id}.vcf.gz
-        else
-            bgzip ~{sample_id}.vcf
         fi
 
         python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
