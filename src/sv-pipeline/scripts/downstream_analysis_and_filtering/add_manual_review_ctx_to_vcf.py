@@ -4,6 +4,9 @@
 
 """
 Adds records representing manually reviewed translocation events to VCF.
+Any events that match exactly on CHR1, POS, CHR2, END2, and CPX_TYPE will be merged into a single
+record with the correct sample genotypes set.
+Genotypes for the new record are given GQ and PE_GQ values of 999.
 Updates CTX records already present in the to store the location on CHR2 in the END2 info field and
 sets their END info field to be CHR1 position + 1
 """
