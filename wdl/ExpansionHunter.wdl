@@ -71,7 +71,7 @@ workflow ExpansionHunter {
             vcfs_gz = RunExpansionHunter.vcf_gz,
             variants_tsvs = RunExpansionHunter.variants_tsv,
             alleles_tsvs = RunExpansionHunter.alleles_tsv,
-            overlapping_reads_files = RunExpansionHunter.overlapping_reads,
+            realigned_bams = RunExpansionHunter.realigned_bam,
             timings = RunExpansionHunter.timing,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
@@ -84,7 +84,7 @@ workflow ExpansionHunter {
         File variants_tsv = ConcatEHOutputs.variants_tsv
         File alleles_tsv = ConcatEHOutputs.alleles_tsv
         File vcf_gz = ConcatEHOutputs.vcf_gz
-        File overlapping_reads = ConcatEHOutputs.overlapping_reads
+        File realigned_bam = ConcatEHOutputs.realigned_bam
         File timing = ConcatEHOutputs.timing
     }
 }
@@ -108,7 +108,7 @@ task RunExpansionHunter {
         File variants_tsv = "${sample_id}_variants.tsv"
         File alleles_tsv = "${sample_id}_alleles.tsv"
         File vcf_gz = "${sample_id}.vcf.gz"
-        File overlapping_reads = "${sample_id}_realigned.bam"
+        File realigned_bam = "${sample_id}_realigned.bam"
         File timing = "${sample_id}_timing.tsv"
     }
 
@@ -191,7 +191,7 @@ task ConcatEHOutputs {
         Array[File] vcfs_gz
         Array[File] variants_tsvs
         Array[File] alleles_tsvs
-        Array[File] overlapping_reads_files
+        Array[File] realigned_bams
         Array[File] timings
         Boolean generate_realigned_bam
         Boolean generate_vcf
@@ -204,7 +204,7 @@ task ConcatEHOutputs {
         File variants_tsv = "${output_prefix}_variants.tsv"
         File alleles_tsv = "${output_prefix}_alleles.tsv"
         File vcf_gz = "${output_prefix}.vcf.gz"
-        File overlapping_reads = "${output_prefix}.bam"
+        File realigned_bam = "${output_prefix}.bam"
         File timing = "${output_prefix}_timing.tsv"
     }
 
@@ -219,7 +219,7 @@ task ConcatEHOutputs {
         fi
 
         if ~{generate_realigned_bam}; then
-            BAMS="~{write_lines(overlapping_reads_files)}"
+            BAMS="~{write_lines(realigned_bams)}"
             samtools merge ~{output_prefix}.bam -b ${BAMS}
         else
             touch ~{output_prefix}.bam
@@ -252,7 +252,7 @@ task ConcatEHOutputs {
                 size(vcfs_gz, "GiB") +
                 size(variants_tsvs, "GiB") +
                 size(alleles_tsvs, "GiB") +
-                size(overlapping_reads_files, "GiB") +
+                size(realigned_bams, "GiB") +
                 size(timings, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])

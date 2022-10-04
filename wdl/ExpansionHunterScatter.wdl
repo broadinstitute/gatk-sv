@@ -75,7 +75,7 @@ workflow ExpansionHunterScatter {
         Array[File] variants_tsv = ExpansionHunter.variants_tsv
         Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
         Array[File] vcfs_gz = ExpansionHunter.vcf_gz
-        Array[File] overlapping_reads = ExpansionHunter.overlapping_reads
+        Array[File] realigned_bam = ExpansionHunter.realigned_bam
         Array[File] timing = ExpansionHunter.timing
     }
 }
