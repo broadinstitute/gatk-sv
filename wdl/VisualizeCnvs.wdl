@@ -6,8 +6,8 @@ import "Structs.wdl"
 
 workflow VisualizeCnvs {
   input{
-    File? vcf  # Option 1
-    File? bed  # Option 2, columns: chrom,start,end,name,svtype,samples
+    # Note vcf will be faster
+    File vcf_or_bed  # bed columns: chrom,start,end,name,svtype,samples
 
     String prefix
     Array[File] median_files
@@ -25,8 +25,7 @@ workflow VisualizeCnvs {
 
   call RdTestPlot {
     input:
-      vcf=vcf,
-      bed=bed,
+      vcf_or_bed=vcf_or_bed,
       median_files=median_files,
       ped_file=ped_file,
       rd_files=rd_files,
@@ -44,8 +43,7 @@ workflow VisualizeCnvs {
 
 task RdTestPlot {
   input{
-    File? vcf
-    File? bed
+    File vcf_or_bed
     Array[File] rd_files
     Array[File] rd_file_indexes
     Array[File] median_files
@@ -59,7 +57,7 @@ task RdTestPlot {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 7.5,
-                               disk_gb: ceil(100 + size(vcf, "GB") * 10 + size(rd_files, "GB")),
+                               disk_gb: ceil(100 + size(vcf_or_bed, "GB") * 10 + size(rd_files, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -68,21 +66,21 @@ task RdTestPlot {
   command <<<
     set -euxo pipefail
 
-    if ~{defined(vcf)}; then
+    if [[ ~{vcf_or_bed} == *.vcf.gz ]]; then
       # Subset to DEL/DUP above min size and covert to bed format
-      bcftools view -i '(SVTYPE=="DEL" || SVTYPE=="DUP") && SVLEN>=~{min_size}' ~{vcf} \
+      bcftools view -i '(SVTYPE=="DEL" || SVTYPE=="DUP") && SVLEN>=~{min_size}' ~{vcf_or_bed} \
         | svtk vcf2bed stdin raw.bed
       # Swap columns 5/6 for RdTest
       awk -F '\t' -v OFS="\t" '{print $1,$2,$3,$4,$6,$5}' raw.bed > cnvs.bed
       rm raw.bed
       # Get list of all sample IDs
-      bcftools query -l ~{vcf} > samples.txt
-    elif ~{defined(bed)}; then
-      if [[ ~{bed} == *.gz ]]; then
+      bcftools query -l ~{vcf_or_bed} > samples.txt
+    elif [[ ~{vcf_or_bed} == *.bed || ~{vcf_or_bed} == *.bed.gz ]]; then
+      if [[ ~{vcf_or_bed} == *.gz ]]; then
         DECOMPRESSED_BED="raw.bed"
-        zcat ~{bed} > $DECOMPRESSED_BED
+        zcat ~{vcf_or_bed} > $DECOMPRESSED_BED
       else
-        DECOMPRESSED_BED="~{bed}"
+        DECOMPRESSED_BED="~{vcf_or_bed}"
       fi
       # Subset to DEL/DUP above min size and swap columns 5/6 for RdTest
       awk -F '\t' -v OFS="\t" '{ if ($0!~"#" && $3-$2>=~{min_size} && ($5=="DEL" || $5=="DUP")) {print $1,$2,$3,$4,$6,$5} }' $DECOMPRESSED_BED > cnvs.bed
@@ -92,7 +90,7 @@ task RdTestPlot {
         | sort -u \
         > samples.txt
     else
-      echo "No calls provided"
+      echo "Invalid extension for input calls. Must be .vcf.gz, .bed.gz, or .bed"
       exit 1
     fi
 
