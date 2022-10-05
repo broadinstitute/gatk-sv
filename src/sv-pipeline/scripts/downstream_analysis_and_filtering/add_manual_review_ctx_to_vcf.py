@@ -6,6 +6,7 @@
 Adds records representing manually reviewed translocation events to VCF.
 Any events that match exactly on CHR1, POS, CHR2, END2, and CPX_TYPE will be merged into a single
 record with the correct sample genotypes set.
+The new record will have 'tloc' as a member of the ALGORITHMS INFO field
 Genotypes for the new record are given GQ and PE_GQ values of 999.
 Updates CTX records already present in the to store the location on CHR2 in the END2 info field and
 sets their END info field to be CHR1 position + 1
@@ -30,11 +31,16 @@ def parse_info(data: pd.DataFrame):
     return pd.concat([data, info_df], axis=1)
 
 
-def create_record(new_idx: int, data: pd.DataFrame, fout: pysam.VariantFile) -> tuple[pysam.VariantRecord, int]:
+def create_record(new_idx: int,
+                  data: pd.DataFrame,
+                  fout: pysam.VariantFile,
+                  ctx_number: int,
+                  cohort_name: str,
+                  batch_name: str) -> tuple[pysam.VariantRecord, int]:
     row = data.iloc[new_idx]
     contig = row["contig"]
     pos1 = row["pos"]
-    id = row["id"]
+    id = new_record_id(cohort_name, batch_name, contig, ctx_number)
     ref = row["ref"]
     alt = row["alt"]
     filter = row["filter"]
@@ -42,6 +48,10 @@ def create_record(new_idx: int, data: pd.DataFrame, fout: pysam.VariantFile) -> 
 
     samples = {row['sample']: row['gt']}
     info_sets = {info_col: {row[info_col]} for info_col in info_cols}
+    if 'info_ALGORITHMS' in info_sets:
+        info_sets['info_ALGORITHMS'].add('tloc')
+    else:
+        info_sets['info_ALGORITHMS'] = {'tloc'}
 
     new_idx = new_idx + 1
     while new_idx < len(data.index) and \
@@ -90,13 +100,19 @@ def create_record(new_idx: int, data: pd.DataFrame, fout: pysam.VariantFile) -> 
     return new_record, new_idx
 
 
+def new_record_id(cohort_name: str, batch_name: str, contig: str, ctx_num: int) -> str:
+    return "{}.{}_CTX_{}_{}".format(cohort_name, batch_name, contig, ctx_num)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--vcf', '-V', help='Input vcf (supports "stdin").')
-    parser.add_argument('--reviewed-ctx-file', help='File with data on reviewed translocation events')
-    parser.add_argument('--out', '-O', help='Output file (supports "stdout").')
+    parser.add_argument('--vcf', '-V', help='Input vcf (supports "stdin").', required=True)
+    parser.add_argument('--reviewed-ctx-file', help='File with data on reviewed translocation events', required=True)
+    parser.add_argument('--cohort-name', help='Name of the cohort (to be used in new record IDs)', required=True)
+    parser.add_argument('--batch-name', help='Name of the batch run (to be used in new record IDs)', required=True)
+    parser.add_argument('--out', '-O', help='Output file (supports "stdout").', required=True)
 
     args = parser.parse_args()
 
@@ -121,6 +137,7 @@ def main():
     data = parse_info(data)
     data = data.sort_values(by=['contig', 'pos', 'info_CHR2', 'info_END', 'info_CPX_TYPE'])
 
+    ctx_number = 0
     new_idx = 0
     prev_contig = None
     prev_pos = None
@@ -128,15 +145,20 @@ def main():
     new_loc = (data.loc[new_idx, 'contig'], data.loc[new_idx, 'pos'])
 
     for record in vcf:
+        if record.contig != prev_contig:
+            ctx_number = 0
         while new_idx < len(data.index) and\
                 before(new_loc, (record.contig, record.pos), contig_list=contig_list) and \
                 not before(new_loc, (prev_contig, prev_pos), contig_list=contig_list):
-            new_record, new_idx = create_record(new_idx, data, fout)
+            ctx_number = ctx_number + 1
+            new_record, new_idx = create_record(new_idx, data, fout, ctx_number, args.cohort_name, args.batch_name)
             fout.write(new_record)
             if new_idx < len(data.index):
                 new_loc = (data.loc[new_idx, 'contig'], data.loc[new_idx, 'pos'])
         # adjust CTX records already in the VCF to store the location on CHR2 in the END2 INFO field
         if record.info['SVTYPE'] == "CTX":
+            ctx_number = ctx_number + 1
+            record.id = new_record_id(args.cohort_name, args.batch_name, record.contig, ctx_number)
             if not 'END2' in record.info:
                 raise Exception("Record {}:{} {} does not have END2 set".format(record.contig, record.pos, record.id))
             else:
