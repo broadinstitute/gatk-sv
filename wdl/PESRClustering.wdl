@@ -163,6 +163,7 @@ task PreparePESRVcfs {
       SAMPLE_NUM=`printf %05d $i`
 
       # Keep main contigs only
+      bcftools index $VCF
       bcftools view $VCF --regions ~{sep=',' contigs} -Oz -o tmp1.vcf.gz
 
       # Convert format
