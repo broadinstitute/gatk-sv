@@ -46,6 +46,7 @@ workflow ClusterPESR {
   call PreparePESRVcfs {
     input:
       vcf_tar=vcf_tar,
+      contig_list=contig_list,
       reference_fasta_fai=reference_fasta_fai,
       exclude_intervals=exclude_intervals,
       exclude_intervals_index=exclude_intervals + ".tbi",
@@ -122,6 +123,7 @@ workflow ClusterPESR {
 task PreparePESRVcfs {
   input {
     File vcf_tar
+    File contig_list
     File reference_fasta_fai
     File exclude_intervals
     File exclude_intervals_index
@@ -145,6 +147,8 @@ task PreparePESRVcfs {
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+  Array[String] contigs = transpose(read_tsv(contig_list))[0]
+
   output {
     File out = "~{output_prefix}.tar.gz"
   }
@@ -157,22 +161,26 @@ task PreparePESRVcfs {
     for VCF in in/*.vcf.gz; do
       NAME=$(basename $VCF .vcf.gz)
       SAMPLE_NUM=`printf %05d $i`
+
+      # Keep main contigs only
+      bcftools view $VCF --regions ~{sep=',' contigs} -Oz -o tmp1.vcf.gz
+
       # Convert format
       python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
-        --vcf $VCF \
-        --out tmp.vcf.gz \
+        --vcf tmp1.vcf.gz \
+        --out tmp2.vcf.gz \
         --ploidy-table ~{ploidy_table} \
         ~{"--remove-infos " + remove_infos} \
         ~{"--remove-formats " + remove_formats}
 
       # Interval, contig, and size filtering
-      bcftools query -f '%CHROM\t%POS\t%POS\t%ID\t%SVTYPE\n%CHROM\t%END\t%END\t%ID\t%SVTYPE\n%CHR2\t%END2\t%END2\t%ID\t%SVTYPE\n' tmp.vcf.gz \
+      bcftools query -f '%CHROM\t%POS\t%POS\t%ID\t%SVTYPE\n%CHROM\t%END\t%END\t%ID\t%SVTYPE\n%CHR2\t%END2\t%END2\t%ID\t%SVTYPE\n' tmp2.vcf.gz \
         | awk '$1!="."' \
         | sort -k1,1V -k2,2n -k3,3n \
         > ends.bed
       bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b ~{exclude_intervals} | cut -f4 | sort | uniq \
         > excluded_vids.list
-      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size})' tmp.vcf.gz \
+      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size})' tmp2.vcf.gz \
         -Oz -o out/$SAMPLE_NUM.$NAME.vcf.gz
       tabix out/$SAMPLE_NUM.$NAME.vcf.gz
       i=$((i+1))
