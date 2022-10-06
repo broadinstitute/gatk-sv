@@ -72,7 +72,7 @@ workflow MergePesrDepth {
     }
 
     if (use_hail) {
-        call HailMerge.HailMerge as ConcatLargePesrDepthHail {
+        call HailMerge.HailMergeTask as ConcatLargePesrDepthHail {
             input:
                 vcfs=[SubsetLarge.filtered_vcf, subtyped_depth_vcf],
                 prefix="~{prefix}.large_pesr_depth",
@@ -157,7 +157,7 @@ workflow MergePesrDepth {
     }
 
     if (use_hail) {
-        call HailMerge.HailMerge as ConcatShardsHail {
+        call HailMerge.HailMergeTask as ConcatShardsHail {
             input:
                 vcfs=flatten([[SubsetSmall.filtered_vcf], SortVcf.out]),
                 prefix="~{prefix}.concat_shards",

@@ -137,7 +137,7 @@ workflow ResolveComplexSv {
 
     #Merge across shards
     if (use_hail) {
-      call HailMerge.HailMerge as ConcatResolvedPerShardHail {
+      call HailMerge.HailMergeTask as ConcatResolvedPerShardHail {
         input:
           vcfs=RestoreUnresolvedCnv.res,
           prefix="~{prefix}.resolved",
