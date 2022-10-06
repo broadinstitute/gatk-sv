@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow ApplyHardFilter {
+workflow ApplyManualVariantFilter {
   input {
     String prefix
     File vcf
@@ -36,7 +36,7 @@ task HardFilterWham {
     String? filter_name
 
     String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_hard_filter_wham
+    RuntimeAttr? runtime_attr_override
   }
 
   String filter_name_ = select_first([filter_name, "filter_wham_del_sr_1kb"])
@@ -46,7 +46,7 @@ task HardFilterWham {
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
     mem_gb: 3.75,
-    disk_gb: ceil(10.0 + (input_size * 1.5)),
+    disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -60,7 +60,7 @@ task HardFilterWham {
 
     bcftools view -e 'SVTYPE=="DEL" && COUNT(ALGORITHMS)==1 && ALGORITHMS=="wham" && SVLEN<1000 && COUNT(EVIDENCE)==1 && EVIDENCE=="SR"' ~{vcf} -Oz -o "~{hard_filtered_vcf_name}"
 
-    tabix -f -p vcf "~{hard_filtered_vcf_name}"
+    tabix "~{hard_filtered_vcf_name}"
 
   >>>
 
