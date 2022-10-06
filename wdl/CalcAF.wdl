@@ -16,7 +16,6 @@ workflow CalcAF {
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
     File? allosomes_list          #allosomes .fai used to override default sex chromosome assignments
-    String sv_pipeline_docker
     String? drop_empty_records
 
     RuntimeAttr? runtime_attr_compute_shard_af
