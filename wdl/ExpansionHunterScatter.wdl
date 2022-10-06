@@ -16,6 +16,7 @@ workflow ExpansionHunterScatter {
         Int? variant_catalog_batch_size
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
+        Boolean? seeking_analysis_mode
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_split_var_catalog
@@ -64,6 +65,7 @@ workflow ExpansionHunterScatter {
                 ped_file=ped_file,
                 generate_realigned_bam=generate_realigned_bam,
                 generate_vcf=generate_vcf,
+                seeking_analysis_mode=seeking_analysis_mode,
                 expansion_hunter_docker=expansion_hunter_docker,
                 python_docker=python_docker,
                 runtime_eh=runtime_eh,

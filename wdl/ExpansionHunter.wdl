@@ -23,6 +23,7 @@ workflow ExpansionHunter {
         String sample_id
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
+        Boolean? seeking_analysis_mode
         File? ped_file
         String expansion_hunter_docker
         String python_docker
@@ -48,6 +49,12 @@ workflow ExpansionHunter {
 
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
+    Boolean seeking_analysis_mode_ = select_first([seeking_analysis_mode, true])
+    String analysis_mode =
+        if select_first([seeking_analysis_mode, true]) then
+            "seeking"
+        else
+            "streaming"
 
     scatter (i in range(length(split_variant_catalogs))) {
         call RunExpansionHunter {
@@ -60,6 +67,7 @@ workflow ExpansionHunter {
                 sample_id = sample_id,
                 generate_realigned_bam = generate_realigned_bam_,
                 generate_vcf = generate_vcf_,
+                analysis_mode = analysis_mode,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
                 runtime_override = runtime_eh
@@ -99,6 +107,7 @@ task RunExpansionHunter {
         String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
+        String analysis_mode
         File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_override
@@ -140,6 +149,7 @@ task RunExpansionHunter {
             --reference $REF \
             --variant-catalog ~{variant_catalog} \
             --output-prefix ~{sample_id} \
+            --analysis-mode ~{analysis_mode} \
             --cache-mates \
             --record-timing \
             $sex
