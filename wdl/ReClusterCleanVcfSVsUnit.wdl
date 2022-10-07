@@ -125,10 +125,10 @@ task SvtkVcfCluster {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float default_mem_gb = 3.75 + (120.0 * (num_vids / 19000.0) * (num_samples / 140000.0))
+    Float default_mem_gb = 10 + (120.0 * (num_vids / 19000.0) * (num_samples / 140000.0))
     RuntimeAttr runtime_default = object {
         mem_gb: default_mem_gb,
-        disk_gb: ceil(10.0 + size(vcf, "GiB") * 5.0),
+        disk_gb: ceil(30.0 + size(vcf, "GiB") * 30.0),
         cpu_cores: 1,
         preemptible_tries: 1,
         max_retries: 1,
