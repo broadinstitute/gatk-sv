@@ -10,6 +10,7 @@ workflow prune_and_add_vafs {
     File vcf_idx
     String prefix
     String sv_pipeline_docker
+    String sv_pipeline_updates_docker
 
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? prune_list              #List of samples to be excluded from the output vcf
@@ -17,7 +18,7 @@ workflow prune_and_add_vafs {
     File? par_bed                 #Used to mark hemizygous males on chrX/Y
     Int sv_per_shard
     File contiglist
-    String? drop_empty_records  
+    String? drop_empty_records
     
   }
   Array[Array[String]] contigs=read_tsv(contiglist)
@@ -38,14 +39,14 @@ workflow prune_and_add_vafs {
       input:
         vcf=PruneVcf.pruned_vcf,
         vcf_idx=PruneVcf.pruned_vcf_idx,
-        contig=contig[0],
         sv_per_shard=sv_per_shard,
         prefix=prefix,
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
         par_bed=par_bed,
         drop_empty_records=drop_empty_records,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_updates_docker=sv_pipeline_updates_docker
     }
   }
 

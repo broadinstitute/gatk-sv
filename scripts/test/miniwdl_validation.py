@@ -42,8 +42,7 @@ def check(wdl_filename, imports_dir, import_max_depth):
             f"maximum {import_max_depth} import depth. You may separately check the "
             f"WDLs imported in {wdl_filename} and make sure they all pass the "
             f"miniwdl validation."))
-    finally:
-        return False
+    return False
 
 
 def main():
