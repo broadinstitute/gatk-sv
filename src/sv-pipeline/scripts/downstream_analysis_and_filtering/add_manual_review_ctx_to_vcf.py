@@ -18,7 +18,9 @@ import pandas as pd
 import pysam
 
 
-def before(loc1: tuple[str, int], loc2: tuple[str, int], contig_list: list[str]) -> bool:
+# removed type hints for backward compatibility with earlier python versions:
+# loc1: tuple[str, int], loc2: tuple[str, int], contig_list: list[str]
+def before() -> bool:
     return (contig_list.index(loc1[0]) < contig_list.index(loc2[0])) or \
         (contig_list.index(loc1[0]) == contig_list.index(loc2[0]) and
          loc1[1] < loc2[1])
@@ -31,12 +33,14 @@ def parse_info(data: pd.DataFrame):
     return pd.concat([data, info_df], axis=1)
 
 
+# removed type hints for backward compatibility with earlier python versions:
+# -> tuple[pysam.VariantRecord, int]
 def create_record(new_idx: int,
                   data: pd.DataFrame,
                   fout: pysam.VariantFile,
                   ctx_number: int,
                   cohort_name: str,
-                  batch_name: str) -> tuple[pysam.VariantRecord, int]:
+                  batch_name: str):
     row = data.iloc[new_idx]
     contig = row["contig"]
     pos1 = row["pos"]
