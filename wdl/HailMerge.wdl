@@ -30,7 +30,7 @@ workflow HailMerge {
     }
   }
 
-  call HailMerge {
+  call HailMergeTask {
     input:
       vcfs = [select_first([Preconcat.concat_vcf, vcfs[0]])],
       prefix = prefix,
@@ -41,7 +41,7 @@ workflow HailMerge {
 
   call FixHeader {
     input:
-      merged_vcf = HailMerge.merged_vcf,
+      merged_vcf = HailMergeTask.merged_vcf,
       example_vcf = vcfs[0],
       prefix = prefix + ".reheadered",
       reset_cnv_gts = select_first([reset_cnv_gts, false]),
@@ -55,7 +55,7 @@ workflow HailMerge {
   }
 }
 
-task HailMerge {
+task HailMergeTask {
   input {
     Array[File] vcfs
     String prefix

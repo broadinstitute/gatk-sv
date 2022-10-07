@@ -100,7 +100,7 @@ workflow ScatterCpxGenotyping {
   }
 
   if (use_hail) {
-    call HailMerge.HailMerge as ConcatCpxCnvVcfsHail {
+    call HailMerge.HailMergeTask as ConcatCpxCnvVcfsHail {
       input:
         vcfs=GenotypeShard.cpx_depth_gt_resolved_vcf,
         prefix="~{prefix}.regenotyped",

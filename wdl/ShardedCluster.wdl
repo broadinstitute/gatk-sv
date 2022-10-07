@@ -143,7 +143,7 @@ workflow ShardedCluster {
   }
   if (length(SvtkVcfCluster.out) > 0) {
     if (use_hail) {
-      call HailMerge.HailMerge as ConcatVcfsHail {
+      call HailMerge.HailMergeTask as ConcatVcfsHail {
         input:
           vcfs=SortVcf.out,
           prefix="~{prefix}.clustered",
