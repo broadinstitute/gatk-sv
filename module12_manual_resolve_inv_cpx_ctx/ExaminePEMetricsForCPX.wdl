@@ -13,7 +13,7 @@ workflow CollectPEMetricsForCPX {
         Array[File] PE_metrics_idxes
         File PE_collect_script
         String prefix
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override_collect_pe
         RuntimeAttr? runtime_attr_override_concat_evidence
         RuntimeAttr? runtime_attr_override_calcu_pe_stat
@@ -26,7 +26,7 @@ workflow CollectPEMetricsForCPX {
                 PE_metric = PE_metrics[i],
                 PE_metrics_idx = PE_metrics_idxes[i],
                 PE_collect_script = PE_collect_script,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_override_collect_pe
         }
     }
@@ -35,7 +35,7 @@ workflow CollectPEMetricsForCPX {
         input:
             evidences = CollectPEMetrics.evidence,
             prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_concat_evidence
     }
 
@@ -43,7 +43,7 @@ workflow CollectPEMetricsForCPX {
         input:
             evidence = ConcatEvidences.concat_evidence,
             prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_calcu_pe_stat
     }
 
@@ -62,7 +62,7 @@ task CollectPEMetrics{
     File PE_metric
     File PE_metrics_idx
     File PE_collect_script
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -98,7 +98,7 @@ task CollectPEMetrics{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -108,7 +108,7 @@ task ConcatEvidences{
   input{
     Array[File] evidences
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -143,7 +143,7 @@ task ConcatEvidences{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -153,7 +153,7 @@ task CalcuPEStat{
   input{
     File evidence
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -184,7 +184,7 @@ task CalcuPEStat{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
