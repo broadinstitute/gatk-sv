@@ -144,6 +144,7 @@ task RunExpansionHunter {
             fi
         fi
 
+        touch ~{sample_id}_timing.tsv
         ExpansionHunter \
             --reads ~{bam_or_cram} \
             --reference $REF \
