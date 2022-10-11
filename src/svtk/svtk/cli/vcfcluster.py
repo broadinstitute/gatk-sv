@@ -92,7 +92,7 @@ def main(argv):
     parser.add_argument('-p', '--prefix',
                         default='MERGED',
                         help='Prefix for merged variant IDs. [MERGED]')
-    parser.add_argument('-t', '--svtypes', default='DEL,DUP,INV,BND',
+    parser.add_argument('-t', '--svtypes', default='DEL,DUP,INS,INV,BND,CNV,CPX,CTX',
                         help='Comma delimited list of svtypes to cluster '
                         '[DEL,DUP,INV,BND]')
     parser.add_argument('--ignore-svtypes', action='store_true', default=False,

@@ -280,6 +280,13 @@ class SVRecordCluster:
         """
         Aggregate INFO fields in child records
         """
+
+        def _as_tuple(x):
+            if isinstance(x, str):
+                return (x,)
+            else:
+                return x
+
         PROTECTED_INFOS = ('SVTYPE CHR2 END STRANDS SVLEN ALGORITHMS CIPOS '
                            'CIEND RMSSTD MEMBERS').split()
         infos = defaultdict(list)
@@ -299,8 +306,12 @@ class SVRecordCluster:
                     new_record.info[key] = sorted(
                         set([v for vlist in values for v in vlist]))
                 elif header_info.number == 1:
-                    new_record.info[key] = ','.join(
-                        sorted(set(values)))
+                    # If Number=1 but there is a comma in the string, pysam interprets it
+                    # as having multiple values and creates a tuple instead of leaving it
+                    # as a string. Here we standardize the value to tuples and flatten.
+                    flattened = set(x for v in values for x in _as_tuple(v))
+                    print(flattened)
+                    new_record.info[key] = ','.join(sorted(flattened))
                 else:
                     new_record.info[key] = [
                         ','.join(vlist) for vlist in zip(values)]
