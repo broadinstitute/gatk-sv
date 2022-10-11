@@ -336,7 +336,7 @@ workflow CombineBatches {
 
     #Merge PESR & RD VCFs
     if (use_hail) {
-      call HailMerge.HailMergeTask as ConcatPesrDepthHail {
+      call HailMerge.HailMerge as ConcatPesrDepthHail {
         input:
           vcfs=[MergeDeletions.out, MergeDuplications.out, HarmonizeHeaders.out[2], HarmonizeHeaders.out[3], HarmonizeHeaders.out[4]],
           prefix="~{cohort_name}.~{contig}.concat_pesr_depth",
