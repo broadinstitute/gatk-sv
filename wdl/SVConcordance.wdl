@@ -93,7 +93,7 @@ workflow SVConcordance {
 
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter (contig in contigs) {
-    call SVConcordance {
+    call SVConcordanceTask {
       input:
         eval_vcf=select_first([FormatEval.out, SvutilsEval.out, eval_vcf]),
         truth_vcf=select_first([FormatTruth.out, SvutilsTruth.out, truth_vcf]),
@@ -108,8 +108,8 @@ workflow SVConcordance {
 
   call tasks_cohort.ConcatVcfs {
     input:
-      vcfs=SVConcordance.out,
-      vcfs_idx=SVConcordance.out_index,
+      vcfs=SVConcordanceTask.out,
+      vcfs_idx=SVConcordanceTask.out_index,
       naive=true,
       outfile_prefix="~{cohort}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -218,7 +218,7 @@ task PreprocessVcf {
   }
 }
 
-task SVConcordance {
+task SVConcordanceTask {
   input {
     File truth_vcf
     File eval_vcf
