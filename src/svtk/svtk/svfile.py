@@ -310,7 +310,6 @@ class SVRecordCluster:
                     # as having multiple values and creates a tuple instead of leaving it
                     # as a string. Here we standardize the value to tuples and flatten.
                     flattened = set(x for v in values for x in _as_tuple(v))
-                    print(flattened)
                     new_record.info[key] = ','.join(sorted(flattened))
                 else:
                     new_record.info[key] = [
