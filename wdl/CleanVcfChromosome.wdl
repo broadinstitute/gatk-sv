@@ -108,7 +108,7 @@ workflow CleanVcfChromosome {
   }
 
   if (use_hail) {
-    call HailMerge.HailMergeTask as CombineStep1VcfsHail {
+    call HailMerge.HailMerge as CombineStep1VcfsHail {
       input:
         vcfs=CleanVcf1a.intermediate_vcf,
         prefix="~{prefix}.combine_step_1_vcfs",
@@ -254,7 +254,7 @@ workflow CleanVcfChromosome {
   }
 
   if (use_hail) {
-    call HailMerge.HailMergeTasks as SortDropRedundantCnvsHail {
+    call HailMerge.HailMerge as SortDropRedundantCnvsHail {
       input:
         vcfs=[DropRedundantCnvs.out],
         prefix="~{prefix}.drop_redundant_cnvs.sorted",

@@ -164,7 +164,7 @@ workflow CleanVcf {
   }
 
   if (use_hail) {
-    call HailMerge.HailMergeTask as ConcatVcfsHail {
+    call HailMerge.HailMerge as ConcatVcfsHail {
       input:
         vcfs=CleanVcfChromosome.out,
         prefix="~{cohort_name}.cleaned",
