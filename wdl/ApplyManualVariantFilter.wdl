@@ -6,41 +6,45 @@ workflow ApplyManualVariantFilter {
   input {
     String prefix
     File vcf
-    String? filter_name
+    File? vcf_index
+    String filter_name
+    String bcftools_filter  # supplied to bcftools view -e "<filter>"
 
     String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_hard_filter_wham
+    RuntimeAttr? runtime_attr_hard_filter_vcf
   }
 
-  call HardFilterWham {
+  call HardFilterVcf {
     input:
       prefix = prefix,
       vcf = vcf,
+      vcf_index = vcf_index,
       filter_name = filter_name,
+      bcftools_filter = bcftools_filter,
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_hard_filter_wham
+      runtime_attr_override = runtime_attr_hard_filter_vcf
   }
 
   output {
-    File hard_filtered_vcf = HardFilterWham.hard_filtered_vcf
-    File hard_filtered_vcf_index = HardFilterWham.hard_filtered_vcf_index
+    File manual_filtered_vcf = HardFilterVcf.hard_filtered_vcf
+    File manual_filtered_vcf_index = HardFilterVcf.hard_filtered_vcf_index
   }
 }
 
 
-# Removes Wham-only, SR-only deletions <1kb
-task HardFilterWham {
+task HardFilterVcf {
   input {
     String prefix
     File vcf
-    String? filter_name
+    File? vcf_index
+    String filter_name
+    String bcftools_filter
 
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String filter_name_ = select_first([filter_name, "filter_wham_del_sr_1kb"])
-  String hard_filtered_vcf_name = "~{prefix}.~{filter_name_}.vcf.gz"
+  String hard_filtered_vcf_name = "~{prefix}.~{filter_name}.vcf.gz"
 
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
@@ -58,7 +62,7 @@ task HardFilterWham {
 
     set -euo pipefail
 
-    bcftools view -e 'SVTYPE=="DEL" && COUNT(ALGORITHMS)==1 && ALGORITHMS=="wham" && SVLEN<1000 && COUNT(EVIDENCE)==1 && EVIDENCE=="SR"' ~{vcf} -Oz -o "~{hard_filtered_vcf_name}"
+    bcftools view -e "~{bcftools_filter}" ~{vcf} -Oz -o "~{hard_filtered_vcf_name}"
 
     tabix "~{hard_filtered_vcf_name}"
 
