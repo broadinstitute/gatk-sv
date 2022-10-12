@@ -18,7 +18,12 @@ workflow GATKSVPipelineSingleSampleTest {
   call module.GATKSVPipelineSingleSample {
     input:
       sample_id = case_sample,
-      ref_samples = ref_samples
+
+      # ref_samples = ref_samples
+      # The above line is commented out to only
+      # to pass the miniwdl validation. The argument to
+      # pass here is ref_samples_list which is a file
+      # that contains a list of the samples.
   }
 
   Array[String] samples = flatten([[case_sample], ref_samples])
