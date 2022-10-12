@@ -11,7 +11,7 @@ workflow GetVariantListsFromVaporAndIRSReports {
     Array[File] irs_sample_batches
     Array[File] irs_test_reports
     File? irs_contigs_fai
-    Float? vapor_min_precision = 0.01
+    Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
     Int? irs_min_cnv_size = 50000
     Float? irs_good_pvalue_threshold = 0.001
