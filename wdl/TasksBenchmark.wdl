@@ -40,7 +40,14 @@ task ConcatVaPoR {
   }
 
   command <<<
-    set -euo pipefail
+    set -eu
+
+    zcat ~{shard_bed_files[0]} | head -n1 > header.txt
+    # note head -n1 stops reading early and sends SIGPIPE to zcat,
+    # so setting pipefail here would result in early termination
+
+    # no more early stopping
+    set -o pipefail
 
     python <<CODE
     import gzip
@@ -48,6 +55,8 @@ task ConcatVaPoR {
       chr3_ids = set()
       wrote_chr13 = False
       for line in old:
+        if line.startswith("#"):
+          continue
         if line.startswith("chr3"):
           chrom, start, end, svtype, varid = line.rstrip('\n').split('\t')[:5]
           if varid in chr3_ids:
@@ -62,7 +71,7 @@ task ConcatVaPoR {
         out.write(line)
     CODE
 
-    cat ~{prefix}.bed | sort -Vk1,1 -k2,2n -k3,3n | bgzip -c > ~{output_file}
+    cat ~{prefix}.bed | sort -Vk1,1 -k2,2n -k3,3n | cat header.txt - | bgzip -c > ~{output_file}
 
     if ~{call_tabix}; then
       tabix -f -p bed ~{output_file}
