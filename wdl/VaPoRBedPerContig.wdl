@@ -8,6 +8,7 @@ workflow VaPoRBed {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
+    File old_vapor_output
     File bed_file
     String? sample_to_extract
     File ref_fasta
@@ -55,16 +56,16 @@ workflow VaPoRBed {
 
   call tasks10.ConcatVaPoR as ConcatVaPoR{
     input:
+      old_vapor_output = old_vapor_output,
       shard_bed_files=RunVaPoR.vapor,
-      shard_plots = RunVaPoR.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 
-  output{
+  output {
       File bed = ConcatVaPoR.merged_bed_file
-      File plots = ConcatVaPoR.merged_bed_plot
+      File plots = RunVaPoR.vapor_plot[0]
     }
   }
 
