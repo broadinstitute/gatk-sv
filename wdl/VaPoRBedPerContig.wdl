@@ -16,7 +16,6 @@ workflow VaPoRBed {
     File ref_dict
     Array[String] contigs
     String vapor_docker
-    String sv_base_mini_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_Vapor 
     RuntimeAttr? runtime_attr_bcf2vcf
@@ -59,7 +58,7 @@ workflow VaPoRBed {
       old_vapor_output = old_vapor_output,
       shard_bed_files=RunVaPoR.vapor,
       prefix=prefix,
-      sv_base_mini_docker=sv_base_mini_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
       }
 

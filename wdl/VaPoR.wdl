@@ -17,7 +17,6 @@ workflow VaPoR {
         File ref_dict
         Array[String] contigs
         String vapor_docker
-        String sv_base_mini_docker
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_Vapor 
         RuntimeAttr? runtime_attr_bcf2vcf
@@ -40,7 +39,6 @@ workflow VaPoR {
                 ref_dict = ref_dict,
                 contigs = contigs,
                 vapor_docker = vapor_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_Vapor    = runtime_attr_Vapor,
                 runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
