@@ -12,7 +12,7 @@ workflow VaPoR {
         String bam_or_cram_index
         File? vcf_file
         File? bed_file
-        String? sample_to_extract_from_bed  # provide sample ID to extact if bed_file contains multiple samples
+        String? sample_to_extract_from_bed  # provide sample ID to extract if bed_file contains multiple samples
         File ref_fasta
         File ref_fai
         File ref_dict
