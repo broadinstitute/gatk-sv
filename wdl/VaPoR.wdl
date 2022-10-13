@@ -16,7 +16,7 @@ workflow VaPoR {
         File ref_fasta
         File ref_fai
         File ref_dict
-        Array[String] contigs
+        File primary_contigs_list
         String vapor_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
@@ -26,6 +26,8 @@ workflow VaPoR {
         RuntimeAttr? runtime_attr_SplitVcf
         RuntimeAttr? runtime_attr_ConcatBeds
     }
+
+    Array[String] contigs = transpose(read_tsv(primary_contigs_list))[0]
 
     if (defined(vcf_file)) {
         call vapor_vcf.VaPoRVcf as VaPoR_vcf{
