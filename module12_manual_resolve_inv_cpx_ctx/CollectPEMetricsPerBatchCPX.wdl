@@ -6,59 +6,52 @@
 version 1.0
 
 import "Structs.wdl"
-import "CollectPEMetricsPerBatchCPX.wdl" as collect_pe_metrics_per_batch
-
-workflow CollectPEMetricsForCPX {
+workflow CollectPEMetricsPerBatchCPX {
     input{
-        Array[String] batch_name_list
-        Array[File] PE_metrics
-        Array[File] PE_metrics_idxes
+        Int n_per_split
+        String batch_name
+        File PE_metric
+        File PE_metrics_idx
         File PE_collect_script
         String prefix
-        Int n_per_split
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override_collect_pe
-        RuntimeAttr? runtime_attr_override_split_script
-        RuntimeAttr? runtime_attr_override_calcu_pe_stat
         RuntimeAttr? runtime_attr_override_concat_evidence
+        RuntimeAttr? runtime_attr_override_calcu_pe_stat
+        RuntimeAttr? runtime_attr_override_split_script
         }
 
-    scatter (i in range(length(batch_name_list))){
-        call collect_pe_metrics_per_batch.CollectPEMetricsPerBatchCPX as CollectPEMetricsPerBatchCPX{
+    call SplitScripts{
+        input:
+            script = PE_collect_script,
+            n_per_split = n_per_split,
+            batch_name = batch_name,
+            sv_base_mini_docker = sv_base_mini_docker,
+            runtime_attr_override = runtime_attr_override_split_script
+    }
+    
+    scatter (script in SplitScripts.script_splits ){
+        call CollectPEMetrics{
             input:
-                n_per_split = n_per_split,
-                prefix = "~{prefix}.~{batch_name_list[i]}",
-                batch_name = batch_name_list[i],
-                PE_metric = PE_metrics[i],
-                PE_metrics_idx = PE_metrics_idxes[i],
-                PE_collect_script = PE_collect_script,
+                batch_name = batch_name,
+                PE_metric = PE_metric,
+                PE_metrics_idx = PE_metrics_idx,
+                PE_collect_script = script,
                 sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override_collect_pe = runtime_attr_override_collect_pe,
-                runtime_attr_override_split_script = runtime_attr_override_split_script,
-                runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
-                runtime_attr_override_concat_evidence = runtime_attr_override_concat_evidence
+                runtime_attr_override = runtime_attr_override_collect_pe
         }
-     }
+    }
 
     call ConcatEvidences{
         input:
-            evidences = CollectPEMetricsPerBatchCPX.evidence,
+            evidences = CollectPEMetrics.evidence,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_override_concat_evidence
     }
 
-    call CalcuPEStat{
-        input:
-            evidence = ConcatEvidences.concat_evidence,
-            prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_calcu_pe_stat
-    }
-
     output{
         File evidence = ConcatEvidences.concat_evidence
-        File evi_stat = CalcuPEStat.evi_stat
     }
 }
 
@@ -72,7 +65,7 @@ task CollectPEMetrics{
     File PE_metrics_idx
     File PE_collect_script
     String sv_base_mini_docker
-   RuntimeAttr? runtime_attr_override
+    RuntimeAttr? runtime_attr_override
   }
 
   RuntimeAttr default_attr = object {
@@ -93,7 +86,13 @@ task CollectPEMetrics{
     gsutil cp ~{PE_metrics_idx} ./
     grep -w ~{batch_name} ~{PE_collect_script} > tmp_metrics.sh
     bash tmp_metrics.sh
-    cat *.PE_evidences > ~{batch_name}.evidence
+
+    touch ~{batch_name}.evidence
+    for peEvFile in *.PE_evidences
+    do
+       cat ${peEvFile} >> ~{batch_name}.evidence
+    done
+
     bgzip ~{batch_name}.evidence
 
   >>>
@@ -198,3 +197,47 @@ task CalcuPEStat{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task SplitScripts {
+  input {
+    File script
+    String batch_name
+    Int n_per_split
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    Array[File] script_splits = glob("collect_PE_evidences.*")
+  }
+  command <<<
+
+    set -euo pipefail
+    grep -w ~{batch_name} ~{script} > tmp_metrics.sh
+    split --additional-suffix ".sh" -l ~{n_per_split} -a 6 tmp_metrics.sh collect_PE_evidences.
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+
+ 
