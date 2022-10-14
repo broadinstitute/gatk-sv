@@ -5,7 +5,7 @@
 # - python3.6, pip
 # - numpy, and pandas
 
-FROM ubuntu:20.04
+FROM ubuntu:22.10
 
 ARG HTSLIB_VER=1.15.1
 ARG BCFTOOLS_VER=1.15.1
@@ -13,6 +13,8 @@ ARG SAMTOOLS_VER=1.15.1
 ARG EH_VER=5.0.0
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
+# libcurl3 is needed for EH.
+    libcurl3-nss \
     tabix \
     git \
     make \
@@ -24,7 +26,10 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl4-gnutls-dev \
     libncurses5-dev \
     libncursesw5-dev \
-    python3.8-dev \
+    build-essential \
+    libssl-dev \
+    libffi-dev \
+    python3-dev \
     python3-pip \
     python3-wheel \
     python3-venv \
