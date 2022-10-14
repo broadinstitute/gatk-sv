@@ -1,17 +1,18 @@
 # This docker image contains the following
 # list of tools and their dependencies:
-# - ExpansionHunter (custom-built);
+# - ExpansionHunter v5;
 # - htslib, bcftools, and samtools;
 # - python3.6, pip
+# - numpy, and pandas
 
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 ARG HTSLIB_VER=1.15.1
 ARG BCFTOOLS_VER=1.15.1
 ARG SAMTOOLS_VER=1.15.1
+ARG EH_VER=5.0.0
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
-    libcurl3 \
     tabix \
     git \
     make \
@@ -23,7 +24,7 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     libcurl4-gnutls-dev \
     libncurses5-dev \
     libncursesw5-dev \
-    python3.6-dev \
+    python3.8-dev \
     python3-pip \
     python3-wheel \
     python3-venv \
@@ -32,8 +33,7 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     wget \
     ca-certificates && \
     update-ca-certificates && \
-    ln -s /usr/bin/python3.6 /usr/bin/python && \
-    ln -s /usr/bin/pip3 /usr/bin/pip
+    alias python=python3
 
 RUN pip install --upgrade setuptools
 # Combining the following two `RUN`s under a single `RUN` cause image build failure.
@@ -42,8 +42,10 @@ RUN pip install -q -U Cython==0.29.30 numpy==1.19.5
 RUN pip install -q -U pandas==1.1.5
 
 RUN cd /opt/ && mkdir eh && cd eh/ && \
-    wget -O ExpansionHunter https://github.com/bw2/ExpansionHunter/raw/master/bin/linux/ExpansionHunter && \
-    chmod 0755 ExpansionHunter
+    wget -O eh.tar.gz https://github.com/Illumina/ExpansionHunter/releases/download/v$EH_VER/ExpansionHunter-v$EH_VER-linux_x86_64.tar.gz && \
+    mkdir eh && tar -xf eh.tar.gz -C eh --strip-components=1 && \
+    mv eh/bin/ExpansionHunter . && \
+    rm eh.tar.gz && rm -r eh && cd ..
 ENV PATH="/opt/eh/:$PATH"
 
 # Install htslib, bcftools, & samtools.
