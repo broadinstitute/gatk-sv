@@ -172,8 +172,10 @@ def load_benchmark_properties_from_vcf_properties(
         allele_counts = genomics_io.get_allele_counts(variants, use_copy_number=use_copy_number, use_cn=use_cn)
         variants = genomics_io.assign_dataframe_column(variants, allele_counts, Keys.allele_count)
     if Keys.is_autosome in wanted_properties:
+        is_autosome = genomics_io.get_is_autosome(variants)
+        print(is_autosome)
         variants = genomics_io.assign_dataframe_column(
-            variants, genomics_io.get_is_autosome(variants), Keys.is_autosome
+            variants, is_autosome, Keys.is_autosome
         )
     # keep only the wanted properties, drop multi-index if it's not needed
     return genomics_io.drop_trivial_columns_multi_index(variants.loc[:, (slice(None), wanted_properties)])
@@ -2164,7 +2166,7 @@ def _compute_hardy_weinberg_plotted_boundary(
     proportion_het_low = alt_allele_frequency_grid * (1.0 - alt_allele_frequency_grid)
     previous = None
     tol = 0.1 * numpy.diff(proportion_het_grid).mean()  # set tol to about 10% of a grid width
-    while previous is None or numpy.abs(proportion_het_low - previous).max() >= tol:
+    while previous is None or numpy.abs(proportion_het_low - previous).max(initial=0) >= tol:
         # to aid convergence, only take a half step each iteration:
         # noinspection PyUnresolvedReferences
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
@@ -2184,7 +2186,7 @@ def _compute_hardy_weinberg_plotted_boundary(
         1.0 - numpy.abs(2 * alt_allele_frequency_grid - 1)
     ) / 2.0
     previous = None
-    while previous is None or numpy.abs(proportion_het_high - previous).max() >= tol:
+    while previous is None or numpy.abs(proportion_het_high - previous).max(initial=0) >= tol:
         # to aid convergence, only take a half step each iteration:
         # noinspection PyTypeChecker
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(

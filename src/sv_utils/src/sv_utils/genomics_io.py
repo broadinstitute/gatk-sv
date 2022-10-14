@@ -1893,9 +1893,9 @@ def assign_dataframe_column(
         # adding a single column (e.g. adding an info field to a variants DataFrame)
         if isinstance(df.columns, pandas.MultiIndex):
             values.name = (None, name)
-            is_new_prop = name in df.columns.get_level_values(level=Keys.property)
+            is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
             if is_new_prop:
-                df = df.join(values)
+                df = pandas.concat((df, values), axis=1)
             else:
                 df.loc[:, (None, name)] = values
 
@@ -1913,7 +1913,7 @@ def assign_dataframe_column(
         values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=Default.column_levels)
         is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
         if is_new_prop:
-            df = df.join(values)
+            df = pandas.concat((df, values), axis=1)
         else:
             df.loc[:, (slice(None), name)] = values
         # need to sort to put the table back into well-organized form

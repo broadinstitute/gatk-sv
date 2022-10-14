@@ -34,7 +34,9 @@ setup(
         "dill",
         "pympler",
         "matplotlib",
-        "seaborn"
+        "seaborn",
+        "dask>=22.9.1",
+        "pyarrow>=9.0.0"
     ],
     extras_require={
         "tests": ["pytest", "pytest-cov"]
