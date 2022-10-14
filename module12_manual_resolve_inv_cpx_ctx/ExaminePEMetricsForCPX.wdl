@@ -15,8 +15,12 @@ workflow CollectPEMetricsForCPX {
         Array[File] PE_metrics_idxes
         File PE_collect_script
         String prefix
+<<<<<<< HEAD
         Int n_per_split
         String sv_base_mini_docker
+=======
+        String sv_pipeline_docker
+>>>>>>> bc8e023a21c738b1564abc82e63ef1f90f6eed68
         RuntimeAttr? runtime_attr_override_collect_pe
         RuntimeAttr? runtime_attr_override_split_script
         RuntimeAttr? runtime_attr_override_calcu_pe_stat
@@ -32,11 +36,16 @@ workflow CollectPEMetricsForCPX {
                 PE_metric = PE_metrics[i],
                 PE_metrics_idx = PE_metrics_idxes[i],
                 PE_collect_script = PE_collect_script,
+<<<<<<< HEAD
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override_collect_pe = runtime_attr_override_collect_pe,
                 runtime_attr_override_split_script = runtime_attr_override_split_script,
                 runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
                 runtime_attr_override_concat_evidence = runtime_attr_override_concat_evidence
+=======
+                sv_pipeline_docker = sv_pipeline_docker,
+                runtime_attr_override = runtime_attr_override_collect_pe
+>>>>>>> bc8e023a21c738b1564abc82e63ef1f90f6eed68
         }
      }
 
@@ -44,7 +53,7 @@ workflow CollectPEMetricsForCPX {
         input:
             evidences = CollectPEMetricsPerBatchCPX.evidence,
             prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_concat_evidence
     }
 
@@ -52,7 +61,7 @@ workflow CollectPEMetricsForCPX {
         input:
             evidence = ConcatEvidences.concat_evidence,
             prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_calcu_pe_stat
     }
 
@@ -71,7 +80,7 @@ task CollectPEMetrics{
     File PE_metric
     File PE_metrics_idx
     File PE_collect_script
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -107,7 +116,7 @@ task CollectPEMetrics{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -117,7 +126,7 @@ task ConcatEvidences{
   input{
     Array[File] evidences
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -152,7 +161,7 @@ task ConcatEvidences{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -162,7 +171,7 @@ task CalcuPEStat{
   input{
     File evidence
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
    RuntimeAttr? runtime_attr_override
   }
 
@@ -193,7 +202,7 @@ task CalcuPEStat{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
