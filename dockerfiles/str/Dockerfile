@@ -28,7 +28,7 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     build-essential \
     libssl-dev \
     libffi-dev \
-    python3-dev \
+    python3.10-dev \
     python3-pip \
     python3-wheel \
     python3-venv \
@@ -37,7 +37,7 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
     wget \
     ca-certificates && \
     update-ca-certificates && \
-    alias python=python3
+    ln -s /usr/bin/python3 /usr/bin/python
 
 RUN pip install --upgrade setuptools
 # Combining the following two `RUN`s under a single `RUN` cause image build failure.
