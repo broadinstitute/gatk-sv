@@ -13,8 +13,7 @@ ARG SAMTOOLS_VER=1.15.1
 ARG EH_VER=5.0.0
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
-# libcurl3 is needed for EH.
-    libcurl3-nss \
+    curl \
     tabix \
     git \
     make \
@@ -43,8 +42,9 @@ RUN apt-get update && apt-get install --no-install-recommends -qqy \
 RUN pip install --upgrade setuptools
 # Combining the following two `RUN`s under a single `RUN` cause image build failure.
 # RUN pip3 install -q -U wheel Cython==0.29.30 numpy==1.19.5 pandas==1.1.5
-RUN pip install -q -U Cython==0.29.30 numpy==1.19.5
-RUN pip install -q -U pandas==1.1.5
+RUN pip install -q numpy==1.23.4
+RUN pip install -q Cython==0.29.32
+RUN pip install -q pandas==1.5.0
 
 RUN cd /opt/ && mkdir eh && cd eh/ && \
     wget -O eh.tar.gz https://github.com/Illumina/ExpansionHunter/releases/download/v$EH_VER/ExpansionHunter-v$EH_VER-linux_x86_64.tar.gz && \
