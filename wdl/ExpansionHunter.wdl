@@ -24,6 +24,7 @@ workflow ExpansionHunter {
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
+        Int? thread_count
         File? ped_file
         String expansion_hunter_docker
         String python_docker
@@ -47,6 +48,7 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
+    Int thread_count_ = select_first([thread_count, 2])
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
     Boolean seeking_analysis_mode_ = select_first([seeking_analysis_mode, true])
@@ -68,6 +70,7 @@ workflow ExpansionHunter {
                 generate_realigned_bam = generate_realigned_bam_,
                 generate_vcf = generate_vcf_,
                 analysis_mode = analysis_mode,
+                thread_count = thread_count_,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
                 runtime_override = runtime_eh
@@ -80,7 +83,6 @@ workflow ExpansionHunter {
             variants_tsvs = RunExpansionHunter.variants_tsv,
             alleles_tsvs = RunExpansionHunter.alleles_tsv,
             realigned_bams = RunExpansionHunter.realigned_bam,
-            timings = RunExpansionHunter.timing,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
@@ -93,7 +95,7 @@ workflow ExpansionHunter {
         File alleles_tsv = ConcatEHOutputs.alleles_tsv
         File vcf_gz = ConcatEHOutputs.vcf_gz
         File realigned_bam = ConcatEHOutputs.realigned_bam
-        File timing = ConcatEHOutputs.timing
+        Array[File] jsons_gz = RunExpansionHunter.json_gz
     }
 }
 
@@ -108,6 +110,7 @@ task RunExpansionHunter {
         Boolean generate_realigned_bam
         Boolean generate_vcf
         String analysis_mode
+        Int thread_count
         File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_override
@@ -117,8 +120,8 @@ task RunExpansionHunter {
         File variants_tsv = "${sample_id}_variants.tsv"
         File alleles_tsv = "${sample_id}_alleles.tsv"
         File vcf_gz = "${sample_id}.vcf.gz"
+        File json_gz = "${sample_id}.json.gz"
         File realigned_bam = "${sample_id}_realigned.bam"
-        File timing = "${sample_id}_timing.tsv"
     }
 
     command <<<
@@ -144,15 +147,13 @@ task RunExpansionHunter {
             fi
         fi
 
-        touch ~{sample_id}_timing.tsv
         ExpansionHunter \
             --reads ~{bam_or_cram} \
             --reference $REF \
             --variant-catalog ~{variant_catalog} \
             --output-prefix ~{sample_id} \
             --analysis-mode ~{analysis_mode} \
-            --cache-mates \
-            --record-timing \
+            --threads ~{thread_count} \
             $sex
 
         if [ ~{generate_realigned_bam} = false ]; then
@@ -170,6 +171,8 @@ task RunExpansionHunter {
         python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
+
+        gzip ~{sample_id}.json
     >>>
 
     RuntimeAttr runtime_default = object {
@@ -178,11 +181,12 @@ task RunExpansionHunter {
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
-        disk_gb: 10 + ceil(size([
-            bam_or_cram,
-            bam_or_cram_index,
-            reference_fasta,
-            reference_fasta_index], "GiB"))
+        disk_gb: 10 + (
+            2 * ceil(size([
+                bam_or_cram,
+                bam_or_cram_index,
+                reference_fasta,
+                reference_fasta_index], "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
@@ -190,7 +194,7 @@ task RunExpansionHunter {
         docker: expansion_hunter_docker
         cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " HDD"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
         preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
@@ -203,7 +207,6 @@ task ConcatEHOutputs {
         Array[File] variants_tsvs
         Array[File] alleles_tsvs
         Array[File] realigned_bams
-        Array[File] timings
         Boolean generate_realigned_bam
         Boolean generate_vcf
         String? output_prefix
@@ -216,7 +219,6 @@ task ConcatEHOutputs {
         File alleles_tsv = "${output_prefix}_alleles.tsv"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
-        File timing = "${output_prefix}_timing.tsv"
     }
 
     command <<<
@@ -247,7 +249,6 @@ task ConcatEHOutputs {
             done < $INPUTS
         }
 
-        merge_tsv "~{write_lines(timings)}" "~{output_prefix}_timing.tsv"
         merge_tsv "~{write_lines(alleles_tsvs)}" "~{output_prefix}_alleles.tsv"
         merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
     >>>
@@ -263,8 +264,7 @@ task ConcatEHOutputs {
                 size(vcfs_gz, "GiB") +
                 size(variants_tsvs, "GiB") +
                 size(alleles_tsvs, "GiB") +
-                size(realigned_bams, "GiB") +
-                size(timings, "GiB")))
+                size(realigned_bams, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
@@ -272,7 +272,7 @@ task ConcatEHOutputs {
         docker: expansion_hunter_docker
         cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
         preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])

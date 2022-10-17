@@ -17,6 +17,7 @@ workflow ExpansionHunterScatter {
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
+        Int? thread_count
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_split_var_catalog
@@ -56,20 +57,21 @@ workflow ExpansionHunterScatter {
 
         call ExpansionHunter.ExpansionHunter  {
             input:
-                bam_or_cram=bam_or_cram_,
-                bam_or_cram_index=bam_or_cram_index_,
-                reference_fasta=reference_fasta,
-                reference_fasta_index=reference_fasta_index_,
-                split_variant_catalogs=SplitVariantCatalog.catalogs_json,
-                sample_id=sample_id,
-                ped_file=ped_file,
-                generate_realigned_bam=generate_realigned_bam,
-                generate_vcf=generate_vcf,
-                seeking_analysis_mode=seeking_analysis_mode,
-                expansion_hunter_docker=expansion_hunter_docker,
-                python_docker=python_docker,
-                runtime_eh=runtime_eh,
-                runtime_concat=runtime_concat
+                bam_or_cram = bam_or_cram_,
+                bam_or_cram_index = bam_or_cram_index_,
+                reference_fasta = reference_fasta,
+                reference_fasta_index = reference_fasta_index_,
+                split_variant_catalogs = SplitVariantCatalog.catalogs_json,
+                sample_id = sample_id,
+                ped_file = ped_file,
+                generate_realigned_bam = generate_realigned_bam,
+                generate_vcf = generate_vcf,
+                seeking_analysis_mode = seeking_analysis_mode,
+                thread_count = thread_count,
+                expansion_hunter_docker = expansion_hunter_docker,
+                python_docker = python_docker,
+                runtime_eh = runtime_eh,
+                runtime_concat = runtime_concat
         }
     }
 
@@ -78,7 +80,7 @@ workflow ExpansionHunterScatter {
         Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
         Array[File] vcfs_gz = ExpansionHunter.vcf_gz
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
-        Array[File] timing = ExpansionHunter.timing
+        Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
     }
 }
 
