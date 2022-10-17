@@ -42,15 +42,22 @@ def check(wdl_filename, imports_dir, import_max_depth):
             f"maximum {import_max_depth} import depth. You may separately check the "
             f"WDLs imported in {wdl_filename} and make sure they all pass the "
             f"miniwdl validation."))
-    finally:
-        return False
+    return False
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("files", nargs="+", help="The WDL files to be checked.")
     parser.add_argument("--imports-dir", required=True, help="The directory to search for WDLs to be imported.")
-    parser.add_argument("--max-import-depth", default=2, help="Maximum depth of imports to check for validating WDLs.")
+    parser.add_argument(
+        "--max-import-depth",
+        default=15,
+        help="Set the maximum allowed depth of imports in the WDLs. "
+             "For a given WDL, miniwdl first asserts the imports, and "
+             "it will error-out if it reaches the given max depth "
+             "and the WDL has imports. For instance, with max depth set "
+             "to 2, it will error-out validating "
+             "Foo.wdl -> (import Bar.wdl -> (import Baz.wdl)).")
     args = parser.parse_args()
 
     wdl_filenames = args.files
