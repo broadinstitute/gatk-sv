@@ -172,7 +172,7 @@ task RunExpansionHunter {
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
 
-        bgzip ~{sample_id}.json
+        gzip ~{sample_id}.json
     >>>
 
     RuntimeAttr runtime_default = object {
