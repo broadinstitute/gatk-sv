@@ -15,12 +15,9 @@ workflow CollectPEMetricsForCPX {
         Array[File] PE_metrics_idxes
         File PE_collect_script
         String prefix
-<<<<<<< HEAD
         Int n_per_split
         String sv_base_mini_docker
-=======
         String sv_pipeline_docker
->>>>>>> bc8e023a21c738b1564abc82e63ef1f90f6eed68
         RuntimeAttr? runtime_attr_override_collect_pe
         RuntimeAttr? runtime_attr_override_split_script
         RuntimeAttr? runtime_attr_override_calcu_pe_stat
@@ -36,16 +33,13 @@ workflow CollectPEMetricsForCPX {
                 PE_metric = PE_metrics[i],
                 PE_metrics_idx = PE_metrics_idxes[i],
                 PE_collect_script = PE_collect_script,
-<<<<<<< HEAD
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override_collect_pe = runtime_attr_override_collect_pe,
                 runtime_attr_override_split_script = runtime_attr_override_split_script,
                 runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
                 runtime_attr_override_concat_evidence = runtime_attr_override_concat_evidence
-=======
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_override_collect_pe
->>>>>>> bc8e023a21c738b1564abc82e63ef1f90f6eed68
         }
      }
 
