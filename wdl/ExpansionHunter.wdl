@@ -48,7 +48,7 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
-    Int thread_count_ = select_first([thread_count, 2])
+    Int thread_count_ = select_first([thread_count, 16])
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
     Boolean seeking_analysis_mode_ = select_first([seeking_analysis_mode, true])
@@ -177,7 +177,7 @@ task RunExpansionHunter {
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 3.75,
+        mem_gb: 64,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
@@ -255,7 +255,7 @@ task ConcatEHOutputs {
 
     RuntimeAttr runtime_default = object {
         cpu_cores: 1,
-        mem_gb: 4,
+        mem_gb: 16,
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
