@@ -38,8 +38,7 @@ workflow CollectPEMetricsForCPX {
                 runtime_attr_override_split_script = runtime_attr_override_split_script,
                 runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
                 runtime_attr_override_concat_evidence = runtime_attr_override_concat_evidence,
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_override_collect_pe
+                sv_pipeline_docker = sv_pipeline_docker
         }
      }
 
