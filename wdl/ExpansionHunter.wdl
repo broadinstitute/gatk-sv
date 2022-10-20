@@ -176,7 +176,7 @@ task RunExpansionHunter {
     >>>
 
     RuntimeAttr runtime_default = object {
-        cpu_cores: 1,
+        cpu_cores: 16,
         mem_gb: 64,
         boot_disk_gb: 10,
         preemptible_tries: 3,
