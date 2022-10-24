@@ -64,7 +64,7 @@ task CollectPEMetrics{
     File PE_metric
     File PE_metrics_idx
     File PE_collect_script
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
