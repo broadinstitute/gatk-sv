@@ -193,27 +193,24 @@ workflow CrossValidateGqRecalibrator {
         "property": old_pipeline_score_property,
         "passing_score": old_pipeline_passing_score
     }
-    Array[ScoresDataSet] comparison_scores_ = flatten(
-        [
-            [
-                {
-                    "label": "recalibrated",
-                    "vcf": DirectGqRecalibrator.filtered_vcf,
-                    "vcf_index": DirectGqRecalibrator.filtered_vcf_index,
-                    "property": new_pipeline_score_property,
-                    "passing_score": new_pipeline_passing_score
-                },
-                {
-                    "label": "cross-validated",
-                    "vcf": MergeRecalibratedTestVcfs.merged_vcf,
-                    "vcf_index": MergeRecalibratedTestVcfs.merged_vcf_index,
-                    "property": new_pipeline_score_property,
-                    "passing_score": new_pipeline_passing_score
-                }
-            ],
-            comparison_scores
-        ]
-    )
+
+    Array[ScoresDataSet] scores_0 = [
+        {
+            "label": "recalibrated",
+            "vcf": DirectGqRecalibrator.filtered_vcf,
+            "vcf_index": DirectGqRecalibrator.filtered_vcf_index,
+            "property": new_pipeline_score_property,
+            "passing_score": new_pipeline_passing_score
+        },
+        {
+            "label": "cross-validated",
+            "vcf": MergeRecalibratedTestVcfs.merged_vcf,
+            "vcf_index": MergeRecalibratedTestVcfs.merged_vcf_index,
+            "property": new_pipeline_score_property,
+            "passing_score": new_pipeline_passing_score
+        }
+    ]
+    Array[ScoresDataSet] comparison_scores_ = flatten([scores_0, comparison_scores])
 
     # actually call BenchmarkFilter workflow
     call BenchmarkGqFilter.BenchmarkGqFilter {
