@@ -79,10 +79,10 @@ def main():
     print("\n\n")
     if counter > 0:
         # print text in bold red.
-        print("\033[1m\033[91m" + f"{counter} of {len(wdl_filenames)} checked WDL files failed the miniwdl validation." + "\033[0m")
+        print("\033[1m\033[91m" + f"{counter} of {len(wdl_filenames)} checked WDLs failed the miniwdl validation." + "\033[0m")
     else:
         # print text in bold green.
-        print("\033[1m\033[92m" + "All WDL files are successfully passed the miniwdl validation." + "\033[0m")
+        print("\033[1m\033[92m" + "All the WDLs successfully passed the miniwdl validation." + "\033[0m")
     sys.exit(exit_code)
 
 
