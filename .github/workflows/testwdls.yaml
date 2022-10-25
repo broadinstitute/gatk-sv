@@ -14,7 +14,7 @@ on:
 
 jobs:
   miniwdl_job:
-    runs-on: ubuntu-22:04
+    runs-on: ubuntu-22.04
     name: miniwdl validation
     strategy:
       matrix:
