@@ -2166,7 +2166,7 @@ def _compute_hardy_weinberg_plotted_boundary(
     proportion_het_low = alt_allele_frequency_grid * (1.0 - alt_allele_frequency_grid)
     previous = None
     tol = 0.1 * numpy.diff(proportion_het_grid).mean()  # set tol to about 10% of a grid width
-    while previous is None or numpy.abs(proportion_het_low - previous).max() >= tol:
+    while previous is None or numpy.abs(proportion_het_low - previous).max(initial=0) >= tol:
         # to aid convergence, only take a half step each iteration:
         # noinspection PyUnresolvedReferences
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
