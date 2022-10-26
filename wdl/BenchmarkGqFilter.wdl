@@ -11,7 +11,7 @@ workflow BenchmarkGqFilter {
         File? pickled_variant_properties
         Array[ScoresDataSet] comparison_scores
         File truth_overlap_info
-        File ped_file
+        File? ped_file
         Array[String] benchmark_args = []
         String sv_utils_docker
         String samtools_cloud_docker
@@ -148,7 +148,7 @@ task BenchmarkFilter {
         File variant_properties
         Array[PickledScoresDataSet] scores_data_sets
         File truth_overlap_info
-        File ped_file
+        File? ped_file
         String make_figure
         String benchmark_figure_filename = "quality-benchmark.pdf"
         Array[String] benchmark_args = []
@@ -156,6 +156,10 @@ task BenchmarkFilter {
         Int num_entries
         Float pickled_files_size
     }
+
+    String pedigree_arg = if defined(ped_file)
+        then "--pedigree " + ped_file
+        else ""
 
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
     Int disk_gb = round(100 + pickled_files_size)
@@ -212,7 +216,7 @@ CODE
 
         sv-utils benchmark-variant-filter \
             --overlap-results ~{truth_overlap_info} \
-            --ped-file ~{ped_file} \
+            ~{pedigree_arg} \
             --scores-data-json ~{scores_data_json} \
             --figure-save-file ~{benchmark_figure_filename} \
             --make-figure ~{make_figure} \

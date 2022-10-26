@@ -81,7 +81,7 @@ task RecalibrateGqTask {
     runtime {
         docker: gatk_docker
         cpu: 1
-        preemptible: 0
+        preemptible: 3
         max_retries: 1
         memory: mem_gb + " GiB"
         disks: "local-disk " + disk_gb + " HDD"

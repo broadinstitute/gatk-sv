@@ -19,7 +19,7 @@
   "MainVcfQc.prefix": "HGDP_and_HGSV",
   "MainVcfQc.ped_file": {{ test_batch.hgdp_1kgp_ped | tojson }},
 
-  "MainVcfQc.vcfs": [ "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/98436db0-1f5a-49a3-a253-ffaa4a854666/call-DirectGqRecalibrator/RecalibrateGq/6868f409-9c62-4e51-bbac-e4275e8b86b6/call-RecalibrateGqTask/hgdp_and_hgsv.cleaned_fixed_annotated_gq_recalibrated.vcf.gz" ],
+  "MainVcfQc.vcfs": [ {{ test_batch.gq_filtered_vcf | tojson }} ],
   "MainVcfQc.sv_per_shard": 2500,
   "MainVcfQc.samples_per_shard": 600,
   "MainVcfQc.runtime_override_per_sample_benchmark_plot": {
