@@ -16,7 +16,6 @@ workflow CollectPEMetricsForCPX {
         File PE_collect_script
         String prefix
         Int n_per_split
-        String sv_base_mini_docker
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override_collect_pe
         RuntimeAttr? runtime_attr_override_split_script
@@ -33,7 +32,7 @@ workflow CollectPEMetricsForCPX {
                 PE_metric = PE_metrics[i],
                 PE_metrics_idx = PE_metrics_idxes[i],
                 PE_collect_script = PE_collect_script,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override_collect_pe = runtime_attr_override_collect_pe,
                 runtime_attr_override_split_script = runtime_attr_override_split_script,
                 runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
