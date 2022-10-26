@@ -14,7 +14,7 @@ workflow CollectPEMetricsPerBatchCPX {
         File PE_metrics_idx
         File PE_collect_script
         String prefix
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override_collect_pe
         RuntimeAttr? runtime_attr_override_concat_evidence
         RuntimeAttr? runtime_attr_override_calcu_pe_stat
@@ -26,7 +26,7 @@ workflow CollectPEMetricsPerBatchCPX {
             script = PE_collect_script,
             n_per_split = n_per_split,
             batch_name = batch_name,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_split_script
     }
     
@@ -37,7 +37,7 @@ workflow CollectPEMetricsPerBatchCPX {
                 PE_metric = PE_metric,
                 PE_metrics_idx = PE_metrics_idx,
                 PE_collect_script = script,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_override_collect_pe
         }
     }
@@ -46,7 +46,7 @@ workflow CollectPEMetricsPerBatchCPX {
         input:
             evidences = CollectPEMetrics.evidence,
             prefix = prefix,
-            sv_base_mini_docker = sv_base_mini_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_override_concat_evidence
     }
 
