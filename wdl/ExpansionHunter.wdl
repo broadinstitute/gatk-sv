@@ -196,8 +196,8 @@ task RunExpansionHunter {
         memory: "128 GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
+        preemptible: 2
+        maxRetries: 0
     }
 }
 
