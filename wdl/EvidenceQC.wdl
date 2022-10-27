@@ -46,6 +46,8 @@ workflow EvidenceQC {
 
     Boolean run_ploidy = true
 
+    Float? melt_insert_size
+
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
     RuntimeAttr? ploidy_score_runtime_attr
@@ -54,6 +56,7 @@ workflow EvidenceQC {
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
     RuntimeAttr? runtime_attr_bincov_attr
+    RuntimeAttr? runtime_attr_make_qc_table
 
     RuntimeAttr? runtime_attr_mediancov       # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
@@ -147,6 +150,29 @@ workflow EvidenceQC {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
+
+    call MakeQcTable
+    {
+      input:
+        prefix = batch,
+
+        ploidy_plots = Ploidy.ploidy_plots,
+        bincov_median = MedianCov.medianCov,
+        WGD_scores = WGD.WGD_scores,
+        melt_insert_size = melt_insert_size,
+
+        manta_qc_low = RawVcfQC_Manta.low,
+        manta_qc_high = RawVcfQC_Manta.high,
+        melt_qc_low = RawVcfQC_Melt.low,
+        melt_qc_high = RawVcfQC_Melt.high,
+        wham_qc_low = RawVcfQC_Wham.low,
+        wham_qc_high = RawVcfQC_Wham.high,
+        scramble_qc_low = RawVcfQC_Scramble.low,
+        scramble_qc_high = RawVcfQC_Scramble.high,
+
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_override = runtime_attr_make_qc_table
+    }
   }
 
   output {
@@ -170,4 +196,63 @@ workflow EvidenceQC {
     File bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx
     File bincov_median = MedianCov.medianCov
   }
+}
+
+task MakeQcTable {
+  input {
+    String? prefix
+
+    File? ploidy_plots
+    File bincov_median
+    File WGD_scores
+    Float? melt_insert_size
+
+    File? manta_qc_low
+    File? manta_qc_high
+    File? melt_qc_low
+    File? melt_qc_high
+    File? wham_qc_low
+    File? wham_qc_high
+    File? scramble_qc_low
+    File? scramble_qc_high
+
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_override
+  }
+
+  output {
+    File qc_table_csv = "${prefix}_table.csv"
+  }
+
+  command <<<
+    set -euxo pipefail
+
+    PLOIDY=""
+    if ~{defined(ploidy_plots)}; then
+      PLOIDY="--ploidy-plots ~{ploidy_plots}"
+
+    python sv-pipeline/scripts/make_evidence_qc_table.py \
+      $PLOIDY
+  >>>
+
+  RuntimeAttr runtime_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1,
+    disk_gb: 100
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
+
+    runtime {
+        docker: sv_pipeline_docker
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
+    }
 }
