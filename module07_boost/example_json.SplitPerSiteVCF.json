@@ -1,0 +1,14 @@
+{
+    "AnnotateSVsWithGenomicContext.vcf":"gs://talkowski-sv-gnomad-output/1KGP/Module05_06/1KGP_2504.cleaned.vcf.gz",
+    "AnnotateSVsWithGenomicContext.vcf_index":"gs://talkowski-sv-gnomad-output/1KGP/Module05_06/1KGP_2504.cleaned.vcf.gz.tbi",
+
+    "AnnotateSVsWithGenomicContext.Repeat_Masks" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.RM.sorted.merged.bed",
+    "AnnotateSVsWithGenomicContext.Simple_Repeats" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SimpRep.sorted.merged.bed",
+    "AnnotateSVsWithGenomicContext.Segmental_Duplicates" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SegDup.sorted.merged.bed",
+
+    "AnnotateSVsWithGenomicContext.sv_pipeline_docker": "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-vcfcluster-flatten-info-c577b0e",
+    "AnnotateSVsWithGenomicContext.sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2022-06-10-v0.23-beta-9c6fbf56",
+    "AnnotateSVsWithGenomicContext.sv_benchmark_docker" : "talkowski/sv_benchmark"
+
+}
+
