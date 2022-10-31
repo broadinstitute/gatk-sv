@@ -73,7 +73,7 @@ task VaporAndIRSSupportReport {
 
   output {
     File summary = "${output_prefix}.irs_vapor_support.summary.tsv"
-    File detail = "${output_prefix}.irs_vapor_support.detail.tsv"
+    File detail = "${output_prefix}.irs_vapor_support.detail.tsv.gz"
   }
 
   command <<<
@@ -112,15 +112,16 @@ task VaporAndIRSSupportReport {
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       --output-summary ~{output_prefix}.irs_vapor_support.summary.tsv \
       --output-detail ~{output_prefix}.irs_vapor_support.detail.tsv
+    gzip ~{output_prefix}.irs_vapor_support.detail.tsv.gz
   >>>
 
   RuntimeAttr runtime_attr_report_default = object {
     cpu_cores: 1,
-    mem_gb: 4,
+    mem_gb: 8,
     boot_disk_gb: 10,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
-    disk_gb: 25 + ceil(size([
+    disk_gb: 100 + ceil(size([
       vcf], "GiB"))
   }
   RuntimeAttr runtime_attr = select_first([
