@@ -111,18 +111,17 @@ task VaporAndIRSSupportReport {
       ~{"--irs-min-probes " + irs_min_probes} \
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       --output-summary ~{output_prefix}.irs_vapor_support.summary.tsv \
-      --output-detail ~{output_prefix}.irs_vapor_support.detail.tsv
-    gzip ~{output_prefix}.irs_vapor_support.detail.tsv.gz
+      --output-detail ~{output_prefix}.irs_vapor_support.detail.tsv.gz
   >>>
 
   RuntimeAttr runtime_attr_report_default = object {
     cpu_cores: 1,
-    mem_gb: 8,
+    mem_gb: 16,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1,
     disk_gb: 100 + ceil(size([
-      vcf], "GiB"))
+      vcf], "GiB")) * 2
   }
   RuntimeAttr runtime_attr = select_first([
     runtime_attr_override,

@@ -2,6 +2,7 @@
 
 import sys
 import argparse
+import gzip
 import numpy
 import json
 import warnings
@@ -70,7 +71,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--output-summary", type=str, required=True,
                         help="File to output summary results to")
     parser.add_argument("--output-detail", type=str, required=True,
-                        help="File to output detail results to")
+                        help="File (gzipped) to output detail results to")
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--irs-sample-batch-lists", type=str,
@@ -121,9 +122,9 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     vaport_supported_var_gts = 0
     irs_supported_var_gts = 0
     with VariantFile(arguments.vcf) as vcf, \
-        open(arguments.output_summary, 'w') as out_summary, \
-        open(arguments.output_detail, 'w') as out_detail:
-        out_summary.write("VAPOR_VALID_VARIANTS\tIRS_VALID_VARIANTS\tVAPOR_TESTED_VAR_GTS" +
+            open(arguments.output_summary, 'w') as out_summary, \
+            gzip.open(arguments.output_detail, 'wb') as out_detail:
+        out_summary.write("VAPOR_TESTABLE_VARIANTS\tIRS_TESTABLE_VARIANTS\tVAPOR_TESTED_VAR_GTS" +
                           "\tIRS_BATCH_TESTED_VAR_GTS\tVAPOR_SUPPORTED_GTS\tIRS_SUPPORTED_VAR_GTS\n")
         out_detail.write("SVID\tSAMPLE\t\SVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tIRS_PVALUE\n")
 
