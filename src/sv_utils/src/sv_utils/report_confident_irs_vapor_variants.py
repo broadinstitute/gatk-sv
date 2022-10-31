@@ -125,7 +125,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         open(arguments.output_detail, 'w') as out_detail:
         out_summary.write("VAPOR_VALID_VARIANTS\tIRS_VALID_VARIANTS\tVAPOR_TESTED_VAR_GTS" +
                           "\tIRS_BATCH_TESTED_VAR_GTS\tVAPOR_SUPPORTED_GTS\tIRS_SUPPORTED_VAR_GTS\n")
-        out_detail.write("SVID\tSAMPLE\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tIRS_PVALUE\n")
+        out_detail.write("SVID\tSAMPLE\t\SVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tIRS_PVALUE\n")
 
         for record in vcf:
             svtype = record.info['SVTYPE']
@@ -171,8 +171,10 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                         irs_supported_var_gts = irs_supported_var_gts + 1
 
                     if vapor_support or irs_support:
-                        out_detail.write("{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\n".format(record.id,
+                        out_detail.write("{}\t{}\t{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\n".format(record.id,
                                                                                   sample,
+                                                                                  record.info['SVTYPE'],
+                                                                                  record.info['SVLEN'],
                                                                                   record.samples[sample]['GT'][0],
                                                                                   record.samples[sample]['GT'][1],
                                                                                   record.samples[sample]['GQ'],
