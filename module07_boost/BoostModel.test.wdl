@@ -45,10 +45,16 @@ workflow BoostModel{
         Array[File?] pacbio_query_files
         Array[File?] bionano_query_files
 
+        File site_anno_bed
+        Array[File] OrganizeTrainingDataPerSample
+        Array[File] AnnotateILFeaturesTar
+        Array[File] TrainBoostModel_trained_model
+
         File simp_rep
         File seg_dup
         File rep_mask
 
+        Int size_sample_list
         String prefix
 
         File ref_fasta
@@ -104,175 +110,18 @@ workflow BoostModel{
         RuntimeAttr? runtime_attr_override_apply_boost_model
     }
 
-    call split_per_site_vcf.SplitPerSiteVCF as SplitPerSiteVCF{
-        input:
-            cleanVcfs = cleanVcfs, 
-            simp_rep = simp_rep,
-            seg_dup = seg_dup,
-            rep_mask = rep_mask,
-            prefix = prefix,
-
-            sv_pipeline_docker = sv_pipeline_docker,
-            sv_base_mini_docker = sv_base_mini_docker,
-            sv_benchmark_docker = sv_benchmark_docker,
-
-            runtime_attr_override_vcf2bed = runtime_attr_override_vcf2bed,
-            runtime_attr_override_anno_gc = runtime_attr_override_anno_gc,
-            runtime_attr_override_inte_gc = runtime_attr_override_inte_gc,
-            runtime_attr_override_concat_beds = runtime_attr_override_concat_beds,
-            runtime_attr_override_inte_features = runtime_attr_override_inte_features
-    }
-
-    scatter(i in range(length(cluster_manta_files))){
-        call ExtractSampleAndVcfList{
-            input:
-                cluster_manta = cluster_manta_files[i],
-                cluster_wham = cluster_wham_files[i],
-                cluster_melt = cluster_melt_files[i],
-                cluster_depth = cluster_depth_files[i],
-                prefix = prefix,
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_override_extract_sample_list
-        }
-
-        call split_per_sample_gtgq_and_bed.SplitPerSampleGTGQandBEDPerSampleList as SplitPerSampleGTGQandBEDPerSampleList{
-            input:
-                cleanVcfs = cleanVcfs,
-                cleanVcfIdxes = cleanVcfIdxes,
-                cleanBeds = cleanBeds,
-                SampleList = ExtractSampleAndVcfList.sample_list,
-                prefixes = VcfPrefixes,
-
-                sv_benchmark_docker = sv_benchmark_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_docker = sv_pipeline_docker,
-
-                runtime_split_per_sample_gtgq = runtime_split_per_sample_gtgq,
-                runtime_attr_concat_gtgqs = runtime_attr_concat_gtgqs,
-                runtime_attr_concat_refs = runtime_attr_concat_refs,
-                runtime_attr_override_vcf2bed = runtime_attr_override_vcf2bed
-        }
-
-        Array[String] sample_list_extracted = read_lines(ExtractSampleAndVcfList.sample_list)
-
-        call annotate_il_features.AnnotateILFeatures as AnnotateILFeatures{
-            input:
-                samples = sample_list_extracted,
-                raw_mantas = ExtractSampleAndVcfList.manta_list,
-                raw_whams = ExtractSampleAndVcfList.wham_list,
-                raw_melts = ExtractSampleAndVcfList.melt_list,
-                raw_depths = ExtractSampleAndVcfList.depth_list,
-                gtgqs = SplitPerSampleGTGQandBEDPerSampleList.gtgq_out,
-                beds = SplitPerSampleGTGQandBEDPerSampleList.bed_out,
-                prefix = cluster_names[i],
-                sv_benchmark_docker = sv_benchmark_docker,
-                duphold_docker = duphold_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_docker = sv_pipeline_docker
-        }
-    }
-
-    call ExtractTrainingSamples{
-        input:
-            training_samples = training_samples,
-            il_anno_tarballs = AnnotateILFeatures.anno_tar,
-            sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_override_extract_training_samples
-    }
-
-    call annotate_training_features.AnnotateTrainingFeatures as AnnotateTrainingFeatures{
-        input:
-            samples = training_samples,
-            IL_anno_files = ExtractTrainingSamples.training_anno,
-            
-            vapor_result_files = vapor_result_files, 
-            pacbio_seqs = pacbio_seqs,
-            pacbio_seq_indexes = pacbio_seq_indexes,
-
-            ont_query_files = ont_query_files,
-            hgsv_query_files = hgsv_query_files,
-            array_query_files = array_query_files,
-            pacbio_query_files = pacbio_query_files,
-            bionano_query_files = bionano_query_files,
-
-            run_vapor = run_vapor,
-            run_duphold = run_duphold,
-            run_rdpesr_anno = run_rdpesr_anno ,
-            run_extract_gt_gq = run_extract_gt_gq,
-            run_versus_raw_vcf = run_versus_raw_vcf,
-            requester_pays_crams = requester_pays_crams,
-            run_extract_algo_evi = run_extract_algo_evi,
-            run_genomic_context_anno = run_genomic_context_anno,
-
-            ref_fasta = ref_fasta,
-            ref_fai = ref_fai,
-            ref_dict = ref_dict,
-            min_shard_size = min_shard_size,
-
-            vapor_docker = vapor_docker,
-            sv_base_mini_docker = sv_base_mini_docker,
-            sv_pipeline_docker = sv_pipeline_docker,
-            sv_benchmark_docker = sv_benchmark_docker,
-
-            runtime_attr_vapor = runtime_attr_vapor,
-            runtime_attr_bcf2vcf = runtime_attr_bcf2vcf,
-            runtime_attr_vcf2bed = runtime_attr_vcf2bed,
-            runtime_attr_SplitVcf = runtime_attr_SplitVcf,
-            runtime_attr_ConcatBeds = runtime_attr_ConcatBeds,
-            runtime_attr_bed_vs_ont = runtime_attr_bed_vs_ont,
-            runtime_attr_bed_vs_hgsv = runtime_attr_bed_vs_hgsv,
-            runtime_attr_bed_vs_array = runtime_attr_bed_vs_array,
-            runtime_attr_bed_vs_pacbio = runtime_attr_bed_vs_pacbio,
-            runtime_attr_bed_vs_bionano = runtime_attr_bed_vs_bionano,
-            runtime_attr_override_inte_anno = runtime_attr_override_inte_anno,
-            runtime_attr_override_format_ref = runtime_attr_override_format_ref
-    }
-
-    scatter(i in range(length(training_samples))){
-        call OrganizeTrainingDataPerSample{
-            input:
-                sample = training_samples[i],
-                site_anno = SplitPerSiteVCF.anno_bed,
-                training_anno = AnnotateTrainingFeatures.annotated_files[i],
-                sv_benchmark_docker = sv_benchmark_docker,
-                runtime_attr_override = runtime_attr_override_organize_training_data_per_sample
-        }
-    }
-
-    call OrganizeTrainingData{
-        input:
-            training_per_sample = OrganizeTrainingDataPerSample.organized_training_anno,
-            prefix = prefix,
-            sv_types = sv_types,
-            size_ranges = size_ranges,
-            af_ranges = af_ranges,
-            sv_benchmark_docker = sv_benchmark_docker,
-            runtime_attr_override = runtime_attr_override_organize_training_data
-    }
-
-    scatter(train_data in OrganizeTrainingData.training_data){
-        call TrainBoostModel{
-            input:
-                training_data = train_data,
-                sv_benchmark_docker = sv_benchmark_docker,
-                runtime_attr_override = runtime_attr_override_train_boost_model
-
-        }
-    }
-
-    scatter(il_anno_list in AnnotateILFeatures.anno_tar){
+    scatter(il_anno_list in AnnotateILFeaturesTar){
         call TestBoostModel{
             input:
-                trained_models = TrainBoostModel.trained_model,
+                trained_models = TrainBoostModel_trained_model,
                 test_data = il_anno_list,
-                site_anno = SplitPerSiteVCF.anno_bed,
+                site_anno = site_anno_bed,
                 sv_benchmark_docker = sv_benchmark_docker,
                 runtime_attr_override = runtime_attr_override_apply_boost_model
         }
     }
 
     output{
-        Array[File] bs_models = TrainBoostModel.trained_model
         Array[File] bs_filtered_tarballs = TestBoostModel.bs_filtered_tar
     }
 
@@ -561,8 +410,8 @@ task TrainBoostModel{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 5, 
-        disk_gb: 10,
+        mem_gb: 20, 
+        disk_gb: 25,
         boot_disk_gb: 30,
         preemptible_tries: 1,
         max_retries: 1

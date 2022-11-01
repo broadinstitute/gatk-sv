@@ -486,9 +486,15 @@ task ConcatVaPoR {
     while read SPLIT; do
       tar zxvf $SPLIT -C ~{prefix}.tmp_plots/
       
-      mv ~{prefix}.tmp_plots/*/*.png ~{prefix}.plots/
+      if [$(ls ~{prefix}.tmp_plots/ | wc -l) gt 0]
+      then
+        mv ~{prefix}.tmp_plots/*/*.png ~{prefix}.plots/
+      fi
+
+      #mv ~{prefix}.tmp_plots/*/*.png ~{prefix}.plots/
       #find -type f -name '~{prefix}.tmp_plots/*/*.png' | xargs -n1 -I{} mv {} ~{prefix}.plots/
-      
+
+     
       #if [$(ls ~{prefix}.tmp_plots/*/*DEL.png | wc -l) gt 0]
       #then
       #  ls ~{prefix}.tmp_plots/*/*DEL.png | xargs -n1 -I{} mv {} ~{prefix}.plots/
