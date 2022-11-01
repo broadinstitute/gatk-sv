@@ -15,6 +15,14 @@ from sv_utils import common, genomics_io, interval_overlaps, get_truth_overlap
 from typing import List, Text, Optional, Dict, Tuple, TypeVar, Union, Collection, Callable, Iterable, Set, Mapping
 
 
+SIZE_BINS = [50,500,5000]
+SIZE_BIN_LABELS = ['SMALL', 'MED', 'LARGE']
+
+
+# non veriant genotypes (taken from svtk.utils)
+NULL_GT = {(0, 0), (None, None), (0, ), (None, )}
+NON_REF_GTS = {"0/1", "1/1"}
+
 def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
                                  precision: float,
                                  valid_variant_ids: set) -> get_truth_overlap.ConfidentVariants:
@@ -26,11 +34,6 @@ def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
         for sample_id, vapor_file in vapor_files.items()
     }
     return vapor_info
-
-
-# non veriant genotypes (taken from svtk.utils)
-NULL_GT = [(0, 0), (None, None), (0, ), (None, )]
-
 
 def get_called_samples(record: VariantRecord) -> set:
     samples = set()
@@ -92,10 +95,9 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
 
 def get_size_bin(svlen):
-    bins = [0,500,5000]
-    if svlen < bins[1]:
+    if svlen > SIZE_BINS[0] and svlen < SIZE_BINS[1]:
         return "SMALL"
-    elif svlen < bins[2]:
+    elif svlen < SIZE_BINS[2]:
         return "MED"
     else:
         return "LARGE"
@@ -134,11 +136,12 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
                                                   read_list_file(arguments.irs_test_report_list))
 
-    samples_list_to_irs_report_data = {
-        frozenset(read_list_file(sample_list)):
-            load_irs_test_report(report)
-        for sample_list, report in sample_list_file_to_report_file_mapping
-    }
+    sample_to_irs_report = {}
+    for sample_list_file_report_pair in sample_list_file_to_report_file_mapping:
+        sample_list = read_list_file(sample_list_file_report_pair[0])
+        report = load_irs_test_report(sample_list_file_report_pair[1])
+        for sample in sample_list:
+            sample_to_irs_report[sample] = report
 
     vapor_valid_variants = 0
     irs_valid_variants = 0
@@ -188,7 +191,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                         vapor_gt = vapor_rec['VaPoR_GT']
                         vapor_tested_var_gts = vapor_tested_var_gts + 1
                         increment_counts(record, vapor_tested_counts_by_svtype, vapor_tested_counts_by_svtype_size_bin)
-                        vapor_support = vapor_gt in {"0/1", "1/1"} and \
+                        vapor_support = vapor_gt in NON_REF_GTS and \
                                         vapor_rec['p_non_ref'] > 1 - arguments.vapor_min_precision
                         if vapor_support:
                             vapor_support_gt = vapor_rec['VaPoR_GT']
@@ -197,22 +200,20 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                             increment_counts(record, vapor_supported_counts_by_svtype, vapor_supported_counts_by_svtype_size_bin)
                     irs_support = False
                     irs_support_pval = 'NA'
-                    if irs_valid:
-                        for sample_list in samples_list_to_irs_report_data:
-                            if sample in sample_list:
-                                irs_data = samples_list_to_irs_report_data[sample_list]
-                                #print(irs_data)
-                                if record.id in irs_data.index:
-                                    irs_tested_var_gts = irs_tested_var_gts + 1
-                                    increment_counts(record, irs_tested_counts_by_svtype, irs_tested_counts_by_svtype_size_bin)
-                                    irs_rec = irs_data.loc[record.id]
-                                    #print(irs_rec)
-                                    irs_support = irs_rec['NPROBES'] >= arguments.irs_min_probes and \
-                                                irs_rec["PVALUE"] <= arguments.irs_good_pvalue_threshold
-                                    if irs_support:
-                                        irs_support_pval = irs_rec['PVALUE']
-                                        irs_supported_var_gts = irs_supported_var_gts + 1
-                                        increment_counts(record, irs_supported_counts_by_svtype, irs_supported_counts_by_svtype_size_bin)
+                    if irs_valid and sample in sample_to_irs_report:
+                        irs_data = sample_to_irs_report[sample]
+                        #print(irs_data)
+                        if record.id in irs_data.index:
+                            irs_tested_var_gts = irs_tested_var_gts + 1
+                            increment_counts(record, irs_tested_counts_by_svtype, irs_tested_counts_by_svtype_size_bin)
+                            irs_rec = irs_data.loc[record.id]
+                            #print(irs_rec)
+                            irs_support = irs_rec['NPROBES'] >= arguments.irs_min_probes and \
+                                        irs_rec["PVALUE"] <= arguments.irs_good_pvalue_threshold
+                            if irs_support:
+                                irs_support_pval = irs_rec['PVALUE']
+                                irs_supported_var_gts = irs_supported_var_gts + 1
+                                increment_counts(record, irs_supported_counts_by_svtype, irs_supported_counts_by_svtype_size_bin)
 
                     if out_detail is not None and (vapor_support or irs_support):
                         out_detail.write("{}\t{}\t{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\n".format(record.id,
@@ -251,7 +252,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                             vapor_supported_count,
                                                             irs_tested_count,
                                                             irs_supported_count))
-            for size_bin in ['SMALL', 'MED', 'LARGE']:
+            for size_bin in SIZE_BIN_LABELS:
                 svtype_bin = svtype + "_" + size_bin
                 if svtype_bin in vapor_tested_counts_by_svtype_size_bin or svtype_bin in irs_tested_counts_by_svtype_size_bin:
                     if svtype_bin in vapor_tested_counts_by_svtype_size_bin:
