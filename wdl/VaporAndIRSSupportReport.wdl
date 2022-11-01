@@ -10,6 +10,7 @@ workflow VaporAndIRSSupportReport {
     Array[File] vapor_files
     Array[File] irs_sample_batches
     Array[File] irs_test_reports
+    Boolean write_detail_report = false
     File? irs_contigs_fai
     Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
@@ -41,6 +42,7 @@ workflow VaporAndIRSSupportReport {
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_min_probes=irs_min_probes,
       output_prefix=output_prefix_,
+      write_detail_report=write_detail_report,
       sv_utils_docker=sv_utils_docker,
       runtime_attr_override=runtime_attr
   }
@@ -58,6 +60,7 @@ task VaporAndIRSSupportReport {
     Array[File] vapor_files
     Array[File] irs_sample_batches
     Array[File] irs_test_reports
+    Boolean write_detail_report
     File? irs_contigs_fai
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
@@ -99,6 +102,7 @@ task VaporAndIRSSupportReport {
     printf "~{vapor_json}: "
     cat ~{vapor_json}
 
+    touch ~{output_prefix}.irs_vapor_support.detail.tsv.gz
     /opt/sv_utils/src/sv_utils/report_confident_irs_vapor_variants.py \
       --vapor-json ~{vapor_json}  \
       --vcf ~{vcf} \
@@ -111,7 +115,7 @@ task VaporAndIRSSupportReport {
       ~{"--irs-min-probes " + irs_min_probes} \
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       --output-summary ~{output_prefix}.irs_vapor_support.summary.tsv \
-      --output-detail ~{output_prefix}.irs_vapor_support.detail.tsv.gz
+      ~{if write_detail_report then "--output-detail ~{output_prefix}.irs_vapor_support.detail.tsv.gz" else ""}
   >>>
 
   RuntimeAttr runtime_attr_report_default = object {

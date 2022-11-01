@@ -70,7 +70,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Minimum allowed precision for selecting good or bad variants from VaPoR")
     parser.add_argument("--output-summary", type=str, required=True,
                         help="File to output summary results to")
-    parser.add_argument("--output-detail", type=str, required=True,
+    parser.add_argument("--output-detail", type=str,
                         help="File (gzipped) to output detail results to")
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
                         help="Maximum size CNV to trust vapor results for")
@@ -89,6 +89,31 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
     return parsed_arguments
+
+
+def get_size_bin(svlen):
+    bins = [0,500,5000]
+    if svlen < bins[1]:
+        return "SMALL"
+    elif svlen < bins[2]:
+        return "MED"
+    else:
+        return "LARGE"
+
+
+def increment_counts(record, counts_by_svtype, counts_by_svtype_size_bin):
+    svtype = record.info['SVTYPE']
+    svlen = record.info['SVLEN']
+    size_bin = get_size_bin(svlen)
+    if svtype in counts_by_svtype:
+        counts_by_svtype[svtype] = counts_by_svtype[svtype] + 1
+    else:
+        counts_by_svtype[svtype] = 1
+    type_bin_label = svtype + "_" + size_bin
+    if type_bin_label in counts_by_svtype_size_bin:
+        counts_by_svtype_size_bin[type_bin_label] = counts_by_svtype_size_bin[type_bin_label] + 1
+    else:
+        counts_by_svtype_size_bin[type_bin_label] = 1
 
 
 def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVariants:
@@ -121,12 +146,26 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     irs_tested_var_gts = 0
     vaport_supported_var_gts = 0
     irs_supported_var_gts = 0
+
+    vapor_tested_counts_by_svtype = {}
+    vapor_tested_counts_by_svtype_size_bin = {}
+
+    vapor_supported_counts_by_svtype = {}
+    vapor_supported_counts_by_svtype_size_bin = {}
+
+    irs_tested_counts_by_svtype = {}
+    irs_tested_counts_by_svtype_size_bin = {}
+
+    irs_supported_counts_by_svtype = {}
+    irs_supported_counts_by_svtype_size_bin = {}
+
     with VariantFile(arguments.vcf) as vcf, \
-            open(arguments.output_summary, 'w') as out_summary, \
-            gzip.open(arguments.output_detail, 'wb') as out_detail:
-        out_summary.write("VAPOR_TESTABLE_VARIANTS\tIRS_TESTABLE_VARIANTS\tVAPOR_TESTED_VAR_GTS" +
-                          "\tIRS_BATCH_TESTED_VAR_GTS\tVAPOR_SUPPORTED_GTS\tIRS_SUPPORTED_VAR_GTS\n")
-        out_detail.write("SVID\tSAMPLE\t\SVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tIRS_PVALUE\n")
+            open(arguments.output_summary, 'w') as out_summary:
+        if arguments.output_detail is not None:
+            out_detail = gzip.open(arguments.output_detail, 'wt')
+            out_detail.write("SVID\tSAMPLE\t\SVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tIRS_PVALUE\n")
+        else:
+            out_detail = None
 
         for record in vcf:
             svtype = record.info['SVTYPE']
@@ -148,12 +187,14 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                         vapor_rec = vapor_variants[sample].loc[record.id]
                         vapor_gt = vapor_rec['VaPoR_GT']
                         vapor_tested_var_gts = vapor_tested_var_gts + 1
+                        increment_counts(record, vapor_tested_counts_by_svtype, vapor_tested_counts_by_svtype_size_bin)
                         vapor_support = vapor_gt in {"0/1", "1/1"} and \
                                         vapor_rec['p_non_ref'] > 1 - arguments.vapor_min_precision
                         if vapor_support:
                             vapor_support_gt = vapor_rec['VaPoR_GT']
                             vapor_support_gq = vapor_rec['VaPoR_GQ']
                             vaport_supported_var_gts = vaport_supported_var_gts + 1
+                            increment_counts(record, vapor_supported_counts_by_svtype, vapor_supported_counts_by_svtype_size_bin)
                     irs_support = False
                     irs_support_pval = 'NA'
                     if irs_valid:
@@ -163,6 +204,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                 #print(irs_data)
                                 if record.id in irs_data.index:
                                     irs_tested_var_gts = irs_tested_var_gts + 1
+                                    increment_counts(record, irs_tested_counts_by_svtype, irs_tested_counts_by_svtype_size_bin)
                                     irs_rec = irs_data.loc[record.id]
                                     #print(irs_rec)
                                     irs_support = irs_rec['NPROBES'] >= arguments.irs_min_probes and \
@@ -170,8 +212,9 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                     if irs_support:
                                         irs_support_pval = irs_rec['PVALUE']
                                         irs_supported_var_gts = irs_supported_var_gts + 1
+                                        increment_counts(record, irs_supported_counts_by_svtype, irs_supported_counts_by_svtype_size_bin)
 
-                    if vapor_support or irs_support:
+                    if out_detail is not None and (vapor_support or irs_support):
                         out_detail.write("{}\t{}\t{}\t{}\t{}/{}\t{}\t{}\t{}\t{}\n".format(record.id,
                                                                                   sample,
                                                                                   record.info['SVTYPE'],
@@ -182,12 +225,54 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                                                   vapor_support_gt,
                                                                                   vapor_support_gq,
                                                                                   irs_support_pval))
-        out_summary.write("{}\t{}\t{}\t{}\t{}\t{}\n".format(vapor_valid_variants,
-                                                            irs_valid_variants,
-                                                            vapor_tested_var_gts,
-                                                            irs_tested_var_gts,
-                                                            vaport_supported_var_gts,
-                                                            irs_supported_var_gts))
+        out_summary.write("#Vapor valid variants: {}\n#IRS valid variants: {}\n".format(vapor_valid_variants,
+                                                                                        irs_valid_variants))
+        out_summary.write("CATEGORY\tCOUNT_VAPOR_TESTED_GTS\tCOUNT_VAPOR_SUPPORTED_GTS\tCOUNT_IRS_TESTED_GTS\tCOUNT_IRS_SUPPORTED_GTS\n")
+        out_summary.write("{}\t{}\t{}\t{}\t{}\n".format("ALL",
+                                                        vapor_tested_var_gts,
+                                                        vaport_supported_var_gts,
+                                                        irs_tested_var_gts,
+                                                        irs_supported_var_gts))
+        for svtype in sorted(set(vapor_tested_counts_by_svtype.keys()).union(set(irs_tested_counts_by_svtype.keys()))):
+            if svtype in vapor_tested_counts_by_svtype:
+                vapor_tested_count = vapor_tested_counts_by_svtype[svtype]
+                vapor_supported_count = vapor_supported_counts_by_svtype[svtype]
+            else:
+                vapor_tested_count = 0
+                vapor_supported_count = 0
+            if svtype in irs_tested_counts_by_svtype:
+                irs_tested_count = irs_tested_counts_by_svtype[svtype]
+                irs_supported_count = irs_supported_counts_by_svtype[svtype]
+            else:
+                irs_tested_count = 0
+                irs_supported_count = 0
+            out_summary.write("{}\t{}\t{}\t{}\t{}\n".format(svtype,
+                                                            vapor_tested_count,
+                                                            vapor_supported_count,
+                                                            irs_tested_count,
+                                                            irs_supported_count))
+            for size_bin in ['SMALL', 'MED', 'LARGE']:
+                svtype_bin = svtype + "_" + size_bin
+                if svtype_bin in vapor_tested_counts_by_svtype_size_bin or svtype_bin in irs_tested_counts_by_svtype_size_bin:
+                    if svtype_bin in vapor_tested_counts_by_svtype_size_bin:
+                        vapor_tested = vapor_tested_counts_by_svtype_size_bin[svtype_bin]
+                        vapor_supported = vapor_supported_counts_by_svtype_size_bin[svtype_bin]
+                    else:
+                        vapor_tested = 0
+                        vapor_supported = 0
+                    if svtype_bin in irs_tested_counts_by_svtype_size_bin:
+                        irs_tested = irs_tested_counts_by_svtype_size_bin[svtype_bin]
+                        irs_supported = irs_supported_counts_by_svtype_size_bin[svtype_bin]
+                    else:
+                        irs_tested = 0
+                        irs_supported = 0
+                    out_summary.write("{}\t{}\t{}\t{}\t{}\n".format(svtype_bin,
+                                                                    vapor_tested,
+                                                                    vapor_supported,
+                                                                    irs_tested,
+                                                                    irs_supported))
+        if out_detail is not None:
+            out_detail.close()
 
 
 if __name__ == "__main__":
