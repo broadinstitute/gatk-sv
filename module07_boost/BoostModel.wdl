@@ -36,14 +36,7 @@ workflow BoostModel{
         Array[String] cluster_names
 
         Array[String] training_samples
-        Array[File?] pacbio_seqs
-        Array[File?] pacbio_seq_indexes
-        Array[File?] vapor_result_files
-        Array[File?] ont_query_files
-        Array[File?] hgsv_query_files
-        Array[File?] array_query_files 
-        Array[File?] pacbio_query_files
-        Array[File?] bionano_query_files
+        Array[File] vapor_result_files
 
         File simp_rep
         File seg_dup
@@ -186,14 +179,6 @@ workflow BoostModel{
             IL_anno_files = ExtractTrainingSamples.training_anno,
             
             vapor_result_files = vapor_result_files, 
-            pacbio_seqs = pacbio_seqs,
-            pacbio_seq_indexes = pacbio_seq_indexes,
-
-            ont_query_files = ont_query_files,
-            hgsv_query_files = hgsv_query_files,
-            array_query_files = array_query_files,
-            pacbio_query_files = pacbio_query_files,
-            bionano_query_files = bionano_query_files,
 
             run_vapor = run_vapor,
             run_duphold = run_duphold,

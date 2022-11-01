@@ -33,14 +33,7 @@ workflow AnnotateTrainingFeatures{
         File ref_dict
         Int min_shard_size
 
-        Array[File?] pacbio_seqs
-        Array[File?] pacbio_seq_indexes
         Array[File?] vapor_result_files
-        Array[File?] ont_query_files
-        Array[File?] hgsv_query_files
-        Array[File?] array_query_files
-        Array[File?] pacbio_query_files
-        Array[File?] bionano_query_files
 
         Boolean requester_pays_crams = false
         Boolean run_genomic_context_anno = false
@@ -75,15 +68,8 @@ workflow AnnotateTrainingFeatures{
             input:
                 sample = samples[i],
                 IL_anno = IL_anno_files[i],
-                ont_query = ont_query_files[i],
-                hgsv_query = hgsv_query_files[i],
-                array_query = array_query_files[i],
-                pacbio_query = pacbio_query_files[i],
-                bionano_query = bionano_query_files[i],
 
                 vapor_result = vapor_result_files[i],
-                pacbio_seq = pacbio_seqs[i],
-                pacbio_seq_index = pacbio_seq_indexes[i],
 
                 run_vapor = run_vapor,
                 run_duphold = run_duphold,
