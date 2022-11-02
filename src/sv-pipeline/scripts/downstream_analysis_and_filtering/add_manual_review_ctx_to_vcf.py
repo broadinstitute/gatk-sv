@@ -13,6 +13,7 @@ sets their END info field to be CHR1 position + 1
 """
 
 import argparse
+from natsort import natsort_keygen
 import sys
 import pandas as pd
 import pysam
@@ -27,8 +28,6 @@ def before(loc1, loc2, contig_list) -> bool:
 
 
 def parse_info(data: pd.DataFrame):
-    print(data)
-    print(data['info'])
     info_mapping = [{"info_" + token.split("=")[0]: token.split("=")[1]
                      for token in info_str.split(";")} for info_str in data['info']]
     info_df = pd.DataFrame(info_mapping, index=data.index)
@@ -44,9 +43,6 @@ def create_ctx_record(new_idx: int,
                   cohort_name: str,
                   batch_name: str):
     row = data.iloc[new_idx]
-    print("create ctx record")
-    print(new_idx)
-    print(row)
     contig = row["contig"]
     pos1 = row["pos"]
     id = new_ctx_record_id(cohort_name, batch_name, contig, ctx_number)
@@ -88,6 +84,7 @@ def create_ctx_record(new_idx: int,
         populate_ctx_gt(new_record, row, sample, sample_data)
 
     new_record.info['END2'] = int(row["info_END"])
+    new_record.info['AC'] = len(samples)
     return new_record, new_idx
 
 
@@ -99,9 +96,6 @@ def create_cnv_record(new_idx: int,
                       batch_name: str,
                       new_svtype: str):
     row = data.iloc[new_idx]
-    print("create cnv record")
-    print(new_idx)
-    print(row)
     contig = row["contig"]
     pos1 = row["pos"]
     if new_svtype == 'DUP':
@@ -146,6 +140,7 @@ def create_cnv_record(new_idx: int,
         populate_cnv_gt(new_record, row, sample, sample_data)
 
     new_record.info['END2'] = int(row["info_END"])
+    new_record.info['AC'] = len(samples)
     return new_record, new_idx
 
 
@@ -159,10 +154,7 @@ def populate_info(info_sets, new_record):
         else:
             elem = next(iter(info_sets[info_key]))
             if pd.isna(elem):
-                print("nan, skipping...")
                 continue
-            print(info_key)
-            print(elem)
             if elem.lstrip("-+").isdigit():
                 elem = int(elem)
             new_record.info[new_info_key] = elem
@@ -239,7 +231,9 @@ def main():
                          names=['contig', 'pos', 'id', 'ref', 'alt', 'qual', 'filter', 'info', 'format', 'gt', 'sample'])
 
     data = parse_info(data)
-    data = data.sort_values(by=['contig', 'pos', 'info_SVTYPE', 'info_CHR2', 'info_END', 'info_CPX_TYPE'])
+    #data.contig = data.contig.astype('category')
+    data = data.sort_values(by=['contig', 'pos', 'info_SVTYPE', 'info_CHR2', 'info_END', 'info_CPX_TYPE'],
+                            key=natsort_keygen())
 
     ctx_number = 0
     del_number = 0
@@ -255,11 +249,8 @@ def main():
             ctx_number = 0
         while new_idx < len(data.index) and\
                 before(new_loc, (record.contig, record.pos), contig_list=contig_list) and \
-                not before(new_loc, (prev_contig, prev_pos), contig_list=contig_list):
-            print('new_svtype')
-            print(new_idx)
+                (prev_contig is None or not before(new_loc, (prev_contig, prev_pos), contig_list=contig_list)):
             new_svtype = data.iloc[new_idx]['info_SVTYPE']
-            print(new_svtype)
             if new_svtype == 'CTX':
                 ctx_number = ctx_number + 1
                 new_record, new_idx = create_ctx_record(new_idx, data, fout, ctx_number, args.cohort_name, args.batch_name)
