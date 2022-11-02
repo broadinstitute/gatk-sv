@@ -132,7 +132,7 @@ workflow BoostModel{
             input:
                 cleanVcfs = cleanVcfs,
                 cleanVcfIdxes = cleanVcfIdxes,
-                cleanBeds = cleanBeds,
+                cleanBeds = SplitPerSiteVCF.vcf_to_bed,
                 SampleList = ExtractSampleAndVcfList.sample_list,
                 prefixes = VcfPrefixes,
 

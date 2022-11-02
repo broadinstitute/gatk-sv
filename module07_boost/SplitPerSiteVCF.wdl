@@ -96,6 +96,7 @@ workflow SplitPerSiteVCF{
 
 
     output{
+        Array[File] vcf_to_bed = vcf2bed.bed_gz
         File anno_bed = ConcatBeds.merged_bed_file
     }
 }
