@@ -21,6 +21,7 @@ import "SplitPerSiteVCF.wdl" as split_per_site_vcf
 import "SplitPerSampleGTGQandBEDPerSampleList.wdl" as split_per_sample_gtgq_and_bed
 import "AnnotateILFeaturesBed.wdl" as annotate_il_features
 import "AnnotateTrainingFeatures.wdl" as annotate_training_features
+import "CrossValidationBoost.wdl" as cross_validation_boost
 
 workflow BoostModel{
     input{
@@ -95,6 +96,9 @@ workflow BoostModel{
         RuntimeAttr? runtime_attr_override_organize_training_data_per_sample
         RuntimeAttr? runtime_attr_override_train_boost_model
         RuntimeAttr? runtime_attr_override_apply_boost_model
+        RuntimeAttr? runtime_attr_override_generate_tarball
+        RuntimeAttr? runtime_attr_override_seek_for_optimal_cffs
+        RuntimeAttr? runtime_attr_override_prepare_cross_validation
     }
 
     call split_per_site_vcf.SplitPerSiteVCF as SplitPerSiteVCF{
@@ -213,6 +217,7 @@ workflow BoostModel{
             runtime_attr_override_format_ref = runtime_attr_override_format_ref
     }
 
+    # generate training data for each sample
     scatter(i in range(length(training_samples))){
         call OrganizeTrainingDataPerSample{
             input:
@@ -224,6 +229,7 @@ workflow BoostModel{
         }
     }
 
+    # collect training data from all samples and split by svtype, size, and allele frequencies
     call OrganizeTrainingData{
         input:
             training_per_sample = OrganizeTrainingDataPerSample.organized_training_anno,
@@ -235,6 +241,26 @@ workflow BoostModel{
             runtime_attr_override = runtime_attr_override_organize_training_data
     }
 
+    # run 5-fold cross validation to select for proper cutoffs:
+    call  cross_validation_boost.CrossValidationBoost as CrossValidationBoost{
+        input:
+            training_anno = OrganizeTrainingDataPerSample.organized_training_anno,
+            cross_validation_fold = 5,
+            site_anno = SplitPerSiteVCF.anno_bed,
+            sv_types = sv_types,
+            size_ranges = size_ranges,
+            af_ranges = af_ranges,
+            sv_benchmark_docker = sv_benchmark_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
+            runtime_attr_override_generate_tarball = runtime_attr_override_generate_tarball,
+            runtime_attr_override_apply_boost_model = runtime_attr_override_apply_boost_model,
+            runtime_attr_override_train_boost_model = runtime_attr_override_train_boost_model,
+            runtime_attr_override_seek_for_optimal_cffs = runtime_attr_override_seek_for_optimal_cffs,
+            runtime_attr_override_organize_training_data = runtime_attr_override_organize_training_data,
+            runtime_attr_override_prepare_cross_validation = runtime_attr_override_prepare_cross_validation
+    }
+
+    # train boost model with all PacBio data
     scatter(train_data in OrganizeTrainingData.training_data){
         call TrainBoostModel{
             input:
@@ -245,6 +271,7 @@ workflow BoostModel{
         }
     }
 
+    #apply the boost model on all samples
     scatter(il_anno_list in AnnotateILFeatures.anno_tar){
         call TestBoostModel{
             input:
@@ -256,9 +283,11 @@ workflow BoostModel{
         }
     }
 
+
     output{
         Array[File] bs_models = TrainBoostModel.trained_model
         Array[File] bs_filtered_tarballs = TestBoostModel.bs_filtered_tar
+        File cutoff_table = CrossValidationBoost.cff_performance_table
     }
 
 }
