@@ -1518,7 +1518,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="beta factor for f-score, weighting importance of recall relative to precision")
     parser.add_argument("--inheritance-af-rareness", type=float, default=Default.inheritance_af_rareness,
                         help="Maximum allele frequency for a variant to use trio inheritance as a truth signal.")
-    parser.add_argument("--use-copy-number", type=bool, default=Default.use_copy_number,
+    parser.add_argument("--use-copy-number", type=common.argparse_bool, default=Default.use_copy_number,
                         help="Where genotype is insufficient, use copy number for estimating allele frequency and "
                              "carrier status")
     parser.add_argument("--num_threads", "-@", type=int, default=Default.num_threads,
