@@ -174,7 +174,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
             svtype = record.info['SVTYPE']
             vapor_valid = False
             irs_valid = False
-            if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] < arguments.vapor_max_cnv_size:
+            if not (svtype == 'DEL' or svtype == 'DUP') or record.info['SVLEN'] <= arguments.vapor_max_cnv_size:
                 vapor_valid = True
                 vapor_valid_variants = vapor_valid_variants + 1
             if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= arguments.irs_min_cnv_size \
@@ -237,13 +237,19 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         for svtype in sorted(set(vapor_tested_counts_by_svtype.keys()).union(set(irs_tested_counts_by_svtype.keys()))):
             if svtype in vapor_tested_counts_by_svtype:
                 vapor_tested_count = vapor_tested_counts_by_svtype[svtype]
-                vapor_supported_count = vapor_supported_counts_by_svtype[svtype]
+                if svtype in vapor_supported_counts_by_svtype:
+                    vapor_supported_count = vapor_supported_counts_by_svtype[svtype]
+                else:
+                    vapor_supported_count = 0
             else:
                 vapor_tested_count = 0
                 vapor_supported_count = 0
             if svtype in irs_tested_counts_by_svtype:
                 irs_tested_count = irs_tested_counts_by_svtype[svtype]
-                irs_supported_count = irs_supported_counts_by_svtype[svtype]
+                if svtype in irs_supported_counts_by_svtype:
+                    irs_supported_count = irs_supported_counts_by_svtype[svtype]
+                else:
+                    irs_supported_count = 0
             else:
                 irs_tested_count = 0
                 irs_supported_count = 0
@@ -257,13 +263,19 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                 if svtype_bin in vapor_tested_counts_by_svtype_size_bin or svtype_bin in irs_tested_counts_by_svtype_size_bin:
                     if svtype_bin in vapor_tested_counts_by_svtype_size_bin:
                         vapor_tested = vapor_tested_counts_by_svtype_size_bin[svtype_bin]
-                        vapor_supported = vapor_supported_counts_by_svtype_size_bin[svtype_bin]
+                        if svtype_bin in vapor_supported_counts_by_svtype_size_bin:
+                            vapor_supported = vapor_supported_counts_by_svtype_size_bin[svtype_bin]
+                        else:
+                            vapor_supported = 0
                     else:
                         vapor_tested = 0
                         vapor_supported = 0
                     if svtype_bin in irs_tested_counts_by_svtype_size_bin:
                         irs_tested = irs_tested_counts_by_svtype_size_bin[svtype_bin]
-                        irs_supported = irs_supported_counts_by_svtype_size_bin[svtype_bin]
+                        if svtype_bin in irs_supported_counts_by_svtype_size_bin:
+                            irs_supported = irs_supported_counts_by_svtype_size_bin[svtype_bin]
+                        else:
+                            irs_supported = 0
                     else:
                         irs_tested = 0
                         irs_supported = 0
