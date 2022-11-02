@@ -29,7 +29,7 @@
   "sv-pipeline-virtual-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline-virtual-env:2022-06-10-v0.23-beta-9c6fbf56",
   "samtools-cloud-virtual-env": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud-virtual-env:2022-06-10-v0.23-beta-9c6fbf56",
   "sv-utils-env": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils-env:2022-09-09-v0.25.1-beta-cd5ce7e0",
-  "sv_utils_docker": "sv-utils:cw-irs-vapor-merge-f3db033",
+  "sv_utils_docker": "sv-utils:cw-irs-vapor-merge-a8716f",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/tbrookin/gatk:0a7e1d86f",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2022-09-15-v0.25.1-beta-b53e58af"
 }
