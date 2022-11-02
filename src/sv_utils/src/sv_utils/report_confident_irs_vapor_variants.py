@@ -145,6 +145,10 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
 
     vapor_valid_variants = 0
     irs_valid_variants = 0
+
+    vapor_valid_variants_by_svtype = {}
+    irs_valid_variants_by_svtype = {}
+
     vapor_tested_var_gts = 0
     irs_tested_var_gts = 0
     vaport_supported_var_gts = 0
@@ -177,27 +181,36 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
             if not (svtype == 'DEL' or svtype == 'DUP') or record.info['SVLEN'] <= arguments.vapor_max_cnv_size:
                 vapor_valid = True
                 vapor_valid_variants = vapor_valid_variants + 1
+                if svtype in vapor_valid_variants_by_svtype:
+                    vapor_valid_variants_by_svtype[svtype] = vapor_valid_variants_by_svtype[svtype] + 1
+                else:
+                    vapor_valid_variants_by_svtype[svtype] = 1
             if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= arguments.irs_min_cnv_size \
                     and (irs_contigs is None or record.contig in irs_contigs):
                 irs_valid = True
                 irs_valid_variants = irs_valid_variants + 1
+                if svtype in irs_valid_variants_by_svtype:
+                    irs_valid_variants_by_svtype[svtype] = irs_valid_variants_by_svtype[svtype] + 1
+                else:
+                    irs_valid_variants_by_svtype[svtype] = 1
             if vapor_valid or irs_valid:
                 for sample in get_called_samples(record):
                     vapor_support = False
                     vapor_support_gt = 'NA'
                     vapor_support_gq = 'NA'
                     if vapor_valid and sample in vapor_variants:
-                        vapor_rec = vapor_variants[sample].loc[record.id]
-                        vapor_gt = vapor_rec['VaPoR_GT']
-                        vapor_tested_var_gts = vapor_tested_var_gts + 1
-                        increment_counts(record, vapor_tested_counts_by_svtype, vapor_tested_counts_by_svtype_size_bin)
-                        vapor_support = vapor_gt in NON_REF_GTS and \
-                                        vapor_rec['p_non_ref'] > 1 - arguments.vapor_min_precision
-                        if vapor_support:
-                            vapor_support_gt = vapor_rec['VaPoR_GT']
-                            vapor_support_gq = vapor_rec['VaPoR_GQ']
-                            vaport_supported_var_gts = vaport_supported_var_gts + 1
-                            increment_counts(record, vapor_supported_counts_by_svtype, vapor_supported_counts_by_svtype_size_bin)
+                        if record.id in vapor_variants[sample].index:
+                            vapor_rec = vapor_variants[sample].loc[record.id]
+                            vapor_gt = vapor_rec['VaPoR_GT']
+                            vapor_tested_var_gts = vapor_tested_var_gts + 1
+                            increment_counts(record, vapor_tested_counts_by_svtype, vapor_tested_counts_by_svtype_size_bin)
+                            vapor_support = vapor_gt in NON_REF_GTS and \
+                                            vapor_rec['p_non_ref'] > 1 - arguments.vapor_min_precision
+                            if vapor_support:
+                                vapor_support_gt = vapor_rec['VaPoR_GT']
+                                vapor_support_gq = vapor_rec['VaPoR_GQ']
+                                vaport_supported_var_gts = vaport_supported_var_gts + 1
+                                increment_counts(record, vapor_supported_counts_by_svtype, vapor_supported_counts_by_svtype_size_bin)
                     irs_support = False
                     irs_support_pval = 'NA'
                     if irs_valid and sample in sample_to_irs_report:
@@ -226,8 +239,10 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                                                   vapor_support_gt,
                                                                                   vapor_support_gq,
                                                                                   irs_support_pval))
-        out_summary.write("#Vapor valid variants: {}\n#IRS valid variants: {}\n".format(vapor_valid_variants,
-                                                                                        irs_valid_variants))
+        out_summary.write("#Vapor valid variants: {} {}\n#IRS valid variants: {} {}\n".format(vapor_valid_variants,
+                                                                                              vapor_valid_variants_by_svtype,
+                                                                                              irs_valid_variants,
+                                                                                              irs_valid_variants_by_svtype))
         out_summary.write("CATEGORY\tCOUNT_VAPOR_TESTED_GTS\tCOUNT_VAPOR_SUPPORTED_GTS\tCOUNT_IRS_TESTED_GTS\tCOUNT_IRS_SUPPORTED_GTS\n")
         out_summary.write("{}\t{}\t{}\t{}\t{}\n".format("ALL",
                                                         vapor_tested_var_gts,
