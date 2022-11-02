@@ -69,6 +69,7 @@ RUN wget http://data.broadinstitute.org/igv/projects/downloads/2.4/IGV_2.4.14.zi
 
 VOLUME ["/root/.config"]
 COPY MakeRDtest.py /src/MakeRDtest.py
+COPY make_igv_script.py  /src/make_igv_script.py
 COPY makeigvpesr_cram.py  /src/makeigvpesr_cram.py
 COPY makeigvsplit_cram.py /src/makeigvsplit_cram.py
 COPY makeigv_cram.py      /src/makeigv_cram.py
