@@ -310,7 +310,7 @@ CODE
         sv-utils make-cross-validation-vcfs ~{vcf} \
             ~{pedigree_arg} \
             --truth-samples-file "$TRUTH_SAMPLES_FILE" \
-            --num_splits ~{num_splits} \
+            --num-splits ~{num_splits} \
             --index-output-vcf true
     >>>
 
@@ -349,7 +349,7 @@ task MergeRecalibratedTestVcfs {
     command <<<
         set -euo pipefail
 
-        bcftools merge --threads $(nproc) -m both -O z -o ~{merged_name} ~{sep=" " filtered_vcfs}
+        bcftools merge --threads $(nproc) -m id -O z -o ~{merged_name} ~{sep=" " filtered_vcfs}
 
         bcftools index --tbi -o ~{merged_index} ~{merged_name}
     >>>
