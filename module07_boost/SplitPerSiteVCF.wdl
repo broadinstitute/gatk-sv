@@ -86,20 +86,26 @@ workflow SplitPerSiteVCF{
         }
     }
 
-    call mini_tasks.ConcatBeds as ConcatBeds{
+    call mini_tasks.ConcatBeds as ConcatAnnos{
         input:
-            prefix = prefix,
+            prefix = "~{prefix}.anno",
             shard_bed_files = IntegrateSiteFeatures.anno,
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_override_concat_beds
     }
 
+    call mini_tasks.ConcatBeds as ConcatBeds{
+        input:
+            prefix = "~{prefix}.vcf2bed"
+            shard_bed_files = vcf2bed.bed_gz,
+            sv_base_mini_docker = sv_base_mini_docker,
+            runtime_attr_override = runtime_attr_override_concat_beds
+    }
 
     output{
-        Array[File] vcf_to_bed = vcf2bed.bed_gz
-        File anno_bed = ConcatBeds.merged_bed_file
-    }
-}
+        File vcf_to_bed = ConcatBeds.merged_bed_file
+        File anno_bed = ConcatAnnos.merged_bed_file
+    }}
 
 
 task vcf2bed{
