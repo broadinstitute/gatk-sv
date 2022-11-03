@@ -231,9 +231,9 @@ def main():
                          names=['contig', 'pos', 'id', 'ref', 'alt', 'qual', 'filter', 'info', 'format', 'gt', 'sample'])
 
     data = parse_info(data)
-    #data.contig = data.contig.astype('category')
-    data = data.sort_values(by=['contig', 'pos', 'info_SVTYPE', 'info_CHR2', 'info_END', 'info_CPX_TYPE'],
-                            key=natsort_keygen())
+    if len(data.index) > 0:
+        data = data.sort_values(by=['contig', 'pos', 'info_SVTYPE', 'info_CHR2', 'info_END', 'info_CPX_TYPE'],
+                                key=natsort_keygen())
 
     ctx_number = 0
     del_number = 0
@@ -242,7 +242,8 @@ def main():
     prev_contig = None
     prev_pos = None
 
-    new_loc = (data.loc[new_idx, 'contig'], data.loc[new_idx, 'pos'])
+    if len(data.index > 0):
+        new_loc = (data.loc[new_idx, 'contig'], data.loc[new_idx, 'pos'])
 
     for record in vcf:
         if record.contig != prev_contig:
