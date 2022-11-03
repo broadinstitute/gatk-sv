@@ -96,7 +96,7 @@ workflow SplitPerSiteVCF{
 
     call mini_tasks.ConcatBeds as ConcatBeds{
         input:
-            prefix = "~{prefix}.vcf2bed"
+            prefix = "~{prefix}.vcf2bed",
             shard_bed_files = vcf2bed.bed_gz,
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_override_concat_beds
