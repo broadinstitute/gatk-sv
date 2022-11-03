@@ -1,4 +1,5 @@
-FROM ubuntu:18.04
+ARG SAMTOOLS_CLOUD_IMAGE=samtools-cloud:latest
+FROM $SAMTOOLS_CLOUD_IMAGE
 
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
@@ -18,4 +19,4 @@ RUN apt-get -qqy update --fix-missing && \
            /usr/share/man/?? \
            /usr/share/man/??_*
 
-ADD dockerfiles/wham/whamg /bin/
+COPY dockerfiles/wham/whamg /bin/

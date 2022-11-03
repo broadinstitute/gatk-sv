@@ -106,10 +106,14 @@ class ProjectBuilder:
             git_dependencies="dockerfiles/manta/*"
         ),
         "melt": ImageDependencies(
-            git_dependencies="dockerfiles/melt/*"
+            git_dependencies="dockerfiles/melt/*",
+            docker_dependencies={
+                "sv-base": "SVBASE_IMAGE"}
         ),
         "wham": ImageDependencies(
-            git_dependencies="dockerfiles/wham/*"
+            git_dependencies="dockerfiles/wham/*",
+            docker_dependencies={
+                "samtools-cloud": "SAMTOOLS_CLOUD_IMAGE"}
         ),
         "str": ImageDependencies(
             git_dependencies=("dockerfiles/str/*", "src/str/*")

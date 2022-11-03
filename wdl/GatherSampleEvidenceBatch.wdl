@@ -9,21 +9,11 @@ workflow GatherSampleEvidenceBatch {
     Array[File]? bam_or_cram_indexes
     Array[String] sample_ids
 
-    # Use only for crams in requester pays buckets
-    Boolean requester_pays_crams = false
-
-    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
-    # May be more expensive - use only if necessary
-    Boolean revise_base_cram_to_bam = false
-    File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
+    File? primary_contigs_fai # required if run_module_metrics = true
 
     # Caller flags
     Boolean collect_coverage = true
     Boolean collect_pesr = true
-
-    # If true, any intermediate BAM files will be deleted after the algorithms have completed.
-    # NOTE: If the workflow (ie any algorithm) fails, the bam will NOT be deleted.
-    Boolean delete_intermediate_bam = false
 
     # Common parameters
     File primary_contigs_list
@@ -85,9 +75,7 @@ workflow GatherSampleEvidenceBatch {
     String cloud_sdk_docker
 
     # Runtime configuration overrides
-    RuntimeAttr? runtime_attr_merge_vcfs
-    RuntimeAttr? runtime_attr_baf_sample
-    RuntimeAttr? runtime_attr_cram_to_bam
+    RuntimeAttr? runtime_attr_localize_reads
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
@@ -95,9 +83,6 @@ workflow GatherSampleEvidenceBatch {
     RuntimeAttr? runtime_attr_scramble
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_include_list
-    RuntimeAttr? runtime_attr_ReviseBaseInBam
-    RuntimeAttr? runtime_attr_ConcatBam
     RuntimeAttr? runtime_attr_cat_metrics
 
     File? NONE_FILE_
@@ -114,11 +99,8 @@ workflow GatherSampleEvidenceBatch {
         bam_or_cram_file = bam_or_cram_files[i],
         bam_or_cram_index = if defined(bam_or_cram_indexes) then select_first([bam_or_cram_indexes])[i] else NONE_FILE_,
         sample_id = sample_ids[i],
-        requester_pays_crams = requester_pays_crams,
-        revise_base_cram_to_bam = revise_base_cram_to_bam,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
-        delete_intermediate_bam = delete_intermediate_bam,
         primary_contigs_list = primary_contigs_list,
         primary_contigs_fai = primary_contigs_fai,
         reference_fasta = reference_fasta,
@@ -160,18 +142,14 @@ workflow GatherSampleEvidenceBatch {
         gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
-        runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,
-        runtime_attr_cram_to_bam = runtime_attr_cram_to_bam,
+        runtime_attr_localize_reads = runtime_attr_localize_reads,
         runtime_attr_manta = runtime_attr_manta,
         runtime_attr_melt_coverage = runtime_attr_melt_coverage,
         runtime_attr_melt_metrics = runtime_attr_melt_metrics,
         runtime_attr_melt = runtime_attr_melt,
         runtime_attr_scramble = runtime_attr_scramble,
         runtime_attr_pesr = runtime_attr_pesr,
-        runtime_attr_wham = runtime_attr_wham,
-        runtime_attr_wham_include_list = runtime_attr_wham_include_list,
-        runtime_attr_ReviseBaseInBam = runtime_attr_ReviseBaseInBam,
-        runtime_attr_ConcatBam = runtime_attr_ConcatBam
+        runtime_attr_wham = runtime_attr_wham
     }
   }
 

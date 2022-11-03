@@ -34,11 +34,6 @@ workflow Manta {
     mem_gb_per_job: "[optional] Memory to request for VM (in GB) = round(num_jobs * mem_gb_per_job). If omitted, defaults to 2."
   }
   
-  meta {
-      author: "Ted Brookings"
-      email: "tbrookin@broadinstitute.org"
-  }
-
   call RunManta {
     input:
       bam_or_cram_file = bam_or_cram_file,

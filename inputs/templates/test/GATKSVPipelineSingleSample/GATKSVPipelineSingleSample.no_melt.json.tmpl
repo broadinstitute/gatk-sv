@@ -2,7 +2,6 @@
   "GATKSVPipelineSingleSample.sample_id" : {{ single_sample.sample_id | tojson }},
   "GATKSVPipelineSingleSample.batch" : {{ single_sample.name | tojson }},
   "GATKSVPipelineSingleSample.bam_or_cram_file" : {{ single_sample.bam_or_cram_file | tojson }},
-  "GATKSVPipelineSingleSample.requester_pays_cram": {{ single_sample.requester_pays_cram | tojson }},
 
   "GATKSVPipelineSingleSample.use_melt": "false",
 
@@ -32,6 +31,8 @@
 
   "GATKSVPipelineSingleSample.linux_docker" : {{ dockers.linux_docker | tojson }},
   "GATKSVPipelineSingleSample.manta_docker": {{ dockers.manta_docker | tojson }},
+  "GATKSVPipelineSingleSample.melt_docker": {{ dockers.melt_docker | tojson }},
+  "GATKSVPipelineSingleSample.scramble_docker": {{ dockers.scramble_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GATKSVPipelineSingleSample.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},

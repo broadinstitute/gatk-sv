@@ -17,7 +17,6 @@ The following inputs must be provided for each sample in the cohort, via the sam
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier*|
 |`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
-|`Boolean`|`requester_pays_cram`|Set to `true` if the case data is stored in a requester-pays GCS bucket|
 
 *See **Sample ID requirements** below for specifications.
 
@@ -121,7 +120,7 @@ Sample IDs are provided to `01-GatherSampleEvidence` directly and need not match
 2. In your new workspace, delete the sample, sample_set, and sample_set_set data tables. To do this, go to the *Data* tab of the workspace. Select the `sample` data table. Check the box to select all samples. Click the 3 blue dots that appear, and select "Delete Data". Confirm when prompted. Repeat for any remaining samples and for any remaining entries in the `sample_set` or `sample_set_set` tables. 
 <img alt="deleting data tables" title="How to delete the sample data table" src="https://i.imgur.com/jNSXAqj.png" width="600">
 
-3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column), `bam_or_cram_file`, and `requester_pays_cram` at minimum. See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
+3. Create and upload a new sample data table for your samples. This should be a tab-separated file (.tsv) with one line per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column) and `bam_or_cram_file` at minimum. See the **Required inputs** section above for more information on these inputs. For an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). To upload the TSV file, navigate to the *Data* tab of the workspace and click the `+` button next to "Tables".  
 <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/h0hj2fT.png" width="400">
 
 4. Edit the `cohort_ped_file` item in the Workspace Data table (as shown in the screenshot below) to provide the Google URI to the PED file for your cohort (make sure to share it with your Terra proxy account!). 
