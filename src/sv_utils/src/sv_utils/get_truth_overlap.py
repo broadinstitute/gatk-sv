@@ -74,6 +74,7 @@ class Default:
     num_threads = common.num_physical_cpus  # by default, use all available cores for interval overlap tasks
     use_copy_number = genomics_io.Default.use_copy_number
     p_misaligned_long_read = 0.1
+    vapor_good_alt_reads_threshold = 2
 
 
 class SvTypeCutoffInfo:
@@ -1053,6 +1054,26 @@ def _get_vapor_p_non_ref(
     # set flat priors on true genotype, just allow likelihoods to dominate prediction
     return pandas.DataFrame(
         1.0 - likelihood_ref / (likelihood_ref + likelihood_het + likelihood_homvar),
+        columns=[Keys.vapor_p_non_ref],
+        index=vapor_variants.index
+    )
+
+
+def _get_vapor_p_non_ref_threshold(
+        vapor_variants: pandas.DataFrame,
+        good_alt_reads_threshold: int = Default.vapor_good_alt_reads_threshold
+) -> pandas.DataFrame:
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
+        lambda scores: [float(score) for score in scores.split(',')] if scores else []
+    )
+    num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
+    return pandas.DataFrame(
+        numpy.where(
+            num_alt_reads == 0,
+            0.0,
+            numpy.where(num_alt_reads >= good_alt_reads_threshold, 1.0, 0.5)
+        ),
         columns=[Keys.vapor_p_non_ref],
         index=vapor_variants.index
     )
