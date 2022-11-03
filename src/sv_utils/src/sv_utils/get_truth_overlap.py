@@ -5,11 +5,11 @@ import os
 import argparse
 import json
 import warnings
-
 import dill
 import numpy
 import pandas
-
+import scipy
+import scipy.stats
 from sv_utils import common, genomics_io, pedigree_tools, interval_overlaps
 from typing import List, Text, Optional, Dict, Tuple, TypeVar, Union, Collection, Callable, Iterable, Set, Mapping
 from types import MappingProxyType
@@ -34,8 +34,8 @@ class Keys:
     allele_frequency = genomics_io.Keys.allele_frequency
     bnd_contig_2 = genomics_io.Keys.bnd_contig_2
     bnd_end_2 = genomics_io.Keys.bnd_end_2
-    vapor_gt = genomics_io.VaporKeys.gt
-    vapor_gq = genomics_io.VaporKeys.gq
+    gq = genomics_io.Keys.gq
+    vapor_read_scores = genomics_io.Keys.vapor_read_scores
     vapor_p_non_ref = "p_non_ref"
     father = "father"
     mother = "mother"
@@ -73,6 +73,7 @@ class Default:
     breakend_types = interval_overlaps.Default.breakend_types
     num_threads = common.num_physical_cpus  # by default, use all available cores for interval overlap tasks
     use_copy_number = genomics_io.Default.use_copy_number
+    p_misaligned_long_read = 0.1
 
 
 class SvTypeCutoffInfo:
@@ -1021,13 +1022,37 @@ def get_trios_overlap_info(
     )
 
 
-def get_vapor_p_non_ref(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
+def _get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
-    p_gt_bad = 10 ** -vapor_variants[Keys.vapor_gq]
+    p_gt_bad = 10 ** -vapor_variants[Keys.gq]
     return pandas.DataFrame(
         numpy.where(
-            vapor_variants[Keys.vapor_gt] == "0/0", p_gt_bad, 1.0 - p_gt_bad
+            vapor_variants[Keys.gt] == "0/0", p_gt_bad, 1.0 - p_gt_bad
         ),
+        columns=[Keys.vapor_p_non_ref],
+        index=vapor_variants.index
+    )
+
+
+def _get_vapor_p_non_ref(
+        vapor_variants: pandas.DataFrame,
+        p_misaligned: float = Default.p_misaligned_long_read
+) -> pandas.DataFrame:
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
+        lambda scores: [float(score) for score in scores.split(',')] if scores else []
+    )
+    num_reads = vapor_read_scores.apply(len)
+    num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
+    # model het likelihood as binomial distribution with 50/50 chance a read is ALT or REF
+    likelihood_het = scipy.stats.binom.pmf(num_alt_reads, num_reads, 0.5)
+    # model homref likelihood as binomial distribution with p_misaligned chance that read looks ALT
+    likelihood_ref = scipy.stats.binom.pmf(num_alt_reads, num_reads, p_misaligned)
+    # model homvar likelihood as binomial distribution with p_misaligned chance that read looks REF
+    likelihood_homvar = scipy.stats.binom.pmf(num_reads - num_alt_reads, num_reads, p_misaligned)
+    # set flat priors on true genotype, just allow likelihoods to dominate prediction
+    return pandas.DataFrame(
+        1.0 - likelihood_ref / (likelihood_ref + likelihood_het + likelihood_homvar),
         columns=[Keys.vapor_p_non_ref],
         index=vapor_variants.index
     )
@@ -1126,7 +1151,7 @@ def get_optimal_overlap_cutoffs(
     # augment overlap stats with probability the variant is non-ref, as estimated by VaPoR:
     vapor_info = {
         sample_id:
-            get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+            _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
             .join(overlap_stats[sample_id], how="inner")
         for sample_id, vapor_file in vapor_files.items()
         if sample_id in overlap_stats
@@ -1274,7 +1299,7 @@ def select_confident_vapor_variants(
         sample_confident_variants: SampleConfidentVariants
             Object holding the confident variants for this sample
     """
-    vapor_p_non_ref = get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+    vapor_p_non_ref = _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
     return SampleConfidentVariants(
         good_variant_ids=sorted(
             valid_variant_ids.intersection(
