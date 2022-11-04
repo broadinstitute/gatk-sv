@@ -1,7 +1,7 @@
 # GATK-SV
 
 A structural variation discovery pipeline for Illumina short-read whole-genome sequencing (WGS) data.
-TEST
+
 ## Table of Contents
 * [Requirements](#requirements)
 * [Citation](#citation)
