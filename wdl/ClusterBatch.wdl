@@ -72,7 +72,6 @@ workflow ClusterBatch {
     RuntimeAttr? runtime_attr_svcluster_melt
     RuntimeAttr? runtime_attr_svcluster_scramble
     RuntimeAttr? runtime_attr_svcluster_wham
-    RuntimeAttr? runtime_attr_svcluster_scramble
     RuntimeAttr? runtime_override_concat_vcfs_pesr
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_pesr
     RuntimeAttr? runtime_attr_scatter_bed

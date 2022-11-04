@@ -174,7 +174,6 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_svcluster_melt_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
     RuntimeAttr? runtime_attr_svcluster_wham_cluster_batch
-    RuntimeAttr? runtime_attr_svcluster_scramble_cluster_batch
     RuntimeAttr? runtime_override_concat_vcfs_pesr_cluster_batch
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch
     RuntimeAttr? runtime_attr_scatter_bed_cluster_batch
@@ -377,7 +376,6 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_svcluster_melt=runtime_attr_svcluster_melt_cluster_batch,
       runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
       runtime_attr_svcluster_wham=runtime_attr_svcluster_wham_cluster_batch,
-      runtime_attr_svcluster_scramble=runtime_attr_svcluster_scramble_cluster_batch,
       runtime_override_concat_vcfs_pesr=runtime_override_concat_vcfs_pesr_cluster_batch,
       runtime_attr_gatk_to_svtk_vcf_pesr=runtime_attr_gatk_to_svtk_vcf_pesr_cluster_batch,
       runtime_attr_scatter_bed=runtime_attr_scatter_bed_cluster_batch,
