@@ -157,22 +157,6 @@ class BedKeys:
     name = "name"
 
 
-<<<<<<< HEAD
-class VaporKeys:
-    contig = "CHR"
-    begin = "POS"
-    end = "END"
-    svtype = "SVTYPE"
-    id = "SVID"
-    gt = "VaPoR_GT"
-    gq = "VaPoR_GQ"
-    qs = "VaPoR_QS"
-    gs = "VaPoR_GS"
-    read_scores = "VaPoR_Rec"
-
-
-=======
->>>>>>> 521afc77 (vapor improvents: compute p_non_ref accurately, expect header in vapor file)
 class Default:
     int_type = numpy.int32
     float_type = numpy.float32
@@ -1224,29 +1208,11 @@ def vcat_with_categoricals(
     return pandas.concat(dataframes, axis=0, **kwargs)
 
 
-<<<<<<< HEAD
-def vapor_to_pandas(vapor_file: Text) -> pandas.DataFrame:
-    return bed_to_pandas(
-        vapor_file,
-        columns={VaporKeys.contig:Keys.contig,
-                 VaporKeys.begin:Keys.begin,
-                 VaporKeys.end:Keys.end,
-                 VaporKeys.svtype:Keys.svtype,
-                 VaporKeys.id:Keys.id,
-                 VaporKeys.qs:VaporKeys.qs,
-                 VaporKeys.gs:VaporKeys.gs,
-                 VaporKeys.gt:VaporKeys.gt,
-                 VaporKeys.gq:VaporKeys.gq,
-                 VaporKeys.read_scores:VaporKeys.read_scores},
-        require_header=True
-    )
-=======
 def vapor_to_pandas(
         vapor_file: Text,
         columns: Union[Sequence[Text], Mapping[Text, Text], None] = Default.load_vapor_columns
 ) -> pandas.DataFrame:
     return bed_to_pandas(vapor_file, columns=columns, missing_value="")
->>>>>>> 521afc77 (vapor improvents: compute p_non_ref accurately, expect header in vapor file)
 
 
 def _get_all_properties(
