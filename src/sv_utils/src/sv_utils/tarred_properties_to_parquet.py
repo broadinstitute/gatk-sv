@@ -50,6 +50,18 @@ class Keys:
     row = "row"
     category = "category"
     one_hot = "one-hot"
+    positive_value = "positive_value"
+    negative_value = "negative_value"
+    baseline = "baseline"
+    scale = "scale"
+    id = genomics_io.Keys.id
+    pos = genomics_io.VcfKeys.pos
+    end = genomics_io.VcfKeys.end
+    contig = genomics_io.Keys.contig
+    svtype = genomics_io.Keys.svtype
+    svlen = genomics_io.Keys.svlen
+    allele_frequency = genomics_io.Keys.allele_frequency
+    variant_weights = "variant_weights"
 
 
 class CompressionAlgorithms:
@@ -75,6 +87,7 @@ class CompressionAlgorithms:
 
 class Default:
     temp_dir = tempfile.gettempdir()
+    compute_weights: bool = False
     remove_input_tar = False
     column_levels = genomics_io.Default.column_levels
     dask_partition_size_mb = 75.0
@@ -84,7 +97,14 @@ class Default:
     category_encoding = Keys.one_hot
     property_names_to_lower = True
     num_jobs = common.num_physical_cpus
+    training_weight_properties = ()
 
+
+non_ml_properties = frozenset((Keys.id, Keys.pos, Keys.end, Keys.contig, Keys.variant_weights))
+training_weight_bins = MappingProxyType({
+    Keys.svlen: numpy.array([50, 500, 5000]),
+    Keys.allele_frequency: numpy.array([0.1, 0.9])
+})
 
 _dtype_map = MappingProxyType({
     Keys.float_type: numpy.float32,
@@ -99,19 +119,26 @@ _extracted_tar_files = {}
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
+    print(argv)
     parser = argparse.ArgumentParser(
         description="Convert properties produced by ExtractSV properties from tarred-gzipped TSV to a parquet data set",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=argv[0]
     )
-    parser.add_argument("--input_tar", "-i", type=str, help="full path to .tar file to convert", action="extend",
+    parser.add_argument("--input-tar", "-i", type=str, help="full path to .tar file to convert", action="extend",
                         required=True, nargs='+')
-    parser.add_argument("--output_parquet", "-o", type=str, required=True,
-                        help="path to output parquet data. If path ends in .tar, the parquet folder will be archived "
-                             "into a single tar file")
+    parser.add_argument("--output-parquet", "-o", type=str, required=True,
+                        help="path to output SV data in parquet format. If path ends in .tar, the parquet folder will "
+                             "be archived into a single tar file")
+    parser.add_argument("--compute-weights", type=common.argparse_bool, default=Default.compute_weights,
+                        help="If true, compute the weight that each variant should have for training.")
+    parser.add_argument("--properties-scaling-json", type=str, default=None,
+                        help="path to output JSON that will store properties baseline and scale needed for training and"
+                             "filtering. Note: should only be generated from training data set, then those stats should"
+                             "be reused for filtering.")
     parser.add_argument("--temp-dir", "-t", type=str, default=Default.temp_dir,
                         help="full path to preferred temporary directory")
-    parser.add_argument("--remove-input-tar", type=bool, default=Default.remove_input_tar,
+    parser.add_argument("--remove-input-tar", type=common.argparse_bool, default=Default.remove_input_tar,
                         help="if true, remove input tar to save space, if false, leave it in place")
     parser.add_argument("--dask-partition-size-mb", type=float, default=Default.dask_partition_size_mb,
                         help="approximate in-memory size of dask partitions, in MiB")
@@ -121,7 +148,7 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                         choices=[Keys.category, Keys.one_hot],
                         help=f"Method to encode categorical data: {Keys.category}: as pandas Categorical, or "
                              f"{Keys.one_hot}: one-hot encode. Note: contig is always kept as Categorical.")
-    parser.add_argument("--property-names-to-lower", type=bool, default=Default.property_names_to_lower,
+    parser.add_argument("--property-names-to-lower", type=common.argparse_bool, default=Default.property_names_to_lower,
                         help="Convert all property names to lower case, to make interactions simpler.")
     parser.add_argument("--threads", type=int, default=Default.num_jobs, help="Number of parallel processes to use")
     return parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
@@ -129,9 +156,12 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: Optional[list[str]] = None):
     args = __parse_arguments(sys.argv if argv is None else argv)
+    print(args)
     tarred_properties_to_parquet(
         input_tar=args.input_tar,
         output_path=args.output_parquet,
+        compute_weights=args.compute_weights,
+        properties_scaling_json=args.properties_scaling_json,
         temp_dir=args.temp_dir,
         remove_input_tar=args.remove_input_tar,
         dask_partition_size_mb=args.dask_partition_size_mb,
@@ -145,6 +175,8 @@ def main(argv: Optional[list[str]] = None):
 def tarred_properties_to_parquet(
         input_tar: Union[str, list[str]],
         output_path: str,
+        compute_weights: bool = Default.compute_weights,
+        properties_scaling_json: Optional[str] = None,
         temp_dir: str = Default.temp_dir,
         remove_input_tar: bool = Default.remove_input_tar,
         dask_partition_size_mb: float = Default.dask_partition_size_mb,
@@ -153,21 +185,29 @@ def tarred_properties_to_parquet(
         property_names_to_lower: bool = Default.property_names_to_lower,
         num_jobs: int = Default.num_jobs
 ):
+    print(f"compute_weights: {compute_weights}")
+    print(f"output_scaling_path: {properties_scaling_json}")
     CompressionAlgorithms.assert_valid(compression_algorithm)
     properties_summaries, sample_ids, input_folders = _get_gzipped_metadata(
         input_tar=input_tar, temp_dir=temp_dir, remove_input_tar=remove_input_tar
     )
-
     with dask.config.set(temporary_directory=temp_dir, scheduler='processes', num_workers=num_jobs):
+        # load all the properties extracted by
         properties = load_properties_from_map(
             input_folder=input_folders, properties_summary=properties_summaries, sample_ids=sample_ids,
             dask_partition_size_mb=dask_partition_size_mb, category_encoding=category_encoding,
             property_names_to_lower=property_names_to_lower
         )
+        if compute_weights:
+            # add variant_weights property
+            properties = add_variant_weights(properties)
         with warnings.catch_warnings():
             warnings.filterwarnings(action="ignore", category=FutureWarning)
             print(properties.head())
         df_to_parquet(df=properties, output_path=output_path, compression_algorithm=compression_algorithm)
+
+        if properties_scaling_json is not None:
+            output_properties_scaling(properties, properties_scaling_json)
 
 
 def _get_gzipped_metadata(
@@ -704,20 +744,220 @@ def get_parquet_file_num_rows(
     return dask.compute(sum(_get_nrows(_pq_file) for _pq_file in glob.glob(f"{input_path}/*.parquet")))[0]
 
 
-def get_value_counts(property_df: DataFrame) -> dict[int, int]:
-    def _red(_vcs: list[dict[int, int]]) -> dict[int, int]:
-        _out = _vcs[0]
-        for _vc in _vcs[1:]:
-            for _x, _v in _vc.items():
-                if _x in _out:
-                    _out[_x] += _v
-                else:
-                    _out[_x] = _v
-        return _out
+def output_properties_scaling(properties: DataFrame, properties_scaling_json: str):
+    properties_scaling = get_properties_scaling(properties)
+    print(f"properties scaling: {json.dumps(properties_scaling, indent='  ')}")
+    with open(properties_scaling_json, 'w') as f_out:
+        json.dump(properties_scaling, f_out, indent="  ")
 
-    return property_df.reduction(
-        lambda p: pandas.Series(p.values.ravel()).value_counts().sort_index().to_dict(), _red, meta={}
+
+def get_properties_scaling(properties: DataFrame) -> dict[str, dict[str, float]]:
+    def _get_bool_counts_dict(_partition: pandas.DataFrame) -> dict[str, int]:
+        n_elements = _partition.size
+        n_true = _partition.values.ravel().sum()
+        return {Keys.positive_value: n_true, Keys.negative_value: n_elements - n_true}
+
+    def _get_int_counts_dict(_partition: pandas.DataFrame) -> dict[int, int]:
+        return pandas.Series(_partition.values.ravel()).value_counts().sort_index().to_dict()
+
+    def _get_percentiles_dict(_partition: pandas.DataFrame) -> dict[str, list[float]]:
+        quantiles = numpy.nanquantile(_partition.values.ravel(), [0.1, 0.5, 0.9])
+        return {"low": [quantiles[0]], Keys.baseline: [quantiles[1]], "high": [quantiles[2]]}
+
+    PropertyStatsDict = dict[Union[str, int], Union[int, list[float]]]
+
+    def _get_property_stats_dict(_property_partition: pandas.DataFrame, property_name: str) -> PropertyStatsDict:
+        dtypes = set(_property_partition.dtypes.values)
+        if dtypes == {numpy.dtype(bool)}:
+            return _get_bool_counts_dict(_property_partition)
+        elif all(pandas.api.types.is_integer_dtype(_dtype) for _dtype in set(_property_partition.dtypes.values)):
+            return _get_int_counts_dict(_property_partition)
+        else:
+            try:
+                return _get_percentiles_dict(_property_partition)
+            except TypeError as type_error:
+                common.add_exception_context(type_error, f"getting stats for {property_name}")
+                raise
+
+    AllPropertiesStatsDict = dict[str, PropertyStatsDict]
+
+    def _get_all_stats_dict(_partition: pandas.DataFrame) -> AllPropertiesStatsDict:
+        return {
+            property_name: _get_property_stats_dict(_partition.loc[:, (slice(None), property_name)], property_name)
+            for property_name in set(_partition.columns.get_level_values(Keys.property))
+            if property_name not in non_ml_properties
+        }
+
+    def _reduce_all_stats_dict(_all_properties_stats_dicts: list[AllPropertiesStatsDict]) -> AllPropertiesStatsDict:
+        _reduced_properties_dict = _all_properties_stats_dicts[0]
+        for _all_properties_stats_dict in _all_properties_stats_dicts[1:]:
+            for _property_name, _stats_dict in _all_properties_stats_dict.items():
+                if Keys.baseline in _stats_dict:
+                    # float property, concatenate values (by adding lists)
+                    _reduced_dict = _reduced_properties_dict[_property_name]
+                    for _value, _counts_list in _stats_dict.items():
+                        _reduced_dict[_value] += _counts_list
+                else:
+                    # property with value counts: add values
+                    _reduced_dict = _reduced_properties_dict[_property_name]
+                    for _value, _counts_list in _stats_dict.items():
+                        _reduced_dict[_value] = _reduced_dict.get(_value, 0) + _counts_list
+        return _reduced_properties_dict
+
+    all_properties_stats = properties.reduction(_get_all_stats_dict, _reduce_all_stats_dict, meta={}).compute()[0]
+    # now need to do final computation of baseline and scale
+
+    def _compute_property_scaling(_property_stats: PropertyStatsDict) -> dict[str, float]:
+        if Keys.positive_value in _property_stats:
+            # boolean property
+            if _property_stats[Keys.positive_value] == 0 or _property_stats[Keys.negative_value] == 0:
+                # there's no real data in this property
+                positive_value = 0.0
+                negative_value = 0.0
+                mean_value = 0.0
+                scale = 1.0
+            else:
+                mean_value = _property_stats[Keys.positive_value] \
+                           / (_property_stats[Keys.positive_value] + _property_stats[Keys.negative_value])
+                scale = (mean_value * (1.0 - mean_value)) ** 0.5
+                positive_value = (1.0 - mean_value) / scale
+                negative_value = -mean_value / scale
+            return {
+                Keys.positive_value: positive_value, Keys.negative_value: negative_value,
+                Keys.baseline: mean_value, Keys.scale: scale
+            }
+        elif Keys.baseline in _property_stats:
+            # float property
+            baseline = numpy.median(_property_stats[Keys.baseline])
+            scale = numpy.median(_property_stats["high"]) - numpy.median(_property_stats["low"])
+            return {Keys.baseline: baseline, Keys.scale: 1.0 if scale == 0.0 else scale}
+        else:
+            # int property
+            num_counts = sum(_property_stats.values())
+
+            def _get_value_at_quantile(_quantile: float) -> int:
+                _target_counts = _quantile * num_counts
+                for _value, _counts in sorted(_property_stats.items(), key=lambda t: t[0]):
+                    _target_counts -= _counts
+                    if _target_counts <= 0:
+                        return _value
+
+            baseline = _get_value_at_quantile(0.5)  # baseline is median
+            # scale is the range of the central 80% of data
+            scale = _get_value_at_quantile(0.9) - _get_value_at_quantile(0.1)
+            if scale == 0:
+                # if the data is mostly constant, set scale to 1.0
+                scale = 1.0
+
+            return {Keys.baseline: baseline, Keys.scale: scale}
+    return {
+        property_name: _compute_property_scaling(property_stats)
+        for property_name, property_stats in all_properties_stats.items()
+    }
+
+
+def add_variant_weights(properties: DataFrame) -> DataFrame:
+    properties[Keys.variant_weights] = get_variant_weights(properties)
+    # rename and re-order to put variant weights at the beginning with other non-GT properties
+    columns = properties.columns.tolist()
+    columns[-1] = (None, Keys.variant_weights)
+    properties.columns = pandas.MultiIndex.from_tuples(columns, names=Default.column_levels)
+    return properties[[properties.columns[-1]] + properties.columns.tolist()[:-1]]
+
+
+def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
+    def _get_categories_dataframe() -> DataFrame:
+        variant_category_columns = {prop for prop in properties.columns.get_level_values(level="property")
+                                    if prop in training_weight_bins or prop.startswith("svtype=")}
+        categories_df = properties.loc[:, [(None, prop) for prop in variant_category_columns]]
+        categories_df.columns = categories_df.columns.droplevel(Keys.sample_id)
+        return categories_df
+
+    def _bin_categories(_partition: pandas.DataFrame):
+        for prop_name, prop_bins in training_weight_bins.items():
+            _partition[prop_name] = numpy.searchsorted(prop_bins, _partition.loc[:, prop_name], side="right")
+
+    def _get_category_counts(_partition: pandas.DataFrame) -> CategoryCounts:
+        _bin_categories(_partition)
+        return _partition.value_counts(sort=False).to_dict()
+
+    def _reduce_category_counts(_category_counts_list: list[CategoryCounts]) -> CategoryCounts:
+        _reduced_counts = _category_counts_list[0]
+        for _category_counts in _category_counts_list[1:]:
+            for _category, _counts in _category_counts.items():
+                _reduced_counts[_category] = _reduced_counts.get(_category, 0) + _counts
+        # sort in category order
+        return {_category: _counts for _category, _counts in sorted(_reduced_counts.items(), key=lambda t: t[0])}
+
+    variant_category_counts = _get_categories_dataframe().reduction(
+        _get_category_counts, _reduce_category_counts, meta={}
     ).compute()[0]
+
+    variant_category_weights = get_variant_category_weights(variant_category_counts)
+    # we want to compress weights as a categorical Series, but it can't handle non-unique values, so we will need to
+    # merge the weights that are equal
+
+    unique_weights = []
+    variant_bin_map = dict()
+    next_bin = 0
+    for bin_number, category in enumerate(sorted(variant_category_weights.keys())):
+        weight = variant_category_weights[category]
+        for _first_bin, _first_category in enumerate(sorted(variant_category_weights.keys())):
+            if _first_bin >= bin_number:
+                unique_weights.append(weight)
+                variant_bin_map[category] = next_bin
+                next_bin += 1
+                break
+            elif variant_category_weights[_first_category] == weight:
+                variant_bin_map[category] = variant_bin_map[_first_category]
+                break
+
+    _dtype = pandas.CategoricalDtype(unique_weights)
+
+    def _get_partition_variant_weights(_partition: pandas.DataFrame) -> pandas.Series:
+        _bin_categories(_partition)
+        return pandas.Series(
+            pandas.Categorical.from_codes(
+                [variant_bin_map[tuple(_category)] for _category in _partition.itertuples(index=False)],
+                categories=unique_weights
+            ),
+            index=_partition.index, name="variant_weight", dtype=_dtype
+        )
+
+    variant_weights = _get_categories_dataframe().map_partitions(
+        _get_partition_variant_weights, meta=pandas.Series(name=Keys.variant_weights, dtype=_dtype)
+    )
+    variant_weights.name = (None, Keys.variant_weights)
+    return variant_weights
+
+
+Category = tuple[Union[bool, int], ...]
+CategoryCounts = dict[Category, int]
+CategoryWeights = dict[Category, float]
+
+
+def get_variant_category_weights(variant_category_counts: CategoryCounts, max_weight: float = 100.0) -> CategoryWeights:
+    """
+    Given counts of number of variants in each variant category, compute weights such that:
+     - weight is inversely proportional to the counts in each category
+     - the mean weight is 1.0
+    After computing initial weights, restrain values so that no weight is greater than max_weight, or less than
+    1.0 / max_weight
+
+    Args:
+        variant_category_counts:
+        max_weight:
+    Returns:
+
+    """
+    num_variants = sum(variant_category_counts.values())
+    num_categories = len(variant_category_counts)
+    weight_coefficient = num_variants / num_categories
+    min_weight = 1.0 / max_weight
+    return {
+        category: max(min(weight_coefficient / counts, max_weight), min_weight)
+        for category, counts in variant_category_counts.items()
+    }
 
 
 if __name__ == "__main__":
