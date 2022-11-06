@@ -9,7 +9,8 @@ workflow TrainGqRecalibrator {
         File train_vcf_index
         File? annotations_vcf
         File? annotations_vcf_index
-        Array[String]? annotations_to_transfer
+        String? info_keys_to_transfer
+        String? format_keys_to_transfer
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
         Array[String]? vapor_sample_ids
@@ -25,6 +26,7 @@ workflow TrainGqRecalibrator {
         Boolean standardize_vcf = true
         String sv_utils_docker
         String gatk_docker
+        String sv_pipeline_docker
         String samtools_cloud_docker
     }
 
@@ -44,8 +46,9 @@ workflow TrainGqRecalibrator {
                 vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
                 vcf_with_annotations=select_first([annotations_vcf]),
                 vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first([annotations_to_transfer]),
-                samtools_cloud_docker=samtools_cloud_docker
+                info_keys_list=info_keys_to_transfer,
+                format_keys_list=format_keys_to_transfer,
+                sv_pipeline_docker=sv_pipeline_docker
         }
     }
 

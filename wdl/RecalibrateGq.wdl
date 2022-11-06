@@ -9,7 +9,8 @@ workflow RecalibrateGq {
         File vcf_index
         File? annotations_vcf
         File? annotations_vcf_index
-        Array[String]? annotations_to_transfer
+        String? info_keys_to_transfer
+        String? format_keys_to_transfer
         Array[File] genome_tracks
         File gq_recalibrator_model_file
         Boolean standardize_vcf = true
@@ -17,6 +18,7 @@ workflow RecalibrateGq {
         Array[String] recalibrate_gq_args = []
         String samtools_cloud_docker
         String gatk_docker
+        String sv_pipeline_docker
         String sv_utils_docker
         Float recalibrate_gq_mem_gb_java = 9.0
         Float recalibrate_gq_mem_gb_overhead = 1.5
@@ -38,8 +40,9 @@ workflow RecalibrateGq {
                 vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, vcf_index]),
                 vcf_with_annotations=select_first([annotations_vcf]),
                 vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first([annotations_to_transfer]),
-                samtools_cloud_docker=samtools_cloud_docker
+                info_keys_list=info_keys_to_transfer,
+                format_keys_list=format_keys_to_transfer,
+                sv_pipeline_docker=sv_pipeline_docker
         }
     }
 

@@ -12,7 +12,8 @@ workflow CrossValidateGqRecalibrator {
         File train_vcf_index
         File? annotations_vcf
         File? annotations_vcf_index
-        Array[String]? annotations_to_transfer
+        String? info_keys_to_transfer
+        String? format_keys_to_transfer
         String train_vcf_label
         Array[File] truth_vcfs = []
         Array[File] truth_vcf_indices = []
@@ -26,6 +27,7 @@ workflow CrossValidateGqRecalibrator {
         Int num_splits = 5
         String sv_utils_docker
         String gatk_docker
+        String sv_pipeline_docker
         String sv_base_mini_docker
         String samtools_cloud_docker
         # optional arguments for overriding default tool behaviors
@@ -61,8 +63,9 @@ workflow CrossValidateGqRecalibrator {
                 vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
                 vcf_with_annotations=select_first([annotations_vcf]),
                 vcf_with_annotations_index=select_first([annotations_vcf_index]),
-                annotations_to_transfer=select_first([annotations_to_transfer]),
-                samtools_cloud_docker=samtools_cloud_docker
+                info_keys_list=info_keys_to_transfer,
+                format_keys_list=format_keys_to_transfer,
+                sv_pipeline_docker=sv_pipeline_docker
         }
     }
 
@@ -87,6 +90,7 @@ workflow CrossValidateGqRecalibrator {
             get_truth_overlap_args=get_truth_overlap_args,
             sv_utils_docker=sv_utils_docker,
             gatk_docker=gatk_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             samtools_cloud_docker=samtools_cloud_docker
     }
 
@@ -100,6 +104,7 @@ workflow CrossValidateGqRecalibrator {
             recalibrate_gq_args=recalibrate_gq_args,
             gatk_docker=gatk_docker,
             sv_utils_docker=sv_utils_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             samtools_cloud_docker=samtools_cloud_docker
     }
 
@@ -136,6 +141,7 @@ workflow CrossValidateGqRecalibrator {
                 get_truth_overlap_args=get_truth_overlap_args,
                 sv_utils_docker=sv_utils_docker,
                 gatk_docker=gatk_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
                 samtools_cloud_docker=samtools_cloud_docker
         }
 
@@ -149,6 +155,7 @@ workflow CrossValidateGqRecalibrator {
                 recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
                 sv_utils_docker=sv_utils_docker,
+                sv_pipeline_docker=sv_pipeline_docker,
                 samtools_cloud_docker=samtools_cloud_docker
         }
     }

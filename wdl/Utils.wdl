@@ -711,46 +711,44 @@ task TransferVcfAnnotations {
     File vcf_to_annotate_index
     File vcf_with_annotations
     File vcf_with_annotations_index
-    Array[String] annotations_to_transfer
-    String samtools_cloud_docker
+    String? info_keys_list  # At least one of info_keys_list or format_keys_list must be provided
+    String? format_keys_list
+    String sv_pipeline_docker
     String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
-  }
+    RuntimeAttr? runtime_attr_override
 
-  parameter_meta {
-    vcf_to_annotate: {
-      localization_optional: true
-    }
-    vcf_with_annotations: {
-      localization_optional: true
-    }
+    # Disk must be scaled proportionally to the size of the VCF
+    # Memory may need to be increased as well, particularly if transferring FORMAT fields on large VCFs
+    RuntimeAttr default_attr = object {
+                                 mem_gb: 7.5,
+                                 disk_gb: ceil(100.0 + size(vcf_to_annotate, "GB") * 2 + size(vcf_with_annotations, "GB")),
+                                 cpu_cores: 1,
+                                 preemptible_tries: 3,
+                                 max_retries: 1,
+                                 boot_disk_gb: 10
+                               }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   }
-
-  Int disk_gb = round(100 + size([vcf_to_annotate, vcf_to_annotate_index,
-                                 vcf_with_annotations, vcf_with_annotations_index], "GiB"))
 
   runtime {
-      docker: samtools_cloud_docker
-      cpu: 1
-      preemptible: 3
-      max_retries: 1
-      memory: "2 GiB"
-      disks: "local-disk 10 HDD"
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " SSD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 
   command <<<
-    # if running in a local mode, this will fail, but it also won't be *needed*
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-
     set -euo pipefail
-
-    bcftools annotate \
-      -a ~{vcf_with_annotations} \
-      -c ~{sep=',' annotations_to_transfer} \
-      -Oz -o "~{output_file_name}" \
-      --threads 2 \
+    python /opt/sv-pipeline/scripts/transfer_vcf_annotations.py \
+      ~{"--infos " + info_keys_list} \
+      ~{"--formats " + format_keys_list} \
+      --ann-vcf ~{vcf_with_annotations} \
+      --out ~{output_file_name} \
       ~{vcf_to_annotate}
-
-    bcftools index --tbi "~{output_file_name}" -o "~{output_file_name}.tbi"
+    tabix ~{output_file_name}
   >>>
 
   output {
