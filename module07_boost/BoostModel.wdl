@@ -58,6 +58,7 @@ workflow BoostModel{
         String vapor_docker
         String duphold_docker
         String sv_benchmark_docker
+        String sv_benchmark_docker_V2
         String sv_base_mini_docker
         String sv_pipeline_docker
 
@@ -224,7 +225,7 @@ workflow BoostModel{
                 sample = training_samples[i],
                 site_anno = SplitPerSiteVCF.anno_bed,
                 training_anno = AnnotateTrainingFeatures.annotated_files[i],
-                sv_benchmark_docker = sv_benchmark_docker,
+                sv_benchmark_docker = sv_benchmark_docker_V2,
                 runtime_attr_override = runtime_attr_override_organize_training_data_per_sample
         }
     }
