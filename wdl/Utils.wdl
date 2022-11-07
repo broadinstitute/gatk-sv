@@ -714,21 +714,21 @@ task TransferVcfAnnotations {
     String? info_keys_list  # At least one of info_keys_list or format_keys_list must be provided
     String? format_keys_list
     String sv_pipeline_docker
-    String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
     RuntimeAttr? runtime_attr_override
-
-    # Disk must be scaled proportionally to the size of the VCF
-    # Memory may need to be increased as well, particularly if transferring FORMAT fields on large VCFs
-    RuntimeAttr default_attr = object {
-                                 mem_gb: 7.5,
-                                 disk_gb: ceil(100.0 + size(vcf_to_annotate, "GB") * 2 + size(vcf_with_annotations, "GB")),
-                                 cpu_cores: 1,
-                                 preemptible_tries: 3,
-                                 max_retries: 1,
-                                 boot_disk_gb: 10
-                               }
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   }
+  String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
+
+  # Disk must be scaled proportionally to the size of the VCF
+  # Memory may need to be increased as well, particularly if transferring FORMAT fields on large VCFs
+  RuntimeAttr default_attr = object {
+                               mem_gb: 7.5,
+                               disk_gb: ceil(100.0 + size(vcf_to_annotate, "GB") * 2 + size(vcf_with_annotations, "GB")),
+                               cpu_cores: 1,
+                               preemptible_tries: 3,
+                               max_retries: 1,
+                               boot_disk_gb: 10
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
