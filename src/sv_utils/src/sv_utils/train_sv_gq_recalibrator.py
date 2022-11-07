@@ -10,6 +10,7 @@ import json
 from tqdm.auto import tqdm as tqdm
 import numpy.random
 import pandas
+import pandas.core.arrays
 import torch
 import concurrent.futures
 
@@ -116,7 +117,7 @@ def train_sv_gq_recalibrator(
             random_state=random_state, excluded_properties=excluded_properties, torch_device=torch_device,
             executor=executor
         )
-        for batch_tensor, batch_weights in tqdm(
+        for batch_tensor, batch_weights, batch_ids in tqdm(
                 vcf_tensor_data_loader, desc="batch", mininterval=0.5, maxinterval=float('inf'), smoothing=0
         ):
             if not isinstance(batch_tensor, torch.Tensor):
@@ -124,6 +125,9 @@ def train_sv_gq_recalibrator(
             num_batches += 1
     t1 = time.time()
     print(f"Got {num_batches} batches in {t1 - t0} s")
+    print(f"batch_ids:\n{batch_ids}")
+    print(f"batch_weights:\n{batch_weights}")
+    print(f"batch_tensor_shape:\n{batch_tensor.shape}")
 
 
 def get_torch_device(device_name: str) -> torch.device:
@@ -140,8 +144,9 @@ class VcfTensorDataLoader:
     __slots__ = (
         "parquet_path", "variants_per_batch", "shuffle", "random_state", "torch_device",
         "executor", "_wanted_columns", "_parquet_files", "_buffer_index", "_buffer_matrix", "_num_rows", "_current_row",
-        "_variant_weights_column", "_variant_columns", "_format_columns", "_num_samples", "_buffer_future",
-        "_numpy_tensor", "_weights_tensor", "_tensor_baseline", "_tensor_scale"
+        "_variant_weights_column", "_variant_id_column", "_variant_columns", "_format_columns", "_num_samples",
+        "_num_properties", "_buffer_future", "_numpy_tensor", "_weights_tensor", "_ids_array", "_tensor_baseline",
+        "_tensor_scale"
     )
 
     def __init__(
@@ -182,6 +187,7 @@ class VcfTensorDataLoader:
             dtype=numpy.float32
         )
         self._weights_tensor = numpy.empty(self.variants_per_batch, dtype=numpy.float32)
+        self._ids_array = pandas.array([""] * self.variants_per_batch, dtype="string[pyarrow]")
         self._buffer_index = 0
         self._buffer_matrix = pandas.DataFrame()
         self._parquet_files = []
@@ -218,39 +224,50 @@ class VcfTensorDataLoader:
         self._variant_weights_column = next(
             index for index, column in enumerate(unflat_columns) if column[1] == Keys.variant_weights
         )
+        print(f"variant_weights_column: {self._variant_weights_column}")
+        self._variant_id_column = next(
+            index for index, column in enumerate(unflat_columns) if column[1] == Keys.id
+        )
+        print(f"variant_id_column: {self._variant_id_column}")
         # get the DataFrame columns that correspond to per-variant / INFO columns
         self._variant_columns = numpy.array(
             [index for index, column in enumerate(unflat_columns)
-             if not isinstance(column[0], str) and column[1] != Keys.variant_weights]
+             if not isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training]
         )
+        print(f"variant_columns: {self._variant_columns}")
         # get the DataFrame columns that correspond to per-sample / FORMAT columns
         self._format_columns = numpy.array(
-            [index for index, column in enumerate(unflat_columns) if isinstance(column[0], str)]
+            [index for index, column in enumerate(unflat_columns)
+             if isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training]
         )
         self._num_samples = len({column[0] for column in unflat_columns if isinstance(column[0], str)})
         # get baseline and scale for final tensor
-        properties_tensor_order = [column[1] for column in unflat_columns
-                                   if not isinstance(column[0], str) and column[1] != Keys.variant_weights]
+        properties_tensor_order = [
+            column[1] for column in unflat_columns
+            if not isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training
+        ]
         found_properties = set()
-        for unflat_column in unflat_columns:
-            if not isinstance(unflat_column[0], str):
+        for sample_id, prop_name in unflat_columns:
+            if prop_name in Default.non_ml_needed_for_training or not isinstance(sample_id, str):
                 continue
-            prop_name = unflat_column[1]
             if prop_name not in found_properties:
                 found_properties.add(prop_name)
                 properties_tensor_order.append(prop_name)
+        print(f"properties_tensor_order: {properties_tensor_order}")
 
         def _get_baseline(_prop_name) -> float:
-            if scale_bool_values or Keys.positive_value not in properties_scaling[prop_name]:
-                return properties_scaling[prop_name][Keys.baseline]
+            if scale_bool_values or Keys.positive_value not in properties_scaling[_prop_name]:
+                return properties_scaling[_prop_name][Keys.baseline]
             else:
                 return 0.0
 
         def _get_scale(_prop_name) -> float:
-            if scale_bool_values or Keys.positive_value not in properties_scaling[prop_name]:
-                return properties_scaling[prop_name][Keys.scale]
+            if scale_bool_values or Keys.positive_value not in properties_scaling[_prop_name]:
+                return properties_scaling[_prop_name][Keys.scale]
             else:
                 return 1.0
+
+        self._num_properties = len(properties_tensor_order)
 
         self._tensor_baseline = torch.tensor(
             [_get_baseline(prop_name) for prop_name in properties_tensor_order],
@@ -343,7 +360,7 @@ class VcfTensorDataLoader:
             )
         return self
 
-    def __next__(self) -> (torch.Tensor, torch.Tensor):
+    def __next__(self) -> (torch.Tensor, torch.Tensor, pandas.core.arrays.string_arrow.ArrowStringArray):
         """
         emit tensors for next batch
         Returns:
@@ -363,9 +380,11 @@ class VcfTensorDataLoader:
             self._load_buffer()
             next_buffer_index = self._buffer_index + self.variants_per_batch
 
-        VcfTensorDataLoader._buffer_matrix_to_tensor(
-            buffer_matrix=self._buffer_matrix[self._buffer_index:next_buffer_index, :], next_tensor=self._numpy_tensor,
-            weights_tensor=self._weights_tensor, variant_weights_column=self._variant_weights_column,
+        num_variant_properties = len(self._variant_columns)
+        (self._ids_array[:], self._weights_tensor[:], self._numpy_tensor[:, :, :num_variant_properties],
+         self._numpy_tensor[:, :, num_variant_properties:]) = VcfTensorDataLoader._get_next_tensor_blocks(
+            buffer_matrix=self._buffer_matrix[self._buffer_index:next_buffer_index, :],
+            variant_ids_column=self._variant_id_column, variant_weights_column=self._variant_weights_column,
             variant_columns=self._variant_columns, format_columns=self._format_columns, num_samples=self._num_samples
         )
         self._buffer_index = next_buffer_index
@@ -376,54 +395,19 @@ class VcfTensorDataLoader:
                 torch.tensor(self._numpy_tensor, dtype=torch.float32, device=self.torch_device)
                 - self._tensor_baseline
             ),
-            torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device)
+            torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
+            self._ids_array
         )
-
-    @staticmethod
-    def _buffer_matrix_to_tensor(
-            buffer_matrix: numpy.ndarray,
-            next_tensor: numpy.ndarray,
-            weights_tensor: numpy.ndarray,
-            variant_weights_column: int,
-            variant_columns: numpy.ndarray,
-            format_columns: numpy.ndarray,
-            num_samples: int
-    ):
-        """
-        Convert DataFrame with multi-index columns (1st index corresponding to sample, with None for per-variant
-        properties, 2nd index corresponding to property name) to 3-tensor (num_variants x num_samples x num_properties).
-        NOTE:
-        1) The per-variant properties will be duplicated during this process
-        2) All properties will be converted to 32-bit floats
-        3) It is assumed that Categorical properties are already one-hot encoded (by tarred_properties_to_parquet.py)
-
-        Args:
-            buffer_matrix: numpy.ndarray
-                Numpy matrix (from DataFrame.values) of variant/sample properties with multi-index columns
-            next_tensor: numpy.ndarray
-                3-tensor of properties used for training or filtering
-        Returns:
-        """
-        # fill num_rows x 1 x num_variant_properties matrix with per-variant properties. Note, the "1" dimension will
-        # broadcast to fill the 2nd (num_samples) dim
-        num_variant_properties = len(variant_columns)
-        weights_tensor[:] = buffer_matrix.take(variant_weights_column, axis=1)
-        next_tensor[:, :, :num_variant_properties] = \
-            buffer_matrix.take(variant_columns, axis=1).reshape(buffer_matrix.shape[0], 1, num_variant_properties)
-        # fill num_rows x num_samples x num_sample_properties matrix of per-sample properties
-        next_tensor[:, :, num_variant_properties:] = \
-            buffer_matrix.take(format_columns, axis=1)\
-                .reshape(buffer_matrix.shape[0], len(format_columns) // num_samples, num_samples)\
-                .swapaxes(1, 2)
 
     @staticmethod
     def _get_next_tensor_blocks(
             buffer_matrix: numpy.ndarray,
+            variant_ids_column: int,
             variant_weights_column: int,
             variant_columns: numpy.ndarray,
             format_columns: numpy.ndarray,
             num_samples: int
-    ):
+    ) -> (pandas.core.arrays.string_arrow.ArrowStringArray, numpy.ndarray, numpy.ndarray, numpy.ndarray):
         """
         Convert DataFrame with multi-index columns (1st index corresponding to sample, with None for per-variant
         properties, 2nd index corresponding to property name) to 3-tensor (num_variants x num_samples x num_properties).
@@ -443,19 +427,18 @@ class VcfTensorDataLoader:
         # broadcast to fill the 2nd (num_samples) dim
         num_variant_properties = len(variant_columns)
         return (
+            buffer_matrix.take(variant_ids_column, axis=1),
             buffer_matrix.take(variant_weights_column, axis=1),
             buffer_matrix.take(variant_columns, axis=1).reshape(buffer_matrix.shape[0], 1, num_variant_properties),
             buffer_matrix.take(format_columns, axis=1)
                 .reshape(buffer_matrix.shape[0], len(format_columns) // num_samples, num_samples)
                 .swapaxes(1, 2)
-        )
+        )  # noqa E131
 
     def __len__(self) -> int:
         # report the number of remaining batches in the iterator
         n_batches, extra_rows = divmod(self._num_rows - self._current_row, self.variants_per_batch)
         return n_batches + 1 if extra_rows else n_batches
-
-
 
 
 if __name__ == "__main__":

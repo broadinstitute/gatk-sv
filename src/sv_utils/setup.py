@@ -35,11 +35,10 @@ setup(
         "pympler",
         "matplotlib",
         "seaborn",
-        "dask>=22.9.1",
-        "pyarrow>=9.0.0"
     ],
     extras_require={
-        "tests": ["pytest", "pytest-cov"]
+        "tests": ["pytest", "pytest-cov"],
+        "machine-learning": ["dask>=22.9.1", "pyarrow>=9.0.0", "torch>=1.10.2"]
     },
     include_package_data=True,
     zip_safe=False

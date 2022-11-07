@@ -75,6 +75,7 @@ class Default:
     use_copy_number = genomics_io.Default.use_copy_number
     p_misaligned_long_read = 0.1
     vapor_good_alt_reads_threshold = 2
+    min_ref_reads_threshold = 6
 
 
 class SvTypeCutoffInfo:
@@ -375,6 +376,7 @@ def split_vcf_dataframe(
                pandas.NA: carrier status is unknown (due to no-calls)
     """
     # variant properties are columns where sample = None (as opposed to sample properties)
+    # noinspection PyTypeChecker
     variant_properties = variants.xs(None, level=Keys.sample_id, axis=1)
 
     for prop in [Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.svlen]:
@@ -1061,16 +1063,18 @@ def _get_vapor_p_non_ref(
 
 def _get_vapor_p_non_ref_threshold(
         vapor_variants: pandas.DataFrame,
-        good_alt_reads_threshold: int = Default.vapor_good_alt_reads_threshold
+        good_alt_reads_threshold: int = Default.vapor_good_alt_reads_threshold,
+        min_ref_reads_threshold: int = Default.min_ref_reads_threshold
 ) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
     vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
         lambda scores: [float(score) for score in scores.split(',')] if scores else []
     )
     num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
+    num_reads = vapor_read_scores.apply(len)
     return pandas.DataFrame(
         numpy.where(
-            num_alt_reads == 0,
+            numpy.logical_and(num_alt_reads == 0, num_reads >= min_ref_reads_threshold),
             0.0,
             numpy.where(num_alt_reads >= good_alt_reads_threshold, 1.0, 0.5)
         ),
