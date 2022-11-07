@@ -18,6 +18,8 @@ workflow RecalibrateGq {
         String samtools_cloud_docker
         String gatk_docker
         String sv_utils_docker
+        Float recalibrate_gq_mem_gb_java = 9.0
+        Float recalibrate_gq_mem_gb_overhead = 1.5
     }
 
     if(standardize_vcf) {
@@ -51,8 +53,10 @@ workflow RecalibrateGq {
             vcf_index=vcf_index_,
             genome_tracks=genome_tracks,
             gq_recalibrator_model_file=gq_recalibrator_model_file,
-            recalibrate_gq_args = recalibrate_gq_args,
-            gatk_docker=gatk_docker
+            recalibrate_gq_args=recalibrate_gq_args,
+            gatk_docker=gatk_docker,
+            mem_gb_java=recalibrate_gq_mem_gb_java,
+            mem_gb_overhead=recalibrate_gq_mem_gb_overhead
     }
 
     output {
@@ -74,7 +78,7 @@ task RecalibrateGqTask {
         Float mem_gb_overhead = 1.5
     }
 
-    Int disk_gb = round(1000 + size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB"))
+    Int disk_gb = round(100 + 2 * size([vcf, vcf_index, gq_recalibrator_model_file], "GiB") + size(genome_tracks, "GiB"))
     Float mem_gb = mem_gb_java + mem_gb_overhead
     String filtered_vcf_name = sub(sub(basename(vcf), ".gz", ""), ".vcf", "_gq_recalibrated.vcf.gz")
 
