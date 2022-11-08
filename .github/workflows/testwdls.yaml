@@ -13,9 +13,9 @@ on:
       - 'wdl/**'
 
 jobs:
-  miniwdl_job:
+  syntax_test_job:
     runs-on: ubuntu-22.04
-    name: miniwdl validation
+    name: Check WDL Syntax
     strategy:
       matrix:
         python-version: ['3.8']
@@ -33,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install miniwdl
 
-      - name: Run Tests
+      - name: Test with Miniwdl
         run: |
           python scripts/test/miniwdl_validation.py \
             --imports-dir wdl \
