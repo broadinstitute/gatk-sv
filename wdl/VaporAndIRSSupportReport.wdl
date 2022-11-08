@@ -17,6 +17,10 @@ workflow VaporAndIRSSupportReport {
     Int? irs_min_cnv_size = 50000
     Float? irs_good_pvalue_threshold = 0.001
     Int? irs_min_probes = 5
+    String vapor_strategy = "READS"
+    Int? vapor_pos_read_threshold = 2
+    Int? vapor_neg_read_threshold = 0
+    Int? vapor_neg_cov_read_threshold = 5
     String? output_prefix
     String sv_utils_docker
     RuntimeAttr? runtime_attr
@@ -38,6 +42,10 @@ workflow VaporAndIRSSupportReport {
       irs_contigs_fai=irs_contigs_fai,
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
+      vapor_strategy=vapor_strategy,
+      vapor_pos_read_threshold=vapor_pos_read_threshold,
+      vapor_neg_read_threshold=vapor_neg_read_threshold,
+      vapor_neg_cov_read_threshold=vapor_neg_cov_read_threshold,
       irs_min_cnv_size=irs_min_cnv_size,
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_min_probes=irs_min_probes,
@@ -64,6 +72,10 @@ task VaporAndIRSSupportReport {
     File? irs_contigs_fai
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
+    String vapor_strategy
+    Int? vapor_pos_read_threshold
+    Int? vapor_neg_read_threshold
+    Int? vapor_neg_cov_read_threshold
     Int? irs_min_cnv_size
     Float? irs_good_pvalue_threshold
     Int? irs_min_probes
@@ -115,6 +127,10 @@ task VaporAndIRSSupportReport {
       ~{"--irs-min-probes " + irs_min_probes} \
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       --output-summary ~{output_prefix}.irs_vapor_support.summary.tsv \
+      --vapor-strategy ~{vapor_strategy} \
+      ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
+      ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
+      ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
       ~{if write_detail_report then "--output-detail ~{output_prefix}.irs_vapor_support.detail.tsv.gz" else ""}
   >>>
 

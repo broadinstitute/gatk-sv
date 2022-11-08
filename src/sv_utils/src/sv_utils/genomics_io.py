@@ -133,6 +133,7 @@ class Keys:
     cnq = VcfKeys.cnq.lower()
     rd_cn = VcfKeys.rd_cn.lower()
     rd_gq = VcfKeys.rd_gq.lower()
+    vapor_gt = VaporKeys.gt.lower()
     vapor_qs = VaporKeys.qs.lower()
     vapor_gs = VaporKeys.gs.lower()
     vapor_read_scores = VaporKeys.read_scores.lower()

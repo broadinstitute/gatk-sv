@@ -13,6 +13,10 @@ workflow GetVariantListsFromVaporAndIRSReports {
     File? irs_contigs_fai
     Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
+    String vapor_strategy = "READS"
+    Int? vapor_pos_read_threshold = 2
+    Int? vapor_neg_read_threshold = 0
+    Int? vapor_neg_cov_read_threshold = 5
     Int? irs_min_cnv_size = 50000
     Float? irs_good_pvalue_threshold = 0.001
     Float? irs_bad_pvalue_threshold = 0.6
@@ -38,6 +42,10 @@ workflow GetVariantListsFromVaporAndIRSReports {
       irs_contigs_fai=irs_contigs_fai,
       vapor_max_cnv_size=vapor_max_cnv_size,
       vapor_min_precision=vapor_min_precision,
+      vapor_strategy=vapor_strategy,
+      vapor_pos_read_threshold=vapor_pos_read_threshold,
+      vapor_neg_read_threshold=vapor_neg_read_threshold,
+      vapor_neg_cov_read_threshold=vapor_neg_cov_read_threshold,
       irs_min_cnv_size=irs_min_cnv_size,
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_bad_pvalue_threshold=irs_bad_pvalue_threshold,
@@ -62,6 +70,10 @@ task GetVariantListsFromVaporAndIRSReports {
     File? irs_contigs_fai
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
+    String vapor_strategy
+    Int? vapor_pos_read_threshold
+    Int? vapor_neg_read_threshold
+    Int? vapor_neg_cov_read_threshold
     Int? irs_min_cnv_size
     Float? irs_good_pvalue_threshold
     Float? irs_bad_pvalue_threshold
@@ -112,7 +124,11 @@ task GetVariantListsFromVaporAndIRSReports {
       ~{"--irs-min-probes " + irs_min_probes} \
       ~{"--irs-good-pvalue-threshold " + irs_good_pvalue_threshold} \
       ~{"--irs-bad-pvalue-threshold " + irs_bad_pvalue_threshold} \
-      -O ~{output_prefix}.json
+      --vapor-strategy ~{vapor_strategy} \
+      ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
+      ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
+      ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
+    -O ~{output_prefix}.json
   >>>
 
   RuntimeAttr runtime_attr_str_profile_default = object {

@@ -15,12 +15,21 @@ from typing import List, Text, Optional, Dict, Tuple, TypeVar, Union, Collection
 
 def get_confident_variants_vapor(vapor_files: Optional[Dict[str, str]],
                                  precision: float,
-                                 valid_variant_ids: set) -> get_truth_overlap.ConfidentVariants:
+                                 valid_variant_ids: set,
+                                 strategy: str,
+                                 read_strategy_good_support_threshold: int,
+                                 read_strategy_bad_support_threshold: int,
+                                 read_strategy_bad_cov_threshold: int
+                                 ) -> get_truth_overlap.ConfidentVariants:
     vapor_info = {
         sample_id:
             get_truth_overlap.select_confident_vapor_variants(vapor_file=vapor_file,
                                                               valid_variant_ids=valid_variant_ids,
-                                                              precision=precision)
+                                                              precision=precision,
+                                                              strategy=strategy,
+                                                              read_strategy_good_support_threshold=read_strategy_good_support_threshold,
+                                                              read_strategy_bad_support_threshold=read_strategy_bad_support_threshold,
+                                                              read_strategy_bad_cov_threshold=read_strategy_bad_cov_threshold)
         for sample_id, vapor_file in vapor_files.items()
     }
     return vapor_info
@@ -121,6 +130,14 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Json file with mapping from sample ID to corresponding VaPoR file.", required=True)
     parser.add_argument("--vapor-min-precision", type=float, default=get_truth_overlap.Default.min_vapor_precision,
                         help="Minimum allowed precision for selecting good or bad variants from VaPoR")
+    parser.add_argument("--vapor-strategy", type=str, default="READS",
+                        help="GQ (just based on VaPoR_GQ), GT (based on re-genotyped model), or READS (based on read support threshold)")
+    parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
+                        help="Min Number of supporting vapor reads required for positive example")
+    parser.add_argument("--vapor-read-support-neg-thresh", type=int, default=0,
+                        help="MaNumber of supporting vapor reads required for neg example")
+    parser.add_argument("--vapor-read-support-neg-cov-thresh", type=int, default=5,
+                        help="MaNumber of covering vapor reads required for neg example")
     parser.add_argument("--output", "-O", type=str, default="-",
                         help="File to output results to. If omitted or set to '-', print to stdout")
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
@@ -170,7 +187,11 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     vapor_confident_variants = get_confident_variants_vapor(
         vapor_files=vapor_files,
         precision=arguments.vapor_min_precision,
-        valid_variant_ids=valid_vapor_variant_ids
+        valid_variant_ids=valid_vapor_variant_ids,
+        strategy=arguments.vapor_strategy,
+        read_strategy_good_support_threshold=arguments.vapor_read_support_pos_thresh,
+        read_strategy_bad_support_threshold=arguments.vapor_read_support_neg_thresh,
+        read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
     )
 
     sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
