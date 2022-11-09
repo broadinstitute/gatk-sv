@@ -201,7 +201,7 @@ def annotate_record(in_record: pysam.VariantRecord,
 
     Returns
     -------
-    header: pysam.VariantRecord
+    pysam.VariantRecord
         annotated record
     """
     new_record = vcf_out.new_record(alleles=in_record.alleles, contig=in_record.contig, filter=in_record.filter,
