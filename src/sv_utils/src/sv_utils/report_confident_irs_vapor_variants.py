@@ -79,6 +79,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="File (gzipped) to output detail results to")
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
                         help="Maximum size CNV to trust vapor results for")
+    parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
+                        help="Min Number of supporting vapor reads required for positive example")
     parser.add_argument("--irs-sample-batch-lists", type=str,
                         help="list of lists of samples used in each IRS test batch", required=True)
     parser.add_argument("--irs-contigs-file", type=str,
@@ -135,7 +137,8 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         #variants_df['p_non_ref'] = numpy.where(variants_df[get_truth_overlap.Keys.vapor_gt] == "0/0", p_gt_bad, 1.0 - p_gt_bad)
         p_non_ref_old = get_truth_overlap.get_vapor_p_non_ref_old(variants_df)
         p_non_ref_genotyped = get_truth_overlap.get_vapor_p_non_ref(variants_df)
-        p_non_ref_read_threshold = get_truth_overlap.get_vapor_p_non_ref_threshold(variants_df)
+        p_non_ref_read_threshold = \
+            get_truth_overlap.get_vapor_p_non_ref_threshold(variants_df, arguments.vapor_read_support_pos_thresh)
         variants_df['p_non_ref_old'] = p_non_ref_old['p_non_ref']
         variants_df['p_non_ref_genotyped'] = p_non_ref_genotyped['p_non_ref']
         variants_df['p_non_ref_read_threshold'] = p_non_ref_read_threshold['p_non_ref']
