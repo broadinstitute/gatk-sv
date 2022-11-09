@@ -17,10 +17,7 @@ workflow VaporAndIRSSupportReport {
     Int? irs_min_cnv_size = 50000
     Float? irs_good_pvalue_threshold = 0.001
     Int? irs_min_probes = 5
-    String vapor_strategy = "READS"
     Int? vapor_pos_read_threshold = 2
-    Int? vapor_neg_read_threshold = 0
-    Int? vapor_neg_cov_read_threshold = 5
     String? output_prefix
     String sv_utils_docker
     RuntimeAttr? runtime_attr
