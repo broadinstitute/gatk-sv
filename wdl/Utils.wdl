@@ -532,6 +532,7 @@ task MaxInts {
     }
 }
 
+
 task WriteLines {
   input {
     Array[String] lines
@@ -575,7 +576,7 @@ task UntarFiles {
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
-  String glob_arg = "out/*" + glob_suffix
+  String glob_arg = "out/*" + select_first([glob_suffix, ""])
 
   command <<<
     set -euo pipefail
@@ -640,5 +641,120 @@ task CombineTars {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+# Subset a VCF to a specific subset of samples
+task SubsetVcfBySamplesList {
+  input {
+    File vcf
+    File? vcf_idx
+    File list_of_samples_to_keep
+    String subset_name = "subset"
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String vcf_subset_filename = basename(vcf, ".vcf.gz") + ".~{subset_name}.vcf.gz"
+  String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
+
+  # Disk must be scaled proportionally to the size of the VCF
+  Float input_size = size(vcf, "GiB")
+  RuntimeAttr default_attr = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + (input_size * 1.5)),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+
+    bcftools view \
+      -S ~{list_of_samples_to_keep} \
+      --force-samples \
+      ~{vcf} \
+    | bcftools view \
+      --min-ac 1 \
+      -O z \
+      -o ~{vcf_subset_filename}
+
+    tabix -f -p vcf ~{vcf_subset_filename}
+    
+  >>>
+
+  output {
+    File vcf_subset = vcf_subset_filename
+    File vcf_subset_idx = vcf_subset_idx_filename
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task TransferVcfAnnotations {
+  input {
+    File vcf_to_annotate
+    File vcf_to_annotate_index
+    File vcf_with_annotations
+    File vcf_with_annotations_index
+    Array[String] annotations_to_transfer
+    String samtools_cloud_docker
+    String output_file_name = sub(sub(basename(vcf_to_annotate), ".gz$", ""), ".vcf$", "_annotated.vcf.gz")
+  }
+
+  parameter_meta {
+    vcf_to_annotate: {
+      localization_optional: true
+    }
+    vcf_with_annotations: {
+      localization_optional: true
+    }
+  }
+
+  Int disk_gb = round(100 + size([vcf_to_annotate, vcf_to_annotate_index,
+                                 vcf_with_annotations, vcf_with_annotations_index], "GiB"))
+
+  runtime {
+      docker: samtools_cloud_docker
+      cpu: 1
+      preemptible: 3
+      max_retries: 1
+      memory: "2 GiB"
+      disks: "local-disk 10 HDD"
+  }
+
+  command <<<
+    # if running in a local mode, this will fail, but it also won't be *needed*
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
+
+    set -euo pipefail
+
+    bcftools annotate \
+      -a ~{vcf_with_annotations} \
+      -c ~{sep=',' annotations_to_transfer} \
+      -Oz -o "~{output_file_name}" \
+      --threads 2 \
+      ~{vcf_to_annotate}
+
+    bcftools index --tbi "~{output_file_name}" -o "~{output_file_name}.tbi"
+  >>>
+
+  output {
+    File annotated_vcf = output_file_name
+    File annotated_vcf_index = output_file_name + ".tbi"
   }
 }

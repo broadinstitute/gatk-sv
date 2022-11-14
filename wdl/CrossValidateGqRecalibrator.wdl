@@ -4,11 +4,15 @@ import "TrainGqRecalibrator.wdl" as TrainGqRecalibrator
 import "RecalibrateGq.wdl" as RecalibrateGq
 import "BenchmarkGqFilter.wdl" as BenchmarkGqFilter
 import "PickleVcfProperties.wdl" as PickleVcfProperties
+import "Utils.wdl" as Utils
 
 workflow CrossValidateGqRecalibrator {
     input {
         File train_vcf
         File train_vcf_index
+        File? annotations_vcf
+        File? annotations_vcf_index
+        Array[String]? annotations_to_transfer
         String train_vcf_label
         Array[File] truth_vcfs
         Array[File] truth_vcf_indices
@@ -29,7 +33,7 @@ workflow CrossValidateGqRecalibrator {
         Array[String] recalibrate_gq_args = []
         Array[String] get_truth_overlap_args = []
         Array[String] benchmark_args = []
-        Int new_pipeline_passing_score = 0
+        Int new_pipeline_passing_score = 1
         String new_pipeline_score_property = "sl"
         Int old_pipeline_passing_score = 1
         String old_pipeline_score_property = "gq"
@@ -49,10 +53,23 @@ workflow CrossValidateGqRecalibrator {
                 sv_utils_docker=sv_utils_docker
         }
     }
-    File train_vcf_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf])
-    File train_vcf_index_ = select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf_index])
+    if(defined(annotations_vcf)) {
+        call Utils.TransferVcfAnnotations {
+            input:
+                vcf_to_annotate=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
+                vcf_to_annotate_index=select_first([StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index]),
+                vcf_with_annotations=select_first([annotations_vcf]),
+                vcf_with_annotations_index=select_first([annotations_vcf_index]),
+                annotations_to_transfer=select_first([annotations_to_transfer]),
+                samtools_cloud_docker=samtools_cloud_docker
+        }
+    }
 
-     call TrainGqRecalibrator.TrainGqRecalibrator {
+    File train_vcf_ = select_first([TransferVcfAnnotations.annotated_vcf, StandardizeVcfForGatk.fixed_vcf, train_vcf])
+    File train_vcf_index_ = select_first([TransferVcfAnnotations.annotated_vcf_index,
+                                          StandardizeVcfForGatk.fixed_vcf_index, train_vcf_index])
+
+    call TrainGqRecalibrator.TrainGqRecalibrator {
         input:
             train_vcf=train_vcf_,
             train_vcf_index=train_vcf_index_,
@@ -78,8 +95,10 @@ workflow CrossValidateGqRecalibrator {
             genome_tracks=genome_tracks,
             gq_recalibrator_model_file=TrainGqRecalibrator.output_gq_recalibrator_model_file,
             standardize_vcf=false,
+            recalibrate_gq_args=recalibrate_gq_args,
             gatk_docker=gatk_docker,
-            sv_utils_docker=sv_utils_docker
+            sv_utils_docker=sv_utils_docker,
+            samtools_cloud_docker=samtools_cloud_docker
     }
 
     if(!defined(pre_computed_cross_validation_vcfs)) {
@@ -123,8 +142,10 @@ workflow CrossValidateGqRecalibrator {
                 genome_tracks=genome_tracks,
                 gq_recalibrator_model_file=CrossTrainGqRecalibrator.output_gq_recalibrator_model_file,
                 standardize_vcf=false,
+                recalibrate_gq_args=recalibrate_gq_args,
                 gatk_docker=gatk_docker,
-                sv_utils_docker=sv_utils_docker
+                sv_utils_docker=sv_utils_docker,
+                samtools_cloud_docker=samtools_cloud_docker
         }
     }
 
@@ -143,7 +164,7 @@ workflow CrossValidateGqRecalibrator {
             input:
                 vcf=train_vcf_,
                 vcf_index=train_vcf_index_,
-                wanted_properties=["svtype", "svlen", "gt"],
+                wanted_properties=["svtype", "svlen", "ac", "is_autosome"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }
@@ -172,27 +193,24 @@ workflow CrossValidateGqRecalibrator {
         "property": old_pipeline_score_property,
         "passing_score": old_pipeline_passing_score
     }
-    Array[ScoresDataSet] comparison_scores_ = flatten(
-        [
-            [
-                {
-                    "label": "recalibrated",
-                    "vcf": DirectGqRecalibrator.filtered_vcf,
-                    "vcf_index": DirectGqRecalibrator.filtered_vcf_index,
-                    "property": new_pipeline_score_property,
-                    "passing_score": new_pipeline_passing_score
-                },
-                {
-                    "label": "cross-validated",
-                    "vcf": MergeRecalibratedTestVcfs.merged_vcf,
-                    "vcf_index": MergeRecalibratedTestVcfs.merged_vcf_index,
-                    "property": new_pipeline_score_property,
-                    "passing_score": new_pipeline_passing_score
-                }
-            ],
-            comparison_scores
-        ]
-    )
+
+    Array[ScoresDataSet] scores_0 = [
+        {
+            "label": "recalibrated",
+            "vcf": DirectGqRecalibrator.filtered_vcf,
+            "vcf_index": DirectGqRecalibrator.filtered_vcf_index,
+            "property": new_pipeline_score_property,
+            "passing_score": new_pipeline_passing_score
+        },
+        {
+            "label": "cross-validated",
+            "vcf": MergeRecalibratedTestVcfs.merged_vcf,
+            "vcf_index": MergeRecalibratedTestVcfs.merged_vcf_index,
+            "property": new_pipeline_score_property,
+            "passing_score": new_pipeline_passing_score
+        }
+    ]
+    Array[ScoresDataSet] comparison_scores_ = flatten([scores_0, comparison_scores])
 
     # actually call BenchmarkFilter workflow
     call BenchmarkGqFilter.BenchmarkGqFilter {
@@ -221,7 +239,7 @@ workflow CrossValidateGqRecalibrator {
         File benchmark_figure = BenchmarkGqFilter.benchmark_figure
         File variant_properties = BenchmarkGqFilter.variant_properties
         File pickled_original_scores = BenchmarkGqFilter.pickled_original_scores
-        Array[File] pickled_comparison_scores=BenchmarkGqFilter.pickled_comparison_scores
+        Array[File] pickled_comparison_scores = BenchmarkGqFilter.pickled_comparison_scores
         CrossValidationVcfs cross_validation_vcfs = cross_validation_vcfs_
     }
 }

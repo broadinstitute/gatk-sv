@@ -15,6 +15,13 @@ workflow BenchmarkGqFilter {
         Array[String] benchmark_args = []
         String sv_utils_docker
         String samtools_cloud_docker
+        # Overridable selection of which figures to make, and what order they'll appear in the final PDF. By default
+        # make all of them, but you could pass a subset of this list to make fewer (or change the order).
+        # Note on runtime: most of these plots take about one hour on a large (4151 samples x 437931 records) data set
+        # with original scores, recalibrated, cross-validated, and two additional comparison scores. However, the
+        # hardy-weinberg plot takes about 2.5 hours. All plots run independently via cromwell scatter.
+        Array[String] make_figures = ["precision-recall", "inheritance", "variants-per-sample", "violation-curve",
+                                      "scores-histogram", "hardy-weinberg"]
     }
 
     # extract properties from VCF and pickle them. It allows extraction on a cheaper (lower memory) machine in parallel
@@ -25,7 +32,7 @@ workflow BenchmarkGqFilter {
             input:
                 vcf=original_scores.vcf,
                 vcf_index=original_scores.vcf_index,
-                wanted_properties=["svtype", "svlen", "gt"],
+                wanted_properties=["svtype", "svlen", "ac", "is_autosome"],
                 samtools_cloud_docker=samtools_cloud_docker,
                 sv_utils_docker=sv_utils_docker
         }
@@ -86,21 +93,31 @@ workflow BenchmarkGqFilter {
         "GiB"
     )
 
-    call BenchmarkFilter {
-        input:
+    scatter(make_figure in make_figures) {
+        call BenchmarkFilter {
+            input:
             data_label=data_label,
             variant_properties=pickled_variant_properties_,
             scores_data_sets=scores_data_sets_,
             truth_overlap_info=truth_overlap_info,
             ped_file=ped_file,
+            make_figure=make_figure,
+            benchmark_figure_filename="benchmark-" + make_figure + ".pdf",
             benchmark_args=benchmark_args,
             sv_utils_docker=sv_utils_docker,
             num_entries=GetVcfSize.num_entries,
             pickled_files_size=pickled_files_size
+        }
+    }
+
+    call ConcatBenchmarkPdfs {
+        input:
+            input_pdfs=BenchmarkFilter.benchmark_figure,
+            concat_pdfs_docker=sv_utils_docker
     }
 
     output {
-        File benchmark_figure = BenchmarkFilter.benchmark_figure
+        File benchmark_figure = ConcatBenchmarkPdfs.benchmark_figure
         File variant_properties=pickled_variant_properties_
         File pickled_original_scores=pickled_original_scores_
         Array[File] pickled_comparison_scores=pickled_comparison_scores_
@@ -132,6 +149,8 @@ task BenchmarkFilter {
         Array[PickledScoresDataSet] scores_data_sets
         File truth_overlap_info
         File ped_file
+        String make_figure
+        String benchmark_figure_filename = "quality-benchmark.pdf"
         Array[String] benchmark_args = []
         String sv_utils_docker
         Int num_entries
@@ -139,15 +158,19 @@ task BenchmarkFilter {
     }
 
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
-    Int disk_gb = round(1000 + pickled_files_size)
-
-    Float mem_scale_vcf_entries = "2.5e-8"
-    Float mem_gb_overhead = 2.0
+    Int disk_gb = round(100 + pickled_files_size)
+    Float mem_scale_vcf_entries =
+        if make_figure == "precision-recall" then "2.1e-8" else
+        if make_figure == "inheritance" then "2.7e-8" else
+        if make_figure == "variants-per-sample" then "2.7e-8" else
+        if make_figure == "violation-curve" then "2.5e-8" else
+        if make_figure == "scores-histogram" then "5.3e-8" else
+        if make_figure == "hardy-weinberg" then "5.3e-8" else
+        "5.3e-8"   # this last one should never hit, I just wanted to make all assignments explicit
+    Float mem_gb_overhead = 2.0 + size(truth_overlap_info, "GiB") + size(ped_file, "GiB")
     Float mem_gb = mem_gb_overhead + mem_scale_vcf_entries * num_entries
 
     String scores_data_json = "scores_data.json"
-    String benchmark_figure_filename = "quality-benchmark.pdf"
-    String args_str = if length(benchmark_args) > 0 then "~{sep=' ' benchmark_args}" else ""
 
     runtime {
         docker: sv_utils_docker
@@ -162,7 +185,7 @@ task BenchmarkFilter {
         set -euo pipefail
 
         # transform scores_data_sets into input format expected by benchmark_variant_filter
-        python - <<'____EoF'
+        python - <<'CODE'
 import json
 with open("~{write_json(scores_data_sets)}", 'r') as f_in:
   input_json = json.load(f_in)
@@ -180,7 +203,7 @@ output_json={
 }
 with open("~{scores_data_json}", 'w') as f_out:
   json.dump(output_json, f_out, indent=2)
-____EoF
+CODE
 
         # just for debugging:
         echo "~{scores_data_json}:"
@@ -192,7 +215,38 @@ ____EoF
             --ped-file ~{ped_file} \
             --scores-data-json ~{scores_data_json} \
             --figure-save-file ~{benchmark_figure_filename} \
-            ~{args_str}
+            --make-figure ~{make_figure} \
+            ~{sep=' ' benchmark_args}
+    >>>
+
+    output {
+        File benchmark_figure = benchmark_figure_filename
+    }
+}
+
+task ConcatBenchmarkPdfs {
+    input {
+        Array[File] input_pdfs
+        String concat_pdfs_docker
+        String benchmark_figure_filename = "quality-benchmark.pdf"
+    }
+
+    Float mem_gb = 2.0
+    Int disk_gb = round(100 + 2 * size(input_pdfs, "GiB"))
+
+    runtime {
+        docker: concat_pdfs_docker
+        cpu: 1
+        preemptible: 1
+        max_retries: 1
+        memory: mem_gb + " GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        gs -dBATCH -dNOPAUSE -q -sDEVICE=pdfwrite  -dCompatibilityLevel=1.4 -dPDFSETTINGS=/default -r150 \
+            -sOutputFile="~{benchmark_figure_filename}" \
+            ~{sep=' ' input_pdfs}
     >>>
 
     output {

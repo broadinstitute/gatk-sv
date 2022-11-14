@@ -29,7 +29,6 @@ workflow EvidenceQC {
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
-    Array[File]? delly_vcfs        # Delly VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? wham_vcfs         # Wham VCF
     Array[File]? scramble_vcfs     # Scramble VCF
@@ -104,17 +103,6 @@ workflow EvidenceQC {
   }
 
   if (run_vcf_qc) {
-    if (defined(delly_vcfs) && (length(select_first([delly_vcfs])) > 0)) {
-      call vcfqc.RawVcfQC as RawVcfQC_Delly {
-        input:
-          vcfs = select_first([delly_vcfs]),
-          prefix = batch,
-          caller = "Delly",
-          runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
-      }
-    }
     if (defined(manta_vcfs) && (length(select_first([manta_vcfs])) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
@@ -162,8 +150,6 @@ workflow EvidenceQC {
   }
 
   output {
-    File? delly_qc_low = RawVcfQC_Delly.low
-    File? delly_qc_high = RawVcfQC_Delly.high
     File? manta_qc_low = RawVcfQC_Manta.low
     File? manta_qc_high = RawVcfQC_Manta.high
     File? melt_qc_low = RawVcfQC_Melt.low

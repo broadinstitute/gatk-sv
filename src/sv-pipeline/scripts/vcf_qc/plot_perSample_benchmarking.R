@@ -24,7 +24,7 @@ ovr.cat.cols <- c("#76E349","#4DAC26","#2C750E",
 ###GENERAL HELPER FUNCTIONS
 ###########################
 #Read overlap data for a list of samples
-readMultiSampDat <- function(samples,measurement="sensitivity"){
+readMultiSampDat <- function(samples, measurement="sensitivity"){
   #Iterate over samples
   dat <- lapply(samples,function(ID){
     #Set path
@@ -590,9 +590,11 @@ plotLinesByClass <- function(means,ci_adj,nsamp,xlab=NULL,ylab=NULL,title=NULL,
   #Add legend
   if(legend==T){
     idx.for.legend <- which(apply(means,1,function(vals){any(!is.na(vals))}))
-    legend("bottomleft",bg="white",pch=19,cex=0.7*lab.cex,lwd=2,
-           legend=rownames(means)[idx.for.legend],
-           col=colors[idx.for.legend])
+    if(length(idx.for.legend) > 0){
+      legend("bottomleft",bg="white",pch=19,cex=0.7*lab.cex,lwd=2,
+             legend=rownames(means)[idx.for.legend],
+             col=colors[idx.for.legend])
+    }
   }
   
   #Add cleanup boxes
@@ -858,9 +860,9 @@ masterWrapper <- function(plotDat.all,compset.prefix){
 ###RSCRIPT FUNCTIONALITY
 ########################
 ###Load libraries as needed
-require(optparse)
-require(vioplot)
-require(beeswarm)
+require(optparse, quietly=T)
+require(vioplot, quietly=T)
+require(beeswarm, quietly=T)
 
 ###List of command-line options
 option_list <- list(
@@ -888,11 +890,11 @@ OUTDIR <- args$args[4]
 compset.prefix <- opts$comparisonSetName
 
 # #Dev parameters
-# perSampDir <- "/Users/rlc/Downloads/gnomAD_v2_SV_PCRPLUS_Q4_batch_1.manta_03_filtered_vcf_Werling_2018_WGS_results_merged/"
-# samples.in <- "/Users/rlc/Downloads/gnomAD_v2_SV_PCRPLUS_Q4_batch_1.manta_03_filtered_vcf.shard..analysis_samples.list"
+# perSampDir <- "/Users/collins/scratch/gnomAD-SV_v3.chr19_to_22.v1/"
+# samples.in <- "/Users/collins/scratch/gnomAD-SV_v3.chr19_to_22.v1.chr19.shard.shard_.analysis_samples.list"
 # OUTDIR <- "~/scratch/perSample_benchmarking_plots_test/"
-# svtypes.file <- "~/Desktop/Collins/Talkowski/code/sv-pipeline/ref/vcf_qc_refs/SV_colors.txt"
-# compset.prefix <- "Sanders_2015_array"
+# svtypes.file <- "/Users/collins/Desktop/Collins/Talkowski/NGS/SV_Projects/gnomAD_v3/gnomad-sv-v3-qc//src/sv-pipeline/scripts/vcf_qc/SV_colors.txt"
+# compset.prefix <- "HGSV_Ebert_perSample"
 
 ###Read & process input data
 #Read list of samples
@@ -922,7 +924,7 @@ plotDat.all <- lapply(list("sensitivity","specificity"),function(measurement){
   measurement.lab <- paste(toupper(substr(measurement,1,1)),substr(measurement,2,nchar(measurement)),sep="")
   
   #Reads list of per-sample overlap data
-  dat <- readMultiSampDat(samples,measurement=measurement)
+  dat <- readMultiSampDat(samples, measurement=measurement)
   
   #Get number of samples
   nsamp <- length(dat)

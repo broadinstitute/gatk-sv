@@ -20,5 +20,6 @@
     "--keep-multiallelic true"
   ],
   "RecalibrateGq.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "RecalibrateGq.samtools_cloud_docker": "${workspace.samtools_cloud_docker}",
   "RecalibrateGq.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }}
 }

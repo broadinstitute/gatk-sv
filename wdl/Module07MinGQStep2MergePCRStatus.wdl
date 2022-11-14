@@ -11,7 +11,7 @@
 
 version 1.0
 
-import "MasterVcfQc.wdl" as QC
+import "MainVcfQc.wdl" as QC
 
 
 workflow MinGQStep2MergePcrStatus {
@@ -78,21 +78,12 @@ workflow MinGQStep2MergePcrStatus {
 
 
   # Run QC on filtered VCF
-  call QC.MasterVcfQc as filtered_VCF_QC {
+  call QC.MainVcfQc as filtered_VCF_QC {
     input:
-      vcf=combine_vcfs.vcf,
-      vcf_idx=combine_vcfs.vcf_idx,
       ped_file=trios_famfile,
       prefix="${prefix}",
       sv_per_shard=10000,
       samples_per_shard=100,
-      thousand_genomes_benchmark_calls=thousand_genomes_benchmark_calls,
-      hgsv_benchmark_calls=hgsv_benchmark_calls,
-      asc_benchmark_calls=asc_benchmark_calls,
-      sanders_2015_tarball=sanders_2015_tarball,
-      collins_2017_tarball=collins_2017_tarball,
-      werling_2018_tarball=werling_2018_tarball,
-      contigs=contigs,
       random_seed=random_seed,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,

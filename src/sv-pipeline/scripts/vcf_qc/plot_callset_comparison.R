@@ -115,21 +115,18 @@ categoryBreakdownByClass <- function(dat,norm=F){
                      "Nearby\n(+/- 250bp)","No Overlap")   
   return(mat)
 }
-#Extract best matching AF pairs
+#Extract best-matching AF pairs (after excluding category 3)
 getFreqPairs <- function(dat){
-  freqPairs <- as.data.frame(t(apply(dat[,7:ncol(dat)],1,function(vals){
-    benchmark.AF <- as.numeric(vals[1])
-    callset.AF <- NULL
-    # for(i in c(2,4,3,5,6)){
-    for(i in c(4,2)){
-      if(is.null(callset.AF)){
-        if(!(vals[i]) %in% c("NS","NO_OVR")){
-          callset.AF <- as.numeric(vals[i])
-        }
-      }
-    }
-    if(is.null(callset.AF)){
+  freqPairs <- as.data.frame(t(apply(dat[,7:11],1,function(vals){
+    vals <- as.numeric(vals)
+    benchmark.AF <- vals[1]
+    callset.AFs <- vals[-1]
+    deltas <- abs(callset.AFs - benchmark.AF)
+    if(all(is.na(deltas))){
       callset.AF <- NA
+    }else{
+      best.match.AF <- min(deltas, na.rm=T)
+      callset.AF <- callset.AFs[head(which(deltas == best.match.AF), 1)]
     }
     return(c(benchmark.AF,callset.AF))
   })))
@@ -988,18 +985,6 @@ INFILE <- args$args[1]
 OUTDIR <- args$args[2]
 prefix <- opts$prefix
 carrierFreqs <- opts$carrierFreqs
-
-#Dev parameters
-# INFILE <- "~/scratch/vcf_qc_output_pesr/data/ASC_Werling.SV.overlaps.bed.gz"
-# prefix <- "ASC_Werling"
-# carrierFreqs <- T
-# INFILE <- "~/scratch/vcf_qc_output_rd/data/1000G_Sudmant.SV.overlaps.bed.gz"
-# prefix <- "1000G_Sudmant"
-# carrierFreqs <- F
-# INFILE <- "~/scratch/vcf_qc_output_pesr/data/HGSV_Chaisson.SV.overlaps.bed.gz"
-# prefix <- "HGSV_Chaisson"
-# carrierFreqs <- T
-# OUTDIR <- "~/scratch/callset_comparison_plots/"
 
 ###Prepares I/O files
 #Read & clean data

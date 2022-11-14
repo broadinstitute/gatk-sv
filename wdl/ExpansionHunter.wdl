@@ -23,6 +23,8 @@ workflow ExpansionHunter {
         String sample_id
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
+        Boolean? seeking_analysis_mode
+        Int? thread_count
         File? ped_file
         String expansion_hunter_docker
         String python_docker
@@ -46,8 +48,15 @@ workflow ExpansionHunter {
         reference_fasta_index,
         reference_fasta + ".fai"])
 
+    Int thread_count_ = select_first([thread_count, 2])
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
+    Boolean seeking_analysis_mode_ = select_first([seeking_analysis_mode, true])
+    String analysis_mode =
+        if select_first([seeking_analysis_mode, true]) then
+            "seeking"
+        else
+            "streaming"
 
     scatter (i in range(length(split_variant_catalogs))) {
         call RunExpansionHunter {
@@ -60,6 +69,8 @@ workflow ExpansionHunter {
                 sample_id = sample_id,
                 generate_realigned_bam = generate_realigned_bam_,
                 generate_vcf = generate_vcf_,
+                analysis_mode = analysis_mode,
+                thread_count = thread_count_,
                 ped_file = ped_file,
                 expansion_hunter_docker = expansion_hunter_docker,
                 runtime_override = runtime_eh
@@ -71,8 +82,7 @@ workflow ExpansionHunter {
             vcfs_gz = RunExpansionHunter.vcf_gz,
             variants_tsvs = RunExpansionHunter.variants_tsv,
             alleles_tsvs = RunExpansionHunter.alleles_tsv,
-            overlapping_reads_files = RunExpansionHunter.overlapping_reads,
-            timings = RunExpansionHunter.timing,
+            realigned_bams = RunExpansionHunter.realigned_bam,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
@@ -84,8 +94,8 @@ workflow ExpansionHunter {
         File variants_tsv = ConcatEHOutputs.variants_tsv
         File alleles_tsv = ConcatEHOutputs.alleles_tsv
         File vcf_gz = ConcatEHOutputs.vcf_gz
-        File overlapping_reads = ConcatEHOutputs.overlapping_reads
-        File timing = ConcatEHOutputs.timing
+        File realigned_bam = ConcatEHOutputs.realigned_bam
+        Array[File] jsons_gz = RunExpansionHunter.json_gz
     }
 }
 
@@ -99,6 +109,8 @@ task RunExpansionHunter {
         String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
+        String analysis_mode
+        Int thread_count
         File? ped_file
         String expansion_hunter_docker
         RuntimeAttr? runtime_override
@@ -108,8 +120,8 @@ task RunExpansionHunter {
         File variants_tsv = "${sample_id}_variants.tsv"
         File alleles_tsv = "${sample_id}_alleles.tsv"
         File vcf_gz = "${sample_id}.vcf.gz"
-        File overlapping_reads = "${sample_id}_realigned.bam"
-        File timing = "${sample_id}_timing.tsv"
+        File json_gz = "${sample_id}.json.gz"
+        File realigned_bam = "${sample_id}_realigned.bam"
     }
 
     command <<<
@@ -140,25 +152,27 @@ task RunExpansionHunter {
             --reference $REF \
             --variant-catalog ~{variant_catalog} \
             --output-prefix ~{sample_id} \
-            --cache-mates \
-            --record-timing \
+            --analysis-mode ~{analysis_mode} \
+            --threads ~{thread_count} \
             $sex
 
-        if ~{generate_realigned_bam}; then
+        if [ ~{generate_realigned_bam} = false ]; then
             rm ~{sample_id}_realigned.bam
             touch ~{sample_id}_realigned.bam
         fi
 
         if ~{generate_vcf}; then
+            bgzip ~{sample_id}.vcf
+        else
             rm ~{sample_id}.vcf
             touch ~{sample_id}.vcf.gz
-        else
-            bgzip ~{sample_id}.vcf
         fi
 
         python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
+
+        gzip ~{sample_id}.json
     >>>
 
     RuntimeAttr runtime_default = object {
@@ -167,11 +181,12 @@ task RunExpansionHunter {
         boot_disk_gb: 10,
         preemptible_tries: 3,
         max_retries: 1,
-        disk_gb: 10 + ceil(size([
-            bam_or_cram,
-            bam_or_cram_index,
-            reference_fasta,
-            reference_fasta_index], "GiB"))
+        disk_gb: 10 + (
+            2 * ceil(size([
+                bam_or_cram,
+                bam_or_cram_index,
+                reference_fasta,
+                reference_fasta_index], "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
@@ -179,7 +194,7 @@ task RunExpansionHunter {
         docker: expansion_hunter_docker
         cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " HDD"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb])  + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
         preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
@@ -191,8 +206,7 @@ task ConcatEHOutputs {
         Array[File] vcfs_gz
         Array[File] variants_tsvs
         Array[File] alleles_tsvs
-        Array[File] overlapping_reads_files
-        Array[File] timings
+        Array[File] realigned_bams
         Boolean generate_realigned_bam
         Boolean generate_vcf
         String? output_prefix
@@ -204,8 +218,7 @@ task ConcatEHOutputs {
         File variants_tsv = "${output_prefix}_variants.tsv"
         File alleles_tsv = "${output_prefix}_alleles.tsv"
         File vcf_gz = "${output_prefix}.vcf.gz"
-        File overlapping_reads = "${output_prefix}.bam"
-        File timing = "${output_prefix}_timing.tsv"
+        File realigned_bam = "${output_prefix}.bam"
     }
 
     command <<<
@@ -219,7 +232,7 @@ task ConcatEHOutputs {
         fi
 
         if ~{generate_realigned_bam}; then
-            BAMS="~{write_lines(overlapping_reads_files)}"
+            BAMS="~{write_lines(realigned_bams)}"
             samtools merge ~{output_prefix}.bam -b ${BAMS}
         else
             touch ~{output_prefix}.bam
@@ -236,7 +249,6 @@ task ConcatEHOutputs {
             done < $INPUTS
         }
 
-        merge_tsv "~{write_lines(timings)}" "~{output_prefix}_timing.tsv"
         merge_tsv "~{write_lines(alleles_tsvs)}" "~{output_prefix}_alleles.tsv"
         merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
     >>>
@@ -252,8 +264,7 @@ task ConcatEHOutputs {
                 size(vcfs_gz, "GiB") +
                 size(variants_tsvs, "GiB") +
                 size(alleles_tsvs, "GiB") +
-                size(overlapping_reads_files, "GiB") +
-                size(timings, "GiB")))
+                size(realigned_bams, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
@@ -261,7 +272,7 @@ task ConcatEHOutputs {
         docker: expansion_hunter_docker
         cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
         preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])

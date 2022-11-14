@@ -104,7 +104,6 @@ class ProjectBuilder:
     #   each dependency is either None, or a mapping from each dependency name to the docker ARG it is passed via
     #   currently each image has zero or one dependencies, but multiple dependencies are allowed
     dependencies = {
-        "delly": ImageDependencies("dockerfiles/delly/*"),
         "manta": ImageDependencies("dockerfiles/manta/*"),
         "melt": ImageDependencies("dockerfiles/melt/*"),
         "wham": ImageDependencies("dockerfiles/wham/*"),
@@ -132,7 +131,13 @@ class ProjectBuilder:
         "sv-pipeline": ImageDependencies(
             ("dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*", "src/svqc/*", "src/svtest/*",
              "src/svtk/*", "src/WGD/*"),
-            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"})
+            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
+        "sv-utils-env": ImageDependencies(
+            "dockerfiles/sv-utils-env/*",
+            {"samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-utils": ImageDependencies(("dockerfiles/sv-utils/*", "src/sv_utils/src/*", "src/sv_utils/setup.py"),
+                                      {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-utils-env": "VIRTUAL_ENV_IMAGE"})
     }
     non_public_images = frozenset({'melt'})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})

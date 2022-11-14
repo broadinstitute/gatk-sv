@@ -17,7 +17,8 @@ workflow WGD {
       bincov_matrix = bincov_matrix,
       wgd_scoring_mask = wgd_scoring_mask,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
-      batch = batch
+      batch = batch,
+      runtime_attr_override=runtime_attr_build
   }
 
   call WGDScore {
@@ -25,7 +26,8 @@ workflow WGD {
       wgd_scoring_mask = wgd_scoring_mask,
       WGD_matrix = BuildWGDMatrix.WGD_matrix,
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
-      batch = batch
+      batch = batch,
+      runtime_attr_override=runtime_attr_score
   }
 
   output {
