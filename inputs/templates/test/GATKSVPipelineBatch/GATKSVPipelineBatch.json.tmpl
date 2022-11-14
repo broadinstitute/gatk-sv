@@ -47,7 +47,6 @@
   "GATKSVPipelineBatch.chr_y": {{ reference_resources.chr_y | tojson }},
 
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
-  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.delly_exclude_intervals_file": {{ reference_resources.delly_exclude_intervals_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
@@ -120,7 +119,12 @@
 
   "GATKSVPipelineBatch.MakeCohortVcf.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.empty_file" : {{ reference_resources.empty_file | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.thousand_genomes_benchmark_calls": {{ reference_resources.thousand_genomes_benchmark_calls | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.site_level_comparison_datasets": [
+    {{ reference_resources.ccdg_abel_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.gnomad_v2_collins_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.hgsv_byrska_bishop_site_level_benchmarking_dataset | tojson }},
+    {{ reference_resources.thousand_genomes_site_level_benchmarking_dataset | tojson }}
+  ],
   "GATKSVPipelineBatch.MakeCohortVcf.cytobands": {{ reference_resources.cytobands | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},

@@ -8,7 +8,7 @@ workflow VaPoRVcf {
     String prefix
     String bam_or_cram_file
     String bam_or_cram_index
-    File? vcf_file
+    File vcf_file
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -92,7 +92,7 @@ task RunVaPoR{
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 5,
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 0,
     max_retries: 1
@@ -116,6 +116,7 @@ task RunVaPoR{
     --output-path ~{prefix}.~{contig} \
     --output-file ~{prefix}.~{contig}.vapor \
     --reference ~{ref_fasta} \
+    --PB-supp 0 \
     --pacbio-input ~{bam_or_cram_file}
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
@@ -180,6 +181,7 @@ task RunVaPoRWithCram{
     --sv-input ~{bed} \
     --output-path ~{prefix}.~{contig} \
     --output-file ~{prefix}.~{contig}.vapor \
+    --PB-supp 0 \
     --reference ~{ref_fasta} \
     --pacbio-input ~{contig}.bam
 

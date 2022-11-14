@@ -8,13 +8,11 @@ workflow GatherSampleEvidenceMetrics {
     File? coverage_counts
     File? pesr_disc
     File? pesr_split
-    File? delly_vcf
     File? manta_vcf
     File? melt_vcf
     File? scramble_vcf
     File? wham_vcf
 
-    File? baseline_delly_vcf
     File? baseline_manta_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
@@ -25,8 +23,6 @@ workflow GatherSampleEvidenceMetrics {
     Int min_size = 50
     String sv_pipeline_base_docker
 
-    RuntimeAttr? runtime_attr_delly_std
-    RuntimeAttr? runtime_attr_delly_metrics
     RuntimeAttr? runtime_attr_manta_std
     RuntimeAttr? runtime_attr_manta_metrics
     RuntimeAttr? runtime_attr_melt_std
@@ -39,41 +35,6 @@ workflow GatherSampleEvidenceMetrics {
     RuntimeAttr? runtime_attr_counts_metrics
   }
 
-  if (defined(delly_vcf)) {
-    call tu.StandardizeVCF as Delly_Std {
-      input:
-        vcf = select_first([delly_vcf]),
-        sample_id = sample,
-        caller = "delly",
-        contig_index = contig_index,
-        min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_delly_std
-    }
-    if (defined(baseline_delly_vcf)) {
-      call tu.StandardizeVCF as Delly_Std_Base {
-        input:
-          vcf = select_first([baseline_delly_vcf]),
-          sample_id = sample,
-          caller = "delly",
-          contig_index = contig_index,
-          min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
-          runtime_attr_override = runtime_attr_delly_std
-      }
-    }
-    call tu.VCFMetrics as Delly_Metrics {
-      input:
-        vcf = Delly_Std.out,
-        baseline_vcf = Delly_Std_Base.out,
-        samples = [sample],
-        prefix = "delly_" + sample,
-        types = "DEL,DUP,INS,INV,BND",
-        contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
-        runtime_attr_override = runtime_attr_delly_metrics
-    }
-  }
   if (defined(manta_vcf)) {
     call tu.StandardizeVCF as Manta_Std {
       input:
@@ -221,6 +182,6 @@ workflow GatherSampleEvidenceMetrics {
   }
 
   output {
-    Array[File] sample_metrics_files = select_all([Delly_Metrics.out, Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
+    Array[File] sample_metrics_files = select_all([Manta_Metrics.out, Melt_Metrics.out, Scramble_Metrics.out, Wham_Metrics.out, SRMetrics.out, PEMetrics.out, CountsMetrics.out])
   }
 }

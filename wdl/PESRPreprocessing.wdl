@@ -77,12 +77,7 @@ task StandardizeVCFs {
     do
       vcf=${vcfs[$i]}
       sample_id=${sample_ids[$i]}
-      if [ ~{caller} == "scramble" ]
-      then
-        zcat $vcf > tmp.vcf
-      else
-        svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
-      fi
+      svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
       sample_no=`printf %03d $i`
       bcftools sort tmp.vcf -Oz -o out/std_${sample_no}.~{caller}.${sample_id}.vcf.gz
     done

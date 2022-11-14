@@ -1,24 +1,27 @@
 version 1.0
 
-import "MasterVcfQc.wdl" as vcf_qc
+import "MainVcfQc.wdl" as vcf_qc
 import "Utils.wdl" as util
 
 workflow FilterBatchQc {
   input {
     File? manta_vcf_noOutliers
-    File? delly_vcf_noOutliers
     File? melt_vcf_noOutliers
     File? wham_vcf_noOutliers
     File? depth_vcf_noOutliers
     File? merged_pesr_vcf
+
+    File? manta_vcf_noOutliers_index
+    File? melt_vcf_noOutliers_index
+    File? wham_vcf_noOutliers_index
+    File? depth_vcf_noOutliers_index
+    File? merged_pesr_vcf_index
+
     String batch
     File ped_file
-    Array[File]? thousand_genomes_benchmark_calls
-    Array[File]? hgsv_benchmark_calls
-    Array[File]? asc_benchmark_calls
-    File? sanders_2015_tarball
-    File? collins_2017_tarball
-    File? werling_2018_tarball
+    Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
+    Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
+    File? sample_renaming_tsv # File with mapping to rename sample IDs for compatibility with sample_level_comparison_datasets
 
     File contig_list
     Int? random_seed
@@ -30,46 +33,45 @@ workflow FilterBatchQc {
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
-    RuntimeAttr? runtime_override_thousand_g_benchmark
-    RuntimeAttr? runtime_override_thousand_g_plot
-    RuntimeAttr? runtime_override_asc_benchmark
-    RuntimeAttr? runtime_override_asc_plot
-    RuntimeAttr? runtime_override_custom_external
-    RuntimeAttr? runtime_override_hgsv_benchmark
-    RuntimeAttr? runtime_override_hgsv_plot
+    RuntimeAttr? runtime_override_site_level_benchmark_plot
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
-    RuntimeAttr? runtime_override_sanders_per_sample_plot
-    RuntimeAttr? runtime_override_collins_per_sample_plot
-    RuntimeAttr? runtime_override_werling_per_sample_plot
+    RuntimeAttr? runtime_override_per_sample_benchmark_plot
     RuntimeAttr? runtime_override_sanitize_outputs
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_subset_ped
 
     # overrides for MiniTasks
+    RuntimeAttr? runtime_override_subset_vcf
     RuntimeAttr? runtime_override_merge_vcfwide_stat_shards
     RuntimeAttr? runtime_override_merge_vcf_2_bed
 
-    # overrides for ShardedQcCollection
+    # overrides for CollectQcVcfWide
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_override_collect_sharded_vcf_stats
     RuntimeAttr? runtime_override_svtk_vcf_2_bed
-    RuntimeAttr? runtime_override_split_vcf_to_qc
+    RuntimeAttr? runtime_override_scatter_vcf
     RuntimeAttr? runtime_override_merge_subvcf_stat_shards
-    RuntimeAttr? runtime_override_merge_svtk_vcf_2_bed
+
+    # overrides for CollectSiteLevelBenchmarking
+    RuntimeAttr? runtime_override_site_level_benchmark
+    RuntimeAttr? runtime_override_merge_site_level_benchmark
 
     # overrides for CollectQcPerSample
     RuntimeAttr? runtime_override_collect_vids_per_sample
     RuntimeAttr? runtime_override_split_samples_list
     RuntimeAttr? runtime_override_tar_shard_vid_lists
+    RuntimeAttr? runtime_override_merge_sharded_per_sample_vid_lists
 
-    # overrides for PerSampleExternalBenchmark
+    # overrides for CollectPerSampleBenchmarking
     RuntimeAttr? runtime_override_benchmark_samples
     RuntimeAttr? runtime_override_split_shuffled_list
     RuntimeAttr? runtime_override_merge_and_tar_shard_benchmarks
   }
 
-  Array[String] algorithms = ["manta", "delly", "melt", "wham", "depth", "pesr"]
-  Array[File?] vcfs_array = [manta_vcf_noOutliers, delly_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
+  Array[String] algorithms = ["manta", "melt", "wham", "depth", "pesr"]
+  Array[File?] vcfs_array = [manta_vcf_noOutliers, melt_vcf_noOutliers, wham_vcf_noOutliers, depth_vcf_noOutliers, merged_pesr_vcf]
+  Array[File?] vcf_indexes_array = [manta_vcf_noOutliers_index, melt_vcf_noOutliers_index, wham_vcf_noOutliers_index, depth_vcf_noOutliers_index, merged_pesr_vcf_index]
   Int num_algorithms = length(algorithms)
 
   call util.GetSampleIdsFromVcf {
@@ -91,52 +93,45 @@ workflow FilterBatchQc {
   Int max_gq_ = select_first([max_gq, 999])
 
   scatter (i in range(num_algorithms)) {
-    if (defined(vcfs_array[i])) {
-      call vcf_qc.MasterVcfQc as VcfQc {
+    if (defined(vcfs_array[i]) && defined(vcf_indexes_array[i])) {
+      call vcf_qc.MainVcfQc as VcfQc {
         input:
-          vcf = select_first([vcfs_array[i]]),
+          vcfs = [select_first([vcfs_array[i]])],
           ped_file=SubsetPedFile.ped_subset_file,
           prefix="${batch}.${algorithms[i]}_FilterBatch_filtered_vcf",
-          sv_per_shard=10000,
-          samples_per_shard=100,
-          thousand_genomes_benchmark_calls=thousand_genomes_benchmark_calls,
-          hgsv_benchmark_calls=hgsv_benchmark_calls,
-          asc_benchmark_calls=asc_benchmark_calls,
-          sanders_2015_tarball=sanders_2015_tarball,
-          collins_2017_tarball=collins_2017_tarball,
-          werling_2018_tarball=werling_2018_tarball,
+          sv_per_shard=2500,
+          samples_per_shard=600,
+          site_level_comparison_datasets=site_level_comparison_datasets,
+          sample_level_comparison_datasets=sample_level_comparison_datasets,
+          sample_renaming_tsv=sample_renaming_tsv,
           primary_contigs_fai=contig_list,
           random_seed=random_seed,
           max_gq=max_gq_,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
           sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          runtime_override_subset_vcf=runtime_override_subset_vcf,
+          runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
           runtime_override_plot_qc_vcf_wide=runtime_override_plot_qc_vcf_wide,
-          runtime_override_thousand_g_benchmark=runtime_override_thousand_g_benchmark,
-          runtime_override_thousand_g_plot=runtime_override_thousand_g_plot,
-          runtime_override_asc_benchmark=runtime_override_asc_benchmark,
-          runtime_override_asc_plot=runtime_override_asc_plot,
-          runtime_override_custom_external=runtime_override_custom_external,
-          runtime_override_hgsv_benchmark=runtime_override_hgsv_benchmark,
-          runtime_override_hgsv_plot=runtime_override_hgsv_plot,
+          runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,
+          runtime_override_per_sample_benchmark_plot=runtime_override_per_sample_benchmark_plot,
           runtime_override_plot_qc_per_sample=runtime_override_plot_qc_per_sample,
           runtime_override_plot_qc_per_family=runtime_override_plot_qc_per_family,
-          runtime_override_sanders_per_sample_plot=runtime_override_sanders_per_sample_plot,
-          runtime_override_collins_per_sample_plot=runtime_override_collins_per_sample_plot,
-          runtime_override_werling_per_sample_plot=runtime_override_werling_per_sample_plot,
           runtime_override_sanitize_outputs=runtime_override_sanitize_outputs,
           runtime_override_merge_vcfwide_stat_shards=runtime_override_merge_vcfwide_stat_shards,
           runtime_override_merge_vcf_2_bed=runtime_override_merge_vcf_2_bed,
           runtime_override_collect_sharded_vcf_stats=runtime_override_collect_sharded_vcf_stats,
           runtime_override_svtk_vcf_2_bed=runtime_override_svtk_vcf_2_bed,
-          runtime_override_split_vcf_to_qc=runtime_override_split_vcf_to_qc,
+          runtime_override_scatter_vcf=runtime_override_scatter_vcf,
           runtime_override_merge_subvcf_stat_shards=runtime_override_merge_subvcf_stat_shards,
-          runtime_override_merge_svtk_vcf_2_bed=runtime_override_merge_svtk_vcf_2_bed,
+          runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
+          runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark,
           runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample,
           runtime_override_split_samples_list=runtime_override_split_samples_list,
           runtime_override_tar_shard_vid_lists=runtime_override_tar_shard_vid_lists,
           runtime_override_benchmark_samples=runtime_override_benchmark_samples,
           runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
+          runtime_override_merge_sharded_per_sample_vid_lists=runtime_override_merge_sharded_per_sample_vid_lists,
           runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
       }
     }
@@ -144,11 +139,10 @@ workflow FilterBatchQc {
 
   output {
     File? filtered_manta_vcf_qc = VcfQc.sv_vcf_qc_output[0]
-    File? filtered_delly_vcf_qc = VcfQc.sv_vcf_qc_output[1]
-    File? filtered_melt_vcf_qc = VcfQc.sv_vcf_qc_output[2]
-    File? filtered_wham_vcf_qc = VcfQc.sv_vcf_qc_output[3]
-    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[4]
-    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[5]
+    File? filtered_melt_vcf_qc = VcfQc.sv_vcf_qc_output[1]
+    File? filtered_wham_vcf_qc = VcfQc.sv_vcf_qc_output[2]
+    File? filtered_depth_vcf_qc = VcfQc.sv_vcf_qc_output[3]
+    File? filtered_pesr_vcf_qc = VcfQc.sv_vcf_qc_output[4]
   }
 
 }

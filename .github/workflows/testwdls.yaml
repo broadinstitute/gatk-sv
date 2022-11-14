@@ -1,0 +1,40 @@
+name: Test WDLs
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'wdl/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'wdl/**'
+
+jobs:
+  miniwdl_job:
+    runs-on: ubuntu-22.04
+    name: miniwdl validation
+    strategy:
+      matrix:
+        python-version: ['3.8']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install miniwdl
+
+      - name: Run Tests
+        run: |
+          python scripts/test/miniwdl_validation.py \
+            --imports-dir wdl \
+            wdl/*.wdl

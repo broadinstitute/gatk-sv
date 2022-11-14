@@ -59,7 +59,6 @@ GATKSVPIPELINEPHASE1_MAP = {
         "outputs": {
             "BAF_out": "BAF_files",
             "coverage_counts": "counts",
-            "delly_vcf": "delly_vcfs",
             "manta_vcf": "manta_vcfs",
             "melt_vcf": "melt_vcfs",
             "pesr_disc": "PE_files",
@@ -76,7 +75,6 @@ MODULE00B_MAP = {
         },
         "outputs": {
             "coverage_counts": "counts",
-            "delly_vcf": "delly_vcfs",
             "manta_vcf": "manta_vcfs",
             "melt_vcf": "melt_vcfs",
             "wham_vcf": "wham_vcfs"
@@ -92,7 +90,6 @@ MODULE00C_MAP = {
         "outputs": {
             "BAF_out": "BAF_files",
             "coverage_counts": "counts",
-            "delly_vcf": "delly_vcfs",
             "manta_vcf": "manta_vcfs",
             "melt_vcf": "melt_vcfs",
             "pesr_disc": "PE_files",
@@ -109,7 +106,6 @@ MODULE01_MAP = {
         },
         "outputs": {
             "std_manta_vcf": "manta_vcfs",
-            "std_delly_vcf": "delly_vcfs",
             "std_melt_vcf": "melt_vcfs",
             "std_wham_vcf": "wham_vcfs",
             "merged_dels": "del_bed",
@@ -136,7 +132,6 @@ MODULE02_MAP = {
         "outputs": {
             "depth_vcf": "depth_vcf",
             "manta_vcf": "manta_vcf",
-            "delly_vcf": "delly_vcf",
             "wham_vcf": "wham_vcf",
             "melt_vcf": "melt_vcf"
         }
@@ -152,7 +147,6 @@ MODULE03_MAP = {
         "outputs": {
             "depth_vcf": "depth_vcf",
             "manta_vcf": "manta_vcf",
-            "delly_vcf": "delly_vcf",
             "wham_vcf": "wham_vcf",
             "melt_vcf": "melt_vcf"
         }
@@ -191,17 +185,17 @@ SCRIPT_CONFIGS = {
     "GATKSVPipelinePhase1": ScriptConfig(GATKSVPIPELINEPHASE1_MAP,
                                          sample_ids_keys=(
                                              "Module00a", "inputs", "samples"),
-                                         sample_specific_file_lists=["BAF_files", "PE_files", "SR_files", "counts", "genotyped_segments_vcfs", "manta_vcfs", "delly_vcfs", "melt_vcfs", "wham_vcfs"]),
+                                         sample_specific_file_lists=["BAF_files", "PE_files", "SR_files", "counts", "genotyped_segments_vcfs", "manta_vcfs", "melt_vcfs", "wham_vcfs"]),
     "Module00b": ScriptConfig(MODULE00B_MAP,
                               sample_ids_keys=(
                                   "Module00a", "inputs", "samples"),
-                              sample_specific_file_lists=["counts", "manta_vcfs", "delly_vcfs", "melt_vcfs", "wham_vcfs"]),
+                              sample_specific_file_lists=["counts", "manta_vcfs", "melt_vcfs", "wham_vcfs"]),
     "Module00c": ScriptConfig(MODULE00C_MAP,
-                              sample_specific_file_lists=["BAF_files", "PE_files", "SR_files", "counts", "manta_vcfs", "delly_vcfs", "melt_vcfs", "wham_vcfs"]),
+                              sample_specific_file_lists=["BAF_files", "PE_files", "SR_files", "counts", "manta_vcfs", "melt_vcfs", "wham_vcfs"]),
     "Module01": ScriptConfig(MODULE01_MAP,
                              sample_ids_keys=(
                                  "Module00c", "inputs", "samples"),
-                             sample_specific_file_lists=["manta_vcfs", "delly_vcfs", "melt_vcfs", "wham_vcfs"]),
+                             sample_specific_file_lists=["manta_vcfs", "melt_vcfs", "wham_vcfs"]),
     "Module02": ScriptConfig(MODULE02_MAP,
                              sample_ids_keys=("Module00c", "inputs", "samples")),
     "Module03": ScriptConfig(MODULE03_MAP,
