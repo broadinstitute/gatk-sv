@@ -5,6 +5,7 @@ import "RecalibrateGq.wdl" as RecalibrateGq
 import "BenchmarkGqFilter.wdl" as BenchmarkGqFilter
 import "PickleVcfProperties.wdl" as PickleVcfProperties
 import "Utils.wdl" as Utils
+import "Structs.wdl"
 
 workflow CrossValidateGqRecalibrator {
     input {
@@ -46,6 +47,8 @@ workflow CrossValidateGqRecalibrator {
         File? pre_computed_pickled_variant_properties
         File? pre_computed_pickled_original_scores
         CrossValidationVcfs? pre_computed_cross_validation_vcfs
+
+        RuntimeAttr? runtime_attr_make_cv_vcfs
     }
 
     if(standardize_vcf) {
@@ -117,7 +120,8 @@ workflow CrossValidateGqRecalibrator {
                 truth_json=truth_json,
                 vapor_sample_ids=if defined(vapor_files) then select_first([vapor_sample_ids]) else [],
                 num_splits=num_splits,
-                sv_utils_docker=sv_utils_docker
+                sv_utils_docker=sv_utils_docker,
+                runtime_attr_override=runtime_attr_make_cv_vcfs
         }
     }
     CrossValidationVcfs cross_validation_vcfs_ = select_first([MakeCrossValidationVcfs.cross_validation_vcfs,
@@ -272,6 +276,7 @@ task MakeCrossValidationVcfs {
         File? truth_json
         Int num_splits = 5
         String sv_utils_docker
+        RuntimeAttr? runtime_attr_override
     }
 
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
@@ -283,13 +288,24 @@ task MakeCrossValidationVcfs {
     Int disk_gb = 1000 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
     Float mem_gb = 2.0
 
+    RuntimeAttr default_attr = object {
+      cpu_cores: 1,
+      mem_gb: mem_gb,
+      disk_gb: disk_gb,
+      boot_disk_gb: 10,
+      preemptible_tries: 3,
+      max_retries: 1
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
     runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
         docker: sv_utils_docker
-        cpu: 1
-        preemptible: 3
-        max_retries: 1
-        memory: mem_gb + " GiB"
-        disks: "local-disk " + disk_gb + " HDD"
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 
     command <<<
