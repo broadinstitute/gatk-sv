@@ -63,6 +63,31 @@ def false(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
     return numpy.zeros(size, dtype=bool)
 
 
+def elapsed_time(delta_t: float) -> str:
+    """
+    Given time interval in seconds, return time interval as human-readable string
+    Args:
+        delta_t: float
+            interval in seconds
+    Returns:
+        t_str: str
+            human-readable string describing interval
+    """
+    m, s = divmod(delta_t, 60.0)
+    t_str = '%.3fs' % s
+    if m <= 0:
+        return t_str
+    h, m = divmod(m, 60)
+    t_str = '%dm ' % m + t_str
+    if h <= 0:
+        return t_str
+    d, h = divmod(h, 24)
+    t_str = '%dh ' % h + t_str
+    if d > 0:
+        t_str = '%dd ' % d + t_str
+    return t_str
+
+
 class PeekableIter(Generic[TypeT]):
     """
     Iterator that can be "copied" (with .peek) to allow peeking ahead while allowing subsequent iteration over all the

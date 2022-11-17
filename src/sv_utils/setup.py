@@ -20,7 +20,9 @@ setup(
     entry_points={
         "console_scripts": [
             "sv-utils=sv_utils.command_line:main",
-            "sv_utils=sv_utils.command_line:main"
+            "sv_utils=sv_utils.command_line:main",
+            "gq-recalibrator=sv_utils.command_line:main",
+            "gq_recalibrator=sv_utils.command_line:main"
         ]
     },
     python_requires=">3.8",
