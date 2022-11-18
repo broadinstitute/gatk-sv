@@ -5,11 +5,15 @@ import numpy
 import pandas
 import pandas.core.arrays
 import torch
+from collections import defaultdict
 from typing import Optional, Union
+from collections.abc import KeysView
 from gq_recalibrator import tarred_properties_to_parquet
+from sv_utils import get_truth_overlap, benchmark_variant_filter
 
 
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
+ConfidentVariants = get_truth_overlap.ConfidentVariants
 
 
 class Keys:
@@ -342,14 +346,18 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
 
 
 class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
-    __slots__ = ("validation_proportion", "_validation_end", "_validation_buffer_index",
-                 "_training_batch", "_validation_batch", "_validation_tensor", "_validation_weights_tensor",
-                 "_validation_ids_array")
+    __slots__ = (
+        "validation_proportion", "_validation_end", "_validation_buffer_index", "_training_batch", "_validation_batch",
+        "_validation_tensor", "_validation_weights_tensor", "_validation_ids_array", "_genotype_is_good_dict",
+        "_genotype_is_bad_dict", "_genotype_is_good_train_tensor", "_genotype_is_bad_train_tensor",
+        "_genotype_is_good_valid_tensor", "_genotype_is_bad_valid_tensor", "_trainable_variant_ids"
+    )
 
     def __init__(
             self,
             parquet_path: str,
             properties_scaling_json: str,
+            truth_json: str,
             executor: concurrent.futures.Executor,
             variants_per_batch: int,
             torch_device: str,
@@ -375,6 +383,46 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         self._validation_tensor = numpy.empty(self._numpy_tensor.shape, self._numpy_tensor.dtype)
         self._validation_weights_tensor = numpy.empty(self._weights_tensor.shape, self._weights_tensor.dtype)
         self._validation_ids_array = self._ids_array.copy()
+        self._genotype_is_good_dict, self._genotype_is_bad_dict = self._reorganize_confident_variants(
+            benchmark_variant_filter.TruthData.load_confident_variants(truth_json)
+        )
+        self._trainable_variant_ids = frozenset(
+            self._genotype_is_good_dict.keys()
+        ).union(self._genotype_is_bad_dict.keys())
+        self._genotype_is_good_train_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
+                                                          dtype=numpy.float32)
+        self._genotype_is_bad_train_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
+                                                         dtype=numpy.float32)
+        self._genotype_is_good_valid_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
+                                                          dtype=numpy.float32)
+        self._genotype_is_bad_valid_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
+                                                         dtype=numpy.float32)
+
+    def _reorganize_confident_variants(
+            self,
+            confident_variants: ConfidentVariants
+    ) -> tuple[dict[str, numpy.ndarray], dict[str, numpy.ndarray]]:
+        genotype_is_good = defaultdict(list)
+        genotype_is_bad = defaultdict(list)
+        sample_index_map = {sample_id: index for index, sample_id in enumerate(self.sample_ids)}
+        for sample_id, sample_confident_variants in confident_variants.items():
+            sample_index = sample_index_map[sample_id]
+            for variant_id in sample_confident_variants.good_variant_ids:
+                genotype_is_good[variant_id].append(sample_index)
+            for variant_id in sample_confident_variants.bad_variant_ids:
+                genotype_is_bad[variant_id].append(sample_index)
+
+        int_dtype = numpy.min_scalar_type(self.num_samples)
+        genotype_is_good = {
+            variant_id: numpy.array(sample_indices, dtype=int_dtype)
+            for variant_id, sample_indices in genotype_is_good.items()
+        }
+        genotype_is_bad = {
+            variant_id: numpy.array(sample_indices, dtype=int_dtype)
+            for variant_id, sample_indices in genotype_is_bad.items()
+        }
+
+        return genotype_is_good, genotype_is_bad
 
     def __iter__(self):
         if self._buffer_future is None:
@@ -385,6 +433,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             self._buffer_future = self.executor.submit(
                 self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
                 wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
+                trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
                 validation_proportion=self.validation_proportion
             )
         return self
@@ -401,18 +450,12 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         self._buffer_future = self.executor.submit(
             self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
             wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
-            validation_proportion=self.validation_proportion,
-            remainder_buffer=self._buffer_matrix[-remainder_rows:, :],
+            trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
+            validation_proportion=self.validation_proportion, remainder_buffer=self._buffer_matrix[-remainder_rows:, :],
             validation_remainder_buffer=self._buffer_matrix[
                                             self._validation_end - remainder_validation_rows:self._validation_end, :
                                         ]
         )
-
-    @staticmethod
-    def phred_to_p(phred_matrix: numpy.ndarray) -> numpy.ndarray:
-        phred_coef = numpy.log(10.0) / 10.0
-        return 1.0 - 0.5 * numpy.exp(phred_coef * (1.0 - phred_matrix))
-
 
     @staticmethod
     def _parquet_file_to_df_buffer(
@@ -420,10 +463,17 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             wanted_columns: list[str],
             random_state: Optional[numpy.random.RandomState],
             validation_proportion: float,
+            trainable_variant_ids: set[str],
+            variant_id_column: int,
             remainder_buffer: Optional[numpy.ndarray] = None,
-            validation_remainder_buffer: Optional[numpy.ndarray] = None
+            validation_remainder_buffer: Optional[numpy.ndarray] = None,
     ) -> (numpy.ndarray, Optional[numpy.random.RandomState], int):
         buffer = pandas.read_parquet(parquet_file, columns=wanted_columns).values
+        # only take the trainable variants
+        buffer = buffer.compress(
+            [variant_id in trainable_variant_ids for variant_id in buffer.take(variant_id_column, axis=1)],
+            axis=0
+        )
         # split new buffer up so that the first section is for validation
         validation_index = round(buffer.shape[0] * validation_proportion)
         if remainder_buffer is None:
@@ -484,6 +534,11 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             variant_ids_column=self._variant_id_column, variant_weights_column=self._variant_weights_column,
             variant_columns=self._variant_columns, format_columns=self._format_columns, num_samples=self.num_samples
         )
+        VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_good_dict,
+                                                       self._genotype_is_good_train_tensor)
+        VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_bad_dict,
+                                                       self._genotype_is_bad_train_tensor)
+
         self._training_batch += 1
         self._buffer_index = next_buffer_index
         self._current_row += self.variants_per_batch
@@ -503,6 +558,11 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                     variant_columns=self._variant_columns, format_columns=self._format_columns,
                     num_samples=self.num_samples
                 )
+            VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_good_dict,
+                                                           self._genotype_is_good_valid_tensor)
+            VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_bad_dict,
+                                                           self._genotype_is_bad_valid_tensor)
+
             self._validation_batch += 1
             self._current_row += self.variants_per_batch
             self._validation_buffer_index = next_validation_buffer_index
@@ -512,7 +572,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                     - self._tensor_baseline
                 ),
                 torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
-                self._ids_array,
+                torch.tensor(self._genotype_is_good_train_tensor, dtype=torch.float32, device=self.torch_device),
+                torch.tensor(self._genotype_is_bad_train_tensor, dtype=torch.float32, device=self.torch_device),
                 self._tensor_scale * (
                         torch.tensor(self._validation_tensor, dtype=torch.float32, device=self.torch_device)
                         - self._tensor_baseline
@@ -533,6 +594,16 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 None,
                 None
             )
+
+    @staticmethod
+    def _fill_truth_tensor(
+            variant_ids: numpy.ndarray,
+            variant_id_trainable_map: dict[str, numpy.ndarray],
+            truth_tensor: numpy.ndarray
+    ):
+        truth_tensor[:] = 0.0
+        for row, variant_id in enumerate(variant_ids):
+            truth_tensor[row, :].put(variant_id_trainable_map.get(variant_id), 1)
 
     def __len__(self) -> int:
         # report the number of training batches in the iterator
