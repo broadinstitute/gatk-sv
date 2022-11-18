@@ -95,7 +95,10 @@ def create_header(header_in: pysam.VariantHeader,
         header.add_sample(sample)
     for line in header_in.records:
         # remove fields
-        if len(line.attrs) > 0 and 'ID' in line.keys() and (line['ID'] in remove_infos or line['ID'] in remove_formats):
+        if len(line.attrs) > 0 and 'ID' in line.keys() and \
+                (line['ID'] in remove_infos
+                 or line['ID'] in remove_formats
+                 or (replace_ev_format and line['ID'] == 'EV')):
             continue
         line_str = str(line)
         # remove source line
