@@ -237,7 +237,7 @@ def main():
     parser.add_argument("Wham-QC-outlier-low-filename", help="...")
     parser.add_argument("--melt-insert-size-file", nargs=1)
     args = parser.parse_args()
-    prefix = args.prefix_test
+    # prefix = args.prefix_test
     merge_evidence_qc_table(args.ploidy_test_filename, args.medianCov_transposed_filename, args.WGD_scores_filename,
                             args.binwise_CNV_qValues_filename, args.Manta_QC_outlier_high_filename,
                             args.Melt_QC_outlier_high_filename,
