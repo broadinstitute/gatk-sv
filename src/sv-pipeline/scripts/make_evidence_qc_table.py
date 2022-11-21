@@ -181,7 +181,7 @@ def merge_evidence_qc_table(filename_estimated_cn: str, filename_medianCov: str,
                             filename_cnv_qvalues: str,
                             filename_high_manta: str, filename_high_melt: str, filename_high_wham: str,
                             filename_low_manta: str,
-                            filename_low_melt: str, filename_low_wham: str) -> pd.DataFrame:
+                            filename_low_melt: str, filename_low_wham: str) -> str:
     """
     input:  The required files for all the functions in the following format in a tab separated order in a tsv format
         filename_estimated_cn,filename_medianCov,filename_wgd,filename_cnv_qvalues,
@@ -211,14 +211,6 @@ def merge_evidence_qc_table(filename_estimated_cn: str, filename_medianCov: str,
 
     # save the file
     return output_df.to_csv('evidence_qc_table.tsv', sep="\t", header=True, index=False)
-    # args.predfix + _table.tsv
-
-
-merge_evidence_qc_table('estimated_copy_numbers.txt', 'bwr_medianCov.transposed.bed', 'bwr_WGD_scores.txt',
-                        'binwise_CNV_qValues.bed', 'bwr.Manta.QC.outlier.high', 'bwr.Melt.QC.outlier.high',
-                        'bwr.Wham.QC.outlier.high', 'bwr.Manta.QC.outlier.low', 'bwr.Melt.QC.outlier.low',
-                        'bwr.Wham.QC.outlier.low')
-
 
 ###########################################################################
 
