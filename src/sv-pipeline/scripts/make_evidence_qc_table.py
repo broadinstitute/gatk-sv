@@ -90,9 +90,7 @@ def read_manta_outlier(filename: str) -> pd.DataFrame:
     if df_manta['Outlier_Sample'].empty:
         df_manta['#ID'] = df_manta.apply(lambda _: ' ', axis=0)
         outlier_manta_sample = df_manta.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
-        #status = 'DataFrame is empty'
     else:
-        #status = 'DataFrame is not empty'
         df_manta['#ID'] = df_manta['Outlier_Sample'].str.split('/', expand=True)[10].str.split('.', expand=True)[0]
         outlier_manta_sample = df_manta.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
     outlier_manta_df = outlier_manta_sample.reset_index()
@@ -111,9 +109,7 @@ def read_melt_outlier(filename: str) -> pd.DataFrame:
     if df_melt['Outlier_Sample'].empty:
         df_melt['#ID'] = df_melt.apply(lambda _: ' ', axis=0)
         outlier_melt_sample = df_melt.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
-        #status = 'DataFrame is empty'
     else:
-        #status = 'DataFrame is not empty'
         df_melt['#ID'] = df_melt['Outlier_Sample'].str.split('/', expand=True)[10].str.split('.', expand=True)[0]
         outlier_melt_sample = df_melt.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
     outlier_melt_df = outlier_melt_sample.reset_index()
@@ -132,9 +128,7 @@ def read_wham_outlier(filename: str) -> pd.DataFrame:
     if df_wham['Outlier_Sample'].empty:
         df_wham['#ID'] = df_wham.apply(lambda _: ' ', axis=0)
         outlier_wham_sample = df_wham.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
-        #status = 'DataFrame is empty'
     else:
-        #status = 'DataFrame is not empty'
         df_wham['#ID'] = df_wham['Outlier_Sample'].str.split('/', expand=True)[11].str.split('.', expand=True)[0]
         outlier_wham_sample = df_wham.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
     outlier_wham_df = outlier_wham_sample.reset_index()
