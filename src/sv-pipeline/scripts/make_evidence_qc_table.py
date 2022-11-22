@@ -114,7 +114,7 @@ def read_melt_outlier(filename: str) -> pd.DataFrame:
         outlier_melt_sample = df_melt.pivot_table(columns=['#ID'], aggfunc='size').astype(int)
     outlier_melt_df = outlier_melt_sample.reset_index()
     outlier_melt_df.columns = ['#ID', str(outlier_melt) + '_outlier']
-    return outlier_melt_df 
+    return outlier_melt_df
 
 
 # Wham:
