@@ -6,7 +6,6 @@ This script creates a single table of sample QC & batching metrics from Evidence
 import argparse
 import pandas as pd
 from collections import Counter
-import numpy as np
 from numpy import array
 from functools import reduce
 
