@@ -6,9 +6,8 @@ import pandas
 import pandas.core.arrays
 import torch
 from collections import defaultdict
-from typing import Optional, Union
-from collections.abc import KeysView
-from gq_recalibrator import tarred_properties_to_parquet
+from typing import Optional, Union, Any
+from gq_recalibrator import tarred_properties_to_parquet, training_utils
 from sv_utils import get_truth_overlap, benchmark_variant_filter
 
 
@@ -25,6 +24,7 @@ class Keys:
     negative_value = tarred_properties_to_parquet.Keys.negative_value
     baseline = tarred_properties_to_parquet.Keys.baseline
     scale = tarred_properties_to_parquet.Keys.scale
+    gq = benchmark_variant_filter.Keys.gq
 
 
 class Default:
@@ -38,8 +38,18 @@ class Default:
     validation_proportion = 0.2
 
 
-def get_torch_device(device_name: str) -> torch.device:
-    return torch.device("cuda:0" if device_name == Keys.cuda and torch.cuda.is_available() else "cpu")
+def get_torch_device(device_name: str, progress_logger: training_utils.ProgressLogger) -> torch.device:
+    if device_name == Keys.cuda:
+        if torch.cuda.is_available():
+            progress_logger.log("Using cuda for torch")
+            torch.cuda.empty_cache()
+            return torch.device("cuda:0")
+        else:
+            progress_logger.log("Cuda not available, falling back to cpu for torch")
+            return torch.device("cpu")
+    else:
+        progress_logger.log("Using cpu for torch")
+        return torch.device("cpu")
 
 
 class VcfTensorDataLoaderBase:
@@ -50,10 +60,11 @@ class VcfTensorDataLoaderBase:
     Source: https://discuss.pytorch.org/t/dataloader-much-slower-than-manual-batching/27014/6
     """
     __slots__ = (
-        "parquet_path", "variants_per_batch", "torch_device", "shuffle", "random_state",
-        "_current_parquet_file", "executor", "_wanted_columns", "_parquet_files", "_buffer_index", "_buffer_matrix",
-        "_num_rows", "_current_row", "_variant_weights_column", "_variant_id_column", "_variant_columns",
-        "_format_columns", "_sample_ids", "_num_properties", "_buffer_future", "_numpy_tensor", "_weights_tensor",
+        "parquet_path", "variants_per_batch", "torch_device", "progress_logger", "shuffle", "random_state",
+        "_current_parquet_file", "process_executor", "thread_executor", "_wanted_columns", "_parquet_files",
+        "_buffer_index", "_buffer_matrix",
+        "_num_rows", "_current_row", "_columns", "_variant_weights_column", "_variant_id_column", "_variant_columns",
+        "_format_columns", "_sample_ids", "_property_names", "_buffer_future", "_numpy_tensor", "_weights_tensor",
         "_ids_array", "_tensor_baseline", "_tensor_scale", "_training_rows", "_validation_rows"
     )
 
@@ -61,9 +72,11 @@ class VcfTensorDataLoaderBase:
             self,
             parquet_path: str,
             properties_scaling_json: str,
-            executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.Executor,
+            thread_executor: concurrent.futures.Executor,
             variants_per_batch: int,
             torch_device: str,
+            progress_logger: training_utils.ProgressLogger,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
@@ -71,9 +84,11 @@ class VcfTensorDataLoaderBase:
     ):
         self.parquet_path = tarred_properties_to_parquet.extract_tar_to_folder(parquet_path) \
             if parquet_path.endswith(".tar") else parquet_path
-        self.executor = executor
+        self.process_executor = process_executor
+        self.thread_executor = thread_executor
         self.variants_per_batch = variants_per_batch
-        self.torch_device = get_torch_device(torch_device)
+        self.progress_logger = progress_logger
+        self.torch_device = get_torch_device(torch_device, self.progress_logger)
         self.shuffle = shuffle
         self.random_state = random_state if isinstance(random_state, numpy.random.RandomState) \
             else numpy.random.RandomState(random_state)
@@ -81,10 +96,8 @@ class VcfTensorDataLoaderBase:
             excluded_properties=excluded_properties, properties_scaling_json=properties_scaling_json,
             scale_bool_values=scale_bool_values
         )
-        num_format_properties = len(self._format_columns) // self.num_samples
         self._numpy_tensor = numpy.empty(
-            (self.variants_per_batch, self.num_samples, len(self._variant_columns) + num_format_properties),
-            dtype=numpy.float32
+            (self.variants_per_batch, self.num_samples, self.num_properties), dtype=numpy.float32
         )
         if Keys.variant_weights not in excluded_properties:
             self._weights_tensor = numpy.empty(self.variants_per_batch, dtype=numpy.float32)
@@ -113,52 +126,50 @@ class VcfTensorDataLoaderBase:
             properties_scaling = json.load(f_in)
 
         raw_columns = tarred_properties_to_parquet.get_parquet_file_columns(self.parquet_path)
-        unflat_columns = [
+        self._columns = [
             raw_column if raw_column == "row" else tarred_properties_to_parquet.unflatten_column_name(raw_column)
             for raw_column in raw_columns
         ]
-        self._wanted_columns, unflat_columns = zip(*(
-            (raw_column, unflat_column) for raw_column, unflat_column in zip(raw_columns, unflat_columns)
+        self._wanted_columns, self._columns = zip(*(
+            (raw_column, unflat_column) for raw_column, unflat_column in zip(raw_columns, self._columns)
             if unflat_column[1] not in excluded_properties
         ))
         # remove "row", as it will be an index
-        unflat_columns = [column for column in unflat_columns if not isinstance(column, str)]
+        self._columns = [column for column in self._columns if not isinstance(column, str)]
         if Keys.variant_weights not in excluded_properties:
             self._variant_weights_column = next(
-                index for index, column in enumerate(unflat_columns) if column[1] == Keys.variant_weights
+                index for index, column in enumerate(self._columns) if column[1] == Keys.variant_weights
             )
         self._variant_id_column = next(
-            index for index, column in enumerate(unflat_columns) if column[1] == Keys.id
+            index for index, column in enumerate(self._columns) if column[1] == Keys.id
         )
-        print(f"variant_id_column: {self._variant_id_column}")
         # get the DataFrame columns that correspond to per-variant / INFO columns
         self._variant_columns = numpy.array(
-            [index for index, column in enumerate(unflat_columns)
+            [index for index, column in enumerate(self._columns)
              if not isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training]
         )
-        print(f"variant_columns: {self._variant_columns}")
         # get the DataFrame columns that correspond to per-sample / FORMAT columns
         self._format_columns = numpy.array(
-            [index for index, column in enumerate(unflat_columns)
+            [index for index, column in enumerate(self._columns)
              if isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training]
         )
         # get baseline and scale for final tensor
-        properties_tensor_order = [
-            column[1] for column in unflat_columns
+        self._property_names = [
+            column[1] for column in self._columns
             if not isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training
         ]
         found_properties = set()
         found_sample_ids = set()
         self._sample_ids = []
-        for sample_id, prop_name in unflat_columns:
+        for sample_id, prop_name in self._columns:
             if prop_name in Default.non_ml_needed_for_training or not isinstance(sample_id, str):
                 continue
             if sample_id not in found_sample_ids:
+                found_sample_ids.add(sample_id)
                 self._sample_ids.append(sample_id)
             if prop_name not in found_properties:
                 found_properties.add(prop_name)
-                properties_tensor_order.append(prop_name)
-        print(f"properties_tensor_order: {properties_tensor_order}")
+                self._property_names.append(prop_name)
 
         def _get_baseline(_prop_name) -> float:
             if scale_bool_values or Keys.positive_value not in properties_scaling[_prop_name]:
@@ -172,14 +183,12 @@ class VcfTensorDataLoaderBase:
             else:
                 return 1.0
 
-        self._num_properties = len(properties_tensor_order)
-
         self._tensor_baseline = torch.tensor(
-            [_get_baseline(prop_name) for prop_name in properties_tensor_order],
+            [_get_baseline(prop_name) for prop_name in self._property_names],
             dtype=torch.float32, device=self.torch_device
         )
         self._tensor_scale = torch.tensor(
-            [1.0 / _get_scale(prop_name) for prop_name in properties_tensor_order],
+            [1.0 / _get_scale(prop_name) for prop_name in self._property_names],
             dtype=torch.float32, device=self.torch_device
         )
 
@@ -237,8 +246,12 @@ class VcfTensorDataLoaderBase:
         return self._sample_ids
 
     @property
+    def property_names(self) -> list[str]:
+        return self._property_names
+
+    @property
     def num_properties(self) -> int:
-        return self._num_properties
+        return len(self.property_names)
 
     def __len__(self) -> int:
         # report the number of remaining batches in the iterator
@@ -251,9 +264,11 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             self,
             parquet_path: str,
             properties_scaling_json: str,
-            executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.Executor,
+            thread_executor: concurrent.futures.Executor,
             variants_per_batch: int,
             torch_device: str,
+            progress_logger: training_utils.ProgressLogger,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
@@ -262,9 +277,10 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         # basically it's the VcfTensorDataLoaderBase with variant weights property excluded and explicitly no
         # validation
         super().__init__(
-            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json, executor=executor,
-            variants_per_batch=variants_per_batch, torch_device=torch_device, shuffle=shuffle,
-            scale_bool_values=scale_bool_values, random_state=random_state,
+            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
+            process_executor=process_executor, thread_executor=thread_executor,
+            variants_per_batch=variants_per_batch, torch_device=torch_device, progress_logger=progress_logger,
+            shuffle=shuffle, scale_bool_values=scale_bool_values, random_state=random_state,
             excluded_properties=excluded_properties.union((Keys.variant_weights,))
         )
 
@@ -273,15 +289,16 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             # only executes on first iteration, so there's no remainder rows
             if not self._parquet_files:
                 self._set_parquet_files()
-            self._current_parquet_file = self._parquet_files.pop()
-            self._buffer_future = self.executor.submit(
-                self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
+            if self._current_parquet_file is None:
+                self._current_parquet_file = self._parquet_files.pop()
+            self._buffer_future = self.process_executor.submit(
+                VcfFilterTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
                 wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None
             )
         return self
 
     @staticmethod
-    def _parquet_file_to_df_buffer(
+    def _parquet_file_to_buffer(
             parquet_file: str,
             wanted_columns: list[str],
             random_state: Optional[numpy.random.RandomState],
@@ -338,8 +355,8 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             self._set_parquet_files()
         self._current_parquet_file = self._parquet_files.pop()
         remainder_rows = divmod(self._buffer_matrix.shape[0], self.variants_per_batch)[1]
-        self._buffer_future = self.executor.submit(
-            self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
+        self._buffer_future = self.process_executor.submit(
+            VcfFilterTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
             wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
             remainder_buffer=self._buffer_matrix[-remainder_rows:, :]
         )
@@ -348,9 +365,12 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
 class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     __slots__ = (
         "validation_proportion", "_validation_end", "_validation_buffer_index", "_training_batch", "_validation_batch",
-        "_validation_tensor", "_validation_weights_tensor", "_validation_ids_array", "_genotype_is_good_dict",
-        "_genotype_is_bad_dict", "_genotype_is_good_train_tensor", "_genotype_is_bad_train_tensor",
-        "_genotype_is_good_valid_tensor", "_genotype_is_bad_valid_tensor", "_trainable_variant_ids"
+        "_genotype_is_good_dict", "_genotype_is_bad_dict", "_genotype_is_good_tensor", "_genotype_is_bad_tensor",
+        "_trainable_variant_ids", "_gq_columns", "_gq_tensor"
+    )
+    __state_keys__ = (
+        "random_state", "_current_parquet_file", "_parquet_files", "_buffer_index", "_current_row", "_validation_end",
+        "_validation_buffer_index", "_training_batch", "_validation_batch"
     )
 
     def __init__(
@@ -358,9 +378,11 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             parquet_path: str,
             properties_scaling_json: str,
             truth_json: str,
-            executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.Executor,
+            thread_executor: concurrent.futures.Executor,
             variants_per_batch: int,
             torch_device: str,
+            progress_logger: training_utils.ProgressLogger,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
@@ -369,34 +391,33 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     ):
         # basically it's the VcfTensorDataLoaderBase with a train/test split
         super().__init__(
-            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json, executor=executor,
-            variants_per_batch=variants_per_batch, torch_device=torch_device, shuffle=shuffle,
-            scale_bool_values=scale_bool_values, random_state=random_state, excluded_properties=excluded_properties
+            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
+            process_executor=process_executor, thread_executor=thread_executor,
+            variants_per_batch=variants_per_batch, torch_device=torch_device, progress_logger=progress_logger,
+            shuffle=shuffle, scale_bool_values=scale_bool_values, random_state=random_state,
+            excluded_properties=excluded_properties
         )
-        if validation_proportion <= 0 or validation_proportion >= 0.5:
-            raise ValueError("Validation proportion must be in open interval (0, 0.5)")
+        if validation_proportion <= 0 or validation_proportion >= 1:
+            raise ValueError("Validation proportion must be in open interval (0, 1)")
         self.validation_proportion = validation_proportion
         self._validation_end = -1
         self._validation_buffer_index = 0
         self._training_batch = 0
         self._validation_batch = 0
-        self._validation_tensor = numpy.empty(self._numpy_tensor.shape, self._numpy_tensor.dtype)
-        self._validation_weights_tensor = numpy.empty(self._weights_tensor.shape, self._weights_tensor.dtype)
-        self._validation_ids_array = self._ids_array.copy()
         self._genotype_is_good_dict, self._genotype_is_bad_dict = self._reorganize_confident_variants(
             benchmark_variant_filter.TruthData.load_confident_variants(truth_json)
         )
         self._trainable_variant_ids = frozenset(
             self._genotype_is_good_dict.keys()
         ).union(self._genotype_is_bad_dict.keys())
-        self._genotype_is_good_train_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
-                                                          dtype=numpy.float32)
-        self._genotype_is_bad_train_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
-                                                         dtype=numpy.float32)
-        self._genotype_is_good_valid_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
-                                                          dtype=numpy.float32)
-        self._genotype_is_bad_valid_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
-                                                         dtype=numpy.float32)
+        self._genotype_is_good_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
+        self._genotype_is_bad_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
+        # get the DataFrame columns that correspond to per-sample / FORMAT columns
+        self._gq_columns = numpy.array(
+            [index for index, column in enumerate(self._columns)
+             if isinstance(column[0], str) and column[1] == Keys.gq]
+        )
+        self._gq_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
 
     def _reorganize_confident_variants(
             self,
@@ -429,17 +450,37 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             # only executes on first iteration, so there's no remainder rows
             if not self._parquet_files:
                 self._set_parquet_files()
-            self._current_parquet_file = self._parquet_files.pop()
-            self._buffer_future = self.executor.submit(
-                self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
+            if self._current_parquet_file is None:
+                self._current_parquet_file = self._parquet_files.pop()
+            self._buffer_future = self.process_executor.submit(
+                VcfTrainingTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
                 wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
                 trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
                 validation_proportion=self.validation_proportion
             )
+            # self._buffer_future = self.process_executor.submit(
+            #     VcfTrainingTensorDataLoader._load_parquet, parquet_file=self._current_parquet_file,
+            #     wanted_columns=self._wanted_columns
+            # )
         return self
 
     def _load_buffer(self):
         self._buffer_matrix, self.random_state, self._validation_end = self._buffer_future.result()
+
+        # if self._buffer_matrix.shape[0] > 0:
+        #     remainder_rows = divmod(self._buffer_matrix.shape[0] - self._validation_end, self.variants_per_batch)[1]
+        #     remainder_validation_rows = divmod(self._validation_end, self.variants_per_batch)[1]
+        #     remainder_buffer = self._buffer_matrix[-remainder_rows:, :]
+        #     validation_remainder_buffer = self._buffer_matrix[
+        #                                      self._validation_end - remainder_validation_rows:self._validation_end, :
+        #                                  ]
+        # else:
+        #     remainder_buffer, validation_remainder_buffer = None, None
+        # self._buffer_matrix, self.random_state, self._validation_end = VcfTrainingTensorDataLoader._form_next_buffer(
+        #     buffer=self._buffer_future.result(), random_state=self.random_state if self.shuffle else None,
+        #     trainable_variant_ids = self._trainable_variant_ids, variant_id_column=self._variant_id_column,
+        #     validation_proportion=self.validation_proportion, remainder_buffer=None, validation_remainder_buffer=None
+        # )
         self._buffer_index = self._validation_end
         self._validation_buffer_index = 0
         if not self._parquet_files:
@@ -447,8 +488,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         self._current_parquet_file = self._parquet_files.pop()
         remainder_rows = divmod(self._buffer_matrix.shape[0] - self._validation_end, self.variants_per_batch)[1]
         remainder_validation_rows = divmod(self._validation_end, self.variants_per_batch)[1]
-        self._buffer_future = self.executor.submit(
-            self.__class__._parquet_file_to_df_buffer, parquet_file=self._current_parquet_file,
+        self._buffer_future = self.process_executor.submit(
+            VcfTrainingTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
             wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
             trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
             validation_proportion=self.validation_proportion, remainder_buffer=self._buffer_matrix[-remainder_rows:, :],
@@ -456,9 +497,65 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                                             self._validation_end - remainder_validation_rows:self._validation_end, :
                                         ]
         )
+        # self._buffer_future = self.process_executor.submit(
+        #     VcfTrainingTensorDataLoader._load_parquet, parquet_file=self._current_parquet_file,
+        #     wanted_columns=self._wanted_columns
+        # )
 
     @staticmethod
-    def _parquet_file_to_df_buffer(
+    def _load_parquet(
+            parquet_file: str,
+            wanted_columns: list[str],
+    ) -> numpy.ndarray:
+        return pandas.read_parquet(parquet_file, columns=wanted_columns).values
+
+    @staticmethod
+    def _form_next_buffer(
+            buffer: numpy.ndarray,
+            random_state: Optional[numpy.random.RandomState],
+            validation_proportion: float,
+            trainable_variant_ids: frozenset[str],
+            variant_id_column: int,
+            remainder_buffer: Optional[numpy.ndarray] = None,
+            validation_remainder_buffer: Optional[numpy.ndarray] = None,
+    ):
+        # only take the trainable variants
+        buffer = buffer.compress(
+            [variant_id in trainable_variant_ids for variant_id in buffer.take(variant_id_column, axis=1)],
+            axis=0
+        )
+        # split new buffer up so that the first section is for validation
+        validation_index = round(buffer.shape[0] * validation_proportion)
+        if remainder_buffer is None:
+            # no remainder buffers
+            if random_state is not None:
+                # permute indices without mixing validation and training
+                perm_validation = random_state.permutation(validation_index)
+                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
+                buffer = buffer.take(numpy.concatenate((perm_validation, perm_training)), axis=0)
+            return buffer, random_state, validation_index
+        else:
+            # copy in remainder buffers after scrambling
+            if random_state is None:
+                buffer = numpy.concatenate((
+                    validation_remainder_buffer,
+                    buffer[:validation_index, :],
+                    remainder_buffer,
+                    buffer[validation_index:, :]
+                ))
+            else:
+                perm_validation = random_state.permutation(validation_index)
+                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
+                buffer = numpy.concatenate((
+                    validation_remainder_buffer,
+                    buffer.take(perm_validation, axis=0),
+                    remainder_buffer,
+                    buffer.take(perm_training, axis=0)
+                ))
+            return buffer, random_state, validation_remainder_buffer.shape[0] + validation_index
+
+    @staticmethod
+    def _parquet_file_to_buffer(
             parquet_file: str,
             wanted_columns: list[str],
             random_state: Optional[numpy.random.RandomState],
@@ -504,8 +601,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 ))
             return buffer, random_state, validation_remainder_buffer.shape[0] + validation_index
 
-    def __next__(self) -> (torch.Tensor, torch.Tensor, ArrowStringArray,
-                           Optional[torch.Tensor], Optional[torch.Tensor], Optional[ArrowStringArray]):
+    def __next__(self) -> (bool, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
         """
         emit tensors for next batch
         Returns:
@@ -522,78 +618,56 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             # the data set each epoch).  Choose to use uniform batch size and approximate traversal:
             self._current_row -= self._num_rows
             raise StopIteration
-        next_buffer_index = self._buffer_index + self.variants_per_batch
-        if next_buffer_index > self._buffer_matrix.shape[0]:
-            self._load_buffer()
-            next_buffer_index = self._buffer_index + self.variants_per_batch
+
+        is_training_batch = self._training_batch * self.validation_proportion <= \
+            (self._validation_batch + 1) * (1.0 - self.validation_proportion)
 
         num_variant_properties = len(self._variant_columns)
+        if is_training_batch:
+            # next batch to emit is for training
+            buffer_begin = self._buffer_index
+            buffer_end = buffer_begin + self.variants_per_batch
+            if buffer_end > self._buffer_matrix.shape[0]:
+                self._load_buffer()
+                buffer_begin = self._buffer_index
+                buffer_end = buffer_begin + self.variants_per_batch
+            self._buffer_index = buffer_end
+            self._training_batch += 1
+        else:
+            # next batch to emit is for validation
+            buffer_begin = self._validation_buffer_index
+            buffer_end = buffer_begin + self.variants_per_batch
+            if buffer_end > self._buffer_matrix.shape[0]:
+                self._load_buffer()
+                buffer_begin = self._validation_buffer_index
+                buffer_end = buffer_begin + self.variants_per_batch
+            self._validation_buffer_index = buffer_end
+            self._validation_batch += 1
+        self._current_row += self.variants_per_batch
+
         (self._ids_array[:], self._weights_tensor[:], self._numpy_tensor[:, :, :num_variant_properties],
          self._numpy_tensor[:, :, num_variant_properties:]) = VcfTensorDataLoaderBase._get_next_tensor_blocks(
-            buffer_matrix=self._buffer_matrix[self._buffer_index:next_buffer_index, :],
+            buffer_matrix=self._buffer_matrix[buffer_begin:buffer_end, :],
             variant_ids_column=self._variant_id_column, variant_weights_column=self._variant_weights_column,
             variant_columns=self._variant_columns, format_columns=self._format_columns, num_samples=self.num_samples
         )
+        self._gq_tensor[:] = self._buffer_matrix[buffer_begin:buffer_end, :].take(self._gq_columns, axis=1)
         VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_good_dict,
-                                                       self._genotype_is_good_train_tensor)
+                                                       self._genotype_is_good_tensor)
         VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_bad_dict,
-                                                       self._genotype_is_bad_train_tensor)
+                                                       self._genotype_is_bad_tensor)
 
-        self._training_batch += 1
-        self._buffer_index = next_buffer_index
-        self._current_row += self.variants_per_batch
-        if self._training_batch * self.validation_proportion >= \
-                (self._validation_batch + 1) * (1.0 - self.validation_proportion):
-            # time for the next validation batch
-            next_validation_buffer_index = self._validation_buffer_index + self.variants_per_batch
-            if next_validation_buffer_index > self._validation_end:
-                self._load_buffer()
-                next_validation_buffer_index = self._validation_buffer_index + self.variants_per_batch
-            (self._validation_ids_array[:], self._validation_weights_tensor[:],
-             self._validation_tensor[:, :, :num_variant_properties],
-             self._validation_tensor[:, :, num_variant_properties:]) = \
-                VcfTensorDataLoaderBase._get_next_tensor_blocks(
-                    buffer_matrix=self._buffer_matrix[self._validation_buffer_index:next_validation_buffer_index, :],
-                    variant_ids_column=self._variant_id_column, variant_weights_column=self._variant_weights_column,
-                    variant_columns=self._variant_columns, format_columns=self._format_columns,
-                    num_samples=self.num_samples
-                )
-            VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_good_dict,
-                                                           self._genotype_is_good_valid_tensor)
-            VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_bad_dict,
-                                                           self._genotype_is_bad_valid_tensor)
-
-            self._validation_batch += 1
-            self._current_row += self.variants_per_batch
-            self._validation_buffer_index = next_validation_buffer_index
-            return (
-                self._tensor_scale * (
-                    torch.tensor(self._numpy_tensor, dtype=torch.float32, device=self.torch_device)
-                    - self._tensor_baseline
-                ),
-                torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
-                torch.tensor(self._genotype_is_good_train_tensor, dtype=torch.float32, device=self.torch_device),
-                torch.tensor(self._genotype_is_bad_train_tensor, dtype=torch.float32, device=self.torch_device),
-                self._tensor_scale * (
-                        torch.tensor(self._validation_tensor, dtype=torch.float32, device=self.torch_device)
-                        - self._tensor_baseline
-                ),
-                torch.tensor(self._validation_weights_tensor, dtype=torch.float32, device=self.torch_device),
-                self._validation_ids_array
-            )
-        else:
-            # not time for a validation batch
-            return (
-                self._tensor_scale * (
-                    torch.tensor(self._numpy_tensor, dtype=torch.float32, device=self.torch_device)
-                    - self._tensor_baseline
-                ),
-                torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
-                self._ids_array,
-                None,
-                None,
-                None
-            )
+        return (
+            is_training_batch,
+            self._tensor_scale * (
+                torch.tensor(self._numpy_tensor, dtype=torch.float32, device=self.torch_device)
+                - self._tensor_baseline
+            ).nan_to_num(),
+            torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
+            torch.tensor(self._gq_tensor, dtype=torch.float32, device=self.torch_device),
+            torch.tensor(self._genotype_is_good_tensor, dtype=torch.float32, device=self.torch_device),
+            torch.tensor(self._genotype_is_bad_tensor, dtype=torch.float32, device=self.torch_device),
+        )
 
     @staticmethod
     def _fill_truth_tensor(
@@ -603,10 +677,20 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     ):
         truth_tensor[:] = 0.0
         for row, variant_id in enumerate(variant_ids):
-            truth_tensor[row, :].put(variant_id_trainable_map.get(variant_id), 1)
+            truth_indices = variant_id_trainable_map.get(variant_id, None)
+            if truth_indices is not None:
+                truth_tensor[row, :].put(truth_indices, 1.0)
 
     def __len__(self) -> int:
         # report the number of training batches in the iterator
         n_batches, extra_rows = divmod(round((1.0 - self.validation_proportion) * (self._num_rows - self._current_row)),
                                        self.variants_per_batch)
         return n_batches + 1 if extra_rows else n_batches
+
+    @property
+    def state_dict(self) -> dict[str, Any]:
+        return {key: getattr(self, key) for key in VcfTrainingTensorDataLoader.__state_keys__}
+
+    def load_state_dict(self, state_dict: dict[str, Any]):
+        for key in VcfTrainingTensorDataLoader.__state_keys__:
+            setattr(self, key, state_dict.get(key))

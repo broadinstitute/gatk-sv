@@ -1,5 +1,3 @@
-from types import MappingProxyType
-from collections import OrderedDict
 from collections.abc import Mapping
 from typing import Any, Optional
 import torch
@@ -9,9 +7,6 @@ class Default:
     num_hidden_layers = 2
     layer_expansion_factor = 2.0
     bias = True
-    optim = "AdamW"
-    optim_type = torch.optim.AdamW
-    optim_kwargs = MappingProxyType({"weight_decay": 1.0})
     leaky_slope = 0.1
     hidden_nonlinearity = torch.nn.LeakyReLU(negative_slope=leaky_slope) if leaky_slope >= 0 else torch.nn.ReLU()
     output_nonlinearity = torch.nn.Sigmoid()
@@ -19,7 +14,7 @@ class Default:
 
 class GqRecalibratorNet(torch.nn.Module):
     __save_values__ = (
-        "num_input_properties", "num_hidden_layers", "layer_expansion_factor", "bias", "optim_type", "optim_kwargs",
+        "num_input_properties", "num_hidden_layers", "layer_expansion_factor", "bias",
         "hidden_nonlinearity", "output_nonlinearity", "model_state_dict"
     )
 
@@ -29,8 +24,6 @@ class GqRecalibratorNet(torch.nn.Module):
             num_hidden_layers: int = Default.num_hidden_layers,
             layer_expansion_factor: float = Default.layer_expansion_factor,
             bias: bool = Default.bias,
-            optim_type: type = Default.optim_type,
-            optim_kwargs: Mapping[str, Any] = Default.optim_kwargs,
             hidden_nonlinearity: torch.nn.Module = Default.hidden_nonlinearity,
             output_nonlinearity: torch.nn.Module = Default.output_nonlinearity,
             model_state_dict: Optional[dict[str, Any]] = None
@@ -41,8 +34,6 @@ class GqRecalibratorNet(torch.nn.Module):
         self.num_hidden_layers = num_hidden_layers
         self.layer_expansion_factor = layer_expansion_factor
         self.bias = bias
-        self.optim_type = optim_type
-        self.optim_kwargs = {**optim_kwargs}
         self.hidden_nonlinearity = hidden_nonlinearity
         self.output_nonlinearity = output_nonlinearity
 
@@ -87,9 +78,13 @@ class GqRecalibratorNet(torch.nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         for m in self.layers:
             x = m(x)
-        return x
+        return x.squeeze(2)  # remove trivial final dimension
+
+    @property
+    def model_state_dict(self) -> dict[str, Any]:
+        return self.state_dict()
 
     @property
     def save_dict(self) -> dict[str, Any]:
-        return {key: getattr(self, key) for key in self.__class__.__save_values__}
+        return {key: getattr(self, key) for key in GqRecalibratorNet.__save_values__}
 

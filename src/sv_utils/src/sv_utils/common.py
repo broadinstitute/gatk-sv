@@ -63,26 +63,32 @@ def false(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
     return numpy.zeros(size, dtype=bool)
 
 
-def elapsed_time(delta_t: float) -> str:
+def elapsed_time(delta_t: float, seconds_precision: int = 3) -> str:
     """
     Given time interval in seconds, return time interval as human-readable string
     Args:
         delta_t: float
             interval in seconds
+        seconds_precision: int
+            number of digits of precision for seconds
     Returns:
         t_str: str
             human-readable string describing interval
     """
     m, s = divmod(delta_t, 60.0)
-    t_str = '%.3fs' % s
+    t_str = '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, s)
+    # edge-case: s is just less than 60 but rounds up to 60 at requested precision
+    if t_str == '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, 60):
+        t_str = '%*.*fs' % (2 if seconds_precision <= 0 else 3 + seconds_precision, seconds_precision, 0)
+        m += 1
     if m <= 0:
         return t_str
     h, m = divmod(m, 60)
-    t_str = '%dm ' % m + t_str
+    t_str = '%2dm ' % m + t_str
     if h <= 0:
         return t_str
     d, h = divmod(h, 24)
-    t_str = '%dh ' % h + t_str
+    t_str = '%2dh ' % h + t_str
     if d > 0:
         t_str = '%dd ' % d + t_str
     return t_str
