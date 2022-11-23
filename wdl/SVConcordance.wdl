@@ -6,18 +6,15 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 workflow SVConcordance {
   input {
     File eval_vcf
+    Boolean? run_formatter_eval_vcf
+    String? formatter_eval_args
+
     File truth_vcf
-
-    File ploidy_table
-    String cohort
-
-    Boolean? run_svutils_truth_vcf
     Boolean? run_formatter_truth_vcf
     String? formatter_truth_args
 
-    Boolean? run_svutils_eval_vcf
-    Boolean? run_formatter_eval_vcf
-    String? formatter_eval_args
+    File ploidy_table
+    String output_prefix
 
     # For testing
     File? svtk_to_gatk_script
@@ -28,66 +25,45 @@ workflow SVConcordance {
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_utils_docker
 
     Float? java_mem_fraction
 
-    RuntimeAttr? runtime_attr_svutils_truth
-    RuntimeAttr? runtime_attr_format_truth
-    RuntimeAttr? runtime_attr_svutils_eval
     RuntimeAttr? runtime_attr_format_eval
+    RuntimeAttr? runtime_attr_format_truth
     RuntimeAttr? runtime_attr_sv_concordance
     RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_concat_shards
   }
 
-  Boolean run_svutils_truth_vcf_ = select_first([run_svutils_truth_vcf, true])
   Boolean run_formatter_truth_vcf_ = select_first([run_formatter_truth_vcf, true])
+  String formatter_truth_args_ = select_first([formatter_truth_args, "--use-end2"])
 
-  Boolean run_svutils_eval_vcf_ = select_first([run_svutils_eval_vcf, true])
   Boolean run_formatter_eval_vcf_ = select_first([run_formatter_eval_vcf, true])
+  String formatter_eval_args_ = select_first([formatter_eval_args, "--use-end2"])
 
-  if (run_svutils_truth_vcf_) {
-    call SvutilsFixVcf as SvutilsTruth {
+  # Adds ECN fields and fixes BND/CPX/CTX END tags. See script for additional options.
+  if (run_formatter_eval_vcf_) {
+    call PreprocessVcf as FormatEval {
       input:
-        vcf=truth_vcf,
-        output_prefix="~{cohort}.svutils_truth",
-        sv_utils_docker=sv_utils_docker,
-        runtime_attr_override=runtime_attr_svutils_truth
+        vcf=eval_vcf,
+        ploidy_table=ploidy_table,
+        args=formatter_eval_args_,
+        output_prefix="~{output_prefix}.format_eval",
+        script=svtk_to_gatk_script,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_format_eval
     }
   }
   if (run_formatter_truth_vcf_) {
     call PreprocessVcf as FormatTruth {
       input:
-        vcf=select_first([SvutilsTruth.out, truth_vcf]),
+        vcf=truth_vcf,
         ploidy_table=ploidy_table,
-        args=formatter_truth_args,
-        output_prefix="~{cohort}.format_truth",
+        args=formatter_truth_args_,
+        output_prefix="~{output_prefix}.format_truth",
         script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_format_truth
-    }
-  }
-
-  if (run_svutils_eval_vcf_) {
-    call SvutilsFixVcf as SvutilsEval {
-      input:
-        vcf=eval_vcf,
-        output_prefix="~{cohort}.svutils_eval",
-        sv_utils_docker=sv_utils_docker,
-        runtime_attr_override=runtime_attr_svutils_eval
-    }
-  }
-  if (run_formatter_eval_vcf_) {
-    call PreprocessVcf as FormatEval {
-      input:
-        vcf=select_first([SvutilsEval.out, eval_vcf]),
-        ploidy_table=ploidy_table,
-        args=formatter_eval_args,
-        output_prefix="~{cohort}.format_eval",
-        script=svtk_to_gatk_script,
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_format_eval
     }
   }
 
@@ -95,9 +71,9 @@ workflow SVConcordance {
   scatter (contig in contigs) {
     call SVConcordanceTask {
       input:
-        eval_vcf=select_first([FormatEval.out, SvutilsEval.out, eval_vcf]),
-        truth_vcf=select_first([FormatTruth.out, SvutilsTruth.out, truth_vcf]),
-        output_prefix="~{cohort}.concordance.~{contig}",
+        eval_vcf=select_first([FormatEval.out, eval_vcf]),
+        truth_vcf=select_first([FormatTruth.out, truth_vcf]),
+        output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
@@ -111,7 +87,7 @@ workflow SVConcordance {
       vcfs=SVConcordanceTask.out,
       vcfs_idx=SVConcordanceTask.out_index,
       naive=true,
-      outfile_prefix="~{cohort}.concordance",
+      outfile_prefix="~{output_prefix}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_override_concat_shards
   }
@@ -119,47 +95,6 @@ workflow SVConcordance {
   output {
     File concordance_vcf = ConcatVcfs.concat_vcf
     File concordance_vcf_index = ConcatVcfs.concat_vcf_idx
-    File? filtered_eval_records_vcf = FormatEval.filtered
-    File? filtered_eval_records_index =FormatEval.filtered_index
-    File? filtered_truth_records_vcf = FormatTruth.filtered
-    File? filtered_truth_records_index = FormatTruth.filtered_index
-  }
-}
-
-task SvutilsFixVcf {
-  input {
-    File vcf
-    String output_prefix
-    String sv_utils_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 3.75,
-                               disk_gb: ceil(10 + size(vcf, "GB") * 2),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.vcf.gz"
-    File out_index = "~{output_prefix}.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-    sv-utils fix-vcf ~{vcf} ~{output_prefix}.vcf.gz
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_utils_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
@@ -187,8 +122,6 @@ task PreprocessVcf {
   output {
     File out = "~{output_prefix}.vcf.gz"
     File out_index = "~{output_prefix}.vcf.gz.tbi"
-    File filtered = "~{output_prefix}.filtered_records.vcf.gz"
-    File filtered_index = "~{output_prefix}.filtered_records.vcf.gz.tbi"
   }
   command <<<
     set -euo pipefail
@@ -197,7 +130,6 @@ task PreprocessVcf {
     python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
       --vcf ~{vcf} \
       --out tmp.vcf.gz \
-      --filter-out ~{output_prefix}.filtered_records.vcf.gz \
       --ploidy-table ~{ploidy_table} \
       ~{args}
 
@@ -205,7 +137,6 @@ task PreprocessVcf {
     bcftools view --no-version -i 'INFO/SVLEN="." || INFO/SVLEN>0' tmp.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
 
     tabix ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.filtered_records.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -276,7 +207,6 @@ task SVConcordanceTask {
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --force-biallelic-dups \
       ~{additional_args}
   >>>
   runtime {

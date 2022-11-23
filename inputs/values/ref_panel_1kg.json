@@ -1121,6 +1121,7 @@
     "cohort_depth_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GATKSVPipelinePhase1/GATKSVPipelinePhase1/acce2c71-7458-4205-ae13-624f6efc9956/call-FilterBatch/FilterBatch/184defa3-e61c-4757-9962-f685f6d0d204/call-FilterBatchSamples/FilterBatchSamples/b308c32e-d171-4d8d-aeaf-b561c55b06b4/call-ExcludeOutliers/shard-4/cacheCopy/ref_panel_1kg.depth.outliers_removed.vcf.gz",
     "cohort_pesr_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GATKSVPipelinePhase1/GATKSVPipelinePhase1/acce2c71-7458-4205-ae13-624f6efc9956/call-FilterBatch/FilterBatch/184defa3-e61c-4757-9962-f685f6d0d204/call-FilterBatchSamples/FilterBatchSamples/b308c32e-d171-4d8d-aeaf-b561c55b06b4/call-MergePesrVcfs/cacheCopy/ref_panel_1kg.filtered_pesr_merged.vcf.gz",
     "concordance_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/SVConcordance/1509e8d1-5d8a-4455-9cd6-152f4f1af313/ref_panel_1kg.concordance.vcf.gz",
+    "concordance_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/SVConcordance/1509e8d1-5d8a-4455-9cd6-152f4f1af313/ref_panel_1kg.concordance.vcf.gz.tbi",
     "contig_ploidy_model_tar": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/gcnv/ref_panel_1kg_v2-contig-ploidy-model.tar.gz",
     "counts": [
         "gs://gatk-sv-ref-panel-1kg/outputs/tws_earlyBAF/counts/HG00096.counts.tsv.gz",
@@ -2246,6 +2247,7 @@
     "qc_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/sv_qc.ref_panel_1kg.tsv",
     "raw_sr_background_fail_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-TripleStreamCatFail/cacheCopy/ref_panel_1kg.genotype_SR_part2_background_fail.txt",
     "raw_sr_bothside_pass_file": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-TripleStreamCatPass/cacheCopy/ref_panel_1kg.genotype_SR_part2_bothside_pass.txt",
+    "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
     "regeno_coverage_medians": "gs://gatk-sv-ref-panel-1kg/outputs/GenotypeBatch/6f4ea58f-ae01-4f24-b447-d8ea72f82425/call-GenotypeDepthPart2/GenotypeDepthPart2/89ff502b-ecc8-49c6-b978-3b86eb9c5cde/call-MergeRegenoCoverageMedians/ref_panel_1kg.regeno.coverage_medians_merged.bed",
     "regenotyped_depth_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-RegenotypeCNVs/RegenotypeCNVs/cda0e73d-e69f-473a-ab87-1068b6d99005/call-ConcatRegenotypedVcfs/shard-0/cacheCopy/ref_panel_1kg.depth.regeno_final.vcf.gz",
     "requester_pays_crams": true,

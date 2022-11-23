@@ -1,0 +1,25 @@
+{
+  "RecalibrateGq.vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
+  "RecalibrateGq.vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
+  "RecalibrateGq.standardize_vcf": true,
+  "RecalibrateGq.gq_recalibrator_model_file":
+    "gs://broad-dsde-methods-tbrookin/results/gq-filtering/2022-02-22_filter-homref/gq_recalibrator.model",
+  "RecalibrateGq.genome_tracks": [
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_gaps.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s36.bed.gz",
+    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s50.bed.gz"
+  ],
+  "RecalibrateGq.standardize_vcf_args": [],
+  "RecalibrateGq.recalibrate_gq_args": [
+    "--keep-homvar false",
+    "--keep-multiallelic true"
+  ],
+  "RecalibrateGq.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "RecalibrateGq.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
+  "RecalibrateGq.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }}
+}
