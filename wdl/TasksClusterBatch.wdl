@@ -28,12 +28,15 @@ task SVCluster {
 
         Float? depth_sample_overlap
         Float? depth_interval_overlap
+        Float? depth_size_similarity
         Int? depth_breakend_window
         Float? mixed_sample_overlap
         Float? mixed_interval_overlap
+        Float? mixed_size_similarity
         Int? mixed_breakend_window
         Float? pesr_sample_overlap
         Float? pesr_interval_overlap
+        Float? pesr_size_similarity
         Int? pesr_breakend_window
 
         File reference_fasta
@@ -110,12 +113,15 @@ task SVCluster {
             ~{"--defrag-sample-overlap " + defrag_sample_overlap} \
             ~{"--depth-sample-overlap " + depth_sample_overlap} \
             ~{"--depth-interval-overlap " + depth_interval_overlap} \
+            ~{"--depth-size-similarity " + depth_size_similarity} \
             ~{"--depth-breakend-window " + depth_breakend_window} \
             ~{"--mixed-sample-overlap " + mixed_sample_overlap} \
             ~{"--mixed-interval-overlap " + mixed_interval_overlap} \
+            ~{"--mixed-size-similarity " + mixed_size_similarity} \
             ~{"--mixed-breakend-window " + mixed_breakend_window} \
             ~{"--pesr-sample-overlap " + pesr_sample_overlap} \
             ~{"--pesr-interval-overlap " + pesr_interval_overlap} \
+            ~{"--pesr-size-similarity " + pesr_size_similarity} \
             ~{"--pesr-breakend-window " + pesr_breakend_window} \
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
