@@ -8,6 +8,10 @@ from collections import Counter
 from numpy import array
 from functools import reduce
 
+
+ID_COL = "#ID"
+
+
 def read_ploidy(filename: str) -> pd.DataFrame:
     """
 
@@ -34,8 +38,8 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
         a pandas DataFrame containing the transposed table given in the input file.
     """
     df_median = pd.read_csv(filename, sep="\t").T
-    df_median = df_median.rename_axis("#ID").reset_index()
-    df_median.columns = ["#ID", "median_coverage"]
+    df_median = df_median.rename_axis(ID_COL).reset_index()
+    df_median.columns = [ID_COL, "median_coverage"]
     df_median = df_median.reset_index(drop=True)
     return df_median
 
@@ -78,73 +82,35 @@ def read_melt_insert_size(filename: str) -> array:
     return melt_insert_size_array
 
 
-def read_manta_outlier(filename: str) -> pd.DataFrame:
+def get_col_name(caller: str, outlier_type: str) -> str:
+    return f"{caller}_{outlier_type}_outlier"
+
+
+def read_outlier(filename: str, outlier_col_label: str, idx=10) -> pd.DataFrame:
     """
-    Outliers from Manta.
+
     Args:
-        filename: A tab-delimited file containing Manta QC Low/High.
+        filename: A tab-delimited file containing the output of
+        Evidence QC on a caller (e.g., Manta) with low/high.
 
+        outlier_col_label: Column header for the outliers.
+
+        idx: The index of the cell in the array containing sample
+        URI split by `/` that contains sample ID.
     Returns:
-        A pandas DataFrame containing the number of times a sample appears
-        in Manta QC low and/or high.
+        A pandas DataFrame containing the number of times a sample
+        appears in the QC of a caller output.
     """
-    outlier_manta = filename.split(".")[-4] + "_" + filename.split(".")[-1]  # + "_" + filename.split(".")[-3]
-    df_manta = pd.read_csv(filename, sep="\t")
-    if df_manta["Outlier_Sample"].empty:
-        df_manta["#ID"] = df_manta.apply(lambda _: " ", axis=0)
-        outlier_manta_sample = df_manta.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
+    df = pd.read_csv(filename, sep="\t")
+    if df["Outlier_Sample"].empty:
+        df[ID_COL] = df.apply(lambda _: "NA", axis=0)
+        outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     else:
-        df_manta["#ID"] = df_manta["Outlier_Sample"].str.split("/", expand=True)[10].str.split(".", expand=True)[0]
-        outlier_manta_sample = df_manta.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
-    outlier_manta_df = outlier_manta_sample.reset_index()
-    outlier_manta_df.columns = ["#ID", str(outlier_manta) + "_outlier"]
-    return outlier_manta_df
-
-
-def read_melt_outlier(filename: str) -> pd.DataFrame:
-    """
-    Outliers from Melt.
-    Args:
-        filename: A tab-delimited file containing the output of EvidenceQC on MELT QC Low/High.
-
-    Returns:
-        A pandas DataFrame containing the number of times a sample appears
-        in MELT QC low and/or high.
-    """
-    outlier_melt = filename.split(".")[-4] + "_" + filename.split(".")[-1]
-    df_melt = pd.read_csv(filename, sep="\t")
-    if df_melt["Outlier_Sample"].empty:
-        df_melt["#ID"] = df_melt.apply(lambda _: " ", axis=0)
-        outlier_melt_sample = df_melt.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
-    else:
-        df_melt["#ID"] = df_melt["Outlier_Sample"].str.split("/", expand=True)[10].str.split(".", expand=True)[0]
-        outlier_melt_sample = df_melt.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
-    outlier_melt_df = outlier_melt_sample.reset_index()
-    outlier_melt_df.columns = ["#ID", str(outlier_melt) + "_outlier"]
-    return outlier_melt_df
-
-
-def read_wham_outlier(filename: str) -> pd.DataFrame:
-    """
-    Outliers from Wham.
-    Args:
-        filename: A tab-delimited file containing the output of EvidenceQC on Wham QC Low/High.
-
-    Returns:
-        A pandas DataFrame containing the number of times a sample appears
-        in MELT QC low and/or high.
-    """
-    outlier_wham = filename.split(".")[-4] + "_" + filename.split(".")[-1]  # + "_" + filename.split(".")[-3]
-    df_wham = pd.read_csv(filename, sep="\t")
-    if df_wham["Outlier_Sample"].empty:
-        df_wham["#ID"] = df_wham.apply(lambda _: " ", axis=0)
-        outlier_wham_sample = df_wham.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
-    else:
-        df_wham["#ID"] = df_wham["Outlier_Sample"].str.split("/", expand=True)[11].str.split(".", expand=True)[0]
-        outlier_wham_sample = df_wham.pivot_table(columns=["#ID"], aggfunc="size").astype(int)
-    outlier_wham_df = outlier_wham_sample.reset_index()
-    outlier_wham_df.columns = ["#ID", str(outlier_wham) + "_outlier"]
-    return outlier_wham_df
+        df[ID_COL] = df["Outlier_Sample"].str.split("/", expand=True)[idx].str.split(".", expand=True)[0]
+        outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
+    outlier_df = outlier_sample.reset_index()
+    outlier_df.columns = [ID_COL, outlier_col_label]
+    return outlier_df
 
 
 def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str, outlier_type: str) -> pd.DataFrame:
@@ -161,20 +127,20 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
         across all four algorithms for each sample.
     """
     # Manta:
-    outlier_manta = filename_manta.split(".")[-4] + "_" + filename_manta.split(".")[
-        -1]
-    outlier_manta_df = read_manta_outlier(filename_manta)
-    dict_manta = dict(list(zip(outlier_manta_df["#ID"], outlier_manta_df[str(outlier_manta) + "_outlier"])))
+    col_name = get_col_name("manta", outlier_type)
+    outlier_manta_df = read_outlier(filename_manta, col_name)
+    dict_manta = dict(list(zip(outlier_manta_df[ID_COL], outlier_manta_df[col_name])))
+
     # Melt:
-    outlier_melt = filename_melt.split(".")[-4] + "_" + filename_melt.split(".")[
-        -1]
-    outlier_melt_df = read_melt_outlier(filename_melt)
-    dict_melt = dict(list(zip(outlier_melt_df["#ID"], outlier_melt_df[str(outlier_melt) + "_outlier"])))
+    col_name = get_col_name("melt", outlier_type)
+    outlier_melt_df = read_outlier(filename_melt, col_name)
+    dict_melt = dict(list(zip(outlier_melt_df[ID_COL], outlier_melt_df[col_name])))
+
     # Wham:
-    outlier_wham = filename_wham.split(".")[-4] + "_" + filename_wham.split(".")[
-        -1]
-    outlier_wham_df = read_wham_outlier(filename_wham)
-    dict_wham = dict(list(zip(outlier_wham_df["#ID"], outlier_wham_df[str(outlier_wham) + "_outlier"])))
+    col_name = get_col_name("wham", outlier_type)
+    outlier_wham_df = read_outlier(filename_wham, col_name, 11)
+    dict_wham = dict(list(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name])))
+
     # merging all the dictionaries
     outlier_dicts = [dict_manta, dict_melt, dict_wham]
     merged_dicts = Counter()
@@ -182,15 +148,13 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
         merged_dicts.update(counted)
     all_outliers = dict(merged_dicts)
     all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()  # index_col=None
-    all_outliers_df.columns = ["#ID", outlier_type + "_overall_outliers"]
+    all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
     return all_outliers_df
 
 
-###########################################################################
-# merging all the dataframes:
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
-        filename_medianCov: str,
+        filename_mediancov: str,
         filename_wgd: str,
         filename_cnv_qvalues: str,
         filename_high_manta: str,
@@ -205,24 +169,25 @@ def merge_evidence_qc_table(
     serialized to the given output filename.
     """
     df_ploidy = read_ploidy(filename_estimated_cn)
-    df_bincov_median = read_bincov_median(filename_medianCov)
+    df_bincov_median = read_bincov_median(filename_mediancov)
     df_wgd_scores = read_wgd_scores(filename_wgd)
     df_non_diploid = read_non_diploid(filename_cnv_qvalues)
-    df_manta_high_outlier = read_manta_outlier(filename_high_manta)
-    df_melt_high_outlier = read_melt_outlier(filename_high_melt)
-    df_wham_high_outlier = read_wham_outlier(filename_high_wham)
+    df_manta_high_outlier = read_outlier(filename_high_manta, get_col_name("manta", "high"))
+    df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
+    df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"), 11)
     df_total_high_outliers = read_all_outlier(filename_high_manta, filename_high_melt, filename_high_wham, "high")
-    df_manta_low_outlier = read_manta_outlier(filename_low_manta)
-    df_melt_low_outlier = read_melt_outlier(filename_low_melt)
-    df_wham_low_outlier = read_wham_outlier(filename_low_wham)
+    df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
+    df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
+    df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"), 11)
     df_total_low_outliers = read_all_outlier(filename_low_manta, filename_low_melt, filename_low_wham, "low")
 
     # all data frames
     dfs = [df_ploidy, df_bincov_median, df_wgd_scores, df_non_diploid, df_manta_high_outlier,
            df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers]
-    output_df = reduce(lambda left, right: pd.merge(left, right, on="#ID",
-                                                    how="outer"), dfs).fillna(0)  # "none"
+    output_df = reduce(
+        lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs
+    ).fillna(0)  # "none"
 
     # save the file
     return output_df.to_csv(f"{output_prefix}evidence_qc_table.tsv", sep="\t", header=True, index=False)
