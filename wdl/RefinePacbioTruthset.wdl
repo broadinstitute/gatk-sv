@@ -23,7 +23,6 @@ workflow RefinePacbioTruthset {
 
     File ploidy_table
 
-    File contig_list
     File reference_fasta
     File reference_fasta_fai
     File reference_dict
@@ -41,6 +40,7 @@ workflow RefinePacbioTruthset {
     RuntimeAttr? runtime_attr_combine_truth
     RuntimeAttr? runtime_attr_svcluster
     RuntimeAttr? runtime_attr_refine_labels
+    RuntimeAttr? runtime_attr_merge_jsons
   }
 
   Array[String] tool_names = ["pbsv", "pav", "sniffles"]
@@ -92,8 +92,16 @@ workflow RefinePacbioTruthset {
     }
   }
 
+  call MergeJsons {
+    input:
+      jsons=RefineLabels.out,
+      output_prefix="~{cohort}.refined_labels",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_merge_jsons
+  }
+
   output {
-    Array[File] refined_labels = RefineLabels.out
+    File refined_labels = MergeJsons.out
   }
 }
 
@@ -203,6 +211,52 @@ task RefineLabels {
       --out ~{output_prefix}.json \
       --truth-algorithms ~{sep="," tool_names}
       ~{additional_args_}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task MergeJsons {
+  input {
+    Array[File] jsons
+    String output_prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50 + size(jsons, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.json"
+  }
+  command <<<
+    set -euo pipefail
+    python3 <<CODE
+    import json
+    with open('~{write_lines(jsons)}') as f:
+        paths = [line.strip() for line in f]
+    data = {}
+    for p in paths:
+        with open(p) as f:
+            data.update(json.load(f))
+    with open('~{output_prefix}.json', 'w') as f:
+        f.write(json.dumps(data))
+    CODE
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
