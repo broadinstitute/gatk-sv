@@ -207,13 +207,13 @@ task RefineLabels {
   }
   command <<<
     set -euo pipefail
-    python ~{default="/opt/sv-pipeline/scripts/refine_training_set.py" script}
+    python ~{default="/opt/sv-pipeline/scripts/refine_training_set.py" script} \
       --clustered-vcf ~{clustered_vcf} \
       --main-vcf ~{main_vcf} \
       --truth-json ~{training_json} \
       --sample-id ~{sample_id} \
       --out ~{output_prefix}.json \
-      --truth-algorithms ~{sep="," tool_names}
+      --truth-algorithms ~{sep="," tool_names} \
       ~{additional_args_}
   >>>
   runtime {
