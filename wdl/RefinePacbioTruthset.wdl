@@ -137,7 +137,7 @@ task PrepSampleVcfs {
     File main_out_index = "{output_prefix}.main.vcf.gz.tbi"
   }
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
 
     # Subset to DEL/DUP/INS and convert DUP to INS
     bcftools view -s "~{sample_id}" ~{main_vcf} -Oz -o tmp1.vcf.gz
@@ -153,7 +153,7 @@ task PrepSampleVcfs {
     # Convert format
     mkdir tmp/
     while read path algorithm; do
-      bcftools reheader -s <(echo "~{sample_id}") $path | bgzip > tmp1.vcf.gz
+      bcftools reheader -s <(echo "~{sample_id}") $path > tmp1.vcf.gz
       python ~{default="/opt/sv-pipeline/scripts/format_pb_for_gatk.py" truth_script} \
         --vcf tmp1.vcf.gz \
         --algorithm $algorithm \
