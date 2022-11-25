@@ -133,8 +133,8 @@ task PrepSampleVcfs {
   output {
     File truth_out = "~{output_prefix}.truth.vcf.gz"
     File truth_out_index = "~{output_prefix}.truth.vcf.gz.tbi"
-    File main_out = "{output_prefix}.main.vcf.gz"
-    File main_out_index = "{output_prefix}.main.vcf.gz.tbi"
+    File main_out = "~{output_prefix}.main.vcf.gz"
+    File main_out_index = "~{output_prefix}.main.vcf.gz.tbi"
   }
   command <<<
     set -euxo pipefail
