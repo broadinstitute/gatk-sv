@@ -140,8 +140,12 @@ task PrepSampleVcfs {
     set -euo pipefail
 
     # Subset to DEL/DUP/INS and convert DUP to INS
-    bcftools view -s "~{sample_id}" ~{main_vcf} -Oz -o tmp.vcf.gz
-    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" main_script} tmp.vcf.gz \
+    bcftools view -s "~{sample_id}" ~{main_vcf} -Oz -o tmp1.vcf.gz
+    python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+      --vcf tmp1.vcf.gz \
+      --out tmp2.vcf.gz \
+      --ploidy-table ~{ploidy_table}
+    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" main_script} tmp2.vcf.gz \
       | bgzip \
       > ~{output_prefix}.main.vcf.gz
     tabix ~{output_prefix}.main.vcf.gz
