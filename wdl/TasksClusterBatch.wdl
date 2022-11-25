@@ -101,13 +101,13 @@ task SVCluster {
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
             --ploidy-table ~{ploidy_table} \
-            --variant-prefix ~{variant_prefix} \
             --reference ~{reference_fasta} \
             ~{"-L " + contig} \
             ~{true="--fast-mode" false="" fast_mode} \
             ~{true="--enable-cnv" false="" enable_cnv} \
             ~{true="--omit-members" false="" omit_members} \
             ~{true="--default-no-call" false="" default_no_call} \
+            ~{"--variant-prefix " + variant_prefix} \
             ~{"--algorithm " + algorithm} \
             ~{"--defrag-padding-fraction " + defrag_padding_fraction} \
             ~{"--defrag-sample-overlap " + defrag_sample_overlap} \
