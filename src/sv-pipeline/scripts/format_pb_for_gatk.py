@@ -180,15 +180,19 @@ def convert(record: pysam.VariantRecord,
                     new_genotype['CN'] = 0
     out = [new_record]
     if svlen is not None and (isDup or isIns):
-        downstream_record = new_record.copy()
-        downstream_record.pos = new_record.pos + svlen
-        downstream_record.stop = downstream_record.pos + 1
-        out.append(downstream_record)
+        downstream_pos = new_record.pos + svlen
+        if downstream_pos < vcf_out.header.contigs[new_record.chrom].length - 1:
+            downstream_record = new_record.copy()
+            downstream_record.pos = downstream_pos
+            downstream_record.stop = downstream_record.pos + 1
+            out.append(downstream_record)
         if isIns:
-            upstream_record = new_record.copy()
-            upstream_record.pos = new_record.pos - svlen
-            upstream_record.stop = upstream_record.pos + 1
-            out.append(upstream_record)
+            upstream_pos = new_record.pos - svlen
+            if upstream_pos > 0:
+                upstream_record = new_record.copy()
+                upstream_record.pos = upstream_pos
+                upstream_record.stop = upstream_record.pos + 1
+                out.append(upstream_record)
     return out
 
 

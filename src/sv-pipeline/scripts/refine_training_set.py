@@ -86,8 +86,7 @@ def _parse_arg_list(arg: Text) -> List[Text]:
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Prepare call set for evaluation against PacBio variants, including subset to DEL/DUP/INS, "
-                    "converting DUP to INS, and filtering variants over 5kbp",
+        description="Refine truth set labels using a VCF containing clustered variants.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--clustered-vcf", type=str, required=True,
