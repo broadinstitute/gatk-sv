@@ -5,7 +5,7 @@ import argparse
 import json
 import pysam
 import sys
-from typing import Any, List, Text, Set, Dict, Optional
+from typing import Any, List, Text, Set, Dict, Optional, Tuple
 
 
 GOOD_VARIANTS_KEY = 'good_variant_ids'
@@ -32,14 +32,14 @@ def parse_input_labels(json_path: Text,
 
 
 def get_vids_and_large_cnvs(vcf: pysam.VariantFile,
-                            size_cutoff: int) -> tuple[Set[Text], Set[Text]]:
+                            size_cutoff: int) -> Tuple[Set[Text], Set[Text]]:
     vids = set()
     large_cnv_vids = set()
     cnv_types = ['DEL', 'DUP']
     for record in vcf:
         vids.add(record.id)
         if record.info['SVTYPE'] in cnv_types:
-            svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.end - record.pos
+            svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.stop - record.pos
             if svlen > size_cutoff:
                 large_cnv_vids.add(record.id)
     return vids, large_cnv_vids
@@ -136,7 +136,7 @@ def main(argv: Optional[List[Text]] = None):
 
     # Get vids we're looking for
     with pysam.VariantFile(arguments.main_vcf) as vcf:
-        main_vids, large_cnv_vids = get_vids_and_large_cnvs(vcf)
+        main_vids, large_cnv_vids = get_vids_and_large_cnvs(vcf, size_cutoff=arguments.cnv_size_cutoff)
 
     # Parse clustered vcf and generate labels
     with pysam.VariantFile(arguments.clustered_vcf) as vcf:
