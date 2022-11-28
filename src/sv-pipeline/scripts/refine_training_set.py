@@ -147,7 +147,8 @@ def main(argv: Optional[List[Text]] = None):
                                                 max_alg_count=arguments.max_algorithm_count)
 
     # Get consensus
-    refined_labels = refine_labels(vids=main_vids, labels1=original_labels, labels2=clustering_labels)
+    refined_labels = refine_labels(vids=main_vids, large_cnv_vids=large_cnv_vids,
+                                   labels1=original_labels, labels2=clustering_labels)
     write_json(path=arguments.out, sample_id=arguments.sample_id, labels=refined_labels)
 
 
