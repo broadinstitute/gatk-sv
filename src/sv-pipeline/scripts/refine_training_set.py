@@ -31,8 +31,18 @@ def parse_input_labels(json_path: Text,
     return labels
 
 
-def get_vids(vcf: pysam.VariantFile) -> Set[Text]:
-    return set([record.id for record in vcf])
+def get_vids_and_large_cnvs(vcf: pysam.VariantFile,
+                            size_cutoff: int) -> tuple[Set[Text], Set[Text]]:
+    vids = set()
+    large_cnv_vids = set()
+    cnv_types = ['DEL', 'DUP']
+    for record in vcf:
+        vids.add(record.id)
+        if record.info['SVTYPE'] in cnv_types:
+            svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.end - record.pos
+            if svlen > size_cutoff:
+                large_cnv_vids.add(record.id)
+    return vids, large_cnv_vids
 
 
 def parse_truth_support(vcf: pysam.VariantFile,
@@ -61,10 +71,12 @@ def parse_truth_support(vcf: pysam.VariantFile,
 
 
 def refine_labels(vids: Set[Text],
+                  large_cnv_vids: Set[Text],
                   labels1: Dict,
                   labels2: Dict) -> Dict:
     return {key: labels1[key] for key in vids
-            if labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False')}
+            if (labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False'))
+            or key in large_cnv_vids}
 
 
 def write_json(path: Text,
@@ -99,6 +111,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Minimum number of truth algorithms required for call to be true")
     parser.add_argument("--max-algorithm-count", type=int, default=0,
                         help="Maximum number of truth algorithms for call to be false")
+    parser.add_argument("--cnv-size-cutoff", type=int, default=10000,
+                        help="Retain DEL and DUP variants in the input truth json that are above this size")
     parser.add_argument("--truth-algorithms", type=str, default="pbsv,sniffles,pav",
                         help="Comma-delimited list of truth ALGORITHMS values")
 
@@ -122,7 +136,7 @@ def main(argv: Optional[List[Text]] = None):
 
     # Get vids we're looking for
     with pysam.VariantFile(arguments.main_vcf) as vcf:
-        main_vids = get_vids(vcf)
+        main_vids, large_cnv_vids = get_vids_and_large_cnvs(vcf)
 
     # Parse clustered vcf and generate labels
     with pysam.VariantFile(arguments.clustered_vcf) as vcf:
