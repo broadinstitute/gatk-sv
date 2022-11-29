@@ -63,7 +63,7 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
     df_non_diploid = df_non_diploid.T.iloc[0:, 3:]
     nondiploid_counts = df_non_diploid[df_non_diploid < 0.05].count()
 
-    nondiploid_counts_df = pd.DataFrame(nondiploid_counts, columns=["nondiploid_counts"]).rename_axis(
+    nondiploid_counts_df = pd.DataFrame(nondiploid_counts, columns=["nondiploid_bins"]).rename_axis(
         ID_COL).reset_index()
     return nondiploid_counts_df
 
