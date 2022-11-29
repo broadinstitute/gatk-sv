@@ -23,8 +23,8 @@ def read_ploidy(filename: str) -> pd.DataFrame:
         [id, chr1_CopyNumber, ..., chrX_CopyNumber, chrX_CopyNumber_rounded].
     """
     df_ploidy = pd.read_csv(filename, sep="\t")
-    df_ploidy.loc[df_ploidy["chrX_CopyNumber"] <= 2, "chrX_CopyNumber_rounded"] = 1
-    df_ploidy.loc[df_ploidy["chrX_CopyNumber"] > 2, "chrX_CopyNumber_rounded"] = 2
+    df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
+    df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
     return df_ploidy
 
 
