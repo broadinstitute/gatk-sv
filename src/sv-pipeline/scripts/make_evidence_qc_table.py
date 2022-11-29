@@ -200,7 +200,7 @@ def main():
         help="Sets the filename containing ploidy tests.")
 
     parser.add_argument(
-        "median_cov_transposed_filename",
+        "median_cov_filename",
         help="Sets the filename containing median coverage.")
 
     parser.add_argument(
