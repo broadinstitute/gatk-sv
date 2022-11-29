@@ -189,7 +189,7 @@ def merge_evidence_qc_table(
     ).fillna(0)  # "none"
 
     # save the file
-    return output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False)
+    output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False)
 
 
 def main():
