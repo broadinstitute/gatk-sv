@@ -196,8 +196,8 @@ def merge_evidence_qc_table(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "ploidy_test_filename",
-        help="Sets the filename containing ploidy tests.")
+        "estimated_copy_number_filename",
+        help="Sets the filename containing estimated copy numbers per contig.")
 
     parser.add_argument(
         "median_cov_filename",
