@@ -60,7 +60,7 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
         A pandas DataFrame containing the number of bins with q-value < 0.05 for each sample.
     """
     df_non_diploid = pd.read_csv(filename, sep="\t").T
-    df_non_diploid = df_non_diploid.T.iloc[0:, 3:]  # .rename_axis("#ID").reset_index()
+    df_non_diploid = df_non_diploid.T.iloc[0:, 3:]
     new_c = df_non_diploid.iloc[0:, 0:]
     nondiploid_counts = new_c[new_c < 0.05].count()
     nondiploid_counts_df = pd.DataFrame(nondiploid_counts, columns=["nondiploid_counts"]).rename_axis(
