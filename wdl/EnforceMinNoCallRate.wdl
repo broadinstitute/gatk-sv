@@ -32,7 +32,7 @@ workflow EnforceMinNoCallRate {
       subset_prefixes=sample_subset_prefixes,
       sv_base_mini_docker=sv_base_mini_docker
   }
-  Boolean vcf_is_annotated = select_first([!reannotate_ncrs_in_vcf, CheckHeader.result])
+  Boolean vcf_is_annotated = if (defined(reannotate_ncrs_in_vcf)) then !reannotate_ncrs_in_vcf else CheckHeader.result
 
   # Step 2: shard VCF if necessary
   if ( always_shard_vcf || defined(min_ncr_table) || defined(global_max_ncr) || !vcf_is_annotated ) {
