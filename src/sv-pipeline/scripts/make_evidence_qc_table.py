@@ -195,53 +195,53 @@ def merge_evidence_qc_table(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "estimated_copy_number_filename",
-        help="Sets the filename containing estimated copy numbers per contig.")
+        "-y","--estimated-copy-number-filename",
+        help="Sets the filename containing estimated copy numbers per contig.", nargs=1)
 
     parser.add_argument(
-        "median_cov_filename",
-        help="Sets the filename containing median coverage.")
+        "-d","--median-cov-filename",
+        help="Sets the filename containing median coverage.", nargs=1)
 
     parser.add_argument(
-        "wgd_scores_filename",
-        help="Sets the filename containing WGD scores.")
+        "-g","--wgd-scores-filename",
+        help="Sets the filename containing WGD scores.", nargs=1)
 
     parser.add_argument(
-        "binwise_cnv_qValues_filename",
-        help="Sets the filename containing bin-wise CNV q-values.")
+        "-b","binwise-cnv-qValues-filename",
+        help="Sets the filename containing bin-wise CNV q-values.", nargs=1)
 
     parser.add_argument(
-        "manta_qc_outlier_high_filename",
-        help="Sets the filename containing Manta QC outlier high.")
+        "-z","--manta-qc-outlier-high-filename",
+        help="Sets the filename containing Manta QC outlier high.", nargs=1)
 
     parser.add_argument(
-        "melt_qc_outlier_high_filename",
-        help="Sets the filename containing Melt QC outlier high.")
+        "-e", "--melt-qc-outlier-high-filename",
+        help="Sets the filename containing Melt QC outlier high.", nargs=1)
 
     parser.add_argument(
-        "wham_qc_outlier_high_filename",
-        help="Sets the filename containing Wham QC outlier high.")
+        "-w","--wham-qc-outlier-high-filename",
+        help="Sets the filename containing Wham QC outlier high.", nargs=1)
 
     parser.add_argument(
-        "manta_qc_outlier_low_filename",
-        help="Sets the filename containing Manta QC outlier low.")
+        "-a","--manta-qc-outlier-low-filename",
+        help="Sets the filename containing Manta QC outlier low.", nargs=1)
 
     parser.add_argument(
-        "melt_qc_outlier_low_filename",
-        help="Sets the filename containing Melt QC outlier low.")
+        "-s","--melt-qc-outlier-low-filename",
+        help="Sets the filename containing Melt QC outlier low.", nargs=1)
 
     parser.add_argument(
-        "wham_qc_outlier_low_filename",
-        help="Sets the filename containing Wham QC outlier low.")
+        "-w","--wham-qc-outlier-low-filename",
+        help="Sets the filename containing Wham QC outlier low.", nargs=1)
 
     parser.add_argument(
-        "melt_insert_size_file",
-        help="Sets the filename containing Melt insert size.")
+        "-m","--melt-insert-size-file",
+        help="Sets the filename containing Melt insert size.", nargs=1)
 
     parser.add_argument(
         "--output-prefix",
         default="",
-        help="Sets a prefix to be added to the output file(s).")
+        help="Sets a prefix to be added to the output file(s).", nargs=1)
 
     args = parser.parse_args()
 
