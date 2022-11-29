@@ -240,7 +240,6 @@ def main():
 
     parser.add_argument(
         "--output-prefix",
-        default="",
         help="Sets a prefix to be added to the output file(s).", nargs=1)
 
     args = parser.parse_args()
