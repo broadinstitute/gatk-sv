@@ -1,12 +1,10 @@
-#### Copyright (C) 2022 Ryan Collins & the Talkowski Laboratory
-####
 #### Workflow to compute and filter no-call GT rates from a GATK-SV VCF
 
 
 version 1.0
 
 
-import "Utils.wdl" as Utils
+import "TasksMakeCohortVcf.wdl" as Tasks
 
 
 workflow EnforceMinNoCallRate {
@@ -21,11 +19,11 @@ workflow EnforceMinNoCallRate {
     File? min_ncr_table  # Note: currently this input does nothing
     Float? global_max_ncr
     String global_ncr_filter_field = "NCR"
-    
+
     String sv_base_mini_docker
     String sv_pipeline_base_docker
   }
-  
+
   # Step 1: determine if NCR is already defined in the VCF header
   call CheckHeader {
     input:
@@ -38,7 +36,7 @@ workflow EnforceMinNoCallRate {
 
   # Step 2: shard VCF if necessary
   if ( always_shard_vcf || defined(min_ncr_table) || defined(global_max_ncr) || !vcf_is_annotated ) {
-    call Utils.ShardVcf as ShardVcf {
+    call Tasks.SplitVcf {
       input:
         vcf=vcf,
         vcf_idx=vcf_idx,
@@ -47,7 +45,7 @@ workflow EnforceMinNoCallRate {
         sv_base_mini_docker=sv_base_mini_docker
     }
   }
-  Array[File] vcf_shards = select_first([ShardVcf.vcf_shards, [vcf]])
+  Array[File] vcf_shards = select_first([SplitVcf.vcf_shards, [vcf]])
 
   # # Step 2a: if necessary, annotate all VCF shards with NCR per record
   if ( !vcf_is_annotated ) {
@@ -60,7 +58,7 @@ workflow EnforceMinNoCallRate {
           sv_pipeline_base_docker=sv_pipeline_base_docker
       }
     }
-    call Utils.ConcatVcfs as ConcatAnnotatedVcfs {
+    call Tasks.ConcatVcfs as ConcatAnnotatedVcfs {
       input:
         vcfs=AnnotateNCRs.annotated_vcf,
         outfile_prefix=basename(vcf, ".vcf.gz") + ".NCR_annotated",
@@ -99,7 +97,7 @@ workflow EnforceMinNoCallRate {
           sv_pipeline_base_docker=sv_pipeline_base_docker
       }
     }
-    call Utils.ConcatVcfs as ConcatFilteredVcfs {
+    call Tasks.ConcatVcfs as ConcatFilteredVcfs {
       input:
         vcfs=ApplyNCRFilter.filtered_vcf,
         outfile_prefix=basename(vcf, ".vcf.gz") + ".NCR_filtered",
@@ -107,7 +105,7 @@ workflow EnforceMinNoCallRate {
     }
   }
 
-  # # Outputs: 
+  # # Outputs:
   # #   1. VCF with NCR annotated
   # #   2. Table of NCRs for all records prior to filtering
   # #   3. VCF with FILTER labels enforced (only if min_ncr_table was provided)

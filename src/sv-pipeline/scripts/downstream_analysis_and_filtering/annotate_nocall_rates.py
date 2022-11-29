@@ -38,7 +38,7 @@ def add_ncrs(record, subsets):
 
     nocalls = 0
     subset_nocalls = {prefix : 0 for prefix in subsets.keys()}
-    
+
     # Process each sample in serial
     for sample in record.samples.keys():
         if record.samples[sample]['GT'] == (None, None):
@@ -92,7 +92,7 @@ def main():
     for prefix in subsets.keys():
         descrip = "Proportion of no-call GTs in {} samples".format(prefix)
         vcf.header.add_meta('INFO',
-                            items=[('ID', "{}_NCR".format(prefix)), 
+                            items=[('ID', "{}_NCR".format(prefix)),
                                    ('Number', "1"), ('Type', "Float"),
                                    ('Description', descrip)])
 

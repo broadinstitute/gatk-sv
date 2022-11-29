@@ -26,7 +26,7 @@ def main():
                         'and "stdout". Default: stdout', default='stdout')
     parser.add_argument('--global-max-ncr', type=float, default=0.1,
                         help='Global maximum NCR to be permitted. [default %(default)s]')
-    parser.add_argument('--global-filter-on', default='NCR', help='Key for INFO ' + 
+    parser.add_argument('--global-filter-on', default='NCR', help='Key for INFO ' +
                         'field to use when applying --global-max-ncr. ' +
                         '[default %(default)s]')
     parser.add_argument('--hard-filter', default=False, action='store_true',
@@ -49,7 +49,7 @@ def main():
 
     # Update VCF header as needed
     vcf.header.add_meta('FILTER',
-                        items=[('ID', "HIGH_NCR"), 
+                        items=[('ID', "HIGH_NCR"),
                                ('Description', "Unacceptably high rate of no-call GTs")])
 
     # Open connection to output VCF
@@ -84,7 +84,7 @@ def main():
         if args.verbose and k % 10 == 0:
             elapsed = time() - start_time
             msg = 'Progress: {} records parsed | {} seconds per record | {} ({:.1f}%) failed | {} ({:.1f}%) missing NCR values'
-            print(msg.format(k, np.round(elapsed / k, 3), k_fail, 
+            print(msg.format(k, np.round(elapsed / k, 3), k_fail,
                              100 * k_fail / k, k_missing, 100 * k_missing / k))
 
     # Close connection to output VCF
