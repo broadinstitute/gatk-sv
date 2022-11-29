@@ -222,7 +222,7 @@ task MakeQcTable {
   }
 
   output {
-    File qc_table_csv = "${prefix}_table.csv"
+    File qc_table_csv = "${prefix}.evidence_qc_table.tsv"
   }
 
   command <<<
