@@ -140,7 +140,7 @@ task PrepSampleVcfs {
     set -euxo pipefail
 
     # Subset to DEL/DUP/INS and convert DUP to INS
-    bcftools view -s "~{sample_id}" ~{main_vcf} -Oz -o tmp1.vcf.gz
+    bcftools view -s "~{sample_id}" ~{main_vcf} | bcftools view --min-ac 1 -Oz -o tmp1.vcf.gz
     python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
       --vcf tmp1.vcf.gz \
       --out tmp2.vcf.gz \
