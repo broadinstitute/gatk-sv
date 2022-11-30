@@ -22,8 +22,8 @@ import logging
 # "resources_hg38.json" input values file.
 #
 # Values can be referred to by their resource bundle name + "." + attribute. For example, if the values
-# directory contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
-# and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template
+# directory contains a file called dockers_gcp.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
+# and the "dockers_gcp.json" input file has been aliased to the "dockers" resource bundle, then in a template
 # the string {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
 #
 # By default the following resource bundle aliases are applied:

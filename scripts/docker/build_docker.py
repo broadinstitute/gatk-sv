@@ -48,7 +48,7 @@ The high-level view of how build_docker.py works:
        --output-json
 
 When you run the program normally, it prints statements describing its
-actions at each step, including printing out changes to dockers.json.
+actions at each step, including printing out changes to dockers_*.json.
 When you run it with --dry-run it does all the same things, except it:
     a) never builds an image
     b) never pushes an image
@@ -61,7 +61,7 @@ Instead it prints the changes that it would make if you ran without
 class Paths:
     this_script_folder = os.path.dirname(os.path.abspath(__file__))
     gatk_sv_path = os.path.dirname(os.path.dirname(this_script_folder))
-    dockers_json_path = os.path.join(gatk_sv_path, "inputs", "values", "dockers.json")
+    dockers_json_path = os.path.join(gatk_sv_path, "inputs", "values", "dockers_gcp.json")
     dev_null = "/dev/null"
 
 
@@ -222,7 +222,7 @@ class ProjectBuilder:
         old_dockers_json = ProjectBuilder.load_json(output_json)
 
         if new_dockers_json != old_dockers_json:
-            # update dockers.json with the new data
+            # update dockers_*.json with the new data
             if self.project_arguments.dry_run:
                 print(f"Write output dockers json at {output_json}")
                 print(json.dumps(new_dockers_json, indent="  "))
@@ -244,7 +244,7 @@ class ProjectBuilder:
 
     def _add_image_prereqs(self, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
-        # (This should almost never happen unless someone has messed with dockers.json or added a brand-new image.)
+        # (This should almost never happen unless someone has messed with dockers_*.json or added a brand-new image.)
         prereqs = {
             prereq
             for target in build_targets
@@ -623,11 +623,11 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
                                           help=f'also update \"{ProjectBuilder.latest_tag}\" tag in remote docker'
                                                f'repo(s)')
     docker_remote_args_group.add_argument('--input-json', type=str, default=Paths.dockers_json_path,
-                                          help="Path to dockers.json to use as input. This file serves as a store for "
+                                          help="Path to dockers_*.json to use as input. This file serves as a store for "
                                                "both the default docker image to use for various gatk-sv WDLs, and for "
                                                "the most up-to-date docker tag for each docker image.")
     docker_remote_args_group.add_argument('--output-json', type=str, default=Paths.dockers_json_path,
-                                          help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn "
+                                          help=f"Path to output updated dockers_*.json. Set to {Paths.dev_null} to turn "
                                                "off updates")
     parser.add_argument("--dry-run", action="store_true",
                         help="Compute docker images that will be build, but don't actually build or push")
