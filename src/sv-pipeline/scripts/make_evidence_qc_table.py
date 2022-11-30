@@ -44,9 +44,17 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
     return df_median
 
 
+
 def read_wgd_scores(filename: str) -> pd.DataFrame:
+    """
+    wgd socre 
+    Args:
+        filename: a tab-delimited file containing wgd scores.
+    Returns:
+        A pandas DataFrame containing wgd scores for each sample.
+    """
     df_wgd_scores = pd.read_csv(filename, sep="\t")
-    df_wgd_scores.rename(columns = {'score':'wgd_score'}, inplace = True)
+    df_wgd_scores.rename(columns={'score': 'wgd_score'}, inplace=True)
     return df_wgd_scores
 
 
