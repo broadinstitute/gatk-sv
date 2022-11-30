@@ -97,7 +97,7 @@ def get_col_name(caller: str, outlier_type: str) -> str:
     return f"{caller}_{outlier_type}_outlier"
 
 
-def read_outlier(filename: str, outlier_col_label: str, idx=10) -> pd.DataFrame:
+def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     """
 
     Args:
@@ -106,8 +106,6 @@ def read_outlier(filename: str, outlier_col_label: str, idx=10) -> pd.DataFrame:
 
         outlier_col_label: Column header for the outliers.
 
-        idx: The index of the cell in the array containing sample
-        URI split by `/` that contains sample ID.
     Returns:
         A pandas DataFrame containing the number of times a sample
         appears in the QC of a caller output.
@@ -151,7 +149,7 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
 
     # Wham:
     col_name = get_col_name("wham", outlier_type)
-    outlier_wham_df = read_outlier(filename_wham, col_name, 11)
+    outlier_wham_df = read_outlier(filename_wham, col_name)
     dict_wham = dict(list(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name])))
 
     # merging all the dictionaries
