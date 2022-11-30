@@ -117,7 +117,9 @@ def read_outlier(filename: str, outlier_col_label: str, idx=10) -> pd.DataFrame:
         df[ID_COL] = df.apply(lambda _: "NA", axis=0)
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     else:
-        df[ID_COL] = df["Outlier_Sample"].str.split("/", expand=True)[idx].str.split(".", expand=True)[0]
+        df['Outlier_Sample'] = df['Outlier_Sample'].apply(Path)
+        df[ID_COL] = df['Outlier_Sample'].apply(lambda x : x.stem if '.' in x.suffix  else np.nan) # np.empty(0, dtype=dtypes)
+        #df[ID_COL] = df["Outlier_Sample"].str.split("/", expand=True)[idx].str.split(".", expand=True)[0]
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     outlier_df = outlier_sample.reset_index()
     outlier_df.columns = [ID_COL, outlier_col_label]
