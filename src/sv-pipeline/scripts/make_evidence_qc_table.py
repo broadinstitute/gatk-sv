@@ -198,7 +198,7 @@ def merge_evidence_qc_table(
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers]
     output_df = reduce(
         lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs
-    ).fillna(0)  # "none"
+    ).fillna(np.nan)  # "none"
 
     # save the file
     output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False)
