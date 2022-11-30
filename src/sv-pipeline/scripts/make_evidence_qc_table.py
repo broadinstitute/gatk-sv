@@ -145,7 +145,7 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
     # Melt:
     col_name = get_col_name("melt", outlier_type)
     outlier_melt_df = read_outlier(filename_melt, col_name)
-    dict_melt = dict(list(zip(outlier_melt_df[ID_COL], outlier_melt_df[col_name])))
+    dict_melt = dict(zip(outlier_melt_df[ID_COL], outlier_melt_df[col_name]))
 
     # Wham:
     col_name = get_col_name("wham", outlier_type)
