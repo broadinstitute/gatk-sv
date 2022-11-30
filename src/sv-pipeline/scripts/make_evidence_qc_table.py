@@ -77,7 +77,7 @@ def read_melt_insert_size(filename: str) -> array:
         Array[Float] of melt_insert_size for each sample
     """
     insert_size = pd.read_csv(filename, sep="\t")
-    melt_insert_size_array = pd.DataFrame(insert_size, columns=["melt_insert_size"]).astype(float)
+    melt_insert_size_array = pd.DataFrame(insert_size, columns=["mean_insert_size"]).astype(float)
     return melt_insert_size_array
 
 
