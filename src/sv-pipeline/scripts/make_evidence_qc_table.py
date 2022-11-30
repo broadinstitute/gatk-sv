@@ -45,7 +45,9 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
 
 
 def read_wgd_scores(filename: str) -> pd.DataFrame:
-    return pd.read_csv(filename, sep="\t")
+    df_wgd_scores = pd.read_csv(filename, sep="\t")
+    df_wgd_scores.rename(columns = {'score':'wgd_score'}, inplace = True)
+    return df_wgd_scores
 
 
 def read_non_diploid(filename: str) -> pd.DataFrame:
