@@ -17,3 +17,4 @@ src/svtk/svtk/vcfcluster.pyc
 /inputs/values/google_cloud.*.json
 /carrot/.runs.json
 /carrot/.configs.json
+/inputs/values/dockers*.json
