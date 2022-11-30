@@ -44,10 +44,9 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
     return df_median
 
 
-
 def read_wgd_scores(filename: str) -> pd.DataFrame:
     """
-    wgd socre 
+    wgd score 
     Args:
         filename: a tab-delimited file containing wgd scores.
     Returns:
