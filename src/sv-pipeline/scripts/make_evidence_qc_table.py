@@ -185,11 +185,11 @@ def merge_evidence_qc_table(
     df_non_diploid = read_non_diploid(filename_cnv_qvalues)
     df_manta_high_outlier = read_outlier(filename_high_manta, get_col_name("manta", "high"))
     df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
-    df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"), 11)
+    df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
     df_total_high_outliers = read_all_outlier(filename_high_manta, filename_high_melt, filename_high_wham, "high")
     df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
-    df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"), 11)
+    df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_total_low_outliers = read_all_outlier(filename_low_manta, filename_low_melt, filename_low_wham, "low")
 
     # all data frames
