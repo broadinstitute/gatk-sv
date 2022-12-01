@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 ID_COL = "#ID"
+EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 
 
 def read_ploidy(filename: str) -> pd.DataFrame:
@@ -111,7 +112,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     """
     df = pd.read_csv(filename, sep="\t")
     if df["Outlier_Sample"].empty:
-        df[ID_COL] = df.apply(lambda _: "NA", axis=0)
+        df[ID_COL] = df.apply(lambda _: EMPTY_OUTLIERS, axis=0)
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     else:
         df['Outlier_Sample'] = df['Outlier_Sample'].apply(Path)
@@ -197,6 +198,7 @@ def merge_evidence_qc_table(
     output_df = reduce(
         lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs
     ).fillna(np.nan)  # "none"
+    output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
 
     # save the file
     output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False)
