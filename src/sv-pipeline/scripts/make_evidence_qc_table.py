@@ -81,7 +81,7 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
 def read_melt_insert_size(filename: str) -> array:
     """
     Reads MELT insert size into an array.
-    
+
     Args:
         filename: melt_insert_size in sample data table
 
