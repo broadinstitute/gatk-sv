@@ -243,7 +243,7 @@ def main():
         help="Sets the filename containing Melt QC outlier low.", nargs=1)
 
     parser.add_argument(
-        "-w", "--wham-qc-outlier-low-filename",
+        "-r", "--wham-qc-outlier-low-filename",
         help="Sets the filename containing Wham QC outlier low.", nargs=1)
 
     parser.add_argument(
