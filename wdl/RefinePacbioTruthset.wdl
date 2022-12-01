@@ -118,7 +118,7 @@ workflow RefinePacbioTruthset {
   call MergeJsons {
     input:
       sample_ids=sample_ids,
-      training_json=gq_recalibrator_training_json,
+      input_json=gq_recalibrator_training_json,
       jsons=RefineLabels.out,
       output_prefix="~{cohort}.refined_labels",
       sv_pipeline_docker=sv_pipeline_docker,
@@ -150,7 +150,7 @@ task PrepSampleVcfs {
                                mem_gb: 3.75,
                                disk_gb: ceil(50 + size(truth_vcfs, "GB") * 3 + size(main_vcf, "GB")),
                                boot_disk_gb: 10,
-                               preemptible_tries: 3,
+                               preemptible_tries: 1,
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -220,9 +220,9 @@ task RefineLabels {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 3.75,
-                               disk_gb: ceil(50 + size(clustered_vcf, "GB") + size(main_vcf, "GB")),
+                               disk_gb: ceil(50 + size(loose_clustered_vcf, "GB") + size(strict_clustered_vcf, "GB") + size(main_vcf, "GB")),
                                boot_disk_gb: 10,
-                               preemptible_tries: 3,
+                               preemptible_tries: 1,
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -256,6 +256,7 @@ task RefineLabels {
 
 task MergeJsons {
   input {
+    File input_json
     Array[File] jsons
     String output_prefix
     String sv_pipeline_docker
@@ -264,10 +265,10 @@ task MergeJsons {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 3.75,
+                               mem_gb: 7.5,
                                disk_gb: ceil(50 + size(jsons, "GB") * 2),
                                boot_disk_gb: 10,
-                               preemptible_tries: 3,
+                               preemptible_tries: 1,
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -285,6 +286,11 @@ task MergeJsons {
     for p in paths:
         with open(p) as f:
             data.update(json.load(f))
+    with open('~{input_json}') as f:
+        # Add short-read-only sample sites, e.g. from arrays
+        for key, value in json.load(f).items():
+            if key not in data:
+                data[key] = value
     with open('~{output_prefix}.json', 'w') as f:
         f.write(json.dumps(data))
     CODE

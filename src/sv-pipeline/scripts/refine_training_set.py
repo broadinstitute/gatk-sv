@@ -78,8 +78,9 @@ def refine_labels(vids: Set[Text],
                   labels1: Dict,
                   labels2: Dict) -> Dict:
     return {key: labels1[key] for key in vids
-            if (labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False'))
-            or key in large_cnv_vids}
+            if key in labels1 and key in labels2
+            and ((labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False'))
+            or key in large_cnv_vids)}
 
 
 def write_json(path: Text,
@@ -168,7 +169,7 @@ def main(argv: Optional[List[Text]] = None):
                                                       max_alg_count=arguments.loose_max_algorithm_count)
     clustering_labels = dict()
     clustering_labels.update(strict_clustering_labels)
-    common_vids = strict_clustering_labels.keys().intersection(loose_clustering_labels.keys())
+    common_vids = set(strict_clustering_labels.keys()).intersection(set(loose_clustering_labels.keys()))
     if len(common_vids) > 0:
         raise ValueError(f"Found {len(common_vids)} variant IDs with both true and false labels. An example is "
                          f"{list(common_vids)[0]}")
