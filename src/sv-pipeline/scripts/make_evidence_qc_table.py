@@ -7,10 +7,10 @@ import pandas as pd
 from collections import Counter
 from numpy import array
 from functools import reduce
-import pathlib
+#import pathlib
 from pathlib import Path
-import os
-from os import path
+#import os
+#from os import path
 import numpy as np
 
 ID_COL = "#ID"
@@ -117,8 +117,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     else:
         df['Outlier_Sample'] = df['Outlier_Sample'].apply(Path)
-        df[ID_COL] = df['Outlier_Sample'].apply(lambda x : x.stem if '.' in x.suffix  else np.nan) # np.empty(0, dtype=dtypes)
-        #df[ID_COL] = df["Outlier_Sample"].str.split("/", expand=True)[idx].str.split(".", expand=True)[0]
+        df[ID_COL] = df['Outlier_Sample'].apply(lambda x: x.stem if '.' in x.suffix  else np.nan)
         outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
     outlier_df = outlier_sample.reset_index()
     outlier_df.columns = [ID_COL, outlier_col_label]
