@@ -126,15 +126,17 @@ def convert(record: pysam.VariantRecord,
         if isinstance(svlen, tuple):
             svlen = svlen[0]
         svlen = abs(int(svlen))
-        if svtype != 'INS':
-            end = record.start + svlen
+        if svtype == 'INS':
+            end = record.start + 1
         else:
-            end = record.stop
+            end = record.start + svlen
     else:
         svlen = record.stop - record.pos
         end = record.stop
     if svlen < min_size:
         return list()
+    if end <= record.start:
+        end = record.start + 1
     # Force symbolic allele
     alleles = ["N", f"<{svtype}>"]
     new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=end, alleles=alleles)
