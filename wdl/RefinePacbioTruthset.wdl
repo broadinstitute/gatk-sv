@@ -17,9 +17,13 @@ workflow RefinePacbioTruthset {
     Array[File] sniffles_vcfs
     File gq_recalibrator_training_json
 
-    Float? pesr_interval_overlap
-    Float? pesr_size_similarity
-    Int? pesr_breakend_window
+    Float? pesr_interval_overlap_strict
+    Float? pesr_size_similarity_strict
+    Int? pesr_breakend_window_strict
+
+    Float? pesr_interval_overlap_loose
+    Float? pesr_size_similarity_loose
+    Int? pesr_breakend_window_loose
 
     File ploidy_table
 
@@ -60,7 +64,7 @@ workflow RefinePacbioTruthset {
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_combine_truth
     }
-    call tasks_cluster.SVCluster {
+    call tasks_cluster.SVCluster as SVClusterStrict {
       input:
         vcfs=[PrepSampleVcfs.truth_out, PrepSampleVcfs.main_out],
         ploidy_table=ploidy_table,
@@ -68,9 +72,27 @@ workflow RefinePacbioTruthset {
         fast_mode=true,
         algorithm="SINGLE_LINKAGE",
         pesr_sample_overlap=0,
-        pesr_interval_overlap=select_first([pesr_interval_overlap, 0]),
-        pesr_size_similarity=select_first([pesr_size_similarity, 0]),
-        pesr_breakend_window=select_first([pesr_breakend_window, 1000]),
+        pesr_interval_overlap=select_first([pesr_interval_overlap_strict, 0.1]),
+        pesr_size_similarity=select_first([pesr_size_similarity_strict, 0.5]),
+        pesr_breakend_window=select_first([pesr_breakend_window_strict, 5000]),
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_svcluster
+    }
+    call tasks_cluster.SVCluster as SVClusterLoose {
+      input:
+        vcfs=[PrepSampleVcfs.truth_out, PrepSampleVcfs.main_out],
+        ploidy_table=ploidy_table,
+        output_prefix="~{cohort}.svcluster.~{sample_ids[i]}",
+        fast_mode=true,
+        algorithm="SINGLE_LINKAGE",
+        pesr_sample_overlap=0,
+        pesr_interval_overlap=select_first([pesr_interval_overlap_loose, 0]),
+        pesr_size_similarity=select_first([pesr_size_similarity_loose, 0]),
+        pesr_breakend_window=select_first([pesr_breakend_window_loose, 5000]),
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
@@ -82,7 +104,8 @@ workflow RefinePacbioTruthset {
       input:
         sample_id=sample_ids[i],
         main_vcf=cleaned_vcf,
-        clustered_vcf=SVCluster.out,
+        strict_clustered_vcf=SVClusterStrict.out,
+        loose_clustered_vcf=SVClusterLoose.out,
         training_json=gq_recalibrator_training_json,
         tool_names=tool_names,
         output_prefix="~{cohort}.refine_labels.~{sample_ids[i]}",
@@ -94,6 +117,8 @@ workflow RefinePacbioTruthset {
 
   call MergeJsons {
     input:
+      sample_ids=sample_ids,
+      training_json=gq_recalibrator_training_json,
       jsons=RefineLabels.out,
       output_prefix="~{cohort}.refined_labels",
       sv_pipeline_docker=sv_pipeline_docker,
@@ -181,7 +206,8 @@ task RefineLabels {
   input {
     String sample_id
     File main_vcf
-    File clustered_vcf
+    File loose_clustered_vcf
+    File strict_clustered_vcf
     File training_json
     Array[String] tool_names
     String? additional_args
@@ -208,7 +234,8 @@ task RefineLabels {
   command <<<
     set -euo pipefail
     python ~{default="/opt/sv-pipeline/scripts/refine_training_set.py" script} \
-      --clustered-vcf ~{clustered_vcf} \
+      --loose-clustered-vcf ~{loose_clustered_vcf} \
+      --strict-clustered-vcf ~{strict_clustered_vcf} \
       --main-vcf ~{main_vcf} \
       --truth-json ~{training_json} \
       --sample-id ~{sample_id} \
