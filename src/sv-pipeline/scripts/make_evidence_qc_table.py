@@ -175,7 +175,7 @@ def merge_evidence_qc_table(
         filename_low_manta: str,
         filename_low_melt: str,
         filename_low_wham: str,
-        output_prefix: str) -> str:
+        output_prefix: str) -> None:
     """
     Reads the provided TSV files (tab-delimited) and merges all the information in one table
     serialized to the given output filename.
