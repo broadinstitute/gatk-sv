@@ -117,7 +117,6 @@ workflow RefinePacbioTruthset {
 
   call MergeJsons {
     input:
-      sample_ids=sample_ids,
       input_json=gq_recalibrator_training_json,
       jsons=RefineLabels.out,
       output_prefix="~{cohort}.refined_labels",
