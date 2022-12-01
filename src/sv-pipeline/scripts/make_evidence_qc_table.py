@@ -130,7 +130,7 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
         filename_manta: Outliers determined in EvidenceQC for Manta.
         filename_melt: Outliers determined in EvidenceQC for MELT.
         filename_wham: Outliers determined in EvidenceQC for Wham.
-        outlier_type:
+        outlier_type: low or high
 
     Returns:
         The total number of times that a sample appears as an outlier
