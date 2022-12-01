@@ -91,6 +91,7 @@ def create_header(header_in: pysam.VariantHeader) -> pysam.VariantHeader:
 def convert(record: pysam.VariantRecord,
             vcf_out: pysam.VariantFile,
             algorithm: Text,
+            min_size: int,
             ploidy_dict: Dict[Text, Dict[Text, int]]) -> pysam.VariantRecord:
     """
     Converts a record from svtk to gatk style. This includes updating all GT fields with proper ploidy, and adding
@@ -127,7 +128,7 @@ def convert(record: pysam.VariantRecord,
         if isinstance(svlen, tuple):
             svlen = svlen[0]
         svlen = abs(int(svlen))
-        if svlen < 25:
+        if svlen < min_size:
             return list()
     else:
         svlen = None
@@ -179,20 +180,6 @@ def convert(record: pysam.VariantRecord,
                 if svtype == 'DEL':
                     new_genotype['CN'] = 0
     out = [new_record]
-    if svlen is not None and (isDup or isIns):
-        downstream_pos = new_record.pos + svlen
-        if downstream_pos < vcf_out.header.contigs[new_record.chrom].length - 1:
-            downstream_record = new_record.copy()
-            downstream_record.pos = downstream_pos
-            downstream_record.stop = downstream_record.pos + 1
-            out.append(downstream_record)
-        if isIns:
-            upstream_pos = new_record.pos - svlen
-            if upstream_pos > 0:
-                upstream_record = new_record.copy()
-                upstream_record.pos = upstream_pos
-                upstream_record.stop = upstream_record.pos + 1
-                out.append(upstream_record)
     return out
 
 
@@ -230,6 +217,7 @@ def _process(vcf_in: pysam.VariantFile,
             record=record,
             vcf_out=vcf_out,
             algorithm=arguments.algorithm,
+            min_size=arguments.min_size,
             ploidy_dict=ploidy_dict
         )
         for record in out:
@@ -248,6 +236,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Output VCF")
     parser.add_argument("--algorithm", type=str, required=True,
                         help="Algorithm name")
+    parser.add_argument("--min-size", type=int, default=25,
+                        help="Min SV size")
     parser.add_argument("--ploidy-table", type=str, required=True,
                         help="Tab-delimited table of sample ploidies. The table should have a header row where the "
                              "first column is SAMPLE, and the remaining columns are contig names. For each row "

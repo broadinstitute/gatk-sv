@@ -17,6 +17,8 @@ workflow RefinePacbioTruthset {
     Array[File] sniffles_vcfs
     File gq_recalibrator_training_json
 
+    Int? truth_min_size
+
     Float? pesr_interval_overlap_strict
     Float? pesr_size_similarity_strict
     Int? pesr_breakend_window_strict
@@ -56,6 +58,7 @@ workflow RefinePacbioTruthset {
         main_vcf=cleaned_vcf,
         main_vcf_index=cleaned_vcf + ".tbi",
         truth_vcfs=[pbsv_vcfs[i], pav_vcfs[i], sniffles_vcfs[i]],
+        min_size=select_first([truth_min_size, 25]),
         tool_names=tool_names,
         ploidy_table=ploidy_table,
         output_prefix="~{cohort}.prep_sample_vcfs.~{sample_ids[i]}",
@@ -136,6 +139,7 @@ task PrepSampleVcfs {
     File main_vcf_index
     Array[File] truth_vcfs
     Array[String] tool_names
+    Int min_size
     File ploidy_table
     File? main_script
     File? truth_script
@@ -181,9 +185,11 @@ task PrepSampleVcfs {
       python ~{default="/opt/sv-pipeline/scripts/format_pb_for_gatk.py" truth_script} \
         --vcf tmp1.vcf.gz \
         --algorithm $algorithm \
+        --min-size ~{min_size} \
         --out tmp2.vcf.gz \
         --ploidy-table ~{ploidy_table}
-      bcftools sort tmp2.vcf.gz -Oz -o tmp/$algorithm.vcf.gz
+      bcftools sort tmp2.vcf.gz \
+        | bcftools annotate --set-id '%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN'-Oz -o tmp/$algorithm.vcf.gz
       tabix tmp/$algorithm.vcf.gz
     done < <(paste ~{write_lines(truth_vcfs)} ~{write_lines(tool_names)})
 
