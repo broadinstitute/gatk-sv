@@ -265,7 +265,7 @@ task MergeJsons {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 7.5,
-                               disk_gb: ceil(50 + size(jsons, "GB") * 2),
+                               disk_gb: ceil(50 + size(jsons, "GB") * 2 + size(input_json, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 1,
                                max_retries: 1
