@@ -138,7 +138,7 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
     # Manta:
     col_name = get_col_name("manta", outlier_type)
     outlier_manta_df = read_outlier(filename_manta, col_name)
-    dict_manta = dict(list(zip(outlier_manta_df[ID_COL], outlier_manta_df[col_name])))
+    dict_manta = dict(zip(outlier_manta_df[ID_COL], outlier_manta_df[col_name]))
 
     # Melt:
     col_name = get_col_name("melt", outlier_type)
@@ -148,7 +148,7 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
     # Wham:
     col_name = get_col_name("wham", outlier_type)
     outlier_wham_df = read_outlier(filename_wham, col_name)
-    dict_wham = dict(list(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name])))
+    dict_wham = dict(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name]))
 
     # merging all the dictionaries
     outlier_dicts = [dict_manta, dict_melt, dict_wham]
