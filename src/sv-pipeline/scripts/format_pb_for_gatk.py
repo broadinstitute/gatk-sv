@@ -119,22 +119,25 @@ def convert(record: pysam.VariantRecord,
         return list()
     # Force DUPs to insertions for consistency
     isDup = svtype == 'DUP'
-    isIns = svtype == 'INS'
     if isDup:
         svtype = 'INS'
-        svlen = record.stop - record.pos
-    elif 'SVLEN' in record.info:
+    if 'SVLEN' in record.info and record.info['SVLEN'] is not None:
         svlen = record.info['SVLEN']
         if isinstance(svlen, tuple):
             svlen = svlen[0]
         svlen = abs(int(svlen))
-        if svlen < min_size:
-            return list()
+        if svtype != 'INS':
+            end = record.start + svlen
+        else:
+            end = record.stop
     else:
-        svlen = None
+        svlen = record.stop - record.pos
+        end = record.stop
+    if svlen < min_size:
+        return list()
     # Force symbolic allele
     alleles = ["N", f"<{svtype}>"]
-    new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=record.stop, alleles=alleles)
+    new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=end, alleles=alleles)
     new_record.info['ALGORITHMS'] = [algorithm]
     new_record.info['SVTYPE'] = svtype
     # fix SVLEN, STRANDS, CHR2, and END2 where needed

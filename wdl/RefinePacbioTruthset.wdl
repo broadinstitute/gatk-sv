@@ -189,7 +189,7 @@ task PrepSampleVcfs {
         --out tmp2.vcf.gz \
         --ploidy-table ~{ploidy_table}
       bcftools sort tmp2.vcf.gz \
-        | bcftools annotate --set-id '%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN'-Oz -o tmp/$algorithm.vcf.gz
+        | bcftools annotate --set-id '%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN' -Oz -o tmp/$algorithm.vcf.gz
       tabix tmp/$algorithm.vcf.gz
     done < <(paste ~{write_lines(truth_vcfs)} ~{write_lines(tool_names)})
 
