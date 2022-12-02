@@ -10,14 +10,14 @@ import pysam
 
 
 _gt_status_map = dict()
-_gt_sum_map = dict()
+_gt_non_ref_map = dict()
 
 
-def _cache_gt_sum(gt):
-    s = _gt_sum_map.get(gt, None)
+def _is_non_ref(gt):
+    s = _gt_non_ref_map.get(gt, None)
     if s is None:
-        s = sum([1 for a in gt if a is not None and a > 0])
-        _gt_sum_map[gt] = s
+        s = any([a is not None and a > 0 for a in gt])
+        _gt_non_ref_map[gt] = s
     return s
 
 
@@ -34,13 +34,9 @@ def annotate_ncr(vcf, fout):
             continue
         gt_list = record.samples.values()
         n_no_call = sum([_is_no_call(gt['GT']) for gt in gt_list])
-        an = sum([len(gt.get('GT', list())) for gt in gt_list])
-        ac = sum([_cache_gt_sum(gt['GT']) for gt in gt_list])
-        af = ac / float(an) if an > 0 else None
-        record.info['NCR'] = n_no_call / n_samples
-        record.info['AN'] = an
-        record.info['AC'] = ac
-        record.info['AF'] = af
+        n_non_ref = sum([_is_non_ref(gt['GT']) for gt in gt_list])
+        record.info['N_NO_CALL'] = n_no_call
+        record.info['N_NON_REF'] = n_non_ref
         fout.write(record)
 
 
@@ -59,10 +55,8 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
-    header.add_line('##INFO=<ID=NCR,Number=1,Type=Float,Description="Fraction of no-call genotypes">')
-    header.add_line('##INFO=<ID=AC,Number=1,Type=Integer,Description="Allele count">')
-    header.add_line('##INFO=<ID=AN,Number=1,Type=Integer,Description="Allele number">')
-    header.add_line('##INFO=<ID=AF,Number=1,Type=Float,Description="Allele frequency">')
+    header.add_line('##INFO=<ID=N_NO_CALL,Number=1,Type=Integer,Description="Number of no-call genotypes">')
+    header.add_line('##INFO=<ID=N_NON_REF,Number=1,Type=Integer,Description="Number of non-ref genotypes">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
