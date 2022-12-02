@@ -137,7 +137,7 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
         outlier_type: high or low. Determined in EvidenceQC for each of the three callers.
     Returns:
         The total number of times that a sample appears as an outlier
-        across all four algorithms for each sample.
+        across all three algorithms for each sample.
     """
     # Manta:
     col_name = get_col_name("manta", outlier_type)
