@@ -15,15 +15,8 @@ EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 
 def read_ploidy(filename: str) -> pd.DataFrame:
     """
-<<<<<<< HEAD
     Args:
         filename: A tab-delimited file containing estimated copy numbers.
-=======
-
-    Args:
-        filename: A tab-delimited file containing estimated copy numbers.
-
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
     Returns:
         A pandas DataFrame containing the following columns:
         [id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded].
@@ -39,10 +32,6 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
     Median coverage (bincov_median)
     Args:
         filename: bincov_median output from EvidenceQC (medianCov.transposed) in a tab separated format
-<<<<<<< HEAD
-=======
-
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
     Returns:
         a pandas DataFrame containing the transposed table given in the input file.
     """
@@ -55,10 +44,6 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
 
 def read_wgd_scores(filename: str) -> pd.DataFrame:
     """
-<<<<<<< HEAD
-=======
-
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
     Args:
         filename: a tab-delimited file containing wgd scores.
     Returns:
@@ -73,15 +58,8 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
     """
     EvidenceQC → untar → /ploidy_est/binwise_CNV_qValues.bed.gz →
     count number of bins with q-value < 0.05 for each sample
-<<<<<<< HEAD
     Args:
         filename: a tab-delimited file containing binwise CNV qValues.
-=======
-
-    Args:
-        filename: a tab-delimited file containing binwise CNV qValues.
-
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
     Returns:
         A pandas DataFrame containing the number of bins with q-value < 0.05 for each sample.
     """
@@ -96,7 +74,6 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
 def read_melt_insert_size(filename: str, col_name="mean_insert_size") -> pd.DataFrame:
     """
     Reads MELT insert size into a Pandas DataFrame.
-<<<<<<< HEAD
     Args:
         filename: melt_insert_size in sample data table
         col_name: Set title to use for the column containing MELT mean insert size.
@@ -109,14 +86,8 @@ def read_melt_insert_size(filename: str, col_name="mean_insert_size") -> pd.Data
     df = pd.read_csv(filename, names=columns_names, header=0, sep="\t")
     df[col_name] = df[col_name].astype(float)
     return df
-=======
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
 
-    Args:
-        filename: melt_insert_size in sample data table
-        col_name: Set title to use for the column containing MELT mean insert size.
 
-<<<<<<< HEAD
 def get_col_name(caller: str, outlier_type: str) -> str:
     return f"{caller}_{outlier_type}_outlier"
 
@@ -148,53 +119,6 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
 
 def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
-=======
-    Returns:
-        MELT insert size for each sample given in a Pandas DataFrame with two columns: sample ID and mean insert size.
-    """
-    columns_names = [ID_COL, col_name]
-    if filename is None:
-        return pd.DataFrame(colums=columns_names)
-    df = pd.read_csv(filename, names=columns_names, header=0, sep="\t")
-    df[col_name] = df[col_name].astype(float)
-    return df
-
-
-def get_col_name(caller: str, outlier_type: str) -> str:
-    return f"{caller}_{outlier_type}_outlier"
-
-
-def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
-    """
-
-    Args:
-        filename: A tab-delimited file containing the output of
-        Evidence QC on a caller (e.g., Manta) with low/high.
-
-        outlier_col_label: Column header for the outliers.
-
-    Returns:
-        A pandas DataFrame containing the number of times a sample
-        appears in the QC of a caller output.
-    """
-    if filename is None:
-        return pd.DataFrame(columns=[ID_COL, outlier_col_label])
-    df = pd.read_csv(filename, sep="\t")
-    if df["Outlier_Sample"].empty:
-        df[ID_COL] = df.apply(lambda _: EMPTY_OUTLIERS, axis=0)
-        outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
-    else:
-        df['Outlier_Sample'] = df['Outlier_Sample'].apply(Path)
-        df[ID_COL] = df['Outlier_Sample'].apply(lambda x: x.stem if '.' in x.suffix else np.nan)
-        outlier_sample = df.pivot_table(columns=[ID_COL], aggfunc="size").astype(int)
-    outlier_df = outlier_sample.reset_index()
-    outlier_df.columns = [ID_COL, outlier_col_label]
-    return outlier_df
-
-
-def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
-    """
->>>>>>> 3123f06fb5f21b6eb1c1d25d1789b4b0778ef4ce
     Args:
         outlier_manta_df: Outliers determined in EvidenceQC for Manta.
         outlier_melt_df: Outliers determined in EvidenceQC for MELT.
