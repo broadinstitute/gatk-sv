@@ -203,13 +203,11 @@ def merge_evidence_qc_table(
            df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
-    output_df = reduce(
-        lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs
-    ).fillna(np.nan)  # "none"
+    output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
 
     # save the file
-    output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False)
+    output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False, na_rep=np.nan)
 
 
 def main():
