@@ -128,32 +128,27 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     return outlier_df
 
 
-def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str, outlier_type: str) -> pd.DataFrame:
+def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame,outlier_type: str) -> pd.DataFrame:
     """
-
     Args:
         filename_manta: Outliers determined in EvidenceQC for Manta.
         filename_melt: Outliers determined in EvidenceQC for MELT.
         filename_wham: Outliers determined in EvidenceQC for Wham.
-        outlier_type: low or high
-
+        outlier_type:
     Returns:
         The total number of times that a sample appears as an outlier
         across all four algorithms for each sample.
     """
     # Manta:
     col_name = get_col_name("manta", outlier_type)
-    outlier_manta_df = read_outlier(filename_manta, col_name)
     dict_manta = dict(zip(outlier_manta_df[ID_COL], outlier_manta_df[col_name]))
 
     # Melt:
     col_name = get_col_name("melt", outlier_type)
-    outlier_melt_df = read_outlier(filename_melt, col_name)
     dict_melt = dict(zip(outlier_melt_df[ID_COL], outlier_melt_df[col_name]))
 
     # Wham:
     col_name = get_col_name("wham", outlier_type)
-    outlier_wham_df = read_outlier(filename_wham, col_name)
     dict_wham = dict(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name]))
 
     # merging all the dictionaries
@@ -162,9 +157,11 @@ def read_all_outlier(filename_manta: str, filename_melt: str, filename_wham: str
     for counted in outlier_dicts:
         merged_dicts.update(counted)
     all_outliers = dict(merged_dicts)
-    all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()  # index_col=None
+    all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
     all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
     return all_outliers_df
+
+
 
 
 def merge_evidence_qc_table(
@@ -191,11 +188,11 @@ def merge_evidence_qc_table(
     df_manta_high_outlier = read_outlier(filename_high_manta, get_col_name("manta", "high"))
     df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
     df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
-    df_total_high_outliers = read_all_outlier(filename_high_manta, filename_high_melt, filename_high_wham, "high")
+    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, "high")
     df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
-    df_total_low_outliers = read_all_outlier(filename_low_manta, filename_low_melt, filename_low_wham, "low")
+    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, "low")
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # all data frames
