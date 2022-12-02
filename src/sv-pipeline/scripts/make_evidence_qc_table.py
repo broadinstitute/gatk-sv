@@ -5,7 +5,6 @@ This script creates a single table of sample QC & batching metrics from Evidence
 import argparse
 import pandas as pd
 from collections import Counter
-from numpy import array
 from functools import reduce
 from pathlib import Path
 import numpy as np
@@ -78,19 +77,23 @@ def read_non_diploid(filename: str) -> pd.DataFrame:
     return nondiploid_counts_df
 
 
-def read_melt_insert_size(filename: str) -> array:
+def read_melt_insert_size(filename: str, col_name="mean_insert_size") -> pd.DataFrame:
     """
-    Reads MELT insert size into an array.
+    Reads MELT insert size into a Pandas DataFrame.
 
     Args:
         filename: melt_insert_size in sample data table
+        col_name: Set title to use for the column containing MELT mean insert size.
 
     Returns:
-        Array[Float] of melt_insert_size for each sample
+        MELT insert size for each sample given in a Pandas DataFrame with two columns: sample ID and mean insert size.
     """
-    insert_size = pd.read_csv(filename, sep="\t")
-    melt_insert_size_array = pd.DataFrame(insert_size, columns=["mean_insert_size"]).astype(float)
-    return melt_insert_size_array
+    columns_names = [ID_COL, col_name]
+    if filename is None:
+        return pd.DataFrame(colums=columns_names)
+    df = pd.read_csv(filename, names=columns_names, header=0, sep="\t")
+    df[col_name] = df[col_name].astype(float)
+    return df
 
 
 def get_col_name(caller: str, outlier_type: str) -> str:
@@ -111,7 +114,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
         appears in the QC of a caller output.
     """
     if filename is None:
-        return pd.DataFrame(columns = [ID_COL, outlier_col_label])
+        return pd.DataFrame(columns=[ID_COL, outlier_col_label])
     df = pd.read_csv(filename, sep="\t")
     if df["Outlier_Sample"].empty:
         df[ID_COL] = df.apply(lambda _: EMPTY_OUTLIERS, axis=0)
@@ -175,6 +178,7 @@ def merge_evidence_qc_table(
         filename_low_manta: str,
         filename_low_melt: str,
         filename_low_wham: str,
+        filename_melt_insert_size: str,
         output_prefix: str) -> None:
     """
     Reads the provided TSV files (tab-delimited) and merges all the information in one table
@@ -192,11 +196,13 @@ def merge_evidence_qc_table(
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_total_low_outliers = read_all_outlier(filename_low_manta, filename_low_melt, filename_low_wham, "low")
+    df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # all data frames
     dfs = [df_ploidy, df_bincov_median, df_wgd_scores, df_non_diploid, df_manta_high_outlier,
            df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
-           df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers]
+           df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
+           df_melt_insert_size]
     output_df = reduce(
         lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs
     ).fillna(np.nan)  # "none"
@@ -250,7 +256,11 @@ def main():
 
     parser.add_argument(
         "-m", "--melt-insert-size-filename",
-        help="Sets the filename containing Melt insert size.")
+        help="Sets the filename containing Melt insert size. "
+             "This file is expected to have two columns, containing "
+             "sample ID and mean insert size in the first and second "
+             "columns respectively. Also, the first line of the file "
+             "is considered as header and is ignored.")
 
     parser.add_argument(
         "-o", "--output-prefix", required=True,
@@ -269,6 +279,7 @@ def main():
         args.manta_qc_outlier_low_filename,
         args.melt_qc_outlier_low_filename,
         args.wham_qc_outlier_low_filename,
+        args.melt_insert_size_filename,
         args.output_prefix)
 
 
