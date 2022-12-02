@@ -131,10 +131,10 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
 def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
     Args:
-        filename_manta: Outliers determined in EvidenceQC for Manta.
-        filename_melt: Outliers determined in EvidenceQC for MELT.
-        filename_wham: Outliers determined in EvidenceQC for Wham.
-        outlier_type:
+        outlier_manta_df: Outliers determined in EvidenceQC for Manta.
+        outlier_melt_df: Outliers determined in EvidenceQC for MELT.
+        outlier_wham_df: Outliers determined in EvidenceQC for Wham.
+        outlier_type: high or low. Determined in EvidenceQC for each of the three callers.
     Returns:
         The total number of times that a sample appears as an outlier
         across all four algorithms for each sample.
