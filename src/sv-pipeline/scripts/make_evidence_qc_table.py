@@ -162,8 +162,6 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     return all_outliers_df
 
 
-
-
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
         filename_mediancov: str,
