@@ -1,21 +1,31 @@
 import glob
+import os
+import atexit
+import shutil
+import tempfile
+import contextlib
+import time
 import json
 import concurrent.futures
+import pickle
 import numpy
 import pandas
 import pandas.core.arrays
 import torch
 from collections import defaultdict
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, IO
+from collections.abc import Iterator, Sequence
 from gq_recalibrator import tarred_properties_to_parquet, training_utils
 from sv_utils import get_truth_overlap, benchmark_variant_filter
 
 
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 ConfidentVariants = get_truth_overlap.ConfidentVariants
+_debug_file_locks = False
 
 
 class Keys:
+    row = tarred_properties_to_parquet.Keys.row
     cuda = "cuda"
     cpu = "cpu"
     id = tarred_properties_to_parquet.Keys.id
@@ -25,6 +35,14 @@ class Keys:
     baseline = tarred_properties_to_parquet.Keys.baseline
     scale = tarred_properties_to_parquet.Keys.scale
     gq = benchmark_variant_filter.Keys.gq
+    training = "training"
+    validation = "validation"
+    pickle_suffix = ".pickle"
+    lock_suffix = ".lock"
+    remainder = "remainder"
+    training_remainder = f"{training}_{remainder}"
+    validation_remainder = f"{validation}_{remainder}"
+    manifest_file = "manifest.json"
 
 
 class Default:
@@ -36,6 +54,10 @@ class Default:
     excluded_properties = non_ml_properties.difference(non_ml_needed_for_training)
     scale_bool_properties = False,
     validation_proportion = 0.2
+    temp_dir = tempfile.gettempdir()
+    sleep_time_s = 0.1
+    delete_after_read = True
+    max_look_ahead_batches = 3
 
 
 def get_torch_device(device_name: str, progress_logger: training_utils.ProgressLogger) -> torch.device:
@@ -52,6 +74,89 @@ def get_torch_device(device_name: str, progress_logger: training_utils.ProgressL
         return torch.device("cpu")
 
 
+if _debug_file_locks:
+    @contextlib.contextmanager
+    def locked_write(file_name: str, mode: str) -> IO:
+        """
+        Get context manager for writing to a file, generating lock file during write to indicate that reading should wait
+        until the write operation is finished
+        """
+        lock_file = file_name + Keys.lock_suffix
+        with open(lock_file, 'w') as f_lock:
+            pass  # just create lock file
+        with open(file_name, mode) as f_out:
+            yield f_out
+        print(f"wrote file {file_name}")
+        os.remove(lock_file)
+        print(f"unlocked file {file_name}")
+
+
+    @contextlib.contextmanager
+    def locked_read(
+            file_name: str,
+            mode: str,
+            delete_after_read: bool = Default.delete_after_read,
+            sleep_time_s: float = Default.sleep_time_s
+    ) -> IO:
+        # wait until file exists
+        n_wait = 0
+        while not os.path.isfile(file_name):
+            n_wait += 1
+            if n_wait % 100 == 0:
+                print(f"waiting for {file_name} to exist")
+            time.sleep(sleep_time_s)
+        # wait until lock file is deleted
+        lock_file = file_name + Keys.lock_suffix
+        n_wait = 0
+        while os.path.isfile(lock_file):
+            n_wait += 1
+            if n_wait % 100 == 0:
+                print(f"waiting for {file_name} to be unlocked")
+            time.sleep(sleep_time_s)
+        # read
+        with open(file_name, mode) as f_in:
+            print(f"opened {file_name}")
+            yield f_in
+        print(f"read {file_name}")
+        if delete_after_read:
+            os.remove(file_name)
+
+else:
+    @contextlib.contextmanager
+    def locked_write(file_name: str, mode: str) -> IO:
+        """
+        Get context manager for writing to a file, generating lock file during write to indicate that reading should wait
+        until the write operation is finished
+        """
+        lock_file = file_name + Keys.lock_suffix
+        with open(lock_file, 'w') as f_lock:
+            pass  # just create lock file
+        with open(file_name, mode) as f_out:
+            yield f_out
+        os.remove(lock_file)
+
+
+    @contextlib.contextmanager
+    def locked_read(
+            file_name: str,
+            mode: str,
+            delete_after_read: bool = Default.delete_after_read,
+            sleep_time_s: float = Default.sleep_time_s
+    ) -> IO:
+        # wait until file exists
+        while not os.path.isfile(file_name):
+            time.sleep(sleep_time_s)
+        # wait until lock file is deleted
+        lock_file = file_name + Keys.lock_suffix
+        while os.path.isfile(lock_file):
+            time.sleep(sleep_time_s)
+        # read
+        with open(file_name, mode) as f_in:
+            yield f_in
+        if delete_after_read:
+            os.remove(file_name)
+
+
 class VcfTensorDataLoaderBase:
     """
     A DataLoader-like object for a set of tensors that can be much faster than
@@ -62,9 +167,9 @@ class VcfTensorDataLoaderBase:
     __slots__ = (
         "parquet_path", "variants_per_batch", "torch_device", "progress_logger", "shuffle", "random_state",
         "_current_parquet_file", "process_executor", "thread_executor", "_wanted_columns", "_parquet_files",
-        "_buffer_index", "_buffer_matrix",
+        "_buffer_index", "_buffer_matrix", "_temp_dir",
         "_num_rows", "_current_row", "_columns", "_variant_weights_column", "_variant_id_column", "_variant_columns",
-        "_format_columns", "_sample_ids", "_property_names", "_buffer_future", "_numpy_tensor", "_weights_tensor",
+        "_format_columns", "_sample_ids", "_property_names", "_future_results", "_numpy_tensor", "_weights_tensor",
         "_ids_array", "_tensor_baseline", "_tensor_scale", "_training_rows", "_validation_rows"
     )
 
@@ -72,15 +177,17 @@ class VcfTensorDataLoaderBase:
             self,
             parquet_path: str,
             properties_scaling_json: str,
-            process_executor: concurrent.futures.Executor,
-            thread_executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.ProcessPoolExecutor,
+            thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
+            temp_dir: str = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
-            excluded_properties: set[str] = Default.excluded_properties
+            excluded_properties: set[str] = Default.excluded_properties,
+            _current_parquet_file: Optional[str] = None
     ):
         self.parquet_path = tarred_properties_to_parquet.extract_tar_to_folder(parquet_path) \
             if parquet_path.endswith(".tar") else parquet_path
@@ -90,6 +197,7 @@ class VcfTensorDataLoaderBase:
         self.progress_logger = progress_logger
         self.torch_device = get_torch_device(torch_device, self.progress_logger)
         self.shuffle = shuffle
+        self._temp_dir = self.__class__.get_temp_subdir(temp_dir)
         self.random_state = random_state if isinstance(random_state, numpy.random.RandomState) \
             else numpy.random.RandomState(random_state)
         self._set_column_info(
@@ -107,39 +215,50 @@ class VcfTensorDataLoaderBase:
         self._parquet_files = []
         self._num_rows = tarred_properties_to_parquet.get_parquet_file_num_rows(self.parquet_path)
         self._current_row = 0
-        self._current_parquet_file = None
-        self._buffer_future = None
+        self._current_parquet_file = _current_parquet_file
+        self._future_results = []
+
+    @classmethod
+    def get_temp_subdir(cls, temp_dir: str) -> str:
+        parent_subdir = os.path.join(temp_dir, cls.__name__)
+        os.makedirs(parent_subdir, exist_ok=True)
+        temp_subdir = tempfile.mkdtemp(dir=parent_subdir)
+        atexit.register(shutil.rmtree, temp_subdir)
+        return temp_subdir
 
     def _set_column_info(self, excluded_properties: set[str], properties_scaling_json: str, scale_bool_values: bool):
-        """
+        f"""
         Set a bunch of column info so that it can be quickly retrieved later
           -self._wanted_columns is the list of raw (str) columns saved in the parquet file that we want to load, i.e.
            everything but the excluded properties
           -self._variant_columns is the unflattened (i.e. MultiIndex) columns that correspond to per-variant properties
           -self._format_columns is the unflattened columns that correspond to per-genotype / format properties
         Have a few annoying issues to work around:
-          -Want "row" in wanted_columns, because it will be the index, but don't want it in variant_columns or
-           format_columns because it's not in the columns of the final dataframe. Also it can't be unflattened
+          -Absolutely don't want {Keys.row} in any columns (wanted_columns, format_columns). Also it can't be unflattened
           -Can only determine if a column is for an excluded property after unflattening
         """
         with open(properties_scaling_json, 'r') as f_in:
             properties_scaling = json.load(f_in)
 
-        raw_columns = tarred_properties_to_parquet.get_parquet_file_columns(self.parquet_path)
-        self._columns = [
-            raw_column if raw_column == "row" else tarred_properties_to_parquet.unflatten_column_name(raw_column)
-            for raw_column in raw_columns
+        # raw_columns are ALL the columns in the dataframe, flattened so columns are not a multi-index
+        raw_columns = [
+            flat_column for flat_column in tarred_properties_to_parquet.get_parquet_file_columns(self.parquet_path)
+            if flat_column != Keys.row
         ]
+        # raw_columns are ALL the columns in the dataframe (except row), flattened so columns are not a multi-index
+        # unflatten the columns to make mult-index (list of tuples) sample_id, property_name
+        raw_columns, self._columns = zip(*(
+            (flat_column, tarred_properties_to_parquet.unflatten_column_name(flat_column))
+            for flat_column in tarred_properties_to_parquet.get_parquet_file_columns(self.parquet_path)
+            if flat_column != Keys.row
+        ))
+        # get rid of all the columns we don't want
         self._wanted_columns, self._columns = zip(*(
             (raw_column, unflat_column) for raw_column, unflat_column in zip(raw_columns, self._columns)
             if unflat_column[1] not in excluded_properties
         ))
-        # remove "row", as it will be an index
-        self._columns = [column for column in self._columns if not isinstance(column, str)]
-        if Keys.variant_weights not in excluded_properties:
-            self._variant_weights_column = next(
-                index for index, column in enumerate(self._columns) if column[1] == Keys.variant_weights
-            )
+        self._variant_weights_column = None if Keys.variant_weights in excluded_properties \
+            else next(index for index, column in enumerate(self._columns) if column[1] == Keys.variant_weights)
         self._variant_id_column = next(
             index for index, column in enumerate(self._columns) if column[1] == Keys.id
         )
@@ -153,17 +272,19 @@ class VcfTensorDataLoaderBase:
             [index for index, column in enumerate(self._columns)
              if isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training]
         )
-        # get baseline and scale for final tensor
+        # get property names (corresponding to dimension 2 of output tensor)
+        # organize with per-variant / INFO properties first
         self._property_names = [
             column[1] for column in self._columns
             if not isinstance(column[0], str) and column[1] not in Default.non_ml_needed_for_training
         ]
+        # get sample IDs in order, and add per-sample / FORMAT properties to property names
         found_properties = set()
         found_sample_ids = set()
         self._sample_ids = []
         for sample_id, prop_name in self._columns:
             if prop_name in Default.non_ml_needed_for_training or not isinstance(sample_id, str):
-                continue
+                continue  # skip properties not in final tensor, or INFO properties
             if sample_id not in found_sample_ids:
                 found_sample_ids.add(sample_id)
                 self._sample_ids.append(sample_id)
@@ -171,6 +292,7 @@ class VcfTensorDataLoaderBase:
                 found_properties.add(prop_name)
                 self._property_names.append(prop_name)
 
+        # get baseline and scale to (approximately) z-score output tensor
         def _get_baseline(_prop_name) -> float:
             if scale_bool_values or Keys.positive_value not in properties_scaling[_prop_name]:
                 return properties_scaling[_prop_name][Keys.baseline]
@@ -233,9 +355,8 @@ class VcfTensorDataLoaderBase:
             None if variant_weights_column is None else buffer_matrix.take(variant_weights_column, axis=1),
             buffer_matrix.take(variant_columns, axis=1).reshape(buffer_matrix.shape[0], 1, num_variant_properties),
             buffer_matrix.take(format_columns, axis=1)
-                .reshape(buffer_matrix.shape[0], len(format_columns) // num_samples, num_samples)
-                .swapaxes(1, 2)
-        )  # noqa E131
+                .reshape(buffer_matrix.shape[0], num_samples, len(format_columns) // num_samples)
+        )  # noqa E131   # ignore pep8 131 error, I think this is more legible
 
     @property
     def num_samples(self) -> int:
@@ -264,11 +385,12 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             self,
             parquet_path: str,
             properties_scaling_json: str,
-            process_executor: concurrent.futures.Executor,
-            thread_executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.ProcessPoolExecutor,
+            thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
+            temp_dir: str = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
@@ -280,7 +402,7 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
             process_executor=process_executor, thread_executor=thread_executor,
             variants_per_batch=variants_per_batch, torch_device=torch_device, progress_logger=progress_logger,
-            shuffle=shuffle, scale_bool_values=scale_bool_values, random_state=random_state,
+            shuffle=shuffle, temp_dir=temp_dir, scale_bool_values=scale_bool_values, random_state=random_state,
             excluded_properties=excluded_properties.union((Keys.variant_weights,))
         )
 
@@ -362,15 +484,114 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         )
 
 
+class TrainingBatchIterator(Iterator):
+    """
+    Iterator class that approximately iterates at the appropriate validation proportion. Works over batches and doesn't
+    allow rounding error to gradually accumulate excess training or validation variants in the remainder
+    """
+    __slots__ = (
+        "num_training_variants", "num_validation_variants", "variants_per_batch", "pickle_folder", "parquet_file",
+        "training_batch", "validation_batch", "previous_training_remainder_ids", "previous_validation_remainder_ids",
+        "num_training_batches", "num_validation_batches", "_approx_validation_proportion", "num_training_remainder",
+        "num_validation_remainder")
+    __state_keys__ = (
+        "num_training_variants", "num_validation_variants", "variants_per_batch", "pickle_folder", "parquet_file",
+        "training_batch", "validation_batch", "previous_training_remainder_ids", "previous_validation_remainder_ids"
+    )
+
+    def __init__(
+            self,
+            num_training_variants: int,
+            num_validation_variants: int,
+            variants_per_batch: int,
+            pickle_folder: str,
+            parquet_file: str,
+            training_batch: int = 0,
+            validation_batch: int = 0,
+            previous_training_remainder_ids: Sequence = (),
+            previous_validation_remainder_ids: Sequence = ()
+    ):
+        self.num_training_variants = num_training_variants
+        self.num_validation_variants = num_validation_variants
+        self.variants_per_batch = variants_per_batch
+        self.pickle_folder = pickle_folder
+        self.parquet_file = parquet_file
+        self.training_batch = training_batch
+        self.validation_batch = validation_batch
+        self.num_training_batches, self.num_training_remainder = divmod(num_training_variants, variants_per_batch)
+        self.num_validation_batches, self.num_validation_remainder = divmod(num_validation_variants, variants_per_batch)
+        self._approx_validation_proportion = \
+            self.num_validation_batches / (self.num_validation_batches + self.num_training_batches)
+        self.previous_training_remainder_ids = pandas.array(previous_training_remainder_ids, dtype="string[pyarrow]")
+        self.previous_validation_remainder_ids = pandas.array(previous_validation_remainder_ids,
+                                                              dtype="string[pyarrow]")
+
+    @property
+    def is_training_batch(self) -> Optional[bool]:
+        """ return True if next batch is training, False if it's validation, and None if it's time to stop iteration """
+        if self.training_batch >= self.num_training_batches:
+            return None if self.validation_batch >= self.num_validation_batches else False
+        elif self.validation_batch >= self.num_validation_batches:
+            return True
+        return self.training_batch * self._approx_validation_proportion < \
+               (self.validation_batch + 1) * (1.0 - self._approx_validation_proportion)
+
+    @property
+    def has_next(self) -> bool:
+        return self.training_batch < self.num_training_batches or self.validation_batch < self.num_validation_batches
+
+    @property
+    def state_dict(self) -> dict[str, Any]:
+        raw_state_dict = {key: getattr(self, key) for key in self.__state_keys__}
+        return {
+            key: value.tolist() if hasattr(value, "tolist") else value
+            for key, value in raw_state_dict.items()
+        }
+
+    def to_json(self):
+        json_file = os.path.join(self.pickle_folder, Keys.manifest_file)
+        with locked_write(json_file, 'w') as f_out:
+            json.dump(self.state_dict, f_out)
+
+    @staticmethod
+    def from_json(
+            pickle_folder: str,
+            delete_after_read: bool = Default.delete_after_read,
+            sleep_time_s: float = Default.sleep_time_s
+    ) -> "TrainingBatchIterator":
+        json_file = os.path.join(pickle_folder, Keys.manifest_file)
+        with locked_read(json_file, mode='r', delete_after_read=delete_after_read, sleep_time_s=sleep_time_s) as f_in:
+            state_dict = json.load(f_in)
+        return TrainingBatchIterator(**state_dict)
+
+    def __iter__(self) -> "TrainingBatchIterator":
+        return self
+
+    def __next__(self) -> (bool, str, int):
+        is_training_batch = self.is_training_batch
+        if is_training_batch is None:
+            raise StopIteration
+        if is_training_batch:
+            batch_number = self.training_batch
+            self.training_batch += 1
+        else:
+            batch_number = self.validation_batch
+            self.validation_batch += 1
+        pickle_file = VcfTrainingTensorDataLoader.get_nth_pickle_file(
+            pickle_folder=self.pickle_folder, n=batch_number, is_training=is_training_batch
+        )
+        return is_training_batch, pickle_file, batch_number
+
+
 class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     __slots__ = (
-        "validation_proportion", "_validation_end", "_validation_buffer_index", "_training_batch", "_validation_batch",
+        "validation_proportion", "_training_batch", "_validation_batch", "batch_iterator", "previous_batch_iterator",
         "_genotype_is_good_dict", "_genotype_is_bad_dict", "_genotype_is_good_tensor", "_genotype_is_bad_tensor",
-        "_trainable_variant_ids", "_gq_columns", "_gq_tensor"
+        "_trainable_variant_ids", "_gq_column", "_gq_tensor", "max_look_ahead_batches"
     )
     __state_keys__ = (
-        "random_state", "_current_parquet_file", "_parquet_files", "_buffer_index", "_current_row", "_validation_end",
-        "_validation_buffer_index", "_training_batch", "_validation_batch"
+        "random_state", "_current_parquet_file", "_parquet_files", "_buffer_index", "_current_row",
+        "_training_batch", "_validation_batch", "batch_iterator", "previous_batch_iterator"
     )
 
     def __init__(
@@ -378,30 +599,36 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             parquet_path: str,
             properties_scaling_json: str,
             truth_json: str,
-            process_executor: concurrent.futures.Executor,
-            thread_executor: concurrent.futures.Executor,
+            process_executor: concurrent.futures.ProcessPoolExecutor,
+            thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
+            temp_dir: str = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
             excluded_properties: set[str] = Default.excluded_properties,
-            validation_proportion: float = Default.validation_proportion
+            validation_proportion: float = Default.validation_proportion,
+            max_look_ahead_batches: int = Default.max_look_ahead_batches,
+            batch_iterator: Optional[TrainingBatchIterator] = None,
+            previous_batch_iterator: Optional[TrainingBatchIterator] = None
     ):
         # basically it's the VcfTensorDataLoaderBase with a train/test split
         super().__init__(
             parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
             process_executor=process_executor, thread_executor=thread_executor,
             variants_per_batch=variants_per_batch, torch_device=torch_device, progress_logger=progress_logger,
-            shuffle=shuffle, scale_bool_values=scale_bool_values, random_state=random_state,
-            excluded_properties=excluded_properties
+            temp_dir=temp_dir, shuffle=shuffle, scale_bool_values=scale_bool_values, random_state=random_state,
+            excluded_properties=excluded_properties,
+            _current_parquet_file=None if batch_iterator is None else batch_iterator.parquet_file
         )
+        self.max_look_ahead_batches = max_look_ahead_batches
+        self.batch_iterator = batch_iterator
+        self.previous_batch_iterator = previous_batch_iterator
         if validation_proportion <= 0 or validation_proportion >= 1:
             raise ValueError("Validation proportion must be in open interval (0, 1)")
         self.validation_proportion = validation_proportion
-        self._validation_end = -1
-        self._validation_buffer_index = 0
         self._training_batch = 0
         self._validation_batch = 0
         self._genotype_is_good_dict, self._genotype_is_bad_dict = self._reorganize_confident_variants(
@@ -413,9 +640,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         self._genotype_is_good_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
         self._genotype_is_bad_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
         # get the DataFrame columns that correspond to per-sample / FORMAT columns
-        self._gq_columns = numpy.array(
-            [index for index, column in enumerate(self._columns)
-             if isinstance(column[0], str) and column[1] == Keys.gq]
+        self._gq_column = next(
+            index for index, property_name in enumerate(self._property_names) if property_name == Keys.gq
         )
         self._gq_tensor = numpy.empty((self.variants_per_batch, self.num_samples), dtype=numpy.float32)
 
@@ -446,160 +672,51 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         return genotype_is_good, genotype_is_bad
 
     def __iter__(self):
-        if self._buffer_future is None:
-            # only executes on first iteration, so there's no remainder rows
-            if not self._parquet_files:
-                self._set_parquet_files()
-            if self._current_parquet_file is None:
-                self._current_parquet_file = self._parquet_files.pop()
-            self._buffer_future = self.process_executor.submit(
-                VcfTrainingTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
-                wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
-                trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
-                validation_proportion=self.validation_proportion
-            )
-            # self._buffer_future = self.process_executor.submit(
-            #     VcfTrainingTensorDataLoader._load_parquet, parquet_file=self._current_parquet_file,
-            #     wanted_columns=self._wanted_columns
-            # )
+        while len(self._future_results) < self.max_look_ahead_batches:
+            # in order to truly be able to restore state, need to be able to restore future results at program start
+            self._submit_next_batch()
+        if self.batch_iterator is None:
+            self._get_next_batch_iterator()
         return self
 
-    def _load_buffer(self):
-        self._buffer_matrix, self.random_state, self._validation_end = self._buffer_future.result()
+    def _get_next_batch_iterator(self):
+        future_result, first_pickle_folder = self._future_results.pop(0)
+        # for now, ignore future_result, because we don't care if it's completed yet. However, this object may have
+        # diagnostic/debugging purposes
+        self.previous_batch_iterator = self.batch_iterator
+        self.batch_iterator = TrainingBatchIterator.from_json(first_pickle_folder, delete_after_read=True)
+        self._submit_next_batch()
 
-        # if self._buffer_matrix.shape[0] > 0:
-        #     remainder_rows = divmod(self._buffer_matrix.shape[0] - self._validation_end, self.variants_per_batch)[1]
-        #     remainder_validation_rows = divmod(self._validation_end, self.variants_per_batch)[1]
-        #     remainder_buffer = self._buffer_matrix[-remainder_rows:, :]
-        #     validation_remainder_buffer = self._buffer_matrix[
-        #                                      self._validation_end - remainder_validation_rows:self._validation_end, :
-        #                                  ]
-        # else:
-        #     remainder_buffer, validation_remainder_buffer = None, None
-        # self._buffer_matrix, self.random_state, self._validation_end = VcfTrainingTensorDataLoader._form_next_buffer(
-        #     buffer=self._buffer_future.result(), random_state=self.random_state if self.shuffle else None,
-        #     trainable_variant_ids = self._trainable_variant_ids, variant_id_column=self._variant_id_column,
-        #     validation_proportion=self.validation_proportion, remainder_buffer=None, validation_remainder_buffer=None
-        # )
-        self._buffer_index = self._validation_end
-        self._validation_buffer_index = 0
+    def _submit_next_batch(self):
+        # get the next parquet file
         if not self._parquet_files:
             self._set_parquet_files()
         self._current_parquet_file = self._parquet_files.pop()
-        remainder_rows = divmod(self._buffer_matrix.shape[0] - self._validation_end, self.variants_per_batch)[1]
-        remainder_validation_rows = divmod(self._validation_end, self.variants_per_batch)[1]
-        self._buffer_future = self.process_executor.submit(
-            VcfTrainingTensorDataLoader._parquet_file_to_buffer, parquet_file=self._current_parquet_file,
-            wanted_columns=self._wanted_columns, random_state=self.random_state if self.shuffle else None,
-            trainable_variant_ids=self._trainable_variant_ids, variant_id_column=self._variant_id_column,
-            validation_proportion=self.validation_proportion, remainder_buffer=self._buffer_matrix[-remainder_rows:, :],
-            validation_remainder_buffer=self._buffer_matrix[
-                                            self._validation_end - remainder_validation_rows:self._validation_end, :
-                                        ]
+        # randomly get a (temporary) pickle folder
+        pickle_folder = self._get_pickle_folder()
+        # in order to truly be able to restore state, need to be able to restore future results at start time...
+        __, previous_pickle_folder = self._future_results[-1] if len(self._future_results) > 0 else (None, None)
+        future_result = self.process_executor.submit(
+            VcfTrainingTensorDataLoader._pickle_batch_tensors,
+            parquet_file=self._current_parquet_file, pickle_folder=pickle_folder,
+            previous_pickle_folder=previous_pickle_folder,
+            wanted_columns=self._wanted_columns, random_seed=self._next_random_seed,
+            variants_per_batch=self.variants_per_batch, num_samples=self.num_samples,
+            num_properties=self.num_properties, variant_weights_column=self._variant_weights_column,
+            variant_columns=self._variant_columns, format_columns=self._format_columns,
+            validation_proportion=self.validation_proportion, trainable_variant_ids=self._trainable_variant_ids,
+            variant_id_column=self._variant_id_column
         )
-        # self._buffer_future = self.process_executor.submit(
-        #     VcfTrainingTensorDataLoader._load_parquet, parquet_file=self._current_parquet_file,
-        #     wanted_columns=self._wanted_columns
-        # )
+        self._future_results.append((future_result, pickle_folder))
 
-    @staticmethod
-    def _load_parquet(
-            parquet_file: str,
-            wanted_columns: list[str],
-    ) -> numpy.ndarray:
-        return pandas.read_parquet(parquet_file, columns=wanted_columns).values
-
-    @staticmethod
-    def _form_next_buffer(
-            buffer: numpy.ndarray,
-            random_state: Optional[numpy.random.RandomState],
-            validation_proportion: float,
-            trainable_variant_ids: frozenset[str],
-            variant_id_column: int,
-            remainder_buffer: Optional[numpy.ndarray] = None,
-            validation_remainder_buffer: Optional[numpy.ndarray] = None,
-    ):
-        # only take the trainable variants
-        buffer = buffer.compress(
-            [variant_id in trainable_variant_ids for variant_id in buffer.take(variant_id_column, axis=1)],
-            axis=0
-        )
-        # split new buffer up so that the first section is for validation
-        validation_index = round(buffer.shape[0] * validation_proportion)
-        if remainder_buffer is None:
-            # no remainder buffers
-            if random_state is not None:
-                # permute indices without mixing validation and training
-                perm_validation = random_state.permutation(validation_index)
-                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
-                buffer = buffer.take(numpy.concatenate((perm_validation, perm_training)), axis=0)
-            return buffer, random_state, validation_index
+    @property
+    def _next_random_seed(self) -> Optional[int]:
+        if self.shuffle:
+            seed_dtype = numpy.uint32
+            seed_dtype_info = numpy.iinfo(seed_dtype)
+            return self.random_state.randint(seed_dtype_info.min, seed_dtype_info.max, dtype=seed_dtype)
         else:
-            # copy in remainder buffers after scrambling
-            if random_state is None:
-                buffer = numpy.concatenate((
-                    validation_remainder_buffer,
-                    buffer[:validation_index, :],
-                    remainder_buffer,
-                    buffer[validation_index:, :]
-                ))
-            else:
-                perm_validation = random_state.permutation(validation_index)
-                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
-                buffer = numpy.concatenate((
-                    validation_remainder_buffer,
-                    buffer.take(perm_validation, axis=0),
-                    remainder_buffer,
-                    buffer.take(perm_training, axis=0)
-                ))
-            return buffer, random_state, validation_remainder_buffer.shape[0] + validation_index
-
-    @staticmethod
-    def _parquet_file_to_buffer(
-            parquet_file: str,
-            wanted_columns: list[str],
-            random_state: Optional[numpy.random.RandomState],
-            validation_proportion: float,
-            trainable_variant_ids: set[str],
-            variant_id_column: int,
-            remainder_buffer: Optional[numpy.ndarray] = None,
-            validation_remainder_buffer: Optional[numpy.ndarray] = None,
-    ) -> (numpy.ndarray, Optional[numpy.random.RandomState], int):
-        buffer = pandas.read_parquet(parquet_file, columns=wanted_columns).values
-        # only take the trainable variants
-        buffer = buffer.compress(
-            [variant_id in trainable_variant_ids for variant_id in buffer.take(variant_id_column, axis=1)],
-            axis=0
-        )
-        # split new buffer up so that the first section is for validation
-        validation_index = round(buffer.shape[0] * validation_proportion)
-        if remainder_buffer is None:
-            # no remainder buffers
-            if random_state is not None:
-                # permute indices without mixing validation and training
-                perm_validation = random_state.permutation(validation_index)
-                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
-                buffer = buffer.take(numpy.concatenate((perm_validation, perm_training)), axis=0)
-            return buffer, random_state, validation_index
-        else:
-            # copy in remainder buffers after scrambling
-            if random_state is None:
-                buffer = numpy.concatenate((
-                    validation_remainder_buffer,
-                    buffer[:validation_index, :],
-                    remainder_buffer,
-                    buffer[validation_index:, :]
-                ))
-            else:
-                perm_validation = random_state.permutation(validation_index)
-                perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
-                buffer = numpy.concatenate((
-                    validation_remainder_buffer,
-                    buffer.take(perm_validation, axis=0),
-                    remainder_buffer,
-                    buffer.take(perm_training, axis=0)
-                ))
-            return buffer, random_state, validation_remainder_buffer.shape[0] + validation_index
+            return None
 
     def __next__(self) -> (bool, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor):
         """
@@ -619,51 +736,30 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             self._current_row -= self._num_rows
             raise StopIteration
 
-        is_training_batch = self._training_batch * self.validation_proportion <= \
-            (self._validation_batch + 1) * (1.0 - self.validation_proportion)
+        if not self.batch_iterator.has_next:
+            self._get_next_batch_iterator()
 
-        num_variant_properties = len(self._variant_columns)
+        is_training_batch, pickle_file, __ = next(self.batch_iterator)
         if is_training_batch:
-            # next batch to emit is for training
-            buffer_begin = self._buffer_index
-            buffer_end = buffer_begin + self.variants_per_batch
-            if buffer_end > self._buffer_matrix.shape[0]:
-                self._load_buffer()
-                buffer_begin = self._buffer_index
-                buffer_end = buffer_begin + self.variants_per_batch
-            self._buffer_index = buffer_end
             self._training_batch += 1
         else:
-            # next batch to emit is for validation
-            buffer_begin = self._validation_buffer_index
-            buffer_end = buffer_begin + self.variants_per_batch
-            if buffer_end > self._buffer_matrix.shape[0]:
-                self._load_buffer()
-                buffer_begin = self._validation_buffer_index
-                buffer_end = buffer_begin + self.variants_per_batch
-            self._validation_buffer_index = buffer_end
             self._validation_batch += 1
         self._current_row += self.variants_per_batch
 
-        (self._ids_array[:], self._weights_tensor[:], self._numpy_tensor[:, :, :num_variant_properties],
-         self._numpy_tensor[:, :, num_variant_properties:]) = VcfTensorDataLoaderBase._get_next_tensor_blocks(
-            buffer_matrix=self._buffer_matrix[buffer_begin:buffer_end, :],
-            variant_ids_column=self._variant_id_column, variant_weights_column=self._variant_weights_column,
-            variant_columns=self._variant_columns, format_columns=self._format_columns, num_samples=self.num_samples
-        )
-        self._gq_tensor[:] = self._buffer_matrix[buffer_begin:buffer_end, :].take(self._gq_columns, axis=1)
-        VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_good_dict,
+        with locked_read(pickle_file, mode="rb", delete_after_read=True, sleep_time_s=Default.sleep_time_s) as f_in:
+            ids_array, weights_tensor, numpy_tensor = pickle.load(f_in)
+        self._gq_tensor[:] = numpy_tensor.take(self._gq_column, axis=2)
+        VcfTrainingTensorDataLoader._fill_truth_tensor(ids_array, self._genotype_is_good_dict,
                                                        self._genotype_is_good_tensor)
-        VcfTrainingTensorDataLoader._fill_truth_tensor(self._ids_array, self._genotype_is_bad_dict,
+        VcfTrainingTensorDataLoader._fill_truth_tensor(ids_array, self._genotype_is_bad_dict,
                                                        self._genotype_is_bad_tensor)
-
         return (
             is_training_batch,
             self._tensor_scale * (
-                torch.tensor(self._numpy_tensor, dtype=torch.float32, device=self.torch_device)
+                torch.tensor(numpy_tensor, dtype=torch.float32, device=self.torch_device)
                 - self._tensor_baseline
             ).nan_to_num(),
-            torch.tensor(self._weights_tensor, dtype=torch.float32, device=self.torch_device),
+            torch.tensor(weights_tensor, dtype=torch.float32, device=self.torch_device),
             torch.tensor(self._gq_tensor, dtype=torch.float32, device=self.torch_device),
             torch.tensor(self._genotype_is_good_tensor, dtype=torch.float32, device=self.torch_device),
             torch.tensor(self._genotype_is_bad_tensor, dtype=torch.float32, device=self.torch_device),
@@ -680,6 +776,237 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             truth_indices = variant_id_trainable_map.get(variant_id, None)
             if truth_indices is not None:
                 truth_tensor[row, :].put(truth_indices, 1.0)
+
+    @staticmethod
+    def _pickle_batch_tensors(
+            parquet_file: str,
+            pickle_folder: str,
+            previous_pickle_folder: Optional[str],
+            wanted_columns: list[str],
+            random_seed: Optional[int],
+            variants_per_batch: int,
+            num_samples: int,
+            num_properties: int,
+            variant_weights_column: int,
+            variant_columns: numpy.ndarray,
+            format_columns: numpy.ndarray,
+            validation_proportion: float,
+            trainable_variant_ids: set[str],
+            variant_id_column: int
+    ) -> str:
+        t0 = time.time()
+        # # read the basic buffer into a numpy array, only loading trainable variant IDs
+        id_filter = (wanted_columns[variant_id_column], 'in', trainable_variant_ids)
+        buffer = pandas.read_parquet(parquet_file, columns=wanted_columns, filters=[id_filter]).values
+        t1 = time.time()
+        # split new buffer up so that the first block of rows is for validation, remaining for training,
+        # and randomly permute the indices within training / permutation blocks if desired
+        validation_index = round(buffer.shape[0] * validation_proportion)
+        if random_seed is not None:
+            random_state = numpy.random.RandomState(random_seed)
+            perm_validation = random_state.permutation(validation_index)
+            perm_training = validation_index + random_state.permutation(buffer.shape[0] - validation_index)
+        else:
+            perm_validation = numpy.arange(validation_index)
+            perm_training = numpy.arange(validation_index, buffer.shape[0])
+        t2 = time.time()
+        # load remainder buffers
+        training_remainder_buffer = VcfTrainingTensorDataLoader.load_remainder_buffer(
+            pickle_folder=previous_pickle_folder, is_training=True, num_properties=num_properties
+        )
+        validation_remainder_buffer = VcfTrainingTensorDataLoader.load_remainder_buffer(
+            pickle_folder=previous_pickle_folder, is_training=False, num_properties=num_properties
+        )
+
+        t3 = time.time()
+        # construct an iterator to handle divvying up the variants into interleaved training/validation batches
+        training_batch_iterator = TrainingBatchIterator(
+            num_training_variants=buffer.shape[0] - validation_index + training_remainder_buffer.shape[0],
+            num_validation_variants=validation_index + validation_remainder_buffer.shape[0],
+            variants_per_batch=variants_per_batch, pickle_folder=pickle_folder, parquet_file=parquet_file,
+            previous_training_remainder_ids=training_remainder_buffer.take(variant_id_column, axis=1),
+            previous_validation_remainder_ids=validation_remainder_buffer.take(variant_id_column, axis=1),
+        )
+        # save iterator so that the main tensor data loader can also iterate over the batches
+        training_batch_iterator.to_json()
+        # pickle remainder variants (variants that are not enough for a complete batch) if any
+        # do this FIRST, because now there will be enough information for another process to proceed onto the next
+        # batch of variants
+        pickle_file = VcfTrainingTensorDataLoader.get_nth_pickle_file(pickle_folder, n=Keys.remainder,
+                                                                      is_training=True)
+        VcfTrainingTensorDataLoader.pickle_remainder(pickle_file, training_batch_iterator.num_training_remainder,
+                                                     perm_training, buffer, training_remainder_buffer)
+        pickle_file = VcfTrainingTensorDataLoader.get_nth_pickle_file(pickle_folder, n=Keys.remainder,
+                                                                      is_training=False)
+        VcfTrainingTensorDataLoader.pickle_remainder(pickle_file, training_batch_iterator.num_validation_remainder,
+                                                     perm_validation, buffer, validation_remainder_buffer)
+        t4 = time.time()
+        # construct numpy arrays that will hold tensors for each batch
+        numpy_tensor = numpy.empty(
+            (variants_per_batch, num_samples, num_properties), dtype=numpy.float32
+        )
+        weights_tensor = numpy.empty(variants_per_batch, dtype=numpy.float32)
+        ids_array = pandas.array([""] * variants_per_batch, dtype="string[pyarrow]")
+
+        # iterate over batches in order, and pickle the batch tensors
+        num_variant_properties = len(variant_columns)
+        training_buffer_end = 0
+        validation_buffer_end = 0
+        for is_training_batch, pickle_file, batch_number in training_batch_iterator:
+            has_remainder = batch_number == 0 and (
+                training_remainder_buffer.shape[0] > 0 if is_training_batch
+                else validation_remainder_buffer.shape[0] > 0
+            )
+            if has_remainder:
+                # first batch has to handle remainders
+                if is_training_batch:
+                    remainder_buffer = training_remainder_buffer
+                    num_remainder = remainder_buffer.shape[0]
+                    training_buffer_begin = training_buffer_end
+                    training_buffer_end += (variants_per_batch - num_remainder)
+                    indices = perm_training[training_buffer_begin:training_buffer_end]
+                else:
+                    remainder_buffer = validation_remainder_buffer
+                    num_remainder = remainder_buffer.shape[0]
+                    validation_buffer_begin = validation_buffer_end
+                    validation_buffer_end += (variants_per_batch - num_remainder)
+                    indices = perm_validation[validation_buffer_begin:validation_buffer_end]
+                try:
+                    (
+                        ids_array[:num_remainder],
+                        weights_tensor[:num_remainder],
+                        numpy_tensor[:num_remainder, :, :num_variant_properties],
+                        numpy_tensor[:num_remainder, :, num_variant_properties:]
+                    ) = VcfTensorDataLoaderBase._get_next_tensor_blocks(
+                        buffer_matrix=remainder_buffer, variant_ids_column=variant_id_column,
+                        variant_weights_column=variant_weights_column, variant_columns=variant_columns,
+                        format_columns=format_columns, num_samples=num_samples
+                    )
+                except Exception:
+                    print(f"Error filling remainder tensors for {parquet_file} in {pickle_folder}: "
+                          f"training ? {is_training_batch}, num_remainder: {num_remainder}")
+                    raise
+                try:
+                    (
+                        ids_array[num_remainder:],
+                        weights_tensor[num_remainder:],
+                        numpy_tensor[num_remainder:, :, :num_variant_properties],
+                        numpy_tensor[num_remainder:, :, num_variant_properties:]
+                    ) = VcfTensorDataLoaderBase._get_next_tensor_blocks(
+                        buffer_matrix=buffer.take(indices, axis=0), variant_ids_column=variant_id_column,
+                        variant_weights_column=variant_weights_column, variant_columns=variant_columns,
+                        format_columns=format_columns, num_samples=num_samples
+                    )
+                except Exception:
+                    print(f"Error filling *after* remainder tensors for {parquet_file} in {pickle_folder}: "
+                          f"training ? {is_training_batch}, num_remainder: {num_remainder}")
+                    raise
+            else:
+                # past the remainders, just take the needed variants from the buffer
+                if is_training_batch:
+                    training_buffer_begin = training_buffer_end
+                    training_buffer_end += variants_per_batch
+                    indices = perm_training[training_buffer_begin:training_buffer_end]
+                else:
+                    validation_buffer_begin = validation_buffer_end
+                    validation_buffer_end += variants_per_batch
+                    indices = perm_validation[validation_buffer_begin:validation_buffer_end]
+                try:
+                    (
+                        ids_array[:],
+                        weights_tensor[:],
+                        numpy_tensor[:, :, :num_variant_properties],
+                        numpy_tensor[:, :, num_variant_properties:]
+                    ) = VcfTensorDataLoaderBase._get_next_tensor_blocks(
+                        buffer_matrix=buffer.take(indices, axis=0),
+                        variant_ids_column=variant_id_column, variant_weights_column=variant_weights_column,
+                        variant_columns=variant_columns, format_columns=format_columns, num_samples=num_samples
+                    )
+                except Exception:
+                    print(f"Error filling regular tensors for {parquet_file} in {pickle_folder}: "
+                          f"training ? {is_training_batch}")
+                    raise
+            with locked_write(pickle_file, mode="wb") as f_out:
+                pickle.dump((ids_array, weights_tensor, numpy_tensor), f_out, protocol=pickle.HIGHEST_PROTOCOL)
+        t5 = time.time()
+        print(
+            f"time to load buffer: {t1 - t0}, make permutations: {t2 - t1}, load remainders: {t3 - t2}, "
+            f"plan batches +pickle remainders: {t4 - t3}, pickle batches: {t5 - t4}"
+        )
+
+        return parquet_file
+
+    @staticmethod
+    def load_remainder_buffer(
+            pickle_folder: Optional[str],
+            is_training: bool,
+            num_properties: int,
+            delete_after_read: bool = Default.delete_after_read,
+            sleep_time_s: float = Default.sleep_time_s
+    ) -> numpy.ndarray:
+        if pickle_folder is None:
+            return numpy.empty((0, num_properties), dtype=numpy.float32)
+        pickle_file = VcfTrainingTensorDataLoader.get_nth_pickle_file(pickle_folder, n=Keys.remainder,
+                                                                      is_training=is_training)
+        with locked_read(pickle_file, "rb", delete_after_read=delete_after_read, sleep_time_s=sleep_time_s) as f_in:
+            buffer = pickle.load(f_in)
+        return buffer
+
+    def _get_pickle_folder(self) -> str:
+        return tempfile.mkdtemp(dir=self._temp_dir)
+
+    @staticmethod
+    def get_nth_pickle_file(pickle_folder: str, n: Union[int, str], is_training: bool) -> str:
+        return os.path.join(pickle_folder,
+                            f"{Keys.training if is_training else Keys.validation}_{n}{Keys.pickle_suffix}")
+
+    @staticmethod
+    def get_next_batch(training_batch: int, validation_batch: int, validation_proportion: float) -> (bool, int, int):
+        is_training_batch = training_batch * validation_proportion < \
+                            (validation_batch + 1) * (1.0 - validation_proportion)
+        if is_training_batch:
+            training_batch += 1
+        else:
+            validation_batch += 1
+        return is_training_batch, training_batch, validation_batch
+
+    @staticmethod
+    def pickle_remainder(
+            pickle_file: str,
+            num_remainder: int,
+            buffer_indices: numpy.ndarray,
+            buffer: numpy.ndarray,
+            previous_remainder_buffer: numpy.ndarray
+    ):
+        with locked_write(pickle_file, mode="wb") as f_out:
+            if num_remainder > buffer_indices.size:
+                # need to copy over part of the previous remainder into the next remainder
+                num_previous = num_remainder - buffer_indices.size
+                if num_previous != previous_remainder_buffer.shape[0]:
+                    print(f"num_remainder wrong size: {num_remainder}, indices: {buffer_indices.size}, previous_remainder: {previous_remainder_buffer.shape[0]}")
+                try:
+                    new_remainder = numpy.concatenate(
+                        (previous_remainder_buffer, buffer.take(buffer_indices, axis=0)),
+                        axis=0
+                    )
+                except Exception as exception:
+                    print(f"got exception {str(exception)} making new_remainder")
+                    raise
+                try:
+                    pickle.dump(new_remainder, f_out, protocol=pickle.HIGHEST_PROTOCOL)
+                except Exception as exception:
+                    print(f"got exception {str(exception)} dumping new_remainder")
+                    raise
+            else:
+                try:
+                    pickle.dump(
+                        buffer.take(buffer_indices[-num_remainder:], axis=0),
+                        f_out,
+                        protocol=pickle.HIGHEST_PROTOCOL
+                    )
+                except Exception as exception:
+                    print(f"got exception {str(exception)} dumping regular remainder of length {num_remainder}")
+                    raise
 
     def __len__(self) -> int:
         # report the number of training batches in the iterator

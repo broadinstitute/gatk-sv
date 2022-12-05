@@ -2410,8 +2410,7 @@ def load_quality_data(
             for sv_category, cutoff in get_truth_overlap.load_optimal_overlap_cutoffs(
                 optimal_overlap_cutoffs_file
             ).items()
-        }  # noqa: E123
-
+        }  # noqa: E123   # ignore PEP8 error. Sometimes pycharm thinks these brackets don't align, I think it's wrong
     return truth_data, sv_selectors, scores_data_sets
 
 

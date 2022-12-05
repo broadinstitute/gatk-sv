@@ -263,7 +263,7 @@ def postprocess_bnd_complex(
     return complex_variants.loc[original_index] if reduce_single_intervals else \
         genomics_io.vcat_with_categoricals(
             (complex_variants, simple_interval_overlaps.loc[simple_variants.loc[is_single_interval].index]),
-        ).loc[original_index]  # noqa E123
+        ).loc[original_index]
 
 
 def apply_interval_overlap_func(
