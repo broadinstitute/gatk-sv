@@ -226,14 +226,64 @@ task MakeQcTable {
   }
 
   command <<<
-    set -euxo pipefail
+  set -euxo pipefail
 
     PLOIDY=""
     if ~{defined(ploidy_plots)}; then
-      PLOIDY="--ploidy-plots ~{ploidy_plots}"
+      PLOIDY="--estimated-copy-number-filename ~{ploidy_plots}"
 
-    python sv-pipeline/scripts/make_evidence_qc_table.py \
-      $PLOIDY
+    BINCOV_MEDIAN=""
+    if ~{defined(bincov_median)}; then
+      BINCOV_MEDIAN="--median-cov-filename ~{bincov_median}"
+
+    WGD_SCORES=""
+    if ~{defined(wgd_scores)}; then
+      WGD_SCORES="--wgd-scores-filename ~{wgd_scores}"
+
+    BINWISE_CNV_Q=""
+    if ~{defined(binwise_cnv_q)}; then
+      BINWISE_CNV_Q="--binwise-cnv-qvalues-filename ~{binwise_cnv_q}"
+
+    MELT_INSERT_SIZE=""
+    if ~{defined(melt_insert_size)}; then
+      MELT_INSERT_SIZE="--melt-insert-size-filename ~{melt_insert_size}"
+
+    MANTA_QC_LOW=""
+    if ~{defined(manta_qc_low)}; then
+      MANTA_QC_LOW="--manta-qc-outlier-low-filename ~{manta_qc_low}"
+
+    MANTA_QC_HIGH=""
+    if ~{defined(manta_qc_high)}; then
+      MANTA_QC_HIGH="--manta-qc-outlier-high-filename ~{manta_qc_high}"
+
+    MELT_QC_LOW=""
+    if ~{defined(melt_qc_low)}; then
+      MELT_QC_LOW="--melt-qc-outlier-low-filename ~{melt_qc_low}"
+
+    MELT_QC_HIGH=""
+    if ~{defined(melt_qc_high)}; then
+      MELT_QC_HIGH="--melt-qc-outlier-high-filename ~{melt_qc_high}"
+
+    WHAM_QC_LOW=""
+    if ~{defined(wham_qc_low)}; then
+      WHAM_QC_LOW="--wham-qc-outlier-low-filename ~{wham_qc_low}"
+
+    WHAM_QC_HIGH=""
+    if ~{defined(wham_qc_high)}; then
+      WHAM_QC_HIGH="--wham-qc-outlier-high-filename ~{wham_qc_high}"
+
+ python sv-pipeline/scripts/make_evidence_qc_table.py \
+      $PLOIDY \
+      $BINCOV_MEDIAN \
+      $WGD_SCORES \
+      $BINWISE_CNV_Q
+      $MELT_INSERT_SIZE
+      $MANTA_QC_LOW \
+      $MANTA_QC_HIGH \
+      $MELT_QC_LOW \
+      $MELT_QC_HIGH \
+      $WHAM_QC_LOW \
+      $WHAM_QC_HIGH
   >>>
 
   RuntimeAttr runtime_default = object {
