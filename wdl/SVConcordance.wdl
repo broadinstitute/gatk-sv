@@ -11,6 +11,8 @@ workflow SVConcordance {
     File ploidy_table
     String cohort
 
+    Boolean filter_cpx_ctx
+
     Boolean? run_svutils_truth_vcf
     Boolean? run_formatter_truth_vcf
     String? formatter_truth_args
@@ -61,6 +63,7 @@ workflow SVConcordance {
       input:
         vcf=select_first([SvutilsTruth.out, truth_vcf]),
         ploidy_table=ploidy_table,
+        filter_cpx_ctx=filter_cpx_ctx,
         args=formatter_truth_args,
         output_prefix="~{cohort}.format_truth",
         script=svtk_to_gatk_script,
@@ -83,6 +86,7 @@ workflow SVConcordance {
       input:
         vcf=select_first([SvutilsEval.out, eval_vcf]),
         ploidy_table=ploidy_table,
+        filter_cpx_ctx=filter_cpx_ctx,
         args=formatter_eval_args,
         output_prefix="~{cohort}.format_eval",
         script=svtk_to_gatk_script,
@@ -167,6 +171,7 @@ task PreprocessVcf {
   input {
     File vcf
     File ploidy_table
+    Boolean filter_cpx_ctx
     File? script
     String? args
     String output_prefix
@@ -193,11 +198,14 @@ task PreprocessVcf {
   command <<<
     set -euo pipefail
 
+    touch ~{output_prefix}.filtered_records.vcf.gz
+    touch ~{output_prefix}.filtered_records.vcf.gz.tbi
+
     # Convert format
     python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
       --vcf ~{vcf} \
       --out tmp.vcf.gz \
-      --filter-out ~{output_prefix}.filtered_records.vcf.gz \
+      ~{if filter_cpx_ctx then "--filter-out ~{output_prefix}.filtered_records.vcf.gz" else ""} \
       --ploidy-table ~{ploidy_table} \
       ~{args}
 
@@ -205,7 +213,7 @@ task PreprocessVcf {
     bcftools view --no-version -i 'INFO/SVLEN="." || INFO/SVLEN>0' tmp.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
 
     tabix ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.filtered_records.vcf.gz
+    tabix -f ~{output_prefix}.filtered_records.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

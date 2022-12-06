@@ -222,6 +222,9 @@ def convert(record: pysam.VariantRecord,
                     new_genotype['CN'] = 0
         if svtype == 'CNV':
             new_genotype['GT'] = (None,) * new_genotype['ECN']
+    # GATK does not allow non-positive lengths
+    if new_record.info['SVLEN'] <= 0:
+        new_record.info['SVLEN'] = None
     return new_record
 
 
