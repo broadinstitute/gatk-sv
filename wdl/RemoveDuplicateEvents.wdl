@@ -46,7 +46,7 @@ task RemoveDuplicateEventsTask {
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
     mem_gb: 3.75,
-    disk_gb: ceil(10.0 + (input_size * 1.5)),
+    disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
