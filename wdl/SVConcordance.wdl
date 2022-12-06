@@ -207,7 +207,7 @@ task PreprocessVcf {
     # Convert format
     python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
       --vcf ~{vcf} \
-      --out tmp.vcf.gz \
+      --out ~{output_prefix}.vcf.gz \
       ~{if filter_cpx_ctx then "--filter-out ~{output_prefix}.filtered_records.vcf.gz" else ""} \
       --ploidy-table ~{ploidy_table} \
       ~{args}
