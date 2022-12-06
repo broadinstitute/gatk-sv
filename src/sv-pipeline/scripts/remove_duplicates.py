@@ -79,7 +79,8 @@ def merge_records(record, other, out):
     gts_match = "same_GTs"
     if mismatch_counter > 0:
         gts_match = "diff_GTs"
-    out.write(f"{record.id}\t{other.id}\t{','.join(combined_filters)}\t{gts_match}\t{mismatch_counter}\n")
+    event = f"{record.chrom}_{record.pos}_{record.stop}_{record.info['SVTYPE']}"
+    out.write(f"{event}\t{record.id}\t{other.id}\t{','.join(combined_filters)}\t{gts_match}\t{mismatch_counter}\n")
 
 
 def increment_dup_dict(dup_dict, sv_type):
@@ -117,7 +118,7 @@ def main():
     with pysam.VariantFile(args.vcf, 'r') as f_in, \
             pysam.VariantFile(args.out, 'w', header=f_in.header) as f_out, \
             open(args.table, 'w') as dups:
-        dups.write("SVID_1\tSVID_2\tFILTERS\tGTs\tGT_mismatches\n")
+        dups.write("SV\tSVID_1\tSVID_2\tFILTERS\tGTs\tGT_mismatches\n")
         for record in f_in:
             all_counter += 1
             if record.start == last_pos:
