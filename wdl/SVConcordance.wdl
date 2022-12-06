@@ -11,6 +11,8 @@ workflow SVConcordance {
     File ploidy_table
     String cohort
 
+    # Filter CPX and CTX records, which are not currently supported in GATK
+    # If False, they will be converted to BNDs with the original type annotated as OSVTYPE
     Boolean filter_cpx_ctx
 
     Boolean? run_svutils_truth_vcf
@@ -198,6 +200,7 @@ task PreprocessVcf {
   command <<<
     set -euo pipefail
 
+    # Create empty outputs in case filtering is turned off
     touch ~{output_prefix}.filtered_records.vcf.gz
     touch ~{output_prefix}.filtered_records.vcf.gz.tbi
 
@@ -209,11 +212,10 @@ task PreprocessVcf {
       --ploidy-table ~{ploidy_table} \
       ~{args}
 
-    # TODO Filter invalid records with SVLEN=0, only needed for legacy runs that used svtk cluster in ClusterBatch
-    bcftools view --no-version -i 'INFO/SVLEN="." || INFO/SVLEN>0' tmp.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
-
     tabix ~{output_prefix}.vcf.gz
-    tabix -f ~{output_prefix}.filtered_records.vcf.gz
+    if ~{filter_cpx_ctx}; then
+      tabix -f ~{output_prefix}.filtered_records.vcf.gz
+    fi
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
