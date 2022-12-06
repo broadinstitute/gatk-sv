@@ -87,9 +87,9 @@ def refine_labels(vids: Set[Text],
                   labels1: Dict,
                   labels2: Dict) -> Dict:
     return {key: labels1[key] for key in vids
-            if key in labels1 and key in labels2
-            and ((labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False'))
-            or key in bypass_vids)}
+            if (key in labels1 and key in labels2
+            and (labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False')))
+            or key in bypass_vids}
 
 
 def write_json(path: Text,
@@ -134,7 +134,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              "loosely clustered vcf")
     parser.add_argument("--loose-max-algorithm-count", type=int, default=0,
                         help="Maximum number of truth algorithms for call to be false for loosely clustered vcf")
-    parser.add_argument("--cnv-size-cutoff", type=int, default=10000,
+    parser.add_argument("--cnv-size-cutoff", type=int, default=5000,
                         help="Retain DEL and DUP variants in the input truth json that are above this size")
     parser.add_argument("--ins-size-cutoff", type=int, default=5000,
                         help="Retain INS variants in the input truth json that are above this size")
