@@ -7,6 +7,13 @@ import pysam
 import sys
 from typing import Any, List, Text, Set, Dict, Optional, Tuple
 
+"""
+Refines a GQRecalibrator training sites json files with SV calls from PacBio data.
+
+Looks for calls clustered together in the input vcfs and comes up with consensus positive/negative labels 
+for small/med dup/del/ins calls. Note large del/dup/ins and all inv from the input json are passed through 
+automatically. Other SV types are not included.
+"""
 
 GOOD_VARIANTS_KEY = 'good_variant_ids'
 BAD_VARIANTS_KEY = 'bad_variant_ids'
@@ -31,18 +38,20 @@ def parse_input_labels(json_path: Text,
     return labels
 
 
-def get_vids_and_large_cnvs(vcf: pysam.VariantFile,
-                            size_cutoff: int) -> Tuple[Set[Text], Set[Text]]:
+def get_vids_and_bypass(vcf: pysam.VariantFile,
+                        cnv_size_cutoff: int,
+                        ins_size_cutoff: int) -> Tuple[Set[Text], Set[Text]]:
     vids = set()
-    large_cnv_vids = set()
+    bypass_vids = set()
     cnv_types = ['DEL', 'DUP']
     for record in vcf:
         vids.add(record.id)
-        if record.info['SVTYPE'] in cnv_types:
-            svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.stop - record.pos
-            if svlen > size_cutoff:
-                large_cnv_vids.add(record.id)
-    return vids, large_cnv_vids
+        svtype = record.info['SVTYPE']
+        svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.stop - record.pos
+        if (svtype in cnv_types and svlen >= cnv_size_cutoff) or \
+           (svtype == 'INS' and svlen >= ins_size_cutoff) or svtype == 'INV':
+            bypass_vids.add(record.id)
+    return vids, bypass_vids
 
 
 def parse_truth_support(vcf: pysam.VariantFile,
@@ -74,13 +83,13 @@ def parse_truth_support(vcf: pysam.VariantFile,
 
 
 def refine_labels(vids: Set[Text],
-                  large_cnv_vids: Set[Text],
+                  bypass_vids: Set[Text],
                   labels1: Dict,
                   labels2: Dict) -> Dict:
     return {key: labels1[key] for key in vids
             if key in labels1 and key in labels2
             and ((labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False'))
-            or key in large_cnv_vids)}
+            or key in bypass_vids)}
 
 
 def write_json(path: Text,
@@ -127,6 +136,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Maximum number of truth algorithms for call to be false for loosely clustered vcf")
     parser.add_argument("--cnv-size-cutoff", type=int, default=10000,
                         help="Retain DEL and DUP variants in the input truth json that are above this size")
+    parser.add_argument("--ins-size-cutoff", type=int, default=5000,
+                        help="Retain INS variants in the input truth json that are above this size")
     parser.add_argument("--truth-algorithms", type=str, default="pbsv,sniffles,pav",
                         help="Comma-delimited list of truth ALGORITHMS values")
 
@@ -153,7 +164,8 @@ def main(argv: Optional[List[Text]] = None):
 
     # Get vids we're looking for
     with pysam.VariantFile(arguments.main_vcf) as vcf:
-        main_vids, large_cnv_vids = get_vids_and_large_cnvs(vcf, size_cutoff=arguments.cnv_size_cutoff)
+        main_vids, bypass_vids = get_vids_and_bypass(vcf, cnv_size_cutoff=arguments.cnv_size_cutoff,
+                                                     ins_size_cutoff=arguments.ins_size_cutoff)
 
     # Parse clustered vcfs and generate labels
     truth_algs = _parse_arg_list(arguments.truth_algorithms)
@@ -176,7 +188,7 @@ def main(argv: Optional[List[Text]] = None):
     clustering_labels.update(loose_clustering_labels)
 
     # Get consensus
-    refined_labels = refine_labels(vids=main_vids, large_cnv_vids=large_cnv_vids,
+    refined_labels = refine_labels(vids=main_vids, bypass_vids=bypass_vids,
                                    labels1=original_labels, labels2=clustering_labels)
     write_json(path=arguments.out, sample_id=arguments.sample_id, labels=refined_labels)
 
