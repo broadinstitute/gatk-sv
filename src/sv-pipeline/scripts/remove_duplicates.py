@@ -128,6 +128,8 @@ def main():
                     f_out.write(rec)
                 last_pos = record.start  # start over for new pos
                 same_pos = [record]
+        for rec in same_pos:
+            f_out.write(rec)
 
     print(f"Found {dup_counter} duplicated variants out of {all_counter}")
     print(dup_dict)
