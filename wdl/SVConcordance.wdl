@@ -14,6 +14,10 @@ workflow SVConcordance {
 
     Int? records_per_shard
 
+    # Filter CPX and CTX records, which are not currently supported in GATK
+    # If False, they will be converted to BNDs with the original type annotated as OSVTYPE
+    Boolean filter_cpx_ctx
+
     Boolean? run_svutils_truth_vcf
     Boolean? run_formatter_truth_vcf
     String? formatter_truth_args
@@ -70,6 +74,7 @@ workflow SVConcordance {
         run_formatter=run_formatter_truth_vcf,
         formatter_args=formatter_truth_args,
         svtk_to_gatk_script=svtk_to_gatk_script,
+        filter_cpx_ctx=filter_cpx_ctx,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_utils_docker=sv_utils_docker,
         runtime_attr_scatter=runtime_attr_scatter_truth,
@@ -91,6 +96,7 @@ workflow SVConcordance {
         run_formatter=run_formatter_eval_vcf,
         formatter_args=formatter_eval_args,
         svtk_to_gatk_script=svtk_to_gatk_script,
+        filter_cpx_ctx=filter_cpx_ctx,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_utils_docker=sv_utils_docker,
         runtime_attr_scatter=runtime_attr_scatter_eval,
@@ -177,6 +183,7 @@ task PreprocessVcf {
   input {
     File vcf
     File ploidy_table
+    Boolean filter_cpx_ctx
     File? script
     String? args
     String output_prefix
@@ -203,19 +210,22 @@ task PreprocessVcf {
   command <<<
     set -euo pipefail
 
+    # Create empty outputs in case filtering is turned off
+    touch ~{output_prefix}.filtered_records.vcf.gz
+    touch ~{output_prefix}.filtered_records.vcf.gz.tbi
+
     # Convert format
     python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
       --vcf ~{vcf} \
-      --out tmp.vcf.gz \
-      --filter-out ~{output_prefix}.filtered_records.vcf.gz \
+      --out ~{output_prefix}.vcf.gz \
+      ~{if filter_cpx_ctx then "--filter-out ~{output_prefix}.filtered_records.vcf.gz" else ""} \
       --ploidy-table ~{ploidy_table} \
       ~{args}
 
-    # TODO Filter invalid records with SVLEN=0, only needed for legacy runs that used svtk cluster in ClusterBatch
-    bcftools view --no-version -i 'INFO/SVLEN="." || INFO/SVLEN>0' tmp.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
-
     tabix ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.filtered_records.vcf.gz
+    if ~{filter_cpx_ctx}; then
+      tabix -f ~{output_prefix}.filtered_records.vcf.gz
+    fi
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
