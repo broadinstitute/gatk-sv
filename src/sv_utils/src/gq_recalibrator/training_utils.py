@@ -1,7 +1,23 @@
 import time
+import signal
+import psutil
 import numpy
 from sv_utils import common
 from typing import Optional, Any
+
+
+def kill_child_processes(parent_pid: int, sig: signal.Signals = signal.SIGTERM):
+    """
+    If a concurrent job is stuck and needs to be canceled, you may need to kill all child processes
+    from https://stackoverflow.com/questions/42782953/python-concurrent-futures-how-to-make-it-cancelable
+    """
+    try:
+        parent = psutil.Process(parent_pid)
+    except psutil.NoSuchProcess:
+        return
+    children = parent.children(recursive=True)
+    for process in children:
+        process.send_signal(sig)
 
 
 class BatchLosses:

@@ -32,6 +32,7 @@ ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 class Keys:
     cuda = vcf_tensor_data_loaders.Keys.cuda
     cpu = vcf_tensor_data_loaders.Keys.cpu
+    mps = vcf_tensor_data_loaders.Keys.mps
     id = tarred_properties_to_parquet.Keys.id
     variant_weights = tarred_properties_to_parquet.Keys.variant_weights
     positive_value = tarred_properties_to_parquet.Keys.positive_value
@@ -64,10 +65,10 @@ class Default:
     optim_kwargs = MappingProxyType({"weight_decay": 0.1, "lr": 1.0e-3})
     hidden_nonlinearity = gq_recalibrator_net.Default.hidden_nonlinearity
     output_nonlinearity = gq_recalibrator_net.Default.output_nonlinearity
-    max_gradient_value = 0.01
-    max_gradient_norm = 1.0e-3
-    correlation_loss_weight = 0.1
-    num_processes = common.num_physical_cpus
+    max_gradient_value = 0.0  # 0.01
+    max_gradient_norm = 0.0  # 1.0e-3
+    correlation_loss_weight = 0.5
+    num_processes = vcf_tensor_data_loaders.Default.max_look_ahead_batches + 1  # common.num_physical_cpus
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -100,8 +101,10 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                         help="initial random seed")
     parser.add_argument("--excluded-properties", type=str, default=','.join(Default.excluded_properties),
                         help="comma-separated list of properties to not use in tensor")
-    parser.add_argument("--torch-device", type=str, default=Default.torch_device, choices=[Keys.cpu, Keys.cuda],
-                        help="Device on which to perform training")
+    parser.add_argument(
+        "--torch-device", type=str, default=Default.torch_device,
+        choices=[Keys.cpu, Keys.cuda, Keys.mps], help="Device on which to perform training"
+    )
     parser.add_argument("--scale-bool-properties", type=common.argparse_bool, default=Default.scale_bool_properties,
                         help="If true, z-score bool variables too. If false, leave as 0.0 or 1.0. Scaling can result in"
                              "large values if the bool variable is mostly true or mostly false.")
@@ -329,14 +332,37 @@ def save(
     pickle_dict = {
         Keys.logger_kwargs: training_logger.save_dict,
         Keys.data_loader_state: vcf_tensor_data_loader.state_dict,
-        Keys.net_kwargs: neural_net.save_dict,
+        Keys.net_kwargs: neural_net.to(Keys.cpu).save_dict,
         Keys.optimizer_type: type(optimizer),
-        Keys.optimizer_kwargs: optimizer.state_dict(),
+        Keys.optimizer_kwargs: state_dict_to(
+            state_dict=optimizer.state_dict(),
+            device=vcf_tensor_data_loaders.get_torch_device(Keys.cpu,  progress_logger=None)
+        ),
         Keys.training_losses: training_losses.save_dict,
         Keys.validation_losses: validation_losses.save_dict
     }
     with open(save_path, "wb") as f_out:
         torch.save(pickle_dict, f_out)
+
+
+def state_dict_to(state_dict: dict[str, Any], device: torch.device) -> dict[str, Any]:
+    """
+    move state_dict to desired device, necessary for optimizer
+    idea taken from: https://discuss.pytorch.org/t/moving-optimizer-from-cpu-to-gpu/96068/3
+    """
+    moved_state_dict = {}
+    for key, param in state_dict.items():
+        # Not sure there are any global tensors in the state dict
+        if isinstance(param, torch.Tensor):
+            moved_param = param.detach().to(device)
+            if param._grad is not None:
+                moved_param._grad.data = param.detach()._grad.data.to(device)
+            moved_state_dict[key] = moved_param
+        elif isinstance(param, dict):
+            moved_state_dict[key] = state_dict_to(param, device)
+        else:
+            moved_state_dict[key] = param
+    return moved_state_dict
 
 
 def load(
@@ -371,7 +397,12 @@ def load(
     neural_net = gq_recalibrator_net.GqRecalibratorNet(**pickle_dict[Keys.net_kwargs])\
         .to(vcf_tensor_data_loader.torch_device).train()
     optimizer = pickle_dict[Keys.optimizer_type](neural_net.parameters())
-    optimizer.load_state_dict(pickle_dict[Keys.optimizer_kwargs])
+    optimizer.load_state_dict(
+        state_dict_to(
+            state_dict=pickle_dict[Keys.optimizer_kwargs],
+            device=vcf_tensor_data_loader.torch_device
+        )
+    )
     training_losses = training_utils.BatchLosses(**pickle_dict[Keys.training_losses])
     validation_losses = training_utils.BatchLosses(**pickle_dict[Keys.validation_losses])
     return training_logger, vcf_tensor_data_loader, neural_net, optimizer, training_losses, validation_losses

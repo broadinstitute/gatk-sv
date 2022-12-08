@@ -1,6 +1,11 @@
 from collections.abc import Mapping
 from typing import Any, Optional
 import torch
+from gq_recalibrator import vcf_tensor_data_loaders
+
+
+class Keys:
+    cpu: vcf_tensor_data_loaders.Keys.cpu
 
 
 class Default:
