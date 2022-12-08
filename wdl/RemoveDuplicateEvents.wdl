@@ -57,7 +57,7 @@ task RemoveDuplicateEventsTask {
   command <<<
     set -euo pipefail
 
-    /opt/sv-pipeline/scripts/remove_duplicates.py ~{vcf} -o ~{output_vcf} -t ~{output_table}
+    python /opt/sv-pipeline/scripts/remove_duplicates.py ~{vcf} -o ~{output_vcf} -t ~{output_table}
 
     tabix ~{output_vcf}
   >>>
