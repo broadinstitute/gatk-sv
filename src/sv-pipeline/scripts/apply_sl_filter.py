@@ -1,9 +1,5 @@
 #!/bin/env python
 
-"""
-Annotates variants with no-call rate and SL statistics
-"""
-
 import argparse
 import sys
 import pysam
@@ -13,7 +9,6 @@ from typing import Any, List, Text, Set, Dict, Optional
 _gt_status_map = dict()
 _gt_non_ref_or_no_call_map = dict()
 _gt_non_ref_map = dict()
-
 _cnv_types = ('DEL', 'DUP')
 
 
@@ -50,17 +45,14 @@ def annotate_ncr(record, n_samples, ploidy_dict):
     record.info['SL_MAX'] = max(sl) if len(sl) > 0 else None
     record.info['SL_MIN'] = min(sl) if len(sl) > 0 else None
 
-    sl = [float(gt['SL']) for _, gt in gt_items if _is_non_ref(gt['GT'])]
-    record.info['SL_MEAN_UNFILTERED'] = sum(sl) / len(sl) if len(sl) > 0 else None
-    record.info['SL_MAX_UNFILTERED'] = max(sl) if len(sl) > 0 else None
-    record.info['SL_MIN_UNFILTERED'] = min(sl) if len(sl) > 0 else None
-
 
 def apply_filter(record, sl_threshold):
     record.info['MINSL'] = sl_threshold
+    if sl_threshold is None:
+        return
     for gt in record.samples.values():
-        if gt['SL'] >= sl_threshold:
-            gt['GT'] = (None for _ in gt['GT'])
+        if _is_non_ref(gt['GT']) and gt['SL'] >= sl_threshold:
+            gt['GT'] = tuple(None for _ in gt['GT'])
 
 
 def get_threshold(record, sl_thresholds, med_size, large_size):
@@ -82,11 +74,11 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
+    k = 0
     for record in vcf:
-        if record.info['SVTYPE'] != 'CNV':
-            sl_threshold = get_threshold(record, thresholds, args.medium_size, args.large_size)
-            apply_filter(record, sl_threshold)
-            annotate_ncr(record, n_samples, ploidy_dict)
+        sl_threshold = get_threshold(record, thresholds, args.medium_size, args.large_size)
+        apply_filter(record, sl_threshold)
+        annotate_ncr(record, n_samples, ploidy_dict)
         fout.write(record)
 
 
@@ -98,7 +90,8 @@ def _create_threshold_dict(args):
         'INV': [args.inv_threshold],
         'BND': [args.bnd_threshold],
         'CPX': [args.cpx_threshold],
-        'CTX': [args.ctx_threshold]
+        'CTX': [args.ctx_threshold],
+        'CNV': [None]
     }
 
 
@@ -139,27 +132,27 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Min size for medium DEL/DUP")
     parser.add_argument("--large-size", type=float, default=1000,
                         help="Min size for large DEL/DUP")
-    parser.add_argument("--small-del-threshold", type=float, default=1,
+    parser.add_argument("--small-del-threshold", type=float,
                         help="Threshold SL for small DELs")
-    parser.add_argument("--medium-del-threshold", type=float, default=1,
+    parser.add_argument("--medium-del-threshold", type=float,
                         help="Threshold SL for medium DELs")
-    parser.add_argument("--large-del-threshold", type=float, default=1,
+    parser.add_argument("--large-del-threshold", type=float,
                         help="Threshold SL for large DELs")
-    parser.add_argument("--small-dup-threshold", type=float, default=1,
+    parser.add_argument("--small-dup-threshold", type=float,
                         help="Threshold SL for small DUPs")
-    parser.add_argument("--medium-dup-threshold", type=float, default=1,
+    parser.add_argument("--medium-dup-threshold", type=float,
                         help="Threshold SL for medium DUPs")
-    parser.add_argument("--large-dup-threshold", type=float, default=1,
+    parser.add_argument("--large-dup-threshold", type=float,
                         help="Threshold SL for large DUPs")
     parser.add_argument("--ins-threshold", type=float, default=1,
                         help="Threshold SL for INS")
     parser.add_argument("--inv-threshold", type=float, default=1,
                         help="Threshold SL for INV")
-    parser.add_argument("--bnd-threshold", type=float, default=1,
+    parser.add_argument("--bnd-threshold", type=float,
                         help="Threshold SL for BND")
-    parser.add_argument("--cpx-threshold", type=float, default=float('-inf'),
+    parser.add_argument("--cpx-threshold", type=float,
                         help="Threshold SL for CPX")
-    parser.add_argument("--ctx-threshold", type=float, default=float('-inf'),
+    parser.add_argument("--ctx-threshold", type=float,
                         help="Threshold SL for CTX")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
@@ -181,12 +174,9 @@ def main(argv: Optional[List[Text]] = None):
     header = vcf.header
     header.add_line('##INFO=<ID=NCN,Number=1,Type=Integer,Description="Number of no-call genotypes">')
     header.add_line('##INFO=<ID=NCR,Number=1,Type=Float,Description="Rate of no-call genotypes">')
-    header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of no-call and non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MIN,Number=1,Type=Float,Description="Min SL of no-call and non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of no-call and non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MEAN_UNFILTERED,Number=1,Type=Float,Description="Mean SL of non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MIN_UNFILTERED,Number=1,Type=Float,Description="Min SL of non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MAX_UNFILTERED,Number=1,Type=Float,Description="Max SL of non-ref genotypes">')
+    header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of filtered and non-ref genotypes">')
+    header.add_line('##INFO=<ID=SL_MIN,Number=1,Type=Float,Description="Min SL of filtered and non-ref genotypes">')
+    header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of filtered and non-ref genotypes">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
