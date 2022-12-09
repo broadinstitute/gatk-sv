@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
+import "FormatVcfForGatk.wdl" as format
 
 workflow SVConcordance {
   input {
@@ -10,6 +11,8 @@ workflow SVConcordance {
 
     File ploidy_table
     String cohort
+
+    Int? records_per_shard
 
     Boolean? run_svutils_truth_vcf
     Boolean? run_formatter_truth_vcf
@@ -32,14 +35,23 @@ workflow SVConcordance {
 
     Float? java_mem_fraction
 
+    RuntimeAttr? runtime_attr_scatter_truth
     RuntimeAttr? runtime_attr_svutils_truth
     RuntimeAttr? runtime_attr_format_truth
+    RuntimeAttr? runtime_attr_concat_truth
+    RuntimeAttr? runtime_attr_concat_filter_truth
+
+    RuntimeAttr? runtime_attr_scatter_eval
     RuntimeAttr? runtime_attr_svutils_eval
     RuntimeAttr? runtime_attr_format_eval
+    RuntimeAttr? runtime_attr_concat_eval
+    RuntimeAttr? runtime_attr_concat_filter_eval
+
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_concat_shards
   }
+
+  Int records_per_shard_ = select_first([records_per_shard, 50000])
 
   Boolean run_svutils_truth_vcf_ = select_first([run_svutils_truth_vcf, true])
   Boolean run_formatter_truth_vcf_ = select_first([run_formatter_truth_vcf, true])
@@ -47,47 +59,45 @@ workflow SVConcordance {
   Boolean run_svutils_eval_vcf_ = select_first([run_svutils_eval_vcf, true])
   Boolean run_formatter_eval_vcf_ = select_first([run_formatter_eval_vcf, true])
 
-  if (run_svutils_truth_vcf_) {
-    call SvutilsFixVcf as SvutilsTruth {
+  if (run_svutils_truth_vcf_ || run_formatter_truth_vcf_) {
+    call format.FormatVcfForGatk as FormatTruth {
       input:
         vcf=truth_vcf,
-        output_prefix="~{cohort}.svutils_truth",
-        sv_utils_docker=sv_utils_docker,
-        runtime_attr_override=runtime_attr_svutils_truth
-    }
-  }
-  if (run_formatter_truth_vcf_) {
-    call PreprocessVcf as FormatTruth {
-      input:
-        vcf=select_first([SvutilsTruth.out, truth_vcf]),
         ploidy_table=ploidy_table,
-        args=formatter_truth_args,
-        output_prefix="~{cohort}.format_truth",
-        script=svtk_to_gatk_script,
+        records_per_shard=records_per_shard_,
+        prefix="~{cohort}.truth",
+        run_svutils=run_svutils_truth_vcf_,
+        run_formatter=run_formatter_truth_vcf,
+        formatter_args=formatter_truth_args,
+        svtk_to_gatk_script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_format_truth
+        sv_utils_docker=sv_utils_docker,
+        runtime_attr_scatter=runtime_attr_scatter_truth,
+        runtime_attr_svutils=runtime_attr_svutils_truth,
+        runtime_attr_format=runtime_attr_format_truth,
+        runtime_attr_concat=runtime_attr_concat_truth,
+        runtime_attr_concat_filter=runtime_attr_concat_filter_truth
     }
   }
 
-  if (run_svutils_eval_vcf_) {
-    call SvutilsFixVcf as SvutilsEval {
+  if (run_svutils_eval_vcf_ || run_formatter_eval_vcf_) {
+    call format.FormatVcfForGatk as FormatEval {
       input:
         vcf=eval_vcf,
-        output_prefix="~{cohort}.svutils_eval",
-        sv_utils_docker=sv_utils_docker,
-        runtime_attr_override=runtime_attr_svutils_eval
-    }
-  }
-  if (run_formatter_eval_vcf_) {
-    call PreprocessVcf as FormatEval {
-      input:
-        vcf=select_first([SvutilsEval.out, eval_vcf]),
         ploidy_table=ploidy_table,
-        args=formatter_eval_args,
-        output_prefix="~{cohort}.format_eval",
-        script=svtk_to_gatk_script,
+        records_per_shard=records_per_shard_,
+        prefix="~{cohort}.eval",
+        run_svutils=run_svutils_eval_vcf_,
+        run_formatter=run_formatter_eval_vcf,
+        formatter_args=formatter_eval_args,
+        svtk_to_gatk_script=svtk_to_gatk_script,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_format_eval
+        sv_utils_docker=sv_utils_docker,
+        runtime_attr_scatter=runtime_attr_scatter_eval,
+        runtime_attr_svutils=runtime_attr_svutils_eval,
+        runtime_attr_format=runtime_attr_format_eval,
+        runtime_attr_concat=runtime_attr_concat_eval,
+        runtime_attr_concat_filter=runtime_attr_concat_filter_eval
     }
   }
 
@@ -95,8 +105,8 @@ workflow SVConcordance {
   scatter (contig in contigs) {
     call SVConcordanceTask {
       input:
-        eval_vcf=select_first([FormatEval.out, SvutilsEval.out, eval_vcf]),
-        truth_vcf=select_first([FormatTruth.out, SvutilsTruth.out, truth_vcf]),
+        eval_vcf=select_first([FormatEval.formatted_vcf, eval_vcf]),
+        truth_vcf=select_first([FormatTruth.formatted_vcf, truth_vcf]),
         output_prefix="~{cohort}.concordance.~{contig}",
         contig=contig,
         reference_dict=reference_dict,
@@ -119,10 +129,10 @@ workflow SVConcordance {
   output {
     File concordance_vcf = ConcatVcfs.concat_vcf
     File concordance_vcf_index = ConcatVcfs.concat_vcf_idx
-    File? filtered_eval_records_vcf = FormatEval.filtered
-    File? filtered_eval_records_index =FormatEval.filtered_index
-    File? filtered_truth_records_vcf = FormatTruth.filtered
-    File? filtered_truth_records_index = FormatTruth.filtered_index
+    File? filtered_eval_records_vcf = FormatEval.filtered_records_vcf
+    File? filtered_eval_records_index = FormatEval.filtered_records_index
+    File? filtered_truth_records_vcf = FormatTruth.filtered_records_vcf
+    File? filtered_truth_records_index = FormatTruth.filtered_records_index
   }
 }
 
