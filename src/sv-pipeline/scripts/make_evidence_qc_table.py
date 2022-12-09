@@ -82,7 +82,7 @@ def read_melt_insert_size(filename: str, col_name="mean_insert_size") -> pd.Data
     """
     columns_names = [ID_COL, col_name]
     if filename is None:
-        return pd.DataFrame(colums=columns_names)
+        return pd.DataFrame(columns=columns_names)
     df = pd.read_csv(filename, names=columns_names, header=0, sep="\t")
     df[col_name] = df[col_name].astype(float)
     return df
