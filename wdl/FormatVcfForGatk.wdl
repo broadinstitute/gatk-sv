@@ -10,6 +10,7 @@ workflow FormatVcfForGatk {
     String prefix
 
     Int records_per_shard
+    Boolean filter_cpx_ctx
 
     Boolean? run_svutils
     Boolean? run_formatter
@@ -55,6 +56,7 @@ workflow FormatVcfForGatk {
         input:
           vcf=select_first([SvutilsFixVcf.out, vcf]),
           ploidy_table=ploidy_table,
+          filter_cpx_ctx=filter_cpx_ctx,
           args=formatter_args,
           output_prefix="~{prefix}.format_~{i}",
           script=svtk_to_gatk_script,
@@ -133,6 +135,7 @@ task PreprocessVcf {
   input {
     File vcf
     File ploidy_table
+    Boolean filter_cpx_ctx
     File? script
     String? args
     String output_prefix
@@ -159,19 +162,22 @@ task PreprocessVcf {
   command <<<
     set -euo pipefail
 
+    # Create empty outputs in case filtering is turned off
+    touch ~{output_prefix}.filtered_records.vcf.gz
+    touch ~{output_prefix}.filtered_records.vcf.gz.tbi
+
     # Convert format
     python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
       --vcf ~{vcf} \
-      --out tmp.vcf.gz \
-      --filter-out ~{output_prefix}.filtered_records.vcf.gz \
+      --out ~{output_prefix}.vcf.gz \
+      ~{if filter_cpx_ctx then "--filter-out ~{output_prefix}.filtered_records.vcf.gz" else ""} \
       --ploidy-table ~{ploidy_table} \
       ~{args}
 
-    # TODO Filter invalid records with SVLEN=0, only needed for legacy runs that used svtk cluster in ClusterBatch
-    bcftools view --no-version -i 'INFO/SVLEN="." || INFO/SVLEN>0' tmp.vcf.gz -Oz -o ~{output_prefix}.vcf.gz
-
     tabix ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.filtered_records.vcf.gz
+    if ~{filter_cpx_ctx}; then
+      tabix -f ~{output_prefix}.filtered_records.vcf.gz
+    fi
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

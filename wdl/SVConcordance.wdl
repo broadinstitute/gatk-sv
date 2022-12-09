@@ -16,7 +16,8 @@ workflow SVConcordance {
 
     # Filter CPX and CTX records, which are not currently supported in GATK
     # If False, they will be converted to BNDs with the original type annotated as OSVTYPE
-    Boolean filter_cpx_ctx
+    Boolean? filter_cpx_ctx_truth
+    Boolean? filter_cpx_ctx_eval
 
     Boolean? run_svutils_truth_vcf
     Boolean? run_formatter_truth_vcf
@@ -59,9 +60,11 @@ workflow SVConcordance {
 
   Boolean run_svutils_truth_vcf_ = select_first([run_svutils_truth_vcf, true])
   Boolean run_formatter_truth_vcf_ = select_first([run_formatter_truth_vcf, true])
+  Boolean filter_cpx_ctx_truth_ = select_first([filter_cpx_ctx_truth, true])
 
   Boolean run_svutils_eval_vcf_ = select_first([run_svutils_eval_vcf, true])
   Boolean run_formatter_eval_vcf_ = select_first([run_formatter_eval_vcf, true])
+  Boolean filter_cpx_ctx_eval_ = select_first([filter_cpx_ctx_eval, true])
 
   if (run_svutils_truth_vcf_ || run_formatter_truth_vcf_) {
     call format.FormatVcfForGatk as FormatTruth {
@@ -69,12 +72,13 @@ workflow SVConcordance {
         vcf=truth_vcf,
         ploidy_table=ploidy_table,
         records_per_shard=records_per_shard_,
+        filter_cpx_ctx=filter_cpx_ctx_truth_,
         prefix="~{cohort}.truth",
         run_svutils=run_svutils_truth_vcf_,
         run_formatter=run_formatter_truth_vcf,
         formatter_args=formatter_truth_args,
         svtk_to_gatk_script=svtk_to_gatk_script,
-        filter_cpx_ctx=filter_cpx_ctx,
+        filter_cpx_ctx=filter_cpx_ctx_truth_,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_utils_docker=sv_utils_docker,
         runtime_attr_scatter=runtime_attr_scatter_truth,
@@ -91,12 +95,13 @@ workflow SVConcordance {
         vcf=eval_vcf,
         ploidy_table=ploidy_table,
         records_per_shard=records_per_shard_,
+        filter_cpx_ctx=filter_cpx_ctx_eval_,
         prefix="~{cohort}.eval",
         run_svutils=run_svutils_eval_vcf_,
         run_formatter=run_formatter_eval_vcf,
         formatter_args=formatter_eval_args,
         svtk_to_gatk_script=svtk_to_gatk_script,
-        filter_cpx_ctx=filter_cpx_ctx,
+        filter_cpx_ctx=filter_cpx_ctx_eval_,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_utils_docker=sv_utils_docker,
         runtime_attr_scatter=runtime_attr_scatter_eval,
@@ -139,102 +144,6 @@ workflow SVConcordance {
     File? filtered_eval_records_index = FormatEval.filtered_records_index
     File? filtered_truth_records_vcf = FormatTruth.filtered_records_vcf
     File? filtered_truth_records_index = FormatTruth.filtered_records_index
-  }
-}
-
-task SvutilsFixVcf {
-  input {
-    File vcf
-    String output_prefix
-    String sv_utils_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 3.75,
-                               disk_gb: ceil(10 + size(vcf, "GB") * 2),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.vcf.gz"
-    File out_index = "~{output_prefix}.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-    sv-utils fix-vcf ~{vcf} ~{output_prefix}.vcf.gz
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_utils_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task PreprocessVcf {
-  input {
-    File vcf
-    File ploidy_table
-    Boolean filter_cpx_ctx
-    File? script
-    String? args
-    String output_prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 3.75,
-                               disk_gb: ceil(10 + size(vcf, "GB") * 2),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.vcf.gz"
-    File out_index = "~{output_prefix}.vcf.gz.tbi"
-    File filtered = "~{output_prefix}.filtered_records.vcf.gz"
-    File filtered_index = "~{output_prefix}.filtered_records.vcf.gz.tbi"
-  }
-  command <<<
-    set -euo pipefail
-
-    # Create empty outputs in case filtering is turned off
-    touch ~{output_prefix}.filtered_records.vcf.gz
-    touch ~{output_prefix}.filtered_records.vcf.gz.tbi
-
-    # Convert format
-    python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
-      --vcf ~{vcf} \
-      --out ~{output_prefix}.vcf.gz \
-      ~{if filter_cpx_ctx then "--filter-out ~{output_prefix}.filtered_records.vcf.gz" else ""} \
-      --ploidy-table ~{ploidy_table} \
-      ~{args}
-
-    tabix ~{output_prefix}.vcf.gz
-    if ~{filter_cpx_ctx}; then
-      tabix -f ~{output_prefix}.filtered_records.vcf.gz
-    fi
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
