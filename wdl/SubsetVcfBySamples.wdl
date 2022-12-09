@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "Utils.wdl" as util
 
-workflow SubsetVcfBySamplesList {
+workflow SubsetVcfBySamples {
   input {
     File vcf
     File? vcf_index
