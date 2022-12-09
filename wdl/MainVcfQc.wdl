@@ -79,8 +79,7 @@ workflow MainVcfQc {
         input:
           vcf=vcf,
           vcf_idx=vcf + ".tbi",
-          list_of_samples_to_keep=select_first([list_of_samples_to_include]),
-          subset_name=basename(vcf, '.vcf.gz') + ".subsetted",
+          list_of_samples=select_first([list_of_samples_to_include]),
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_attr_override=runtime_override_subset_vcf
       }

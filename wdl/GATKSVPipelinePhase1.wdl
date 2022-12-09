@@ -221,7 +221,7 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_filter_annotate_vcf
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
     RuntimeAttr? runtime_attr_identify_outliers
-    RuntimeAttr? runtime_attr_exclude_outliers
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
     RuntimeAttr? runtime_attr_get_male_only
@@ -451,7 +451,7 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_filter_annotate_vcf=runtime_attr_filter_annotate_vcf,
       runtime_attr_merge_pesr_vcfs=runtime_attr_merge_pesr_vcfs,
       runtime_attr_identify_outliers=runtime_attr_identify_outliers,
-      runtime_attr_exclude_outliers=runtime_attr_exclude_outliers,
+      runtime_attr_subset_vcf=runtime_attr_subset_vcf,
       runtime_attr_cat_outliers=runtime_attr_cat_outliers,
       runtime_attr_filter_samples=runtime_attr_filter_samples,
       run_module_metrics = run_filterbatch_metrics,

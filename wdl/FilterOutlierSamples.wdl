@@ -17,7 +17,7 @@ workflow FilterOutlierSamples {
     String sv_base_mini_docker
     String linux_docker
     RuntimeAttr? runtime_attr_identify_outliers
-    RuntimeAttr? runtime_attr_exclude_outliers
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
     RuntimeAttr? runtime_attr_ids_from_vcf
@@ -39,13 +39,14 @@ workflow FilterOutlierSamples {
       runtime_attr_count_svs = runtime_attr_count_svs
   }
 
-  call ExcludeOutliers {
+  call util.SubsetVcfBySamplesList {
     input:
       vcf = vcf,
-      outliers_list = IdentifyOutlierSamples.outlier_samples_list,
-      outfile = "${name}.outliers_removed.vcf.gz",
+      list_of_samples = IdentifyOutlierSamples.outlier_samples_file,
+      outfile_name = "${name}.outliers_removed.vcf.gz",
+      remove_samples = true,
       sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_exclude_outliers
+      runtime_attr_override = runtime_attr_subset_vcf
   }
   
   call util.GetSampleIdsFromVcf {
@@ -66,7 +67,7 @@ workflow FilterOutlierSamples {
   }
 
   output {
-    File outlier_filtered_vcf = ExcludeOutliers.vcf_no_outliers
+    File outlier_filtered_vcf = SubsetVcfBySamplesList.vcf_subset
     Array[String] filtered_samples_list = FilterSampleList.filtered_samples_list
     File filtered_samples_file = FilterSampleList.filtered_samples_file
     Array[String] outlier_samples_excluded = IdentifyOutlierSamples.outlier_samples_list
@@ -75,61 +76,6 @@ workflow FilterOutlierSamples {
   }
 }
 
-
-# Exclude outliers from VCF
-task ExcludeOutliers {
-  input {
-    File vcf
-    Array[String] outliers_list
-    String outfile
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75, 
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File vcf_no_outliers = "${outfile}"
-    File vcf_no_outliers_index = "${outfile}.tbi"
-  }
-  command <<<
-
-    set -eu
-    OUTLIERS=~{write_lines(outliers_list)}
-    if [ $( wc -c < $OUTLIERS ) -gt 1 ]; then
-      zcat ~{vcf} | fgrep "#" | fgrep -v "##" \
-       | sed 's/\t/\n/g' | awk -v OFS="\t" '{ print $1, NR }' \
-       | fgrep -wf $OUTLIERS | cut -f2 \
-       > indexes_to_exclude.txt
-      zcat ~{vcf} | \
-       cut --complement -f$( cat indexes_to_exclude.txt | paste -s -d, ) \
-       | vcftools --mac 1 --vcf - --recode --recode-INFO-all --stdout \
-       | bgzip -c > ~{outfile}
-    else
-      cp ~{vcf} ~{outfile}
-    fi
-    tabix ~{outfile}
-  
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
-}
 
 # Write new list of samples per batch after outlier filtering
 task FilterSampleList {
