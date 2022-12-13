@@ -231,6 +231,11 @@ task MakeQcTable {
 
   command <<<
     set -euxo pipefail
+    if (defined(melt_insert_size))] ; then
+      echo -e "sample_ID\tmean_insert_size" > "$mean_insert_size.tsv.tmp"
+      cat write_tsv(transpose([samples, select_first([melt_insert_size])])) >> "$mean_insert_size.tsv.tmp"
+        mv "$mean_insert_size.tsv.tmp" "$mean_insert_size.tsv"
+    fi
 
     tar -xvf ~{ploidy_plots}
 
@@ -245,10 +250,10 @@ task MakeQcTable {
       ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
-      ~{if (defined(melt_insert_size)) then "--melt-insert-size " + write_tsv(transpose([["#ID", "mean_insert_size"], samples, select_first([melt_insert_size])])) else ""} \
+      ~{if (defined(melt_insert_size)) then "--melt-insert-size " + "mean_insert_size.tsv" else ""}\
       ~{"--output-prefix " + output_prefix}
   >>>
-
+#
   RuntimeAttr runtime_default = object {
     cpu_cores: 1,
     mem_gb: 4,
