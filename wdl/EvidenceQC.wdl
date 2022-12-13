@@ -232,7 +232,7 @@ task MakeQcTable {
   command <<<
     set -euxo pipefail
 
-    if (defined(melt_insert_size)) ; then
+    if ~{defined(melt_insert_size)} ; then
       echo -e "sample_ID\tmean_insert_size" > "$mean_insert_size.tsv.tmp"
       cat write_tsv(transpose([samples, select_first([melt_insert_size])])) >> "$mean_insert_size.tsv.tmp"
       mv "$mean_insert_size.tsv.tmp" "$mean_insert_size.tsv"
