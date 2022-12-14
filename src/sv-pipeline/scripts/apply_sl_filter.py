@@ -122,7 +122,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help='Set filtered genotypes to hom-ref (0/0) instead of no-call (./.)')
     parser.add_argument("--medium-size", type=float, default=500,
                         help="Min size for medium DEL/DUP")
-    parser.add_argument("--large-size", type=float, default=1000,
+    parser.add_argument("--large-size", type=float, default=10000,
                         help="Min size for large DEL/DUP")
     parser.add_argument("--small-del-threshold", type=float,
                         help="Threshold SL for small DELs")
