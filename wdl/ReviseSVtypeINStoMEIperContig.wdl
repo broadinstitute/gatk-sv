@@ -29,7 +29,7 @@ workflow ReviseSVtypeINStoMEIperContig {
       input:
         vcf=vcf,
         prefix="~{prefix}.~{contig}",
-        records_per_shard=max_shards_per_chrom_step1,
+        records_per_shard=min_records_per_shard_step1,
         sv_pipeline_docker=sv_pipeline_updates_docker,
         runtime_attr_override=runtime_override_split_vcf_to_clean
   }
