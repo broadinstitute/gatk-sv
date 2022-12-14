@@ -3,6 +3,9 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
+# Applies GQ filtering using SL scores assigned by GqRecalibrator
+# Also annotates variant no-call rate and SL metrics
+
 workflow FilterRecalibratedVcf {
   input {
     # VCF produced by RecalibrateGq, note that GT filtering here will be applied on top of
@@ -11,6 +14,9 @@ workflow FilterRecalibratedVcf {
 
     File ploidy_table
     String output_prefix
+
+    # Usually want to provide these, see apply_sl_filter.py script for details
+    String? args
 
     # For testing
     File? filter_script
