@@ -62,7 +62,7 @@ task HardFilterVcf {
 
     set -euo pipefail
 
-    bcftools view -e "~{bcftools_filter}" ~{vcf} -Oz -o "~{hard_filtered_vcf_name}"
+    bcftools view -e '~{bcftools_filter}' ~{vcf} -Oz -o "~{hard_filtered_vcf_name}"
 
     tabix "~{hard_filtered_vcf_name}"
 
