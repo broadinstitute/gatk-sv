@@ -25,6 +25,7 @@ def _filter_gt(gt, allele):
 
 def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref):
     record.info['MINSL'] = sl_threshold
+    # Only filter non-ref genotypes
     gt_list = [gt for s, gt in record.samples.items() if ploidy_dict[s][record.chrom] > 0
                and _is_non_ref_or_no_call(gt['GT'])]
     if sl_threshold is None:
@@ -34,6 +35,7 @@ def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref):
     n_no_call = len(filtered_gt)
     record.info['NCN'] = n_no_call
     record.info['NCR'] = n_no_call / n_samples
+    # SL metrics are on the set of filtered and non-ref/unfiltered genotypes
     sl_list = [gt['SL'] for gt in filtered_gt + non_ref_unfiltered_gt]
     n_sl = len(sl_list)
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
@@ -110,7 +112,7 @@ def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Apply class-specific genotype filtering using SL scores and annotate NCR",
+        description="Apply class-specific genotype filtering using SL scores and annotates NCR",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
