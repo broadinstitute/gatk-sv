@@ -3,12 +3,11 @@
 import argparse
 import sys
 import pysam
+import math
 from typing import Any, List, Text, Set, Dict, Optional
 
 
-_gt_status_map = dict()
 _gt_non_ref_or_no_call_map = dict()
-_gt_non_ref_map = dict()
 _cnv_types = ('DEL', 'DUP')
 
 
@@ -20,39 +19,28 @@ def _is_non_ref_or_no_call(gt):
     return s
 
 
-def _is_non_ref(gt):
-    s = _gt_non_ref_map.get(gt, None)
-    if s is None:
-        s = any([a is not None and a > 0 for a in gt])
-        _gt_non_ref_map[gt] = s
-    return s
+def _filter_gt(gt, allele):
+    return tuple(allele for _ in gt)
 
 
-def _is_no_call(gt):
-    if gt not in _gt_status_map:
-        _gt_status_map[gt] = gt is None or all(e is None for e in gt)
-    return _gt_status_map[gt]
-
-
-def annotate_ncr(record, n_samples, ploidy_dict):
-    gt_items = record.samples.items()
-    n_no_call = sum([_is_no_call(gt['GT']) for s, gt in gt_items if ploidy_dict[s][record.chrom] > 0])
-    sl = [float(gt['SL']) for s, gt in gt_items
-          if _is_non_ref_or_no_call(gt['GT']) and ploidy_dict[s][record.chrom] > 0]
+def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref):
+    record.info['MINSL'] = sl_threshold
+    gt_list = [gt for s, gt in record.samples.items() if ploidy_dict[s][record.chrom] > 0
+               and _is_non_ref_or_no_call(gt['GT'])]
+    if sl_threshold is None:
+        sl_threshold = -math.inf
+    filtered_gt = [gt for gt in gt_list if gt['SL'] < sl_threshold]
+    non_ref_unfiltered_gt = [gt for gt in gt_list if gt['SL'] >= sl_threshold]
+    n_no_call = len(filtered_gt)
     record.info['NCN'] = n_no_call
     record.info['NCR'] = n_no_call / n_samples
-    record.info['SL_MEAN'] = sum(sl) / len(sl) if len(sl) > 0 else None
-    record.info['SL_MAX'] = max(sl) if len(sl) > 0 else None
-    record.info['SL_MIN'] = min(sl) if len(sl) > 0 else None
-
-
-def apply_filter(record, sl_threshold):
-    record.info['MINSL'] = sl_threshold
-    if sl_threshold is None:
-        return
-    for gt in record.samples.values():
-        if _is_non_ref(gt['GT']) and gt['SL'] >= sl_threshold:
-            gt['GT'] = tuple(None for _ in gt['GT'])
+    sl_list = [gt['SL'] for gt in filtered_gt + non_ref_unfiltered_gt]
+    n_sl = len(sl_list)
+    record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
+    record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
+    allele = 0 if apply_hom_ref else None
+    for gt in filtered_gt:
+        gt['GT'] = _filter_gt(gt['GT'], allele)
 
 
 def get_threshold(record, sl_thresholds, med_size, large_size):
@@ -74,11 +62,11 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
-    k = 0
     for record in vcf:
-        sl_threshold = get_threshold(record, thresholds, args.medium_size, args.large_size)
-        apply_filter(record, sl_threshold)
-        annotate_ncr(record, n_samples, ploidy_dict)
+        sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
+                                     large_size=args.large_size)
+        _apply_filter(record=record, sl_threshold=sl_threshold, n_samples=n_samples,
+                      ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref)
         fout.write(record)
 
 
@@ -128,6 +116,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
     parser.add_argument('--out', type=str, help='Output file (defaults to stdout)')
     parser.add_argument('--ploidy-table', type=str, required=True, help='Ploidy table tsv')
+    parser.add_argument('--apply-hom-ref', action='store_true',
+                        help='Set filtered genotypes to hom-ref (0/0) instead of no-call (./.)')
     parser.add_argument("--medium-size", type=float, default=500,
                         help="Min size for medium DEL/DUP")
     parser.add_argument("--large-size", type=float, default=1000,
@@ -175,7 +165,6 @@ def main(argv: Optional[List[Text]] = None):
     header.add_line('##INFO=<ID=NCN,Number=1,Type=Integer,Description="Number of no-call genotypes">')
     header.add_line('##INFO=<ID=NCR,Number=1,Type=Float,Description="Rate of no-call genotypes">')
     header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of filtered and non-ref genotypes">')
-    header.add_line('##INFO=<ID=SL_MIN,Number=1,Type=Float,Description="Min SL of filtered and non-ref genotypes">')
     header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of filtered and non-ref genotypes">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
