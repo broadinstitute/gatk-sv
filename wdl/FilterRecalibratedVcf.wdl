@@ -16,7 +16,7 @@ workflow FilterRecalibratedVcf {
     String output_prefix
 
     # Usually want to provide these, see apply_sl_filter.py script for details
-    String? args
+    String? filter_args
 
     # For testing
     File? filter_script
@@ -45,6 +45,8 @@ workflow FilterRecalibratedVcf {
       input:
         vcf=ScatterVcf.shards[i],
         ploidy_table=ploidy_table,
+        args=filter_args,
+        script=filter_script,
         output_prefix="~{output_prefix}.filter.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_override_filter_vcf
