@@ -15,7 +15,7 @@ workflow FilterRecalibratedVcf {
     # For testing
     File? filter_script
 
-    Int records_per_shard
+    Int? records_per_shard
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -28,7 +28,7 @@ workflow FilterRecalibratedVcf {
   call tasks_cohort.ScatterVcf {
     input:
       vcf=vcf,
-      records_per_shard=records_per_shard,
+      records_per_shard=select_first([records_per_shard, 20000]),
       prefix="~{output_prefix}.scatter",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_override_scatter
