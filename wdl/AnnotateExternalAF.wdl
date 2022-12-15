@@ -24,8 +24,8 @@ workflow AnnotateExternalAF {
 
         # overrides for local tasks
         RuntimeAttr? runtime_attr_modify_vcf
-        RuntimeAttr? runtime_override_combine_vcfs
-        RuntimeAttr? runtime_override_split_vcf
+        RuntimeAttr? runtime_attr_combine_vcfs
+        RuntimeAttr? runtime_attr_split_vcf
         RuntimeAttr? runtime_attr_split_ref_bed
         RuntimeAttr? runtime_attr_split_query_vcf
         RuntimeAttr? runtime_attr_bedtools_closest
@@ -70,7 +70,7 @@ workflow AnnotateExternalAF {
                 min_records_per_shard_step1 = min_records_per_shard_step1,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
-                runtime_override_split_vcf = runtime_override_split_vcf,
+                runtime_attr_split_vcf = runtime_attr_split_vcf,
                 runtime_attr_modify_vcf = runtime_attr_modify_vcf,
                 runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
                 runtime_attr_bedtools_closest = runtime_attr_bedtools_closest
@@ -84,7 +84,7 @@ workflow AnnotateExternalAF {
         naive = true,
         outfile_prefix = "~{prefix}.annotated",
         sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_override_combine_vcfs
+        runtime_attr_override = runtime_attr_combine_vcfs
     }
 
      output {

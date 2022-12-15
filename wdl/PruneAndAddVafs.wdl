@@ -13,73 +13,57 @@ workflow PruneAndAddVafs {
 
     File   vcf
     File   vcf_idx
-    File   contig_list
-    Int    sv_per_shard
     String prefix
+    String contig
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
-    File? prune_list              # List of samples to be excluded from the output vcf
     File? ped_file                # Used for M/F AF calculations
+    File? par_bed
+    File? allosomes_list
+    File sample_list              # List of samples to be retained from the output vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    RuntimeAttr? runtime_attr_prune_vcf
     RuntimeAttr? runtime_attr_shard_vcf
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_concat_vcfs
+    RuntimeAttr? runtime_attr_extract_subset_samples_from_vcf
   }
-
-  Array[Array[String]] contigs = read_tsv(contig_list)
-
-  # Iterate over chromosomes
-  scatter (contig in contigs) {
-    
-    # Prune VCF
-    call PruneVcf {
-      input:
-
-        vcf        = vcf,
-        vcf_idx    = vcf_idx,
-        contig     = contig[0],
-        prune_list = prune_list,
-        prefix     = prefix,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_prune_vcf
-    }
-
-    # Compute AC, AN, and AF per population & sex combination
-    call calcAF.ChromosomeAlleleFrequencies as ChromosomeAlleleFrequencies {
-      input:
-        vcf                    = PruneVcf.pruned_vcf,
-        vcf_idx                = PruneVcf.pruned_vcf_idx,
-        contig                 = contig[0],
-        sv_per_shard           = sv_per_shard,
-        prefix                 = prefix,
-        sample_pop_assignments = sample_pop_assignments,
-        ped_file               = ped_file,
-        sv_base_mini_docker    = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_shard_vcf    = runtime_attr_shard_vcf,
-        runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs
-    }
-  }
-
-  # Merge pruned VCFs with allele info
-  call MiniTasks.ConcatVcfs as ConcatVcfs{
+  
+  # Prune VCF
+  call ExtractSubsetSamples {
     input:
-      vcfs = ChromosomeAlleleFrequencies.vcf_wAFs,
-      vcfs_idx = ChromosomeAlleleFrequencies.vcf_wAFs_idx,
-      outfile_prefix = "${prefix}.pruned_wAFs",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_vcfs
+      vcf        = vcf,
+      vcf_idx    = vcf_idx,
+      sample_list = sample_list,
+      midfix = prefix,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_extract_subset_samples_from_vcf
+  }
+
+  # Compute AC, AN, and AF per population & sex combination
+  call calcAF.ChromosomeAlleleFrequencies as ChromosomeAlleleFrequencies {
+    input:
+      vcf                    = ExtractSubsetSamples.out_vcf,
+      vcf_idx                = ExtractSubsetSamples.out_vcf_idx,
+      contig                 = contig,
+      prefix                 = prefix,
+      sample_pop_assignments = sample_pop_assignments,
+      ped_file               = ped_file,
+      par_bed                = par_bed,
+      allosomes_list         = allosomes_list,
+      sv_base_mini_docker    = sv_base_mini_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_shard_vcf    = runtime_attr_shard_vcf,
+      runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
+      runtime_attr_combine_vcfs = runtime_attr_combine_vcfs
   }
 
   output {
-    File output_vcf     = ConcatVcfs.concat_vcf
-    File output_vcf_idx = ConcatVcfs.concat_vcf_idx
+    File output_vcf     = ChromosomeAlleleFrequencies.vcf_wAFs
+    File output_vcf_idx = ChromosomeAlleleFrequencies.vcf_wAFs_idx
   }
 }
 
@@ -121,7 +105,7 @@ task PruneVcf {
         | fgrep -wf ~{prune_list} \
         | cut -f1 | paste -s -d, )
       zcat ~{contig}.vcf.gz \
-        | cut --complement -f"$dropidx" \
+        | cut --complement -f "$dropidx" \
         | bgzip -c \
         > "~{prefix}.~{contig}.pruned.vcf.gz"
     else
@@ -152,3 +136,53 @@ task PruneVcf {
     docker:                 sv_base_mini_docker
   }
 }
+
+task ExtractSubsetSamples {
+    input {
+        File vcf
+        File vcf_idx
+        File sample_list
+        String midfix
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+
+    Float input_size = size(vcf, "GB")
+    Float base_disk_gb = 10.0
+    RuntimeAttr runtime_default = object {
+            mem_gb: 3,
+            disk_gb: ceil(base_disk_gb + (input_size * 2.0)),
+            cpu_cores: 1,
+            preemptible_tries: 3,
+            max_retries: 1,
+            boot_disk_gb: 10
+    }
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    runtime {
+            memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+            disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+            cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+            preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+            maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+            docker: sv_pipeline_docker
+            bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    String prefix = basename(vcf, '.vcf.gz')
+    command <<<
+        set -eu -o pipefail
+
+        bcftools view -S ~{sample_list} ~{vcf} \
+        | bgzip > ~{prefix}.~{midfix}.vcf.gz
+
+        tabix -p vcf ~{prefix}.~{midfix}.vcf.gz
+
+    >>>
+
+    output {
+        File out_vcf = "~{prefix}.~{midfix}.vcf.gz"
+        File out_vcf_idx = "~{prefix}.~{midfix}.vcf.gz.tbi"
+    }
+}
+
