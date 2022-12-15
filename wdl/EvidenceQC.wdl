@@ -251,7 +251,7 @@ task MakeQcTable {
       ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
-      ~{if (defined(melt_insert_size)) then "--melt-insert-size " + "mean_insert_size.tsv" else ""}\
+      ~{if (defined(melt_insert_size)) then "--melt-insert-size mean_insert_size.tsv" else ""}\
       ~{"--output-prefix " + output_prefix}
   >>>
 #
