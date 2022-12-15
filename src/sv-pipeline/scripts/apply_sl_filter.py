@@ -8,6 +8,7 @@ from typing import Any, List, Text, Set, Dict, Optional
 
 
 _gt_non_ref_or_no_call_map = dict()
+_gt_ref_map = dict()
 _cnv_types = ('DEL', 'DUP')
 
 
@@ -19,11 +20,26 @@ def _is_non_ref_or_no_call(gt):
     return s
 
 
+def _is_ref(gt):
+    s = _gt_ref_map.get(gt, None)
+    if s is None:
+        s = all([a is not None and a == 0 for a in gt])
+        _gt_ref_map[gt] = s
+    return s
+
+
 def _filter_gt(gt, allele):
     return tuple(allele for _ in gt)
 
 
-def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref):
+def recalculate_gq(sl, scale_factor, is_hom_ref, upper, lower, shift):
+    sign = -1 if is_hom_ref else 1
+    sl = (sign * min(max(sl, lower), upper)) + shift
+    return int(math.floor(-10 * math.log10(1 / (math.pow(scale_factor, sl) + 1))))
+
+
+def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref,
+                  replace_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
     record.info['MINSL'] = sl_threshold
     # Only filter non-ref genotypes
     gt_list = [gt for s, gt in record.samples.items() if ploidy_dict[s][record.chrom] > 0
@@ -41,6 +57,18 @@ def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref):
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
     record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
     allele = 0 if apply_hom_ref else None
+    if replace_gq:
+        # Recalculate GQ values based on SL
+        for gt in record.samples.values():
+            gq = gt.get('GQ', None)
+            if gq is None:
+                continue
+            gt['OGQ'] = gq
+            sl = gt.get('SL', None)
+            if sl is None:
+                continue
+            gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=_is_ref(gt['GT']),
+                                          upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
     for gt in filtered_gt:
         gt['GT'] = _filter_gt(gt['GT'], allele)
 
@@ -68,7 +96,10 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
         sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
                                      large_size=args.large_size)
         _apply_filter(record=record, sl_threshold=sl_threshold, n_samples=n_samples,
-                      ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref)
+                      ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref,
+                      replace_gq=args.replace_gq, gq_scale_factor=args.gq_scale_factor,
+                      upper_sl_cap=args.upper_sl_cap, lower_sl_cap=args.lower_sl_cap, sl_shift=args.sl_shift,
+                      max_gq=args.max_gq)
         fout.write(record)
 
 
@@ -118,8 +149,23 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
     parser.add_argument('--out', type=str, help='Output file (defaults to stdout)')
     parser.add_argument('--ploidy-table', type=str, required=True, help='Ploidy table tsv')
+
     parser.add_argument('--apply-hom-ref', action='store_true',
                         help='Set filtered genotypes to hom-ref (0/0) instead of no-call (./.)')
+    parser.add_argument('--replace-gq', action='store_true',
+                        help='Use SL to set GQ = '
+                             'math.floor(-10 * math.log10(1 / (math.pow(gq_scale_factor, SL) + 1))),'
+                             'where SL=-SL is applied when hom-ref')
+    parser.add_argument("--gq-scale-factor", type=float, default=(0.52 / 0.48),
+                        help="Scale factor if using --replace-gq")
+    parser.add_argument("--upper-sl-cap", type=float, default=200,
+                        help="SL=min(SL, upper_cap) is applied for GQ calculations")
+    parser.add_argument("--lower-sl-cap", type=float, default=-200,
+                        help="SL=max(SL, lower_cap) is applied for GQ calculations")
+    parser.add_argument("--sl-shift", type=float, default=100,
+                        help="SL=SL+shift is applied for GQ calculations")
+    parser.add_argument("--max-gq", type=int, default=99, help="GQ cap")
+
     parser.add_argument("--medium-size", type=float, default=500,
                         help="Min size for medium DEL/DUP")
     parser.add_argument("--large-size", type=float, default=10000,
@@ -168,6 +214,8 @@ def main(argv: Optional[List[Text]] = None):
     header.add_line('##INFO=<ID=NCR,Number=1,Type=Float,Description="Rate of no-call genotypes">')
     header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of filtered and non-ref genotypes">')
     header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of filtered and non-ref genotypes">')
+    if args.replace_gq:
+        header.add_line('##FORMAT=<ID=OGQ,Number=1,Type=Integer,Description="Original GQ">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
