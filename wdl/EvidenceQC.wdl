@@ -197,7 +197,7 @@ workflow EvidenceQC {
     File bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx
     File bincov_median = MedianCov.medianCov
 
-    File? qc_table_csv = MakeQcTable.qc_table_csv
+    File? qc_table = MakeQcTable.qc_table
   }
 }
 
