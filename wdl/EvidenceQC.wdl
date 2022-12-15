@@ -226,7 +226,7 @@ task MakeQcTable {
   }
 
   output {
-    File qc_table_csv = "${output_prefix}.evidence_qc_table.tsv"
+    File qc_table = "${output_prefix}.evidence_qc_table.tsv"
   }
 
   command <<<
