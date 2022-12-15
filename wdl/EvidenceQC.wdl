@@ -230,7 +230,7 @@ task MakeQcTable {
   }
 
   command <<<
-    set -euxo pipefail
+    set -euo pipefail
 
     if ~{defined(melt_insert_size)} ; then
       echo -e "sample_ID\tmean_insert_size" > mean_insert_size.tsv
