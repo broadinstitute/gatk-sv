@@ -46,6 +46,8 @@ workflow EvidenceQC {
 
     Boolean run_ploidy = true
 
+    Array[Float]? melt_insert_size
+
     RuntimeAttr? runtime_attr_qc
     RuntimeAttr? runtime_attr_qc_outlier
     RuntimeAttr? ploidy_score_runtime_attr
@@ -54,6 +56,7 @@ workflow EvidenceQC {
     RuntimeAttr? wgd_build_runtime_attr
     RuntimeAttr? wgd_score_runtime_attr
     RuntimeAttr? runtime_attr_bincov_attr
+    RuntimeAttr? runtime_attr_make_qc_table
 
     RuntimeAttr? runtime_attr_mediancov       # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
@@ -148,6 +151,29 @@ workflow EvidenceQC {
       }
     }
   }
+  if (run_ploidy) {
+      call MakeQcTable {
+        input:
+          output_prefix = batch,
+          samples = samples,
+          ploidy_plots = select_first([Ploidy.ploidy_plots]),
+          bincov_median = MedianCov.medianCov,
+          WGD_scores = WGD.WGD_scores,
+          melt_insert_size = melt_insert_size,
+
+          manta_qc_low = RawVcfQC_Manta.low,
+          manta_qc_high = RawVcfQC_Manta.high,
+          melt_qc_low = RawVcfQC_Melt.low,
+          melt_qc_high = RawVcfQC_Melt.high,
+          wham_qc_low = RawVcfQC_Wham.low,
+          wham_qc_high = RawVcfQC_Wham.high,
+          scramble_qc_low = RawVcfQC_Scramble.low,
+          scramble_qc_high = RawVcfQC_Scramble.high,
+
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_override = runtime_attr_make_qc_table
+    }
+  }
 
   output {
     File? manta_qc_low = RawVcfQC_Manta.low
@@ -169,5 +195,83 @@ workflow EvidenceQC {
     File bincov_matrix = MakeBincovMatrix.merged_bincov
     File bincov_matrix_index = MakeBincovMatrix.merged_bincov_idx
     File bincov_median = MedianCov.medianCov
+
+    File? qc_table = MakeQcTable.qc_table
   }
+}
+
+task MakeQcTable {
+  input {
+
+    File ploidy_plots
+    File bincov_median
+    File WGD_scores
+    Array[Float]? melt_insert_size
+    Array[String] samples
+
+
+    File? manta_qc_low
+    File? manta_qc_high
+    File? melt_qc_low
+    File? melt_qc_high
+    File? wham_qc_low
+    File? wham_qc_high
+    File? scramble_qc_low
+    File? scramble_qc_high
+
+    String sv_pipeline_docker
+    String output_prefix
+    RuntimeAttr? runtime_override
+  }
+
+  output {
+    File qc_table = "${output_prefix}.evidence_qc_table.tsv"
+  }
+
+  command <<<
+    set -euo pipefail
+
+    if ~{defined(melt_insert_size)} ; then
+      echo -e "sample_ID\tmean_insert_size" > mean_insert_size.tsv
+      mv ~{if (defined(melt_insert_size)) then write_tsv(transpose([samples, select_first([melt_insert_size])])) else ""} mean_insert_size.tsv.tmp
+      cat mean_insert_size.tsv.tmp >> mean_insert_size.tsv
+    fi
+
+    tar -xvf ~{ploidy_plots}
+
+    python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
+      ~{"--estimated-copy-number-filename " + "./ploidy_est/estimated_copy_numbers.txt.gz"} \
+      ~{"--median-cov-filename " + bincov_median} \
+      ~{"--wgd-scores-filename " + WGD_scores} \
+      ~{"--binwise-cnv-qvalues-filename " + "./ploidy_est/binwise_CNV_qValues.bed.gz"} \
+      ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
+      ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \
+      ~{"--wham-qc-outlier-high-filename " + wham_qc_high} \
+      ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
+      ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
+      ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
+      ~{if (defined(melt_insert_size)) then "--melt-insert-size mean_insert_size.tsv" else ""}\
+      ~{"--output-prefix " + output_prefix}
+  >>>
+#
+  RuntimeAttr runtime_default = object {
+    cpu_cores: 1,
+    mem_gb: 4,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1,
+    disk_gb: 100
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
+
+    runtime {
+        docker: sv_pipeline_docker
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
+    }
 }
