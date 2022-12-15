@@ -156,7 +156,6 @@ workflow EvidenceQC {
         input:
           output_prefix = batch,
           samples = samples,
-          #ploidy_plots = Ploidy.ploidy_plots,
           ploidy_plots = select_first([Ploidy.ploidy_plots]),
           bincov_median = MedianCov.medianCov,
           WGD_scores = WGD.WGD_scores,
