@@ -64,7 +64,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_get_vcf_header_with_members_info_line
   }
 
-  call MiniTasks.ScatterVcf{
+  call MiniTasks.ScatterVcf {
     input:
       vcf = vcf,
       prefix = prefix,
@@ -75,18 +75,10 @@ workflow ShardedAnnotateVcf {
 
   scatter (i in range(length(ScatterVcf.shards))) {
 
-    call FixEndsRescaleGQ {
-      input:
-        vcf = ScatterVcf.shards[i],
-        prefix = "~{prefix}.~{i}",
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_fix_ends_rescale_GQ
-      }
-
     call func.AnnotateFunctionalConsequences {
       input:
-        vcf = FixEndsRescaleGQ.out,
-        vcf_index = FixEndsRescaleGQ.out_idx,
+        vcf = ScatterVcf.shards[i],
+        vcf_index = ScatterVcf.shards_idx[i],
         prefix = "~{prefix}.~{i}",
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
@@ -193,98 +185,6 @@ workflow ShardedAnnotateVcf {
   output {
     File output_vcf = select_first([GetVcfHeader_annotated.out, ConcatVcfs_annotated.concat_vcf, ConcatVcfsHail_annotated.merged_vcf])
     File output_vcf_idx = select_first([GetVcfHeader_annotated.out_idx, ConcatVcfs_annotated.concat_vcf_idx, ConcatVcfsHail_annotated.merged_vcf_index])
-  }
-}
-
-
-#function to fix BND, CTX, CPX, INS that have END and END2 represent the breakpoint on the 2nd chromosome
-#Note: this is a temp function for the first beta version of gnomad SV callset. It'll be revised and added as part of the manunal revise / clean up script
-task FixEndsRescaleGQ {
-  input {
-    File vcf
-    String prefix
-
-    Boolean? fix_ends
-    Boolean? rescale_gq
-
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: ceil(10 + size(vcf, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  String outfile = "~{prefix}.vcf.gz"
-  Boolean fix_ends_ = select_first([fix_ends, true])
-  Boolean rescale_gq_ = select_first([rescale_gq, true])
-
-  output {
-    File out = "~{outfile}"
-    File out_idx = "~{outfile}.tbi"
-  }
-  command <<<
-
-    set -euo pipefail
-
-    python <<CODE
-    import pysam
-    import argparse
-    from math import floor
-
-
-    GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
-
-    filts_for_info = 'PESR_GT_OVERDISPERSION HIGH_SR_BACKGROUND BOTHSIDES_SUPPORT VARIABLE_ACROSS_BATCHES'.split(' ')
-    filts_to_remove = 'HIGH_PCRPLUS_NOCALL_RATE HIGH_PCRMINUS_NOCALL_RATE'.split(' ')
-    filts_to_remove = filts_to_remove + filts_for_info
-
-    def fix_bad_end(record):
-      # pysam converts to 0-based half-open intervals by subtracting 1 from start, but END is unaltered
-      if record.stop < record.start + 2:
-        if record.info["SVTYPE"] == "BND" or record.info["SVTYPE"] == "CTX":
-          record.info["END2"] = record.stop  # just in case it is not already set. not needed for INS or CPX
-        record.stop = record.start + 1
-
-    def rescale_gq(record):
-      for sample in record.samples:
-        for gq_field in GQ_FIELDS:
-          if gq_field in record.samples[sample] and record.samples[sample][gq_field] is not None:
-            record.samples[sample][gq_field] = floor(record.samples[sample][gq_field] / 10)
-
-
-    with pysam.VariantFile("~{vcf}", 'r') as f_in, pysam.VariantFile("~{outfile}", 'w', header=f_in.header) as f_out:
-      for record in f_in:
-        newfilts = [filt for filt in record.filter if filt not in filts_to_remove]
-        record.filter.clear()
-        for filt in newfilts:
-            record.filter.add(filt)
-        if len(record.filter) == 0:
-            record.filter.add('PASS')
-        if "~{fix_ends_}" == "true":
-          fix_bad_end(record)
-        if "~{rescale_gq_}" == "true":
-          rescale_gq(record)
-        f_out.write(record)
-
-    CODE
-    tabix ~{outfile}
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 

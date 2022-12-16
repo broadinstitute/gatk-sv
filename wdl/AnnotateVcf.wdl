@@ -8,7 +8,7 @@ workflow AnnotateVcf {
   input {
     Array[File] vcf_list
     Array[File] vcf_idx_list
-    Array[String] contig_list
+    File contig_list
     Array[String] prefix_list
 
     File protein_coding_gtf
@@ -58,12 +58,14 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_get_vcf_header_with_members_info_line
   }
 
+  Array[String] contigs = read_lines(contig_list)
+
   scatter (i in range(length(vcf_list))) {
     call sharded_annotate_vcf.ShardedAnnotateVcf as ShardedAnnotateVcf{
       input:
         vcf = vcf_list[i],
         vcf_idx = vcf_idx_list[i],
-        contig = contig_list[i],
+        contig = contigs[i],
         prefix = prefix_list[i],
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
