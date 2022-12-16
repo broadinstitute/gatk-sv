@@ -20,7 +20,7 @@ workflow PruneAndAddVafs {
     File? ped_file                # Used for M/F AF calculations
     File? par_bed
     File? allosomes_list
-    File sample_list              # List of samples to be retained from the output vcf
+    File? sample_keep_list              # List of samples to be retained from the output vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -33,21 +33,23 @@ workflow PruneAndAddVafs {
   }
   
   # Prune VCF
-  call ExtractSubsetSamples {
-    input:
-      vcf        = vcf,
-      vcf_idx    = vcf_idx,
-      sample_list = sample_list,
-      midfix = prefix,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_extract_subset_samples_from_vcf
+  if (defined(sample_keep_list)) {
+    call ExtractSubsetSamples {
+      input:
+        vcf        = vcf,
+        vcf_idx    = vcf_idx,
+        sample_list = select_first([sample_keep_list]),
+        midfix = prefix,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_extract_subset_samples_from_vcf
+    }
   }
 
   # Compute AC, AN, and AF per population & sex combination
   call calcAF.ChromosomeAlleleFrequencies as ChromosomeAlleleFrequencies {
     input:
-      vcf                    = ExtractSubsetSamples.out_vcf,
-      vcf_idx                = ExtractSubsetSamples.out_vcf_idx,
+      vcf                    = select_first([ExtractSubsetSamples.out_vcf, vcf]),
+      vcf_idx                = select_first([ExtractSubsetSamples.out_vcf_idx, vcf_idx]),
       contig                 = contig,
       prefix                 = prefix,
       sample_pop_assignments = sample_pop_assignments,
@@ -67,75 +69,6 @@ workflow PruneAndAddVafs {
   }
 }
 
-# Prune off samples from annotated VCF
-task PruneVcf {
-  
-  input {
-    File   vcf
-    File   vcf_idx
-    String contig
-    String prefix
-    
-    File? prune_list
-
-    String sv_base_mini_docker
-    
-    RuntimeAttr? runtime_attr_override
-  }
-  
-  output {
-    File pruned_vcf     = "${prefix}.${contig}.pruned.vcf.gz"
-    File pruned_vcf_idx = "${prefix}.${contig}.pruned.vcf.gz.tbi"
-  }
-
-  command <<<
-
-    set -euo pipefail
-    
-    # Tabix chromosome of interest
-    tabix -h ~{vcf} ~{contig} | bgzip -c > ~{contig}.vcf.gz
-    
-    # Get column indexes corresponding to samples to drop, if any exist
-    if ~{defined(prune_list)}; then
-      dropidx=$( zcat ~{contig}.vcf.gz \
-        | sed -n '1,500p' \
-        | grep "^#CHROM" \
-        | sed 's/\t/\n/g' \
-        | awk -v OFS="\t" '{ print NR, $1 }' \
-        | fgrep -wf ~{prune_list} \
-        | cut -f1 | paste -s -d, )
-      zcat ~{contig}.vcf.gz \
-        | cut --complement -f "$dropidx" \
-        | bgzip -c \
-        > "~{prefix}.~{contig}.pruned.vcf.gz"
-    else
-      cp "~{contig}.vcf.gz" "~{prefix}.~{contig}.pruned.vcf.gz"
-    fi
-    
-    tabix -f "~{prefix}.~{contig}.pruned.vcf.gz"
-  
-  >>>
-
-  #########################
-  RuntimeAttr default_attr = object {
-    cpu_cores:          1, 
-    mem_gb:             3.75, 
-    disk_gb:            250,
-    boot_disk_gb:       10,
-    preemptible_tries:  3,
-    max_retries:        1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])  
-  runtime {
-    cpu:                    select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
-    memory:                 select_first([runtime_attr.mem_gb,            default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " +  select_first([runtime_attr.disk_gb,           default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
-    preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
-    docker:                 sv_base_mini_docker
-  }
-}
 
 task ExtractSubsetSamples {
     input {

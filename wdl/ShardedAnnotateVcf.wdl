@@ -25,7 +25,7 @@ workflow ShardedAnnotateVcf {
     Int min_records_per_shard_step1
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
-    File sample_list
+    File? sample_keep_list
     File? ped_file                # Used for M/F AF calculations
     File? par_bed
     File? allosomes_list
@@ -97,7 +97,7 @@ workflow ShardedAnnotateVcf {
         contig                 = contig,
         ped_file               = ped_file,
         par_bed                = par_bed,
-        sample_list            = sample_list,
+        sample_keep_list       = sample_keep_list,
         allosomes_list         = allosomes_list,
         sample_pop_assignments = sample_pop_assignments,
 

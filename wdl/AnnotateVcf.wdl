@@ -21,7 +21,7 @@ workflow AnnotateVcf {
     Int min_records_per_shard_step1
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
-    File sample_list              # List of samples to be retained from the output vcf
+    File? sample_keep_list              # List of samples to be retained from the output vcf
     File? ped_file                # Used for M/F AF calculations
     File? par_bed
     File? allosomes_list
@@ -76,7 +76,7 @@ workflow AnnotateVcf {
         max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
         min_records_per_shard_step1 = min_records_per_shard_step1,
         sample_pop_assignments = sample_pop_assignments,
-        sample_list = sample_list,
+        sample_keep_list = sample_keep_list,
         ped_file = ped_file,
         par_bed = par_bed,
         sv_per_shard = sv_per_shard,
