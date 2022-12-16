@@ -100,7 +100,6 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref,
             sl_list.append(sl)
         if replace_gq:
             gq = gt.get('GQ', None)
-            gt['OGQ'] = gq
             # Recalculate GQ values based on SL
             gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=gt_is_ref,
                                           upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
@@ -260,8 +259,6 @@ def main(argv: Optional[List[Text]] = None):
     header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of filtered and non-ref genotypes">')
     header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of filtered and non-ref genotypes">')
     header.add_line('##FORMAT=<ID=GT_FILTER,Number=1,Type=String,Description="Genotype filter status">')
-    if args.replace_gq:
-        header.add_line('##FORMAT=<ID=OGQ,Number=1,Type=Integer,Description="Original GQ">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
