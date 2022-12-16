@@ -108,8 +108,10 @@ workflow Module07FilterGTsPart2 {
   }
   File PCRMINUS_training_tarball = select_first([SubsetTriosPCRMINUS.subsetted_tarball, 
                                                  PCRMINUS_merged_tarball])
-  File PCRPLUS_training_tarball = select_first([SubsetTriosPCRPLUS.subsetted_tarball, 
-                                                 PCRPLUS_merged_tarball])
+  if (defined(PCRPLUS_cleaned_trios_famfile)) {
+    File PCRPLUS_training_tarball = select_first([SubsetTriosPCRPLUS.subsetted_tarball, 
+                                                   PCRPLUS_merged_tarball])
+  }
 
   # Train PCR- filtering model
   scatter ( shard in EnumerateConditions.conditions_table_noHeader_shards ) {

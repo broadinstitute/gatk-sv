@@ -318,7 +318,7 @@ def main():
 
     #Get list of sex chromosomes, if optioned
     if args.allosomes_list is not None:
-        sex_chroms = [l.split('\t')[0] for l in open(allosomes_list).readlines()]
+        sex_chroms = [l.split('\t')[0] for l in open(args.allosomes_list).readlines()]
     else:
         sex_chroms = 'X Y chrX chrY'.split()
 
