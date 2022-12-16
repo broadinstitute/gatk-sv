@@ -83,6 +83,9 @@ def _fails_filter(sl, gt_is_ref, cutoff):
 
 def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref,
                   replace_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
+    # CNVs are not evaluated by the recalibrator and use CNQ instead
+    if record.info['SVTYPE'] == 'CNV':
+        return
     record.info['MINSL'] = sl_threshold
     if sl_threshold is None:
         sl_threshold = -math.inf
