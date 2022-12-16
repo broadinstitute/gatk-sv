@@ -11,6 +11,7 @@ _gt_no_call_map = dict()
 _gt_hom_var_map = dict()
 _gt_ref_map = dict()
 _gt_to_filter_status_map = dict()
+_gt_to_filter_gt_map = dict()
 _cnv_types = ('DEL', 'DUP')
 
 
@@ -47,6 +48,8 @@ def _gt_to_filter_status(gt, fails_filter):
             s = 'homRefFail'
         elif _is_hom_var(gt):
             s = 'homVarFail'
+        elif _is_no_call(gt):
+            s = 'noCallFail'
         else:
             s = 'hetFail'
         _gt_to_filter_status_map[gt] = s
@@ -59,7 +62,11 @@ def _split_on_condition(seq, condition):
 
 
 def _filter_gt(gt, allele):
-    return tuple(allele for _ in gt)
+    s = _gt_to_filter_gt_map.get(gt, None)
+    if s is None:
+        s = tuple(allele for _ in gt)
+        _gt_to_filter_gt_map[gt] = s
+    return s
 
 
 def recalculate_gq(sl, scale_factor, is_hom_ref, upper, lower, shift):
