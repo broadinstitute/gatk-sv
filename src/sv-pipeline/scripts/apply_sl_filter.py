@@ -5,27 +5,57 @@ import sys
 import pysam
 import math
 from typing import Any, List, Text, Set, Dict, Optional
+from itertools import tee
 
-
-_gt_non_ref_or_no_call_map = dict()
+_gt_no_call_map = dict()
+_gt_hom_var_map = dict()
 _gt_ref_map = dict()
+_gt_to_filter_status_map = dict()
 _cnv_types = ('DEL', 'DUP')
 
 
-def _is_non_ref_or_no_call(gt):
-    s = _gt_non_ref_or_no_call_map.get(gt, None)
+def _is_no_call(gt):
+    s = _gt_no_call_map.get(gt, None)
     if s is None:
-        s = any([a is not None and a > 0 for a in gt]) or all([a is None for a in gt])
-        _gt_non_ref_or_no_call_map[gt] = s
+        s = all([a is None for a in gt])
+        _gt_no_call_map[gt] = s
     return s
 
 
-def _is_ref(gt):
+def _is_hom_ref(gt):
     s = _gt_ref_map.get(gt, None)
     if s is None:
         s = all([a is not None and a == 0 for a in gt])
         _gt_ref_map[gt] = s
     return s
+
+
+def _is_hom_var(gt):
+    s = _gt_hom_var_map.get(gt, None)
+    if s is None:
+        s = all([a is not None and a > 0 for a in gt])
+        _gt_hom_var_map[gt] = s
+    return s
+
+
+def _gt_to_filter_status(gt, fails_filter):
+    if not fails_filter:
+        return 'pass'
+    s = _gt_to_filter_status_map.get(gt, None)
+    if s is None:
+        if _is_hom_ref(gt):
+            s = 'homRefFail'
+        elif _is_hom_var(gt):
+            s = 'homVarFail'
+        else:
+            s = 'hetFail'
+        _gt_to_filter_status_map[gt] = s
+    return s
+
+
+def _split_on_condition(seq, condition):
+    l1, l2 = tee((condition(item), item) for item in seq)
+    return (i for p, i in l1 if p), (i for p, i in l2 if not p)
 
 
 def _filter_gt(gt, allele):
@@ -38,39 +68,54 @@ def recalculate_gq(sl, scale_factor, is_hom_ref, upper, lower, shift):
     return int(math.floor(-10 * math.log10(1 / (math.pow(scale_factor, sl) + 1))))
 
 
-def _apply_filter(record, sl_threshold, n_samples, ploidy_dict, apply_hom_ref,
+def _fails_filter(sl, gt_is_ref, cutoff):
+    if gt_is_ref:
+        sl = -sl
+    return sl < cutoff
+
+
+def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref,
                   replace_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
     record.info['MINSL'] = sl_threshold
-    # Only filter non-ref genotypes
-    gt_list = [gt for s, gt in record.samples.items() if ploidy_dict[s][record.chrom] > 0
-               and _is_non_ref_or_no_call(gt['GT'])]
     if sl_threshold is None:
         sl_threshold = -math.inf
-    filtered_gt = [gt for gt in gt_list if gt['SL'] < sl_threshold]
-    non_ref_unfiltered_gt = [gt for gt in gt_list if gt['SL'] >= sl_threshold]
-    n_no_call = len(filtered_gt)
+    allele = 0 if apply_hom_ref else None
+    sl_list = []
+    n_samples = 0
+    n_no_call = 0
+    for s, gt in record.samples.items():
+        # Always set this to avoid weird values from pysam
+        gt['GT_FILTER'] = '.'
+        # Skip over ploidy 0 or if SL is missing
+        if ploidy_dict[s][record.chrom] == 0:
+            continue
+        # Count every sample where ploidy > 0 for NCR
+        n_samples += 1
+        sl = gt.get('SL', None)
+        if sl is None:
+            continue
+        gt_is_ref = _is_hom_ref(gt['GT'])
+        # SL metrics are over non-ref / no-call samples
+        if not gt_is_ref:
+            sl_list.append(sl)
+        if replace_gq:
+            gq = gt.get('GQ', None)
+            gt['OGQ'] = gq
+            # Recalculate GQ values based on SL
+            gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=gt_is_ref,
+                                          upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
+        # Check and apply filter
+        fails_filter = _fails_filter(sl, gt_is_ref, sl_threshold)
+        gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
+        if fails_filter:
+            gt['GT'] = _filter_gt(gt['GT'], allele)
+            n_no_call += 1
+    # Annotate metrics
     record.info['NCN'] = n_no_call
-    record.info['NCR'] = n_no_call / n_samples
-    # SL metrics are on the set of filtered and non-ref/unfiltered genotypes
-    sl_list = [gt['SL'] for gt in filtered_gt + non_ref_unfiltered_gt]
+    record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
     n_sl = len(sl_list)
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
     record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
-    allele = 0 if apply_hom_ref else None
-    if replace_gq:
-        # Recalculate GQ values based on SL
-        for gt in record.samples.values():
-            gq = gt.get('GQ', None)
-            if gq is None:
-                continue
-            gt['OGQ'] = gq
-            sl = gt.get('SL', None)
-            if sl is None:
-                continue
-            gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=_is_ref(gt['GT']),
-                                          upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
-    for gt in filtered_gt:
-        gt['GT'] = _filter_gt(gt['GT'], allele)
 
 
 def get_threshold(record, sl_thresholds, med_size, large_size):
@@ -95,7 +140,7 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
     for record in vcf:
         sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
                                      large_size=args.large_size)
-        _apply_filter(record=record, sl_threshold=sl_threshold, n_samples=n_samples,
+        _apply_filter(record=record, sl_threshold=sl_threshold,
                       ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref,
                       replace_gq=args.replace_gq, gq_scale_factor=args.gq_scale_factor,
                       upper_sl_cap=args.upper_sl_cap, lower_sl_cap=args.lower_sl_cap, sl_shift=args.sl_shift,
@@ -214,6 +259,7 @@ def main(argv: Optional[List[Text]] = None):
     header.add_line('##INFO=<ID=NCR,Number=1,Type=Float,Description="Rate of no-call genotypes">')
     header.add_line('##INFO=<ID=SL_MEAN,Number=1,Type=Float,Description="Mean SL of filtered and non-ref genotypes">')
     header.add_line('##INFO=<ID=SL_MAX,Number=1,Type=Float,Description="Max SL of filtered and non-ref genotypes">')
+    header.add_line('##FORMAT=<ID=GT_FILTER,Number=1,Type=String,Description="Genotype filter status">')
     if args.replace_gq:
         header.add_line('##FORMAT=<ID=OGQ,Number=1,Type=Integer,Description="Original GQ">')
     if args.out is None:
