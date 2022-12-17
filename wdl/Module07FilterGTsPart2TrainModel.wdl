@@ -38,6 +38,7 @@ workflow Module07FilterGTsPart2 {
 
     String sv_pipeline_docker
     String sv_pipeline_base_docker
+    String? sv_pipeline_base_docker_buildTree
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_EnumerateConditions
@@ -154,7 +155,7 @@ workflow Module07FilterGTsPart2 {
       condition_distrib_stats=combine_roc_stats_PCRMINUS.merged_file,
       prefix="~{prefix}.PCRMINUS",
       optimize_metric=optimize_metric,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_base_docker=select_first([sv_pipeline_base_docker_buildTree, sv_pipeline_base_docker])
   }
 
   # Train PCR+ filtering model, if optioned
@@ -198,7 +199,7 @@ workflow Module07FilterGTsPart2 {
         condition_distrib_stats=combine_roc_stats_PCRPLUS.merged_file,
         prefix="~{prefix}.PCRPLUS",
         optimize_metric=optimize_metric,
-        sv_pipeline_base_docker=sv_pipeline_base_docker
+        sv_pipeline_base_docker=select_first([sv_pipeline_base_docker_buildTree, sv_pipeline_base_docker])
     }
   }
 
