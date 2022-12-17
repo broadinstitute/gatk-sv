@@ -43,6 +43,7 @@ workflow Module07FilterGTsPart2 {
     RuntimeAttr? runtime_attr_EnumerateConditions
     RuntimeAttr? runtime_attr_ConcatTarball
     RuntimeAttr? runtime_attr_SubsetTrioTarball
+    RuntimeAttr? runtime_attr_roc_single
   }
 
   # Get table of all conditions to evaluate
@@ -130,7 +131,8 @@ workflow Module07FilterGTsPart2 {
         min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_base_docker=sv_pipeline_base_docker,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_roc_single=runtime_attr_roc_single
     }
   }
   call minGQTasks.CombineRocOptResults as combine_roc_optimal_PCRMINUS {
@@ -173,7 +175,8 @@ workflow Module07FilterGTsPart2 {
           min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_base_docker=sv_pipeline_base_docker,
-          sv_pipeline_docker=sv_pipeline_docker
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_roc_single=runtime_attr_roc_single
       }
     }
     call minGQTasks.CombineRocOptResults as combine_roc_optimal_PCRPLUS {

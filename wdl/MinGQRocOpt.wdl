@@ -51,7 +51,7 @@ workflow MinGQRocOpt {
         roc_max_metric=roc_max_metric,
         roc_step_metric=roc_step_metric,
         min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
-        runtime_attr_override = runtime_attr_roc_single
+        runtime_attr_override=runtime_attr_roc_single
     }
   }
 
@@ -76,7 +76,7 @@ workflow MinGQRocOpt {
 # Subset variants to meet a given set of conditions, merge across trios, 
 # and run ROC if condition has enough variants per sample
 task FilterMergeVariantsWithROC {
-  input{
+  input {
     File? trio_tarball
     String prefix
     File? trios_list
@@ -104,7 +104,7 @@ task FilterMergeVariantsWithROC {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 2,
-    disk_gb: 5 * size(trio_tarball, "GB"),
+    disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 1,
     max_retries: 1
