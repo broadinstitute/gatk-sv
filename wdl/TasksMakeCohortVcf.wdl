@@ -178,6 +178,7 @@ task ConcatVcfs {
     Boolean generate_index = true
     Boolean sites_only = false
     Boolean sort_vcf_list = false
+    Boolean sort_after_concat = false
     String? outfile_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
@@ -210,16 +211,18 @@ task ConcatVcfs {
   String concat_output_type = if (sites_only) then "v" else "z"
   String sites_only_command = if (sites_only) then "| bcftools view --no-version -G -Oz" else ""
   String generate_index_command = if (generate_index) then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
+  String sort_after_concat_command = if (sort_after_concat) then "bcftools sort --no-version -Oz"
 
   command <<<
     set -euo pipefail
     VCFS="~{write_lines(vcfs)}"
     if ~{sort_vcf_list}; then
-      cat $VCFS | awk -F '/' '{print $NF"\t"$0}' | sort -k1,1V | awk '{print $2}' > vcfs.list
+      cat $VCFS | awk -F '/' '{ print $NF"\t"$0 }' | sort -k1,1V | awk '{ print $2 }' > vcfs.list
     else
       cp $VCFS vcfs.list
     fi
     bcftools concat --no-version ~{allow_overlaps_flag} ~{naive_flag} -O~{concat_output_type} --file-list vcfs.list \
+      ~{sort_after_concat_command} \
       ~{sites_only_command} \
       > ~{outfile_name}
     ~{generate_index_command}
