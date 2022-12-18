@@ -211,7 +211,7 @@ task ConcatVcfs {
   String concat_output_type = if (sites_only) then "v" else "z"
   String sites_only_command = if (sites_only) then "| bcftools view --no-version -G -Oz" else ""
   String generate_index_command = if (generate_index) then "tabix ~{outfile_name}" else "touch ~{outfile_name}.tbi"
-  String sort_after_concat_command = if (sort_after_concat) then "bcftools sort --no-version -Oz"
+  String sort_after_concat_command = if (sort_after_concat) then "bcftools sort --no-version -Oz" else ""
 
   command <<<
     set -euo pipefail
