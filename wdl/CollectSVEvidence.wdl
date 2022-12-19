@@ -51,6 +51,8 @@ task RunCollectSVEvidence {
     File reference_index
     File reference_dict
     File sd_locs_vcf
+    Int site_depth_min_mapq = 6
+    Int site_depth_min_baseq = 10
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -99,6 +101,8 @@ task RunCollectSVEvidence {
         --allele-count-file "~{sample_id}.sd.txt.gz" \
         --allele-count-vcf ~{sd_locs_vcf} \
         --sample-name ~{sample_id} \
+        --site-depth-min-mapq "~{site_depth_min_mapq}" \
+        --site-depth-min-baseq "~{site_depth_min_baseq}" \
         -R ~{reference_fasta}
 
   >>>
