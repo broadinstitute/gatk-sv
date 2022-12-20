@@ -18,6 +18,7 @@ workflow Module07FilterGTsPart3 {
     Array[String] filter_GT_options = []
     Float max_noCallRate
     Boolean naive_merge = true
+    Boolean allow_overlaps_merge = false
     Boolean sort_after_merge = false
 
     String sv_pipeline_docker
@@ -70,6 +71,7 @@ workflow Module07FilterGTsPart3 {
   call MiniTasks.ConcatVcfs as CombineVcfs {
     input:
       vcfs=filtered_vcf_shards,
+      allow_overlaps_flag=allow_overlaps_merge,
       naive=naive_merge,
       sort_after_concat=sort_after_merge,
       outfile_prefix=prefix,
