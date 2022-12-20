@@ -65,12 +65,14 @@ workflow Module07FilterGTsPart3 {
     }
 
     File filtered_vcf_shards = select_first([merge_PCR_VCFs.merged_vcf, apply_filter_PCRMINUS.filtered_vcf])
+    File filtered_idx_shards = select_first([merge_PCR_VCFs.merged_vcf_idx, apply_filter_PCRMINUS.filtered_vcf_idx])
 
   }
 
   call MiniTasks.ConcatVcfs as CombineVcfs {
     input:
       vcfs=filtered_vcf_shards,
+      vcfs_idx=filtered_idx_shards,
       allow_overlaps=allow_overlaps_merge,
       naive=naive_merge,
       sort_after_concat=sort_after_merge,

@@ -771,10 +771,12 @@ task FilterGTs {
     | fgrep -v "##INFO=<ID=CN_NONREF_FREQ," \
     | bgzip -c \
     > "~{prefix}.filtered.vcf.gz"
+    tabix -p vcf -f "~{prefix}.filtered.vcf.gz"
   >>>
 
   output {
     File filtered_vcf = "~{prefix}.filtered.vcf.gz"
+    File filtered_vcf_idx = "~{prefix}.filtered.vcf.gz.tbi"
   }
 
   runtime {
@@ -832,6 +834,7 @@ task MergePcrVCFs {
         "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
       bgzip -f "~{prefix}.minGQ_filtered.no_blanks.vcf"
+      tabix -p vcf -f "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
     else
       #Sanitize FILTER columns
       zcat "~{PCRMINUS_vcf}" | cut -f7 | grep -ve '^#' | sed '1d' > PCRMINUS_filters.txt
@@ -848,11 +851,13 @@ task MergePcrVCFs {
         "~{prefix}.minGQ_filtered.no_blanks.vcf"
       #Bgzip & tabix
       vcf-sort "~{prefix}.minGQ_filtered.no_blanks.vcf" | bgzip > "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
+      tabix -p vcf -f "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
     fi
   >>>
 
   output {
     File merged_vcf = "~{prefix}.minGQ_filtered.no_blanks.vcf.gz"
+    File merged_vcf_idx = "~{prefix}.minGQ_filtered.no_blanks.vcf.gz.tbi"
   }
 
   runtime {
