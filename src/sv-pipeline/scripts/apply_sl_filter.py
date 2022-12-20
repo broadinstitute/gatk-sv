@@ -107,7 +107,6 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref,
         if not gt_is_ref:
             sl_list.append(sl)
         if replace_gq:
-            gq = gt.get('GQ', None)
             # Recalculate GQ values based on SL
             gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=gt_is_ref,
                                           upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
