@@ -16,11 +16,12 @@ workflow CollectPEMetricsForCPX {
         File PE_collect_script
         String prefix
         Int n_per_split
+        String sv_pipeline_docker
         String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override_collect_pe
-        RuntimeAttr? runtime_attr_override_split_script
-        RuntimeAttr? runtime_attr_override_calcu_pe_stat
-        RuntimeAttr? runtime_attr_override_concat_evidence
+        RuntimeAttr? runtime_attr_collect_pe
+        RuntimeAttr? runtime_attr_split_script
+        RuntimeAttr? runtime_attr_calcu_pe_stat
+        RuntimeAttr? runtime_attr_concat_evidence
         }
 
     scatter (i in range(length(batch_name_list))){
@@ -32,11 +33,12 @@ workflow CollectPEMetricsForCPX {
                 PE_metric = PE_metrics[i],
                 PE_metrics_idx = PE_metrics_idxes[i],
                 PE_collect_script = PE_collect_script,
+                sv_pipeline_docker = sv_pipeline_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override_collect_pe = runtime_attr_override_collect_pe,
-                runtime_attr_override_split_script = runtime_attr_override_split_script,
-                runtime_attr_override_calcu_pe_stat = runtime_attr_override_calcu_pe_stat,
-                runtime_attr_override_concat_evidence = runtime_attr_override_concat_evidence
+                runtime_attr_collect_pe = runtime_attr_collect_pe,
+                runtime_attr_split_script = runtime_attr_split_script,
+                runtime_attr_calcu_pe_stat = runtime_attr_calcu_pe_stat,
+                runtime_attr_concat_evidence = runtime_attr_concat_evidence
         }
      }
 
@@ -45,7 +47,7 @@ workflow CollectPEMetricsForCPX {
             evidences = CollectPEMetricsPerBatchCPX.evidence,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_concat_evidence
+            runtime_attr_override = runtime_attr_concat_evidence
     }
 
     call CalcuPEStat{
@@ -53,7 +55,7 @@ workflow CollectPEMetricsForCPX {
             evidence = ConcatEvidences.concat_evidence,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_calcu_pe_stat
+            runtime_attr_override = runtime_attr_calcu_pe_stat
     }
 
     output{

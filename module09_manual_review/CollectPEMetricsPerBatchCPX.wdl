@@ -15,10 +15,11 @@ workflow CollectPEMetricsPerBatchCPX {
         File PE_collect_script
         String prefix
         String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override_collect_pe
-        RuntimeAttr? runtime_attr_override_concat_evidence
-        RuntimeAttr? runtime_attr_override_calcu_pe_stat
-        RuntimeAttr? runtime_attr_override_split_script
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_collect_pe
+        RuntimeAttr? runtime_attr_concat_evidence
+        RuntimeAttr? runtime_attr_calcu_pe_stat
+        RuntimeAttr? runtime_attr_split_script
         }
 
     call SplitScripts{
@@ -27,7 +28,7 @@ workflow CollectPEMetricsPerBatchCPX {
             n_per_split = n_per_split,
             batch_name = batch_name,
             sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_split_script
+            runtime_attr_override = runtime_attr_split_script
     }
     
     scatter (script in SplitScripts.script_splits ){
@@ -37,8 +38,8 @@ workflow CollectPEMetricsPerBatchCPX {
                 PE_metric = PE_metric,
                 PE_metrics_idx = PE_metrics_idx,
                 PE_collect_script = script,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_override_collect_pe
+                sv_pipeline_docker = sv_pipeline_docker,
+                runtime_attr_override = runtime_attr_collect_pe
         }
     }
 
@@ -47,7 +48,7 @@ workflow CollectPEMetricsPerBatchCPX {
             evidences = CollectPEMetrics.evidence,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_concat_evidence
+            runtime_attr_override = runtime_attr_concat_evidence
     }
 
     output{
@@ -64,14 +65,14 @@ task CollectPEMetrics{
     File PE_metric
     File PE_metrics_idx
     File PE_collect_script
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 5,
-    disk_gb: ceil(10.0 + size(PE_metric, "GiB") * 2),
+    disk_gb: ceil(30.0 + size(PE_metric, "GiB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -84,10 +85,15 @@ task CollectPEMetrics{
     mkdir PE_metrics/
     gsutil cp ~{PE_metric} ./
     gsutil cp ~{PE_metrics_idx} ./
-    grep -w ~{batch_name} ~{PE_collect_script} > tmp_metrics.sh
-    bash tmp_metrics.sh
+    echo "Metrics succesfully downloaded."
+    echo "Starting the evidence collection ..."
+    
+    if [ $(wc -c < "~{PE_collect_script}") -gt 0 ]; then
+      bash ~{PE_collect_script}
+    fi
 
     touch ~{batch_name}.evidence
+    touch ~{batch_name}.0.PE_evidences
     for peEvFile in *.PE_evidences
     do
        cat ${peEvFile} >> ~{batch_name}.evidence
@@ -106,7 +112,7 @@ task CollectPEMetrics{
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -222,9 +228,15 @@ task SplitScripts {
   }
   command <<<
 
-    set -euo pipefail
-    grep -w ~{batch_name} ~{script} > tmp_metrics.sh
-    split --additional-suffix ".sh" -l ~{n_per_split} -a 6 tmp_metrics.sh collect_PE_evidences.
+    set -e pipefail
+
+    awk '{if ($2=="~{batch_name}.PE.txt.gz") print}' ~{script} > tmp_metrics.sh
+    
+    if [ $(wc -c < "tmp_metrics.sh") -gt 0 ]; then
+      split --additional-suffix ".sh" -l ~{n_per_split} -a 6 tmp_metrics.sh collect_PE_evidences.
+    else
+      touch collect_PE_evidences.aaaaaa.sh
+    fi
 
   >>>
   runtime {
