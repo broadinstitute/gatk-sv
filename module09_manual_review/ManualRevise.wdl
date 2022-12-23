@@ -7,11 +7,10 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
 
 # Workflow to shard a filtered vcf & run vcfcluster (sub-sub-sub workflow)
-workflow ShardedManualRevise {
+workflow ManualRevise {
   input {
     File vcf
     String prefix
-    String contig
     File? exclude_list
     Float merging_shard_scale_factor = 30000000
 
@@ -61,141 +60,57 @@ workflow ShardedManualRevise {
     File exclude_list_idx = exclude_list + ".tbi"
   }
 
-  call MiniTasks.ScatterVcf{
-    input:
-      vcf = vcf,
-      prefix = prefix,
-      records_per_shard = 10000,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_scatter_vcf
-  }
-
-
   #Run vcfcluster per shard
-  scatter (i in range(length(ScatterVcf.shards))) {
-
-    call ReviseVcf{
-        input:
-            vcf_file = ScatterVcf.shards[i],
-            vcf_index = ScatterVcf.shards_idx[i],
-            SVID_to_Remove = SVID_to_Remove,
-            MEI_DEL_Rescue = MEI_DEL_Rescue,
-            CPX_manual = CPX_manual,
-            CTX_manual = CTX_manual,
-            sv_benchmark_docker = sv_benchmark_docker,
-            runtime_attr_override = runtime_attr_revise_vcf
-    }
-
-
-    call CleanUpFormats as clean_up_formats_revised_vcf{
+  call ReviseVcf{
       input:
-        vcf_file = ReviseVcf.manual_revised_vcf,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_clean_up_formats_revised_vcf
-    }
-
-    call CleanUpFormats as clean_up_formats_cpx_ctx_vcf{
-      input:
-        vcf_file = ReviseVcf.cpx_ctx_vcf,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_clean_up_formats_revised_vcf
-    }
-
-    call MiniTasks.SortVcf as sort_manual_revised_vcf{
-      input:
-        vcf = clean_up_formats_revised_vcf.reformatted_vcf,
-        outfile_prefix = "~{prefix}.manual_revised.sorted.shard_${i}",
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_sort_merged_vcf
-    }
-
-    call MiniTasks.SortVcf as sort_cpx_ctx_vcf{
-      input:
-        vcf = clean_up_formats_cpx_ctx_vcf.reformatted_vcf,
-        outfile_prefix = "~{prefix}.cpx_ctx.sorted.shard_${i}",
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_sort_merged_vcf
-    }
+          vcf_file = vcf,
+          vcf_index = vcf_idx,
+          SVID_to_Remove = SVID_to_Remove,
+          MEI_DEL_Rescue = MEI_DEL_Rescue,
+          CPX_manual = CPX_manual,
+          CTX_manual = CTX_manual,
+          sv_benchmark_docker = sv_benchmark_docker,
+          runtime_attr_override = runtime_attr_revise_vcf
   }
 
-  if (length(ReviseVcf.manual_revised_vcf) == 0) {
-    call GetVcfHeaderWithMembersInfoLine as GetVcfHeader_manual_revised {
-      input:
-        vcf_gz=vcf,
-        prefix="~{prefix}.manual_revised.clustered",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_get_vcf_header_with_members_info_line
-    }
-
-    call GetVcfHeaderWithMembersInfoLine as GetVcfHeader_cpx_ctx {
-      input:
-        vcf_gz=vcf,
-        prefix="~{prefix}.cpx_ctx.clustered",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_get_vcf_header_with_members_info_line
-    }
-
+  call CleanUpFormats as clean_up_formats_revised_vcf{
+    input:
+      vcf_file = ReviseVcf.out_manual_revised_vcf,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_clean_up_formats_revised_vcf
   }
-  if (length(ReviseVcf.manual_revised_vcf) > 0) {
-    if (use_hail) {
-      call HailMerge.HailMerge as ConcatVcfsHail_manual_revised {
-        input:
-          vcfs=sort_manual_revised_vcf.out,
-          prefix="~{prefix}.manual_revised.clustered",
-          gcs_project=gcs_project,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-          runtime_attr_preconcat=runtime_attr_preconcat_sharded_cluster,
-          runtime_attr_hail_merge=runtime_attr_hail_merge_sharded_cluster,
-          runtime_attr_fix_header=runtime_attr_fix_header_sharded_cluster
-      }
 
-      call HailMerge.HailMerge as ConcatVcfsHail_cpx_ctx {
-        input:
-          vcfs=sort_cpx_ctx_vcf.out,
-          prefix="~{prefix}.cpx_ctx.clustered",
-          gcs_project=gcs_project,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-          runtime_attr_preconcat=runtime_attr_preconcat_sharded_cluster,
-          runtime_attr_hail_merge=runtime_attr_hail_merge_sharded_cluster,
-          runtime_attr_fix_header=runtime_attr_fix_header_sharded_cluster
-      }
-
-    }
-    if (!use_hail) {
-      call MiniTasks.ConcatVcfs as ConcatVcfs_manual_revised {
-        input:
-          vcfs=sort_manual_revised_vcf.out,
-          vcfs_idx=sort_manual_revised_vcf.out_index,
-          allow_overlaps=true,
-          outfile_prefix="~{prefix}.manual_revised.clustered",
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_attr_concat_sharded_cluster
-      }
-
-      call MiniTasks.ConcatVcfs as ConcatVcfs_cpx_ctx {
-        input:
-          vcfs=sort_cpx_ctx_vcf.out,
-          vcfs_idx=sort_cpx_ctx_vcf.out_index,
-          allow_overlaps=true,
-          outfile_prefix="~{prefix}.cpx_ctx.clustered",
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_attr_concat_sharded_cluster
-      }
-
-    }
+  call CleanUpFormats as clean_up_formats_cpx_ctx_vcf{
+    input:
+      vcf_file = ReviseVcf.out_cpx_ctx_vcf,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_clean_up_formats_revised_vcf
   }
+
+  call MiniTasks.SortVcf as sort_manual_revised_vcf{
+    input:
+      vcf = clean_up_formats_revised_vcf.reformatted_vcf,
+      outfile_prefix = "~{prefix}.manual_revised.sorted.shard",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_sort_merged_vcf
+  }
+
+  call MiniTasks.SortVcf as sort_cpx_ctx_vcf{
+    input:
+      vcf = clean_up_formats_cpx_ctx_vcf.reformatted_vcf,
+      outfile_prefix = "~{prefix}.cpx_ctx.sorted.shard",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_sort_merged_vcf
+  }
+
 
   #Output
   output {
-    File manual_revised_vcf = select_first([GetVcfHeader_manual_revised.out, ConcatVcfs_manual_revised.concat_vcf, ConcatVcfsHail_manual_revised.merged_vcf])
-    File manual_revised_vcf_idx = select_first([GetVcfHeader_manual_revised.out_idx, ConcatVcfs_manual_revised.concat_vcf_idx, ConcatVcfsHail_manual_revised.merged_vcf_index])
-    File cpx_ctx_vcf = select_first([GetVcfHeader_cpx_ctx.out, ConcatVcfs_cpx_ctx.concat_vcf, ConcatVcfsHail_cpx_ctx.merged_vcf])
-    File cpx_ctx_vcf_idx = select_first([GetVcfHeader_cpx_ctx.out_idx, ConcatVcfs_cpx_ctx.concat_vcf_idx, ConcatVcfsHail_cpx_ctx.merged_vcf_index])
-  }
+    File manual_revised_vcf = sort_manual_revised_vcf.out
+    File manual_revised_vcf_idx = sort_manual_revised_vcf.out_index
+    File cpx_ctx_vcf = sort_cpx_ctx_vcf.out
+    File cpx_ctx_vcf_idx = sort_cpx_ctx_vcf.out_index
+    }
 }
 
 # Adds MEMBERS definition to header (workaround for when VIDs_list is empty)
@@ -341,7 +256,7 @@ task CleanUpFormats{
         for record in fin:
           if record.info['SVTYPE']=="CPX" and record.info['CPX_TYPE'] in ['dDUP','dDUP_iDEL','INS_iDEL']:
             if record.info['CPX_TYPE']=='INS_iDEL':
-              record.info['CPX_INTERVALS'] = ','.join([record.info['CPX_INTERVALS'], record.info['SOURCE']])
+              record.info['CPX_INTERVALS'] = ','.join([x for x in record.info['CPX_INTERVALS']] + [record.info['SOURCE']])
               del record.info['SOURCE']
             else:
               del record.info['SOURCE']
@@ -354,7 +269,7 @@ task CleanUpFormats{
               record.info['CPX_INTERVALS'] = record.info['SOURCE'].replace('INV','DUP')+','+record.info['SOURCE']
             else:
               record.info['CPX_TYPE']="dDUP_iDEL"
-              record.info['CPX_INTERVALS'] = record.info['SOURCE'].replace('INV','DUP')+','+record.info['SOURCE']+','+"DEL_"+record.chr+":"+str(record.pos)+'-'+str(record.stop)
+              record.info['CPX_INTERVALS'] = record.info['SOURCE'].replace('INV','DUP')+','+record.info['SOURCE']+','+"DEL_"+record.chrom+":"+str(record.pos)+'-'+str(record.stop)
             del record.info['SOURCE'] 
           for i in record.format.keys():
             if not i in formats_to_keep:
@@ -669,8 +584,8 @@ task ReviseVcf{
     >>>
 
     output{
-        File manual_revised_vcf = "~{prefix}.Manual_Revised.vcf.gz"
-        File cpx_ctx_vcf = "~{prefix}.CPX_CTX.vcf.gz"
+        File out_manual_revised_vcf = "~{prefix}.Manual_Revised.vcf.gz"
+        File out_cpx_ctx_vcf = "~{prefix}.CPX_CTX.vcf.gz"
     }
 
     runtime {

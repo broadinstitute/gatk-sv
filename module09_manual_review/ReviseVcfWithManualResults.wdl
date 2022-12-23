@@ -18,6 +18,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as mini_tasks
 import "ShardedManualRevise.wdl" as sharded_manual_revise
+import "ManualRevise.wdl" as manual_revise
 workflow ReviseVcfWithManualResults{
     input{ 
         File vcf_file
@@ -53,11 +54,10 @@ workflow ReviseVcfWithManualResults{
             runtime_attr_override = runtime_attr_override_split_cpx_per_contig
     }
 
-    call sharded_manual_revise.ShardedManualRevise as ShardedManualRevise{
+    call manual_revise.ManualRevise as ManualRevise{
         input:
             vcf = vcf_file,
             prefix = prefix,
-            contig = chr_name,
             SVID_to_Remove = SVID_to_Remove,
             MEI_DEL_Rescue = MEI_DEL_Rescue,
             CPX_manual = SplitFilePerContig.output_file,
@@ -71,36 +71,24 @@ workflow ReviseVcfWithManualResults{
             runtime_attr_concat_sharded_cluster = runtime_attr_concat_sharded_cluster
         }
 
-    #call ReviseVcf{
-        #input:
-        #    vcf_file = vcf_file,
-        #    vcf_index = vcf_index,
-        #    SVID_to_Remove = SVID_to_Remove,
-        #    MEI_DEL_Rescue = MEI_DEL_Rescue,
-        #    CPX_manual = SplitFilePerContig.output_file,
-        #    CTX_manual = CTX_manual,
-        #    duplicated_SVID_manual = duplicated_SVID_manual,
-        #    sv_benchmark_docker = sv_benchmark_docker,
-        #    runtime_attr_override = runtime_attr_override_revise_vcf
-    #}
 
     if(defined(raw_SVs)){
         call AddRawSVs{
             input:
                 prefix = prefix,
                 chr_name = chr_name,
-                vcf_file = ShardedManualRevise.cpx_ctx_vcf,
+                vcf_file = ManualRevise.cpx_ctx_vcf,
                 raw_SVs = raw_SVs,
                 sv_benchmark_docker = sv_benchmark_docker,
                 runtime_attr_override = runtime_attr_override_add_raw_SVs
         }
     }
 
-    File Cpx_Ctx_vcf = select_first([ShardedManualRevise.cpx_ctx_vcf, AddRawSVs.vcf_with_raw_SVs])
+    File Cpx_Ctx_vcf = select_first([ManualRevise.cpx_ctx_vcf, AddRawSVs.vcf_with_raw_SVs])
 
     call mini_tasks.ConcatVcfs as ConcatVcfs{
         input:
-            vcfs = [ShardedManualRevise.manual_revised_vcf, Cpx_Ctx_vcf],
+            vcfs = [ManualRevise.manual_revised_vcf, Cpx_Ctx_vcf],
             outfile_prefix = "~{prefix}.~{chr_name}.manually_revised",
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_override_concat_vcfs

@@ -210,39 +210,59 @@ workflow ShardeManualReview{
                     sv_base_mini_docker = sv_base_mini_docker,
                     runtime_attr_override = runtime_attr_split_raw_SVs_per_chr
             }
+
+            call revise_vcf_with_manual_results.ReviseVcfWithManualResults as ReviseVcfWithManualResults_with_raw{
+                input:
+                    vcf_file = RemoveDuplicateEvents.deduplicated_vcf,
+                    vcf_index = RemoveDuplicateEvents.deduplicated_vcf_index,
+                    raw_SVs = SplitRawSVsPerChr.raw_SV_per_chr,
+                    SVID_to_Remove = SVID_to_Remove,
+                    MEI_DEL_Rescue = BNDvsMEI.mei_del_SVID,
+                    CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
+                    CTX_manual = CTX_manual,
+                    prefix = "~{prefix}.~{i}",
+                    chr_name = contig,
+                    sv_benchmark_docker = sv_benchmark_docker,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    sv_pipeline_docker = sv_pipeline_docker,
+                    sv_pipeline_hail_docker = sv_pipeline_hail_docker
+            }
         }
 
-        File raw_vcf = select_first(['null', SplitRawSVsPerChr.raw_SV_per_chr])
-
-        call revise_vcf_with_manual_results.ReviseVcfWithManualResults as ReviseVcfWithManualResults{
-            input:
-                vcf_file = RemoveDuplicateEvents.deduplicated_vcf,
-                vcf_index = RemoveDuplicateEvents.deduplicated_vcf_index,
-                raw_SVs = raw_vcf,
-                SVID_to_Remove = SVID_to_Remove,
-                MEI_DEL_Rescue = BNDvsMEI.mei_del_SVID,
-                CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
-                CTX_manual = CTX_manual,
-                prefix = "~{prefix}.~{i}",
-                chr_name = contig,
-                sv_benchmark_docker = sv_benchmark_docker,
-                sv_base_mini_docker = sv_base_mini_docker,
-                sv_pipeline_docker = sv_pipeline_docker,
-                sv_pipeline_hail_docker = sv_pipeline_hail_docker
+        if(!defined(raw_SVs)){
+            call revise_vcf_with_manual_results.ReviseVcfWithManualResults as ReviseVcfWithManualResults_wo_raw{
+                input:
+                    vcf_file = RemoveDuplicateEvents.deduplicated_vcf,
+                    vcf_index = RemoveDuplicateEvents.deduplicated_vcf_index,
+                    SVID_to_Remove = SVID_to_Remove,
+                    MEI_DEL_Rescue = BNDvsMEI.mei_del_SVID,
+                    CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
+                    CTX_manual = CTX_manual,
+                    prefix = "~{prefix}.~{i}",
+                    chr_name = contig,
+                    sv_benchmark_docker = sv_benchmark_docker,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    sv_pipeline_docker = sv_pipeline_docker,
+                    sv_pipeline_hail_docker = sv_pipeline_hail_docker
+            }        
         }
+
+        File revised_vcf = select_first([ReviseVcfWithManualResults_with_raw.revised_vcf, ReviseVcfWithManualResults_wo_raw.revised_vcf])
+        File revised_vcf_idx = select_first([ReviseVcfWithManualResults_with_raw.revised_vcf_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
+
 
         if (run_fix_ends){
             call MiniTasks.FixEndsRescaleGQ{
                 input:
-                    vcf = ReviseVcfWithManualResults.revised_vcf,
+                    vcf = revised_vcf,
                     prefix = "~{prefix}.{i}",
                     sv_pipeline_docker = sv_pipeline_docker,
                     runtime_attr_override = runtime_attr_fix_bad_ends
             }
         }
 
-        File sharded_annotated_vcf = select_first([FixEndsRescaleGQ.out, ReviseVcfWithManualResults.revised_vcf])
-        File sharded_annotated_vcf_idx = select_first([FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults.revised_vcf_idx])
+        File sharded_annotated_vcf = select_first([FixEndsRescaleGQ.out, revised_vcf])
+        File sharded_annotated_vcf_idx = select_first([FixEndsRescaleGQ.out_idx, revised_vcf_idx])
     }
 
     if (length(sharded_annotated_vcf) == 0) {
