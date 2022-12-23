@@ -46,21 +46,24 @@ workflow ReviseVcfWithManualResults{
         RuntimeAttr? runtime_attr_override_split_cpx_per_contig
     }
 
-    call SplitFilePerContig{
-        input:
-            input_file = CPX_manual,
-            contig = chr_name,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_split_cpx_per_contig
+    if (chr_name != "whole_genome"){
+        call SplitFilePerContig{
+            input:
+                input_file = CPX_manual,
+                contig = chr_name,
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_override_split_cpx_per_contig
+            }
     }
 
+    File CPX_manual_output = select_first([SplitFilePerContig.output_file, CPX_manual])
     call manual_revise.ManualRevise as ManualRevise{
         input:
             vcf = vcf_file,
             prefix = prefix,
             SVID_to_Remove = SVID_to_Remove,
             MEI_DEL_Rescue = MEI_DEL_Rescue,
-            CPX_manual = SplitFilePerContig.output_file,
+            CPX_manual = CPX_manual_output,
             CTX_manual = CTX_manual,
             use_hail = false,
             sv_benchmark_docker = sv_benchmark_docker,
