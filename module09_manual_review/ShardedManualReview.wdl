@@ -276,19 +276,21 @@ workflow ShardeManualReview{
     File reviewed_vcf_idx = select_first([GetVcfHeader_annotated.out_idx, ConcatVcfs_annotated.concat_vcf_idx, ConcatVcfsHail_annotated.merged_vcf_index])
 
 
-    if (contig!="whole_genome"){
-        call SplitRawSVsPerChr{
-            input:
-                raw_SVs = raw_SVs,
-                contig = contig,
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_split_raw_SVs_per_chr
-        }
-    }
-
-    File split_raw_SVs = select_first([SplitRawSVsPerChr.raw_SV_per_chr, raw_SVs])
 
     if (defined(raw_SVs)){
+
+        if (contig!="whole_genome"){
+            call SplitRawSVsPerChr{
+                input:
+                    raw_SVs = raw_SVs,
+                    contig = contig,
+                    sv_base_mini_docker = sv_base_mini_docker,
+                    runtime_attr_override = runtime_attr_split_raw_SVs_per_chr
+            }
+        }
+
+        File split_raw_SVs = select_first([SplitRawSVsPerChr.raw_SV_per_chr, raw_SVs])
+
         call revise_vcf_with_manual_results.AddRawSVs{
             input:
                 prefix = prefix,
