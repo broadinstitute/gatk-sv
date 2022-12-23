@@ -130,8 +130,8 @@ workflow ManualReview{
     }
 
     output{
-        Array[File] reviewed_vcfs = ShardeManualReview.reviewed_vcf
-        Array[File] review_vcf_idxes = ShardeManualReview.review_vcf_idx
+        Array[File] reviewed_vcfs = ShardeManualReview.revised_output_vcf
+        Array[File] reviewed_vcf_idxes = ShardeManualReview.revised_output_vcf_idx
     }
 
 

@@ -31,7 +31,7 @@ workflow ReviseVcfWithManualResults{
         #File duplicated_SVID_manual
 
         String prefix
-        String chr_name
+        String contig
 
         String sv_benchmark_docker
         String sv_base_mini_docker
@@ -46,17 +46,18 @@ workflow ReviseVcfWithManualResults{
         RuntimeAttr? runtime_attr_override_split_cpx_per_contig
     }
 
-    if (chr_name != "whole_genome"){
+    if (contig != "whole_genome"){
         call SplitFilePerContig{
             input:
                 input_file = CPX_manual,
-                contig = chr_name,
+                contig = contig,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_override_split_cpx_per_contig
             }
     }
 
     File CPX_manual_output = select_first([SplitFilePerContig.output_file, CPX_manual])
+    
     call manual_revise.ManualRevise as ManualRevise{
         input:
             vcf = vcf_file,
@@ -79,7 +80,7 @@ workflow ReviseVcfWithManualResults{
         call AddRawSVs{
             input:
                 prefix = prefix,
-                chr_name = chr_name,
+                batch_name = contig,
                 vcf_file = ManualRevise.cpx_ctx_vcf,
                 raw_SVs = raw_SVs,
                 sv_benchmark_docker = sv_benchmark_docker,
@@ -92,7 +93,7 @@ workflow ReviseVcfWithManualResults{
     call mini_tasks.ConcatVcfs as ConcatVcfs{
         input:
             vcfs = [ManualRevise.manual_revised_vcf, Cpx_Ctx_vcf],
-            outfile_prefix = "~{prefix}.~{chr_name}.manually_revised",
+            outfile_prefix = "~{prefix}.~{contig}.manually_revised",
             sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_override = runtime_attr_override_concat_vcfs
     }
@@ -199,7 +200,7 @@ task ReviseVcf{
 task AddRawSVs{
     input{
         String prefix
-        String chr_name
+        String batch_name
         File vcf_file
         File? raw_SVs
         String sv_benchmark_docker
@@ -224,12 +225,14 @@ task AddRawSVs{
             --vcf ~{vcf_file} \
             --reviewed-events-file ~{raw_SVs} \
             --cohort-name ~{prefix} \
-            --batch-name ~{chr_name} \
+            --batch-name ~{batch_name} \
             --out ~{prefix}.with_raw.vcf.gz 
+        tabix -p vcf ~{prefix}.with_raw.vcf.gz 
     >>>
 
     output{
         File vcf_with_raw_SVs = "~{prefix}.with_raw.vcf.gz"
+        File vcf_idx_with_raw_SVs = "~{prefix}.with_raw.vcf.gz.tbi"
     }
 
     runtime {
