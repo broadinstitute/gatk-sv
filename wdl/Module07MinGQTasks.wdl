@@ -539,7 +539,7 @@ task GatherTrioData {
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75, 
-    disk_gb: 3 * size(files, "GB"),
+    disk_gb: 3 * ceil(size(files, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
