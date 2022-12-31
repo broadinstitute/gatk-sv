@@ -24,11 +24,11 @@ workflow ReviseSVtypeINStoMEIperContig {
     RuntimeAttr? runtime_override_combine_step_1_vcfs
   }
 
-
   call MiniTasks.ScatterVcf as SplitVcfReviseSVtypeMEI {
       input:
         vcf=vcf,
         prefix="~{prefix}.~{contig}",
+        contig=contig,
         records_per_shard=min_records_per_shard_step1,
         sv_pipeline_docker=sv_pipeline_updates_docker,
         runtime_attr_override=runtime_override_split_vcf_to_clean
