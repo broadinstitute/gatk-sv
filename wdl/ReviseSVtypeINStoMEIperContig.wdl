@@ -27,6 +27,7 @@ workflow ReviseSVtypeINStoMEIperContig {
   call MiniTasks.ScatterVcf as SplitVcfReviseSVtypeMEI {
       input:
         vcf=vcf,
+        vcf_idx=vcf_idx,
         prefix="~{prefix}.~{contig}",
         contig=contig,
         records_per_shard=min_records_per_shard_step1,
