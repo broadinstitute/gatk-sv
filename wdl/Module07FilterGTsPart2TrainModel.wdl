@@ -40,6 +40,7 @@ workflow Module07FilterGTsPart2 {
     String sv_pipeline_base_docker
     String? sv_pipeline_base_docker_buildTree
     String sv_base_mini_docker
+    String gcloud_sdk_docker
 
     RuntimeAttr? runtime_attr_EnumerateConditions
     RuntimeAttr? runtime_attr_ConcatTarball
@@ -130,9 +131,9 @@ workflow Module07FilterGTsPart2 {
         roc_max_metric=roc_max_metric,
         roc_step_metric=roc_step_metric,
         min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
-        sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_base_docker=sv_pipeline_base_docker,
         sv_pipeline_docker=sv_pipeline_docker,
+        gcloud_sdk_docker=gcloud_sdk_docker,
         runtime_attr_roc_single=runtime_attr_roc_single
     }
   }
@@ -140,13 +141,13 @@ workflow Module07FilterGTsPart2 {
     input:
       shards=roc_opt_PCRMINUS.roc_optimal_merged,
       outfile="~{prefix}.PCRMINUS.min~{optimize_metric}_condition_opts.txt",
-      sv_base_mini_docker=sv_base_mini_docker
+      gcloud_sdk_docker=gcloud_sdk_docker
   }
   call minGQTasks.CombineRocOptResults as combine_roc_stats_PCRMINUS {
     input:
       shards=roc_opt_PCRMINUS.distrib_stats_merged,
       outfile="~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt",
-      sv_base_mini_docker=sv_base_mini_docker
+      gcloud_sdk_docker=gcloud_sdk_docker
   }
   call minGQTasks.BuildFilterTree as build_tree_PCRMINUS {
     input:
@@ -174,9 +175,9 @@ workflow Module07FilterGTsPart2 {
           roc_max_metric=roc_max_metric,
           roc_step_metric=roc_step_metric,
           min_sv_per_proband_per_condition=min_sv_per_proband_per_condition,
-          sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_base_docker=sv_pipeline_base_docker,
           sv_pipeline_docker=sv_pipeline_docker,
+          gcloud_sdk_docker=gcloud_sdk_docker,
           runtime_attr_roc_single=runtime_attr_roc_single
       }
     }
@@ -184,13 +185,13 @@ workflow Module07FilterGTsPart2 {
       input:
         shards=roc_opt_PCRPLUS.roc_optimal_merged,
         outfile="~{prefix}.PCRPLUS.min~{optimize_metric}_condition_opts.txt",
-        sv_base_mini_docker=sv_base_mini_docker
+        gcloud_sdk_docker=gcloud_sdk_docker
     }
     call minGQTasks.CombineRocOptResults as combine_roc_stats_PCRPLUS {
       input:
         shards=roc_opt_PCRPLUS.distrib_stats_merged,
         outfile="~{prefix}.min~{optimize_metric}_condition_distrib_stats.txt",
-        sv_base_mini_docker=sv_base_mini_docker
+        gcloud_sdk_docker=gcloud_sdk_docker
     }
     call minGQTasks.BuildFilterTree as build_tree_PCRPLUS {
       input:

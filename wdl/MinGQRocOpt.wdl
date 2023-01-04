@@ -17,7 +17,7 @@ workflow MinGQRocOpt {
     Int min_sv_per_proband_per_condition
     String sv_pipeline_docker
     String sv_pipeline_base_docker
-    String sv_base_mini_docker
+    String gcloud_sdk_docker
     RuntimeAttr? runtime_attr_roc_single
   }
 
@@ -58,7 +58,7 @@ workflow MinGQRocOpt {
   # Merge across conditions
   call CombineRocOptResults as combine {
   input:
-    sv_base_mini_docker=sv_base_mini_docker,
+    gcloud_sdk_docker=gcloud_sdk_docker,
     condition_optimizations=roc_single.roc_optimal,
     condition_distrib_stats=roc_single.distrib_stats,
     optimize_metric=optimize_metric,
@@ -200,7 +200,7 @@ task CombineRocOptResults {
     Array[File] condition_distrib_stats
     String prefix
     String optimize_metric
-    String sv_base_mini_docker
+    String gcloud_sdk_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -233,7 +233,7 @@ task CombineRocOptResults {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: gcloud_sdk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

@@ -11,6 +11,7 @@ workflow Module07MinGQ {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_updates_docker
+    String gcloud_sdk_docker
     File vcf
     File vcf_idx
     String prefix
@@ -135,7 +136,7 @@ workflow Module07MinGQ {
     input:
       shards=GetAfTables.PCRMINUS_AF_table,
       outfile="~{prefix}.PCRMINUS.AF_preMinGQ.txt",
-      sv_base_mini_docker=sv_base_mini_docker,
+      gcloud_sdk_docker=gcloud_sdk_docker,
   }
 
   call MiniTasks.ConcatVcfs as CombineVcfs_PCRMINUS {
@@ -220,13 +221,13 @@ workflow Module07MinGQ {
       input:
         shards=roc_opt_PCRMINUS.roc_optimal_merged,
         outfile="~{prefix}.PCRMINUS.minGQ_condition_opts.txt",
-        sv_base_mini_docker=sv_base_mini_docker
+        gcloud_sdk_docker=gcloud_sdk_docker
     }
     call CombineRocOptResults as combine_roc_stats_PCRMINUS {
       input:
         shards=roc_opt_PCRMINUS.distrib_stats_merged,
         outfile="~{prefix}.minGQ_condition_distrib_stats.txt",
-        sv_base_mini_docker=sv_base_mini_docker
+        gcloud_sdk_docker=gcloud_sdk_docker
     }
 
 
@@ -699,7 +700,7 @@ task CombineRocOptResults {
   input{
     Array[File] shards
     String outfile
-    String sv_base_mini_docker
+    String gcloud_sdk_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -725,7 +726,7 @@ task CombineRocOptResults {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: gcloud_sdk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

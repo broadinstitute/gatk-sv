@@ -23,6 +23,7 @@ workflow Module07FilterGTsPart1 {
     Boolean revise_mei_svtypes = true
     Int n_max_trios = 1000
 
+    String gcloud_sdk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_base_docker
@@ -144,14 +145,14 @@ workflow Module07FilterGTsPart1 {
     input:
       shards = GetAfTables.PCRMINUS_AF_table,
       outfile = "~{prefix}.PCRMINUS.AF_preGTFiltering.txt",
-      sv_base_mini_docker = sv_base_mini_docker
+      gcloud_sdk_docker = gcloud_sdk_docker
   }
   if (defined(pcrplus_samples_list)){
     call minGQTasks.CombineRocOptResults as cat_AF_table_PCRPLUS {
       input:
         shards = GetAfTables.PCRPLUS_AF_table,
         outfile = "~{prefix}.PCRPLUS.AF_preGTFiltering.txt",
-        sv_base_mini_docker = sv_base_mini_docker
+        gcloud_sdk_docker = gcloud_sdk_docker
     }
   }
 

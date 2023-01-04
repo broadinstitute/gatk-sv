@@ -636,9 +636,9 @@ task EnumerateConditions {
 # Merge ROC optimal cutoffs or stats
 task CombineRocOptResults {
   input{
-    Array[File] shards
+    Array[String] shards
     String outfile
-    String sv_base_mini_docker
+    String gcloud_sdk_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -652,7 +652,7 @@ task CombineRocOptResults {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    cat ~{write_lines(shards)} | xargs -I {} fgrep -v "#" {}  | sort -Vk1,1 > ~{outfile}
+    cat ~{write_lines(shards)} | gsutil -m cp -I | fgrep -v "#" | sort -Vk1,1 | uniq > ~{outfile}
   >>>
 
   output {
@@ -664,7 +664,7 @@ task CombineRocOptResults {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: gcloud_sdk_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
