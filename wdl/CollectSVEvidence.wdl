@@ -98,8 +98,8 @@ task RunCollectSVEvidence {
         -I ~{cram} \
         --sr-file "~{sample_id}.sr.txt.gz" \
         --pe-file "~{sample_id}.pe.txt.gz" \
-        --allele-count-file "~{sample_id}.sd.txt.gz" \
-        --allele-count-vcf ~{sd_locs_vcf} \
+        --sd-file "~{sample_id}.sd.txt.gz" \
+        --site-depth-locs-vcf ~{sd_locs_vcf} \
         --sample-name ~{sample_id} \
         --site-depth-min-mapq "~{site_depth_min_mapq}" \
         --site-depth-min-baseq "~{site_depth_min_baseq}" \
