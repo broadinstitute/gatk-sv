@@ -652,7 +652,16 @@ task CombineRocOptResults {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-    cat ~{write_lines(shards)} | gsutil -m cp -I | fgrep -v "#" | sort -Vk1,1 | uniq > ~{outfile}
+    set -euo pipefail
+
+    # Note: shards is intentionally localized as Array[String] and not Array[File] to avoid long (multi-hour) call cache wait times
+    # Its a little clunky, but its faster and works fine
+    cat ~{write_lines(shards)} \
+    | xargs -I {} gsutil cat {} \
+    | fgrep -v "#" \
+    | sort -Vk1,1 \
+    | uniq \
+    > ~{outfile}
   >>>
 
   output {
