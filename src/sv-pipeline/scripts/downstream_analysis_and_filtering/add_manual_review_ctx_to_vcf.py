@@ -78,6 +78,7 @@ def create_ctx_record(new_idx: int,
                                  filter=filter)
 
     populate_info(info_sets, new_record)
+    new_record.info['RESOLVED_POSTHOC'] = True
 
     for sample in samples:
         sample_data = samples[sample]
@@ -134,6 +135,7 @@ def create_cnv_record(new_idx: int,
                                  filter=filter)
 
     populate_info(info_sets, new_record)
+    new_record.info['RESOLVED_POSTHOC'] = True
 
     for sample in samples:
         sample_data = samples[sample]
@@ -218,6 +220,7 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
+    header.add_line('##INFO=<ID=RESOLVED_POSTHOC,Number=0,Type=Flag,Description="SVs that are manually resolved posthoc.">')
 
     contig_list = [contig.name for contig in vcf.header.contigs.values()]
 
