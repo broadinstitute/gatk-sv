@@ -53,10 +53,6 @@ def create_ctx_record(new_idx: int,
 
     samples = {row['sample']: row['gt']}
     info_sets = {info_col: {row[info_col]} for info_col in info_cols}
-    if 'info_ALGORITHMS' in info_sets:
-        info_sets['info_ALGORITHMS'].add('tloc')
-    else:
-        info_sets['info_ALGORITHMS'] = {'tloc'}
 
     new_idx = new_idx + 1
     while new_idx < len(data.index) and \
@@ -66,7 +62,6 @@ def create_ctx_record(new_idx: int,
             data.iloc[new_idx]['info_CHR2'] == row['info_CHR2'] and \
             data.iloc[new_idx]['info_END'] == row['info_END'] and \
             data.iloc[new_idx]['info_CPX_TYPE'] == row['info_CPX_TYPE']:
-        info_sets['info_MEMBERS'].add(data.iloc[new_idx]['info_MEMBERS'])
         samples[data.iloc[new_idx]['sample']] = data.iloc[new_idx]['gt']
         new_idx = new_idx + 1
 
