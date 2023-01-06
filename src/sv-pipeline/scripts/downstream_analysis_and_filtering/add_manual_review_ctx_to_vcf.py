@@ -66,7 +66,7 @@ def create_ctx_record(new_idx: int,
         new_idx = new_idx + 1
 
     new_record = fout.new_record(contig=contig,
-                                 start=pos1,
+                                 start=pos1 - 1,
                                  id=id,
                                  stop=pos1 + 1,
                                  alleles=(ref, alt),
@@ -79,7 +79,6 @@ def create_ctx_record(new_idx: int,
         sample_data = samples[sample]
         populate_ctx_gt(new_record, row, sample, sample_data)
 
-    new_record.info['END2'] = int(row["info_END"])
     new_record.info['AC'] = len(samples)
     return new_record, new_idx
 
@@ -123,9 +122,9 @@ def create_cnv_record(new_idx: int,
         new_idx = new_idx + 1
 
     new_record = fout.new_record(contig=contig,
-                                 start=pos1,
+                                 start=pos1 - 1,
                                  id=id,
-                                 stop=pos1 + 1,
+                                 stop=int(row['info_END']),
                                  alleles=(ref, alt),
                                  filter=filter)
 
@@ -136,7 +135,6 @@ def create_cnv_record(new_idx: int,
         sample_data = samples[sample]
         populate_cnv_gt(new_record, row, sample, sample_data)
 
-    new_record.info['END2'] = int(row["info_END"])
     new_record.info['AC'] = len(samples)
     return new_record, new_idx
 
