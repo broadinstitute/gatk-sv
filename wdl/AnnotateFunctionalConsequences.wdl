@@ -75,9 +75,14 @@ task SVAnnotate {
   }
   command <<<
 
-     set -euo pipefail
+    set -euo pipefail
 
-     gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
+    # check index is in expected location. if not, tabix
+    if [ ! -f "~{vcf}.tbi" ]; then
+      tabix -p vcf ~{vcf}
+    fi
+
+    gatk --java-options "-Xmx~{java_mem_mb}m" SVAnnotate \
       -V ~{vcf} \
       -O ~{outfile} \
       --protein-coding-gtf ~{protein_coding_gtf} \
