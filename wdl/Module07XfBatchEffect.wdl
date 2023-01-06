@@ -24,6 +24,7 @@ workflow XfBatchEffect {
     Int? onevsall_cutoff=2
     String prefix
     File af_pcrmins_premingq
+    Boolean? enable_unstable_af_filter
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
@@ -176,6 +177,7 @@ workflow XfBatchEffect {
         contig=contig[0],
         reclassification_table=MakeReclassificationTable.reclassification_table,
         mingq_prePost_pcrminus_fails=CompareFreqsPrePostMinGQPcrminus.pcrminus_fails,
+        enable_unstable_af_filter = select_first([enable_unstable_af_filter, true]),
         prefix="~{prefix}.~{contig[0]}",
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -647,6 +649,7 @@ task ApplyBatchEffectLabels {
     File reclassification_table
     File mingq_prePost_pcrminus_fails
     String prefix
+    Boolean enable_unstable_af_filter
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -663,7 +666,7 @@ task ApplyBatchEffectLabels {
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-        --unstable-af-pcrminus ~{mingq_prePost_pcrminus_fails} \
+        ~{if (enable_unstable_af_filter) then "--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails else ""} \
         stdin \
         ~{reclassification_table} \
         stdout \
