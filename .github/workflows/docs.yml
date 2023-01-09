@@ -1,0 +1,67 @@
+name: documentation
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+jobs:
+  checks:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            lfs: 'true'
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+        run: git lfs pull
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '18.x'
+      - name: Test Build
+        run: |
+            cd website
+            if [ -e yarn.lock ]; then
+            yarn install --frozen-lockfile
+            elif [ -e package-lock.json ]; then
+            npm ci
+            else
+            npm i
+            fi
+            npm run build
+  gh-release:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+            lfs: 'true'
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+        run: git lfs pull
+      - uses: actions/setup-node@v1
+        with:
+          node-version: '18.x'
+      - name: Release to GitHub Pages
+        env:
+         USE_SSH: true
+         GIT_USER: git
+        run: |
+          git config --global user.email "actions@gihub.com"
+          git config --global user.name "gh-actions"
+          cd website
+          if [ -e yarn.lock ]; then
+          yarn install --frozen-lockfile
+          elif [ -e package-lock.json ]; then
+          npm ci
+          else
+          npm i
+          fi
+          npx docusaurus build
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website/build
