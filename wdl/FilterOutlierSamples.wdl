@@ -72,6 +72,7 @@ workflow FilterOutlierSamples {
 
   output {
     File outlier_filtered_vcf = SubsetVcfBySamplesList.vcf_subset
+    File outlier_filtered_vcf_idx = SubsetVcfBySamplesList.vcf_subset_index
     Array[String] filtered_samples_list = FilterSampleList.filtered_samples_list
     File filtered_samples_file = FilterSampleList.filtered_samples_file
     Array[String] outlier_samples_excluded = IdentifyOutlierSamples.outlier_samples_list
