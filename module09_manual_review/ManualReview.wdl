@@ -21,6 +21,7 @@ import "ShardedManualReview.wdl" as sharded_manual_review
 workflow ManualReview{
     input{ 
         File SVID_to_Remove #large CNVs, mCNVs that failed manual review, or redundant large CNVs that overlaps with Seg Dup and mCNVs
+        File SVID_to_Remove_DEL_bump
         File CTX_manual
         #File CPX_manual
         #File duplicated_SVID_manual
@@ -47,6 +48,7 @@ workflow ManualReview{
         Boolean use_hail = false
         String? gcs_project
         Boolean run_fix_ends
+        Boolean clean_del_bump
 
         String sv_benchmark_docker
         String sv_base_mini_docker
@@ -76,6 +78,7 @@ workflow ManualReview{
         call sharded_manual_review.ShardeManualReview as ShardeManualReview{
             input:
                 SVID_to_Remove = SVID_to_Remove,
+                SVID_to_Remove_DEL_bump = SVID_to_Remove_DEL_bump,
                 CTX_manual = CTX_manual,
                 #CPX_manual = CPX_manual,
                 #duplicated_SVID_manual = duplicated_SVID_manual,
@@ -102,6 +105,7 @@ workflow ManualReview{
                 use_hail  = use_hail,
                 gcs_project = gcs_project,
                 run_fix_ends = run_fix_ends,
+                clean_del_bump = clean_del_bump,
 
                 sv_benchmark_docker = sv_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,

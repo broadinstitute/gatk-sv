@@ -23,7 +23,7 @@ import "CollectPEMetricsForCPX.wdl" as collect_pe_metrics_for_cpx
 import "CollectLgCnvSupportForCPX.wdl" as collect_lg_cnv_supp_for_cpx
 import "ReviseVcfWithManualResults.wdl" as revise_vcf_with_manual_results
 
-workflow ShardeManualReview{
+workflow ShardeManualReviewRemoveDuplicateEventsRerun{
     input{ 
         File SVID_to_Remove #large CNVs, mCNVs that failed manual review, or redundant large CNVs that overlaps with Seg Dup and mCNVs
         File SVID_to_Remove_DEL_bump #SVID list of DELs <5Kb that are enriched for outlier samples; the outlier samples are defined as samples that carry more than average (top 5%) DELs between 400bp and 1Kb, AC>1 and AF<1%
@@ -36,6 +36,10 @@ workflow ShardeManualReview{
 
         File vcf
         File vcf_idx
+        File ScatterVcf_shards
+        File ScatterVcf_shards_idx
+        String ScatterVcf_shards_num
+
         String contig #use chromosome name if the input vcf is per-contig; else, put "whole_genome"
 
         Array[String] batch_name_list
@@ -91,22 +95,11 @@ workflow ShardeManualReview{
     }
 
 
-    call MiniTasks.ScatterVcf{
-        input:
-          vcf = vcf,
-          prefix = prefix,
-          records_per_shard = n_per_split,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_attr_scatter_vcf
-      }
-
-    scatter (i in range(length(ScatterVcf.shards))) {
-
         call remove_duplicate_events.RemoveDuplicateEventsTaskV2 as RemoveDuplicateEvents{
             input:
-                vcf = ScatterVcf.shards[i],
-                vcf_index = ScatterVcf.shards_idx[i],
-                prefix = "~{prefix}.~{i}",
+                vcf = ScatterVcf_shards,
+                vcf_index = ScatterVcf_shards_idx,
+                prefix = "~{prefix}.~{ScatterVcf_shards_num}",
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_remove_duplicate_events_task
         }
@@ -122,14 +115,14 @@ workflow ShardeManualReview{
         call SplitCpxCtx{
             input:
                 bed = Vcf2Bed.bed,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_extract_cpx_ctx
         }
 
         call collect_lg_cnv_supp_for_cpx.CollectLgCnvSupportForCPX{
             input:
                 cpx_ctx_bed = SplitCpxCtx.cpx_ctx_bed,
-                prefix = "~{prefix}.~{i}",
+                prefix = "~{prefix}.~{ScatterVcf_shards_num}",
 
                 sample_depth_calls = sample_depth_calls,
                 batch_name_list = batch_name_list,
@@ -160,7 +153,7 @@ workflow ShardeManualReview{
                 PE_metrics = PE_metrics,
                 PE_metrics_idxes = PE_metrics_idxes,
                 PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
-                prefix = "~{prefix}.~{i}",
+                prefix = "~{prefix}.~{ScatterVcf_shards_num}",
                 n_per_split = n_per_split,
                 sv_pipeline_docker = sv_pipeline_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
@@ -175,18 +168,8 @@ workflow ShardeManualReview{
                 PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
                 PE_supp = CollectPEMetricsForCPX.evi_stat,
                 depth_supp = CollectLgCnvSupportForCPX.lg_cnv_depth_supp,
-                prefix = "~{prefix}.~{i}",
-                sv_base_mini_docker = sv_base_mini_docker,
-                runtime_attr_override = runtime_attr_calcu_cpx_evidences
-        }
-
-        call CalculateCtxEvidences{
-            input:
-                PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
-                PE_supp = CollectPEMetricsForCPX.evi_stat,
-                depth_supp = CollectLgCnvSupportForCPX.lg_cnv_depth_supp,
-                prefix = "~{prefix}.~{i}",
-                sv_base_mini_docker = sv_base_mini_docker,
+                prefix = "~{prefix}.~{ScatterVcf_shards_num}",
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_calcu_cpx_evidences
         }
 
@@ -195,7 +178,7 @@ workflow ShardeManualReview{
             input:
                 vcf = RemoveDuplicateEvents.deduplicated_vcf,
                 vcf_idx = RemoveDuplicateEvents.deduplicated_vcf_index,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_extract_bnd_del
         }
 
@@ -224,7 +207,7 @@ workflow ShardeManualReview{
                 MEI_DEL_Rescue = BNDvsMEI.mei_del_SVID,
                 CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
                 CTX_manual = CTX_manual,
-                prefix = "~{prefix}.~{i}",
+                prefix = "~{prefix}.~{ScatterVcf_shards_num}",
                 contig = contig,
                 sv_benchmark_docker = sv_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
@@ -236,7 +219,7 @@ workflow ShardeManualReview{
             call MiniTasks.FixEndsRescaleGQ{
                 input:
                     vcf = ReviseVcfWithManualResults_wo_raw.revised_vcf,
-                    prefix = "~{prefix}.~{i}",
+                    prefix = "~{prefix}.~{ScatterVcf_shards_num}",
                     sv_pipeline_docker = sv_pipeline_docker,
                     runtime_attr_override = runtime_attr_fix_bad_ends
             }
@@ -257,101 +240,10 @@ workflow ShardeManualReview{
             }
         }
 
-        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
-        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
-    }
-
-    if (length(sharded_annotated_vcf) == 0) {
-        call MiniTasks.GetVcfHeaderWithMembersInfoLine as GetVcfHeader_annotated {
-            input:
-                vcf_gz=vcf,
-                prefix="~{prefix}.manual_review",
-                sv_base_mini_docker=sv_base_mini_docker,
-                runtime_attr_override=runtime_attr_get_vcf_header_with_members_info_line
-        }
-    }
-
-    if (length(sharded_annotated_vcf) > 0) {
-        if (use_hail) {
-            call HailMerge.HailMerge as ConcatVcfsHail_annotated {
-                input:
-                    vcfs=sharded_annotated_vcf,
-                    prefix="~{prefix}.manual_review",
-                    gcs_project=gcs_project,
-                    sv_base_mini_docker=sv_base_mini_docker,
-                    sv_pipeline_docker=sv_pipeline_docker,
-                    sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-                    runtime_attr_preconcat=runtime_attr_preconcat_sharded_cluster,
-                    runtime_attr_hail_merge=runtime_attr_hail_merge_sharded_cluster,
-                    runtime_attr_fix_header=runtime_attr_fix_header_sharded_cluster
-            }
-        }
-
-        if (!use_hail) {
-            call MiniTasks.ConcatVcfs as ConcatVcfs_annotated {
-                input:
-                    vcfs=sharded_annotated_vcf,
-                    vcfs_idx=sharded_annotated_vcf_idx,
-                    allow_overlaps=true,
-                    outfile_prefix="~{prefix}.manual_review",
-                    sv_base_mini_docker=sv_base_mini_docker,
-                    runtime_attr_override=runtime_attr_concat_sharded_cluster
-            }
-        }
-    }
-
-    call MiniTasks.ConcatFiles as concat_cpx_evidences{
-        input:
-            shard_bed_files = CalculateCpxEvidences.manual_revise_CPX_results,
-            prefix = "~{prefix}.CPX_evidence" ,
-            sv_base_mini_docker = sv_base_mini_docker
-
-    }
-
-    call MiniTasks.ConcatFiles as concat_ctx_evidences{
-        input:
-            shard_bed_files = CalculateCtxEvidences.manual_revise_CTX_results,
-            prefix = "~{prefix}.CTX_evidence" ,
-            sv_base_mini_docker = sv_base_mini_docker
-
-    }
-
-
-    File reviewed_vcf = select_first([GetVcfHeader_annotated.out, ConcatVcfs_annotated.concat_vcf, ConcatVcfsHail_annotated.merged_vcf])
-    File reviewed_vcf_idx = select_first([GetVcfHeader_annotated.out_idx, ConcatVcfs_annotated.concat_vcf_idx, ConcatVcfsHail_annotated.merged_vcf_index])
-
-
-
-    if (defined(raw_SVs)){
-
-        if (contig!="whole_genome"){
-            call SplitRawSVsPerChr{
-                input:
-                    raw_SVs = raw_SVs,
-                    contig = contig,
-                    sv_base_mini_docker = sv_base_mini_docker,
-                    runtime_attr_override = runtime_attr_split_raw_SVs_per_chr
-            }
-        }
-
-        File split_raw_SVs = select_first([SplitRawSVsPerChr.raw_SV_per_chr, raw_SVs])
-
-        call revise_vcf_with_manual_results.AddRawSVs{
-            input:
-                prefix = prefix,
-                batch_name = contig,
-                vcf_file = reviewed_vcf,
-                raw_SVs = split_raw_SVs,
-                sv_benchmark_docker = sv_benchmark_docker,
-                runtime_attr_override = runtime_attr_add_raw_SVs
-        }
-    }
 
     output{
-        File revised_output_vcf = select_first([AddRawSVs.vcf_with_raw_SVs, reviewed_vcf])
-        File revised_output_vcf_idx = select_first([AddRawSVs.vcf_idx_with_raw_SVs, reviewed_vcf_idx])
-        File cpx_evidences = concat_cpx_evidences.merged_file
-        File ctx_evidences = concat_ctx_evidences.merged_file
+        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
+        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
     }
 }
 
@@ -399,7 +291,7 @@ task Vcf2Bed{
 task SplitCpxCtx{
     input{
         File bed
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -421,15 +313,15 @@ task SplitCpxCtx{
         zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
 
         set -euo pipefail
-        if [ $( zcat ~{bed} | grep CPX | wc -l ) -gt 0 ]; then
+        if [ $( zcat ~{bed} | grep CPX | wc -l ) -gt 1 ]; then
             zcat ~{bed} | grep CPX | grep -v UNRESOLVE >> ~{prefix}.cpx_ctx.bed
         fi
 
-        if [ $( zcat ~{bed} | grep CTX | wc -l ) -gt 0 ]; then
+        if [ $( zcat ~{bed} | grep CTX | wc -l ) -gt 1 ]; then
             zcat ~{bed} | grep CTX >> ~{prefix}.cpx_ctx.bed
         fi
 
-        if [ $( zcat ~{bed} | grep INS | grep INV | wc -l ) -gt 0 ]; then
+        if [ $( zcat ~{bed} | grep INS | grep INV | wc -l ) -gt 1 ]; then
             zcat ~{bed} | grep INS | grep INV >> ~{prefix}.cpx_ctx.bed
         fi
 
@@ -445,7 +337,7 @@ task SplitCpxCtx{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -607,7 +499,7 @@ task SplitBndDel{
     input{
         File vcf
         File vcf_idx
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -653,7 +545,7 @@ task SplitBndDel{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -824,7 +716,7 @@ task CalculateCpxEvidences{
         File PE_supp
         File depth_supp
         String prefix
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -966,130 +858,10 @@ task CalculateCpxEvidences{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
    
-task CalculateCtxEvidences{
-    input{
-        File PE_collect_script
-        File PE_supp
-        File depth_supp
-        String prefix
-        String sv_base_mini_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 5, 
-        disk_gb: 10,
-        boot_disk_gb: 30,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    command<<<
-
-        set -eu
-
-        awk '{print $6, $(NF-3)}' ~{PE_collect_script} | grep "_CTX_"| uniq > sample_SVID.tsv
-
-        set -eu
-        
-        zcat ~{PE_supp} | grep "_CTX_"| uniq > PE_supp.tsv
-
-        set -euo pipefail
-
-        python <<CODE
-
-        def sample_svid_readin(filein):
-            out = {}
-            fin=open(filein)
-            for line in fin:
-                pin=line.strip().split()
-                if not pin[1] in out.keys():
-                    out[pin[1]] = []
-                out[pin[1]].append(pin[0])
-            fin.close()
-            return out
-
-        def PE_supp_readin(filein):
-            fin=open(filein)
-            out={}
-            for line in fin:
-                pin=line.strip().split()
-                if not pin[4] in out.keys():
-                    out[pin[4]] = {}
-                if not pin[3] in out[pin[4]].keys():
-                    out[pin[4]][pin[3]] = [[],[]]
-                if pin[1]=="+":
-                    out[pin[4]][pin[3]][0] = [int(pin[0])]+pin[1:3]
-                elif pin[1]=="-":
-                    out[pin[4]][pin[3]][1] = [int(pin[0])]+pin[1:3]
-            fin.close()
-            return out
-
-        def add_PE_supp(sample_svid, PE_supp):
-            out = {}
-            for svid in sample_svid.keys():
-                out[svid] = {}
-                if svid in PE_supp.keys():
-                    for sample in sample_svid[svid]:
-                        if sample in PE_supp[svid].keys():
-                            pe_supp = 'no_PE'
-                            if len(PE_supp[svid][sample][0])==0:
-                                PE_supp[svid][sample][0].append(0)
-                            if len(PE_supp[svid][sample][1])==0:
-                                PE_supp[svid][sample][1].append(0)
-                            if PE_supp[svid][sample][0][0]>0 or PE_supp[svid][sample][1][0]>0:
-                                pe_supp = 'partial_PE'
-                            if PE_supp[svid][sample][0][0]>0 and PE_supp[svid][sample][1][0]>0:
-                                pe_supp = 'low_PE'
-                            if PE_supp[svid][sample][0][0]>2 and PE_supp[svid][sample][1][0]>2:
-                                pe_supp = 'high_PE'
-                            out[svid][sample] = [pe_supp]
-                        else:
-                            out[svid][sample] = ['no_PE']
-                else:
-                    for sample in sample_svid[svid]:
-                        out[svid][sample] = ['no_PE']
-            return out
-
-        def write_pe_depth_supp(sample_svid_pe_depth, fileout):
-            fo=open(fileout,'w')
-            print('\t'.join(['VID','sample','supportive_PE_counts']), file=fo)
-            for svid in sample_svid_pe_depth.keys():
-                for sample in sample_svid_pe_depth[svid].keys():
-                    print('\t'.join([svid,sample] + sample_svid_pe_depth[svid][sample]), file=fo)
-            fo.close()
-
-        import os
-        sample_svid = sample_svid_readin("sample_SVID.tsv")
-        PE_supp = PE_supp_readin("PE_supp.tsv")
-        sample_svid_pe = add_PE_supp(sample_svid, PE_supp)
-        write_pe_depth_supp(sample_svid_pe, "~{prefix}.manual_revise.CTX_results")
-
-        CODE
-    >>>
-
-    output{
-        File manual_revise_CTX_results = "~{prefix}.manual_revise.CTX_results"
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-   
-
 

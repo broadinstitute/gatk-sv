@@ -125,7 +125,14 @@ task SplitFilePerContig{
 
     String prefix = basename(input_file,'.tsv')
     command<<<
-        grep ".~{contig}." ~{input_file} > ~{prefix}.~{contig}
+        set -euo pipefail
+
+        touch ~{prefix}.~{contig}
+
+        if [ $(wc -l ~{input_file}) -gt 1]; then
+            grep ".~{contig}." ~{input_file} > ~{prefix}.~{contig}
+        fi
+
     >>>
     output{
         File output_file = "~{prefix}.~{contig}"
@@ -209,8 +216,8 @@ task AddRawSVs{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 5, 
-        disk_gb: 10,
+        mem_gb: 10, 
+        disk_gb: ceil(5.0 +  size(vcf_file, "GB")*3),
         boot_disk_gb: 30,
         preemptible_tries: 1,
         max_retries: 1
