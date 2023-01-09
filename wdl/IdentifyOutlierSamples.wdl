@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "PlotSVCountsPerSample.wdl" as plot_svcounts
+import "CollectQcVcfWide.wdl" as qc_utils
 
 workflow IdentifyOutlierSamples {
   input {
@@ -11,8 +12,10 @@ workflow IdentifyOutlierSamples {
     Int N_IQR_cutoff
     File? outlier_cutoff_table
     String? vcf_identifier  # required (enter algorithm here) if providing outlier_cutoff_table, optional otherwise to add to file prefixes (ie. as a VCF identifier)
+    String? bcftools_preprocessing_options
     String sv_pipeline_docker
     String linux_docker
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_attr_identify_outliers
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_count_svs
@@ -20,10 +23,23 @@ workflow IdentifyOutlierSamples {
 
   String prefix = if (defined(vcf_identifier)) then "~{name}_~{vcf_identifier}" else name
 
+  # Preprocess VCF with bcftools, if optioned
+  if (defined(bcftools_preprocessing_options)) {
+    call qc_utils.PreprocessVcf {
+      input:
+        vcf=vcf,
+        prefix=basename(vcf, ".vcf.gz") + ".preprocessed",
+        bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
+        sv_base_mini_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_preprocess_vcf
+    }
+  }
+  File prepped_vcf = select_first([PreprocessVcf.outvcf, vcf])
+
   if (!defined(sv_counts)) {
     call plot_svcounts.CountSVsPerSamplePerType {
       input:
-        vcf = vcf,
+        vcf = prepped_vcf,
         prefix = prefix,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_count_svs
@@ -33,7 +49,7 @@ workflow IdentifyOutlierSamples {
   if (defined(outlier_cutoff_table)) {
     call IdentifyOutliersByCutoffTable {
       input:
-        vcf = vcf,
+        vcf = prepped_vcf,
         svcounts = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts]),
         outlier_cutoff_table = select_first([outlier_cutoff_table]),
         outfile = "${prefix}_outliers.txt",
@@ -44,7 +60,7 @@ workflow IdentifyOutlierSamples {
   }
   call IdentifyOutliersByIQR {
     input:
-      vcf = vcf,
+      vcf = prepped_vcf,
       svcounts = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts]),
       N_IQR_cutoff = N_IQR_cutoff,
       outfile = "${prefix}_IQR_outliers.txt",

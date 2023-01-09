@@ -13,9 +13,11 @@ workflow FilterOutlierSamples {
     Int N_IQR_cutoff
     File? outlier_cutoff_table
     String? vcf_identifier  # required (enter algorithm here) if providing outlier_cutoff_table, otherwise used in some file prefixes
+    String? bcftools_preprocessing_options
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_attr_identify_outliers
     RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_cat_outliers
@@ -32,8 +34,10 @@ workflow FilterOutlierSamples {
       N_IQR_cutoff = N_IQR_cutoff,
       outlier_cutoff_table = outlier_cutoff_table,
       vcf_identifier = vcf_identifier,
+      bcftools_preprocessing_options = bcftools_preprocessing_options,
       sv_pipeline_docker = sv_pipeline_docker,
       linux_docker = linux_docker,
+      runtime_override_preprocess_vcf = runtime_override_preprocess_vcf,
       runtime_attr_identify_outliers = runtime_attr_identify_outliers,
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
       runtime_attr_count_svs = runtime_attr_count_svs
