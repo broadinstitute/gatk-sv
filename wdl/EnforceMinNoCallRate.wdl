@@ -23,7 +23,7 @@ workflow EnforceMinNoCallRate {
     String? chry_ncr_filter_field
 
     String sv_base_mini_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
   }
 
   # Step 1: determine if NCR is already defined in the VCF header
@@ -57,7 +57,7 @@ workflow EnforceMinNoCallRate {
           vcf=shard,
           subset_prefixes=sample_subset_prefixes,
           subset_lists=sample_subset_lists,
-          sv_pipeline_base_docker=sv_pipeline_base_docker
+          sv_pipeline_docker=sv_pipeline_docker
       }
     }
     call Tasks.ConcatVcfs as ConcatAnnotatedVcfs {
@@ -98,7 +98,7 @@ workflow EnforceMinNoCallRate {
           chrx_ncr_filter_field = chrx_ncr_filter_field,
           chry_ncr_filter_field = chry_ncr_filter_field,
           global_ncr_filter_field=global_ncr_filter_field,
-          sv_pipeline_base_docker=sv_pipeline_base_docker
+          sv_pipeline_docker=sv_pipeline_docker
       }
     }
     call Tasks.ConcatVcfs as ConcatFilteredVcfs {
@@ -175,7 +175,7 @@ task AnnotateNCRs {
     File vcf
     Array[String]? subset_prefixes
     Array[File]? subset_lists
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
   }
   String prefix = basename(vcf, ".vcf.gz")
 
@@ -189,7 +189,7 @@ task AnnotateNCRs {
     cpu: 1
     preemptible: 1
     maxRetries: 1
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: 10
   }
 
@@ -318,7 +318,7 @@ task ApplyNCRFilter {
     String global_ncr_filter_field = "NCR"
     String? chrx_ncr_filter_field
     String? chry_ncr_filter_field
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
   }
   String prefix = basename(vcf, ".vcf.gz")
 
@@ -332,7 +332,7 @@ task ApplyNCRFilter {
     cpu: 1
     preemptible: 1
     maxRetries: 1
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: 10
   }
 
