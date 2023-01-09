@@ -29,6 +29,12 @@ def main():
     parser.add_argument('--global-filter-on', default='NCR', help='Key for INFO ' +
                         'field to use when applying --global-max-ncr. ' +
                         '[default %(default)s]')
+    parser.add_argument('--chrx-filter-on', default=None, help='Key for INFO ' +
+                        'field to use when applying --global-max-ncr on chrX. ' +
+                        '[defaults to --global-filter-on]')
+    parser.add_argument('--chry-filter-on', default=None, help='Key for INFO ' +
+                        'field to use when applying --global-max-ncr on chrY. ' +
+                        '[defaults to --global-filter-on]')
     parser.add_argument('--hard-filter', default=False, action='store_true',
                         help='Exclude failing records outright from vcf_out. ' +
                         '[default: retain failing records but tag them with ' +
@@ -41,11 +47,14 @@ def main():
     vcf = pysam.VariantFile(args.vcf_in)
 
     # Check to ensure NCR is present in VCF header
-    ncr_key = args.global_filter_on
-    if ncr_key not in vcf.header.records.header.info.keys():
-        msg = 'ERROR: INFO "{}" not found in header of input VCF. Has this VCF ' + \
-              'been preprocessed by annotate_nocall_rates.py yet?'
-        exit(msg.format(ncr_key))
+    autosome_ncr_key = args.global_filter_on
+    chrx_ncr_key = autosome_ncr_key if args.chrx_filter_on is None else args.chrx_filter_on
+    chry_ncr_key = autosome_ncr_key if args.chry_filter_on is None else args.chry_filter_on
+    for key in [autosome_ncr_key, chrx_ncr_key, chry_ncr_key]:
+        if key not in vcf.header.records.header.info.keys():
+            msg = 'ERROR: INFO "{}" not found in header of input VCF. Has this VCF ' + \
+                  'been preprocessed by annotate_nocall_rates.py yet?'
+            exit(msg.format(key))
 
     # Update VCF header as needed
     vcf.header.add_meta('FILTER',
@@ -66,6 +75,12 @@ def main():
         start_time = time()
     for record in vcf:
         k += 1
+
+        ncr_key = autosome_ncr_key
+        if record.chrom == "chrX":
+            ncr_key = chrx_ncr_key
+        elif record.chrom == "chrY":
+            ncr_key = chry_ncr_key
 
         # Check global NCR
         if ncr_key not in record.info.keys():

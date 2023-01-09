@@ -19,6 +19,8 @@ workflow EnforceMinNoCallRate {
     File? min_ncr_table  # Note: currently this input does nothing
     Float? global_max_ncr
     String global_ncr_filter_field = "NCR"
+    String? chrx_ncr_filter_field
+    String? chry_ncr_filter_field
 
     String sv_base_mini_docker
     String sv_pipeline_base_docker
@@ -93,6 +95,8 @@ workflow EnforceMinNoCallRate {
           vcf=shard,
           min_ncr_table=min_ncr_table,
           global_max_ncr=global_max_ncr,
+          chrx_ncr_filter_field = chrx_ncr_filter_field,
+          chry_ncr_filter_field = chry_ncr_filter_field,
           global_ncr_filter_field=global_ncr_filter_field,
           sv_pipeline_base_docker=sv_pipeline_base_docker
       }
@@ -312,6 +316,8 @@ task ApplyNCRFilter {
     File? min_ncr_table # Note: currently this input does nothing / feature not yet implemented
     Float? global_max_ncr
     String global_ncr_filter_field = "NCR"
+    String? chrx_ncr_filter_field
+    String? chry_ncr_filter_field
     String sv_pipeline_base_docker
   }
   String prefix = basename(vcf, ".vcf.gz")
@@ -337,15 +343,12 @@ task ApplyNCRFilter {
       tabix -f ~{vcf}
     fi
 
-    script_options=""
-    if [ ~{defined(global_max_ncr)} == "true" ]; then
-      script_options="$script_options --global-max-ncr ~{global_max_ncr}"
-    fi
-
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/nocall_rate_filter.py \
       --verbose \
       --global-filter-on ~{global_ncr_filter_field} \
-      $script_options \
+      ~{"--chrx_filter_on " + chrx_ncr_filter_field} \
+      ~{"--chry_filter_on " + chry_ncr_filter_field} \
+      ~{"--global-max-ncr " + global_max_ncr} \
       ~{vcf} \
       ~{prefix}.NCR_filtered.vcf.gz
   >>>
