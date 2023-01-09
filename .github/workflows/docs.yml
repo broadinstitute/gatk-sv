@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+            lfs: 'true'
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+        run: git lfs pull
       - uses: actions/setup-node@v1
         with:
           node-version: '18.x'
@@ -31,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+            lfs: 'true'
+      - name: checkoutLFS
+        uses: actions/checkout@v2
+        run: git lfs pull
       - uses: actions/setup-node@v1
         with:
           node-version: '18.x'
