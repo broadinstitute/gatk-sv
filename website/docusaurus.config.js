@@ -9,7 +9,7 @@ const config = {
   title: 'GATK-SV',
   tagline: 'A cloud-native pipeline for calling structural variations on short-read sequencing data',
   url: 'https://broadinstitute.github.io',
-  baseUrl: '/',
+  baseUrl: '/gatk-sv/',
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'throw',
   //favicon: 'img/favicon.ico',
