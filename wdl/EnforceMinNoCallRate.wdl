@@ -346,8 +346,8 @@ task ApplyNCRFilter {
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/nocall_rate_filter.py \
       --verbose \
       --global-filter-on ~{global_ncr_filter_field} \
-      ~{"--chrx_filter_on " + chrx_ncr_filter_field} \
-      ~{"--chry_filter_on " + chry_ncr_filter_field} \
+      ~{"--chrx-filter-on " + chrx_ncr_filter_field} \
+      ~{"--chry-filter-on " + chry_ncr_filter_field} \
       ~{"--global-max-ncr " + global_max_ncr} \
       ~{vcf} \
       ~{prefix}.NCR_filtered.vcf.gz
