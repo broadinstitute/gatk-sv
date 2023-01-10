@@ -13,7 +13,8 @@ class Default:
     layer_expansion_factor = 2.0
     bias = True
     leaky_slope = 0.1
-    hidden_nonlinearity = torch.nn.LeakyReLU(negative_slope=leaky_slope) if leaky_slope >= 0 else torch.nn.ReLU()
+    hidden_nonlinearity = torch.nn.LeakyReLU(negative_slope=leaky_slope) if leaky_slope >= 0 else \
+        torch.nn.ReLU()
     output_nonlinearity = torch.nn.Sigmoid()
 
 

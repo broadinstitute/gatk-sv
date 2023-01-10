@@ -7,13 +7,17 @@ import numpy
 import pandas
 import collections
 import psutil
-from typing import Text, Any, Union, List, Optional, Iterable, Iterator, Tuple, Generic, Callable, TypeVar
-from types import ModuleType
+from typing import (
+    Text, Any, Union, List, Optional, Iterable, Iterator, Tuple, Generic, Callable, TypeVar
+)
+from types import ModuleType, NoneType
 
 
 Vector = Union[List, pandas.Series, numpy.array]
 Numeric = Union[int, float, numpy.integer, numpy.floating]
 TypeT = TypeVar("TypeT")
+BitGeneratorState = dict[str, Any]
+GeneratorInit = Union[int, NoneType, BitGeneratorState, numpy.random.Generator]
 
 
 def deref_iterable_with_sorted_indices(base_list: Iterable[TypeT], sorted_indices: Iterable[int]) -> Iterator[TypeT]:
@@ -48,6 +52,23 @@ def true(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:
             bool array of all true
     """
     return numpy.ones(size, dtype=bool)
+
+
+def init_generator(generator_init: GeneratorInit) -> numpy.random.Generator:
+    """
+    Initialize and return a new numpy.random.Generator, of the current default type
+    if a seed is provided (either an int or None), create new generator initialized to that seed
+    if a saved state is provided, create a new generated and restore the state
+    if a Generator is provided, create a new generator with identical state
+    """
+    if isinstance(generator_init, (NoneType, int, numpy.integer)):
+        return numpy.random.default_rng(seed=generator_init)
+    elif isinstance(generator_init, numpy.random.Generator):
+        return init_generator(generator_init=generator_init.bit_generator.state)
+    else:
+        generator = numpy.random.default_rng(seed=0)
+        generator.bit_generator.state = generator_init
+        return generator
 
 
 def false(size: Union[int, Tuple[int, ...]]) -> numpy.ndarray:

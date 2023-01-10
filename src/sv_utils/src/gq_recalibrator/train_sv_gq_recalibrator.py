@@ -53,7 +53,7 @@ class Default:
     variants_per_batch = 100
     batches_per_mini_epoch = 50
     shuffle = vcf_tensor_data_loaders.Default.shuffle
-    random_state = vcf_tensor_data_loaders.Default.random_state
+    random_state = vcf_tensor_data_loaders.Default.random_seed
     excluded_properties = vcf_tensor_data_loaders.Default.excluded_properties
     torch_device = Keys.cpu
     scale_bool_properties = vcf_tensor_data_loaders.Default.scale_bool_properties
@@ -67,8 +67,8 @@ class Default:
     output_nonlinearity = gq_recalibrator_net.Default.output_nonlinearity
     max_gradient_value = 0.0  # 0.01
     max_gradient_norm = 0.0  # 1.0e-3
-    correlation_loss_weight = 0.5
-    num_processes = vcf_tensor_data_loaders.Default.max_look_ahead_batches + 1  # common.num_physical_cpus
+    correlation_loss_weight = 0.1
+    num_processes = vcf_tensor_data_loaders.Default.max_look_ahead_batches + 1
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -80,16 +80,19 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--properties", "-p", type=str, required=True,
                         help="full path to tarred parquet file with variant properties")
     parser.add_argument("--properties-scaling-json", "-j", type=str, required=True,
-                        help="full path to JSON with baseline and scales needed for training / filtering properties")
+                        help="full path to JSON with baseline and scales needed for training / "
+                             "filtering properties")
     parser.add_argument("--truth-json", type=str, required=True,
-                        help="full path to JSON with info about which GTs are good for each variant x sample")
+                        help="full path to JSON with info about which GTs are good for each variant"
+                             " x sample")
     parser.add_argument("--output-model", "-o", type=str, required=True,
                         help="path to output file with trained model")
     parser.add_argument("--input-model", "-i", type=str, required=False,
                         help="path to input file with partially trained model")
     parser.add_argument("--variants-per-batch", type=int, default=Default.variants_per_batch,
                         help="number of variants used in each training batch")
-    parser.add_argument("--batches-per-mini-epoch", type=int, default=Default.batches_per_mini_epoch,
+    parser.add_argument("--batches-per-mini-epoch", type=int,
+                        default=Default.batches_per_mini_epoch,
                         help="number of batches between progress updates and checkpoints")
     parser.add_argument("--max-train-variants", type=int, default=None,
                         help="maximum number of variants to train before ending training")
@@ -179,7 +182,7 @@ def train_sv_gq_recalibrator(
             vcf_tensor_data_loader = vcf_tensor_data_loaders.VcfTrainingTensorDataLoader(
                 parquet_path=properties_path, properties_scaling_json=properties_scaling_json, truth_json=truth_json,
                 scale_bool_values=scale_bool_values, variants_per_batch=variants_per_batch, shuffle=shuffle,
-                random_state=random_state, excluded_properties=excluded_properties, torch_device=torch_device,
+                random_generator=random_state, excluded_properties=excluded_properties, torch_device=torch_device,
                 progress_logger=training_logger, process_executor=process_executor, thread_executor=thread_executor,
                 max_look_ahead_batches=max(2, num_cpu_processes)
             )
@@ -205,6 +208,7 @@ def train_sv_gq_recalibrator(
                     max_look_ahead_batches=max(2, num_cpu_processes)
                 )
 
+        gq_baseline, gq_scale = vcf_tensor_data_loader.gq_baseline, vcf_tensor_data_loader.gq_scale
         for (is_training_batch, batch_tensor, batch_weights, gq, is_good_gt, is_bad_gt) in vcf_tensor_data_loader:
             if is_training_batch:
                 optimizer.zero_grad()
@@ -212,7 +216,8 @@ def train_sv_gq_recalibrator(
                 loss = loss_function(
                     predicted_probabilities=batch_outputs, variant_weights=batch_weights, gq_values=gq,
                     genotype_is_good=is_good_gt, genotype_is_bad=is_bad_gt,
-                    correlation_loss_scale=correlation_loss_weight
+                    correlation_loss_scale=correlation_loss_weight, gq_baseline=gq_baseline,
+                    gq_scale=gq_scale
                 )
                 loss.backward()
                 if max_gradient_value > 0:
@@ -241,7 +246,8 @@ def train_sv_gq_recalibrator(
                         loss_function(
                             predicted_probabilities=batch_outputs, variant_weights=batch_weights, gq_values=gq,
                             genotype_is_good=is_good_gt, genotype_is_bad=is_bad_gt,
-                            correlation_loss_scale=correlation_loss_weight
+                            correlation_loss_scale=correlation_loss_weight, gq_baseline=gq_baseline,
+                            gq_scale=gq_scale
                         ).item()
                     )
 
@@ -254,24 +260,26 @@ def train_sv_gq_recalibrator(
         torch.cuda.empty_cache()
 
     training_logger.log(
-        f"Got {len(training_losses)} training batches and {len(validation_losses)} validation batches in "
-        f"{training_logger.elapsed_time}"
+        f"Got {len(training_losses)} training batches and {len(validation_losses)} validation"
+        f" batches in {training_logger.elapsed_time}"
     )
 
 
 def correlation_coefficient(
         target_values: torch.Tensor,
         predicted_values: torch.Tensor,
-        variant_weights: torch.Tensor
+        variant_weights: torch.Tensor,
+        gq_baseline: torch.Tensor,
+        gq_scale: torch.Tensor
 ) -> torch.Tensor:
     """ Differentiable correlation coefficient between predicted and target values """
     # np.corrcoef in torch from @mdo
     # https://forum.numer.ai/t/custom-loss-functions-for-xgboost-using-pytorch/960
     # subtract mean and divide by norm
-    predicted_values = predicted_values - predicted_values.mean(dim=1, keepdims=True)
-    target_values = target_values - target_values.mean(dim=1, keepdims=True)
-    predicted_values = predicted_values / (1e-6 + predicted_values.norm(dim=1, keepdim=True))
-    target_values = target_values / (1e-6 + target_values.norm(dim=1, keepdim=True))
+    predicted_values = 2.0 * (predicted_values - 0.5)
+    target_values = (target_values - gq_baseline) * gq_scale
+    #predicted_values = predicted_values / (1e-6 + predicted_values.norm(dim=1, keepdim=True))
+    #target_values = target_values / (1e-6 + target_values.norm(dim=1, keepdim=True))
     # compute correlation across samples, then compute weighted sum across variants
     variant_correlation = (predicted_values * target_values).mean(dim=1)
     return (variant_correlation * variant_weights).mean()
@@ -305,14 +313,18 @@ def loss_function(
         gq_values: torch.Tensor,
         genotype_is_good: torch.Tensor,
         genotype_is_bad: torch.Tensor,
-        correlation_loss_scale: float
+        correlation_loss_scale: float,
+        gq_baseline: torch.Tensor,
+        gq_scale: torch.tensor
 ) -> torch.Tensor:
     tal = truth_agreement_loss(
         genotype_is_good=genotype_is_good, genotype_is_bad=genotype_is_bad,
         predicted_probabilities=predicted_probabilities, variant_weights=variant_weights
     )
-    cc = correlation_coefficient(target_values=gq_values, predicted_values=predicted_probabilities,
-                                 variant_weights=variant_weights)
+    cc = correlation_coefficient(
+        target_values=gq_values, predicted_values=predicted_probabilities,
+        variant_weights=variant_weights, gq_baseline=gq_baseline, gq_scale=gq_scale
+    )
     print(f"tal: {tal}, cc: {cc}")
     return tal + correlation_loss_scale * (1.0 - cc)
 
@@ -352,7 +364,6 @@ def state_dict_to(state_dict: dict[str, Any], device: torch.device) -> dict[str,
     """
     moved_state_dict = {}
     for key, param in state_dict.items():
-        # Not sure there are any global tensors in the state dict
         if isinstance(param, torch.Tensor):
             moved_param = param.detach().to(device)
             if param._grad is not None:
@@ -387,11 +398,12 @@ def load(
     training_logger = training_utils.ProgressLogger(**pickle_dict[Keys.logger_kwargs])
     training_logger.replay()
     vcf_tensor_data_loader = vcf_tensor_data_loaders.VcfTrainingTensorDataLoader(
-        parquet_path=parquet_path, properties_scaling_json=properties_scaling_json, truth_json=truth_json,
-        scale_bool_values=scale_bool_values, variants_per_batch=variants_per_batch, shuffle=shuffle,
-        random_state=0, excluded_properties=excluded_properties, torch_device=torch_device,
-        progress_logger=training_logger, process_executor=process_executor, thread_executor=thread_executor,
-        max_look_ahead_batches=max_look_ahead_batches
+        parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
+        truth_json=truth_json, scale_bool_values=scale_bool_values,
+        variants_per_batch=variants_per_batch, shuffle=shuffle, random_generator=0,
+        excluded_properties=excluded_properties, torch_device=torch_device,
+        progress_logger=training_logger, process_executor=process_executor,
+        thread_executor=thread_executor, max_look_ahead_batches=max_look_ahead_batches
     )
     vcf_tensor_data_loader.load_state_dict(pickle_dict[Keys.data_loader_state])
     neural_net = gq_recalibrator_net.GqRecalibratorNet(**pickle_dict[Keys.net_kwargs])\
@@ -405,7 +417,10 @@ def load(
     )
     training_losses = training_utils.BatchLosses(**pickle_dict[Keys.training_losses])
     validation_losses = training_utils.BatchLosses(**pickle_dict[Keys.validation_losses])
-    return training_logger, vcf_tensor_data_loader, neural_net, optimizer, training_losses, validation_losses
+    return (
+        training_logger, vcf_tensor_data_loader, neural_net, optimizer, training_losses,
+        validation_losses
+    )
 
 
 def filter_sv_gq_recalibrator(
@@ -426,7 +441,7 @@ def filter_sv_gq_recalibrator(
         vcf_tensor_data_loader = vcf_tensor_data_loaders.VcfFilterTensorDataLoader(
             parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
             scale_bool_values=scale_bool_values, variants_per_batch=variants_per_batch, shuffle=shuffle,
-            random_state=random_state, excluded_properties=excluded_properties, torch_device=torch_device,
+            random_generator=random_state, excluded_properties=excluded_properties, torch_device=torch_device,
             process_executor=process_executor, thread_executor=thread_executor
         )
         for batch_tensor, batch_ids in tqdm(
