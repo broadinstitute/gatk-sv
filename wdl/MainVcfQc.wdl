@@ -1,6 +1,5 @@
 version 1.0
 
-import "ApplyManualVariantFilter.wdl" as manualfilter
 import "CollectQcVcfWide.wdl" as vcfwideqc
 import "CollectQcPerSample.wdl" as persample
 import "CollectSiteLevelBenchmarking.wdl" as sitebench
@@ -28,7 +27,6 @@ workflow MainVcfQc {
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
     Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
-    String? bcftools_hard_filter_query
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -41,7 +39,6 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_plot_qc_per_family
     RuntimeAttr? runtime_override_per_sample_benchmark_plot
     RuntimeAttr? runtime_override_sanitize_outputs
-    RuntimeAttr? runtime_override_hard_filter
 
     # overrides for MiniTasks or Utils
     RuntimeAttr? runtime_override_subset_vcf
@@ -90,23 +87,7 @@ workflow MainVcfQc {
     }
   }
 
-  # Apply an optional hard filter to the VCF before QC, ie. restrict to only PASS/MULTIALLELIC sites
-  if (defined(bcftools_hard_filter_query)) {
-    scatter (vcf in select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])) {
-      call manualfilter.HardFilterVcf {
-        input:
-          prefix = basename(vcf, ".vcf.gz"),
-          vcf = vcf,
-          vcf_index = vcf + ".tbi",
-          filter_name = "hard_filter",
-          bcftools_filter = select_first([bcftools_hard_filter_query]),
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_override = runtime_override_hard_filter
-      }
-    }
-  }
-
-  Array[File] vcfs_for_qc = select_first([HardFilterVcf.hard_filtered_vcf, SubsetVcfBySamplesList.vcf_subset, vcfs])
+  Array[File] vcfs_for_qc = select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])
 
   # Scatter raw variant data collection per chromosome
   scatter ( contig in contigs ) {
