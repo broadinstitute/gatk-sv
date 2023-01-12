@@ -69,7 +69,7 @@ workflow EnforceMinNoCallRate {
   Boolean vcf_is_annotated = select_first([!reannotate_ncrs_in_vcf, CheckHeader.result])
 
   # Step 2: shard VCF if necessary
-  if ( always_shard_vcf || defined(global_max_ncr) || !vcf_is_annotated ) {
+  if ( always_shard_vcf ) {
     call Utils.ShardVcf as ShardVcf {
       input:
         vcf=input_vcf,
