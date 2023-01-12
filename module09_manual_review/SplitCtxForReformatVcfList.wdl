@@ -18,6 +18,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "SplitCtxForReformat.wdl" as split_ctx_for_reformat
+import "RemoveDuplicateEvents.wdl" as remove_duplicate_events
 import "ReviseVcfWithManualResults.wdl" as revise_vcf_with_manual_results
 
 ### this script is designed to split CTX event from vcf, so they can be manually reformatted and inserted back
@@ -44,6 +45,7 @@ workflow SplitCtxForReformatVcfList{
         RuntimeAttr? runtime_attr_exclude_ctx_calls
         RuntimeAttr? runtime_attr_override_reformat_ctx
         RuntimeAttr? runtime_attr_split_raw_SVs_per_chr
+        RuntimeAttr? runtime_attr_remove_duplicate_events_task
     }
 
     scatter(i in range(length(vcf_list))){
@@ -116,6 +118,15 @@ workflow SplitCtxForReformatVcfList{
             runtime_attr_override = runtime_attr_concat_sharded_cluster
     }
 
+    call remove_duplicate_events.RemoveDuplicateEventsTaskV2 as RemoveDuplicateEvents{
+        input:
+            vcf = ConcatVcfs_CTX.concat_vcf,
+            vcf_index = ConcatVcfs_CTX.concat_vcf_idx,
+            prefix = "~{prefix}.ctx.manual_review",
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_remove_duplicate_events_task
+    }
+
 
     if(exclude_ctx){
         scatter(i in range(length(vcf_list))){
@@ -130,8 +141,8 @@ workflow SplitCtxForReformatVcfList{
      }
 
    output{
-        File concat_cpx_vcf = ConcatVcfs_CTX.concat_vcf
-        File concat_cpx_vcf_idx = ConcatVcfs_CTX.concat_vcf_idx
+        File concat_cpx_vcf = RemoveDuplicateEvents.deduplicated_vcf
+        File concat_cpx_vcf_idx = RemoveDuplicateEvents.deduplicated_vcf_index
         Array[File] cpx_vcf_list = ctx_vcf_Step2
         Array[File] ctx_vcf_idx_list = ctx_vcf_idx_Step2
         Array[File]? no_ctx_vcf_list = ExcludeCtxCallsV2.no_ctx_vcf

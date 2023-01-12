@@ -158,6 +158,12 @@ task RemoveDuplicateEventsTaskV2 {
       return is_carrier
 
 
+    def is_ref(format_fields):
+      gt = format_fields.get('GT', None)
+      is_hom_ref = gt is not None and all(a is not None and a == 0 for a in gt)
+      return is_hom_ref
+
+
     def is_null(format_fields):
       gt = format_fields.get('GT', None)
       is_null_gt = gt is None or any(a is None for a in gt)
@@ -173,12 +179,13 @@ task RemoveDuplicateEventsTaskV2 {
           mismatch_counter += 1
           # keep GT info of highest GQ non-ref GT
           if (is_null(other.samples[i]) and not is_null(record.samples[i])) or \
-              (is_non_ref(other.samples[i]) and
-               ((not is_non_ref(record.samples[i])) or other.samples[i]['GQ'] > record.samples[i]['GQ'])):
+              (is_non_ref(other.samples[i]) and is_ref(record.samples[i])) or \
+              (is_non_ref(other.samples[i]) and is_non_ref(record.samples[i]) and other.samples[i]['GQ'] > record.samples[i]['GQ']):
             for format_field in record.samples[i]:
               if format_field in other.samples[i].keys():
                 record.samples[i][format_field] = other.samples[i][format_field]
       return mismatch_counter
+
 
 
     def merge_records(record, other, out):
