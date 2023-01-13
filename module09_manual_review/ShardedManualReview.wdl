@@ -195,7 +195,7 @@ workflow ShardeManualReview{
             input:
                 vcf = RemoveDuplicateEvents.deduplicated_vcf,
                 vcf_idx = RemoveDuplicateEvents.deduplicated_vcf_index,
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_extract_bnd_del
         }
 
@@ -607,7 +607,7 @@ task SplitBndDel{
     input{
         File vcf
         File vcf_idx
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
