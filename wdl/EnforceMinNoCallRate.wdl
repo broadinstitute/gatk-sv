@@ -16,11 +16,11 @@ workflow EnforceMinNoCallRate {
     Boolean? reannotate_ncrs_in_vcf
     Array[String]? sample_subset_prefixes
     Array[File]? sample_subset_lists
-    File? min_ncr_table  # Note: currently this input does nothing
     Float? global_max_ncr
     String global_ncr_filter_field = "NCR"
     String? chrx_ncr_filter_field
     String? chry_ncr_filter_field
+    String? ncr_filter_script_options  # CLI options to nocall_rate_filter.py. Specify class-specific thresholds, verbosity, chrX/chrY strings, etc
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -37,7 +37,7 @@ workflow EnforceMinNoCallRate {
   Boolean vcf_is_annotated = if (defined(reannotate_ncrs_in_vcf)) then !reannotate_ncrs_in_vcf else CheckHeader.result
 
   # Step 2: shard VCF if necessary
-  if ( always_shard_vcf || defined(min_ncr_table) || defined(global_max_ncr) || !vcf_is_annotated ) {
+  if ( always_shard_vcf || defined(ncr_filter_script_options) || defined(global_max_ncr) || !vcf_is_annotated ) {
     call Tasks.SplitVcf {
       input:
         vcf=vcf,
@@ -87,17 +87,17 @@ workflow EnforceMinNoCallRate {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
-  # Step 3: if min_ncr_table is provided or global_max_ncr is defined, apply min NCR thresholds
-  if ( defined(min_ncr_table) || defined(global_max_ncr) ) {
+  # Step 3: if global_max_ncr is defined or filter script options are supplied, apply min NCR thresholds
+  if ( defined(ncr_filter_script_options) || defined(global_max_ncr) ) {
     scatter ( shard in select_first([AnnotateNCRs.annotated_vcf]) ) {
       call ApplyNCRFilter {
         input:
           vcf=shard,
-          min_ncr_table=min_ncr_table,
           global_max_ncr=global_max_ncr,
           chrx_ncr_filter_field = chrx_ncr_filter_field,
           chry_ncr_filter_field = chry_ncr_filter_field,
           global_ncr_filter_field=global_ncr_filter_field,
+          script_options = ncr_filter_script_options,
           sv_pipeline_docker=sv_pipeline_docker
       }
     }
@@ -112,7 +112,7 @@ workflow EnforceMinNoCallRate {
   # # Outputs:
   # #   1. VCF with NCR annotated
   # #   2. Table of NCRs for all records prior to filtering
-  # #   3. VCF with FILTER labels enforced (only if min_ncr_table was provided)
+  # #   3. VCF with FILTER labels enforced (only if global_max_ncr or ncr_filter_script_options was provided)
   output {
     File ncr_annotated_vcf = select_first([ConcatAnnotatedVcfs.concat_vcf, vcf])
     File ncr_annotated_vcf_idx = select_first([ConcatAnnotatedVcfs.concat_vcf_idx, vcf_idx])
@@ -313,11 +313,11 @@ task ApplyNCRFilter {
   input {
     File vcf
     File? vcf_idx
-    File? min_ncr_table # Note: currently this input does nothing / feature not yet implemented
     Float? global_max_ncr
     String global_ncr_filter_field = "NCR"
     String? chrx_ncr_filter_field
     String? chry_ncr_filter_field
+    String? script_options
     String sv_pipeline_docker
   }
   String prefix = basename(vcf, ".vcf.gz")
@@ -349,6 +349,7 @@ task ApplyNCRFilter {
       ~{"--chrx-filter-on " + chrx_ncr_filter_field} \
       ~{"--chry-filter-on " + chry_ncr_filter_field} \
       ~{"--global-max-ncr " + global_max_ncr} \
+      ~{script_options} \
       ~{vcf} \
       ~{prefix}.NCR_filtered.vcf.gz
   >>>
