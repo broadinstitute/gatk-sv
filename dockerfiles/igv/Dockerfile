@@ -19,7 +19,7 @@ RUN apt-get update --fix-missing && \
     apt-get install -y \
     bcftools \
     bedtools \
-    openjdk-8-jdk \
+    openjdk-11-jdk \
     xvfb \
     zip \
     python3-pip \
