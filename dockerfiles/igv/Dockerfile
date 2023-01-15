@@ -63,8 +63,8 @@ RUN apt-get update -qqy && apt-get install -qqy \
     gcloud --version
 
 
-RUN wget http://data.broadinstitute.org/igv/projects/downloads/2.4/IGV_2.4.14.zip && \
-    unzip IGV_2.4.14.zip
+RUN wget https://data.broadinstitute.org/igv/projects/downloads/2.15/IGV_2.15.4.zip && \
+    unzip IGV_2.15.4.zip
 
 
 VOLUME ["/root/.config"]
