@@ -130,7 +130,7 @@ task RunIGV {
       --snapshot-prefix "~{prefix}" \
       --out "~{prefix}-screenshot-script.txt" \
       --reference ~{ref_fasta}
-    xvfb-run --server-args="-screen 0, 1920x3000x24" bash /IGV_2.4.14/igv.sh -b "~{prefix}-screenshot-script.txt"
+    xvfb-run --server-args="-screen 0, 1920x3000x24" bash /IGV_2.15.4/igv.sh -b "~{prefix}-screenshot-script.txt"
     tar -czf "~{prefix}-screenshots.tar.gz" "~{prefix}-screenshots"
   >>>
 
