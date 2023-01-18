@@ -3,7 +3,7 @@ name: Docker Images
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'src/**'
       - 'dockerfiles/**'
@@ -11,7 +11,7 @@ on:
       - '.github/workflows/sv_pipeline_docker.yml'
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - 'src/**'
       - 'dockerfiles/**'
@@ -43,7 +43,7 @@ jobs:
         id: commit_sha
         # This action determines the SHA of two commits:
         # - BASE (BASE_SHA): The commit SHA of the base branch (e.g.,
-        #   broadinstitute/gatk-sv:master) which the feature branch targets.
+        #   broadinstitute/gatk-sv:main) which the feature branch targets.
         # - HEAD (HEAD_SHA): The commit SHA of the latest commit on the
         #   feature branch.
         #
@@ -51,7 +51,7 @@ jobs:
         #
         #     	    X---Y---Z     feature
         #          /         \
-        #     A---B---C---D---E   master
+        #     A---B---C---D---E   main
         #
         # 'E' is the merge commit (e.g., 'Merge pull request #0').
         #
@@ -222,5 +222,5 @@ jobs:
           git config --global user.name 'gatk-sv-bot'
           git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
           git commit ./inputs/values/dockers.json -m "Update docker images list, triggered by "${COMMIT_SHA::8}
-          git pull --rebase origin master
+          git pull --rebase origin main
           git push
