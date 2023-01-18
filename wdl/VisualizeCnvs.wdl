@@ -14,6 +14,7 @@ workflow VisualizeCnvs {
     Array[File] rd_files
     File ped_file
     Int min_size
+    Boolean? restrict_samples
     String flags
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_rdtest
@@ -32,6 +33,7 @@ workflow VisualizeCnvs {
       rd_file_indexes=rd_file_indexes,
       prefix=prefix,
       min_size=min_size,
+      restrict_samples=select_first([restrict_samples, true]),
       flags=flags,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override = runtime_attr_rdtest
@@ -52,6 +54,7 @@ task RdTestPlot {
     Int min_size
     File ped_file
     String prefix
+    Boolean restrict_samples
     String sv_pipeline_docker
     String flags
     RuntimeAttr? runtime_attr_override
@@ -115,7 +118,7 @@ task RdTestPlot {
       -m median_file.txt \
       -f ~{ped_file} \
       -p TRUE \
-      -w samples.txt \
+      ~{if (restrict_samples) then "-w samples.txt" else ""} \
       ~{flags}
 
     mkdir ~{prefix}_rd_plots
