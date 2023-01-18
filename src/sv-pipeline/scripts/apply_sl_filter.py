@@ -76,6 +76,8 @@ def recalculate_gq(sl, scale_factor, is_hom_ref, upper, lower, shift):
 
 
 def _fails_filter(sl, gt_is_ref, cutoff):
+    if cutoff is None:
+        return False
     if gt_is_ref:
         sl = -sl
     return sl < cutoff
@@ -84,9 +86,6 @@ def _fails_filter(sl, gt_is_ref, cutoff):
 def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref,
                   replace_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
     record.info['MINSL'] = sl_threshold
-    # CNVs are not evaluated by the recalibrator (use CNQ instead)
-    if sl_threshold is None:
-        return
     allele = 0 if apply_hom_ref else None
     sl_list = []
     n_samples = 0
