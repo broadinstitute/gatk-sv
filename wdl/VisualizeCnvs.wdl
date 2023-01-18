@@ -38,6 +38,8 @@ workflow VisualizeCnvs {
   }
   output{
     File rdtest_plots = RdTestPlot.plots
+    File rdtest_median_geno = RdTestPlot.median_geno
+    File rdtest_geno = RdTestPlot.geno
   }
 }
 
@@ -123,6 +125,8 @@ task RdTestPlot {
 
   output {
     File plots = "~{prefix}_rd_plots.tar.gz"
+    File median_geno = "~{prefix}.median_geno"
+    File geno = "~{prefix}.median_geno"
   }
 
   runtime {
