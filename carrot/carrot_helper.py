@@ -792,7 +792,7 @@ def init_config():
     print("\nPlease enter the branch that contains the test and evaluation"
           "WDLs and their input JSON files. If you want to run the "
           "existing tests on broadinstitute/gatk-sv, this can be "
-          "`master`, or the name of your feature branch.")
+          "`main`, or the name of your feature branch.")
     branch = None
     while not branch or not is_url_accessible(f"{repo}/tree/{branch}"):
         branch = input("\tPlease enter branch name: ")

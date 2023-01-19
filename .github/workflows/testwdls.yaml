@@ -3,12 +3,12 @@ name: Test WDLs
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'wdl/**'
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - 'wdl/**'
 
