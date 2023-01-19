@@ -89,7 +89,7 @@ workflow EnforceMinNoCallRate {
 
   # Step 3: if global_max_ncr is defined or filter script options are supplied, apply min NCR thresholds
   if ( defined(ncr_filter_script_options) || defined(global_max_ncr) ) {
-    scatter ( shard in select_first([AnnotateNCRs.annotated_vcf]) ) {
+    scatter ( shard in select_first([AnnotateNCRs.annotated_vcf, vcf_shards]) ) {
       call ApplyNCRFilter {
         input:
           vcf=shard,
@@ -149,10 +149,12 @@ task CheckHeader {
   command <<<
     set -eu -o pipefail
 
-    cat ~{write_lines(select_first([subset_prefixes, []]))} > subsets.tsv
-    cat subsets.tsv
-    cut -f1 subsets.tsv | awk '{ print $1"_NCR" }' | cat <( echo "NCR" ) - \
-    | awk '{ print "ID="$1 }' > mandatory_infos.txt
+    echo "ID=NCR" > mandatory_infos.txt
+    if [ ~{defined(subset_prefixes)} == "true" ]; then
+      cat ~{write_lines(select_first([subset_prefixes, []]))} > subsets.tsv
+      cat subsets.tsv
+      cut -f1 subsets.tsv | awk '{ print "ID="$1"_NCR" }' >> mandatory_infos.txt
+    fi
     cat mandatory_infos.txt
     n_infos=$( cat mandatory_infos.txt | wc -l )
 
