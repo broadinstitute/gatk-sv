@@ -116,6 +116,12 @@ const config = {
         ],
         copyright: `Copyright © ${new Date().getFullYear()} BroadInstitute, Built with Docusaurus.`,
       },
+      algolia: {
+        appId: 'LI6UMHUDIS',
+        apiKey: '97d929d265c25db1ed1816391a2a719a',
+        indexName: 'gatk-sv',
+        contextualSearch: true
+    },
       prism: {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
