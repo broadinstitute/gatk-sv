@@ -15,23 +15,37 @@ workflow VisualizeCnvs {
     File ped_file
     Int min_size
     Boolean? restrict_samples
+    File? cutoffs
     String flags
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_rdtest
+    RuntimeAttr? runtime_attr_rdtestprep
   }
 
   scatter (file in rd_files) {
     File rd_file_indexes = file + ".tbi"
   }
 
-  call RdTestPlot {
+  call RdTestPrep {
     input:
       vcf_or_bed=vcf_or_bed,
       median_files=median_files,
-      ped_file=ped_file,
-      rd_files=rd_files,
+      rd_files = rd_files,
       rd_file_indexes=rd_file_indexes,
+      min_size=min_size,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_rdtestprep
+  }
+
+  call RdTestPlot {
+    input:
+      median_file=RdTestPrep.median_file,
+      cnvs_bed=RdTestPrep.cnvs_bed,
+      samples_in_bed=RdTestPrep.samples_in_bed,
+      ped_file=ped_file,
+      rd_subsets_tar=RdTestPrep.rd_subsets_tar,
       prefix=prefix,
+      cutoffs=cutoffs,
       min_size=min_size,
       restrict_samples=select_first([restrict_samples, true]),
       flags=flags,
@@ -45,18 +59,14 @@ workflow VisualizeCnvs {
   }
 }
 
-task RdTestPlot {
+task RdTestPrep {
   input{
     File vcf_or_bed
+    Array[File] median_files
     Array[File] rd_files
     Array[File] rd_file_indexes
-    Array[File] median_files
     Int min_size
-    File ped_file
-    String prefix
-    Boolean restrict_samples
     String sv_pipeline_docker
-    String flags
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -100,7 +110,11 @@ task RdTestPlot {
     fi
 
     paste ~{sep=" " median_files} > median_file.txt
+    bgzip median_file.txt
+
+
     bedtools merge -i cnvs.bed | cut -f1-3 > merged.bed
+    bgzip cnvs.bed
 
     i=0
     mkdir rd_subsets
@@ -111,6 +125,66 @@ task RdTestPlot {
       i=$((i+1))
     done<~{write_lines(rd_files)}
 
+    tar -czvf rd_subsets.tar.gz rd_subsets/
+  >>>
+
+  output {
+    File cnvs_bed = "cnvs.bed.gz"
+    File median_file = "median_file.txt.gz"
+    File samples_in_bed = "samples.txt.gz"
+    File rd_subsets_tar = "rd_subsets.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task RdTestPlot {
+  input{
+    File median_file
+    File samples_in_bed
+    File rd_subsets_tar
+    File cnvs_bed
+    Int min_size
+    File ped_file
+    String prefix
+    File? cutoffs
+    Boolean restrict_samples
+    String sv_pipeline_docker
+    String flags
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 7.5,
+                               disk_gb: ceil(100 + size(cnvs_bed, "GB") * 10 + size(rd_subsets_tar, "GB") * 10),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  command <<<
+    set -euxo pipefail
+
+    mv ~{median_file} median_file.txt.gz
+    gunzip median_file.txt.gz
+
+    mv ~{cnvs_bed} cnvs.bed.gz
+    gunzip cnvs.bed.gz
+
+    mv ~{samples_in_bed} samples.txt.gz
+    gunzip samples.txt.gz
+
+    tar -xzvf ~{rd_subsets_tar}
+
+
     Rscript /opt/RdTest/RdTestV2.R \
       -b cnvs.bed \
       -n ~{prefix} \
@@ -119,6 +193,8 @@ task RdTestPlot {
       -f ~{ped_file} \
       -p TRUE \
       ~{if (restrict_samples) then "-w samples.txt" else ""} \
+      ~{if defined(cutoffs) then "-g TRUE" else ""} \
+      ~{"-r " + cutoffs} \
       ~{flags}
 
     mkdir ~{prefix}_rd_plots
