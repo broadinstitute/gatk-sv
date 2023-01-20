@@ -44,7 +44,7 @@ workflow FilterBatch {
     RuntimeAttr? runtime_attr_cat_outliers_preview
 
     RuntimeAttr? runtime_attr_identify_outliers
-    RuntimeAttr? runtime_attr_exclude_outliers
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
   }
@@ -90,7 +90,7 @@ workflow FilterBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_identify_outliers = runtime_attr_identify_outliers,
-      runtime_attr_exclude_outliers= runtime_attr_exclude_outliers,
+      runtime_attr_subset_vcf= runtime_attr_subset_vcf,
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
       runtime_attr_filter_samples = runtime_attr_filter_samples,
       runtime_attr_ids_from_vcf = runtime_attr_ids_from_vcf,

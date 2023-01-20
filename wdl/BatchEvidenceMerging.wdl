@@ -135,6 +135,7 @@ task SDtoBAF {
     String batch
     Array[String] samples
     File reference_dict
+    Float min_het_probability = 0.05
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -169,7 +170,13 @@ task SDtoBAF {
       tabix -f -s1 -b2 -e2 $fil
     done
 
-    /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" SiteDepthtoBAF -F inputs.list --sample-names samples.list --sequence-dictionary ~{reference_dict} --baf-sites-vcf "~{sd_locs_vcf}" -O "~{batch}.baf.txt.gz"
+    /gatk/gatk --java-options "-Xmx~{java_heap_size_mb}m" SiteDepthtoBAF \
+        -F inputs.list \
+        --sample-names samples.list \
+        --sequence-dictionary "~{reference_dict}" \
+        --baf-sites-vcf "~{sd_locs_vcf}" \
+        --min-het-probability "~{min_het_probability}" \
+        -O "~{batch}.baf.txt.gz"
 
   >>>
   runtime {
