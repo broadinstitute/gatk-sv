@@ -21,6 +21,8 @@ following command to fetch the `LFS`-tracked files.
     $ git lfs fetch --all
     $ git lfs pull
     ```
+- Mac M1 users: You may need to [set IPv6 configuration](https://support.apple.com/guide/mac-help/use-ipv6-on-mac-mchlp2499/mac)
+to `Link-Local Only` for `npm` to successfully install packages.  
 
 ### Install 
 
