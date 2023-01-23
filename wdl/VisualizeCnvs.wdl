@@ -109,6 +109,8 @@ task RdTestPrep {
       exit 1
     fi
 
+    bgzip samples.txt
+
     paste ~{sep=" " median_files} > median_file.txt
     bgzip median_file.txt
 
