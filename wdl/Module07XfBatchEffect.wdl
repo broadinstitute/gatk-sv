@@ -23,7 +23,7 @@ workflow XfBatchEffect {
     Int? pairwise_cutoff=2
     Int? onevsall_cutoff=2
     String prefix
-    File af_pcrmins_premingq
+    File? af_pcrmins_premingq
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
