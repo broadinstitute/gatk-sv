@@ -24,7 +24,6 @@ workflow XfBatchEffect {
     Int? onevsall_cutoff=2
     String prefix
     File af_pcrmins_premingq
-    Boolean? enable_unstable_af_filter
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
@@ -87,12 +86,14 @@ workflow XfBatchEffect {
 
   # Compare frequencies before and after minGQ, and generate list of variants
   # that are significantly different between the steps
-  call CompareFreqsPrePostMinGQPcrminus {
-    input:
-      af_pcrmins_premingq=af_pcrmins_premingq,
-      AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+  if (defined(af_pcrmins_premingq)) {
+    call CompareFreqsPrePostMinGQPcrminus {
+      input:
+        af_pcrmins_premingq=select_first([af_pcrmins_premingq]),
+        AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   # Generate matrix of correlation coefficients for all batches, by population & SVTYPE
@@ -177,7 +178,6 @@ workflow XfBatchEffect {
         contig=contig[0],
         reclassification_table=MakeReclassificationTable.reclassification_table,
         mingq_prePost_pcrminus_fails=CompareFreqsPrePostMinGQPcrminus.pcrminus_fails,
-        enable_unstable_af_filter = select_first([enable_unstable_af_filter, true]),
         prefix="~{prefix}.~{contig[0]}",
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -647,9 +647,8 @@ task ApplyBatchEffectLabels {
     File vcf_idx
     String contig
     File reclassification_table
-    File mingq_prePost_pcrminus_fails
+    File? mingq_prePost_pcrminus_fails
     String prefix
-    Boolean enable_unstable_af_filter
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -666,7 +665,7 @@ task ApplyBatchEffectLabels {
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-        ~{if (enable_unstable_af_filter) then "--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails else ""} \
+        ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
         stdin \
         ~{reclassification_table} \
         stdout \
