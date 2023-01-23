@@ -251,9 +251,7 @@ task CollectNCRTable {
   command <<<
     set -eu -o pipefail
 
-    infos=$( cat ~{write_lines(select_first([subset_prefixes, []]))} \
-             | awk -v OFS="_" '{ print $1, "NCR" }' \
-             | cat <( echo "NCR" ) - \
+    infos=$( ~{if (defined(subset_prefixes)) then "cat ~{write_lines(select_first([subset_prefixes, []]))} | awk -v OFS=\"_\" '{ print $1, \"NCR\" }' | cat <( echo \"NCR\" ) - " else "echo \"NCR\"" } \
              | awk -v OFS="/" -v ORS="\\\t" '{ print "%INFO", $1 }' \
              | sed 's/\\t$/\\n/g' )
 
