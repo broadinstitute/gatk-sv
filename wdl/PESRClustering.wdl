@@ -157,6 +157,7 @@ task PreparePESRVcfs {
     for VCF in in/*.vcf.gz; do
       NAME=$(basename $VCF .vcf.gz)
       SAMPLE_NUM=`printf %05d $i`
+      echo "PROCESSING ${NAME}"
       # Convert format
       python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
         --vcf $VCF \
@@ -167,12 +168,12 @@ task PreparePESRVcfs {
 
       # Interval, contig, and size filtering
       bcftools query -f '%CHROM\t%POS\t%POS\t%ID\t%SVTYPE\n%CHROM\t%END\t%END\t%ID\t%SVTYPE\n%CHR2\t%END2\t%END2\t%ID\t%SVTYPE\n' tmp.vcf.gz \
-        | awk '$1!="."' \
+        | awk '$2!="."' \
         | sort -k1,1V -k2,2n -k3,3n \
         > ends.bed
       bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b ~{exclude_intervals} | cut -f4 | sort | uniq \
         > excluded_vids.list
-      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size})' tmp.vcf.gz \
+      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size} || INFO/SVLEN<0)' tmp.vcf.gz \
         -Oz -o out/$SAMPLE_NUM.$NAME.vcf.gz
       tabix out/$SAMPLE_NUM.$NAME.vcf.gz
       i=$((i+1))
