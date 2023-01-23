@@ -13,6 +13,24 @@ You may build and run it for local development using the following commands.
 ### Prerequisite
 
 - Install [Node.js](https://nodejs.org/en/download/);
+- Install [Git LFS](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage)
+since GATK-SV tracks images using `git lfs`. After you `git clone` the GATK-SV repository, run the 
+following command to fetch the `LFS`-tracked files. 
+    ```
+    $ git lfs install
+    $ git lfs fetch --all
+    $ git lfs pull
+    ```
+
+### Install 
+
+```
+$ cd website/
+$ npm install
+```
+
+This command installs necessary packages and creates `package-lock.json`
+for the reproducibility of deployment.
 
 ### Build
 
