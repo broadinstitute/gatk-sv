@@ -94,7 +94,6 @@ def assert_all_variant_ids_valid(confident_variants: get_truth_overlap.Confident
 
 @pytest.mark.integration_test
 def test_get_truth_overlap(
-        capsys,
         short_reads_vcf,
         vapor_files: Iterable[str] = Default.vapor_files,
         long_reads_vcfs: Iterable[str] = Default.long_reads_vcfs,
@@ -108,11 +107,12 @@ def test_get_truth_overlap(
 
     vapor_dict = get_vapor_dict(vapor_files)
     confident_variants = get_truth_overlap.get_truth_overlap(
-        test_vcfs=(short_reads_vcf,), truth_vcfs=long_reads_vcfs, ped_files=ped_file, vapor_files=vapor_dict,
-        optimal_overlap_cutoffs_file=optimal_overlap_cutoffs_file
+        test_vcfs=(short_reads_vcf,), truth_vcfs=long_reads_vcfs, ped_files=ped_file,
+        vapor_files=vapor_dict, optimal_overlap_cutoffs_file=optimal_overlap_cutoffs_file
     )
 
-    # The mechanism of determining confident variants is different for each of these cases. Ensure it's working:
+    # The mechanism of determining confident variants is different for each of these cases.
+    # Ensure it's working:
     assert_has_confident_variants(confident_variants, pacbio_no_vapor_sample_id)
     assert_has_confident_variants(confident_variants, vapor_no_pacbio_sample_id)
     assert_has_confident_variants(confident_variants, pacbio_and_vapor_sample_id)
@@ -120,12 +120,10 @@ def test_get_truth_overlap(
 
     # make sure that everything works without vapor
     no_vapor_confident_variants = get_truth_overlap.get_truth_overlap(
-        test_vcfs=(short_reads_vcf,), truth_vcfs=long_reads_vcfs, ped_files=ped_file, vapor_files=None,
-        optimal_overlap_cutoffs_file=optimal_overlap_cutoffs_file
+        test_vcfs=(short_reads_vcf,), truth_vcfs=long_reads_vcfs, ped_files=ped_file,
+        vapor_files=None, optimal_overlap_cutoffs_file=optimal_overlap_cutoffs_file
     )
     assert_has_confident_variants(no_vapor_confident_variants, pacbio_no_vapor_sample_id)
     assert_has_no_confident_variants(no_vapor_confident_variants, vapor_no_pacbio_sample_id)
     assert_has_confident_variants(no_vapor_confident_variants, pacbio_and_vapor_sample_id)
     assert_all_variant_ids_valid(no_vapor_confident_variants, valid_variant_ids)
-    with capsys.disabled():
-        get_truth_overlap.output_confident_variants(no_vapor_confident_variants, "-")

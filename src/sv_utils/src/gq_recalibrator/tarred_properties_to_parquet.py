@@ -25,23 +25,17 @@ from sv_utils import common, genomics_io
 from typing import Optional, Union
 from collections.abc import Mapping
 from types import MappingProxyType
+import enum
 
 
 class Keys:
     num_samples = "num_samples"
     num_rows = "num_rows"
     codes = "codes"
-    type_name = "type"
+    property_type = "type"
     start_row = "start_row"
     sample_id = genomics_io.Keys.sample_id
     property = genomics_io.Keys.property
-    float_type = "float"
-    double_type = "double"
-    byte_type = "byte"
-    short_type = "short"
-    int_type = "int"
-    string_type = "String"
-    string_set_type = "StringSet"
     row = "row"
     category = "category"
     one_hot = "one-hot"
@@ -106,14 +100,6 @@ training_weight_bins = MappingProxyType({
     Keys.allele_frequency: numpy.array([0.1, 0.9])
 })
 
-_dtype_map = MappingProxyType({
-    Keys.float_type: numpy.float32,
-    Keys.double_type: numpy.float64,
-    Keys.byte_type: numpy.int8,
-    Keys.short_type: numpy.int16,
-    Keys.int_type: numpy.int32
-})
-
 # Mapping holds data for summary of an individual property
 PropertySummaryJsonDict = dict[str, Union[int, str, list[str]]]
 # Mapping holds baseline and scale for an individual property
@@ -121,32 +107,121 @@ PropertyStatsDict = dict[Union[str, int], Union[int, list[float]]]
 # Mapping holds statistics for all properties
 AllPropertiesStatsDict = dict[str, PropertyStatsDict]
 DataFrame = dask.dataframe.DataFrame
+DType = numpy.dtype | pandas.api.extensions.ExtensionDtype
+
+
+class PropertyType(enum.Enum):
+    String = "String"
+    StringSet = "StringSet"
+    boolean = "boolean"
+    byte = "byte"
+    short = "short"
+    int = "int"
+    float = "float"
+    double = "double"
+
+    @property
+    def dtype(self) -> DType:
+        # noinspection PyProtectedMember
+        return PropertyType._dtype_map.get(self)
+
+    @property
+    def has_codes(self) -> bool:
+        return self == PropertyType.String or self == PropertyType.StringSet
+
+    @property
+    def is_floating_type(self) -> bool:
+        return not self.has_codes and numpy.issubdtype(self.dtype, numpy.floating)
+
+    @property
+    def is_integer_type(self) -> bool:
+        return not self.has_codes and numpy.issubdtype(self.dtype, numpy.integer)
+
+
+# MappingProxyType[PropertyType, numpy.dtype | pandas.api.extensions.ExtensionDtype]
+PropertyType._dtype_map = MappingProxyType({
+    PropertyType.String: pandas.api.types.CategoricalDtype,
+    PropertyType.float: numpy.dtype(numpy.float32),
+    PropertyType.double: numpy.dtype(numpy.float64),
+    PropertyType.boolean: numpy.dtype(bool),
+    PropertyType.byte: numpy.dtype(numpy.int8),
+    PropertyType.short: numpy.dtype(numpy.int16),
+    PropertyType.int: numpy.dtype(numpy.int32)
+})
 
 
 @attr.s(frozen=True, slots=True)
 class PropertySummary:
-    type_name: str = attr.ib()
+    property_type: PropertyType = attr.ib()
     num_rows: int = attr.ib()
-    num_samples: int = attr.ib()
-    codes: list[str] = attr.ib()
+    num_samples: int = attr.ib(default=0)
+    codes: list[str] = attr.ib(default=[])
 
     @classmethod
-    def from_json(cls, json_dict: PropertySummaryJsonDict) -> "PropertySummary":
+    def from_json(
+            cls, json_dict: PropertySummaryJsonDict) -> "PropertySummary":
         return PropertySummary(
-            type_name=json_dict[Keys.type_name],
+            property_type=PropertyType(json_dict[Keys.property_type]),
             num_rows=json_dict[Keys.num_rows],
             num_samples=json_dict[Keys.num_samples],
             codes=json_dict.get(Keys.codes, [])
         )
 
+    @property
+    def encoding_dtype(self) -> numpy.dtype:
+        """get the pure numpy dtype that would be used for ordinal encoding of String/StringSet,
+        for storing to disk; hencs booleans should be represented as uint8 0 or 1
+        """
+        if self.has_codes:
+            return numpy.dtype(numpy.min_scalar_type(len(self.codes)))
+        elif self.is_bool_type:
+            return numpy.dtype(numpy.uint8)
+        else:
+            return self.property_type.dtype
+
+    @property
+    def decoding_dtype(self) -> numpy.dtype:
+        """get the pure numpy dtype that would be used for ordinal encoding of String/StringSet,
+        for loading from disk; hence booleans should be represented as bool.
+        """
+        if self.has_codes:
+            return numpy.dtype(numpy.min_scalar_type(len(self.codes)))
+        else:
+            return self.property_type.dtype
+
+    @property
+    def dtype(self) -> DType:
+        if self.has_codes:
+            return pandas.CategoricalDtype(categories=self.codes, ordered=False)
+        else:
+            return self.property_type.dtype
+
+    @property
+    def has_codes(self) -> bool:
+        return self.property_type.has_codes
+
+    @property
+    def is_floating_type(self) -> bool:
+        return self.property_type.is_floating_type
+
+    @property
+    def is_integer_type(self) -> bool:
+        return self.property_type.is_integer_type
+
+    @property
+    def is_bool_type(self) -> bool:
+        return self.property_type == PropertyType.boolean
+
 
 class PropertiesSummary(dict[str, PropertySummary]):
     @classmethod
-    def from_json(cls, json_dict: dict[str, PropertySummaryJsonDict]) -> "PropertiesSummary":
-        return PropertiesSummary({
-            key: PropertySummary.from_json(property_dict)
-            for key, property_dict in json_dict.items()
-        })
+    def from_json(
+            cls, json_dict: PropertySummaryJsonDict | dict[str, PropertySummary]
+    ) -> Union["PropertiesSummary", PropertySummary]:
+        if Keys.property_type in json_dict:
+            return PropertySummary.from_json(json_dict)
+        else:
+            return PropertiesSummary(json_dict)
 
 
 # keep track of tar files that have already been extracted
@@ -154,10 +229,9 @@ _extracted_tar_files = {}
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
-    print(argv)
     parser = argparse.ArgumentParser(
-        description="Convert properties produced by ExtractSV properties from tarred-gzipped TSV to"
-                    " a parquet data set",
+        description="Convert properties produced by ExtractSV properties from tarred-gzipped TSV"
+                    " to a parquet data set",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=argv[0]
     )
@@ -173,9 +247,9 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--properties-scaling-json", type=str, default=None,
-        help="path to output JSON that will store properties baseline and scale needed for training"
-             "and filtering. Note: should only be generated from training data set, then those "
-             "stats should be reused for filtering."
+        help="path to output JSON that will store properties baseline and scale needed for "
+             "training and filtering. Note: should only be generated from training data set, then "
+             "those stats should be reused for filtering."
     )
     parser.add_argument("--temp-dir", "-t", type=Path, default=Default.temp_dir,
                         help="Path to preferred temporary directory")
@@ -209,7 +283,6 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
 
 def main(argv: Optional[list[str]] = None):
     args = __parse_arguments(sys.argv if argv is None else argv)
-    print(args)
     tarred_properties_to_parquet(
         input_tar=args.input_tar,
         output_path=args.output_parquet,
@@ -238,8 +311,6 @@ def tarred_properties_to_parquet(
         property_names_to_lower: bool = Default.property_names_to_lower,
         num_jobs: int = Default.num_jobs
 ):
-    print(f"compute_weights: {compute_weights}")
-    print(f"output_scaling_path: {properties_scaling_json}")
     CompressionAlgorithms.assert_valid(compression_algorithm)
     properties_summaries, sample_ids, input_folders = _get_gzipped_metadata(
         input_tar=input_tar, temp_dir=temp_dir, remove_input_tar=remove_input_tar
@@ -317,22 +388,37 @@ def _get_gzipped_metadata(
     return properties_summaries, sample_ids, input_folders
 
 
+def _get_tar_top_level_folder(tar_in: tarfile.TarFile) -> str:
+    root_folders = {
+        archive_parents[-2]
+        for archive_parents in (
+            Path(archive_file).parents for archive_file in tar_in.getnames()
+        )
+        if len(archive_parents) > 1
+    }
+    # if there is exactly one base folder in the archive, return that, otherwise return '.'
+    return root_folders.pop() if len(root_folders) == 1 else '.'
+
+
 def extract_tar_to_folder(
         input_tar: Path,
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar
 ) -> Path:
     if input_tar in _extracted_tar_files:
-        input_tar.unlink(missing_ok=True)
+        if remove_input_tar:
+            input_tar.unlink(missing_ok=True)
         return _extracted_tar_files[input_tar]
     if base_dir is None:
         base_dir = input_tar.parent
     with tarfile.open(input_tar, 'r') as tar_in:
-        tar_folder = base_dir / os.path.basename(os.path.commonpath(tar_in.getnames()))
+        # tar_folder = base_dir / os.path.basename(os.path.commonpath(tar_in.getnames()))
+        tar_folder = base_dir / _get_tar_top_level_folder(tar_in)
         _extracted_tar_files[input_tar] = tar_folder
         tar_in.extractall(path=base_dir)
     if remove_input_tar:
         input_tar.unlink()
+    print(f"Extracted tar file to {tar_folder}")
     return tar_folder
 
 
@@ -396,12 +482,12 @@ def _validate_properties_summary(
                     f"Inconsistent {Keys.num_samples} between data sets for {prop_name}: "
                     f"{num_compare_samples} -> {num_prop_samples}"
                 )
-            type_name = properties_summary[prop_name].type_name
-            compare_type = prop_summary.type_name
+            type_name = properties_summary[prop_name].property_type
+            compare_type = prop_summary.property_type
             if type_name != compare_type:
                 raise ValueError(
-                    f"Inconsistent {Keys.type_name} between data sets for {prop_name}: {type_name}"
-                    f" -> {compare_type}"
+                    f"Inconsistent {Keys.property_type} between data sets for {prop_name}: "
+                    f"{type_name.name} -> {compare_type.name}"
                 )
 
 
@@ -468,6 +554,9 @@ def _decompress_gzipped_file(
     if not compressed_file.suffix == ".gz":
         raise ValueError("compressed file does not end with .gz extension")
     decompressed_file = compressed_file.with_suffix("")
+    if decompressed_file.is_file() and not compressed_file.is_file():
+        # decompression was already performed, or file was never compressed:
+        return decompressed_file
     with gzip.open(compressed_file, "rb") as f_in, open(decompressed_file, "wb") as f_out:
         shutil.copyfileobj(f_in, f_out)
     if remove_compressed:
@@ -482,7 +571,12 @@ def _get_dask_divisions(
     num_rows = next(iter(property_summaries.values())).num_rows
     bytes_per_row = sum(_get_bytes_per_row(property_name, property_summary)
                         for property_name, property_summary in property_summaries.items())
-    rows_per_division = int(numpy.ceil(dask_partition_size_mb * (2 ** 20) / bytes_per_row))
+    # compute the number of rows per division that should fit within our memory budget, but set to
+    # a minimum of 5 so that basic operations can work (e.g. .head())
+    rows_per_division = max(
+        5,
+        int(numpy.ceil(dask_partition_size_mb * (2 ** 20) / bytes_per_row))
+    )
     return list(range(0, num_rows, rows_per_division)) + [num_rows]
 
 
@@ -490,24 +584,25 @@ def _get_bytes_per_row(property_name: str, property_summary: PropertySummary) ->
     if property_name == "ID":
         return 20  # wild guess as to string length, won't be a dominant factor
     else:
-        _dtype = _dtype_map.get(property_summary.type_name, numpy.uint8)
+        _dtype = property_summary.encoding_dtype
         bits_per_column = numpy.finfo(_dtype).bits if numpy.issubdtype(_dtype, numpy.floating) \
             else numpy.iinfo(_dtype).bits
         return (bits_per_column // 8) * max(1, property_summary.num_samples)
 
 
 def _tsvs_to_df_partition(
-        division_parameters: tuple[int, int, int, Path, Mapping[str, PropertySummary]],
+        division_parameters: tuple[int, int, int, Path, PropertiesSummary],
         sample_ids: list[str],
         total_num_rows: int,
         category_encoding: str,
         property_names_to_lower: bool
 ) -> pandas.DataFrame:
-    row_start, row_end, data_set_row_start, input_folder, property_summaries = division_parameters
+    row_start, row_end, data_set_row_start, input_folder, properties_summary = division_parameters
 
-    def _summary_sort_key(item):
-        _name, _summary = item
-        return _summary[Keys.num_samples], _name
+    def _summary_sort_key(_item: tuple[str, PropertySummary]) -> tuple[int, str]:
+        _name, _summary = _item
+        return _summary.num_samples, _name
+
     df = pandas.concat(
         tuple(
             _read_csv_chunk(
@@ -516,7 +611,7 @@ def _tsvs_to_df_partition(
                 row_end=row_end, category_encoding=category_encoding,
                 property_names_to_lower=property_names_to_lower
             )
-            for property_name, property_summary in sorted(property_summaries.items(),
+            for property_name, property_summary in sorted(properties_summary.items(),
                                                           key=_summary_sort_key)
         ),
         axis=1
@@ -563,25 +658,24 @@ def _read_csv_chunk(
         column_names = [property_name]
         columns = pandas.MultiIndex.from_product([[None], [property_name]],
                                                  names=Default.column_levels)
-    type_name = property_summary.type_name
-    codes = property_summary.codes
+    # noinspection PyTypeChecker
     _dtype = "string[pyarrow]" if property_name == "id" else \
-        _dtype_map.get(type_name, numpy.min_scalar_type(len(codes)))
+        property_summary.decoding_dtype
     dtypes = {column_name: _dtype for column_name in column_names}
     df = pandas.read_csv(
         tsv, sep='\t', low_memory=True, engine='c', memory_map=False, names=column_names,
         dtype=dtypes, nrows=row_end - row_start, skiprows=row_start
     )
-    if codes:
+    if property_summary.codes:
         if category_encoding == Keys.category:
             # need to do convert ordinal ints to pandas Categorical
             df = pandas.DataFrame(
-                pandas.Categorical.from_codes(df, categories=codes),
+                pandas.Categorical.from_codes(df, categories=property_summary.codes),
                 index=df.index, columns=columns
             )
         else:
             # need to one-hot this DataFrame
-            codewords_map = _get_codewords_map(codes=codes, type_name=type_name)
+            codewords_map = _get_codewords_map(property_summary)
             df = codes_to_one_hot(df, codewords_map=codewords_map, property_name=property_name,
                                   is_format_property=is_format_property)
     else:
@@ -589,18 +683,80 @@ def _read_csv_chunk(
     return df
 
 
-def _get_codewords_map(codes: list[str], type_name: str) -> dict[str, numpy.array]:
-    if type_name == Keys.string_type:
+def categorical_df_to_one_hot(
+        properties_dataframe: pandas.DataFrame,
+        properties_summary: PropertiesSummary,
+        property_names_to_lower: bool = Default.property_names_to_lower
+) -> pandas.DataFrame:
+    """
+    Convert a properties DataFrame with MultiIndex columns, where encoding is categorical to one
+    where encoding is 1-hot.
+    Utility function mainly useful for testing, but here in case it's useful for debugging
+    """
+    property_names = set(properties_dataframe.columns.get_level_values(level=Keys.property))
+
+    def _iter_properties() -> tuple[str, pandas.DataFrame, PropertySummary]:
+        for property_name in property_names:
+            property_values = properties_dataframe.loc[:, (slice(None), property_name)]
+            property_summary = properties_summary[property_name]
+            if property_summary.codes:
+                inverse_codes = {code_word: ind for ind, code_word in
+                                 enumerate(property_summary.codes)}
+                # expect that property_values is probably CategoricalDtype. If so, need to convert
+                # to integer dtypes corresponding to the appropriate codes
+                property_values = property_values.applymap(inverse_codes.get).astype(
+                    property_summary.encoding_dtype
+                )
+                property_values.columns = (
+                    [property_name.lower()] if property_summary.num_samples == 0
+                    else property_values.columns.get_level_values(level=Keys.sample_id)
+                )
+
+            yield (
+                property_name.lower() if property_names_to_lower else property_name,
+                property_values,
+                property_summary
+            )
+
+    return pandas.concat(
+        (
+            codes_to_one_hot(
+                property_values,
+                codewords_map=_get_codewords_map(property_summary),
+                property_name=property_name,
+                is_format_property=property_summary.num_samples > 0
+            ) if property_summary.codes else property_values
+            for property_name, property_values, property_summary in _iter_properties()
+        ),
+        axis=1
+    )
+
+
+def _get_codewords_map(property_summary: PropertySummary) -> dict[str, numpy.array]:
+    """
+    Create a map from value of String/StringSet property to 1-hot encoding for that value, for
+    fast lookup
+    Args:
+        property_summary: PropertySummary
+            Summary info for this property
+    Returns:
+        codewords_map: dict[str, numpy.array]
+            Map from code to 1-hot encoding for that code
+    """
+    if PropertySummary.property_type == PropertyType.String:
+        # this property is a single string
         # easy: the nth code is all false except for the nth value in the map
-        num_codewords = len(codes)
+        num_codewords = len(property_summary.codes)
 
         def _basis(_ind: int) -> numpy.ndarray:
             _arr = numpy.zeros(num_codewords, dtype=bool)
             _arr[_ind] = True
             return _arr
-        return {code: _basis(ind) for ind, code in enumerate(codes)}
+        return {code: _basis(ind) for ind, code in enumerate(property_summary.codes)}
     else:
-        code_sets = [set(code.split(',')) for code in codes]
+        # this property is a set of strings
+        code_sets = [set(code.split(',')) for code in property_summary.codes]
+
         all_codewords = sorted(set.union(*code_sets))
 
         def _contains(_codeword: str) -> numpy.ndarray:
@@ -614,10 +770,38 @@ def codes_to_one_hot(
         property_name: str,
         is_format_property: bool
 ) -> DataFrame:
-    mapped_dfs = {codeword: df.applymap(lambda code: code_included[code])
-                  for codeword, code_included in codewords_map.items()}
+    """
+    Convert DataFrame of codes (words for String property, comma-separated words for StringSet
+    property) to 1-hot encoded DataFrame
+    Args:
+        df: pandas.DataFrame
+            DataFrame with values as string codes
+        codewords_map: dict[str, numpy.array]
+            Map from code to boolean numpy array of the 1-hot encoding corresponding to that code
+        property_name: str
+            Name of the property
+        is_format_property: bool
+
+    """
+    try:
+        # make one dataframe for each code, indicating if that code is present for that row
+        mapped_dfs = {
+            codeword: df.applymap(code_is_included.take)
+            for codeword, code_is_included in codewords_map.items()
+        }
+    except IndexError as index_error:
+        common.add_exception_context(
+            index_error,
+            f"codewords_map: {codewords_map}, df_codes: {numpy.unique(df.values[:])}"
+        )
+        raise
+
     for codeword, mapped_df in mapped_dfs.items():
-        one_hot_property_name = f"{property_name}={codeword}"
+        # make a sensible but non-redundant property name
+        one_hot_property_name = (
+            codeword if codeword.lower().startswith(f"{property_name}=".lower())
+            else f"{property_name}={codeword}"
+        )
         mapped_df.columns = pandas.MultiIndex.from_product(
             [df.columns.tolist(), [one_hot_property_name]] if is_format_property
             else [[None], [one_hot_property_name]],
@@ -650,7 +834,9 @@ def df_to_parquet(
         parquet_folder = output_path
     with warnings.catch_warnings():
         warnings.filterwarnings(action="ignore", category=FutureWarning)
+        print(f"writing parquet files to {parquet_folder}")
         df.to_parquet(parquet_folder, engine="pyarrow", compression=compression_algorithm)
+        os.system(f"ls -alh {parquet_folder}")
 
     # restore the old columns
     df.columns = old_columns
@@ -683,7 +869,7 @@ def archive_to_tar(
                 continue  # only need to archive files
             tar_out.add(file_to_archive, arcname=os.path.relpath(file_to_archive, tar_root_folder))
             if remove_files:
-                folder_to_archive.unlink()
+                file_to_archive.unlink()
     if remove_files:
         shutil.rmtree(folder_to_archive)
     return tar_file
@@ -702,7 +888,6 @@ def parquet_to_df(
         input_path = extract_tar_to_folder(
             input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
         )
-        print(f"extracted tarfile to {input_path}")
     with warnings.catch_warnings():
         df = dask.dataframe.read_parquet(
             str(input_path), engine="pyarrow", index=Keys.row, calculate_divisions=True,
@@ -798,7 +983,6 @@ def get_parquet_file_columns(
     if input_path.suffix == ".tar":
         input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
                                            remove_input_tar=remove_input_tar)
-        print(f"extracted tarfile to {input_path}")
     pq_file = next(input_path.glob("*.parquet"))
     schema = pyarrow.parquet.read_schema(pq_file)
     return schema.names
@@ -812,7 +996,6 @@ def get_parquet_file_num_rows(
     if input_path.suffix == ".tar":
         input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
                                            remove_input_tar=remove_input_tar)
-        print(f"extracted tarfile to {input_path}")
 
     @dask.delayed
     def _get_nrows(_pq_file: Path) -> int:

@@ -2,13 +2,14 @@
 import io
 import os
 import sys
+from pathlib import Path
 import ast
 import types
 import warnings
 from enum import Enum
 from types import MappingProxyType
-from typing import Text, Union, Tuple, Mapping, Optional, Any, Dict, Callable, Sequence, List, Collection, ValuesView, \
-    Iterator, Set, Iterable, TypeVar
+from typing import Text, Union, Tuple, Mapping, Optional, Any, Dict, Callable, Sequence, List, \
+    Collection, ValuesView, Iterator, Set, Iterable, TypeVar
 import numpy
 import pandas
 import pandas.core.dtypes.base
@@ -27,7 +28,8 @@ VcfEncodingMapper = Mapping[str, EncodedVcfField]
 VariantPropertiesSource = Union[pysam.VariantRecord, pysam.libcbcf.VariantRecordInfo]
 VcfPropSpecifier = Optional[Union[Dict[str, str], Sequence[str]]]
 VariantPropertyExtractor = Callable[[pysam.VariantRecord], Optional[EncodedVcfField]]
-GenotypePropertyExtractor = Callable[[pysam.libcbcf.VariantRecordSample], Optional[EncodedVcfField]]
+GenotypePropertyExtractor = Callable[[pysam.libcbcf.VariantRecordSample],
+                                     Optional[EncodedVcfField]]
 Genotype = Optional[Tuple[Optional[int], ...]]
 
 
@@ -54,16 +56,19 @@ class ErrorAction(Enum):
         if self == ErrorAction.Warn:
             warnings.warn(message, stacklevel=1)
         elif self == ErrorAction.RaiseException:
-            # remove last frame from traceback so that the exception points to the actual problem, and not this
-            # wrapper
+            # remove last frame from traceback so that the exception points to the actual problem,
+            # and not this wrapper
             # noinspection PyUnresolvedReferences,PyProtectedMember
             back_frame = sys._getframe(1)
-            back_traceback = types.TracebackType(tb_next=None, tb_frame=back_frame, tb_lasti=back_frame.f_lasti,
-                                                 tb_lineno=back_frame.f_lineno)
+            back_traceback = types.TracebackType(
+                tb_next=None, tb_frame=back_frame, tb_lasti=back_frame.f_lasti,
+                tb_lineno=back_frame.f_lineno
+            )
             raise ValueError(message).with_traceback(back_traceback)
 
 
-class VcfKeys:  # note: for convenience we use .lower() before processing to make all fields lower-case
+class VcfKeys:
+    """ note: for convenience we use .lower() before processing to make all fields lower-case """
     id = "id"
     chrom = "chrom"
     pos = "pos"
@@ -162,21 +167,24 @@ class Default:
     float_type = numpy.float32
     missing_value = "MISSING"
     location_vcf_columns = MappingProxyType({
-        VcfKeys.id: Keys.id, VcfKeys.chrom: Keys.contig, VcfKeys.pos: Keys.begin, VcfKeys.stop: Keys.end
+        VcfKeys.id: Keys.id, VcfKeys.chrom: Keys.contig, VcfKeys.pos: Keys.begin,
+        VcfKeys.stop: Keys.end
     })
     basic_vcf_columns = MappingProxyType({
         **location_vcf_columns,
-        **{VcfKeys.qual: Keys.qual, VcfKeys.ref: Keys.ref, VcfKeys.alts: Keys.alts, VcfKeys.filter: Keys.filter}
+        **{VcfKeys.qual: Keys.qual, VcfKeys.ref: Keys.ref, VcfKeys.alts: Keys.alts,
+           VcfKeys.filter: Keys.filter}
     })
     load_bed_columns = MappingProxyType({
-        BedKeys.chrom: Keys.contig, BedKeys.chrom_start: Keys.begin, BedKeys.chrom_end: Keys.end, BedKeys.name: Keys.id,
-        BedKeys.other_chrom: Keys.other_contig, BedKeys.other_start: Keys.other_begin,
-        BedKeys.other_end: Keys.other_end
+        BedKeys.chrom: Keys.contig, BedKeys.chrom_start: Keys.begin, BedKeys.chrom_end: Keys.end,
+        BedKeys.name: Keys.id, BedKeys.other_chrom: Keys.other_contig,
+        BedKeys.other_start: Keys.other_begin, BedKeys.other_end: Keys.other_end
     })
     load_vapor_columns = MappingProxyType({
-        VaporKeys.chr: Keys.contig, VaporKeys.pos: Keys.begin, VaporKeys.end: Keys.end, VaporKeys.svtype: Keys.svtype,
-        VaporKeys.svid: Keys.id, VaporKeys.qs: Keys.vapor_qs, VaporKeys.gs: Keys.vapor_gs, VaporKeys.gt: Keys.gt,
-        VaporKeys.gq: Keys.gq, VaporKeys.read_scores: Keys.vapor_read_scores
+        VaporKeys.chr: Keys.contig, VaporKeys.pos: Keys.begin, VaporKeys.end: Keys.end,
+        VaporKeys.svtype: Keys.svtype, VaporKeys.svid: Keys.id, VaporKeys.qs: Keys.vapor_qs,
+        VaporKeys.gs: Keys.vapor_gs, VaporKeys.gt: Keys.gt, VaporKeys.gq: Keys.gq,
+        VaporKeys.read_scores: Keys.vapor_read_scores
     })
     save_bed_columns = MappingProxyType(
         {val: key for key, val in load_bed_columns.items()}
@@ -193,29 +201,39 @@ class Default:
     missing_properties_action = ErrorAction.RaiseException
     header_start = '#'  # most files use this as their header indicator
     log_progress = True
-    location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
-    use_copy_number = False
-    use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
+    location_columns = frozenset(
+        {Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end}
+    )
+    string_object_columns = frozenset({Keys.id})
     column_levels = (Keys.sample_id, Keys.property)
+    use_copy_number = False
+    # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present:
+    use_cn = False
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
     return vcf_number > 1 if isinstance(vcf_number, int) else True
 
 
-def _get_genotype_extractor(vcf_prop_name: str, header: pysam.VariantHeader) -> GenotypePropertyExtractor:
+def _get_genotype_extractor(
+        vcf_prop_name: str, header: pysam.VariantHeader
+) -> GenotypePropertyExtractor:
     header_field = header.formats.get(vcf_prop_name)
     field_type, number = header_field.type, header_field.number
     if field_type == VcfFieldTypes.string or _number_more_than_1(number):
         encode_dict = CategoryPropertyCollator.get_encode_dict(vcf_prop_name)
 
-        def extractor(genotype_record: pysam.libcbcf.VariantRecordSample) -> Optional[EncodedVcfField]:
+        def extractor(
+                genotype_record: pysam.libcbcf.VariantRecordSample
+        ) -> Optional[EncodedVcfField]:
             return CategoryPropertyCollator.encode(
                 genotype_record.get(vcf_prop_name, None),
                 encode_dict
             )
     else:
-        def extractor(genotype_record: pysam.libcbcf.VariantRecordSample) -> Optional[EncodedVcfField]:
+        def extractor(
+                genotype_record: pysam.libcbcf.VariantRecordSample
+        ) -> Optional[EncodedVcfField]:
             return genotype_record.get(vcf_prop_name, None)
     return extractor
 
@@ -244,16 +262,19 @@ def _get_variant_extractor(
 
         def extractor(variant_record: pysam.VariantRecord) -> Optional[EncodedVcfField]:
             filters = tuple(variant_record.filter)
-            return CategoryPropertyCollator.encode(filters if filters else missing_value, encode_dict)
+            return CategoryPropertyCollator.encode(
+                filters if filters else missing_value, encode_dict
+            )
     else:
         # get property directly from record. These are fields defined in the vcf spec
         if vcf_prop_name in {VcfKeys.pos, VcfKeys.stop, VcfKeys.rlen}:
             field_type = VcfFieldTypes.integer
         elif vcf_prop_name in {VcfKeys.qual}:
             field_type = VcfFieldTypes.float
-        elif vcf_prop_name in {VcfKeys.id, VcfKeys.chrom, Keys.contig, VcfKeys.alts, VcfKeys.alleles, VcfKeys.ref}:
-            # note: pysam allows querying chrom as contig, so check for both here in case user overrides default
-            # properties
+        elif vcf_prop_name in {VcfKeys.id, VcfKeys.chrom, Keys.contig, VcfKeys.alts,
+                               VcfKeys.alleles, VcfKeys.ref}:
+            # note: pysam allows querying chrom as contig, so check for both here in case user
+            # overrides default properties
             field_type = VcfFieldTypes.string
         else:
             raise ValueError(f"Unknown vcf property '{vcf_prop_name}'")
@@ -289,7 +310,9 @@ class VcfPropertyCollator:
         return self.column_name[0]
 
     def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
-        raise NotImplementedError("class derived from VcfPropertyCollator should implement .dtype()")
+        raise NotImplementedError(
+            "class derived from VcfPropertyCollator should implement .dtype()"
+        )
 
     def get_pandas_series(self, values: Sequence[EncodedVcfField]) -> pandas.Series:
         try:
@@ -315,9 +338,10 @@ class VcfPropertyCollator:
                 field_type, number = VcfFieldTypes.integer, 1
             elif vcf_prop_name in {VcfKeys.qual}:
                 field_type, number = VcfFieldTypes.float, 1
-            elif vcf_prop_name in {VcfKeys.id, VcfKeys.chrom, Keys.contig, VcfKeys.alts, VcfKeys.alleles, VcfKeys.ref}:
-                # note: pysam allows querying chrom as contig, so check for both here in case user overrides default
-                # properties
+            elif vcf_prop_name in {VcfKeys.id, VcfKeys.chrom, Keys.contig, VcfKeys.alts,
+                                   VcfKeys.alleles, VcfKeys.ref}:
+                # note: pysam allows querying chrom as contig, so check for both here in case user
+                # overrides default properties
                 field_type, number = VcfFieldTypes.string, -1
             else:
                 raise ValueError(f"Unknown vcf property '{vcf_prop_name}'")
@@ -334,17 +358,24 @@ class VcfPropertyCollator:
             cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int,
             ordered: bool = Default.category_prop_getter_ordered
     ) -> "VcfPropertyCollator":
-        field_type, number = VcfPropertyCollator.get_field_type_and_number(vcf_prop_name=vcf_prop_name, header=header)
+        field_type, number = VcfPropertyCollator.get_field_type_and_number(
+            vcf_prop_name=vcf_prop_name, header=header
+        )
 
         if field_type == VcfFieldTypes.integer:
             if number == 1:
-                return IntPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name, int_type=int_type)
+                return IntPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
+                                           int_type=int_type)
         if field_type == VcfFieldTypes.float:
             if number == 1:
-                return FloatPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
-                                             float_type=float_type, cast_whole_nums_to_int=cast_whole_nums_to_int)
-        return CategoryPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
-                                        missing_value=missing_value, ordered=ordered)
+                return FloatPropertyCollator(
+                    vcf_prop_name=vcf_prop_name, column_name=column_name, float_type=float_type,
+                    cast_whole_nums_to_int=cast_whole_nums_to_int
+                )
+        return CategoryPropertyCollator(
+            vcf_prop_name=vcf_prop_name, column_name=column_name, missing_value=missing_value,
+            ordered=ordered
+        )
 
 
 class CategoryPropertyCollator(VcfPropertyCollator):
@@ -353,8 +384,13 @@ class CategoryPropertyCollator(VcfPropertyCollator):
     missing_value: Any
     ordered: bool
 
-    def __init__(self, vcf_prop_name: str, column_name: Tuple[Optional[Text], Text],
-                 missing_value: Any = Default.missing_value, ordered: bool = Default.category_prop_getter_ordered):
+    def __init__(
+            self,
+            vcf_prop_name: str,
+            column_name: Tuple[Optional[Text], Text],
+            missing_value: Any = Default.missing_value,
+            ordered: bool = Default.category_prop_getter_ordered
+    ):
         super().__init__(vcf_prop_name=vcf_prop_name, column_name=column_name)
         # create global encode dict (to keep common encoding in case later another VCF is read in)
         self.encode_dict = CategoryPropertyCollator.get_encode_dict(self.vcf_prop_name)
@@ -381,46 +417,58 @@ class CategoryPropertyCollator(VcfPropertyCollator):
 
     @property
     def categories(self) -> List[Any]:
+        """ Return categories in order of 1st appearance """
         unique_values = [None] * len(self.encode_dict)
         for unique_value, code in self.encode_dict.items():
             unique_values[code] = self.missing_value if unique_value is None else unique_value
         return unique_values
 
     @staticmethod
-    def _is_compressable(num_categories: int, num_values: int) -> bool:
+    def _is_compressible(num_categories: int, num_values: int) -> bool:
         return num_categories < num_values // 2
 
     def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
         categories = self.categories
-        if CategoryPropertyCollator._is_compressable(len(categories), len(values)):
-            # this data is compressable, use categorical.
-            return pandas.CategoricalDtype(categories=self.categories, ordered=self.ordered)
-        else:
+        if (
+                self.table_prop_name in Default.string_object_columns or
+                not CategoryPropertyCollator._is_compressible(len(categories), len(values))
+        ):
+            # this data is not compressible, use an object
             return numpy.dtype("object")
+        else:
+            # this data is compressible, use categorical.
+            return pandas.CategoricalDtype(categories=self.categories, ordered=self.ordered)
 
     def get_pandas_series(self, values: Sequence[EncodedVcfField]) -> pandas.Series:
         try:
             categories = self.categories
-            if CategoryPropertyCollator._is_compressable(len(categories), len(values)):
-                # this data is compressable, use categorical
+            if (
+                    self.table_prop_name in Default.string_object_columns or
+                    not CategoryPropertyCollator._is_compressible(len(categories), len(values))
+            ):
+                # this data is not compressible, use an object
+                return pandas.Series(
+                    [categories[value] for value in values], name=self.column_name, dtype="object"
+                )
+            else:
+                # this data is compressible, use categorical
                 try:
                     return pandas.Series(
-                        pandas.Categorical.from_codes(values, categories=categories, ordered=self.ordered),
+                        pandas.Categorical.from_codes(
+                            values, categories=categories, ordered=self.ordered
+                        ),
                         name=self.column_name
                     )
                 except Exception as exception:
                     common.add_exception_context(
-                        exception, f"Error compressing {len(values)} values into categories: {categories}"
+                        exception,
+                        f"Error compressing {len(values)} values into categories: {categories}"
                     )
                     raise
-            else:
-                # expected a categorical, but it's better to be just an object series
-                return pandas.Series(
-                    [categories[value] for value in values], name=self.column_name, dtype="object"
-                )
         except Exception as err:
-            common.add_exception_context(err,
-                                         f"making series for sample {self.sample_id}, property {self.table_prop_name}")
+            common.add_exception_context(
+                err, f"making series for sample {self.sample_id}, property {self.table_prop_name}"
+            )
             raise
 
 
@@ -435,7 +483,9 @@ class IntPropertyCollator(VcfPropertyCollator):
         self.int_type = int_type
 
     @staticmethod
-    def is_integer_values(values: Union[Sequence[EncodedVcfField], numpy.ndarray, pandas.Series]) -> bool:
+    def is_integer_values(
+            values: Union[Sequence[EncodedVcfField], numpy.ndarray, pandas.Series]
+    ) -> bool:
         return all(value is None or pandas.api.types.is_integer(value) for value in values)
 
     @staticmethod
@@ -466,8 +516,10 @@ class IntPropertyCollator(VcfPropertyCollator):
             location_columns: Collection[str] = Default.location_columns
     ) -> dtype:
         try:
-            _has_missing = any(pandas.isna(value) for value in values) if isinstance(values, Tuple) \
+            _has_missing = (
+                any(pandas.isna(value) for value in values) if isinstance(values, Tuple)
                 else pandas.isna(values).any()
+            )
         except AttributeError as attribute_error:
             common.add_exception_context(attribute_error, f"values={values}")
             raise
@@ -480,8 +532,8 @@ class IntPropertyCollator(VcfPropertyCollator):
             max_val = max(values, default=0)
 
         if _is_location_column(prop_name, location_columns=location_columns):
-            # ensure that begin and end can handle addition / subtraction with typical-sized other values to avoid
-            # potential overflows in downstream computations
+            # ensure that begin and end can handle addition / subtraction with typical-sized other
+            # values to avoid potential overflows in downstream computations
             min_val = min(min_val, numpy.iinfo(int_type).min)
             max_val = max(max_val, numpy.iinfo(int_type).max)
 
@@ -494,15 +546,20 @@ class IntPropertyCollator(VcfPropertyCollator):
         try:
             return pandas.Series(values, dtype=self.get_dtype(values), name=self.column_name)
         except TypeError:
-            # Sometimes variants have multiple values for an "integer" property (e.g. svlen). Unfortunately, in *MANY*
-            # places in the codebase, we must make decisions about svlen, etc as though they were simple integers. So if
-            # this error occurs, try ONE TIME to coerce all values to simple integers and re-calculate min/max values
-            values = [value if isinstance(value, (int, NoneType)) else max(value, key=abs) for value in values]
+            # Sometimes variants have multiple values for an "integer" property (e.g. svlen).
+            # Unfortunately, in *MANY* places in the codebase, we must make decisions about svlen,
+            # etc as though they were simple integers. So if this error occurs, try ONE TIME to
+            # coerce all values to simple integers and re-calculate min/max values
+            values = [
+                value if isinstance(value, (int, NoneType))
+                else max(value, key=abs) for value in values
+            ]
             try:
                 return pandas.Series(values, dtype=self.get_dtype(values), name=self.column_name)
             except Exception as err:
                 common.add_exception_context(
-                    err, f"making series for sample {self.sample_id}, property {self.table_prop_name}"
+                    err,
+                    f"making series for sample {self.sample_id}, property {self.table_prop_name}"
                 )
                 raise
 
@@ -512,8 +569,13 @@ class FloatPropertyCollator(VcfPropertyCollator):
     float_type: type
     cast_whole_nums_to_int: bool
 
-    def __init__(self, vcf_prop_name: str, column_name: Tuple[Optional[Text], Text],
-                 float_type: type = Default.float_type, cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int):
+    def __init__(
+            self,
+            vcf_prop_name:
+            str, column_name: Tuple[Optional[Text], Text],
+            float_type: type = Default.float_type,
+            cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int
+    ):
         # ignore missing_value: for ints, we need to use NA
         super().__init__(vcf_prop_name=vcf_prop_name, column_name=column_name)
         self.float_type = float_type
@@ -531,13 +593,17 @@ class FloatPropertyCollator(VcfPropertyCollator):
             int_type: type = Default.int_type,
             float_type: type = Default.float_type
     ) -> dtype:
-        if IntPropertyCollator.is_integer_values(values) or \
-                (cast_whole_nums_to_int and FloatPropertyCollator._float_values_can_be_cast_to_int(values)):
+        if IntPropertyCollator.is_integer_values(values) or (
+                cast_whole_nums_to_int and
+                FloatPropertyCollator._float_values_can_be_cast_to_int(values)
+        ):
             return IntPropertyCollator.min_int_dtype(values, prop_name=prop_name, int_type=int_type)
         else:
             return numpy.dtype(float_type)
 
-    def get_dtype(self, values: Sequence[EncodedVcfField], int_type: type = Default.int_type) -> dtype:
+    def get_dtype(
+            self, values: Sequence[EncodedVcfField], int_type: type = Default.int_type
+    ) -> dtype:
         return FloatPropertyCollator.min_numeric_dtype(
             values, self.table_prop_name, cast_whole_nums_to_int=self.cast_whole_nums_to_int,
             float_type=self.float_type, int_type=int_type
@@ -545,7 +611,10 @@ class FloatPropertyCollator(VcfPropertyCollator):
 
     def get_pandas_series(self, values: Sequence[EncodedVcfField]) -> pandas.Series:
         try:
-            if self.cast_whole_nums_to_int and FloatPropertyCollator._float_values_can_be_cast_to_int(values):
+            if (
+                self.cast_whole_nums_to_int and
+                FloatPropertyCollator._float_values_can_be_cast_to_int(values)
+            ):
                 return pandas.Series(
                     values,
                     dtype=IntPropertyCollator.min_int_dtype(values, prop_name=self.table_prop_name,
@@ -568,9 +637,11 @@ def _is_location_column(
 
 
 def _literal_eval(val: Any) -> Any:
-    return val if isinstance(val, (float, int)) \
-        else val if (isinstance(val, str) and not (val.startswith('(') and val.endswith(')'))) \
+    return (
+        val if isinstance(val, (float, int))
+        else val if (isinstance(val, str) and not (val.startswith('(') and val.endswith(')')))
         else ast.literal_eval(val)
+    )
 
 
 PandasType = TypeVar("PandasType", pandas.Series, pandas.DataFrame)
@@ -594,20 +665,21 @@ def compress_types(
         float_type: type = Default.float_type,
         missing_value: Any = Default.missing_value,
         cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int,
-        literal_eval_columns: Optional[Set[str]] = None
+        literal_eval_columns: Optional[Set[str]] = None,
+        category_prop_getter_ordered: bool = Default.category_prop_getter_ordered
 ) -> Union[pandas.DataFrame, pandas.Series]:
     f"""
     Decrease memory usage of pandas object by
         -reducing int and float types
-        -compressing objects to categoricals. Note: NaN pandas can't use NaN as a category (NaNs can be in categorical
-        series, but they don't show up in .cat.categories), so object Series have NaNs changed to missing_value (unless
-        missing_value is set to NaN)
+        -compressing objects to categoricals. Note: NaN pandas can't use NaN as a category (NaNs
+         can be in categorical series, but they don't show up in .cat.categories), so object Series
+         have NaNs changed to missing_value (unless missing_value is set to NaN)
     Args:
         pandas_obj: Union[pandas.DataFrame, pandas.Series]
             pandas object with data to compress
         int_type: numpy field_type (Default = {Default.int_type})
-            Minimum field_type for "begin" and "end". Other int columns are compressed into smallest viable integer
-            field_type.
+            Minimum field_type for "begin" and "end". Other int columns are compressed into
+            smallest viable integer field_type.
         float_type: numpy field_type (Default = {Default.float_type})
             Type for any float columns
         missing_value: str (Default = {Default.missing_value})
@@ -615,16 +687,22 @@ def compress_types(
         cast_whole_nums_to_int: bool (Default={Default.cast_whole_nums_to_int})
             If True and the values are float but are all whole numbers, covert to ints
         literal_eval_columns: Optional[Set[str]] (default=None)
-            Columns that need to be "evaluated" to convert from string to some more complex type. A typical example
-            would be "alts", which is frequently a tuple. If None, then attempt to convert every object column.
+            Columns that need to be "evaluated" to convert from string to some more complex type.
+            A typical example would be "alts", which is frequently a tuple. If None, then attempt
+            to convert every object column.
+        category_prop_getter_ordered: bool (default={Default.category_prop_getter_ordered})
+            If True, create categorical properties as ordered CategoricalDTypes. Don't mess with
+            this unless you're 100% sure you know what you're doing.
     Returns:
         compressed_pandas_obj: Union[pandas.DataFrame, pandas.Series]
             pandas_obj with values compressed
     """
     if isinstance(pandas_obj, pandas.DataFrame):
         for col in pandas_obj.columns:
-            pandas_obj[col] = compress_types(pandas_obj[col], int_type=int_type, float_type=float_type,
-                                             missing_value=missing_value, literal_eval_columns=literal_eval_columns)
+            pandas_obj[col] = compress_types(
+                pandas_obj[col], int_type=int_type, float_type=float_type,
+                missing_value=missing_value, literal_eval_columns=literal_eval_columns
+            )
         return pandas_obj
 
     if pandas_obj.dtype == object:
@@ -632,28 +710,45 @@ def compress_types(
             try:
                 pandas_obj = pandas_obj.map(_literal_eval, na_action="ignore")
             except ValueError as value_error:
-                common.add_exception_context(value_error, f"Error performing literal_eval on {pandas_obj.name}")
+                common.add_exception_context(
+                    value_error, f"Error performing literal_eval on {pandas_obj.name}"
+                )
                 raise
-        return pandas_obj.fillna(missing_value).astype("category") if pandas_obj.nunique() < len(pandas_obj) // 2 \
-            else pandas_obj.fillna(missing_value)
+        pandas_obj = pandas_obj.fillna(missing_value)
+        return (
+            pandas_obj.astype(
+                pandas.CategoricalDtype(categories=pandas_obj.unique(),
+                                        ordered=category_prop_getter_ordered)
+            )
+            if pandas_obj.nunique() < len(pandas_obj) // 2
+            else pandas_obj
+        )
     else:
         numeric_dtype = FloatPropertyCollator.min_numeric_dtype(
-            pandas_obj, prop_name=str(pandas_obj.name), cast_whole_nums_to_int=cast_whole_nums_to_int,
+            pandas_obj, prop_name=f"{pandas_obj.name}",
+            cast_whole_nums_to_int=cast_whole_nums_to_int,
             int_type=int_type, float_type=float_type
         )
+
         # don't up-cast to larger type than is originally used
-        return pandas_obj.astype(numeric_dtype) if numeric_dtype.type(0).nbytes <= pandas_obj.dtype.type(0).nbytes \
+        return (
+            pandas_obj.astype(numeric_dtype)
+            if numeric_dtype.type(0).nbytes <= pandas_obj.dtype.type(0).nbytes
             else pandas_obj
+        )
 
 
 def shift_origin(
-        df: pandas.DataFrame, current_origin: int, desired_origin: int, copy_on_change: bool = False
+        df: pandas.DataFrame,
+        current_origin: int,
+        desired_origin: int,
+        copy_on_change: bool = False
 ) -> pandas.DataFrame:
     """
     Utility function to alter intervals dataframe between BED and VCF formats
     """
-    # note, only shift "begin" because VCF and BED format have different origin but different open/closed structure, so
-    # "end" doesn't change
+    # note, only shift "begin" because VCF and BED format have different origin but different
+    # open/closed structure, so "end" doesn't change
     if current_origin == desired_origin or Keys.begin not in df.columns:
         return df
     if copy_on_change:
@@ -751,7 +846,7 @@ def _tuple_to_str(val: Any) -> Any:
 
 
 def pandas_to_tsv(
-        data_file: Text,
+        data_file: Path | str,
         df: pandas.DataFrame,
         columns: Union[Sequence[str], Mapping[str, str], None] = None,
         first_columns: Sequence[str] = (),
@@ -767,8 +862,8 @@ def pandas_to_tsv(
         -Rename columns from internal schema to safe-file schema
         -Shift genomic coordinates from internal origin to save-file origin if different
     Args:
-        data_file: Text
-            Full path to save file
+        data_file: Path or str
+            Path to save file
         df: pandas.DataFrame
             Table of data.
         columns: Mapping[str, str], Sequence[str], or None (Default = None)
@@ -791,15 +886,24 @@ def pandas_to_tsv(
             Encoding to use when writing strings.
     """
     if isinstance(df.columns, pandas.MultiIndex):
-        raise ValueError("Unable to output multi-index columns as TSV. Manually flatten the column labels first.")
+        raise ValueError(
+            "Unable to output multi-index columns as TSV."
+            " Manually flatten the column labels first."
+        )
     df = _remap_columns(
-        shift_origin(df, current_origin=genome_origin, desired_origin=tsv_origin, copy_on_change=True),
+        shift_origin(
+            df, current_origin=genome_origin, desired_origin=tsv_origin, copy_on_change=True
+        ),
         columns=columns, first_columns=first_columns, copy_on_change=True
     ).applymap(_tuple_to_str)
     with pysam.BGZFile(data_file, "wb") as f_out:
         if write_header and header_start:
             f_out.write(header_start.encode(encoding))
-        f_out.write(df.to_csv(sep='\t', index=write_index, header=write_header, na_rep=numpy.nan).encode(encoding))
+        f_out.write(
+            df.to_csv(
+                sep='\t', index=write_index, header=write_header, na_rep=numpy.nan
+            ).encode(encoding)
+        )
 
 
 def pandas_to_bed(
@@ -873,31 +977,35 @@ def tsv_to_pandas(
         *args, **kwargs
 ) -> pandas.DataFrame:
     f"""
-    Load dataframe from generic tab-delimited-gzipped file. If specifically loading from a .bed file, use bed_to_pandas
-    which calls this function with appropriate arguments.
+    Load dataframe from generic tab-delimited-gzipped file. If specifically loading from a .bed
+    file, use bed_to_pandas which calls this function with appropriate arguments.
        - Treat lines starting with {header_start} as comments and ignore.
        - Rename columns from file schema to desired schema
-       - Shift genomic coordinates from file origin ({tsv_origin}) to desired origin ({genome_origin})
+       - Shift genomic coordinates from file origin ({tsv_origin}) to desired origin
+         ({genome_origin})
        - Attempt to compress data optimally
            - Use {float_type} for float columns
            - Use {int_type} for genomic coordinate columns
            - Use smallest possible int for all other int columns
-           - Use categoricals for object columns provided the number of categories is < 1/2 the number of rows
+           - Use categoricals for object columns provided the number of categories is < 1/2 the
+             number of rows
     Args:
         data_file: Text
             Full path to file
         columns: Mapping[str, str], Sequence[str], or None (Default = {Default.load_bed_columns})
-            If a Mapping: when loading from disk, rename any column names that are keys in this mapping.
+            If a Mapping: when loading from disk, rename any column names that are keys in this
+                          mapping.
             If a Sequence: when loading from disk, set the column names to this sequence
         int_type: numpy field_type (Default = {Default.int_type})
-            Minimum field_type for "begin" and "end". Other int columns are compressed into smallest viable integer
-            field_type.
+            Minimum field_type for "begin" and "end". Other int columns are compressed into
+            smallest viable integer field_type.
         float_type: numpy field_type (Default = {Default.float_type})
             Type for any float columns
         missing_value: str (Default = {Default.missing_value})
             Value to replace NaNs with in object columns
         genome_origin: int (Default = {Default.genome_origin})
-            Desired indexing origin for DataFrame. bed files use 0-indexing, so shift values in DataFrame if needed.
+            Desired indexing origin for DataFrame. bed files use 0-indexing, so shift values in
+            DataFrame if needed.
         tsv_origin: int (Default = {Default.genome_origin})
             Indexing origin for bed  file.
         sort_intervals: bool (Default=False)
@@ -906,15 +1014,16 @@ def tsv_to_pandas(
             Assume header starts with this string.
             If set to empty string, assume first line is header (if require_header is True)
         require_header: bool (Default=True)
-            If set to True, throw error if a header (starting with header_start) is not present in the file.
+            If set to True, throw error if a header (starting with header_start) is not present in
+                            the file.
             If False, use columns (if provided) to create a header) or else just integers
         encoding: str (Default={Default.encoding})
             Encoding to use for file
         log_progress: bool (Default={Default.log_progress})
             Display file name and requested properties on loading file
         literal_eval_columns: Iterable[str] (default=())
-            Columns that need to be "evaluated" to convert from string to some more complex type. A typical example
-            would be "alts", which is frequently a tuple.
+            Columns that need to be "evaluated" to convert from string to some more complex type.
+            A typical example would be "alts", which is frequently a tuple.
         *args, **kwargs: passed to pandas.read_csv
     Returns:
         df: pandas.DataFrame
@@ -925,12 +1034,13 @@ def tsv_to_pandas(
             print(f"Loading {data_file} ...", flush=True, file=sys.stderr, end="")
         else:
             target_columns = columns.values() if isinstance(columns, Mapping) else columns
-            print(f"Reading {','.join(target_columns)} from {data_file} ...", flush=True, file=sys.stderr, end="")
+            print(f"Reading {','.join(target_columns)} from {data_file} ...", flush=True,
+                  file=sys.stderr, end="")
 
     if not os.path.isfile(data_file):
         raise ValueError(f"{data_file} does not exist")
-    # it is *VASTLY* faster to handle header manually, then load remaining file into buffer and call pandas.read_csv
-    # on the buffer than it is to load line-by-line with python code.
+    # it is *VASTLY* faster to handle header manually, then load remaining file into buffer and
+    # call pandas.read_csv on the buffer than it is to load line-by-line with python code.
     header_start = header_start.encode(encoding)
     buffer = io.StringIO()
     with pysam.BGZFile(data_file, "rb") as f_in:
@@ -938,7 +1048,10 @@ def tsv_to_pandas(
         if require_header:
             if header_start and file_start != header_start:
                 # require a header but one wasn't found
-                raise ValueError(f".bed ({data_file}) file does not start with {header_start.decode(encoding)} header")
+                raise ValueError(
+                    f".bed ({data_file}) file does not start with {header_start.decode(encoding)}"
+                    " header"
+                )
         else:
             # don't require a header in the file, create one
             if columns is None:
@@ -949,9 +1062,11 @@ def tsv_to_pandas(
                 buffer.write(first_line)  # put back first line, after the new header
             else:
                 # make header from columns
-                header = '\t'.join(columns if isinstance(columns, Sequence) else columns.keys()) + '\n'
+                header = \
+                    '\t'.join(columns if isinstance(columns, Sequence) else columns.keys()) + '\n'
                 buffer.write(header)  # insert header onto front of file
-                buffer.write(file_start.decode(encoding))  # put back file_start, after the new header
+                # put back file_start, after the new header:
+                buffer.write(file_start.decode(encoding))
 
         # now that header stuff is taken care of, read rest of file into buffer
         buffer.write(f_in.read().decode(encoding))
@@ -964,7 +1079,9 @@ def tsv_to_pandas(
     )
 
     df = shift_origin(
-        _remap_columns(df, columns=columns), current_origin=tsv_origin, desired_origin=genome_origin
+        _remap_columns(df, columns=columns),
+        current_origin=tsv_origin,
+        desired_origin=genome_origin
     )
     df = compress_types(df, int_type=int_type, float_type=float_type, missing_value=missing_value,
                         literal_eval_columns=literal_eval_columns)
@@ -1044,8 +1161,9 @@ def bed_to_pandas(
     """
 
     return tsv_to_pandas(
-        data_file=data_file, columns=columns, int_type=int, float_type=float_type, missing_value=missing_value,
-        genome_origin=genome_origin, tsv_origin=bed_origin, sort_intervals=sort_intervals, header_start=header_start,
+        data_file=data_file, columns=columns, int_type=int_type, float_type=float_type,
+        missing_value=missing_value, genome_origin=genome_origin, tsv_origin=bed_origin,
+        sort_intervals=sort_intervals, header_start=header_start,
         require_header=require_header, encoding=encoding, log_progress=log_progress,
         literal_eval_columns=literal_eval_columns, *args, **kwargs
     )
@@ -1068,7 +1186,10 @@ def is_autosome(contig: Text) -> bool:
 
 
 def get_is_autosome(variants: pandas.DataFrame) -> pandas.Series:
-    """ Get boolean Series specifying if each variant is in the autosome (standard diploid/non-sex chromosomes) """
+    """
+    Get boolean Series specifying if each variant is in the autosome (standard diploid/non-sex
+    chromosomes)
+    """
     return variants[
         (None, Keys.contig) if variants.columns.nlevels == 2 else Keys.contig
     ].map(is_autosome).astype(bool)
@@ -1124,13 +1245,16 @@ def sort_intervals_table(
         sorted_contigs = sorted(contigs, key=contig_sort_key)
         if not (intervals_df[Keys.contig].cat.ordered and contigs.equals(sorted_contigs)):
             # they're not ordered and in order, so swap them around and set to ordered
-            intervals_df[Keys.contig] = intervals_df[Keys.contig].cat.reorder_categories(sorted_contigs, ordered=True)
+            intervals_df[Keys.contig] = intervals_df[Keys.contig].cat.reorder_categories(
+                sorted_contigs, ordered=True
+            )
     else:
         # get a list of all the contigs, sorted in correct order (e.g. chr11 comes *after* chr3)
         contigs = sorted(intervals_df[Keys.contig].unique(), key=contig_sort_key)
         # make contig column categorical, with category codes in desired order
-        intervals_df[Keys.contig] = pandas.Categorical(intervals_df[Keys.contig].values, ordered=True,
-                                                       categories=contigs)
+        intervals_df[Keys.contig] = pandas.Categorical(
+            intervals_df[Keys.contig].values, ordered=True, categories=contigs
+        )
 
     # now sorting by contig will actually sort by category code, which is in the desired order
     # sort intervals_df by contig, then within contig, by begin and end
@@ -1365,8 +1489,8 @@ def vcf_to_pandas(
                 -If Warn, then raise a warning showing which properties are missing
                 -If RaiseException, then raise a ValueError
         category_prop_getter_ordered: bool (default={Default.category_prop_getter_ordered})
-            If True, create categorical properties as ordered CategoricalDTypes. Don't mess with this unless you're 100%
-            sure you know what you're doing.
+            If True, create categorical properties as ordered CategoricalDTypes. Don't mess with
+            this unless you're 100% sure you know what you're doing.
         log_progress: bool (default={Default.log_progress})
             If True, display a few lines to indicate how loading the VCF is proceeding.
         num_threads: int (default={common.num_logical_cpus})
@@ -1457,10 +1581,13 @@ def vcf_to_pandas(
         )
 
         variants = pandas.DataFrame(
-            {property_collator.column_name: property_collator.get_pandas_series(property_values)
-             for property_collator, property_values in zip(property_collators, zip(*encoded_rows_iter))}
-        ).rename_axis(columns=Default.column_levels)\
-            .sort_index(axis=1, level=Keys.sample_id)
+            {
+                property_collator.column_name: property_collator.get_pandas_series(property_values)
+                for property_collator, property_values in zip(
+                    property_collators, zip(*encoded_rows_iter)
+                )
+            }
+        ).rename_axis(columns=Default.column_levels).sort_index(axis=1, level=Keys.sample_id)
 
     if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
         # all IDs are unique, use ID as the index
@@ -1475,7 +1602,8 @@ def vcf_to_pandas(
     if drop_trivial_multi_index:
         drop_trivial_columns_multi_index(variants)
 
-    variants = shift_origin(variants, desired_origin=genome_origin, current_origin=vcf_origin, copy_on_change=False)
+    variants = shift_origin(variants, desired_origin=genome_origin, current_origin=vcf_origin,
+                            copy_on_change=False)
 
     # add custom field listing the samples
     variants.attrs[Keys.sample_ids] = samples

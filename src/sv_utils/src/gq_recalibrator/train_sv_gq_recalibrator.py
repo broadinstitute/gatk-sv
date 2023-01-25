@@ -82,9 +82,10 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--properties-scaling-json", "-j", type=str, required=True,
                         help="full path to JSON with baseline and scales needed for training / "
                              "filtering properties")
-    parser.add_argument("--truth-json", type=str, required=True,
-                        help="full path to JSON with info about which GTs are good for each variant"
-                             " x sample")
+    parser.add_argument(
+        "--truth-json", type=str, required=True,
+        help="full path to JSON with info about which GTs are good for each variant x sample"
+    )
     parser.add_argument("--output-model", "-o", type=str, required=True,
                         help="path to output file with trained model")
     parser.add_argument("--input-model", "-i", type=str, required=False,
@@ -102,17 +103,24 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                         help="if True, shuffle order of variants while training")
     parser.add_argument("--random-seed", type=int, default=Default.random_state,
                         help="initial random seed")
-    parser.add_argument("--excluded-properties", type=str, default=','.join(Default.excluded_properties),
-                        help="comma-separated list of properties to not use in tensor")
+    parser.add_argument(
+        "--excluded-properties", type=str, default=','.join(Default.excluded_properties),
+        help="comma-separated list of properties to not use in tensor"
+    )
     parser.add_argument(
         "--torch-device", type=str, default=Default.torch_device,
         choices=[Keys.cpu, Keys.cuda, Keys.mps], help="Device on which to perform training"
     )
-    parser.add_argument("--scale-bool-properties", type=common.argparse_bool, default=Default.scale_bool_properties,
-                        help="If true, z-score bool variables too. If false, leave as 0.0 or 1.0. Scaling can result in"
-                             "large values if the bool variable is mostly true or mostly false.")
-    parser.add_argument("--num-processes", type=int, default=Default.num_processes,
-                        help="Number of cpu processes to use. One for training, the rest for loading data.")
+    parser.add_argument(
+        "--scale-bool-properties", type=common.argparse_bool,
+        default=Default.scale_bool_properties,
+        help="If true, z-score bool variables too. If false, leave as 0.0 or 1.0. Scaling can "
+             "result in large values if the bool variable is mostly true or mostly false."
+    )
+    parser.add_argument(
+        "--num-processes", type=int, default=Default.num_processes,
+        help="Number of cpu processes to use. One for training, the rest for loading data."
+    )
     return parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
 
 
