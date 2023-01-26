@@ -49,7 +49,7 @@ RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools._
 
 # pybedtools needs to be installed via pip because it doesn't like the updated python
 # hail's latest version is only available via pip or local build
-ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93"
+ARG PIP_PKGS="pybedtools==0.9.0 hail==0.2.93 more-itertools==9.0.0"
 RUN pip3 --no-cache-dir install $PIP_PKGS
 
 # clean unneeded stuff
@@ -71,7 +71,8 @@ ENV CONDA_ENV_NAME=$CONDA_ENV_NAME
 ARG BUILD_DEPS="make cmake g++ gcc gfortran \
                 libbz2-dev libblas-dev libicu-dev liblapack-dev liblzma-dev libpcre2-dev zlib1g-dev \
                 pkg-config libcurl4-openssl-dev libssl-dev libatlas-base-dev libssh2-1-dev libssh2-1 \
-                libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev"
+                libgit2-dev libfftw3-dev libjpeg8-dev libxml2-dev libfontconfig1-dev libharfbuzz-dev \
+                libfribidi-dev libfreetype6-dev libpng-dev libtiff5-dev libjpeg-dev"
 ARG RUN_DEPS="file bzip2 libssl3 libatlas3-base libssh2-1 libgit2-1.1 libfftw3-3 libjpeg8 libxml2"
 RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) && \
     printf " $NEW_PACKAGES" | fix_spaces.sh >> $APT_REQUIRED_PACKAGES

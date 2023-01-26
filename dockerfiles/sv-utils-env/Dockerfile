@@ -7,7 +7,7 @@ ARG CONDA_ENV_NAME="gatk-sv"
 FROM $PYTHON_VIRTUAL_ENV_IMAGE as python_virtual_env
 
 # install any build dependencies, plus ghostscript (needed for merging PDFs)
-ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget"
+ARG BUILD_DEPS="g++ make apt-transport-https ca-certificates wget zlib1g-dev"
 ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-install-recommends $BUILD_DEPS
