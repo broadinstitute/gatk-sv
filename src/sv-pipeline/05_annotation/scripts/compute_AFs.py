@@ -294,6 +294,8 @@ def main():
                         'sex-specific AFs).', default=None)
     parser.add_argument('--par', help='BED file of pseudoautosomal regions (used ' +
                         'for sex-specific AFs).', default=None)
+    parser.add_argument('--samples-list', help='List of samples to use for AF calculations',
+                        default=None)
     parser.add_argument(
         'fout', help='Output vcf. Also accepts "stdout" and "-".')
     args = parser.parse_args()
@@ -305,7 +307,10 @@ def main():
         vcf = pysam.VariantFile(args.vcf)
 
     # Get list of all samples in vcf
-    samples_list = list(vcf.header.samples)
+    if args.samples_list is None:
+        samples_list = list(vcf.header.samples)
+    else:
+        samples_list = [line.strip() for line in open(args.samples_list)]
 
     # Get lists of males and females
     parbt = pbt.BedTool('', from_string=True)
