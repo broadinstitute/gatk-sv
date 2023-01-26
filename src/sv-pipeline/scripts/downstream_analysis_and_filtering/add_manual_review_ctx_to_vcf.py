@@ -34,6 +34,13 @@ def parse_info(data: pd.DataFrame):
     return pd.concat([data, info_df], axis=1)
 
 
+def conv_type(s):
+    if isinstance(s, str) and s.lstrip("-+").isdigit():
+        return int(s)
+    else:
+        return s
+
+
 # removed type hints for backward compatibility with earlier python versions:
 # -> tuple[pysam.VariantRecord, int]
 def create_ctx_record(new_idx: int,
@@ -41,7 +48,8 @@ def create_ctx_record(new_idx: int,
                   fout: pysam.VariantFile,
                   ctx_number: int,
                   cohort_name: str,
-                  batch_name: str):
+                  batch_name: str,
+                  merge_record: pysam.VariantRecord=None):
     row = data.iloc[new_idx]
     contig = row["contig"]
     pos1 = row["pos"]
@@ -49,10 +57,11 @@ def create_ctx_record(new_idx: int,
     ref = row["ref"]
     alt = row["alt"]
     filter = row["filter"]
+    qual = 999
     info_cols = [colname for colname in data.columns if colname.startswith("info_")]
 
-    samples = {row['sample']: row['gt']}
-    info_sets = {info_col: {row[info_col]} for info_col in info_cols}
+    update_samples = {row['sample']: row['gt']}
+    info_sets = {info_col: {conv_type(row[info_col])} for info_col in info_cols}
 
     new_idx = new_idx + 1
     while new_idx < len(data.index) and \
@@ -62,24 +71,49 @@ def create_ctx_record(new_idx: int,
             data.iloc[new_idx]['info_CHR2'] == row['info_CHR2'] and \
             data.iloc[new_idx]['info_END'] == row['info_END'] and \
             data.iloc[new_idx]['info_CPX_TYPE'] == row['info_CPX_TYPE']:
-        samples[data.iloc[new_idx]['sample']] = data.iloc[new_idx]['gt']
+        update_samples[data.iloc[new_idx]['sample']] = data.iloc[new_idx]['gt']
+        for col in info_cols:
+            info_sets[col].add(conv_type(data.iloc[new_idx][col]))
         new_idx = new_idx + 1
+
+    if merge_record is not None:
+        for info in merge_record.info:
+            info_key = 'info_' + info
+            if info_key in info_sets:
+                if isinstance(merge_record.info[info], tuple):
+                    info_sets[info_key].update(merge_record.info[info])
+                else:
+                    info_sets[info_key].add(merge_record.info[info])
+            else:
+                info_sets[info_key] = {merge_record.info[info]}
 
     new_record = fout.new_record(contig=contig,
                                  start=pos1 - 1,
                                  id=id,
                                  stop=pos1 + 1,
+                                 qual=qual,
                                  alleles=(ref, alt),
                                  filter=filter)
 
     populate_info(info_sets, new_record)
     new_record.info['RESOLVED_POSTHOC'] = True
 
-    for sample in samples:
-        sample_data = samples[sample]
-        populate_ctx_gt(new_record, row, sample, sample_data)
+    ac = 0
+    for sample in new_record.samples:
+        if sample in update_samples:
+            sample_data = update_samples[sample]
+            populate_ctx_gt_from_raw(new_record, row, sample, sample_data)
+            ac = ac + 1
+        elif merge_record is not None:
+            if merge_record.samples[sample]['GT'] is not None:
+                for allele_idx in merge_record.samples[sample]['GT']:
+                    if allele_idx is not None and allele_idx == 1:
+                        ac = ac + 1
+            populate_ctx_gt_from_merge_record(new_record, sample, merge_record)
+        else:
+            populate_ctx_gt_for_non_carrier(new_record, sample)
 
-    new_record.info['AC'] = len(samples)
+    new_record.info['AC'] = ac
     return new_record, new_idx
 
 
@@ -102,9 +136,10 @@ def create_cnv_record(new_idx: int,
     ref = row["ref"]
     alt = row["alt"]
     filter = row["filter"]
+    qual = 999
     info_cols = [colname for colname in data.columns if colname.startswith("info_")]
 
-    samples = {row['sample']: row['gt']}
+    update_samples = {row['sample']: row['gt']}
     info_sets = {info_col: {row[info_col]} for info_col in info_cols}
     if 'info_ALGORITHMS' in info_sets:
         info_sets['info_ALGORITHMS'].add('manual_review')
@@ -118,7 +153,7 @@ def create_cnv_record(new_idx: int,
             data.iloc[new_idx]['info_SVTYPE'] == new_svtype and \
             data.iloc[new_idx]['info_END'] == row['info_END']:
         info_sets['info_MEMBERS'].add(data.iloc[new_idx]['info_MEMBERS'])
-        samples[data.iloc[new_idx]['sample']] = data.iloc[new_idx]['gt']
+        update_samples[data.iloc[new_idx]['sample']] = data.iloc[new_idx]['gt']
         new_idx = new_idx + 1
 
     new_record = fout.new_record(contig=contig,
@@ -126,16 +161,22 @@ def create_cnv_record(new_idx: int,
                                  id=id,
                                  stop=int(row['info_END']),
                                  alleles=(ref, alt),
-                                 filter=filter)
+                                 filter=filter,
+                                 qual=qual)
 
     populate_info(info_sets, new_record)
     new_record.info['RESOLVED_POSTHOC'] = True
 
-    for sample in samples:
-        sample_data = samples[sample]
-        populate_cnv_gt(new_record, row, sample, sample_data)
+    ac = 0
+    for sample in new_record.samples:
+        if sample in update_samples:
+            sample_data = update_samples[sample]
+            populate_cnv_gt(new_record, row, sample, sample_data)
+            ac = ac + sum(new_record.samples[sample]['GT'])
+        else:
+            populate_cnv_gt_for_non_carrier(new_record, sample)
 
-    new_record.info['AC'] = len(samples)
+    new_record.info['AC'] = ac
     return new_record, new_idx
 
 
@@ -145,17 +186,17 @@ def populate_info(info_sets, new_record):
         if new_info_key == 'END':
             continue
         if len(info_sets[info_key]) > 1:
-            new_record.info[new_info_key] = ",".join(info_sets[info_key])
+            new_record.info[new_info_key] = ",".join(map(str, info_sets[info_key]))
         else:
             elem = next(iter(info_sets[info_key]))
             if pd.isna(elem):
                 continue
-            if elem.lstrip("-+").isdigit():
+            if isinstance(elem, str) and elem.lstrip("-+").isdigit():
                 elem = int(elem)
             new_record.info[new_info_key] = elem
 
 
-def populate_ctx_gt(new_record, row, sample, sample_data):
+def populate_ctx_gt_from_raw(new_record, row, sample, sample_data):
     new_record.samples[sample]['GT'] = tuple(map(int, sample_data.split(':')[0].split('/')))
     new_record.samples[sample]['CN'] = None
     new_record.samples[sample]['CNQ'] = None
@@ -163,6 +204,39 @@ def populate_ctx_gt(new_record, row, sample, sample_data):
     new_record.samples[sample]['GQ'] = 999
     new_record.samples[sample]['PE_GQ'] = 999
     new_record.samples[sample]['PE_GT'] = sum(map(int, sample_data.split(':')[0].split('/')))
+    new_record.samples[sample]['RD_CN'] = None
+    new_record.samples[sample]['RD_GQ'] = None
+    new_record.samples[sample]['SR_GQ'] = None
+    new_record.samples[sample]['SR_GT'] = None
+
+
+def populate_ctx_gt_from_merge_record(new_record, sample, merge_record):
+    for data in merge_record.samples[sample]:
+        new_record.samples[sample][data] = merge_record.samples[sample][data]
+
+
+def populate_ctx_gt_for_non_carrier(new_record, sample):
+    new_record.samples[sample]['GT'] = (0, 0)
+    new_record.samples[sample]['CN'] = None
+    new_record.samples[sample]['CNQ'] = None
+    new_record.samples[sample]['EV'] = None
+    new_record.samples[sample]['GQ'] = 0
+    new_record.samples[sample]['PE_GQ'] = 0
+    new_record.samples[sample]['PE_GT'] = 0
+    new_record.samples[sample]['RD_CN'] = None
+    new_record.samples[sample]['RD_GQ'] = None
+    new_record.samples[sample]['SR_GQ'] = None
+    new_record.samples[sample]['SR_GT'] = None
+
+
+def populate_cnv_gt_for_non_carrier(new_record, sample):
+    new_record.samples[sample]['GT'] = (0, 0)
+    new_record.samples[sample]['CN'] = None
+    new_record.samples[sample]['CNQ'] = None
+    new_record.samples[sample]['EV'] = None
+    new_record.samples[sample]['GQ'] = 0
+    new_record.samples[sample]['PE_GQ'] = 0
+    new_record.samples[sample]['PE_GT'] = 0
     new_record.samples[sample]['RD_CN'] = None
     new_record.samples[sample]['RD_GQ'] = None
     new_record.samples[sample]['SR_GQ'] = None
@@ -265,11 +339,23 @@ def main():
         # adjust CTX records already in the VCF to store the location on CHR2 in the END2 INFO field
         if record.info['SVTYPE'] == "CTX":
             ctx_number = ctx_number + 1
-            record.id = new_ctx_record_id(args.cohort_name, args.batch_name, record.contig, ctx_number)
-            if not 'END2' in record.info:
-                raise Exception("Record {}:{} {} does not have END2 set".format(record.contig, record.pos, record.id))
+            # check to see if any new calls need to be merged into the existing vcf call
+            merged_record = None
+            while new_idx < len(data.index) and \
+                    data.loc[new_idx, 'contig'] == record.contig and data.loc[new_idx, 'pos'] == record.pos and data.iloc[new_idx]['info_SVTYPE'] == 'CTX' and \
+                    record.info['CHR2'] == data.iloc[new_idx]['info_CHR2'] and record.info['END2'] == int(data.iloc[new_idx]['info_END2']) and \
+                    record.info['CPX_TYPE'] == data.iloc[new_idx]['info_CPX_TYPE']:
+                merged_record, new_idx = create_ctx_record(new_idx, data, fout, ctx_number, args.cohort_name, args.batch_name, merge_record=record)
+                if new_idx < len(data.index):
+                    new_loc = (data.loc[new_idx, 'contig'], data.loc[new_idx, 'pos'])
+            if merged_record is not None:
+                record = merged_record
             else:
-                record.stop = record.pos + 1
+                record.id = new_ctx_record_id(args.cohort_name, args.batch_name, record.contig, ctx_number)
+                if not 'END2' in record.info:
+                    raise Exception("Record {}:{} {} does not have END2 set".format(record.contig, record.pos, record.id))
+                else:
+                    record.stop = record.pos + 1
         fout.write(record)
         prev_contig = record.contig
         prev_pos = record.pos
