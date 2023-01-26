@@ -67,8 +67,8 @@ task SanitizeHeaderTask {
 
     bcftools reheader -h newheader.vcf ~{vcf} \
       | bcftools annotate -x ~{drop_fields} \
-        --no-version
-        -O z
+        --no-version \
+        -O z \
         -o ~{prefix}.vcf.gz
 
     tabix ~{prefix}.vcf.gz
