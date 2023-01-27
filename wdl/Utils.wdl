@@ -661,7 +661,7 @@ task SubsetVcfBySamplesList {
   String vcf_subset_filename = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".subset.vcf.gz"])
   String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
 
-  String remove_private_sites_flag = if remove_private_sites then " | bcftools view --min-ac 1 " else ""
+  String remove_private_sites_flag = if remove_private_sites then " | bcftools +fill-tags -- -t AC | bcftools view -i 'SVTYPE==\"CNV\" || AC>0' " else ""
   String complement_flag = if remove_samples then "^" else ""
 
   # Disk must be scaled proportionally to the size of the VCF
