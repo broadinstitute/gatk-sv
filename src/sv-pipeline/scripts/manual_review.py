@@ -4,13 +4,17 @@ import argparse
 import sys
 import pysam
 from collections import defaultdict
-from typing import Any, List, Text, Set, Dict, Optional
+from typing import List, Text, Set, Dict, Optional
+from itertools import chain
 
 # Format fields to drop when converting records to CNV
 CNV_FORMAT_KEYS_TO_DROP = set(['PE_GT', 'PE_GQ', 'SR_GT', 'SR_GQ'])
 
+# For new and converted CNV records
 DEFAULT_CNQ = 999
 DEFAULT_GQ = 99
+DEFAULT_OGQ = 99
+DEFAULT_RD_GQ = 99
 
 
 def _convert_to_cnv(record, fout):
@@ -47,22 +51,42 @@ def _annotate_genomic_region(record, region_name):
     record.info['GD'] = region_name
 
 
+def _set_filter_pass(record):
+    if 'MULTIALLELIC' in record.filter:
+        record.filter.clear()
+        record.filter.add('MULTIALLELIC')
+    else:
+        record.filter.clear()
+        record.filter.add('PASS')
+
+
+def _annotate_manual_review(record, value):
+    if record.info.get('MANUAL_REVIEW_TYPE', None) is None:
+        record.info['MANUAL_REVIEW_TYPE'] = tuple()
+    record.info['MANUAL_REVIEW_TYPE'] = tuple(list(record.info['MANUAL_REVIEW_TYPE']) + [value])
+
+
 def _process(record, fout, remove_vids_set, multiallelic_vids_set, remove_call_dict, add_call_dict,
              gd_dict, coords_dict):
     if record.id in remove_vids_set:
         print(f"Deleting variant {record.id}")
         return
-    elif record.id in multiallelic_vids_set:
+    if record.id in multiallelic_vids_set:
         # Convert to CNV
         print(f"Performing CNV conversion for variant {record.id}")
         record = _convert_to_cnv(record, fout)
-    elif record.id in remove_call_dict:
+        _annotate_manual_review(record, 'CONVERT_TO_CNV')
+    if record.id in remove_call_dict:
         # Set genotypes to hom-ref
+        _annotate_manual_review(record, f"DROP_{len(remove_call_dict[record.id])}_CALLS")
+        _set_filter_pass(record)
         for s in remove_call_dict[record.id]:
             print(f"Setting genotype {s} to hom-ref for variant {record.id}")
             record.samples[s]['GT'] = (0,) * len(record.samples[s]['GT'])
-    elif record.id in add_call_dict:
+    if record.id in add_call_dict:
         # Set genotypes to het
+        _annotate_manual_review(record, f"ADD_{len(add_call_dict[record.id])}_CALLS")
+        _set_filter_pass(record)
         for s in add_call_dict[record.id]:
             ploidy = len(record.samples[s]['GT'])
             print(f"Setting genotype {s} to het for variant {record.id}")
@@ -70,24 +94,64 @@ def _process(record, fout, remove_vids_set, multiallelic_vids_set, remove_call_d
                 gt = record.samples[s]['GT'] = [0] * ploidy
                 gt[-1] = 1
                 record.samples[s]['GT'] = tuple(gt)
-    elif record.id in gd_dict:
+    if record.id in gd_dict:
         print(f"Annotating genomic disorder region of variant {record.id}")
+        _set_filter_pass(record)
         _annotate_genomic_region(record, gd_dict[record.id])
-    elif record.id in coords_dict:
+    if record.id in coords_dict:
         print(f"Changing coordinates of variant {record.id}")
+        _set_filter_pass(record)
+        _annotate_manual_review(record, 'REFINE_COORDINATES')
         value = coords_dict[record.id]
         pos = int(value[1])
         end = int(value[2])
         record.pos = pos
         record.stop = end
+        record.info['SVLEN'] = end - pos + 1
     # Write variant
     fout.write(record)
 
 
-def _create_new_variants(fout, new_cnv_dict, gd_dict):
+def _create_new_variants(fout, new_cnv_dict):
     for vid, value in new_cnv_dict.items():
-        
-
+        chrom = value[0].split(';')[0]  # Sometimes semicolon delimited lists are provided
+        pos = int(value[1])
+        end = int(value[2])
+        carrier_samples = set(value[3].split(','))
+        is_dup = 'DUP' in vid
+        is_del = 'DEL' in vid
+        if is_dup:
+            alt = '<DUP>'
+            svtype = 'DUP'
+        elif is_del:
+            alt = '<DEL>'
+            svtype = 'DEL'
+        else:
+            raise ValueError(f"Could not determine whether DEL or DUP from variant ID {vid}")
+        record = fout.new_record(id=vid, contig=chrom, start=pos, stop=end,
+                                 alleles=('N', alt), filter=('PASS',))
+        _annotate_manual_review(record, 'NEW_VARIANT')
+        record.info['SVTYPE'] = svtype
+        record.info['ALGORITHMS'] = ('manual_review',)
+        record.info['EVIDENCE'] = ('RD',)
+        record.info['SVLEN'] = end - pos + 1
+        record.info['NCN'] = 0
+        record.info['NCR'] = 0
+        carrier_rd_cn = 3 if is_dup else 1
+        for s, gt in record.samples.items():
+            if s in carrier_samples:
+                gt['GT'] = (0, 1)
+                gt['RD_CN'] = carrier_rd_cn
+            else:
+                gt['GT'] = (0, 0)
+                gt['RD_CN'] = 2
+            gt['EV'] = ('RD',)
+            gt['OGQ'] = DEFAULT_OGQ
+            gt['GT_FILTER'] = 'pass'
+            gt['GQ'] = DEFAULT_GQ
+            gt['RD_GQ'] = DEFAULT_RD_GQ
+        print(f"Created new variant {vid}")
+        yield record
 
 
 def _parse_set(path: Text) -> Set[Text]:
@@ -109,8 +173,8 @@ def _parse_coords_table(path: Text) -> Dict[Text, List[Text]]:
         d = {}
         for line in f:
             tokens = line.strip().split('\t')
-            # { vid: [chrom, pos, end, breakpoint_vid] }
-            d[tokens[0]] = tokens[1:]
+            # { vid: [chrom, pos, end] }
+            d[tokens[0]] = tokens[1:-1]
     return d
 
 
@@ -124,15 +188,45 @@ def _parse_new_cnv_table(path: Text) -> Dict[Text, List[Text]]:
     return d
 
 
+def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
+    """
+    Parses tsv of sample ploidy values.
+
+    Parameters
+    ----------
+    path: Text
+        table path
+
+    Returns
+    -------
+    header: Dict[Text, Dict[Text, int]]
+        map of sample to contig to ploidy, i.e. Dict[sample][contig] = ploidy
+    """
+    ploidy_dict = dict()
+    with open(path, 'r') as f:
+        header = f.readline().strip().split('\t')
+        for line in f:
+            tokens = line.strip().split('\t')
+            sample = tokens[0]
+            ploidy_dict[sample] = {header[i]: int(tokens[i]) for i in range(1, len(header))}
+    return ploidy_dict
+
+
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Apply post-hoc updates to manually reviewed variants",
+        description="Apply post-hoc updates to manually reviewed variants. Output may be unsorted.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
     parser.add_argument('--out', type=str, help='Output file (defaults to stdout)')
 
+    parser.add_argument("--chr-x", type=str, default="chrX", help="Chromosome X name, used for sex identification")
+
+    parser.add_argument('--new-cnv-table', type=str, required=True,
+                        help='Table of (1) chrom, (2) pos, (3) end, (4) unique ID possibly corresponding to IDs in '
+                             '--gd-table, and (5) comma-delimited list of carrier samples, for new DEL/DUP records '
+                             'to be added. The ID should contain either "DEL" or "DUP" to determine the SV type.')
     parser.add_argument('--remove-vids-list', type=str, required=True, help='List of variant IDs to remove')
     parser.add_argument('--multiallelic-vids-list', type=str, required=True,
                         help='List of variant IDs to convert to multiallelic CVNs')
@@ -165,6 +259,8 @@ def main(argv: Optional[List[Text]] = None):
 
     header = vcf.header
     header.add_line('##INFO=<ID=GD,Number=1,Type=String,Description="Genomic disorder region">')
+    header.add_line('##INFO=<ID=MANUAL_REVIEW_TYPE,Number=.,Type=String,Description="Annotation(s) for variants '
+                    'modified post hoc after manual review">')
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
@@ -177,14 +273,17 @@ def main(argv: Optional[List[Text]] = None):
     gd_dict = _parse_two_column_table(args.gd_table)
     coords_dict = _parse_coords_table(args.coords_table)
     new_cnv_dict = _parse_new_cnv_table(args.new_cnv_table)
-    for record in vcf:
-        _process(record, fout,
-                 remove_vids_set=remove_vids_set,
-                 multiallelic_vids_set=multiallelic_vids_set,
-                 remove_call_dict=remove_call_dict,
-                 add_call_dict=add_call_dict,
-                 gd_dict=gd_dict,
-                 coords_dict=coords_dict)
+    for record in chain(_create_new_variants(fout=fout, new_cnv_dict=new_cnv_dict), vcf):
+        _process(
+            record=record,
+            fout=fout,
+            remove_vids_set=remove_vids_set,
+            multiallelic_vids_set=multiallelic_vids_set,
+            remove_call_dict=remove_call_dict,
+            add_call_dict=add_call_dict,
+            gd_dict=gd_dict,
+            coords_dict=coords_dict
+        )
     vcf.close()
     fout.close()
 
