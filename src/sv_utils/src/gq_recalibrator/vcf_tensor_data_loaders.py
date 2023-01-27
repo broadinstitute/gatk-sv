@@ -1,8 +1,8 @@
 import sys
 import traceback
 import os
-import glob
 import attr
+from pathlib import Path
 import atexit
 import shutil
 import tempfile
@@ -60,7 +60,7 @@ class Default:
     excluded_properties = non_ml_properties.difference(non_ml_needed_for_training)
     scale_bool_properties = False,
     validation_proportion = 0.2
-    temp_dir = tempfile.gettempdir()
+    temp_dir = Path(tempfile.gettempdir())
     sleep_time_s = 0.1
     delete_after_read = True
     max_look_ahead_batches = 3
@@ -101,40 +101,44 @@ def get_torch_device(
         return torch.device("cpu")
 
 
+def _get_lock_path(file_path: Path) -> Path:
+    return file_path.with_suffix(file_path.suffix + Keys.lock_suffix)
+
+
 if _debug_file_locks:
     @contextlib.contextmanager
-    def locked_write(file_name: str, mode: str) -> IO:
+    def locked_write(file_name: Path, mode: str) -> IO:
         """
         Get context manager for writing to a file, generating lock file during write to indicate
         that reading should wait until the write operation is finished
         """
-        lock_file = file_name + Keys.lock_suffix
+        lock_file = _get_lock_path(file_name)
         with open(lock_file, 'w'):
             pass  # just create lock file
         with open(file_name, mode) as f_out:
             yield f_out
         print(f"wrote file {file_name}")
-        os.remove(lock_file)
+        lock_file.unlink()
         print(f"unlocked file {file_name}")
 
     @contextlib.contextmanager
     def locked_read(
-            file_name: str,
+            file_name: Path,
             mode: str,
             delete_after_read: bool = Default.delete_after_read,
             sleep_time_s: float = Default.sleep_time_s
     ) -> IO:
         # wait until file exists
         n_wait = 0
-        while not os.path.isfile(file_name):
+        while not file_name.is_file():
             n_wait += 1
             if n_wait % 100 == 0:
                 print(f"waiting for {file_name} to exist")
             time.sleep(sleep_time_s)
         # wait until lock file is deleted
-        lock_file = file_name + Keys.lock_suffix
+        lock_file = _get_lock_path(file_name)
         n_wait = 0
-        while os.path.isfile(lock_file):
+        while lock_file.is_file():
             n_wait += 1
             if n_wait % 100 == 0:
                 print(f"waiting for {file_name} to be unlocked")
@@ -145,26 +149,26 @@ if _debug_file_locks:
             yield f_in
         print(f"read {file_name}")
         if delete_after_read:
-            os.remove(file_name)
+            file_name.unlink()
 
 else:
     @contextlib.contextmanager
-    def locked_write(file_name: str, mode: str) -> IO:
+    def locked_write(file_name: Path, mode: str) -> IO:
         """
         Get context manager for writing to a file, generating lock file during write to indicate
         that reading should wait until the write operation is finished
         """
-        lock_file = file_name + Keys.lock_suffix
+        lock_file = _get_lock_path(file_name)
         with open(lock_file, 'w'):
             pass  # just create lock file
         with open(file_name, mode) as f_out:
             yield f_out
-        os.remove(lock_file)
+        lock_file.unlink()
 
 
     @contextlib.contextmanager
     def locked_read(
-            file_name: str,
+            file_name: Path,
             mode: str,
             delete_after_read: bool = Default.delete_after_read,
             sleep_time_s: float = Default.sleep_time_s
@@ -173,14 +177,14 @@ else:
         while not os.path.isfile(file_name):
             time.sleep(sleep_time_s)
         # wait until lock file is deleted
-        lock_file = file_name + Keys.lock_suffix
+        lock_file = _get_lock_path(file_name)
         while os.path.isfile(lock_file):
             time.sleep(sleep_time_s)
         # read
         with open(file_name, mode) as f_in:
             yield f_in
         if delete_after_read:
-            os.remove(file_name)
+            file_name.unlink()
 
 
 class VcfTensorDataLoaderBase:
@@ -202,14 +206,14 @@ class VcfTensorDataLoaderBase:
 
     def __init__(
             self,
-            parquet_path: str,
-            properties_scaling_json: str,
+            parquet_path: Path,
+            properties_scaling_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
-            temp_dir: str = Default.temp_dir,
+            temp_dir: Path = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_generator: common.GeneratorInit = Default.random_seed,
@@ -217,7 +221,7 @@ class VcfTensorDataLoaderBase:
             _current_parquet_file: Optional[str] = None
     ):
         self.parquet_path = tarred_properties_to_parquet.extract_tar_to_folder(parquet_path) \
-            if parquet_path.endswith(".tar") else parquet_path
+            if parquet_path.suffix == ".tar" else parquet_path
         self.process_executor = process_executor
         self.thread_executor = thread_executor
         self.variants_per_batch = variants_per_batch
@@ -246,17 +250,17 @@ class VcfTensorDataLoaderBase:
         self._futures = []
 
     @classmethod
-    def get_temp_subdir(cls, temp_dir: str) -> str:
-        parent_subdir = os.path.join(temp_dir, cls.__name__)
-        os.makedirs(parent_subdir, exist_ok=True)
+    def get_temp_subdir(cls, temp_dir: Path) -> Path:
+        parent_subdir = temp_dir / cls.__name__
+        parent_subdir.mkdir(parents=True, exist_ok=True)
         temp_subdir = tempfile.mkdtemp(dir=parent_subdir)
         atexit.register(shutil.rmtree, temp_subdir)
-        return temp_subdir
+        return Path(temp_subdir)
 
     def _set_column_info(
             self,
             excluded_properties: set[str],
-            properties_scaling_json: str,
+            properties_scaling_json: Path,
             scale_bool_values: bool
     ):
         f"""
@@ -356,7 +360,7 @@ class VcfTensorDataLoaderBase:
         )
 
     def _set_parquet_files(self):
-        self._parquet_files = glob.glob(f"{self.parquet_path}/*.parquet")
+        self._parquet_files = list(self.parquet_path.glob("*.parquet"))
         if self.shuffle:
             # randomize order of visiting partitions
             self._parquet_files = self.random_generator.permutation(self._parquet_files).tolist()
@@ -429,14 +433,14 @@ class VcfTensorDataLoaderBase:
 class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
     def __init__(
             self,
-            parquet_path: str,
-            properties_scaling_json: str,
+            parquet_path: Path,
+            properties_scaling_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
-            temp_dir: str = Default.temp_dir,
+            temp_dir: Path = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_generator: common.GeneratorInit = Default.random_seed,
@@ -469,7 +473,7 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
 
     @staticmethod
     def _parquet_file_to_buffer(
-            parquet_file: str,
+            parquet_file: Path,
             wanted_columns: list[str],
             random_generator: Optional[numpy.random.Generator],
             remainder_buffer: Optional[numpy.ndarray] = None
@@ -561,8 +565,8 @@ class TrainingBatchIterator(Iterator):
             num_training_variants: int,
             num_validation_variants: int,
             variants_per_batch: int,
-            pickle_folder: str,
-            parquet_file: str,
+            pickle_folder: Path,
+            parquet_file: Path,
             training_batch: int = 0,
             validation_batch: int = 0,
             previous_training_remainder_ids: Sequence = (),
@@ -620,17 +624,17 @@ class TrainingBatchIterator(Iterator):
         }
 
     def to_json(self):
-        json_file = os.path.join(self.pickle_folder, Keys.manifest_file)
+        json_file = self.pickle_folder / Keys.manifest_file
         with locked_write(json_file, 'w') as f_out:
             json.dump(self.state_dict, f_out)
 
     @staticmethod
     def from_json(
-            pickle_folder: str,
+            pickle_folder: Path,
             delete_after_read: bool = Default.delete_after_read,
             sleep_time_s: float = Default.sleep_time_s
     ) -> "TrainingBatchIterator":
-        json_file = os.path.join(pickle_folder, Keys.manifest_file)
+        json_file = pickle_folder / Keys.manifest_file
         with locked_read(
                 json_file, mode='r', delete_after_read=delete_after_read, sleep_time_s=sleep_time_s
         ) as f_in:
@@ -665,7 +669,7 @@ class TrainingBatchIterator(Iterator):
 @attr.s(auto_attribs=True, frozen=True, slots=True)
 class TrainingFuture:
     future: concurrent.futures.Future = attr.ib()
-    pickle_folder: str = attr.ib()
+    pickle_folder: Path = attr.ib()
     generator_state: common.BitGeneratorState = attr.ib()
 
 
@@ -684,15 +688,15 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
 
     def __init__(
             self,
-            parquet_path: str,
-            properties_scaling_json: str,
-            truth_json: str,
+            parquet_path: Path,
+            properties_scaling_json: Path,
+            truth_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             thread_executor: concurrent.futures.ThreadPoolExecutor,
             variants_per_batch: int,
             torch_device: str,
             progress_logger: training_utils.ProgressLogger,
-            temp_dir: str = Default.temp_dir,
+            temp_dir: Path = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_generator: common.GeneratorInit = Default.random_seed,
@@ -919,9 +923,9 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
 
     @staticmethod
     def _pickle_batch_tensors(
-            parquet_file: str,
-            pickle_folder: str,
-            previous_pickle_folder: Optional[str],
+            parquet_file: Path,
+            pickle_folder: Path,
+            previous_pickle_folder: Optional[Path],
             wanted_columns: list[str],
             random_seed: Optional[int],
             variants_per_batch: int,
@@ -933,7 +937,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             validation_proportion: float,
             trainable_variant_ids: set[str],
             variant_id_column: int
-    ) -> str:
+    ) -> Path:
         try:
             t0 = time.time()
             # # read the basic buffer into a numpy array, only loading trainable variant IDs
@@ -960,7 +964,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             if previous_pickle_folder is None:
                 num_previous_training_remainder, num_previous_validation_remainder = 0, 0
             else:
-                previous_remainder_sizes = os.path.join(previous_pickle_folder, Keys.remainder_sizes)
+                previous_remainder_sizes = previous_pickle_folder / Keys.remainder_sizes
                 with locked_read(previous_remainder_sizes, "rb") as f_in:
                     num_previous_training_remainder, num_previous_validation_remainder = \
                         pickle.load(f_in)
@@ -985,7 +989,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             # onto the next batch of variants
             # first quickly output just the sizes, because that can be very quick and is enough to
             # enable planning
-            remainder_sizes = os.path.join(pickle_folder, Keys.remainder_sizes)
+            remainder_sizes = pickle_folder / Keys.remainder_sizes
             with locked_write(remainder_sizes, "wb") as f_out:
                 pickle.dump(
                     (
@@ -1102,7 +1106,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
 
     @staticmethod
     def load_remainder_buffer(
-            pickle_folder: Optional[str],
+            pickle_folder: Optional[Path],
             is_training: bool,
             num_columns: int,
             delete_after_read: bool = Default.delete_after_read,
@@ -1119,13 +1123,12 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             buffer = pickle.load(f_in)
         return buffer
 
-    def _get_pickle_folder(self) -> str:
-        return tempfile.mkdtemp(dir=self._temp_dir)
+    def _get_pickle_folder(self) -> Path:
+        return Path(tempfile.mkdtemp(dir=self._temp_dir))
 
     @staticmethod
-    def get_nth_pickle_file(pickle_folder: str, n: Union[int, str], is_training: bool) -> str:
-        return os.path.join(
-            pickle_folder,
+    def get_nth_pickle_file(pickle_folder: Path, n: Union[int, str], is_training: bool) -> Path:
+        return pickle_folder / (
             f"{Keys.training if is_training else Keys.validation}_{n}{Keys.pickle_suffix}"
         )
 
@@ -1144,8 +1147,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     @staticmethod
     def _handle_new_and_old_remainder_buffers(
             is_training: bool,
-            previous_pickle_folder: str,
-            pickle_folder: str,
+            previous_pickle_folder: Path,
+            pickle_folder: Path,
             buffer: numpy.ndarray,
             training_batch_iterator: TrainingBatchIterator,
             buffer_indices: numpy.ndarray,

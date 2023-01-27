@@ -212,6 +212,12 @@ class PropertySummary:
     def is_bool_type(self) -> bool:
         return self.property_type == PropertyType.boolean
 
+    def with_added_codes(self, added_codes: list[str]) -> "PropertySummary":
+        return PropertySummary(
+            property_type=self.property_type, num_rows=self.num_rows, num_samples=self.num_samples,
+            codes=self.codes + added_codes
+        )
+
 
 class PropertiesSummary(dict[str, PropertySummary]):
     @classmethod
@@ -235,7 +241,7 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=argv[0]
     )
-    parser.add_argument("--input-tar", "-i", type=str, help="full path to .tar file to convert",
+    parser.add_argument("--input-tar", "-i", type=Path, help="full path to .tar file to convert",
                         action="extend", required=True, nargs='+')
     parser.add_argument(
         "--output-parquet", "-o", type=Path, required=True,
@@ -246,7 +252,7 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
         help="If true, compute the weight that each variant should have for training."
     )
     parser.add_argument(
-        "--properties-scaling-json", type=str, default=None,
+        "--properties-scaling-json", type=Path, default=None,
         help="path to output JSON that will store properties baseline and scale needed for "
              "training and filtering. Note: should only be generated from training data set, then "
              "those stats should be reused for filtering."
@@ -382,7 +388,9 @@ def _get_gzipped_metadata(
             existing_codes = properties_summary[prop_name].codes
             missing_codes = all_codes.difference(existing_codes)
             if missing_codes:
-                properties_summary[prop_name].codes = existing_codes + sorted(missing_codes)
+                properties_summary[prop_name] = properties_summary[prop_name].with_added_codes(
+                    sorted(missing_codes)
+                )
 
     print("\tgetting metadata complete.")
     return properties_summaries, sample_ids, input_folders
@@ -412,7 +420,6 @@ def extract_tar_to_folder(
     if base_dir is None:
         base_dir = input_tar.parent
     with tarfile.open(input_tar, 'r') as tar_in:
-        # tar_folder = base_dir / os.path.basename(os.path.commonpath(tar_in.getnames()))
         tar_folder = base_dir / _get_tar_top_level_folder(tar_in)
         _extracted_tar_files[input_tar] = tar_folder
         tar_in.extractall(path=base_dir)

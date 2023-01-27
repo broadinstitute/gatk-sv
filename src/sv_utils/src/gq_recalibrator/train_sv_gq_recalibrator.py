@@ -2,6 +2,7 @@
 
 import sys
 import os
+from pathlib import Path
 import tempfile
 import argparse
 import warnings
@@ -49,7 +50,7 @@ class Keys:
 
 
 class Default:
-    temp_dir = tempfile.gettempdir()
+    temp_dir = Path(tempfile.gettempdir())
     variants_per_batch = 100
     batches_per_mini_epoch = 50
     shuffle = vcf_tensor_data_loaders.Default.shuffle
@@ -77,18 +78,18 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=argv[0]
     )
-    parser.add_argument("--properties", "-p", type=str, required=True,
+    parser.add_argument("--properties", "-p", type=Path, required=True,
                         help="full path to tarred parquet file with variant properties")
-    parser.add_argument("--properties-scaling-json", "-j", type=str, required=True,
+    parser.add_argument("--properties-scaling-json", "-j", type=Path, required=True,
                         help="full path to JSON with baseline and scales needed for training / "
                              "filtering properties")
     parser.add_argument(
-        "--truth-json", type=str, required=True,
+        "--truth-json", type=Path, required=True,
         help="full path to JSON with info about which GTs are good for each variant x sample"
     )
-    parser.add_argument("--output-model", "-o", type=str, required=True,
+    parser.add_argument("--output-model", "-o", type=Path, required=True,
                         help="path to output file with trained model")
-    parser.add_argument("--input-model", "-i", type=str, required=False,
+    parser.add_argument("--input-model", "-i", type=Path, required=False,
                         help="path to input file with partially trained model")
     parser.add_argument("--variants-per-batch", type=int, default=Default.variants_per_batch,
                         help="number of variants used in each training batch")
@@ -97,7 +98,7 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                         help="number of batches between progress updates and checkpoints")
     parser.add_argument("--max-train-variants", type=int, default=None,
                         help="maximum number of variants to train before ending training")
-    parser.add_argument("--temp-dir", type=str, default=Default.temp_dir,
+    parser.add_argument("--temp-dir", type=Path, default=Default.temp_dir,
                         help="preferred path to folder for temporary files")
     parser.add_argument("--shuffle", type=common.argparse_bool, default=Default.shuffle,
                         help="if True, shuffle order of variants while training")
@@ -154,11 +155,11 @@ def main(argv: Optional[list[str]] = None):
 
 
 def train_sv_gq_recalibrator(
-        properties_path: str,
-        properties_scaling_json: str,
-        truth_json: str,
-        output_model_path: str,
-        input_model_path: Optional[str] = None,
+        properties_path: Path,
+        properties_scaling_json: Path,
+        truth_json: Path,
+        output_model_path: Path,
+        input_model_path: Optional[Path] = None,
         variants_per_batch: int = Default.variants_per_batch,
         batches_per_mini_epoch: int = Default.batches_per_mini_epoch,
         max_train_variants: Optional[int] = None,
@@ -338,7 +339,7 @@ def loss_function(
 
 
 def save(
-        save_path: str,
+        save_path: Path,
         training_logger: training_utils.ProgressLogger,
         vcf_tensor_data_loader: vcf_tensor_data_loaders.VcfTrainingTensorDataLoader,
         neural_net: gq_recalibrator_net.GqRecalibratorNet,
@@ -346,9 +347,8 @@ def save(
         training_losses: training_utils.BatchLosses,
         validation_losses: training_utils.BatchLosses
 ):
-    parent_dir = os.path.dirname(save_path)
-    if not os.path.isdir(parent_dir):
-        os.makedirs(parent_dir, exist_ok=True)
+    """ Save neural net and state info for resuming training (or for filtering) """
+    save_path.parent.mkdir(parents=True, exist_ok=True)
     pickle_dict = {
         Keys.logger_kwargs: training_logger.save_dict,
         Keys.data_loader_state: vcf_tensor_data_loader.state_dict,
@@ -385,10 +385,10 @@ def state_dict_to(state_dict: dict[str, Any], device: torch.device) -> dict[str,
 
 
 def load(
-        save_path: str,
-        parquet_path: str,
-        properties_scaling_json: str,
-        truth_json: str,
+        save_path: Path,
+        parquet_path: Path,
+        properties_scaling_json: Path,
+        truth_json: Path,
         scale_bool_values: bool,
         variants_per_batch: int,
         shuffle: bool,
@@ -432,9 +432,9 @@ def load(
 
 
 def filter_sv_gq_recalibrator(
-        properties_path: str,
-        properties_scaling_json: str,
-        input_model_path: str,
+        properties_path: Path,
+        properties_scaling_json: Path,
+        input_model_path: Path,
         variants_per_batch: int = Default.variants_per_batch,
         shuffle: bool = Default.shuffle,
         random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
