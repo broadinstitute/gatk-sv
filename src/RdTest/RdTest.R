@@ -48,7 +48,7 @@ list <- structure(NA, class = "result")
 
 #Command line options
 
-option_list = list(
+option_list <- list(
   make_option(c("-b", "--bed"), type="character", default=NULL,
               help="Bed file of CNVs to check. No header. Locus ID as fourth column. SampleIDs of interest comma delimited as fifth column. CNVtype (DEL,DUP) as the sixth column", metavar="character"),
   make_option(c("-c", "--coveragefile"), type="character", default=NULL,
@@ -89,8 +89,12 @@ option_list = list(
               help="Optional:Plot JPG visualization of copy state (requires -j TRUE if want to plot kmeans) . Default:FALSE", metavar="logical"),
   make_option(c("-s", "--sizefilter"), type="numeric", default=1000000,
               help="Optional:Restrict to large CNV to inner specified size Default:1000000", metavar="numeric"),
-  make_option(c("-x", "--newsizefilter"), type="numeric", default=5000000,
-              help="Optional:For CNVs over this size load entire coverage range with median window strategy Default:5000000", metavar="numeric"),
+  make_option(c("-x", "--verylargevariantsize"), type="numeric", default=2500000,
+              help="Optional:For CNVs over this size load entire coverage range with median window strategy Default:2500000", metavar="numeric"),
+  make_option("--verylargevariantpoints", type="numeric", default=500,
+              help="Optional:Number of windows to use for very large variant genotyping Default:500", metavar="numeric"),
+  make_option("--verylargevariantwindows", type="numeric", default=2000,
+              help="Optional:Size of windows to use for very large variant genotyping Default:2000", metavar="numeric"),
   make_option(c("-u", "--quartetDenovo"), type="logical", default=FALSE,
               help="Proband,Father,Mother, & Sib de novo analysis", metavar="logical"),
   make_option(c("-z", "--mosaicsep"), type="logical", default=FALSE,
@@ -99,10 +103,10 @@ option_list = list(
               help="Optional:Single column file with list of samples to exclude", metavar="character"),
   make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
               help="Optional:Single column file with list of samples to include", metavar="character")
-);
+)
 
-opt_parser = OptionParser(option_list = option_list)
-opt = parse_args(opt_parser)
+opt_parser <- OptionParser(option_list = option_list)
+opt <- parse_args(opt_parser)
 
 ##QC check, see file inputs exist and are formated correctly and edit if neccessary##
 
@@ -205,7 +209,6 @@ fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome
   if (nrow(cov1) > 1) {
     gapLengths <- sapply(2:nrow(cov1), function(i) { cov1$start[i] - cov1$end[i-1]})
     if (any(gapLengths) > 0) {
-      print("has gaps to fill")
       gapStarts <- cov1$end[which(gapLengths > 0)]
       gapEnds <- cov1$start[which(gapLengths > 0)+1]
       zeroBinStarts <- unlist(lapply(1:length(gapStarts), function(i) { seq(gapStarts[i], gapEnds[i]-1, by=BinSize) }))
@@ -226,8 +229,6 @@ fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome
       cov1 <- cov1[order(cov1[, 2]), ]
     }
   }
-  print(cov1[1:10,1:5])
-  print(tail(cov1[,1:5]))
   return(cov1)
 }
 
@@ -251,19 +252,12 @@ applySampleIncludeAndExcludeLists <- function(cov1, allnorm, SampleExcludeList, 
     allnorm <-
       allnorm[,!(names(allnorm) %in% samplesExcludelist)]
   }
-  print("dim cov1 after sample exclude filter")
-  print(dim(cov1))
 
   ##Allow inlcude list##
   if (!is.null(SampleIncludelist)) {
-    print("applying sample include list")
     samplesIncludeList <- readLines(SampleIncludelist)
-    print("length samplesIncludeList")
-    print(length(samplesIncludeList))
     IDsSamplesIncludelistButNotCoverage <-
       samplesIncludeList[!(samplesIncludeList %in% names(cov1))]
-    print("length IDsSamplesIncludelistButNotCoverage")
-    print(length(IDsSamplesIncludelistButNotCoverage))
 
     if (length(IDsSamplesIncludelistButNotCoverage) > 0)
     {
@@ -277,8 +271,6 @@ applySampleIncludeAndExcludeLists <- function(cov1, allnorm, SampleExcludeList, 
     allnorm <-
       allnorm[, (names(allnorm) %in% samplesIncludeList)]
   }
-  print("dim cov1 after sample include filter")
-  print(dim(cov1))
   return(list(cov1, allnorm))
 }
 
@@ -303,107 +295,51 @@ removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
 
     ##remove failing bins from coverage file##
     cov2 <- cov1[-which(paste(cov1[, 1], "_", cov1[, 2], "_", cov1[, 3], sep = "") %in% passing_int),]
-    print("cov2")
-    print(dim(cov2))
     cov3 <- cov1[-which(paste(cov1[, 1], "_", cov1[, 2], "_", cov1[, 3], sep = "") %in% passing_int_noregion),]
-    print("cov3")
-    print(dim(cov3))
 
     ##must have at least 10 bins after filtering or exclude##
     if (nrow(cov2) > 9) {
-      print("setting cov1 to cov2")
       cov1 <- cov2
     } else if (nrow(cov3) > 9) {
-      print("setting cov1 to cov3")
       cov1 <- cov3
     }
   }
   return(cov1)
 }
 
-loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,SampleExcludeList, SampleIncludeList,poorbincov=NULL,raw_cov=NULL)
+loadData <- function(chr, start, end, cnvID, sampleIDs, coveragefile, medianfile, bins, verylargevariantsize,
+                     vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, poorbincov=NULL, raw_cov=NULL)
   {
     if (is.null(raw_cov)) {
-      if (end - start > newsizefilter) {
-        print(paste0("using smooth subsampling approach for ", chr,":",start,"-",end))
-        regionPoints <- 500
-        window <- 1000
+      if (end - start > verylargevariantsize) {
+        print(paste0("using very large event subsampling approach for ", chr,":",start,"-",end))
+        regionPoints <- vlRegionPoints
+        window <- vlWindow / 2
         pointSpacing <-  trunc((end - start) / regionPoints)
         points <- seq(start + window, end - window, by=pointSpacing)
         pointBed <- data.frame(chr=chr, start=points - window, end=points+window+1)
-        print("pointBed")
-        print(head(pointBed))
-        print(tail(pointBed))
         #pointFile <- tempfile(pattern=cnvID)
         pointFile <- "regions.bed"
         write.table(pointBed, file=pointFile, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-        cov1 <- tryCatch(read.table(pipe(paste("bedtools merge -i ", pointFile, " | tabix -h ",coveragefile," -R - | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
-        print("dim cov1 before medians")
-        print(dim(cov1))
+        cov1 <- tryCatch(
+          read.table(pipe(
+            paste("bedtools merge -i ", pointFile,
+                  " | tabix -h ",coveragefile," -R - | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
 
 
         cov1 <- removeExcludedBinCovBins(chr, cov1, end, poorbincov, start)
-        print("dim cov1 after bin cov")
-
-        print(cov1[1:30,1:5])
 
         cov1 <- ldply(seq(1,regionPoints), function(i) {
           windowCov <- cov1[cov1$end > pointBed[i,"start"] & cov1$start < pointBed[i,"end"],]
-          #print("windowCov")
-          #print(windowCov[,1:5])
           if (nrow(windowCov) > 0) {
-            #print(head(windowCov[,4:ncol(windowCov)]))
             covMeds <- data.frame(lapply(windowCov[,4:ncol(windowCov)], median), check.names=FALSE)
-            #covMeds <- adply(windowCov[,4:ncol(windowCov)], 2, function(x) { data.frame(names(x)[1]=median(x[,1]))})
-            #print("covMeds")
-            #print(dim(covMeds))
-            #print(covMeds[,1:5])
             medianWindowCov <- cbind(data.frame(chr=chr, start=pointBed[i, "start"], end=pointBed[i, "end"]), covMeds)
-            #print("medianWindowCov")
-            #print(medianWindowCov[,1:5])
             return(medianWindowCov)
           } else {
             return(NULL)
           }
         })
-        print("dim cov1 after medians")
-        print(dim(cov1))
-        print(cov1[1:30,1:5])
 
-        #numChunks <- ceiling((end - start) / newsizefilter)
-        #print(paste0("numchunks ", numChunks))
-        #chunkSize <- trunc((end - start) / numChunks)
-        #print(paste0("chunkSize ", chunkSize))
-        #chunk <- 1
-        #cov1 <- data.frame()
-        #BinSize <- -1
-        #while (chunk <= numChunks) {
-        #  print(paste0("processing chunk ", chunk))
-        # chunkStart <- start + (chunk - 1) * chunkSize
-        #  chunkEnd <- start + chunk * chunkSize - 1
-        #  print(paste0("loading chunk ", chr,":",chunkStart,"-",chunkEnd))
-        #  chunkData <- read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", chunkStart, "-", chunkEnd, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
-
-        #  if (BinSize == -1) {
-
-        #  }
-
-        #  chunkData <- fillGapsInCoverageMatrixWithZeroCountBins(chunkData, BinSize, chr)
-        #  print("chunk dim before subsampling")
-        #  print(dim(chunkData))
-
-        #  if (nrow(chunkData) > 1) {
-        #    chunkData <- chunkData[(seq(1,nrow(chunkData)) - 1) %% numChunks == 0,]
-        #  }
-        #  print("chunk dim after subsampling")
-        #  print(dim(chunkData))
-
-        #  cov1 <- rbind(cov1, chunkData)
-        #BinSize <- median(cov1$end - chunkData$start)
-        #print("cov1 dim after loading chunk")
-        #print(dim(cov1))
-
-        #  chunk <- chunk + 1
       } else {
         #Take the coverage matrix header and tabix query the region in the .gz coverage matrix
         cov1 <-read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
@@ -414,27 +350,17 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
         #Find window bin size
         BinSize <- median(cov1$end - cov1$start)
 
-        print("loaded region")
-        print(dim(cov1))
-
         cov1 <- fillGapsInCoverageMatrixWithZeroCountBins(cov1, BinSize, chr)
-
-        print("filled gaps")
-        print(dim(cov1))
 
       }
 
       raw_coverage <- cov1
     } else {
       # reuse previously loaded raw_cov as cov1 matrix
-      print("reusing raw_cov as cov1")
       cov1 <- raw_cov
       raw_coverage <- raw_cov
     }
 
-
-    print("Done loading cov1")
-    print(dim(cov1))
 
     #Check if no data
     if (nrow(cov1) < 1) {
@@ -448,10 +374,8 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
     startAdjToInnerBinStart <- if (any(cov1$start >= start)) { cov1$start[which(cov1$start >= start)[1]] } else { min(cov1$start) }
     endAdjToInnerBinEnd <- if (any(cov1$end <= end)) { cov1$end[max(which(cov1$end <= end))] } else { max(cov1$end) }
-    print(paste0("adj to inner bins: ", startAdjToInnerBinStart, "-", endAdjToInnerBinEnd))
 
     numInternalBins <- sum(cov1$start >= startAdjToInnerBinStart & cov1$end <= endAdjToInnerBinEnd)
-    print(paste0("numInternalBins: ", numInternalBins))
     if (numInternalBins < bins)
     {
       bins = numInternalBins
@@ -501,8 +425,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     cov1 <- sampleFilterResult[[1]]
     allnorm <- sampleFilterResult[[2]]
 
-    print("after return from sample filter")
-    print(dim(cov1))
     if (ncol(cov1) < 4)
     {
       stop (" WARNING: All samples excluded by filtering")
@@ -517,12 +439,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     
     ##restrict bins to those with unique mapping##
     cov1 <- removeExcludedBinCovBins(chr, cov1, end, poorbincov, start)
-    print("after bincov")
-    print(dim(cov1))
-
-    print("cov1")
-    print(head(cov1[,1:10], 20))
-    print(tail(cov1[,1:10], 20))
 
 
     #Rebins values
@@ -536,10 +452,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     } else {
       res <- cov1[, 4:ncol(cov1)]
     }
-
-    print("res")
-    print(head(res[,1:10], 20))
-    print(tail(res[,1:10], 20))
 
     #Adds sample medians to df
     res0<-rbind((res), allnorm)
@@ -556,9 +468,6 @@ loadData <- function(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,b
     } else {
       cnv_matrix <- as.matrix(res1)
     }
-    print("cnv_matrix")
-    print(head(cnv_matrix[,1:10], 20))
-    print(tail(cnv_matrix[,1:10], 20))
 
     # remember to delete
     #write.table(cnv_matrix, file=paste0("tabixit_", bins, ".dat"), sep="\t", row.names = FALSE, quote = FALSE)
@@ -1183,7 +1092,7 @@ runRdTest<-function(bed)
     assign(names,unname(unlist(opt[names])))
   }
   #Speed up large cnvs by taking inner range of laregest desired size
-  if (end - start > newsizefilter) {
+  if (end - start > verylargevariantsize) {
     cat(paste(chr,":",start,"-",end,":Using new large event subsampling\n",sep=""))
   } else if (end - start  > sizefilter) {
     cat(paste(chr,":",start,"-",end,":Large size so subsampling in middle\n",sep=""))
@@ -1201,20 +1110,16 @@ runRdTest<-function(bed)
   
   ##Get Intesity Data##
   if (exists("poorbincov")) {
-    loadResult <-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,opt$SampleExcludeList, opt$SampleIncludeList,poorbincov)
-    #print("loaded")
-    #print(names(loadResult))
+    loadResult <-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,
+                          verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
+                          opt$SampleIncludeList,poorbincov)
     cnv_matrix <- loadResult[["cnv_matrix"]]
-    #print("dim matrix")
-    #print(dim(cnv_matrix))
     raw_cov <- loadResult[["raw_cov"]]
   } else {
-    loadResult<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,newsizefilter,opt$SampleExcludeList, opt$SampleIncludeList,)
-    #print("loaded")
-    #print(names(loadResult))
+    loadResult<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,
+                         verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
+                         opt$SampleIncludeList)
     cnv_matrix <- loadResult[["cnv_matrix"]]
-    #print("dim matrix")
-    #print(dim(cnv_matrix))
     raw_cov <- loadResult[["raw_cov"]]
 
   }
@@ -1284,7 +1189,9 @@ runRdTest<-function(bed)
   ##genotype and write to file##
   if (opt$rungenotype == TRUE) {
     ##Compress x-axis to 10 bins so it is easier to view###
-    plot_cnvmatrix<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,newsizefilter,opt$SampleExcludeList, opt$SampleIncludeList,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
+    plot_cnvmatrix<-loadData(chr, start, end, cnvID, sampleIDs, coveragefile, medianfile,
+                             verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
+                             opt$SampleIncludeList,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
   }
   
