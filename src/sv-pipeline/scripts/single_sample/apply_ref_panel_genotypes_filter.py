@@ -95,7 +95,7 @@ def filter_cnv_on_coverage(single_sample_vcf_file,
 
     with open("ref_panel_variant_samples_by_itx_region_{}.bed".format(svtype), 'w') as \
             ref_panel_variant_samples_by_itx_region, \
-        open("final_merged_intersection_{}.bed".format(svtype), 'w') as final_merged_intersection:
+            open("final_merged_intersection_{}.bed".format(svtype), 'w') as final_merged_intersection:
         cov_hist = subprocess.Popen(['bedtools', 'coverage', '-a', 'single_sample_calls_{}.bed'.format(svtype), '-b',
                                      'ref_panel_calls_{}.bed'.format(svtype), '-d'],
                                     stdout=subprocess.PIPE)
