@@ -216,7 +216,7 @@ task ApplyManualReviewUpdates {
   command <<<
     set -euo pipefail
     python ~{default="/opt/sv-pipeline/scripts/manual_review.py" script} \
-      --vcf test.vcf.gz \
+      --vcf ~{vcf} \
       --out ~{prefix}.unsorted.vcf.gz \
       --ped-file ~{ped_file} \
       ~{"--new-cnv-table " + new_cnv_table} \
