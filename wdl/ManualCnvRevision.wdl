@@ -37,6 +37,9 @@ workflow ManualCnvRevision {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
+    # Do not use
+    File? NONE_FILE_
+
     RuntimeAttr? runtime_override_hail_preconcat
     RuntimeAttr? runtime_override_hail_merge
     RuntimeAttr? runtime_override_hail_fix_header
@@ -77,7 +80,7 @@ workflow ManualCnvRevision {
       vcf=vcf,
       ped_file=ped_file,
       prefix="~{output_prefix}.manual_review.shard_~{i}",
-      new_cnv_table=new_cnv_table,
+      new_cnv_table=if i == 0 then new_cnv_table else NONE_FILE_,
       remove_vids_list=remove_vids_list,
       multiallelic_vids_list=multiallelic_vids_list,
       add_call_table=add_call_table,
