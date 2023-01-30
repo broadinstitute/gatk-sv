@@ -219,14 +219,14 @@ task ApplyManualReviewUpdates {
       --vcf test.vcf.gz \
       --out ~{prefix}.unsorted.vcf.gz \
       --ped-file ~{ped_file} \
-      ~{"--new-cnv-table" + new_cnv_table} \
-      ~{"--remove-vids-list" + remove_vids_list} \
-      ~{"--multiallelic-vids-list" + multiallelic_vids_list} \
-      ~{"--add-call-table" + add_call_table} \
-      ~{"--remove-call-table" + remove_call_table} \
-      ~{"--coords-table" + coords_table} \
-      ~{"--gd-table" + gd_table} \
-      ~{"--spanned-del-table" + spanned_del_table}
+      ~{"--new-cnv-table " + new_cnv_table} \
+      ~{"--remove-vids-list " + remove_vids_list} \
+      ~{"--multiallelic-vids-list " + multiallelic_vids_list} \
+      ~{"--add-call-table " + add_call_table} \
+      ~{"--remove-call-table " + remove_call_table} \
+      ~{"--coords-table " + coords_table} \
+      ~{"--gd-table " + gd_table} \
+      ~{"--spanned-del-table " + spanned_del_table}
     bcftools sort ~{prefix}.unsorted.vcf.gz -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
