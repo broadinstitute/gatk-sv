@@ -263,7 +263,7 @@ class ProjectBuilder:
                 print(f"Write output dockers json at {output_json}")
                 print(json.dumps(new_dockers_json, indent="  "))
             else:
-                with open(output_json, 'w') as f_out:
+                with open(output_json, "w") as f_out:
                     json.dump(new_dockers_json, f_out, indent="  ")
 
     def get_build_priority(self, target_name: str) -> (int, str):
@@ -378,7 +378,7 @@ class ProjectBuilder:
         build_completed = False
 
         if os.system("docker system info > /dev/null 2>&1") != 0:
-            raise RuntimeError("docker daemon is not running or returned error")
+            raise RuntimeError("Docker daemon is not running or returned error.")
 
         try:
             # set the appropriate targets
@@ -403,10 +403,10 @@ class ProjectBuilder:
                 for target_name in expanded_build_targets:
                     ImageBuilder(target_name, self).update_current_image()
             else:
-                print(colored('#' * 50, 'magenta'))
+                print(colored("#" * 50, "magenta"))
                 for target_name in expanded_build_targets:
                     a = colored("Building image ", "grey")
-                    b = colored(target_name + ":" + self.project_arguments.image_tag, "yellow", attrs=['bold'])
+                    b = colored(target_name + ":" + self.project_arguments.image_tag, "yellow", attrs=["bold"])
                     c = colored(" ...", "grey")
                     print(a, b, c)
 
@@ -468,7 +468,7 @@ class ProjectBuilder:
         return get_command_output(
             f"git diff --name-only {base_git_commit}" if current_git_commit is None else
             f"git diff --name-only {base_git_commit} {current_git_commit}"
-        ).strip().split('\n')
+        ).strip().split("\n")
 
 
 class ImageBuilder:  # class for building and pushing a single image
@@ -525,7 +525,7 @@ class ImageBuilder:  # class for building and pushing a single image
         images = {
             image for image in get_command_output(
                 "docker images --format '{{.Repository}}:{{.Tag}}'"
-            ).split('\n')
+            ).split("\n")
         }
         return local_image in images
 
@@ -535,7 +535,7 @@ class ImageBuilder:  # class for building and pushing a single image
 
     def build(self, build_time_args: Mapping[str, str]):
         if self.do_not_rebuild:
-            print(f"skipping build of {self.local_image} because it is already built and --no-force-rebuild is set")
+            print(f"Skipping build of {self.local_image} because it is already built and --no-force-rebuild is set.")
             return
         # standard build command
         docker_build_command = "docker build --platform linux/amd64 --progress plain --network=host \\\n    "
@@ -564,9 +564,11 @@ class ImageBuilder:  # class for building and pushing a single image
         """
         for remote_image in self.remote_images:
             # do not push images with very restrictive licenses
-            if self.name in ProjectBuilder.non_public_images and not remote_image.startswith('us.gcr.io'):
-                print(colored(f"Refusing to push non-public image {self.name} to non us.grc.io repo at {remote_image}",
-                              "red"))
+            if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
+                print(colored(
+                    f"Refusing to push non-public image {self.name} to non us.grc.io repo at {remote_image}",
+                    "red")
+                )
                 continue
             if ImageBuilder.docker_tag(self.local_image, remote_image) != 0:
                 raise RuntimeError(f"Failed to tag image ({remote_image}) for pushing to remote")
