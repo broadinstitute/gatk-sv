@@ -16,6 +16,14 @@ DEFAULT_GQ = 99
 DEFAULT_OGQ = 99
 DEFAULT_RD_GQ = 99
 
+# Defines how to refine genotypes spanned by erroneous deletions
+DEL_SPANNED_GT_MAP = {
+    (0, 0): (0, 1),
+    (0, 1): (1, 1),
+    (1, 1): (1, 1),
+    (None, None): (None, None)
+}
+
 
 def _convert_to_cnv(record, fout):
     new_record = fout.new_record(id=record.id, contig=record.chrom, start=record.start, stop=record.stop,
@@ -66,8 +74,8 @@ def _annotate_manual_review(record, value):
     record.info['MANUAL_REVIEW_TYPE'] = tuple(list(record.info['MANUAL_REVIEW_TYPE']) + [value])
 
 
-def _process(record, fout, remove_vids_set, multiallelic_vids_set, remove_call_dict, add_call_dict,
-             gd_dict, coords_dict):
+def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_set,
+             remove_call_dict, add_call_dict, gd_dict, coords_dict, no_sex_samples, allosomes):
     if record.id in remove_vids_set:
         print(f"Deleting variant {record.id}")
         return
@@ -108,13 +116,26 @@ def _process(record, fout, remove_vids_set, multiallelic_vids_set, remove_call_d
         record.pos = pos
         record.stop = end
         record.info['SVLEN'] = end - pos + 1
+    if record.id in spanned_del_dict:
+        print(f"Correcting genotypes of variant {record.id} spanned an erroneous DEL")
+        _set_filter_pass(record)
+        _annotate_manual_review(record, f"SPANNED_DEL")
+        # Flatten in case vids are repeated
+        samples = [x for y in spanned_del_dict[record.id] for x in y.split(',')]
+        for s in samples:
+            gt = record.samples[s]['GT']
+            record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
+    if record.chrom in allosomes:
+        for s in no_sex_samples:
+            record.samples[s]['GT'] = (None, None)
     # Write variant
     fout.write(record)
 
 
 def _create_new_variants(fout, new_cnv_dict):
-    for vid, value in new_cnv_dict.items():
-        chrom = value[0].split(';')[0]  # Sometimes semicolon delimited lists are provided
+    for key, value in new_cnv_dict.items():
+        vid = key.split(';')[0]  # Sometimes semicolon delimited lists are provided
+        chrom = value[0]
         pos = int(value[1])
         end = int(value[2])
         carrier_samples = set(value[3].split(','))
@@ -155,89 +176,92 @@ def _create_new_variants(fout, new_cnv_dict):
 
 
 def _parse_set(path: Text) -> Set[Text]:
+    if path is None:
+        return set()
     with open(path, 'r') as f:
-        return set([line.strip().split('\t')[0] for line in f])
+        return set([line.strip().split()[0] for line in f])
 
 
 def _parse_two_column_table(path: Text) -> Dict[Text, Text]:
+    if path is None:
+        return dict()
     with open(path, 'r') as f:
         d = defaultdict(list)
         for line in f:
-            tokens = line.strip().split('\t')
+            tokens = line.strip().split()
             d[tokens[0]].append(tokens[1])
     return d
 
 
 def _parse_coords_table(path: Text) -> Dict[Text, List[Text]]:
+    if path is None:
+        return dict()
     with open(path, 'r') as f:
         d = {}
         for line in f:
-            tokens = line.strip().split('\t')
+            tokens = line.strip().split()
             # { vid: [chrom, pos, end] }
             d[tokens[0]] = tokens[1:-1]
     return d
 
 
 def _parse_new_cnv_table(path: Text) -> Dict[Text, List[Text]]:
+    if path is None:
+        return dict()
     with open(path, 'r') as f:
         d = {}
         for line in f:
-            tokens = line.strip().split('\t')
+            tokens = line.strip().split()
             # { vid: [chrom, pos, end, sample_list] }
             d[tokens[3]] = tokens[:3] + tokens[4:]
     return d
 
 
-def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
-    """
-    Parses tsv of sample ploidy values.
-
-    Parameters
-    ----------
-    path: Text
-        table path
-
-    Returns
-    -------
-    header: Dict[Text, Dict[Text, int]]
-        map of sample to contig to ploidy, i.e. Dict[sample][contig] = ploidy
-    """
-    ploidy_dict = dict()
+def _parse_no_sex_samples(path: Text) -> List[Text]:
+    if path is None:
+        return list()
+    no_sex_samples = list()
     with open(path, 'r') as f:
-        header = f.readline().strip().split('\t')
         for line in f:
-            tokens = line.strip().split('\t')
-            sample = tokens[0]
-            ploidy_dict[sample] = {header[i]: int(tokens[i]) for i in range(1, len(header))}
-    return ploidy_dict
+            tokens = line.strip().split()
+            # Add sample ID if 5th column is 0
+            if tokens[4] == '0':
+                no_sex_samples.append(tokens[1])
+    return no_sex_samples
 
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Apply post-hoc updates to manually reviewed variants. Output may be unsorted.",
+        description="Apply post-hoc updates to manually reviewed variants. Table columns should be delimited "
+                    "with whitespace.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--vcf', type=str, help='Input vcf (defaults to stdin)')
-    parser.add_argument('--out', type=str, help='Output file (defaults to stdout)')
+    parser.add_argument('--out', type=str, help='Output file (defaults to stdout). May be unsorted.')
 
-    parser.add_argument("--chr-x", type=str, default="chrX", help="Chromosome X name, used for sex identification")
+    parser.add_argument('--chr-x', type=str, default='chrX', help='Chromosome X name')
+    parser.add_argument('--chr-y', type=str, default='chrY', help='Chromosome Y name')
+    parser.add_argument('--ped-file', type=str, help='Ped file', required=True)
 
-    parser.add_argument('--new-cnv-table', type=str, required=True,
+    parser.add_argument('--new-cnv-table', type=str,
                         help='Table of (1) chrom, (2) pos, (3) end, (4) unique ID possibly corresponding to IDs in '
                              '--gd-table, and (5) comma-delimited list of carrier samples, for new DEL/DUP records '
                              'to be added. The ID should contain either "DEL" or "DUP" to determine the SV type.')
-    parser.add_argument('--remove-vids-list', type=str, required=True, help='List of variant IDs to remove')
-    parser.add_argument('--multiallelic-vids-list', type=str, required=True,
+    parser.add_argument('--remove-vids-list', type=str, help='List of variant IDs to remove')
+    parser.add_argument('--multiallelic-vids-list', type=str,
                         help='List of variant IDs to convert to multiallelic CVNs')
-    parser.add_argument('--remove-call-table', type=str, required=True,
+    parser.add_argument('--spanned-del-table', type=str,
+                        help='Table of (1) variant IDs of overlapping an erroneous spanning deletion and '
+                             '(2) comma-delimited list of sample IDs whose genotypes will be corrected.')
+    parser.add_argument('--remove-call-table', type=str,
                         help='Table of (1) variant ID and (2) sample ID to change to hom-ref genotypes')
-    parser.add_argument('--add-call-table', type=str, required=True,
+    parser.add_argument('--add-call-table', type=str,
                         help='Table of (1) variant ID and (2) sample ID to change to het genotypes')
-    parser.add_argument('--coords-table', type=str, required=True,
+    parser.add_argument('--coords-table', type=str,
                         help='Table of (1) variant ID, (2) chrom, (3) pos, (4) end, and (5) ID of variant that led '
                              'to the new breakpoint, for changing variant coordinates.')
-    parser.add_argument('--gd-table', type=str, required=True,
+    parser.add_argument('--gd-table', type=str,
                         help='Table of (1) variant ID and (2) region name for annotating genomic disorder '
                              'regions (GD).')
     if len(argv) <= 1:
@@ -268,21 +292,27 @@ def main(argv: Optional[List[Text]] = None):
 
     remove_vids_set = _parse_set(args.remove_vids_list)
     multiallelic_vids_set = _parse_set(args.multiallelic_vids_list)
+    spanned_del_dict = _parse_two_column_table(args.spanned_del_table)
     remove_call_dict = _parse_two_column_table(args.remove_call_table)
     add_call_dict = _parse_two_column_table(args.add_call_table)
     gd_dict = _parse_two_column_table(args.gd_table)
     coords_dict = _parse_coords_table(args.coords_table)
     new_cnv_dict = _parse_new_cnv_table(args.new_cnv_table)
+    no_sex_samples = _parse_no_sex_samples(args.ped_file)
+    print(f"Allosome genotypes of samples without an assigned sex will be set to no-call: {', '.join(no_sex_samples)}")
     for record in chain(_create_new_variants(fout=fout, new_cnv_dict=new_cnv_dict), vcf):
         _process(
             record=record,
             fout=fout,
             remove_vids_set=remove_vids_set,
+            spanned_del_dict=spanned_del_dict,
             multiallelic_vids_set=multiallelic_vids_set,
             remove_call_dict=remove_call_dict,
             add_call_dict=add_call_dict,
             gd_dict=gd_dict,
-            coords_dict=coords_dict
+            coords_dict=coords_dict,
+            no_sex_samples=no_sex_samples,
+            allosomes=[args.chr_x, args.chr_y]
         )
     vcf.close()
     fout.close()
