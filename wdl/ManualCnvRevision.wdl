@@ -160,8 +160,9 @@ task GetSpannedDeletionsFromComplexResolve {
 
   command <<<
     set -euo pipefail
+    mkdir tmp
     bcftools view --no-version -i 'ID=@~{vids_list}' ~{vcf} \
-      bcftools sort -Oz -o ~{prefix}.vcf.gz
+      | bcftools sort -T ./tmp -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 
