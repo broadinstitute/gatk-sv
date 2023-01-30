@@ -219,7 +219,7 @@ fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome
       column_end = matrix(zeroBinEnds, ncol = 1)
       ncov_col = ncol(cov1)
       null_model <-
-        cbind(chr, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
+        cbind(chromosome, column_start, column_end, matrix(rep(0, times = nrow(column_start) *
           (ncov_col - 3)), ncol = ncov_col - 3))
       colnames(null_model) <- colnames(cov1)
 
@@ -308,7 +308,7 @@ removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
   return(cov1)
 }
 
-loadData <- function(chr, start, end, cnvID, sampleIDs, coveragefile, medianfile, bins, verylargevariantsize,
+loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargevariantsize,
                      vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, poorbincov=NULL, raw_cov=NULL)
   {
     if (is.null(raw_cov)) {
@@ -1111,13 +1111,13 @@ runRdTest<-function(bed)
   
   ##Get Intesity Data##
   if (exists("poorbincov")) {
-    loadResult <-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,
+    loadResult <-loadData(chr, start, end, coveragefile,medianfile,bins,
                           verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                           opt$SampleIncludeList,poorbincov)
     cnv_matrix <- loadResult[["cnv_matrix"]]
     raw_cov <- loadResult[["raw_cov"]]
   } else {
-    loadResult<-loadData(chr, start, end, cnvID, sampleIDs,coveragefile,medianfile,bins,
+    loadResult<-loadData(chr, start, end, coveragefile,medianfile,bins,
                          verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                          opt$SampleIncludeList)
     cnv_matrix <- loadResult[["cnv_matrix"]]
@@ -1190,7 +1190,7 @@ runRdTest<-function(bed)
   ##genotype and write to file##
   if (opt$rungenotype == TRUE) {
     ##Compress x-axis to 10 bins so it is easier to view###
-    plot_cnvmatrix<-loadData(chr, start, end, cnvID, sampleIDs, coveragefile, medianfile,
+    plot_cnvmatrix<-loadData(chr, start, end, coveragefile, medianfile,
                              verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                              opt$SampleIncludeList,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
