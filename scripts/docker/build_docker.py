@@ -98,48 +98,84 @@ class ProjectBuilder:
     """
     class to track dependencies, control build and push of entire job
     """
-    github_org = 'broadinstitute'
-    github_repo = 'gatk-sv'
+    github_org = "broadinstitute"
+    github_repo = "gatk-sv"
     # mapping from target to its dependencies
     #   each dependency is either None, or a mapping from each dependency name to the docker ARG it is passed via
-    #   currently each image has zero or one dependencies, but multiple dependencies are allowed
+    #   currently each image has zero or one dependency, but multiple dependencies are allowed
     dependencies = {
-        "manta": ImageDependencies("dockerfiles/manta/*"),
-        "melt": ImageDependencies("dockerfiles/melt/*"),
-        "wham": ImageDependencies("dockerfiles/wham/*"),
-        "str": ImageDependencies(("dockerfiles/str/*", "src/str/*")),
-        "sv-base-mini": ImageDependencies("dockerfiles/sv-base-mini/*"),
-        "samtools-cloud-virtual-env": ImageDependencies("dockerfiles/samtools-cloud-virtual-env/*"),
-        "samtools-cloud": ImageDependencies(
-            "dockerfiles/samtools-cloud/*",
-            {"sv-base-mini": "MINIBASE_IMAGE", "samtools-cloud-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-base-virtual-env": ImageDependencies("dockerfiles/sv-base-virtual-env/*"),
-        "sv-base": ImageDependencies(
-            "dockerfiles/sv-base/*",
-            {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "cnmops-virtual-env": ImageDependencies(
-            "dockerfiles/cnmops-virtual-env/*",
-            {"sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "cnmops": ImageDependencies(
-            ("dockerfiles/cnmops/*", "src/WGD/*"),
-            {"sv-base": "SVBASE_IMAGE", "cnmops-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline-virtual-env": ImageDependencies(
-            "dockerfiles/sv-pipeline-virtual-env/*",
-            {"sv-base-mini": "SV_BASE_MINI_IMAGE",
-             "sv-base-virtual-env": "R_VIRTUAL_ENV_IMAGE",
-             "samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}),
-        "sv-pipeline": ImageDependencies(
-            ("dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*", "src/svqc/*", "src/svtest/*",
-             "src/svtk/*", "src/WGD/*"),
-            {"sv-base": "SVBASE_IMAGE", "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}),
-        "sv-utils-env": ImageDependencies(
-            "dockerfiles/sv-utils-env/*",
-            {"samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}
+        "manta": ImageDependencies(
+            git_dependencies="dockerfiles/manta/*"
         ),
-        "sv-utils": ImageDependencies(("dockerfiles/sv-utils/*", "src/sv_utils/src/*", "src/sv_utils/setup.py"),
-                                      {"samtools-cloud": "SAMTOOLS_CLOUD_IMAGE", "sv-utils-env": "VIRTUAL_ENV_IMAGE"})
+        "melt": ImageDependencies(
+            git_dependencies="dockerfiles/melt/*"
+        ),
+        "wham": ImageDependencies(
+            git_dependencies="dockerfiles/wham/*"
+        ),
+        "str": ImageDependencies(
+            git_dependencies=("dockerfiles/str/*", "src/str/*")
+        ),
+        "sv-base-mini": ImageDependencies(
+            git_dependencies="dockerfiles/sv-base-mini/*"
+        ),
+        "samtools-cloud-virtual-env": ImageDependencies(
+            git_dependencies="dockerfiles/samtools-cloud-virtual-env/*"
+        ),
+        "samtools-cloud": ImageDependencies(
+            git_dependencies="dockerfiles/samtools-cloud/*",
+            docker_dependencies={
+                "sv-base-mini": "MINIBASE_IMAGE",
+                "samtools-cloud-virtual-env": "VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-base-virtual-env": ImageDependencies(
+            git_dependencies="dockerfiles/sv-base-virtual-env/*"
+        ),
+        "sv-base": ImageDependencies(
+            git_dependencies="dockerfiles/sv-base/*",
+            docker_dependencies={
+                "samtools-cloud": "SAMTOOLS_CLOUD_IMAGE",
+                "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}
+        ),
+        "cnmops-virtual-env": ImageDependencies(
+            git_dependencies="dockerfiles/cnmops-virtual-env/*",
+            docker_dependencies={
+                "sv-base-virtual-env": "VIRTUAL_ENV_IMAGE"}
+        ),
+        "cnmops": ImageDependencies(
+            git_dependencies=("dockerfiles/cnmops/*", "src/WGD/*"),
+            docker_dependencies={
+                "sv-base": "SVBASE_IMAGE",
+                "cnmops-virtual-env": "VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-pipeline-virtual-env": ImageDependencies(
+            git_dependencies="dockerfiles/sv-pipeline-virtual-env/*",
+            docker_dependencies={
+                "sv-base-mini": "SV_BASE_MINI_IMAGE",
+                "sv-base-virtual-env": "R_VIRTUAL_ENV_IMAGE",
+                "samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-pipeline": ImageDependencies(
+            git_dependencies=(
+                "dockerfiles/sv-pipeline/*", "src/RdTest/*", "src/sv-pipeline/*",
+                "src/svqc/*", "src/svtest/*", "src/svtk/*", "src/WGD/*"),
+            docker_dependencies={
+                "sv-base": "SVBASE_IMAGE",
+                "sv-pipeline-virtual-env": "VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-utils-env": ImageDependencies(
+            git_dependencies="dockerfiles/sv-utils-env/*",
+            docker_dependencies={
+                "samtools-cloud-virtual-env": "PYTHON_VIRTUAL_ENV_IMAGE"}
+        ),
+        "sv-utils": ImageDependencies(
+            git_dependencies=("dockerfiles/sv-utils/*", "src/sv_utils/src/*", "src/sv_utils/setup.py"),
+            docker_dependencies={
+                "samtools-cloud": "SAMTOOLS_CLOUD_IMAGE",
+                "sv-utils-env": "VIRTUAL_ENV_IMAGE"}
+        )
     }
-    non_public_images = frozenset({'melt'})
+    non_public_images = frozenset({"melt"})
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
     accepted_target_values = frozenset(dependencies.keys()).union({"all"})
     latest_tag = "latest"
@@ -163,18 +199,18 @@ class ProjectBuilder:
     def load_json(json_file: str) -> Dict[str, str]:
         if not os.path.isfile(json_file):
             return {}
-        with open(json_file, 'r') as f_in:
+        with open(json_file, "r") as f_in:
             return json.load(f_in)
 
     @staticmethod
     def get_target_from_image(docker_image: str) -> str:
         # note: will process any string, even if it does not have '/' or ':' in it, even if it is not a docker image
         # (in which case it will return the whole docker_image string)
-        return docker_image.rsplit('/', 1)[-1].split(':', 1)[0]
+        return docker_image.rsplit("/", 1)[-1].split(":", 1)[0]
 
     @staticmethod
     def get_image_repo(docker_image: str) -> Optional[str]:
-        repo_ind = docker_image.rfind('/')
+        repo_ind = docker_image.rfind("/")
         return None if repo_ind < 0 else docker_image[:repo_ind]
 
     @staticmethod
@@ -299,7 +335,7 @@ class ProjectBuilder:
             self.working_dir = os.path.dirname(os.path.dirname(self.launch_script_path))
         else:
             # if staging is required, mkdir, cd, and pull
-            tmp_dir_path = tempfile.mkdtemp(prefix=self.project_arguments.staging_dir).rstrip('/') + '/'
+            tmp_dir_path = tempfile.mkdtemp(prefix=self.project_arguments.staging_dir).rstrip("/") + "/"
             connect_mode = "git@github.com:" if self.project_arguments.use_ssh else "https://github.com"
             clone_target = connect_mode + "/" + ProjectBuilder.github_org + "/" + ProjectBuilder.github_repo + ".git"
             if os.system(f"git clone {clone_target} {tmp_dir_path}") != 0:
@@ -316,7 +352,7 @@ class ProjectBuilder:
             git_checkout_cmd = "git checkout      " + \
                 self.project_arguments.remote_git_hash
             if os.system(git_checkout_cmd) != 0:
-                raise ValueError(f"The provided git hash [{self.project_arguments.remote_git_hash}] does not exist")
+                raise ValueError(f"The provided git hash `{self.project_arguments.remote_git_hash}` does not exist")
 
         print("Working directory: " + os.getcwd())
         return tmp_dir_path
@@ -376,8 +412,7 @@ class ProjectBuilder:
 
                     build_time_args = {
                         arg: self.get_current_image(image_name)
-                        for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()
-                    }
+                        for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()}
 
                     image_builder = ImageBuilder(target_name, self)
                     image_builder.build(build_time_args)
@@ -385,9 +420,9 @@ class ProjectBuilder:
                     if self.project_arguments.prune_after_each_image and not self.project_arguments.dry_run:
                         # clean dangling images (i.e. those "<none>" images), stopped containers, etc
                         os.system("docker system prune -f")
-                    print(colored('#' * 50, 'magenta'))
+                    print(colored("#" * 50, "magenta"))
 
-                print(colored('BUILD PROCESS SUCCESS!', 'green'))
+                print(colored("BUILD PROCESS SUCCESS!", "green"))
 
             if self.remote_docker_repos:
                 # push any images that are purely local (this can happen if e.g. images are built without specifying
@@ -438,8 +473,8 @@ class ProjectBuilder:
 
 class ImageBuilder:  # class for building and pushing a single image
     def __init__(self, name: str, project_builder: ProjectBuilder):
-        if ':' in name:
-            self.name, self.tag = name.split(':', 1)
+        if ":" in name:
+            self.name, self.tag = name.split(":", 1)
         else:
             self.name = name
             self.tag = project_builder.project_arguments.image_tag
@@ -489,7 +524,7 @@ class ImageBuilder:  # class for building and pushing a single image
     def image_is_built(local_image: str) -> bool:
         images = {
             image for image in get_command_output(
-                'docker images --format "{{.Repository}}:{{.Tag}}"'
+                "docker images --format '{{.Repository}}:{{.Tag}}'"
             ).split('\n')
         }
         return local_image in images
@@ -572,7 +607,7 @@ def get_command_output(
         stderr = pipe_err.read().decode(encoding)
     return_code = sub_p.poll()
     if raise_on_error and return_code != 0:
-        raise RuntimeError('Error executing %s:\n%s' % (command, stderr[:-1]))
+        raise RuntimeError("Error executing %s:\n%s" % (command, stderr[:-1]))
     return (output, stderr, return_code) if return_error_info else output
 
 
@@ -587,91 +622,138 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
     # required arguments
     # to build from local or remote git tag/hash values
-    git_args_group = parser.add_argument_group('Mutex args', 'remote git tag/hash values (mutually exclusive)')
+    git_args_group = parser.add_argument_group("Mutex args", "remote git tag/hash values (mutually exclusive)")
     git_mutex_args_group = git_args_group.add_mutually_exclusive_group()
 
     git_mutex_args_group.add_argument(
-        '--remote-git-tag', type=str,
-        help='release tag on Github; this indicates pulling from Github to a staging dir'
+        "--remote-git-tag", type=str,
+        help="Release tag on Github; this indicates pulling from Github to a staging dir."
     )
 
     git_mutex_args_group.add_argument(
-        '--remote-git-hash', type=str,
-        help='a hash value on Github; this indicates pulling from Github to a staging dir'
+        "--remote-git-hash", type=str,
+        help="A hash value on Github; this indicates pulling from Github to a staging dir."
     )
+
     # to build from remote/Github (staging required)
-    remote_git_args_group = parser.add_argument_group('Remote git',
-                                                      'args involved when building from remote git tags/hashes')
+    remote_git_args_group = parser.add_argument_group(
+        "Remote git",
+        "Args involved when building from remote git tags/hashes."
+    )
 
     remote_git_args_group.add_argument(
-        '--staging-dir', type=str, help='a temporary staging directory to store builds; required only when pulling '
-                                        'from Github, ignored otherwise'
+        "--staging-dir", type=str,
+        help="A temporary staging directory to store builds; required only when pulling "
+             "from Github, ignored otherwise."
     )
-    remote_git_args_group.add_argument('--use-ssh', action='store_true', help='use SSH to pull from github')
+
+    remote_git_args_group.add_argument(
+        "--use-ssh", action="store_true",
+        help="Use SSH to pull from GitHub."
+    )
+
     # flag to turn on push to Dockerhub and/or GCR
     docker_remote_args_group = parser.add_argument_group(
-        'Docker push', 'controlling behavior related pushing dockers to remote repos'
+        "Docker push",
+        "Controlling behavior related pushing dockers to remote repos."
     )
-    docker_remote_args_group.add_argument('--docker-repo', type=str,
-                                          help='Docker repo to push images to. This will push images that are built '
-                                               'this run of build_docker.py, or that currently have only a local image '
-                                               'in --input-json')
-    docker_remote_args_group.add_argument('--gcr-project', type=str,
-                                          help='Deprecated. Used to determine which docker repo to push images to. Use '
-                                               '--docker-repo instead.')
-    docker_remote_args_group.add_argument('--update-latest', action='store_true',
-                                          help=f'also update \"{ProjectBuilder.latest_tag}\" tag in remote docker'
-                                               f'repo(s)')
-    docker_remote_args_group.add_argument('--input-json', type=str, default=Paths.dockers_json_path,
-                                          help="Path to dockers.json to use as input. This file serves as a store for "
-                                               "both the default docker image to use for various gatk-sv WDLs, and for "
-                                               "the most up-to-date docker tag for each docker image.")
-    docker_remote_args_group.add_argument('--output-json', type=str, default=Paths.dockers_json_path,
-                                          help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn "
-                                               "off updates")
-    parser.add_argument("--dry-run", action="store_true",
-                        help="Compute docker images that will be build, but don't actually build or push")
-    parser.add_argument("--skip-dependent-images", action="store_true",
-                        help="Don't build images that depend on targets. Can leave images in an unreproducible state: "
-                             "only use this if you are sure you know what you are doing!")
+
+    docker_remote_args_group.add_argument(
+        "--docker-repo", type=str,
+        help="Docker repo to push images to. This will push images that are built "
+             "this run of build_docker.py, or that currently have only a local image "
+             "in --input-json."
+    )
+
+    docker_remote_args_group.add_argument(
+        "--gcr-project", type=str,
+        help="Deprecated. Used to determine which docker repo to push images to. Use "
+             "--docker-repo instead."
+    )
+
+    docker_remote_args_group.add_argument(
+        "--update-latest", action="store_true",
+        help=f"Also update `{ProjectBuilder.latest_tag}` tag in remote docker repo(s)."
+    )
+
+    docker_remote_args_group.add_argument(
+        "--input-json", type=str, default=Paths.dockers_json_path,
+        help="Path to dockers.json to use as input. This file serves as a store for "
+             "both the default docker image to use for various gatk-sv WDLs, and for "
+             "the most up-to-date docker tag for each docker image."
+    )
+
+    docker_remote_args_group.add_argument(
+        "--output-json", type=str, default=Paths.dockers_json_path,
+        help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn off updates."
+    )
+
     parser.add_argument(
-        '--targets', nargs='*', type=str,
-        help='Manually-specified list project docker image(s) you want to build (note "all" does not include melt). '
-             'Alternatively can specify --base-git-commit/--current-git-commit to automatically determine targets.'
+        "--dry-run", action="store_true",
+        help="Compute docker images that will be build, but don't actually build or push."
     )
+
+    parser.add_argument(
+        "--skip-dependent-images", action="store_true",
+        help="Don't build images that depend on targets. Can leave images in an unreproducible state: "
+             "only use this if you are sure you know what you are doing!"
+    )
+
+    parser.add_argument(
+        "--targets", nargs="*", type=str,
+        help="Manually-specified list project docker image(s) you want to build (note `all` does not include melt). "
+             "Alternatively can specify --base-git-commit/--current-git-commit to automatically determine targets."
+    )
+
     short_git_hash_head = get_command_output("git rev-parse --short HEAD").strip()
-    parser.add_argument('--image-tag', type=str, default=short_git_hash_head,
-                        help='tag to be applied to all images being built')
+    parser.add_argument(
+        "--image-tag", type=str, default=short_git_hash_head,
+        help="Tag to be applied to all images being built."
+    )
+
     parser.add_argument(
         # flag to turn off git protection (default mode is refusing to build when there are untracked files and/or
         # uncommitted changes)
-        '--disable-git-protect', action='store_true',
-        help='disable git check/protect when building from local files (will use uncommited changes to build)'
+        "--disable-git-protect", action="store_true",
+        help="Disable git check/protect when building from local files (will use uncommitted changes to build)."
     )
-    parser.add_argument('--no-force-rebuild', action='store_true',
-                        help='Do not rebuild docker images if the exact image and tag already exist.')
-    parser.add_argument('--skip-cleanup', action='store_true',
-                        help='skip cleanup after successful and unsuccessful build attempts.')
-    parser.add_argument('--base-git-commit', type=str,
-                        help="This script can have targets specified manually (via --targets) or it can automatically "
-                             "determine which docker image \"targets\" to build by examining which files have changed "
-                             "in the git repo. When auto-determining build targets, this options specifies the baseline"
-                             " git commit to check for changes, i.e. only files altered since this commit should be "
-                             "considered changed. Can be a SHA or other  specifier "
-                             "(e.g. HEAD^)")
-    parser.add_argument('--current-git-commit', type=str,
-                        help="This script can automatically determine which docker image \"targets\" to build by "
-                             "examining which files have changed in the git repo. When auto-determining build targets, "
-                             "this options specifies the current git commit to check for changes. If omitted,"
-                             " use current status of git repo with uncommitted changes. Can be a SHA or other specifier"
-                             " (e.g. HEAD)")
-    parser.add_argument('--prune-after-each-image', action='store_true',
-                        help='Do "docker system prune" after each image is successfully built, to save disk space. Only'
-                             ' necessary on cramped VMs')
+
+    parser.add_argument(
+        "--no-force-rebuild", action="store_true",
+        help="Do not rebuild docker images if the exact image and tag already exist."
+    )
+
+    parser.add_argument(
+        "--skip-cleanup", action="store_true",
+        help="Skip cleanup after successful and unsuccessful build attempts."
+    )
+
+    parser.add_argument(
+        "--base-git-commit", type=str,
+        help="This script can have targets specified manually (via --targets) or it can automatically "
+             "determine which docker image `targets` to build by examining which files have changed "
+             "in the git repo. When auto-determining build targets, this options specifies the baseline "
+             "git commit to check for changes, i.e. only files altered since this commit should be "
+             "considered changed. Can be a SHA or other  specifier (e.g. HEAD)."
+    )
+
+    parser.add_argument(
+        "--current-git-commit", type=str,
+        help="This script can automatically determine which docker image `targets` to build by "
+             "examining which files have changed in the git repo. When auto-determining build targets, "
+             "this options specifies the current git commit to check for changes. If omitted, "
+             "use current status of git repo with uncommitted changes. Can be a SHA or other specifier (e.g. HEAD)."
+    )
+
+    parser.add_argument(
+        "--prune-after-each-image", action="store_true",
+        help="Do `docker system prune` after each image is successfully built, to save disk space. "
+             "Only necessary on cramped VMs."
+    )
 
     # parse and consistency check
     if len(args_list) <= 1:  # no arguments, print help and exit with success
-        parser.parse_args(['-h'])
+        parser.parse_args(["-h"])
         sys.exit(0)
     parsed_args = parser.parse_args(args_list[1:])
 
@@ -680,34 +762,34 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
 
     if parsed_args.base_git_commit is None:
         if parsed_args.targets is None:
-            raise ValueError('Must specify exactly one of "--base-git-commit" or "--targets", but neither were passed')
+            raise ValueError("Must specify exactly one of `--base-git-commit` or `--targets`, but neither were passed.")
         # if passed targets are in the accepted values
         for tar in parsed_args.targets:
             if tar not in ProjectBuilder.accepted_target_values:
-                raise ValueError("\"" + tar + "\" not in allowed target values")
+                raise ValueError("\"" + tar + "\" not in allowed target values.")
 
         if "all" in parsed_args.targets:
             if 1 != len(parsed_args.targets):
-                raise ValueError("when \"all\" is provided, no other target values allowed")
+                raise ValueError("When `all` is provided, no other target values allowed.")
     else:
         if parsed_args.targets is not None:
-            raise ValueError('Must specify exactly one of "--base-git-commit" or "--targets", but both were passed')
+            raise ValueError("Must specify exactly one of `--base-git-commit` or `--targets`, but both were passed.")
 
     # if "use_ssh" flag is turned on, remote git tag/hash should be provided
     if parsed_args.use_ssh is True:
         if (parsed_args.remote_git_tag is None) and (parsed_args.remote_git_hash is None):
-            raise ValueError("\"use_ssh\" is specified but remote git tag/hash is not")
+            raise ValueError("`use_ssh` is specified but remote git tag/hash is not.")
 
     # if remote git tag/hash and/or is specified, staging dir should be specified
     if (parsed_args.remote_git_tag is not None) or (parsed_args.remote_git_hash is not None):
         if parsed_args.staging_dir is None:
-            raise ValueError("remote git tag/hash is specified but staging_dir is not")
+            raise ValueError("Remote git tag/hash is specified but staging_dir is not.")
 
     # if requesting to update "latest" tag in remote docker repo(s), remote git release tag must be specified
     if parsed_args.update_latest is True:
         if parsed_args.remote_git_tag is None:
-            raise ValueError(f"publishing \"{ProjectBuilder.latest_tag}\" docker images requires a remote Github "
-                             "release tag")
+            raise ValueError(f"Publishing `{ProjectBuilder.latest_tag}` docker images requires a remote Github "
+                             "release tag.")
 
     # if there are uncommitted changes when building from local files, raise exception
     if parsed_args.staging_dir is None and not parsed_args.disable_git_protect:
@@ -715,8 +797,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         ret = int(s)
         if 0 != ret:
             raise ValueError(
-                "Current directory has uncommitted changes or untracked files. Cautiously refusing to proceed."
-            )
+                "Current directory has uncommitted changes or untracked files. Cautiously refusing to proceed.")
 
     if parsed_args.gcr_project is not None:
         if parsed_args.docker_repo is not None:
