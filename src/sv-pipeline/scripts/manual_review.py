@@ -170,7 +170,6 @@ def _create_new_variants(fout, new_cnv_dict):
                 gt['GT'] = (0, 0)
                 gt['RD_CN'] = 2
             gt['EV'] = ('RD',)
-            gt['GT_FILTER'] = 'pass'
             gt['GQ'] = DEFAULT_GQ
             gt['RD_GQ'] = DEFAULT_RD_GQ
         print(f"Created new variant {vid}")
