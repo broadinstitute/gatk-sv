@@ -74,10 +74,12 @@ workflow ManualCnvRevision {
     }
   }
 
+  Array[File] vcf_shards = flatten(select_all([ScatterVcf.shards, GetSpannedDeletionsFromComplexResolve.out]))
+
   scatter ( i in range(length(ScatterVcf.shards)) ) {
     call ApplyManualReviewUpdates {
       input:
-      vcf=vcf,
+      vcf=vcf_shards[i],
       ped_file=ped_file,
       prefix="~{output_prefix}.manual_review.shard_~{i}",
       new_cnv_table=if i == 0 then new_cnv_table else NONE_FILE_,
@@ -94,12 +96,10 @@ workflow ManualCnvRevision {
     }
   }
 
-  Array[File] vcf_shards = flatten(select_all([GetSpannedDeletionsFromComplexResolve.out, ApplyManualReviewUpdates.out]))
-  Array[File] vcf_shard_indexes = flatten(select_all([GetSpannedDeletionsFromComplexResolve.out_index, ApplyManualReviewUpdates.out_index]))
   if (use_hail) {
     call HailMerge.HailMerge {
       input:
-        vcfs=vcf_shards,
+        vcfs=ApplyManualReviewUpdates.out,
         prefix="~{output_prefix}.manual_cnv_revision",
         gcs_project=gcs_project,
         reset_cnv_gts=true,
@@ -114,8 +114,8 @@ workflow ManualCnvRevision {
   if (!use_hail) {
     call tasks.ConcatVcfs {
       input:
-        vcfs=vcf_shards,
-        vcfs_idx=vcf_shard_indexes,
+        vcfs=ApplyManualReviewUpdates.out,
+        vcfs_idx=ApplyManualReviewUpdates.out_index,
         allow_overlaps=true,
         outfile_prefix="~{output_prefix}.manual_cnv_revision",
         sv_base_mini_docker=sv_base_mini_docker,
