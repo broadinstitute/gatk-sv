@@ -89,19 +89,21 @@ def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_
         _annotate_manual_review(record, f"DROP_{len(remove_call_dict[record.id])}_CALLS")
         _set_filter_pass(record)
         for s in remove_call_dict[record.id]:
-            print(f"Setting genotype {s} to hom-ref for variant {record.id}")
-            record.samples[s]['GT'] = (0,) * len(record.samples[s]['GT'])
+            if s in record.samples:
+                print(f"Setting genotype {s} to hom-ref for variant {record.id}")
+                record.samples[s]['GT'] = (0,) * len(record.samples[s]['GT'])
     if record.id in add_call_dict:
         # Set genotypes to het
         _annotate_manual_review(record, f"ADD_{len(add_call_dict[record.id])}_CALLS")
         _set_filter_pass(record)
         for s in add_call_dict[record.id]:
-            ploidy = len(record.samples[s]['GT'])
-            print(f"Setting genotype {s} to het for variant {record.id}")
-            if ploidy > 0:
-                gt = record.samples[s]['GT'] = [0] * ploidy
-                gt[-1] = 1
-                record.samples[s]['GT'] = tuple(gt)
+            if s in record.samples:
+                ploidy = len(record.samples[s]['GT'])
+                print(f"Setting genotype {s} to het for variant {record.id}")
+                if ploidy > 0:
+                    gt = record.samples[s]['GT'] = [0] * ploidy
+                    gt[-1] = 1
+                    record.samples[s]['GT'] = tuple(gt)
     if record.id in gd_dict:
         print(f"Annotating genomic disorder region of variant {record.id}")
         _set_filter_pass(record)
@@ -123,11 +125,13 @@ def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_
         # Flatten in case vids are repeated
         samples = [x for y in spanned_del_dict[record.id] for x in y.split(',')]
         for s in samples:
-            gt = record.samples[s]['GT']
-            record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
+            if s in record.samples:
+                gt = record.samples[s]['GT']
+                record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
     if record.chrom in allosomes:
         for s in no_sex_samples:
-            record.samples[s]['GT'] = (None, None)
+            if s in record.samples:
+                record.samples[s]['GT'] = (None, None)
     # Write variant
     fout.write(record)
 
