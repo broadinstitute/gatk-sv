@@ -13,7 +13,6 @@ CNV_FORMAT_KEYS_TO_DROP = set(['PE_GT', 'PE_GQ', 'SR_GT', 'SR_GQ'])
 # For new and converted CNV records
 DEFAULT_CNQ = 999
 DEFAULT_GQ = 99
-DEFAULT_OGQ = 99
 DEFAULT_RD_GQ = 99
 
 # Defines how to refine genotypes spanned by erroneous deletions
@@ -171,7 +170,6 @@ def _create_new_variants(fout, new_cnv_dict):
                 gt['GT'] = (0, 0)
                 gt['RD_CN'] = 2
             gt['EV'] = ('RD',)
-            gt['OGQ'] = DEFAULT_OGQ
             gt['GT_FILTER'] = 'pass'
             gt['GQ'] = DEFAULT_GQ
             gt['RD_GQ'] = DEFAULT_RD_GQ
