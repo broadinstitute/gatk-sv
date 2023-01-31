@@ -124,7 +124,7 @@ def _process(record, fout, sample_set, remove_vids_set, spanned_del_dict, multia
         # Flatten in case vids are repeated
         samples = [x for y in spanned_del_dict[record.id] for x in y.split(',')]
         for s in samples:
-            if s in record.samples:
+            if s in sample_set:
                 gt = record.samples[s]['GT']
                 record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
     if record.chrom in allosomes:
