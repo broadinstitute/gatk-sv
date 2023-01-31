@@ -73,7 +73,7 @@ def _annotate_manual_review(record, value):
     record.info['MANUAL_REVIEW_TYPE'] = tuple(list(record.info['MANUAL_REVIEW_TYPE']) + [value])
 
 
-def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_set,
+def _process(record, fout, sample_set, remove_vids_set, spanned_del_dict, multiallelic_vids_set,
              remove_call_dict, add_call_dict, gd_dict, coords_dict, no_sex_samples, allosomes):
     if record.id in remove_vids_set:
         print(f"Deleting variant {record.id}")
@@ -88,7 +88,7 @@ def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_
         _annotate_manual_review(record, f"DROP_{len(remove_call_dict[record.id])}_CALLS")
         _set_filter_pass(record)
         for s in remove_call_dict[record.id]:
-            if s in record.samples:
+            if s in sample_set:
                 print(f"Setting genotype {s} to hom-ref for variant {record.id}")
                 record.samples[s]['GT'] = (0,) * len(record.samples[s]['GT'])
     if record.id in add_call_dict:
@@ -96,7 +96,7 @@ def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_
         _annotate_manual_review(record, f"ADD_{len(add_call_dict[record.id])}_CALLS")
         _set_filter_pass(record)
         for s in add_call_dict[record.id]:
-            if s in record.samples:
+            if s in sample_set:
                 ploidy = len(record.samples[s]['GT'])
                 print(f"Setting genotype {s} to het for variant {record.id}")
                 if ploidy > 0:
@@ -129,7 +129,7 @@ def _process(record, fout, remove_vids_set, spanned_del_dict, multiallelic_vids_
                 record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
     if record.chrom in allosomes:
         for s in no_sex_samples:
-            if s in record.samples:
+            if s in sample_set:
                 record.samples[s]['GT'] = (None, None)
     # Write variant
     fout.write(record)
@@ -300,11 +300,13 @@ def main(argv: Optional[List[Text]] = None):
     coords_dict = _parse_coords_table(args.coords_table)
     new_cnv_dict = _parse_new_cnv_table(args.new_cnv_table)
     no_sex_samples = _parse_no_sex_samples(args.ped_file)
+    sample_set = set(s for s in fout.header.samples)
     print(f"Allosome genotypes of samples without an assigned sex will be set to no-call: {', '.join(no_sex_samples)}")
     for record in chain(_create_new_variants(fout=fout, new_cnv_dict=new_cnv_dict), vcf):
         _process(
             record=record,
             fout=fout,
+            sample_set=sample_set,
             remove_vids_set=remove_vids_set,
             spanned_del_dict=spanned_del_dict,
             multiallelic_vids_set=multiallelic_vids_set,
