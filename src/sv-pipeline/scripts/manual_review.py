@@ -283,7 +283,7 @@ def main(argv: Optional[List[Text]] = None):
         vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
-    header.add_line('##INFO=<ID=GD,Number=1,Type=String,Description="Genomic disorder region">')
+    header.add_line('##INFO=<ID=GD,Number=.,Type=String,Description="Genomic disorder region">')
     header.add_line('##INFO=<ID=MANUAL_REVIEW_TYPE,Number=.,Type=String,Description="Annotation(s) for variants '
                     'modified post hoc after manual review">')
     if args.out is None:
