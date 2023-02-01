@@ -49,17 +49,8 @@ workflow ManualCnvRevision {
     RuntimeAttr? runtime_attr_override_scatter
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_override_spanned_cpx
-    RuntimeAttr? runtime_override_rescale_gq
     RuntimeAttr? runtime_attr_apply
-  }
-
-  call tasks.ScatterVcf {
-    input:
-      vcf=vcf,
-      records_per_shard = records_per_shard,
-      prefix = "~{output_prefix}.scatter_vcf",
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_override_scatter
+    RuntimeAttr? runtime_attr_apply_cpx
   }
 
   call utils.GetSampleIdsFromVcf {
@@ -71,33 +62,51 @@ workflow ManualCnvRevision {
 
   if (defined(spanned_del_cpx_vids_list)) {
     Array[File] cpx_vcfs_ = select_first([cpx_vcfs])
+    File vids_list_ = select_first([spanned_del_cpx_vids_list])
     scatter ( i in range(length(cpx_vcfs_))) {
       call GetSpannedDeletionsFromComplexResolve {
         input:
           vcf = cpx_vcfs_[i],
           vcf_index = cpx_vcfs_[i] + ".tbi",
-          vids_list = select_first([spanned_del_cpx_vids_list]),
+          vids_list = vids_list_,
           prefix = "~{output_prefix}.spanned_del_cpx.shard_~{i}",
           sample_list=GetSampleIdsFromVcf.out_file,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_attr_override_spanned_cpx
       }
-      call tasks.FixEndsRescaleGQ {
+      call ApplyManualReviewUpdates as ApplyUpdatesToDeletionsFromComplexResolve {
         input:
-          vcf = GetSpannedDeletionsFromComplexResolve.out,
-          prefix = "~{output_prefix}.rescale_gq.shard_~{i}",
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_override = runtime_override_rescale_gq
+          vcf=GetSpannedDeletionsFromComplexResolve.out,
+          ped_file=ped_file,
+          prefix="~{output_prefix}.spanned_del_cpx_manual_review.shard_~{i}",
+          remove_vids_list=remove_vids_list,
+          multiallelic_vids_list=multiallelic_vids_list,
+          add_call_table=add_call_table,
+          remove_call_table=remove_call_table,
+          coords_table=coords_table,
+          gd_table=gd_table,
+          spanned_del_table=spanned_del_table,
+          spanned_del_vids_list = vids_list_,
+          script=apply_manual_review_script,
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_apply_cpx
       }
     }
   }
 
-  Array[File] vcf_shards = flatten(select_all([ScatterVcf.shards, FixEndsRescaleGQ.out]))
+  call tasks.ScatterVcf {
+    input:
+      vcf=vcf,
+      records_per_shard = records_per_shard,
+      prefix = "~{output_prefix}.scatter_vcf",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_override_scatter
+  }
 
-  scatter ( i in range(length(vcf_shards)) ) {
+  scatter ( i in range(length(ScatterVcf.shards)) ) {
     call ApplyManualReviewUpdates {
       input:
-      vcf=vcf_shards[i],
+      vcf=ScatterVcf.shards[i],
       ped_file=ped_file,
       prefix="~{output_prefix}.manual_review.shard_~{i}",
       new_cnv_table=if i == 0 then new_cnv_table else NONE_FILE_,
@@ -113,6 +122,8 @@ workflow ManualCnvRevision {
       runtime_attr_override=runtime_attr_apply
     }
   }
+
+  Array[File] vcf_shards = flatten(select_all([ApplyManualReviewUpdates.out, ApplyUpdatesToDeletionsFromComplexResolve.out]))
 
   if (use_hail) {
     call HailMerge.HailMerge {
@@ -132,7 +143,7 @@ workflow ManualCnvRevision {
   if (!use_hail) {
     call tasks.ConcatVcfs {
       input:
-        vcfs=ApplyManualReviewUpdates.out,
+        vcfs=vcf_shards,
         vcfs_idx=ApplyManualReviewUpdates.out_index,
         allow_overlaps=true,
         outfile_prefix="~{output_prefix}.manual_cnv_revision",
@@ -205,6 +216,7 @@ task ApplyManualReviewUpdates {
     File? coords_table
     File? gd_table
     File? spanned_del_table
+    File? spanned_del_vids_list
 
     # For debugging
     File? script
@@ -245,7 +257,8 @@ task ApplyManualReviewUpdates {
       ~{"--remove-call-table " + remove_call_table} \
       ~{"--coords-table " + coords_table} \
       ~{"--gd-table " + gd_table} \
-      ~{"--spanned-del-table " + spanned_del_table}
+      ~{"--spanned-del-table " + spanned_del_table} \
+      ~{"--spanned-del-vids-list " + spanned_del_vids_list}
     bcftools sort ~{prefix}.unsorted.vcf.gz -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>

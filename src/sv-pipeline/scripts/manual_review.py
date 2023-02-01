@@ -15,6 +15,9 @@ DEFAULT_CNQ = 999
 DEFAULT_GQ = 99
 DEFAULT_RD_GQ = 99
 
+# Pegged to 99 for spanned DEL records pulled from CPX genotyping VCF
+GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
+
 # Defines how to refine genotypes spanned by erroneous deletions
 DEL_SPANNED_GT_MAP = {
     (0, 0): (0, 1),
@@ -73,8 +76,9 @@ def _annotate_manual_review(record, value):
     record.info['MANUAL_REVIEW_TYPE'] = tuple(list(record.info['MANUAL_REVIEW_TYPE']) + [value])
 
 
-def _process(record, fout, sample_set, remove_vids_set, spanned_del_dict, multiallelic_vids_set,
-             remove_call_dict, add_call_dict, gd_dict, coords_dict, no_sex_samples, allosomes):
+def _process(record, fout, sample_set, remove_vids_set, spanned_del_vids_set, spanned_del_dict,
+             multiallelic_vids_set, remove_call_dict, add_call_dict, gd_dict, coords_dict,
+             no_sex_samples, allosomes):
     if record.id in remove_vids_set:
         print(f"Deleting variant {record.id}")
         return
@@ -127,6 +131,13 @@ def _process(record, fout, sample_set, remove_vids_set, spanned_del_dict, multia
             if s in sample_set:
                 gt = record.samples[s]['GT']
                 record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
+    if record.id in spanned_del_vids_set:
+        print(f"Setting quality scores to 99 for variant {record.id}")
+        _set_filter_pass(record)
+        _annotate_manual_review(record, f"SPANNED_DEL")
+        for gt in record.samples.values():
+            for key in GQ_FIELDS:
+                gt[key] = 99
     if record.chrom in allosomes:
         for s in no_sex_samples:
             if s in sample_set:
@@ -255,6 +266,9 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--spanned-del-table', type=str,
                         help='Table of (1) variant IDs of overlapping an erroneous spanning deletion and '
                              '(2) comma-delimited list of sample IDs whose genotypes will be corrected.')
+    parser.add_argument('--spanned-del-vids-list', type=str,
+                        help='List of spanned DEL variant IDs pulled from the complex genotyping vcf that need '
+                             'quality scores to be set to 99.')
     parser.add_argument('--remove-call-table', type=str,
                         help='Table of (1) variant ID and (2) sample ID to change to hom-ref genotypes')
     parser.add_argument('--add-call-table', type=str,
@@ -294,6 +308,7 @@ def main(argv: Optional[List[Text]] = None):
     remove_vids_set = _parse_set(args.remove_vids_list)
     multiallelic_vids_set = _parse_set(args.multiallelic_vids_list)
     spanned_del_dict = _parse_two_column_table(args.spanned_del_table)
+    spanned_del_vids_set = _parse_set(args.spanned_del_vids_list)
     remove_call_dict = _parse_two_column_table(args.remove_call_table)
     add_call_dict = _parse_two_column_table(args.add_call_table)
     gd_dict = _parse_two_column_table(args.gd_table)
@@ -309,6 +324,7 @@ def main(argv: Optional[List[Text]] = None):
             sample_set=sample_set,
             remove_vids_set=remove_vids_set,
             spanned_del_dict=spanned_del_dict,
+            spanned_del_vids_set=spanned_del_vids_set,
             multiallelic_vids_set=multiallelic_vids_set,
             remove_call_dict=remove_call_dict,
             add_call_dict=add_call_dict,
