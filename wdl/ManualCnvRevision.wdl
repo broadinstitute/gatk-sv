@@ -49,6 +49,7 @@ workflow ManualCnvRevision {
     RuntimeAttr? runtime_attr_override_scatter
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_override_spanned_cpx
+    RuntimeAttr? runtime_override_rescale_gq
     RuntimeAttr? runtime_attr_apply
   }
 
@@ -81,10 +82,17 @@ workflow ManualCnvRevision {
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_attr_override_spanned_cpx
       }
+      call tasks.FixEndsRescaleGQ {
+        input:
+          vcf = GetSpannedDeletionsFromComplexResolve.out,
+          prefix = "~{output_prefix}.rescale_gq.shard_~{i}",
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_override_rescale_gq
+      }
     }
   }
 
-  Array[File] vcf_shards = flatten(select_all([ScatterVcf.shards, GetSpannedDeletionsFromComplexResolve.out]))
+  Array[File] vcf_shards = flatten(select_all([ScatterVcf.shards, FixEndsRescaleGQ.out]))
 
   scatter ( i in range(length(vcf_shards)) ) {
     call ApplyManualReviewUpdates {
