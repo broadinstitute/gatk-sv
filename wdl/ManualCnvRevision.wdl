@@ -76,7 +76,7 @@ workflow ManualCnvRevision {
 
   Array[File] vcf_shards = flatten(select_all([ScatterVcf.shards, GetSpannedDeletionsFromComplexResolve.out]))
 
-  scatter ( i in range(length(ScatterVcf.shards)) ) {
+  scatter ( i in range(length(vcf_shards)) ) {
     call ApplyManualReviewUpdates {
       input:
       vcf=vcf_shards[i],
