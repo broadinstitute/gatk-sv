@@ -627,7 +627,7 @@ class Colors:
     ENDC = "\033[0m"
 
 
-def print_colored(text:str, color:str, newline=True):
+def print_colored(text: str, color: str):
     print(f"{color}{text}{Colors.ENDC}")
 
 
