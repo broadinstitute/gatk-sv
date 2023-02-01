@@ -190,9 +190,10 @@ task GetSpannedDeletionsFromComplexResolve {
 
   command <<<
     set -euo pipefail
-    mkdir tmp
+
+    # Subset samples, subset variants, and remove EV fields which are still in Integer format
     bcftools view --no-version -S ~{sample_list} -i 'ID=@~{vids_list}' ~{vcf} \
-      | bcftools sort -T ./tmp -Oz -o ~{prefix}.vcf.gz
+      | bcftools annotate -x FORMAT/EV -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 
@@ -259,7 +260,8 @@ task ApplyManualReviewUpdates {
       ~{"--gd-table " + gd_table} \
       ~{"--spanned-del-table " + spanned_del_table} \
       ~{"--spanned-del-vids-list " + spanned_del_vids_list}
-    bcftools sort ~{prefix}.unsorted.vcf.gz -Oz -o ~{prefix}.vcf.gz
+    mkdir tmp
+    bcftools sort -T ./tmp ~{prefix}.unsorted.vcf.gz -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 

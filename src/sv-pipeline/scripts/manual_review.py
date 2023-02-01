@@ -132,10 +132,11 @@ def _process(record, fout, sample_set, remove_vids_set, spanned_del_vids_set, sp
                 gt = record.samples[s]['GT']
                 record.samples[s]['GT'] = DEL_SPANNED_GT_MAP.get(gt, gt)
     if record.id in spanned_del_vids_set:
-        print(f"Setting quality scores to 99 for variant {record.id}")
+        print(f"Setting quality scores to 99 and EV to RD for variant {record.id}")
         _set_filter_pass(record)
         _annotate_manual_review(record, f"SPANNED_DEL")
         for gt in record.samples.values():
+            gt['EV'] = ('RD',)
             for key in GQ_FIELDS:
                 gt[key] = 99
     if record.chrom in allosomes:
@@ -268,7 +269,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              '(2) comma-delimited list of sample IDs whose genotypes will be corrected.')
     parser.add_argument('--spanned-del-vids-list', type=str,
                         help='List of spanned DEL variant IDs pulled from the complex genotyping vcf that need '
-                             'quality scores to be set to 99.')
+                             'quality scores to be set to 99 and EV set to RD.')
     parser.add_argument('--remove-call-table', type=str,
                         help='Table of (1) variant ID and (2) sample ID to change to hom-ref genotypes')
     parser.add_argument('--add-call-table', type=str,
@@ -297,6 +298,8 @@ def main(argv: Optional[List[Text]] = None):
         vcf = pysam.VariantFile(args.vcf)
 
     header = vcf.header
+    # In case it doesn't exist
+    header.add_line('##FORMAT=<ID=EV,Number=.,Type=String,Description="Classes of evidence supporting final genotype">')
     header.add_line('##INFO=<ID=GD,Number=.,Type=String,Description="Genomic disorder region">')
     header.add_line('##INFO=<ID=MANUAL_REVIEW_TYPE,Number=.,Type=String,Description="Annotation(s) for variants '
                     'modified post hoc after manual review">')
