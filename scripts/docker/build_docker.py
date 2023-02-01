@@ -9,8 +9,6 @@ import time
 import tempfile
 import shutil
 import pprint
-# noinspection PyPackageRequirements
-from termcolor import colored
 import subprocess
 from typing import Union, Iterable, Mapping, Optional, List, Tuple, Set, Dict
 from types import MappingProxyType
@@ -403,12 +401,12 @@ class ProjectBuilder:
                 for target_name in expanded_build_targets:
                     ImageBuilder(target_name, self).update_current_image()
             else:
-                print(colored("#" * 50, "magenta"))
+                print_colored("#" * 50, Colors.MAGENTA)
                 for target_name in expanded_build_targets:
-                    a = colored("Building image ", "grey")
-                    b = colored(target_name + ":" + self.project_arguments.image_tag, "yellow", attrs=["bold"])
-                    c = colored(" ...", "grey")
-                    print(a, b, c)
+                    print_colored(
+                        f"Building image: {target_name}:{self.project_arguments.image_tag} ...",
+                        Colors.YELLOW
+                    )
 
                     build_time_args = {
                         arg: self.get_current_image(image_name)
@@ -420,9 +418,9 @@ class ProjectBuilder:
                     if self.project_arguments.prune_after_each_image and not self.project_arguments.dry_run:
                         # clean dangling images (i.e. those "<none>" images), stopped containers, etc
                         os.system("docker system prune -f")
-                    print(colored("#" * 50, "magenta"))
+                    print_colored("#" * 50, Colors.MAGENTA)
 
-                print(colored("BUILD PROCESS SUCCESS!", "green"))
+                print_colored("BUILD PROCESS SUCCESS!", Colors.GREEN)
 
             if self.remote_docker_repos:
                 # push any images that are purely local (this can happen if e.g. images are built without specifying
@@ -565,9 +563,9 @@ class ImageBuilder:  # class for building and pushing a single image
         for remote_image in self.remote_images:
             # do not push images with very restrictive licenses
             if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
-                print(colored(
+                print_colored(
                     f"Refusing to push non-public image {self.name} to non us.grc.io repo at {remote_image}",
-                    "red")
+                    Colors.RED
                 )
                 continue
             if ImageBuilder.docker_tag(self.local_image, remote_image) != 0:
@@ -615,6 +613,21 @@ def get_command_output(
 
 class CustomFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawDescriptionHelpFormatter):
     pass
+
+
+class Colors:
+    GRAY = "\033[90m"
+    RED = "\033[91m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    BLUE = "\033[94m"
+    MAGENTA = "\033[95m"
+    Cyan = "\033[96m"
+    ENDC = "\033[0m"
+
+
+def print_colored(text:str, color:str, newline=True):
+    print(f"{color}{text}{Colors.ENDC}")
 
 
 def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
@@ -804,7 +817,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     if parsed_args.gcr_project is not None:
         if parsed_args.docker_repo is not None:
             raise ValueError("Both --gcr-project and --docker-repo were specified, but only one is allowed.")
-        print(colored("--gcr-project is deprecated, use --docker-repo instead.", "red"))
+        print_colored("--gcr-project is deprecated, use --docker-repo instead.", Colors.RED)
         parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project.strip('/')}"
     return parsed_args
 
