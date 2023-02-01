@@ -410,7 +410,8 @@ class ProjectBuilder:
 
                     build_time_args = {
                         arg: self.get_current_image(image_name)
-                        for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()}
+                        for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()
+                    }
 
                     image_builder = ImageBuilder(target_name, self)
                     image_builder.build(build_time_args)
