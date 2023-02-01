@@ -3,6 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "HailMerge.wdl" as HailMerge
 import "TasksMakeCohortVcf.wdl" as tasks
+import "Utils.wdl" as utils
 
 # Applies some post-hoc revisions to CNVs. Intended to be run following genotype and NCR filtering.
 
@@ -46,6 +47,7 @@ workflow ManualCnvRevision {
     RuntimeAttr? runtime_override_concat
 
     RuntimeAttr? runtime_attr_override_scatter
+    RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_override_spanned_cpx
     RuntimeAttr? runtime_attr_apply
   }
@@ -59,6 +61,13 @@ workflow ManualCnvRevision {
       runtime_attr_override=runtime_attr_override_scatter
   }
 
+  call utils.GetSampleIdsFromVcf {
+    input:
+      vcf = vcf,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_ids_from_vcf
+  }
+
   if (defined(spanned_del_cpx_vids_list)) {
     Array[File] cpx_vcfs_ = select_first([cpx_vcfs])
     scatter ( i in range(length(cpx_vcfs_))) {
@@ -68,6 +77,7 @@ workflow ManualCnvRevision {
           vcf_index = cpx_vcfs_[i] + ".tbi",
           vids_list = select_first([spanned_del_cpx_vids_list]),
           prefix = "~{output_prefix}.spanned_del_cpx.shard_~{i}",
+          sample_list=GetSampleIdsFromVcf.out_file,
           sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_attr_override_spanned_cpx
       }
@@ -134,6 +144,7 @@ task GetSpannedDeletionsFromComplexResolve {
     File vcf
     File vcf_index
     File vids_list
+    File sample_list
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -161,7 +172,7 @@ task GetSpannedDeletionsFromComplexResolve {
   command <<<
     set -euo pipefail
     mkdir tmp
-    bcftools view --no-version -i 'ID=@~{vids_list}' ~{vcf} \
+    bcftools view --no-version -S ~{sample_list} -i 'ID=@~{vids_list}' ~{vcf} \
       | bcftools sort -T ./tmp -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
