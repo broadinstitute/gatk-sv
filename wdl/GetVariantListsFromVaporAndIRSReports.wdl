@@ -8,8 +8,8 @@ workflow GetVariantListsFromVaporAndIRSReports {
     File vcf
     Array[String] vapor_sample_ids
     Array[File] vapor_files
-    Array[File] irs_sample_batches
-    Array[File] irs_test_reports
+    Array[File]? irs_sample_batches
+    Array[File]? irs_test_reports
     File? irs_contigs_fai
     Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
@@ -65,8 +65,8 @@ task GetVariantListsFromVaporAndIRSReports {
     File vcf
     Array[String] vapor_sample_ids
     Array[File] vapor_files
-    Array[File] irs_sample_batches
-    Array[File] irs_test_reports
+    Array[File]? irs_sample_batches
+    Array[File]? irs_test_reports
     File? irs_contigs_fai
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
@@ -88,6 +88,7 @@ task GetVariantListsFromVaporAndIRSReports {
   output {
     File output_json = "${output_prefix}.json"
   }
+
 
   command <<<
     set -euxo pipefail
@@ -115,8 +116,8 @@ task GetVariantListsFromVaporAndIRSReports {
     /opt/sv_utils/src/sv_utils/get_confident_variant_lists_from_vapor_and_irs_test.py \
       --vapor-json ~{vapor_json}  \
       --vcf ~{vcf} \
-      --irs-sample-batch-lists ~{write_lines(irs_sample_batches)} \
-      --irs-test-report-list ~{write_lines(irs_test_reports)} \
+      ~{if defined(irs_sample_batches) then "--irs-sample-batch-lists " + write_lines(select_first([irs_sample_batches])) else ""} \
+      ~{if defined(irs_test_reports) then "--irs-test-report-list " + write_lines(select_first([irs_test_reports])) else ""} \
       ~{"--irs-contigs-file " + irs_contigs_fai} \
       ~{"--vapor-max-cnv-size " + vapor_max_cnv_size} \
       ~{"--vapor-min-precision " + vapor_min_precision} \

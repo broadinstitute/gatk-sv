@@ -143,11 +143,11 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--irs-sample-batch-lists", type=str,
-                        help="list of lists of samples used in each IRS test batch", required=True)
+                        help="list of lists of samples used in each IRS test batch")
     parser.add_argument("--irs-contigs-file", type=str,
                         help="list of contigs to restrict IRS variants to")
     parser.add_argument("--irs-test-report-list", type=str,
-                        help="list of IRS results files", required=True)
+                        help="list of IRS results files")
     parser.add_argument("--irs-good-pvalue-threshold", type=float, default=0.001,
                         help="Maximum pvalue to choose a good record from the IRS report")
     parser.add_argument("--irs-bad-pvalue-threshold", type=float, default=0.5,
@@ -194,24 +194,27 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
     )
 
-    sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
-                                                  read_list_file(arguments.irs_test_report_list))
+    if arguments.irs_sample_batch_lists is not None:
+        sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
+                                                      read_list_file(arguments.irs_test_report_list))
 
-    samples_list_to_confident_irs_variant_ids_mapping = {
-        frozenset(read_list_file(sample_list)):
-            get_confident_variant_ids_from_irs_report(report_list,
-                                                      arguments.irs_good_pvalue_threshold,
-                                                      arguments.irs_bad_pvalue_threshold,
-                                                      arguments.irs_min_probes,
-                                                      valid_irs_variant_ids)
-        for sample_list, report_list in sample_list_file_to_report_file_mapping
-    }
+        samples_list_to_confident_irs_variant_ids_mapping = {
+            frozenset(read_list_file(sample_list)):
+                get_confident_variant_ids_from_irs_report(report_list,
+                                                          arguments.irs_good_pvalue_threshold,
+                                                          arguments.irs_bad_pvalue_threshold,
+                                                          arguments.irs_min_probes,
+                                                          valid_irs_variant_ids)
+            for sample_list, report_list in sample_list_file_to_report_file_mapping
+        }
 
-    # for each variant in the IRS table that passes filters as good,
-    # find all non ref samples and add variant ID to good list
-    irs_sample_confident_variants = get_irs_sample_confident_variants(arguments.vcf,
-                                                               valid_irs_variant_ids,
-                                                               samples_list_to_confident_irs_variant_ids_mapping)
+        # for each variant in the IRS table that passes filters as good,
+        # find all non ref samples and add variant ID to good list
+        irs_sample_confident_variants = get_irs_sample_confident_variants(arguments.vcf,
+                                                                          valid_irs_variant_ids,
+                                                                          samples_list_to_confident_irs_variant_ids_mapping)
+    else:
+        irs_sample_confident_variants = {}
 
     all_confident_variants = {}
     for sample in set(irs_sample_confident_variants.keys()).union(vapor_confident_variants.keys()):
