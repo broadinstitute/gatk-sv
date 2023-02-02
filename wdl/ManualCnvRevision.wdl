@@ -124,6 +124,7 @@ workflow ManualCnvRevision {
   }
 
   Array[File] vcf_shards = flatten(select_all([ApplyManualReviewUpdates.out, ApplyUpdatesToDeletionsFromComplexResolve.out]))
+  Array[File] vcf_shard_indexes = flatten(select_all([ApplyManualReviewUpdates.out_index, ApplyUpdatesToDeletionsFromComplexResolve.out_index]))
 
   if (use_hail) {
     call HailMerge.HailMerge {
@@ -144,7 +145,7 @@ workflow ManualCnvRevision {
     call tasks.ConcatVcfs {
       input:
         vcfs=vcf_shards,
-        vcfs_idx=ApplyManualReviewUpdates.out_index,
+        vcfs_idx=vcf_shard_indexes,
         allow_overlaps=true,
         outfile_prefix="~{output_prefix}.manual_cnv_revision",
         sv_base_mini_docker=sv_base_mini_docker,
