@@ -157,7 +157,7 @@ jobs:
         python-version: ['3.8']
     env:
       DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
-      DOCKERS_GCP: "./inputs/values/dockers_gcp.json"
+      DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
