@@ -26,6 +26,7 @@ workflow MainVcfQc {
     File primary_contigs_fai
     Int? random_seed
     Int? max_gq  # Max GQ for plotting. Default = 99, ie. GQ is on a scale of [0,99]. Prior to CleanVcf, use 999
+    Int? downsample_qc_per_sample  # Number of samples to use for per-sample QC. Default: 1000
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -212,6 +213,7 @@ workflow MainVcfQc {
       per_sample_tarball=TarShardVidLists.vid_lists,
       prefix=prefix,
       max_gq=max_gq_,
+      downsample_qc_per_sample=downsample_qc_per_sample,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
@@ -452,6 +454,7 @@ task PlotQcPerSample {
     File per_sample_tarball
     String prefix
     Int max_gq
+    Int? downsample_qc_per_sample
     String sv_pipeline_qc_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -496,7 +499,8 @@ task PlotQcPerSample {
       ~{samples_list} \
       ~{prefix}_perSample/ \
       ~{prefix}_perSample_plots/ \
-      --maxgq ~{max_gq}
+      --maxgq ~{max_gq} \
+      ~{"--downsample " + downsample_qc_per_sample}
 
     # Prepare output
     tar -czvf ~{prefix}.plotQC_perSample.tar.gz \
