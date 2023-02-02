@@ -1,0 +1,10 @@
+{
+  "ApplyManualVariantFilter.vcf" :   {{ test_batch.clean_vcf | tojson }},
+
+  "ApplyManualVariantFilter.prefix" : {{ test_batch.name | tojson }},
+
+  "ApplyManualVariantFilter.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
+
+  "ApplyManualVariantFilter.bcftools_filter": "SVTYPE==\"DEL\" && COUNT(ALGORITHMS)==1 && ALGORITHMS==\"wham\" && SVLEN<1000 && COUNT(EVIDENCE)==1 && EVIDENCE==\"SR\"",
+  "ApplyManualVariantFilter.filter_name": "filter_wham_del_sr_1kb"
+}
