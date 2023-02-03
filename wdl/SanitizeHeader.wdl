@@ -63,7 +63,8 @@ task SanitizeHeaderTask {
 
     bcftools view --no-version -h ~{vcf} > header.vcf
 
-    grep -v ^"##bcftools" header.vcf | sed 's/Minimum passing GQ for each biallelic non-refvariant/Minimum passing SL for each biallelic variant/g' > newheader.vcf
+    grep -v -e ^"##bcftools" header.vcf -e ^"##source=depth" -e ^"##ALT=<ID=UNR" \
+      | sed 's/Minimum passing GQ for each biallelic non-refvariant/Minimum passing SL for each biallelic variant/g' > newheader.vcf
 
     bcftools reheader -h newheader.vcf ~{vcf} \
       | bcftools annotate -x ~{drop_fields} \
