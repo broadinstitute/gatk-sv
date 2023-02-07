@@ -4,11 +4,12 @@ import "Structs.wdl"
 import "Utils.wdl" as util
 import "IdentifyOutlierSamples.wdl" as identify_outliers
 
-# Filter outlier samples by IQR or cutoff table for a single VCF. Recommended to run PlotSVCountsPerSample first to choose cutoff
+# Filter outlier samples by IQR or cutoff table for one or more VCFs
+# Recommended to run PlotSVCountsPerSample first to choose cutoff
 workflow FilterOutlierSamples {
   input {
     String name  # batch or cohort
-    File vcf
+    Array[File] vcfs
     File? sv_counts  # SV counts file from PlotSVCountsPerSample - if not provided, will create
     Int N_IQR_cutoff
     File? outlier_cutoff_table
@@ -28,7 +29,7 @@ workflow FilterOutlierSamples {
 
   call identify_outliers.IdentifyOutlierSamples {
     input:
-      vcf = vcf,
+      vcfs = vcfs,
       name = name,
       sv_counts = sv_counts, 
       N_IQR_cutoff = N_IQR_cutoff,
@@ -43,19 +44,21 @@ workflow FilterOutlierSamples {
       runtime_attr_count_svs = runtime_attr_count_svs
   }
 
-  call util.SubsetVcfBySamplesList {
-    input:
-      vcf = vcf,
-      list_of_samples = IdentifyOutlierSamples.outlier_samples_file,
-      outfile_name = "${name}.outliers_removed.vcf.gz",
-      remove_samples = true,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_subset_vcf
+  scatter ( vcf in vcfs ) {
+    call util.SubsetVcfBySamplesList {
+      input:
+        vcf = vcf,
+        list_of_samples = IdentifyOutlierSamples.outlier_samples_file,
+        outfile_name = basename(vcf, ".vcf.gz") + ".${name}.outliers_removed.vcf.gz",
+        remove_samples = true,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_vcf
+    }
   }
   
   call util.GetSampleIdsFromVcf {
     input:
-      vcf = vcf,
+      vcf = vcfs[0],
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
@@ -71,8 +74,8 @@ workflow FilterOutlierSamples {
   }
 
   output {
-    File outlier_filtered_vcf = SubsetVcfBySamplesList.vcf_subset
-    File outlier_filtered_vcf_idx = SubsetVcfBySamplesList.vcf_subset_index
+    Array[File] outlier_filtered_vcfs = SubsetVcfBySamplesList.vcf_subset
+    Array[File] outlier_filtered_vcf_idxs = SubsetVcfBySamplesList.vcf_subset_index
     Array[String] filtered_samples_list = FilterSampleList.filtered_samples_list
     File filtered_samples_file = FilterSampleList.filtered_samples_file
     Array[String] outlier_samples_excluded = IdentifyOutlierSamples.outlier_samples_list

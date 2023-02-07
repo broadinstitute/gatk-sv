@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "CollectQcVcfWide.wdl" as qc_utils
 
-# Workflow to count SVs per sample per type and 
+# Workflow to count SVs per sample per type
 workflow PlotSVCountsPerSample {
   input {
     String prefix

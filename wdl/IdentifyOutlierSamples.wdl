@@ -3,11 +3,14 @@ version 1.0
 import "Structs.wdl"
 import "PlotSVCountsPerSample.wdl" as plot_svcounts
 import "CollectQcVcfWide.wdl" as qc_utils
+import "FilterOutlierSamplesPostMinGQ.wdl" as legacy
+
+# Identifies a list of SV count outlier samples from one or more input VCFs
 
 workflow IdentifyOutlierSamples {
   input {
     String name  # batch or cohort
-    File vcf
+    Array[File] vcfs
     File? sv_counts  # SV counts file from PlotSVCountsPerSample - if not provided, will create
     Int N_IQR_cutoff
     File? outlier_cutoff_table
@@ -23,34 +26,47 @@ workflow IdentifyOutlierSamples {
 
   String prefix = if (defined(vcf_identifier)) then "~{name}_~{vcf_identifier}" else name
 
-  # Preprocess VCF with bcftools, if optioned
-  if (defined(bcftools_preprocessing_options)) {
-    call qc_utils.PreprocessVcf {
-      input:
-        vcf=vcf,
-        prefix=basename(vcf, ".vcf.gz") + ".preprocessed",
-        bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
-        sv_base_mini_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_preprocess_vcf
-    }
-  }
-  File prepped_vcf = select_first([PreprocessVcf.outvcf, vcf])
-
+  # Collect SV counts for each VCF in parallel inless sv_counts is provided
   if (!defined(sv_counts)) {
-    call plot_svcounts.CountSVsPerSamplePerType {
+
+    # Process each VCF in parallel
+    scatter ( vcf in vcfs ) {
+      # Preprocess VCF with bcftools, if optioned
+      if (defined(bcftools_preprocessing_options)) {
+        call qc_utils.PreprocessVcf {
+          input:
+            vcf = vcf,
+            prefix = basename(vcf, ".vcf.gz") + ".preprocessed",
+            bcftools_preprocessing_options = select_first([bcftools_preprocessing_options]),
+            sv_base_mini_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_override_preprocess_vcf
+        }
+      }
+      File prepped_vcf = select_first([PreprocessVcf.outvcf, vcf])
+
+      call plot_svcounts.CountSVsPerSamplePerType {
+        input:
+          vcf = prepped_vcf,
+          prefix = prefix,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_count_svs
+      }
+    }
+
+    # Combine counts across all VCFs
+    call legacy.CombineCounts as Combine {
       input:
-        vcf = prepped_vcf,
+        svcounts = CountSVsPerSamplePerType.sv_counts,
         prefix = prefix,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_count_svs
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
+  File final_counts = select_first([sv_counts, Combine.summed_svcounts])
 
   if (defined(outlier_cutoff_table)) {
     call IdentifyOutliersByCutoffTable {
       input:
-        vcf = prepped_vcf,
-        svcounts = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts]),
+        svcounts = final_counts,
         outlier_cutoff_table = select_first([outlier_cutoff_table]),
         outfile = "${prefix}_outliers.txt",
         algorithm = select_first([vcf_identifier]),
@@ -60,8 +76,7 @@ workflow IdentifyOutlierSamples {
   }
   call IdentifyOutliersByIQR {
     input:
-      vcf = prepped_vcf,
-      svcounts = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts]),
+      svcounts = final_counts,
       N_IQR_cutoff = N_IQR_cutoff,
       outfile = "${prefix}_IQR_outliers.txt",
       sv_pipeline_docker = sv_pipeline_docker,
@@ -80,13 +95,12 @@ workflow IdentifyOutlierSamples {
   output {
     File outlier_samples_file = CatOutliers.outliers_file
     Array[String] outlier_samples_list = CatOutliers.outliers_list
-    File sv_counts_file = select_first([sv_counts, CountSVsPerSamplePerType.sv_counts])
+    File sv_counts_file = final_counts
   }
 }
 
 task IdentifyOutliersByIQR {
   input {
-    File vcf
     File svcounts
     Int N_IQR_cutoff
     String outfile
@@ -132,7 +146,6 @@ task IdentifyOutliersByIQR {
 
 task IdentifyOutliersByCutoffTable {
   input {
-    File vcf
     File svcounts
     File outlier_cutoff_table
     String outfile
