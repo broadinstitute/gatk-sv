@@ -1,8 +1,8 @@
 ---
+title: About
+description: GATK-SV
 sidebar_position: 1
 ---
-
-# About
 
 Structural variants are key players in human evolution and 
 disease, but they are difficult to discover and analyze. 
