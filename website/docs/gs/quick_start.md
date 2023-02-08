@@ -12,7 +12,7 @@ This page provides steps for running the pipeline using demo data.
 This section walks you through the steps of running pipeline using 
 demo data on a managed Cromwell server.
 
-### 1/4: Setup Environment
+### Setup Environment
 
 - A running instance of a Cromwell server. While you can 
   [host your own Cromwell server](https://cromwell.readthedocs.io/en/stable/tutorials/ServerMode/),
@@ -22,7 +22,7 @@ demo data on a managed Cromwell server.
 - Install Cromshell and configure it to connect with the Cromwell server you are using. 
   You may follow [these steps](cromwell#setup-cromshell).
 
-### 2/4: Build Inputs
+### Build Inputs
 
 - Example workflow inputs can be found in `/inputs`. 
   Build using `scripts/inputs/build_default_inputs.sh`, 
@@ -41,7 +41,7 @@ demo data on a managed Cromwell server.
   users may use placeholder values for the cloud configuration 
   and simply delete the inputs manually.
 
-### 3/4: Requester Pays Buckets
+### Requester Pays Buckets
 
 The following parameters must be set when certain input data is in requester pays (RP) buckets:
 
@@ -50,7 +50,7 @@ The following parameters must be set when certain input data is in requester pay
 set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
 
 
-### 4/4: Execution
+### Execution
 
 ```shell
 > mkdir gatksv_run && cd gatksv_run
