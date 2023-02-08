@@ -12,7 +12,4 @@ GATK-SV supports input data in the following formats.
 
 - Family structure definitions file in 
   [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).  
-  
-  :::info
-  Sex aneuploidies (detected in EvidenceQC) should be entered as sex = 0.
-  :::
+  **Note**: Sex aneuploidies (detected in EvidenceQC) should be entered as sex = 0.
