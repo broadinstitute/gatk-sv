@@ -10,8 +10,7 @@ number of males and females is recommended. For modest cohorts
 using `GATKSVPipelineBatch.wdl`.
 
 For larger cohorts, samples should be split up into batches of 
-about 100-500 samples. Refer to the [Batching](/docs/run/batching) 
-section for further guidance on creating batches.
+about 100-500 samples. 
 
 The pipeline should be executed as follows:
 
