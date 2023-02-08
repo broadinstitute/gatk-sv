@@ -1,7 +1,7 @@
 ---
 title: GenotypeBatch
 description: Genotype Batch
-sidebar_position: 8
+sidebar_position: 9
 slug: gb
 ---
 

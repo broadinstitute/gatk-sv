@@ -1,6 +1,7 @@
 ---
 title: ReGenotypeCNVs
 description: Regenotype CNVs
+sidebar_position: 10
 slug: rgcnvs
 ---
 

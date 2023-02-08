@@ -1,6 +1,7 @@
 ---
 title: MakeCohortVcf
 description: Make Cohort VCF
+sidebar_position: 11
 slug: cvcf
 ---
 
