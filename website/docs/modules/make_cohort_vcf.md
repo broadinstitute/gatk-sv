@@ -1,5 +1,5 @@
 ---
-title: Make Cohort VCF
+title: MakeCohortVcf
 description: Make Cohort VCF
 slug: cvcf
 ---

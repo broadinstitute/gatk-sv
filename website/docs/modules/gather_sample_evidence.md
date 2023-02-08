@@ -1,5 +1,5 @@
 ---
-title: Gather Sample Evidence 
+title: GatherSampleEvidence 
 description: Gather Sample Evidence
 sidebar_position: 1
 slug: gse

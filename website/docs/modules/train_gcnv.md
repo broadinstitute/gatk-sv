@@ -1,5 +1,5 @@
 ---
-title: Train gCNV
+title: TrainGCNV
 description: Train gCNV
 sidebar_position: 3
 slug: gcnv

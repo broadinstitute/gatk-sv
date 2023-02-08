@@ -1,5 +1,5 @@
 ---
-title: ReGenotype CNVs
+title: ReGenotypeCNVs
 description: Regenotype CNVs
 slug: rgcnvs
 ---

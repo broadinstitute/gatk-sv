@@ -1,5 +1,5 @@
 ---
-title: Cluster Batch
+title: ClusterBatch
 description: Cluster Batch
 sidebar_position: 5
 slug: cb

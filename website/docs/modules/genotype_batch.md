@@ -1,5 +1,5 @@
 ---
-title: Genotype Batch
+title: GenotypeBatch
 description: Genotype Batch
 sidebar_position: 8
 slug: gb

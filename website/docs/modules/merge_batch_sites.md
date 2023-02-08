@@ -1,5 +1,5 @@
 ---
-title: Merge Batch Sites
+title: MergeBatchSites
 description: Merge Batch Sites
 sidebar_position: 9
 slug: msites

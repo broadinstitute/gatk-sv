@@ -1,5 +1,5 @@
 ---
-title: Filter Batch
+title: FilterBatch
 description: Filter Batch
 sidebar_position: 7
 slug: fb

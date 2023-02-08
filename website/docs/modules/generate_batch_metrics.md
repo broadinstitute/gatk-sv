@@ -1,5 +1,5 @@
 ---
-title: Generate Batch Metrics
+title: GenerateBatchMetrics
 description: Generate Batch Metrics
 sidebar_position: 6
 slug: gbm

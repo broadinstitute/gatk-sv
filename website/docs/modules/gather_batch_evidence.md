@@ -1,5 +1,5 @@
 ---
-title: Gather Batch Evidence
+title: GatherBatchEvidence
 description: Gather Batch Evidence
 sidebar_position: 4
 slug: gbe

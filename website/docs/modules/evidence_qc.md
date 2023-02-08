@@ -1,5 +1,5 @@
 ---
-title: Evidence QC
+title: EvidenceQC
 description: Evidence QC
 sidebar_position: 2
 slug: eqc
