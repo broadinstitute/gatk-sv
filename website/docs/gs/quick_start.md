@@ -5,11 +5,7 @@ sidebar_position: 1
 slug: ./qs
 ---
 
-This page provides steps for running the pipeline using demo data. 
-
-# Quick Start on Terra
-
-https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/gatk-sv-pipeline-1kgp
+This page provides steps for running the pipeline using demo data.
 
 # Quick Start on Cromwell
 
