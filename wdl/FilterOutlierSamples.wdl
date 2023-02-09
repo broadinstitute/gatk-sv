@@ -16,7 +16,8 @@ workflow FilterOutlierSamples {
     String? vcf_identifier  # required (enter algorithm here) if providing outlier_cutoff_table, otherwise used in some file prefixes
     String? bcftools_preprocessing_options
     Boolean plot_counts = false
-    Array[Pair[String, File]]? sample_subsets # if provided, will identify outliers separately within each subset. Expected format is array of pairs, where pair.left is the subset name and pair.right is a text file with all relevant sample IDs
+    Array[String]? sample_subset_prefixes # if provided, will identify outliers separately within each subset
+    Array[String]? sample_subset_lists # if provided, will identify outliers separately within each subset
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
@@ -28,7 +29,13 @@ workflow FilterOutlierSamples {
     RuntimeAttr? runtime_attr_filter_samples
     RuntimeAttr? runtime_attr_ids_from_vcf
     RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_combine_counts
     RuntimeAttr? runtime_attr_plot_svcounts
+  }
+
+  if (defined(sample_subset_prefixes) && defined(sample_subset_lists)) {
+    Array[Pair[String, File]]? sample_subsets = zip(select_first([sample_subset_prefixes]), 
+                                                    select_first([sample_subset_lists]))
   }
 
   call identify_outliers.IdentifyOutlierSamples {
@@ -51,6 +58,7 @@ workflow FilterOutlierSamples {
       runtime_attr_cat_outliers = runtime_attr_cat_outliers,
       runtime_attr_subset_counts = runtime_attr_subset_counts,
       runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_combine_counts = runtime_attr_combine_counts,
       runtime_attr_plot_svcounts = runtime_attr_plot_svcounts
   }
 

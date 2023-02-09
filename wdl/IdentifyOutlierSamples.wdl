@@ -28,6 +28,7 @@ workflow IdentifyOutlierSamples {
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_subset_counts
     RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_combine_counts
     RuntimeAttr? runtime_attr_plot_svcounts
   }
 
@@ -41,7 +42,7 @@ workflow IdentifyOutlierSamples {
         runtime_attr_override = runtime_attr_ids_from_vcf
     }
   }
-  Array[Pair[String, File]] subsets_to_eval = select_first([sample_subsets, [("ALL", select_first([GetSamplesList.out_file]))]])
+  Array[Pair[String, File]] subsets_to_eval = select_first([sample_subsets, [("ALL", select_all([GetSamplesList.out_file]))]])
 
   # Collect SV counts for each VCF in parallel unless sv_counts is provided
   if (!defined(sv_counts)) {
@@ -75,7 +76,8 @@ workflow IdentifyOutlierSamples {
       input:
         svcounts = CountPerVcf.sv_counts,
         prefix = prefix,
-        sv_pipeline_docker = sv_pipeline_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_combine_counts
     }
   }
   File final_counts = select_first([sv_counts, Combine.summed_svcounts])
