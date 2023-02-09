@@ -1,11 +1,5 @@
-from collections.abc import Mapping
 from typing import Any, Optional
 import torch
-from gq_recalibrator import vcf_tensor_data_loaders
-
-
-class Keys:
-    cpu: vcf_tensor_data_loaders.Keys.cpu
 
 
 class Default:
@@ -55,11 +49,18 @@ class GqRecalibratorNet(torch.nn.Module):
         layers_size = self.num_input_properties
         layers = []
         for _ in range(self.num_hidden_layers):
-            previous_size, layers_size = layers_size, round(self.layer_expansion_factor * layers_size)
-            layers.append(torch.nn.Linear(in_features=previous_size, out_features=layers_size, bias=self.bias))
+            previous_size, layers_size = (
+                layers_size, round(self.layer_expansion_factor * layers_size)
+            )
+            layers.append(
+                torch.nn.Linear(in_features=previous_size, out_features=layers_size,
+                                bias=self.bias)
+            )
             layers.append(self.hidden_nonlinearity)
         previous_size, layers_size = layers_size, 1
-        layers.append(torch.nn.Linear(in_features=previous_size, out_features=layers_size, bias=self.bias))
+        layers.append(
+            torch.nn.Linear(in_features=previous_size, out_features=layers_size, bias=self.bias)
+        )
         layers.append(self.output_nonlinearity)
         return torch.nn.ModuleList(layers)
 
@@ -93,4 +94,3 @@ class GqRecalibratorNet(torch.nn.Module):
     @property
     def save_dict(self) -> dict[str, Any]:
         return {key: getattr(self, key) for key in GqRecalibratorNet.__save_values__}
-

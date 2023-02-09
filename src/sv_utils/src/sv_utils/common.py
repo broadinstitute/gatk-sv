@@ -17,7 +17,7 @@ Vector = Union[List, pandas.Series, numpy.array]
 Numeric = Union[int, float, numpy.integer, numpy.floating]
 TypeT = TypeVar("TypeT")
 BitGeneratorState = dict[str, Any]
-GeneratorInit = Union[int, NoneType, BitGeneratorState, numpy.random.Generator]
+GeneratorInit = Union[int, None, BitGeneratorState, numpy.random.Generator]
 
 
 def deref_iterable_with_sorted_indices(base_list: Iterable[TypeT], sorted_indices: Iterable[int]) -> Iterator[TypeT]:

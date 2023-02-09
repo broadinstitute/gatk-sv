@@ -321,7 +321,8 @@ def tarred_properties_to_parquet(
     properties_summaries, sample_ids, input_folders = _get_gzipped_metadata(
         input_tar=input_tar, temp_dir=temp_dir, remove_input_tar=remove_input_tar
     )
-    with dask.config.set(temporary_directory=temp_dir, scheduler='processes', num_workers=num_jobs):
+    with dask.config.set(temporary_directory=temp_dir, scheduler='processes',
+                         num_workers=num_jobs):
         # load all the properties extracted by
         properties = load_properties_from_map(
             input_folder=input_folders, properties_summary=properties_summaries,
@@ -508,14 +509,18 @@ def load_properties_from_map(
 ) -> DataFrame:
     if isinstance(input_folder, Path):
         if not isinstance(properties_summary, Mapping):
-            raise ValueError("Must specify the same numbers of input_folder and property_summaries")
+            raise ValueError(
+                "Must specify the same numbers of input_folder and property_summaries"
+            )
         # explicitly convert to list
         input_folders = [input_folder]
         properties_summaries = [properties_summary]
     else:
         if not (isinstance(input_folder, list) and isinstance(properties_summary, list) and
                 len(input_folder) == len(properties_summary)):
-            raise ValueError("Must specify the same numbers of input_folder and property_summaries")
+            raise ValueError(
+                "Must specify the same numbers of input_folder and property_summaries"
+            )
         input_folders = input_folder
         properties_summaries = properties_summary
 
@@ -610,6 +615,7 @@ def _tsvs_to_df_partition(
         _name, _summary = _item
         return _summary.num_samples, _name
 
+    # noinspection PyTypeChecker
     df = pandas.concat(
         tuple(
             _read_csv_chunk(
