@@ -59,7 +59,7 @@ workflow ShardedCluster {
 
   File vcf_idx = vcf + ".tbi"
   if (defined(exclude_list)) {
-    File exclude_list_idx = exclude_list + ".tbi"
+    File exclude_list_idx = select_first([exclude_list]) + ".tbi"
   }
 
   call MiniTasks.MakeSitesOnlyVcf {
