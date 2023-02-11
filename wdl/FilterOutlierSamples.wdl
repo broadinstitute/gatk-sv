@@ -18,6 +18,7 @@ workflow FilterOutlierSamples {
     Boolean plot_counts = false
     Array[String]? sample_subset_prefixes # if provided, will identify outliers separately within each subset
     Array[String]? sample_subset_lists # if provided, will identify outliers separately within each subset
+    Int samples_per_shard = 5000
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
@@ -49,6 +50,7 @@ workflow FilterOutlierSamples {
       bcftools_preprocessing_options = bcftools_preprocessing_options,
       plot_counts = plot_counts,
       sample_subsets = sample_subsets,
+      samples_per_shard = samples_per_shard,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       linux_docker = linux_docker,
