@@ -9,13 +9,6 @@ The GATK-SV pipeline consists of _workflows_ and _reference data_ that
 orchestrates the analysis flow of input data. Hence, a successful
 execution requires running the _workflows_ on _reference_ and input data.
 
-GATK-SV workflow definition is independent of the runtime environment.
-The runtime environment is managed by Cromwell, and accordingly Terra. 
-Cromwell currently supports a few [runtime environments](https://cromwell.readthedocs.io/en/stable/backends/Backends/),
-including Google Cloud, AWS, Azure, HPC, and SLURM. 
-However, GATK_SV reference data is currently hosted only on GCP.
-
-
 ## Alternative backends
 
 GATK-SV has been tested only on the Google Cloud Platform (GCP); 
