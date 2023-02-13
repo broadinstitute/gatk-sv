@@ -15,9 +15,9 @@ demo data on a managed Cromwell server.
 ### Setup Environment
 
 - A running instance of a Cromwell server. While you can 
-  [host your own Cromwell server](https://cromwell.readthedocs.io/en/stable/tutorials/ServerMode/),
-  (or [these steps](cromwell#setup-cromwell)) due to the required domain expertise, we recommend using a managed 
-  Cromwell instance for the purpose of _Quick Start_.
+  [host your own Cromwell server](https://cromwell.readthedocs.io/en/stable/tutorials/ServerMode/), 
+  we recommend using a managed Cromwell instance for the purpose of _Quick Start_ 
+  (i.e., a server managed by your institute).
 
 - Install Cromshell and configure it to connect with the Cromwell server you are using. 
   You may follow [these steps](cromwell#setup-cromshell).
