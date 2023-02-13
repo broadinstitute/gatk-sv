@@ -5,7 +5,7 @@ sidebar_position: 3
 slug: ./inputs
 ---
 
-GATK-SV supports input data in the following formats.
+GATK-SV requires the following input data:
 
 - Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). 
   BAMs must also be indexed.
