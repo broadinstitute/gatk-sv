@@ -12,7 +12,7 @@ raw evidence into a batch. See above for more information on batching.
 
 - GatherSampleEvidence
 - (Recommended) EvidenceQC
-- gCNV 
+- gCNV training. 
 
 ### Inputs
 - PED file (updated with EvidenceQC sex assignments, including sex = 0 
