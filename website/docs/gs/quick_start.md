@@ -41,6 +41,17 @@ demo data on a managed Cromwell server.
   users may use placeholder values for the cloud configuration 
   and simply delete the inputs manually.
 
+### MELT
+Important: The example input files contain MELT inputs that are NOT public 
+(see [Requirements](https://github.com/broadinstitute/gatk-sv#requirements)). These include:
+
+- `GATKSVPipelineSingleSample.melt_docker` and `GATKSVPipelineBatch.melt_docker` - MELT docker URI 
+(see [Docker readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
+- `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([GatherBatchEvidence](/docs/modules/gbe))
+The input values are provided only as an example and are not publicly accessible. 
+- In order to include MELT, these values must be provided by the user. MELT can be 
+- disabled by deleting these inputs and setting GATKSVPipelineBatch.use_melt to false.
+
 ### Requester Pays Buckets
 
 The following parameters must be set when certain input data is in requester pays (RP) buckets:
