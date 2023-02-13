@@ -7,10 +7,7 @@ sidebar_position: 6
 [Cromwell](https://github.com/broadinstitute/cromwell) is a workflow management system
 that takes a workflow (e.g., a workflow written in [Workflow Description Language (WDL)](https://openwdl.org)), 
 its dependencies and input data, and runs it on a given platform 
-(e.g., 
-[Azure](https://cromwell.readthedocs.io/en/stable/backends/Azure/), 
-[GCP](https://cromwell.readthedocs.io/en/stable/backends/Google/), or 
-[AWS](https://cromwell.readthedocs.io/en/stable/backends/AWSBatch/)). 
+(e.g., [GCP](https://cromwell.readthedocs.io/en/stable/backends/Google/)). 
 In order to run a workflow on Cromwell, you need a running instance of 
 Cromwell that is available in two forms: [Server and stand-alone mode](https://cromwell.readthedocs.io/en/stable/Modes/).
 
