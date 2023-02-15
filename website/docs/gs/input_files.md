@@ -46,11 +46,11 @@ need not match sample names from the BAM/CRAM headers.
 also generates a set of alternate IDs that are considered 
 safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py)
 transforms a list of sample IDs to fit these requirements. 
-Currently, sample IDs can be replaced again in [GatherBatchEvidence](./gbe).
+Currently, sample IDs can be replaced again in [GatherBatchEvidence](/docs/modules/gbe).
 
 The following inputs will need to be updated with the transformed sample IDs:
 
-- Sample ID list for [GatherSampleEvidence](./gse) or [GatherBatchEvidence](./gbe)
+- Sample ID list for [GatherSampleEvidence](/docs/modules/gse) or [GatherBatchEvidence](/docs/modules/gbe)
 - PED file
 
 
