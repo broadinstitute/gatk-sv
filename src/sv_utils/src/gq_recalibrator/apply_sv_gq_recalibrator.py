@@ -233,7 +233,8 @@ def apply_sv_gq_recalibrator(
 
     with (
         concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as process_executor,
-        pysam.BGZFile(f"{output_path}", mode="wb", index=None) as f_out
+        pysam.BGZFile(f"{output_path}", mode="wb", index=None) as f_out,
+        torch.no_grad()
     ):
         vcf_tensor_data_loader = vcf_filter_data_loader.VcfFilterTensorDataLoader(
             parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
@@ -258,6 +259,7 @@ def apply_sv_gq_recalibrator(
             output_batch(
                 f_out=f_out,
                 predicted_probabilities=predicted_probabilities,
+                vcf_tensor_data_loader=vcf_tensor_data_loader,
                 write_header=(num_batches == 0),
                 quality_calculator=quality_calculator,
                 encoding=encoding
@@ -281,17 +283,28 @@ def load_gq_recalibrator(
 def output_batch(
         f_out: pysam.BGZFile,
         predicted_probabilities: torch.tensor,
+        vcf_tensor_data_loader: vcf_filter_data_loader.VcfFilterTensorDataLoader,
         write_header: bool,
         quality_calculator: QualityCalculator,
         encoding: str = Default.encoding,
 ):
+    last_sample_ind = vcf_tensor_data_loader.num_samples - 1
     if write_header:
-        f_out.write(f"probability\tGQ\tSL\n".encode(encoding))
-    gq = quality_calculator.p_to_phred(predicted_probabilities)
-    sl = quality_calculator.p_to_scaled_logits(predicted_probabilities)
+        for ind, sample_id in enumerate(vcf_tensor_data_loader.sample_ids):
+            last_space = '\n' if ind == last_sample_ind else '\t'
+            f_out.write(
+                f"{sample_id},probability\t{sample_id},GQ\t{sample_id},SL{last_space}"
+                .encode(encoding)
+            )
+        f_out.write("\n".encode(encoding))
+    gqs = quality_calculator.p_to_phred(predicted_probabilities)
+    sls = quality_calculator.p_to_scaled_logits(predicted_probabilities)
     out_device = quality_calculator.out_device
-    for probability, gq, sl in zip(predicted_probabilities.to(out_device), gq, sl):
-        f_out.write(f"{probability}\t{gq}\t{sl}\n".encode(encoding))
+    for ind, (probability, gq, sl) in enumerate(
+            zip(predicted_probabilities.to(out_device), gqs, sls)
+    ):
+        last_space = '\n' if ind == last_sample_ind else '\t'
+        f_out.write(f"{probability}\t{gq}\t{sl}{last_space}".encode(encoding))
 
 
 if __name__ == "__main__":

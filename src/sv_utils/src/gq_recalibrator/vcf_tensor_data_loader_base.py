@@ -13,7 +13,7 @@ import pandas
 import pandas.core.arrays
 import torch
 from typing import Optional, Any, IO, TypeVar
-from collections.abc import Iterator, Collection
+from collections.abc import Iterator, Collection, Iterable
 from gq_recalibrator import tarred_properties_to_parquet, training_utils
 from sv_utils import common, get_truth_overlap, benchmark_variant_filter
 
@@ -39,7 +39,7 @@ class Keys:
     remainder_sizes = f"{remainder}_sizes{pickle_suffix}"
     training_remainder = f"{training}_{remainder}"
     validation_remainder = f"{validation}_{remainder}"
-    manifest_file = "manifest.json"
+    parquet_suffix = tarred_properties_to_parquet.Keys.parquet_suffix
 
 
 class Default:
@@ -185,25 +185,6 @@ class BatchIteratorBase(Iterator, ABC):
             for key, value in self.state_dict.items()
         }
 
-    def to_json(self: BatchIterator) -> None:
-        json_file = self.pickle_folder / Keys.manifest_file
-        with locked_write(json_file, 'w') as f_out:
-            json.dump(self.json_dict, f_out)
-
-    @classmethod
-    def from_json(
-            cls: BatchIterator.__class__,
-            pickle_folder: Path,
-            delete_after_read: bool = Default.delete_after_read,
-            sleep_time_s: float = Default.sleep_time_s
-    ) -> BatchIterator:
-        json_file = pickle_folder / Keys.manifest_file
-        with locked_read(
-                json_file, mode='r', delete_after_read=delete_after_read, sleep_time_s=sleep_time_s
-        ) as f_in:
-            json_dict = json.load(f_in)
-        return cls(**json_dict)
-
 
 class VcfTensorDataLoaderBase:
     """
@@ -255,7 +236,7 @@ class VcfTensorDataLoaderBase:
             scale_bool_values=scale_bool_values
         )
         self._parquet_files = [] if _parquet_files is None else _parquet_files
-        self._num_rows = tarred_properties_to_parquet.get_parquet_file_num_rows(self.parquet_path)
+        self._num_rows = tarred_properties_to_parquet.get_parquet_folder_num_rows(self.parquet_path)
         self._current_row = _current_row
         self._current_parquet_file = _current_parquet_file
 
@@ -299,7 +280,7 @@ class VcfTensorDataLoaderBase:
         #  that are easier to process and organize
         raw_columns, self._columns = zip(*(
             (flat_column, tarred_properties_to_parquet.unflatten_column_name(flat_column))
-            for flat_column in tarred_properties_to_parquet.get_parquet_file_columns(
+            for flat_column in tarred_properties_to_parquet.get_parquet_folder_columns(
                 self.parquet_path
             )
             if flat_column != Keys.row
@@ -372,8 +353,11 @@ class VcfTensorDataLoaderBase:
             dtype=torch.float32, device=self.torch_device
         )
 
+    def get_all_parquet_files(self) -> Iterable[str]:
+        return self.parquet_path.glob(f"*{Keys.parquet_suffix}")
+
     def _set_parquet_files(self):
-        self._parquet_files = list(self.parquet_path.glob("*.parquet"))
+        self._parquet_files = list(self.get_all_parquet_files())
         if self.shuffle:
             # randomize order of visiting partitions
             self._parquet_files = self.random_generator.permutation(self._parquet_files).tolist()
@@ -406,11 +390,6 @@ class VcfTensorDataLoaderBase:
         x num-properties tensor)
         """
         return len(self.property_names)
-
-    def __len__(self) -> int:
-        """ return the number of remaining batches in the iterator """
-        n_batches, extra_rows = divmod(self._num_rows - self._current_row, self.variants_per_batch)
-        return n_batches + 1 if extra_rows else n_batches
 
 
 class BatchPicklerBase:

@@ -34,8 +34,8 @@ class TrainingBatchIterator(BatchIteratorBase):
         "num_validation_remainder"
     )
     __state_keys__ = BatchIteratorBase.__state_keys__ + (
-        "num_training_variants", "num_validation_variants", "training_batch", "validation_batch",
-        "training_remainder_ids", "validation_remainder_ids"
+        "num_training_variants", "num_validation_variants", "training_remainder_ids",
+        "validation_remainder_ids"
     )
 
     empty_ids = pandas.array([], dtype="string[pyarrow]")
@@ -193,7 +193,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             ]
             # create a process to write the remainder files for the batch before the one we'll
             # resume with
-            print("readied restart_pickle_previous_remainders")
+            self.progress_logger("readied restart_pickle_previous_remainders")
             future = self.process_executor.submit(
                 TrainingBatchPickler.restart_pickle_previous_remainders,
                 previous_batch_iterators=self._previous_batch_iterators,
@@ -208,7 +208,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 )
             )
         else:
-            print("skipped restart_pickle_previous_remainders")
+            self.progress_logger("skipped restart_pickle_previous_remainders")
             self._previous_batch_iterators = []
 
         if validation_proportion <= 0 or validation_proportion >= 1:
@@ -236,6 +236,11 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             device=self.torch_device,
             dtype=torch.int64
         )
+
+    def __len__(self) -> int:
+        """ return the number of remaining batches in the iterator """
+        n_batches, extra_rows = divmod(self._num_rows - self._current_row, self.variants_per_batch)
+        return n_batches + 1 if extra_rows else n_batches
 
     def _reorganize_confident_variants(
             self,
@@ -268,7 +273,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         while len(self._training_futures) < self.max_look_ahead_batches:
             # while we haven't started prepping far enough into the future, submit more batches
             self._submit_next_batch()
-        if self._batch_iterator is None:
+        while self._batch_iterator is None:
             # if we don't have a current batch iterator, get it from futures. This should only
             # happen for the first iteration epoch
             self._get_next_batch_iterator()
@@ -294,7 +299,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             executor=self.process_executor,
             context=f"Pickling tensors in folder {training_future.pickle_folder}"
         )
-        self._batch_iterator = TrainingBatchIterator(**batch_iterator_state_dict)
+        self._batch_iterator = None if batch_iterator_state_dict is None \
+            else TrainingBatchIterator(**batch_iterator_state_dict)
         # Submit a new batch to be computed and pickled, so that when this batch is done iterating
         # hopefully the next batch will be ready to load
         self._submit_next_batch()
@@ -724,11 +730,13 @@ class TrainingBatchPickler(BatchPicklerBase):
             previous_batch_iterators: list[TrainingBatchIterator],
             wanted_columns: list[str],
             variant_id_column: int
-    ) -> dict[str, Any]:
+    ) -> None:
         """
         For restarting training after interruption, recreate the remainder tensor for the batch
         prior to the resumed batch
         """
+        for ind, batch_iterator in enumerate(previous_batch_iterators):
+            print(f"{ind}: {json.dumps(batch_iterator.json_dict, indent='  ')}")
         last_batch_iterator = previous_batch_iterators[-1]
         if not last_batch_iterator.has_remainders:
             raise ValueError("Should not _restart_pickle_previous_remainders with no remainders")
@@ -783,11 +791,15 @@ class TrainingBatchPickler(BatchPicklerBase):
                         f_out,
                         protocol=pickle.HIGHEST_PROTOCOL
                     )
+                print(f"pickled {pickle_file}")
 
         # pickle remainders
         _pickle_last_remainder(is_training=True)
         _pickle_last_remainder(is_training=False)
-        return last_batch_iterator.state_dict
+        # don't return this, because it's a phony batch iterator now. It was just used to recreate
+        # a pickle file for the first real batch iterator
+        # return last_batch_iterator.state_dict
+        return None
 
     @staticmethod
     def _write_remainder_sizes(

@@ -61,7 +61,7 @@ class Default:
     layer_expansion_factor = gq_recalibrator_net.Default.layer_expansion_factor
     bias = gq_recalibrator_net.Default.bias
     optim_type = torch.optim.AdamW
-    optim_kwargs = MappingProxyType({"weight_decay": 1e-5, "lr": 1.0e-4})
+    optim_kwargs = MappingProxyType({"weight_decay": 0, "lr": 1.0e-3})
     hidden_nonlinearity = gq_recalibrator_net.Default.hidden_nonlinearity
     output_nonlinearity = gq_recalibrator_net.Default.output_nonlinearity
     max_gradient_value = 1.0e-2
@@ -290,6 +290,12 @@ class TrainingState:
             random_generator=random_state, excluded_properties=excluded_properties,
             torch_device_kind=torch_device_kind, progress_logger=training_logger,
             process_executor=process_executor, max_look_ahead_batches=max_look_ahead_batches
+        )
+        training_logger(
+            f"training len: {len(vcf_tensor_data_loader)}\n"
+            f"num_samples: {vcf_tensor_data_loader.num_samples}\n"
+            f"num_properties: {vcf_tensor_data_loader.num_properties}\n"
+            f"parquet_files: {vcf_tensor_data_loader._parquet_files}"
         )
         # create the neural net, move to requested device, and set to train
         gq_recalibrator = gq_recalibrator_net.GqRecalibratorNet(

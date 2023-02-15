@@ -9,6 +9,7 @@ import torch
 from typing import Optional, Any
 from sv_utils import get_truth_overlap
 from gq_recalibrator import training_utils
+from gq_recalibrator import tarred_properties_to_parquet
 from gq_recalibrator.vcf_tensor_data_loader_base import (
     locked_read, locked_write,
     BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase, Default, Keys
@@ -27,9 +28,7 @@ class FilterBatchIterator(BatchIteratorBase):
     __slots__ = (
         "num_variants", "batch", "num_batches", "num_variants_in_remainder_batch"
     )
-    __state_keys__ = BatchIteratorBase.__state_keys__ + (
-        "num_variants", "batch"
-    )
+    __state_keys__ = BatchIteratorBase.__state_keys__ + ("num_variants",)
 
     def __init__(
             self,
@@ -64,6 +63,7 @@ class FilterBatchIterator(BatchIteratorBase):
         num_variants_in_batch = self.num_variants_in_remainder_batch if is_remainder_batch \
             else self.variants_per_batch
         pickle_file = self.get_nth_pickle_file(n=self.batch)
+        self.batch += 1
         return is_remainder_batch, pickle_file, num_variants_in_batch
 
     def get_nth_pickle_file(self, n: int) -> Path:
@@ -88,7 +88,7 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             torch_device_kind: training_utils.TorchDeviceKind,
             progress_logger: training_utils.ProgressLogger,
             temp_dir: Path = Default.temp_dir,
-            scale_bool_values: bool = Default.scale_bool_properties,
+            scale_bool_values:  bool = Default.scale_bool_properties,
             excluded_properties: set[str] = Default.excluded_properties,
             max_look_ahead_batches: int = Default.max_look_ahead_batches,
     ):
@@ -117,6 +117,25 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         self._get_next_batch_iterator()
         return self
 
+    @staticmethod
+    def _batches_per_parquet_file(parquet_file: Path, variants_per_batch: int) -> int:
+        num_rows = tarred_properties_to_parquet.get_parquet_file_num_rows(parquet_file)
+        n_batches, extra_rows = divmod(num_rows, variants_per_batch)
+        return n_batches + 1 if extra_rows > 0 else n_batches
+
+    def __len__(self) -> int:
+        """ return the number of remaining batches in the iterator """
+        parquet_files = self.get_all_parquet_files() if not self._parquet_files \
+            else self._parquet_files
+        n_batches = sum(
+            VcfFilterTensorDataLoader._batches_per_parquet_file(
+                parquet_file=parquet_file, variants_per_batch=self.variants_per_batch
+            ) for parquet_file in parquet_files
+        )
+        if self._batch_iterator is not None:
+            n_batches += len(self._batch_iterator)
+        return n_batches
+
     def _get_next_batch_iterator(self):
         """Called when we've finished iterating over the current batch of training and validation
         tensors and need to start on the next. Maintains current _batch_iterator and enough prior
@@ -140,7 +159,7 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
 
     def _submit_next_batch(self):
         # get the next parquet file
-        if not self._parquet_files():
+        if not self._parquet_files:
             return
         self._current_parquet_file = self._parquet_files.pop()
         pickle_folder = self._get_pickle_folder()

@@ -149,6 +149,9 @@ class ProgressLogger:
         self.logs.append(log_str)
         print(log_str)
 
+    def __call__(self, *args, **kwargs):
+        self.log(*args, **kwargs)
+
     def replay(self):
         for log in self.logs:
             print(log)
@@ -207,9 +210,7 @@ class TorchDeviceKind(enum.Enum):
         """
         def _log(_log_str: str):
             if progress_logger is not None:
-                progress_logger.log(_log_str)
-            else:
-                print(_log_str)
+                progress_logger(_log_str)
         if self == TorchDeviceKind.cuda:
             if torch.cuda.is_available():
                 _log(f"Using {self.name} for torch")

@@ -23,7 +23,7 @@ with warnings.catch_warnings():
     import dask.dataframe
 from sv_utils import common, genomics_io
 from typing import Optional, Union
-from collections.abc import Mapping
+from collections.abc import Mapping, Iterable
 from types import MappingProxyType
 import enum
 
@@ -51,6 +51,7 @@ class Keys:
     svlen = genomics_io.Keys.svlen
     allele_frequency = genomics_io.Keys.allele_frequency
     variant_weights = "variant_weights"
+    parquet_suffix = ".parquet"
 
 
 class CompressionAlgorithms:
@@ -840,7 +841,7 @@ def df_to_parquet(
         # request final output as a tarred parquet folder
         tar_file = output_path
         # rename intermediate parquet folder something sensible
-        parquet_folder = output_path.with_suffix(".parquet")
+        parquet_folder = output_path.with_suffix(Keys.parquet_suffix)
     else:
         # don't produce a tar_file
         tar_file = None
@@ -948,7 +949,7 @@ def _get_wanted_columns(
             return None  # get all columns
         # get columns with desired properties
         if file_columns is None:
-            file_columns = get_parquet_file_columns(input_path)
+            file_columns = get_parquet_folder_columns(input_path)
         wanted_columns = [
             col for col in file_columns
             if any(f"'{prop}'" in col for prop in wanted_properties)
@@ -960,7 +961,7 @@ def _get_wanted_columns(
     elif wanted_properties is None:
         # get columns with desired samples (or no sample / per-variant data)
         if file_columns is None:
-            file_columns = get_parquet_file_columns(input_path)
+            file_columns = get_parquet_folder_columns(input_path)
         wanted_columns = [
             col for col in file_columns
             if any(f"'{sample}'" in col for sample in wanted_samples)
@@ -971,7 +972,7 @@ def _get_wanted_columns(
                     raise ValueError(f"Wanted sample {sample} not present in {input_path}")
     else:
         # get columns with specified samples and properties
-        file_columns = get_parquet_file_columns(input_path)
+        file_columns = get_parquet_folder_columns(input_path)
         sample_wanted_columns = set(
             _get_wanted_columns(
                 input_path, wanted_properties=None, wanted_samples=wanted_samples,
@@ -988,7 +989,7 @@ def _get_wanted_columns(
     return wanted_columns
 
 
-def get_parquet_file_columns(
+def get_parquet_folder_columns(
         input_path: Path,
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar
@@ -996,12 +997,15 @@ def get_parquet_file_columns(
     if input_path.suffix == ".tar":
         input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
                                            remove_input_tar=remove_input_tar)
-    pq_file = next(input_path.glob("*.parquet"))
-    schema = pyarrow.parquet.read_schema(pq_file)
-    return schema.names
+    parquet_file = next(input_path.glob("*.parquet"))
+    return get_parquet_file_columns(parquet_file)
 
 
-def get_parquet_file_num_rows(
+def get_parquet_file_columns(parquet_file: Path) -> list[str]:
+    return pyarrow.parquet.read_schema(parquet_file).names
+
+
+def get_parquet_folder_num_rows(
         input_path: Path,
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar
@@ -1009,12 +1013,25 @@ def get_parquet_file_num_rows(
     if input_path.suffix == ".tar":
         input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
                                            remove_input_tar=remove_input_tar)
+    #
+    # @dask.delayed
+    # def _get_nrows(_pq_file: Path) -> int:
+    #     return pyarrow.parquet.ParquetFile(_pq_file).metadata.num_rows
 
-    @dask.delayed
-    def _get_nrows(_pq_file: Path) -> int:
-        return pyarrow.parquet.ParquetFile(_pq_file).metadata.num_rows
+    return get_parquet_files_num_rows(parquet_files=input_path.glob("*.parquet"))
 
-    return dask.compute(sum(_get_nrows(_pq_file) for _pq_file in input_path.glob("*.parquet")))[0]
+
+def get_parquet_files_num_rows(parquet_files: Iterable[Path]) -> int:
+    return dask.compute(
+        sum(
+            dask.delayed(get_parquet_file_num_rows(parquet_file))
+            for parquet_file in parquet_files
+        )
+    )[0]
+
+
+def get_parquet_file_num_rows(parquet_file: Path) -> int:
+    return pyarrow.parquet.ParquetFile(parquet_file).metadata.num_rows
 
 
 def output_properties_scaling(properties: DataFrame, properties_scaling_json: Path):
