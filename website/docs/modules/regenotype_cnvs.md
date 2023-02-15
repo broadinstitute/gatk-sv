@@ -21,4 +21,4 @@ Re-genotypes probable mosaic variants across multiple batches.
 
 ### Outputs
 
-- Re=genotyped depth VCFs.
+- Re-genotyped depth VCFs.
