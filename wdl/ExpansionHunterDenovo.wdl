@@ -8,16 +8,7 @@
 
 version 1.0
 
-#import "Structs.wdl"
-# Carrot currently does not support imports.
-struct RuntimeAttr {
-  Float? mem_gb
-  Int? cpu_cores
-  Int? disk_gb
-  Int? boot_disk_gb
-  Int? preemptible_tries
-  Int? max_retries
-}
+import "Structs.wdl"
 
 struct FilenamePostfixes {
   String locus
@@ -184,7 +175,7 @@ task ComputeSTRProfile {
 
   >>>
 
-  RuntimeAttr runtime_attr_str_profile_default = object {
+  RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 4,
     boot_disk_gb: 10,
@@ -198,13 +189,13 @@ task ComputeSTRProfile {
   }
   RuntimeAttr runtime_attr = select_first([
     runtime_attr_override,
-    runtime_attr_str_profile_default])
+    default_attr])
 
   runtime {
     docker: ehdn_docker
     cpu: runtime_attr.cpu_cores
-    memory: runtime_attr.mem_gb + " GiB"
-    disks: "local-disk " + runtime_attr.disk_gb + " HDD"
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: runtime_attr.boot_disk_gb
     preemptible: runtime_attr.preemptible_tries
     maxRetries: runtime_attr.max_retries
@@ -324,7 +315,7 @@ task STRAnalyze {
     done
   >>>
 
-  RuntimeAttr runtime_attr_analysis_default = object {
+  RuntimeAttr default_attr = object {
   cpu_cores: 1,
   mem_gb: 4,
   boot_disk_gb: 10,
@@ -336,13 +327,13 @@ task STRAnalyze {
   }
   RuntimeAttr runtime_attr = select_first([
     runtime_attr_override,
-    runtime_attr_analysis_default])
+    default_attr])
 
   runtime {
     docker: ehdn_docker
     cpu: runtime_attr.cpu_cores
-    memory: runtime_attr.mem_gb + " GiB"
-    disks: "local-disk " + runtime_attr.disk_gb + " HDD"
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: runtime_attr.boot_disk_gb
     preemptible: runtime_attr.preemptible_tries
     maxRetries: runtime_attr.max_retries
