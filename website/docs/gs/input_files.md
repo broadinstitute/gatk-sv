@@ -54,7 +54,7 @@ The following inputs will need to be updated with the transformed sample IDs:
 - PED file
 
 
-### Generating a reference panel
+### Generating a reference panel (single-sample mode only)
 New reference panels can be generated easily from a single run of the `GATKSVPipelineBatch` workflow. If using a Cromwell server, we recommend copying the outputs to a permanent location by adding the following option to the workflow configuration file:
 ```
   "final_workflow_outputs_dir" : "gs://my-outputs-bucket",
