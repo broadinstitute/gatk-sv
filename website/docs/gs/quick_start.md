@@ -31,10 +31,10 @@ demo data on a managed Cromwell server.
 - Some workflows require a Google Cloud Project ID to be defined in 
   a cloud environment parameter group. Workspace builds require a 
   Terra billing project ID as well. An example is provided at 
-  /inputs/values/google_cloud.json but should not be used, 
+  `/inputs/values/google_cloud.json` but should not be used, 
   as modifying this file will cause tracked changes in the repository. 
   Instead, create a copy in the same directory with the format 
-  google_cloud.my_project.json and modify as necessary.
+  `google_cloud.my_project.json` and modify as necessary.
 
   Note that these inputs are required only when certain data are 
   located in requester pays buckets. If this does not apply, 
@@ -50,7 +50,7 @@ Important: The example input files contain MELT inputs that are NOT public
 - `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([GatherBatchEvidence](/docs/modules/gbe))
 The input values are provided only as an example and are not publicly accessible. 
 - In order to include MELT, these values must be provided by the user. MELT can be 
-- disabled by deleting these inputs and setting GATKSVPipelineBatch.use_melt to false.
+  disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to false.
 
 ### Requester Pays Buckets
 
