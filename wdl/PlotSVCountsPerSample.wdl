@@ -1,14 +1,17 @@
 version 1.0
 
 import "Structs.wdl"
+import "CollectQcVcfWide.wdl" as qc_utils
 
-# Workflow to count SVs per sample per type and 
+# Workflow to count SVs per sample per type
 workflow PlotSVCountsPerSample {
   input {
     String prefix
     Array[File?] vcfs
     Int N_IQR_cutoff
+    String? bcftools_preprocessing_options
     String sv_pipeline_docker
+    RuntimeAttr? runtime_override_preprocess_vcf
     RuntimeAttr? runtime_attr_count_svs
     RuntimeAttr? runtime_attr_plot_svcounts
     RuntimeAttr? runtime_attr_cat_outliers_preview
@@ -16,10 +19,23 @@ workflow PlotSVCountsPerSample {
 
   scatter (vcf in vcfs) {
     if (defined(vcf)) {
-      String vcf_name = basename(select_first([vcf]), ".vcf.gz")
+      # Preprocess VCF with bcftools, if optioned
+      if (defined(bcftools_preprocessing_options)) {
+        call qc_utils.PreprocessVcf {
+          input:
+            vcf=select_first([vcf]),
+            prefix=basename(select_first([vcf]), ".vcf.gz") + ".preprocessed",
+            bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
+            sv_base_mini_docker=sv_pipeline_docker,
+            runtime_attr_override=runtime_override_preprocess_vcf
+        }
+      }
+      File prepped_vcf = select_first([PreprocessVcf.outvcf, vcf])
+    
+      String vcf_name = basename(select_first([prepped_vcf]), ".vcf.gz")
       call CountSVsPerSamplePerType {
         input:
-          vcf = select_first([vcf]),
+          vcf = select_first([prepped_vcf]),
           prefix = vcf_name,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_count_svs
