@@ -17,7 +17,9 @@ const FeatureList = [
     Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
     description: (
       <>
-        Seamlessly scales to cohorts containing hundreds of thousands of samples
+        Used to produce high-quality SV call sets for large
+        scale sequencing initiatives such as the Genome
+        Aggregation Project (gnomAD)
       </>
     ),
   },
@@ -26,7 +28,8 @@ const FeatureList = [
     Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
     description: (
       <>
-        Quality checks manually curated by experts
+        Analyzes SV calls from multiple algorithms and evidence
+        signatures to achieve high sensitivity and precision
       </>
     ),
   },
