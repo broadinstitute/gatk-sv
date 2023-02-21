@@ -23,8 +23,10 @@ A high-level description of GATK-SV is available [here](https://gatk.broadinstit
 
 ### Citation 
 
-Please cite the following publication: Collins, Brand, et al. 2020. 
-"A structural variation reference for medical and population genetics." Nature 581, 444-451.
+Please cite the following publication:
 
-Additional references: Werling et al. 2018. "An analytical framework for whole-genome 
-sequence association studies and its implications for autism spectrum disorder." Nature genetics 50.5, 727-736.
+- [Collins, Brand, et al. 2020. "A structural variation reference for medical and population genetics." Nature 581, 444-451.](https://doi.org/10.1038/s41586-020-2287-8)
+
+Additional references: 
+
+- [Werling et al. 2018. "An analytical framework for whole-genome sequence association studies and its implications for autism spectrum disorder." Nature genetics 50.5, 727-736.](https://doi.org/10.1038/s41588-018-0107-y)
