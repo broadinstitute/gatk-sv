@@ -9,11 +9,13 @@ The GATK-SV pipeline consists of _workflows_ and _reference data_ that
 orchestrates the analysis flow of input data. Hence, a successful
 execution requires running the _workflows_ on _reference_ and input data.
 
-## Alternative backends
-
+:::info Currently supported backends: GCP
 GATK-SV has been tested only on the Google Cloud Platform (GCP); 
 therefore, we are unable to provide specific guidance or support 
-for other execution platforms including HPC clusters and AWS. 
+for other execution platforms including HPC clusters and AWS.
+:::
+
+## Alternative backends
 
 Contributions from the community to improve portability between backends 
 will be considered on a case-by-case-basis. We ask contributors to 
