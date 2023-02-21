@@ -20,7 +20,7 @@ demo data on a managed Cromwell server.
   (i.e., a server managed by your institute).
 
 - Install Cromshell and configure it to connect with the Cromwell server you are using. 
-  You may follow [these steps](cromwell#setup-cromshell).
+  You may refer to the documentation on [Cromshell README](https://github.com/broadinstitute/cromshell).
 
 ### Build Inputs
 
