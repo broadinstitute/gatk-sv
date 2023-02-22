@@ -230,7 +230,8 @@ jobs:
       - name: Build and Publish Docker Images to ACR
         run: |
           python ./scripts/docker/build_docker.py \
-            --targets manta \
+            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
+            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
             --docker-repo ${{ secrets.AZ_CR }} \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_AZURE \
