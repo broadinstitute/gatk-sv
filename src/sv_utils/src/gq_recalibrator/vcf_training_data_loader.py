@@ -10,15 +10,44 @@ import torch
 from collections import defaultdict
 from typing import Optional, Union, Any
 from collections.abc import Sequence
-from gq_recalibrator import training_utils
+from gq_recalibrator import (
+    training_utils, tarred_properties_to_parquet, vcf_tensor_data_loader_base
+)
 from gq_recalibrator.vcf_tensor_data_loader_base import (
     locked_read, locked_write, BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase,
-    Default, Keys
+    SupplementalPropertyGetter
 )
-from sv_utils import common, get_truth_overlap, benchmark_variant_filter
+from sv_utils import common, genomics_io, get_truth_overlap, benchmark_variant_filter
 
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 ConfidentVariants = get_truth_overlap.ConfidentVariants
+
+
+class Keys:
+    row = vcf_tensor_data_loader_base.Keys.row
+    id = tarred_properties_to_parquet.Keys.id
+    variant_weights = tarred_properties_to_parquet.Keys.variant_weights
+    training = "training"
+    validation = "validation"
+    pickle_suffix = vcf_tensor_data_loader_base.Keys.pickle_suffix
+    remainder = "remainder"
+    gq = genomics_io.Keys.gq
+    remainder_sizes = f"{remainder}_sizes{pickle_suffix}"
+    training_remainder = f"{training}_{remainder}"
+    validation_remainder = f"{validation}_{remainder}"
+
+
+class Default:
+    shuffle = True
+    random_seed = 0
+    non_filtration_properties = vcf_tensor_data_loader_base.Default.non_filtration_properties
+    supplemental_columns_for_training = frozenset({Keys.id, Keys.variant_weights, Keys.gq})
+    scale_bool_properties = vcf_tensor_data_loader_base.Default.scale_bool_properties,
+    validation_proportion = 0.2
+    temp_dir = vcf_tensor_data_loader_base.Default.temp_dir
+    sleep_time_s = vcf_tensor_data_loader_base.Default.sleep_time_s
+    delete_after_read = vcf_tensor_data_loader_base.Default.delete_after_read
+    max_look_ahead_batches = vcf_tensor_data_loader_base.Default.max_look_ahead_batches
 
 
 class TrainingBatchIterator(BatchIteratorBase):
@@ -132,7 +161,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         "validation_proportion", "_training_batch", "_validation_batch", "_batch_iterator",
         "_previous_batch_iterators", "_genotype_is_good_dict", "_genotype_is_bad_dict",
         "_genotype_is_good_tensor", "_genotype_is_bad_tensor", "_trainable_variant_ids",
-        "_gq_column", "max_look_ahead_batches", "_resume_generator_state", "_training_futures"
+        "max_look_ahead_batches", "_resume_generator_state", "_training_futures",
     )
     __state_keys__ = (
         "_resume_generator_state", "_current_parquet_file", "_parquet_files", "_current_row",
@@ -146,13 +175,17 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             truth_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             variants_per_batch: int,
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool,
             torch_device_kind: training_utils.TorchDeviceKind,
             progress_logger: training_utils.ProgressLogger,
             temp_dir: Path = Default.temp_dir,
             shuffle: bool = Default.shuffle,
             scale_bool_values: bool = Default.scale_bool_properties,
             random_generator: common.GeneratorInit = Default.random_seed,
-            excluded_properties: set[str] = Default.excluded_properties,
+            non_filtration_properties: set[str] = Default.non_filtration_properties,
+            supplemental_properties: set[str] = Default.supplemental_columns_for_training,
             validation_proportion: float = Default.validation_proportion,
             max_look_ahead_batches: int = Default.max_look_ahead_batches,
             _resume_generator_state: Optional[common.BitGeneratorState] = None,
@@ -169,14 +202,16 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
             process_executor=process_executor, variants_per_batch=variants_per_batch,
             torch_device_kind=torch_device_kind, progress_logger=progress_logger,
-            temp_dir=temp_dir, shuffle=shuffle, scale_bool_values=scale_bool_values,
+            temp_dir=temp_dir, shuffle=shuffle, keep_multiallelic=keep_multiallelic,
+            keep_homref=keep_homref, keep_homvar=keep_homvar, scale_bool_values=scale_bool_values,
             random_generator=(
                 random_generator if _resume_generator_state is None else _resume_generator_state
             ),
-            excluded_properties=excluded_properties,
+            non_filtration_properties=non_filtration_properties,
+            supplemental_properties=supplemental_properties,
             _current_parquet_file=_current_parquet_file,
             _parquet_files=_parquet_files,
-            _current_row=_current_row,
+            _current_row=_current_row
         )
         self._training_futures = []
         self._resume_generator_state = self.random_generator
@@ -198,7 +233,8 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 TrainingBatchPickler.restart_pickle_previous_remainders,
                 previous_batch_iterators=self._previous_batch_iterators,
                 wanted_columns=self._wanted_columns,
-                variant_id_column=self._variant_id_column
+                variant_id_column=self._variant_id_flat_column_name,
+                supplemental_property_getters=self.supplemental_property_getters
             )
             self._training_futures.append(
                 TrainingFuture(
@@ -227,15 +263,6 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                                                     dtype=numpy.float32)
         self._genotype_is_bad_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
                                                    dtype=numpy.float32)
-        # get the DataFrame column
-        self._gq_column = torch.tensor(
-            next(
-                index for index, property_name in enumerate(self._property_names)
-                if property_name == Keys.gq
-            ),
-            device=self.torch_device,
-            dtype=torch.int64
-        )
 
     def __len__(self) -> int:
         """ return the number of remaining batches in the iterator """
@@ -352,11 +379,11 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             wanted_columns=self._wanted_columns, random_seed=self._next_random_seed,
             variants_per_batch=self.variants_per_batch, num_samples=self.num_samples,
             num_properties=self.num_properties,
-            variant_weights_column=self._variant_weights_column,
             variant_columns=self._variant_columns, format_columns=self._format_columns,
             validation_proportion=self.validation_proportion,
             trainable_variant_ids=self._trainable_variant_ids,
-            variant_id_column=self._variant_id_column
+            variant_id_flat_column_name=self._variant_id_flat_column_name,
+            supplemental_property_getters=self.supplemental_property_getters
         )
         self._training_futures.append(
             TrainingFuture(future=future, pickle_folder=pickle_folder,
@@ -414,21 +441,38 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         with locked_read(
                 pickle_file, mode="rb", delete_after_read=True, sleep_time_s=Default.sleep_time_s
         ) as f_in:
-            ids_array, weights_tensor, numpy_tensor = pickle.load(f_in)
-        VcfTrainingTensorDataLoader._fill_truth_tensor(ids_array, self._genotype_is_good_dict,
-                                                       self._genotype_is_good_tensor)
-        VcfTrainingTensorDataLoader._fill_truth_tensor(ids_array, self._genotype_is_bad_dict,
-                                                       self._genotype_is_bad_tensor)
-        scaled_tensor = self._tensor_scale * (
-            torch.tensor(numpy_tensor, dtype=torch.float32, device=self.torch_device)
-            - self._tensor_baseline
+            filtration_properties_tensor, supplemental_properties_buffers = pickle.load(f_in)
+        # fill good and bad truth tensors. Note variant ID is always a non-filtration property,
+        # so we know the buffer was passed back
+        VcfTrainingTensorDataLoader._fill_truth_tensor(
+            supplemental_properties_buffers[Keys.id],
+            self._genotype_is_good_dict,
+            self._genotype_is_good_tensor
+        )
+        VcfTrainingTensorDataLoader._fill_truth_tensor(
+            supplemental_properties_buffers[Keys.id],
+            self._genotype_is_bad_dict,
+            self._genotype_is_bad_tensor
+        )
+        # scale filtration properties for learning
+        scaled_filtration_properties_tensor = self._tensor_scale * (
+            torch.tensor(
+                filtration_properties_tensor, dtype=torch.float32, device=self.torch_device
+            ) - self._tensor_baseline
         ).nan_to_num()
-        gq_tensor = scaled_tensor[:, :, self._gq_column].squeeze()
         return (
             is_training_batch,
-            scaled_tensor,
-            torch.tensor(weights_tensor, dtype=torch.float32, device=self.torch_device),
-            gq_tensor,
+            scaled_filtration_properties_tensor,
+            self.get_unscaled_property_tensor(
+                property_name=Keys.variant_weights,
+                filtration_properties_tensor=filtration_properties_tensor,
+                supplemental_properties_buffers=supplemental_properties_buffers
+            ),
+            self.get_scaled_property_tensor(
+                property_name=Keys.gq,
+                scaled_filtration_properties_tensor=scaled_filtration_properties_tensor,
+                supplemental_properties_buffers=supplemental_properties_buffers
+            ),
             torch.tensor(self._genotype_is_good_tensor, dtype=torch.float32,
                          device=self.torch_device),
             torch.tensor(self._genotype_is_bad_tensor, dtype=torch.float32,
@@ -446,14 +490,6 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             truth_indices = variant_id_trainable_map.get(variant_id, None)
             if truth_indices is not None:
                 truth_tensor[row, :].put(truth_indices, 1.0)
-
-    def __len__(self) -> int:
-        # report the number of training batches in the iterator
-        n_batches, extra_rows = divmod(
-            round((1.0 - self.validation_proportion) * (self._num_rows - self._current_row)),
-            self.variants_per_batch
-        )
-        return n_batches + 1 if extra_rows else n_batches
 
     @staticmethod
     def get_nth_pickle_file(pickle_folder: Path, n: Union[int, str], is_training: bool) -> Path:
@@ -507,17 +543,22 @@ class TrainingBatchPickler(BatchPicklerBase):
             variants_per_batch: int,
             num_samples: int,
             num_properties: int,
-            variant_weights_column: int,
             variant_columns: numpy.ndarray,
             format_columns: numpy.ndarray,
             validation_proportion: float,
             trainable_variant_ids: set[str],
-            variant_id_column: int
+            variant_id_flat_column_name: str,
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool
     ) -> dict[str, Any]:
         # read the basic buffer into a numpy array, only loading trainable variant IDs
         buffer = cls._load_buffer(
-            parquet_file=parquet_file, wanted_columns=wanted_columns,
-            wanted_ids=trainable_variant_ids, variant_id_column=variant_id_column
+            parquet_file=parquet_file,
+            wanted_columns=wanted_columns,
+            wanted_ids=trainable_variant_ids,
+            variant_id_flat_column_name=variant_id_flat_column_name
         )
         # split new buffer up so that the first block of rows is for validation, remaining for
         # training, and randomly permute the indices within training / permutation blocks if
@@ -571,7 +612,8 @@ class TrainingBatchPickler(BatchPicklerBase):
                 num_previous_remainder=num_previous_training_remainder,
                 pickle_folder=pickle_folder,
                 num_remainder=training_batch_iterator.num_training_remainder,
-                buffer=buffer, variant_id_column=variant_id_column, buffer_indices=perm_training
+                buffer=buffer, variant_id_getter=supplemental_property_getters[Keys.id],
+                buffer_indices=perm_training
             )
         validation_remainder_buffer, training_batch_iterator.validation_remainder_ids = \
             cls._handle_new_and_old_remainder_buffers(
@@ -579,17 +621,20 @@ class TrainingBatchPickler(BatchPicklerBase):
                 num_previous_remainder=num_previous_validation_remainder,
                 pickle_folder=pickle_folder,
                 num_remainder=training_batch_iterator.num_validation_remainder,
-                buffer=buffer, variant_id_column=variant_id_column, buffer_indices=perm_validation
+                buffer=buffer, variant_id_getter=supplemental_property_getters[Keys.id],
+                buffer_indices=perm_validation
             )
         # construct numpy arrays that will hold tensors for each batch
-        numpy_tensor = numpy.empty(
+        filtration_properties_tensor = numpy.empty(
             (variants_per_batch, num_samples, num_properties), dtype=numpy.float32
         )
-        weights_tensor = numpy.empty(variants_per_batch, dtype=numpy.float32)
-        ids_array = pandas.array([""] * variants_per_batch, dtype="string[pyarrow]")
+
+        supplemental_property_buffers = {
+            property_name: property_getter.get_empty_array(variants_per_batch)
+            for property_name, property_getter in supplemental_property_getters.items()
+        }
 
         # iterate over batches in order, and pickle the batch tensors
-        num_variant_properties = len(variant_columns)
         training_buffer_end = 0
         validation_buffer_end = 0
         for is_training_batch, pickle_file, batch_number in training_batch_iterator:
@@ -611,31 +656,25 @@ class TrainingBatchPickler(BatchPicklerBase):
                     validation_buffer_begin = validation_buffer_end
                     validation_buffer_end += (variants_per_batch - num_remainder)
                     indices = perm_validation[validation_buffer_begin:validation_buffer_end]
-                (
-                    ids_array[:num_remainder],
-                    weights_tensor[:num_remainder],
-                    numpy_tensor[:num_remainder, :, :num_variant_properties],
-                    numpy_tensor[:num_remainder, :, num_variant_properties:]
-                ) = cls._get_next_tensor_blocks(
+                cls._fill_next_tensor_blocks(
                     buffer_matrix=remainder_buffer,
-                    variant_ids_column=variant_id_column,
-                    variant_weights_column=variant_weights_column,
                     variant_columns=variant_columns,
                     format_columns=format_columns,
-                    num_samples=num_samples
+                    num_samples=num_samples,
+                    supplemental_property_getters=supplemental_property_getters,
+                    filtration_properties_tensor=filtration_properties_tensor,
+                    supplemental_property_buffers=supplemental_property_buffers,
+                    fill_end_index=num_remainder
                 )
-                (
-                    ids_array[num_remainder:],
-                    weights_tensor[num_remainder:],
-                    numpy_tensor[num_remainder:, :, :num_variant_properties],
-                    numpy_tensor[num_remainder:, :, num_variant_properties:]
-                ) = cls._get_next_tensor_blocks(
+                cls._fill_next_tensor_blocks(
                     buffer_matrix=buffer.take(indices, axis=0),
-                    variant_ids_column=variant_id_column,
-                    variant_weights_column=variant_weights_column,
                     variant_columns=variant_columns,
                     format_columns=format_columns,
-                    num_samples=num_samples
+                    num_samples=num_samples,
+                    supplemental_property_getters=supplemental_property_getters,
+                    filtration_properties_tensor=filtration_properties_tensor,
+                    supplemental_property_buffers=supplemental_property_buffers,
+                    fill_start_index=num_remainder
                 )
             else:
                 # past the remainders, just take the needed variants from the buffer
@@ -647,81 +686,19 @@ class TrainingBatchPickler(BatchPicklerBase):
                     validation_buffer_begin = validation_buffer_end
                     validation_buffer_end += variants_per_batch
                     indices = perm_validation[validation_buffer_begin:validation_buffer_end]
-                (
-                    ids_array[:],
-                    weights_tensor[:],
-                    numpy_tensor[:, :, :num_variant_properties],
-                    numpy_tensor[:, :, num_variant_properties:]
-                ) = cls._get_next_tensor_blocks(
+                cls._fill_next_tensor_blocks(
                     buffer_matrix=buffer.take(indices, axis=0),
-                    variant_ids_column=variant_id_column,
-                    variant_weights_column=variant_weights_column,
                     variant_columns=variant_columns,
                     format_columns=format_columns,
-                    num_samples=num_samples
+                    num_samples=num_samples,
+                    supplemental_property_getters=supplemental_property_getters,
+                    filtration_properties_tensor=filtration_properties_tensor,
+                    supplemental_property_buffers=supplemental_property_buffers
                 )
             with locked_write(pickle_file, mode="wb") as f_out:
-                pickle.dump((ids_array, weights_tensor, numpy_tensor), f_out,
+                pickle.dump((filtration_properties_tensor, supplemental_property_buffers), f_out,
                             protocol=pickle.HIGHEST_PROTOCOL)
         return training_batch_iterator.state_dict
-
-    @classmethod
-    def _get_next_tensor_blocks(
-            cls,
-            buffer_matrix: numpy.ndarray,
-            variant_ids_column: int,
-            variant_weights_column: Optional[int],
-            variant_columns: numpy.ndarray,
-            format_columns: numpy.ndarray,
-            num_samples: int
-    ) -> (ArrowStringArray, Optional[numpy.ndarray], numpy.ndarray, numpy.ndarray):
-        """
-        Convert DataFrame with multi-index columns (1st index corresponding to sample, with None
-        for per-variant properties, 2nd index corresponding to property name) to 3-tensor
-        (num_variants x num_samples x num_properties).
-        NOTE:
-        1) The per-variant properties will be duplicated during this process
-        2) All properties will be converted to 32-bit floats
-        3) It is assumed that Categorical properties are already one-hot encoded (by
-           tarred_properties_to_parquet.py)
-
-        Args:
-            buffer_matrix: numpy.ndarray
-                Numpy matrix (from DataFrame.values) of variant/sample properties with multi-index
-                columns
-            variant_ids_column: int
-                Index to column number with variant IDs
-            variant_weights_column: Optional[int]
-                Index to column number with variant weights (or None if no such column exists)
-            variant_columns: numpy.ndarray
-                Array of indices to columns with per-variant (e.g. INFO) properties
-            format_columns: numpy.ndarray
-                Array of indices to columns with per-genotype (e.g. FORMAT) properties
-            num_samples: int
-                Number of samples / genotypes per row
-        Returns:
-            variant_ids: ArrowStringArray
-                array of variant IDs
-            variant_weights: Optional[numpy.ndarray]
-                array of variant weights (or None if not present)
-            variant_properties: numpy.ndarray
-                num_rows x 1 x num_variant_properties matrix of per-variant / INFO properties
-            format_properties: numpy.ndarray
-                num_rows x num_samples x num_format_properties matrix of per-genotype / FORMAT
-                properties
-        """
-        # fill num_rows x 1 x num_variant_properties matrix with per-variant properties. Note, the
-        # "1" dimension will broadcast to fill the 2nd (num_samples) dim
-        num_variant_properties = len(variant_columns)
-        return (
-            buffer_matrix.take(variant_ids_column, axis=1),
-            None if variant_weights_column is None else
-                buffer_matrix.take(variant_weights_column, axis=1),
-            buffer_matrix.take(variant_columns, axis=1).reshape(buffer_matrix.shape[0], 1,
-                                                                num_variant_properties),
-            buffer_matrix.take(format_columns, axis=1)
-                .reshape(buffer_matrix.shape[0], num_samples, len(format_columns) // num_samples)
-        )  # noqa E131   # ignore pep8 131 error, I think this is more legible
 
     @classmethod
     @training_utils.reraise_with_stack
@@ -729,7 +706,11 @@ class TrainingBatchPickler(BatchPicklerBase):
             cls,
             previous_batch_iterators: list[TrainingBatchIterator],
             wanted_columns: list[str],
-            variant_id_column: int
+            variant_id_flat_column_name: str,
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool
     ) -> None:
         """
         For restarting training after interruption, recreate the remainder tensor for the batch
@@ -751,14 +732,15 @@ class TrainingBatchPickler(BatchPicklerBase):
             tuple(
                 cls._load_buffer(
                     parquet_file=_batch_iterator.parquet_file, wanted_columns=wanted_columns,
-                    wanted_ids=_batch_iterator.remainder_ids, variant_id_column=variant_id_column
+                    wanted_ids=_batch_iterator.remainder_ids,
+                    variant_id_flat_column_name=variant_id_flat_column_name
                 )
                 for _batch_iterator in previous_batch_iterators
             )
         )
 
         # get the buffer's variant ids in order
-        variant_ids = buffer.take(variant_id_column, axis=1)
+        variant_ids = supplemental_property_getters[Keys.id].get_from_buffer(buffer)
         # sort variant IDs, keeping track of the original indices
         buffer_indices = numpy.argsort(variant_ids)
         variant_ids = variant_ids.take(buffer_indices)
@@ -824,11 +806,11 @@ class TrainingBatchPickler(BatchPicklerBase):
             pickle_folder: Path,
             num_remainder: int,
             buffer: numpy.ndarray,
-            variant_id_column: int,
+            variant_id_getter: SupplementalPropertyGetter,
             buffer_indices: numpy.ndarray,
             delete_after_read: bool = Default.delete_after_read,
             sleep_time_s: float = Default.sleep_time_s
-    ) -> (numpy.ndarray, pandas.array):
+    ) -> (numpy.ndarray, ArrowStringArray):
         has_previous_remainder = num_previous_remainder > 0
         # get file name for new remainder
         pickle_file = VcfTrainingTensorDataLoader.get_nth_pickle_file(
@@ -845,7 +827,7 @@ class TrainingBatchPickler(BatchPicklerBase):
                 num_columns=buffer.shape[1]
             )
             buffer = buffer.take(buffer_indices, axis=0)
-            remainder_variant_ids = buffer.take(variant_id_column, axis=1)
+            remainder_variant_ids = variant_id_getter.get_from_buffer(buffer)
             new_remainder = numpy.concatenate(
                 (previous_remainder_buffer, buffer.take(buffer_indices, axis=0)),
                 axis=0
@@ -861,7 +843,7 @@ class TrainingBatchPickler(BatchPicklerBase):
                 end = len(buffer_indices)
                 begin = end - num_remainder
                 buffer = buffer.take(buffer_indices[begin:end], axis=0)
-                remainder_variant_ids = buffer.take(variant_id_column, axis=1)
+                remainder_variant_ids = variant_id_getter.get_from_buffer(buffer)
                 with locked_write(pickle_file, mode="wb") as f_out:
                     pickle.dump(buffer, f_out, protocol=pickle.HIGHEST_PROTOCOL)
             else:

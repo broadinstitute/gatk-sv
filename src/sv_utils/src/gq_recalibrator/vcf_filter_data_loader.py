@@ -3,20 +3,40 @@ from pathlib import Path
 import concurrent.futures
 import pickle
 import numpy
-import pandas
 import pandas.core.arrays
 import torch
-from typing import Optional, Any
-from sv_utils import get_truth_overlap
-from gq_recalibrator import training_utils
-from gq_recalibrator import tarred_properties_to_parquet
+from typing import Any
+from sv_utils import genomics_io, get_truth_overlap
+from gq_recalibrator import (
+    training_utils, tarred_properties_to_parquet, vcf_tensor_data_loader_base
+)
 from gq_recalibrator.vcf_tensor_data_loader_base import (
-    locked_read, locked_write,
-    BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase, Default, Keys
+    locked_read, locked_write, ArrayType,
+    BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase, SupplementalPropertyGetter
 )
 
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 ConfidentVariants = get_truth_overlap.ConfidentVariants
+
+
+class Keys:
+    pickle_suffix = vcf_tensor_data_loader_base.Keys.pickle_suffix
+    id = tarred_properties_to_parquet.Keys.id
+    is_multiallelic = tarred_properties_to_parquet.Keys.is_multiallelic
+    gq = genomics_io.Keys.gq
+    allele_count = genomics_io.Keys.allele_count
+
+
+class Default:
+    non_filtration_properties = vcf_tensor_data_loader_base.Default.non_filtration_properties
+    supplemental_columns_for_filtering = frozenset((
+        Keys.id, Keys.is_multiallelic, Keys.gq, Keys.allele_count
+    ))
+    scale_bool_properties = vcf_tensor_data_loader_base.Default.scale_bool_properties,
+    temp_dir = vcf_tensor_data_loader_base.Default.temp_dir
+    sleep_time_s = vcf_tensor_data_loader_base.Default.sleep_time_s
+    delete_after_read = vcf_tensor_data_loader_base.Default.delete_after_read
+    max_look_ahead_batches = vcf_tensor_data_loader_base.Default.max_look_ahead_batches
 
 
 class FilterBatchIterator(BatchIteratorBase):
@@ -85,11 +105,15 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             properties_scaling_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             variants_per_batch: int,
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool,
             torch_device_kind: training_utils.TorchDeviceKind,
             progress_logger: training_utils.ProgressLogger,
             temp_dir: Path = Default.temp_dir,
             scale_bool_values:  bool = Default.scale_bool_properties,
-            excluded_properties: set[str] = Default.excluded_properties,
+            non_filtration_properties: set[str] = Default.non_filtration_properties,
+            supplemental_properties: set[str] = Default.supplemental_columns_for_filtering,
             max_look_ahead_batches: int = Default.max_look_ahead_batches,
     ):
         # basically it's the VcfTensorDataLoaderBase with variant weights property excluded and
@@ -97,10 +121,11 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         super().__init__(
             parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
             process_executor=process_executor, variants_per_batch=variants_per_batch,
+            keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
             torch_device_kind=torch_device_kind, progress_logger=progress_logger, shuffle=False,
             temp_dir=temp_dir, scale_bool_values=scale_bool_values,
-            random_generator=None,
-            excluded_properties=excluded_properties.union((Keys.variant_weights,))
+            random_generator=None, non_filtration_properties=non_filtration_properties,
+            supplemental_properties=supplemental_properties
         )
         self.max_look_ahead_batches = max_look_ahead_batches
         self._filter_futures = []
@@ -169,28 +194,24 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             wanted_columns=self._wanted_columns, variants_per_batch=self.variants_per_batch,
             num_samples=self.num_samples, num_properties=self.num_properties,
             variant_columns=self._variant_columns, format_columns=self._format_columns,
+            supplemental_property_getters=self.supplemental_property_getters,
+            keep_multiallelic=self.keep_multiallelic, keep_homref=self.keep_homref,
+            keep_homvar=self.keep_homvar
         )
         self._filter_futures.append(
             FilterFuture(future=future, pickle_folder=pickle_folder)
         )
 
-    @staticmethod
-    @training_utils.reraise_with_stack
-    def _parquet_file_to_buffer(
-            parquet_file: Path,
-            wanted_columns: list[str]
-    ) -> (numpy.ndarray, Optional[numpy.random.Generator]):
-        return pandas.read_parquet(parquet_file, columns=wanted_columns).values
-
-    def __next__(self) -> torch.Tensor:
+    def __next__(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         emit tensors for next batch
         Returns:
-            properties_tensor: torch.Tensor
-                num_variants x num_samples x num_properties 32-bit float tensor of training /
-                filtering properties
-            variant_ids: ArrowStringArray
-                num_variants array of variant IDs
+            filtration_properties_tensor: num_variants x num_samples x num_properties 32-bit float
+                                          tensor of properties to be injested by neural network
+            original_gq: num_variants x num_samples torch tensor with GQ values from original
+                         VCF
+            is_filterable: num_variants x num_samples boolean array, set to True if the
+                           corresponding genotype is filterable, False otherwise
         """
         if not self._batch_iterator.has_next:
             self._get_next_batch_iterator()
@@ -200,12 +221,30 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         with locked_read(
                 pickle_file, mode="rb", delete_after_read=True, sleep_time_s=Default.sleep_time_s
         ) as f_in:
-            numpy_tensor = pickle.load(f_in)
+            (
+                filtration_properties_tensor, supplemental_properties_buffers, packed_is_filterable
+            ) = pickle.load(f_in)
 
-        return self._tensor_scale * (
-                torch.tensor(numpy_tensor, dtype=torch.float32, device=self.torch_device)
-                - self._tensor_baseline
+        # scale the filtration properties to be appropriate for the neural net
+        scaled_filtration_properties_tensor = self._tensor_scale * (
+                torch.tensor(
+                    filtration_properties_tensor, dtype=torch.float32, device=self.torch_device
+                ) - self._tensor_baseline
             )
+        # unpack the is_filterable numpy array
+        is_filterable = numpy.unpackbits(
+            packed_is_filterable, count=num_variants_in_batch * self.num_samples
+        ).astype(bool).reshape((num_variants_in_batch, self.num_samples))
+
+        return (
+            scaled_filtration_properties_tensor,
+            self.get_unscaled_property_tensor(
+                property_name=Keys.gq,
+                filtration_properties_tensor=filtration_properties_tensor,
+                supplemental_properties_buffers=supplemental_properties_buffers
+            ),
+            torch.tensor(is_filterable, dtype=torch.bool, device=self.torch_device)
+        )
 
 
 class FilterBatchPickler(BatchPicklerBase):
@@ -221,6 +260,10 @@ class FilterBatchPickler(BatchPicklerBase):
             num_properties: int,
             variant_columns: numpy.ndarray,
             format_columns: numpy.ndarray,
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool
     ) -> dict[str, Any]:
         # read the basic buffer into a pandas array
         buffer = cls._load_buffer(parquet_file=parquet_file, wanted_columns=wanted_columns)
@@ -230,85 +273,80 @@ class FilterBatchPickler(BatchPicklerBase):
         )
 
         # construct numpy array that will hold tensors for each batch
-        numpy_tensor = numpy.empty(
+        filtration_properties_tensor = numpy.empty(
             (variants_per_batch, num_samples, num_properties), dtype=numpy.float32
         )
+        supplemental_property_buffers = {
+            property_name: property_getter.get_empty_array(variants_per_batch)
+            for property_name, property_getter in supplemental_property_getters.items()
+        }
+        is_filterable = numpy.empty((variants_per_batch, num_samples), dtype=bool)
 
         # iterate over batches in order, and pickle the batch tensors
-        num_variant_properties = len(variant_columns)
         buffer_end = 0
         for is_remainder_batch, pickle_file, num_variants_in_batch in filter_batch_iterator:
             buffer_begin = buffer_end
             buffer_end += num_variants_in_batch
-            if is_remainder_batch:
-                (
-                    numpy_tensor[:num_variants_in_batch, :, :num_variant_properties],
-                    numpy_tensor[:num_variants_in_batch, :, num_variant_properties:]
-                ) = cls._get_next_tensor_blocks(
-                    buffer_matrix=buffer[buffer_begin:buffer_end, :],
-                    variant_columns=variant_columns,
-                    format_columns=format_columns,
-                    num_samples=num_samples
+            cls._fill_next_tensor_blocks(
+                buffer_matrix=buffer[buffer_begin:buffer_end, :],
+                variant_columns=variant_columns,
+                format_columns=format_columns,
+                num_samples=num_samples,
+                supplemental_property_getters=supplemental_property_getters,
+                filtration_properties_tensor=filtration_properties_tensor[:num_variants_in_batch],
+                supplemental_property_buffers=supplemental_property_buffers,
+                fill_end_index=num_variants_in_batch
+            )
+            packed_is_filterable = cls._pack_is_filterable(
+                keep_multiallelic=keep_multiallelic,
+                keep_homref=keep_homref,
+                keep_homvar=keep_homvar,
+                filtration_properties_tensor=filtration_properties_tensor[:num_variants_in_batch],
+                is_filterable_matrix=is_filterable[:num_variants_in_batch],
+                supplemental_property_getters=supplemental_property_getters,
+                supplemental_property_buffers=supplemental_property_buffers
+            )
+            with locked_write(pickle_file, mode="wb") as f_out:
+                pickle.dump(
+                    (
+                        filtration_properties_tensor[:num_variants_in_batch],
+                        supplemental_property_buffers,
+                        packed_is_filterable
+                    ),
+                    f_out,
+                    protocol=pickle.HIGHEST_PROTOCOL
                 )
-                with locked_write(pickle_file, mode="wb") as f_out:
-                    pickle.dump(numpy_tensor[:num_variants_in_batch, :, :], f_out,
-                                protocol=pickle.HIGHEST_PROTOCOL)
-            else:
-                (
-                    numpy_tensor[:, :, :num_variant_properties],
-                    numpy_tensor[:, :, num_variant_properties:]
-                ) = cls._get_next_tensor_blocks(
-                    buffer_matrix=buffer[buffer_begin:buffer_end, :],
-                    variant_columns=variant_columns,
-                    format_columns=format_columns,
-                    num_samples=num_samples
-                )
-                with locked_write(pickle_file, mode="wb") as f_out:
-                    pickle.dump(numpy_tensor, f_out, protocol=pickle.HIGHEST_PROTOCOL)
 
         return filter_batch_iterator.state_dict
 
     @classmethod
-    def _get_next_tensor_blocks(
+    def _pack_is_filterable(
             cls,
-            buffer_matrix: numpy.ndarray,
-            variant_columns: numpy.ndarray,
-            format_columns: numpy.ndarray,
-            num_samples: int
-    ) -> (numpy.ndarray, numpy.ndarray):
-        """
-        Convert DataFrame with multi-index columns (1st index corresponding to sample, with None
-        for per-variant properties, 2nd index corresponding to property name) to 3-tensor
-        (num_variants x num_samples x num_properties).
-        NOTE:
-        1) The per-variant properties will be duplicated during this process
-        2) All properties will be converted to 32-bit floats
-        3) It is assumed that Categorical properties are already one-hot encoded (by
-           tarred_properties_to_parquet.py)
+            keep_multiallelic: bool,
+            keep_homvar: bool,
+            keep_homref: bool,
+            filtration_properties_tensor: numpy.ndarray,
+            is_filterable_matrix: numpy.ndarray,
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
+            supplemental_property_buffers: dict[str, ArrayType]
+    ) -> numpy.ndarray:
+        is_filterable_matrix[:] = True
+        num_rows = is_filterable_matrix.shape[0]
 
-        Args:
-            buffer_matrix: numpy.ndarray
-                Numpy matrix (from DataFrame.values) of variant/sample properties with multi-index
-                columns
-            variant_columns: numpy.ndarray
-                Array of indices to columns with per-variant (e.g. INFO) properties
-            format_columns: numpy.ndarray
-                Array of indices to columns with per-genotype (e.g. FORMAT) properties
-            num_samples: int
-                Number of samples / genotypes per row
-        Returns:
-            variant_properties: numpy.ndarray
-                num_rows x 1 x num_variant_properties matrix of per-variant / INFO properties
-            format_properties: numpy.ndarray
-                num_rows x num_samples x num_format_properties matrix of per-genotype / FORMAT
-                properties
-        """
-        # fill num_rows x 1 x num_variant_properties matrix with per-variant properties. Note, the
-        # "1" dimension will broadcast to fill the 2nd (num_samples) dim
-        num_variant_properties = len(variant_columns)
-        return (
-            buffer_matrix.take(variant_columns, axis=1).reshape(buffer_matrix.shape[0], 1,
-                                                                num_variant_properties),
-            buffer_matrix.take(format_columns, axis=1)
-                .reshape(buffer_matrix.shape[0], num_samples, len(format_columns) // num_samples)
-        )  # noqa E131   # ignore pep8 131 error, I think this is more legible
+        if keep_multiallelic:
+            is_multiallelic = supplemental_property_buffers[Keys.is_multiallelic][:num_rows]
+            is_filterable_matrix[is_multiallelic, :] = False
+
+        if keep_homref or keep_homvar:
+            allele_count_getter = supplemental_property_getters[Keys.allele_count]
+            allele_counts = (
+                allele_count_getter.get_from_tensor(filtration_properties_tensor)
+                if allele_count_getter.is_tensor
+                else supplemental_property_buffers[Keys.allele_count][:num_rows]
+            )
+            if keep_homref:
+                is_filterable_matrix[allele_counts == 0] = False
+            if keep_homvar:
+                is_filterable_matrix[allele_counts == 2] = False
+
+        return numpy.packbits(is_filterable_matrix)

@@ -51,6 +51,8 @@ class Keys:
     svlen = genomics_io.Keys.svlen
     allele_frequency = genomics_io.Keys.allele_frequency
     variant_weights = "variant_weights"
+    is_multiallelic = "is_multiallelic"
+    is_autosome = "is_autosome"
     parquet_suffix = ".parquet"
 
 
@@ -95,16 +97,19 @@ class Default:
     training_weight_properties = ()
 
 
-non_ml_properties = frozenset((Keys.id, Keys.pos, Keys.end, Keys.contig, Keys.variant_weights))
+non_ml_properties = frozenset((
+    Keys.id, Keys.pos, Keys.end, Keys.contig, Keys.variant_weights, Keys.is_multiallelic,
+    Keys.is_autosome
+))
 training_weight_bins = MappingProxyType({
     Keys.svlen: numpy.array([50, 500, 5000]),
     Keys.allele_frequency: numpy.array([0.1, 0.9])
 })
 
 # Mapping holds data for summary of an individual property
-PropertySummaryJsonDict = dict[str, Union[int, str, list[str]]]
+PropertySummaryJsonDict = dict[str, int | str | list[str]]
 # Mapping holds baseline and scale for an individual property
-PropertyStatsDict = dict[Union[str, int], Union[int, list[float]]]
+PropertyStatsDict = dict[str | int, int | list[float]]
 # Mapping holds statistics for all properties
 AllPropertiesStatsDict = dict[str, PropertyStatsDict]
 DataFrame = dask.dataframe.DataFrame
@@ -224,7 +229,7 @@ class PropertiesSummary(dict[str, PropertySummary]):
     @classmethod
     def from_json(
             cls, json_dict: PropertySummaryJsonDict | dict[str, PropertySummary]
-    ) -> Union["PropertiesSummary", PropertySummary]:
+    ) -> Union[PropertySummary, "PropertiesSummary"]:
         if Keys.property_type in json_dict:
             return PropertySummary.from_json(json_dict)
         else:
@@ -306,7 +311,7 @@ def main(argv: Optional[list[str]] = None):
 
 
 def tarred_properties_to_parquet(
-        input_tar: Union[Path, list[Path]],
+        input_tar: Path | list[Path],
         output_path: Path,
         compute_weights: bool = Default.compute_weights,
         properties_scaling_json: Optional[Path] = None,
@@ -344,7 +349,7 @@ def tarred_properties_to_parquet(
 
 
 def _get_gzipped_metadata(
-        input_tar: Union[Path, list[Path]],
+        input_tar: Path | list[Path],
         temp_dir: Path = Default.temp_dir,
         remove_input_tar: bool = Default.remove_input_tar,
 ) -> (list[PropertiesSummary], list[str], list[Path]):
@@ -501,8 +506,8 @@ def _validate_properties_summary(
 
 
 def load_properties_from_map(
-        input_folder: Union[Path, list[Path]],
-        properties_summary: Union[PropertiesSummary, list[PropertiesSummary]],
+        input_folder: Path | list[Path],
+        properties_summary: PropertiesSummary | list[PropertiesSummary],
         sample_ids: list[str],
         dask_partition_size_mb: float = Default.dask_partition_size_mb,
         category_encoding: str = Default.category_encoding,
@@ -1013,11 +1018,6 @@ def get_parquet_folder_num_rows(
     if input_path.suffix == ".tar":
         input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
                                            remove_input_tar=remove_input_tar)
-    #
-    # @dask.delayed
-    # def _get_nrows(_pq_file: Path) -> int:
-    #     return pyarrow.parquet.ParquetFile(_pq_file).metadata.num_rows
-
     return get_parquet_files_num_rows(parquet_files=input_path.glob("*.parquet"))
 
 
@@ -1028,6 +1028,32 @@ def get_parquet_files_num_rows(parquet_files: Iterable[Path]) -> int:
             for parquet_file in parquet_files
         )
     )[0]
+
+
+def get_parquet_folder_dtypes(
+        input_path: Path,
+        base_dir: Optional[Path] = None,
+        remove_input_tar: bool = Default.remove_input_tar,
+        unflatten_column_names: bool = False
+) -> dict[str, DType]:
+    if input_path.suffix == ".tar":
+        input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
+                                           remove_input_tar=remove_input_tar)
+    parquet_file = next(input_path.glob("*.parquet"))
+    return get_parquet_file_dtypes(parquet_file, unflatten_column_names=unflatten_column_names)
+
+
+def get_parquet_file_dtypes(
+        parquet_file: Path,
+        unflatten_column_names: bool = False
+) -> dict[str, DType]:
+    schema = pyarrow.parquet.read_schema(parquet_file)
+    return {
+        unflatten_column_name(name) if unflatten_column_names else name:
+            pyarrow_dtype.to_pandas_dtype()
+        for name, pyarrow_dtype in zip(schema.names, schema.types)
+        if name != "row"
+    }
 
 
 def get_parquet_file_num_rows(parquet_file: Path) -> int:
@@ -1245,7 +1271,7 @@ def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
     return variant_weights
 
 
-Category = tuple[Union[bool, int], ...]
+Category = tuple[bool | int, ...]
 CategoryCounts = dict[Category, int]
 CategoryWeights = dict[Category, float]
 

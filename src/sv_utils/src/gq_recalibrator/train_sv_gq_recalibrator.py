@@ -53,7 +53,7 @@ class Default:
     batches_per_mini_epoch = 50
     shuffle = vcf_training_data_loader.Default.shuffle
     random_state = vcf_training_data_loader.Default.random_seed
-    excluded_properties = vcf_training_data_loader.Default.excluded_properties
+    non_filtration_properties = vcf_training_data_loader.Default.non_filtration_properties
     torch_device_kind = training_utils.TorchDeviceKind.cpu
     scale_bool_properties = vcf_training_data_loader.Default.scale_bool_properties
     validation_proportion = vcf_training_data_loader.Default.validation_proportion
@@ -69,6 +69,9 @@ class Default:
     correlation_loss_weight = 0.5
     max_look_ahead_batches = vcf_training_data_loader.Default.max_look_ahead_batches
     num_processes = vcf_training_data_loader.Default.max_look_ahead_batches + 1
+    keep_multiallelic = True
+    keep_homref = False
+    keep_homvar = False
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
@@ -91,6 +94,12 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--input-model", "-i", type=Path, required=False,
                         help="path to input file with partially trained model. If not specified or"
                              " a file doesn't exist at the path, training will start from scratch")
+    parser.add_argument("--keep-multiallelic", type=bool, default=Default.keep_multiallelic,
+                        help="If True, do not train on multiallelic variants; if False, do so")
+    parser.add_argument("--keep-homref", type=bool, default=Default.keep_homref,
+                        help="If True, do not train on HOMREF genotypes; if False, do so")
+    parser.add_argument("--keep-homvar", type=bool, default=Default.keep_homvar,
+                        help="If True, do not train on HOMVAR genotypes; if False, do so")
     parser.add_argument("--variants-per-batch", type=int, default=Default.variants_per_batch,
                         help="number of variants used in each training batch")
     parser.add_argument("--batches-per-mini-epoch", type=int,
@@ -105,8 +114,10 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--random-seed", type=int, default=Default.random_state,
                         help="initial random seed")
     parser.add_argument(
-        "--excluded-properties", type=str, default=','.join(Default.excluded_properties),
-        help="comma-separated list of properties to not use in tensor"
+        "--excluded-properties", type=str, default=','.join(Default.non_filtration_properties),
+        help="comma-separated list of additional properties to not use in training or filtering. "
+             f"Default excluded properties cannot be used (will remain excluded), passing"
+             f"--exclude-properties will add one or more properties to exclude."
     )
     # noinspection PyTypeChecker
     parser.add_argument(
@@ -135,6 +146,7 @@ def main(argv: Optional[list[str]] = None):
         truth_json=args.truth_json,
         output_model_path=args.model,
         input_model_path=args.input_model,
+        temp_dir=args.temp_dir,
         variants_per_batch=args.variants_per_batch,
         batches_per_mini_epoch=args.batches_per_mini_epoch,
         max_train_variants=args.max_train_variants,
@@ -152,12 +164,16 @@ def train_sv_gq_recalibrator(
         truth_json: Path,
         output_model_path: Path,
         input_model_path: Optional[Path] = None,
+        temp_dir: Path = Default.temp_dir,
+        keep_multiallelic: bool = Default.keep_multiallelic,
+        keep_homref: bool = Default.keep_homref,
+        keep_homvar: bool = Default.keep_homvar,
         variants_per_batch: int = Default.variants_per_batch,
         batches_per_mini_epoch: int = Default.batches_per_mini_epoch,
         max_train_variants: Optional[int] = None,
         shuffle: bool = Default.shuffle,
         random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
-        excluded_properties: set[str] = Default.excluded_properties,
+        excluded_properties: set[str] = frozenset({}),
         torch_device_kind: training_utils.TorchDeviceKind = Default.torch_device_kind,
         scale_bool_values: bool = Default.scale_bool_properties,
         num_hidden_layers: int = Default.num_hidden_layers,
@@ -174,27 +190,35 @@ def train_sv_gq_recalibrator(
         num_processes: int = Default.num_processes
 ):
     variants_trained = 0
+    non_filtration_properties = Default.non_filtration_properties.union(excluded_properties)
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as process_executor:
         # create the tensor data loader
         if input_model_path is None or not input_model_path.is_file():
             training_state = TrainingState.build(
                 process_executor=process_executor, properties_path=properties_path,
                 properties_scaling_json=properties_scaling_json, truth_json=truth_json,
+                temp_dir=temp_dir,
+                keep_multiallelic=keep_multiallelic, keep_homref=keep_homref,
+                keep_homvar=keep_homvar,
                 variants_per_batch=variants_per_batch, shuffle=shuffle, random_state=random_state,
-                excluded_properties=excluded_properties, torch_device_kind=torch_device_kind,
-                scale_bool_values=scale_bool_values, num_hidden_layers=num_hidden_layers,
-                layer_expansion_factor=layer_expansion_factor, bias=bias, optim_type=optim_type,
-                optim_kwargs=optim_kwargs, hidden_nonlinearity=hidden_nonlinearity,
-                output_nonlinearity=output_nonlinearity,
+                non_filtration_properties=non_filtration_properties,
+                torch_device_kind=torch_device_kind, scale_bool_values=scale_bool_values,
+                num_hidden_layers=num_hidden_layers, layer_expansion_factor=layer_expansion_factor,
+                bias=bias, optim_type=optim_type, optim_kwargs=optim_kwargs,
+                hidden_nonlinearity=hidden_nonlinearity, output_nonlinearity=output_nonlinearity,
                 max_look_ahead_batches=max_look_ahead_batches
             )
         else:
             training_state = TrainingState.load(
                 save_path=input_model_path, process_executor=process_executor,
                 parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
+                temp_dir=temp_dir,
+                keep_multiallelic=keep_multiallelic, keep_homref=keep_homref,
+                keep_homvar=keep_homvar,
                 truth_json=truth_json, variants_per_batch=variants_per_batch, shuffle=shuffle,
-                excluded_properties=excluded_properties, torch_device_kind=torch_device_kind,
-                scale_bool_values=scale_bool_values, max_look_ahead_batches=max_look_ahead_batches
+                non_filtration_properties=non_filtration_properties,
+                torch_device_kind=torch_device_kind, scale_bool_values=scale_bool_values,
+                max_look_ahead_batches=max_look_ahead_batches
             )
 
         for (is_training_batch, batch_tensor, batch_weights, scaled_gq, is_good_gt, is_bad_gt) in \
@@ -267,10 +291,14 @@ class TrainingState:
             properties_path: Path,
             properties_scaling_json: Path,
             truth_json: Path,
+            temp_dir: Path,
+            keep_multiallelic: bool = Default.keep_multiallelic,
+            keep_homref: bool = Default.keep_homref,
+            keep_homvar: bool = Default.keep_homvar,
             variants_per_batch: int = Default.variants_per_batch,
             shuffle: bool = Default.shuffle,
             random_state: Union[int, numpy.random.RandomState, None] = Default.random_state,
-            excluded_properties: set[str] = Default.excluded_properties,
+            non_filtration_properties: set[str] = Default.non_filtration_properties,
             torch_device_kind: training_utils.TorchDeviceKind = Default.torch_device_kind,
             scale_bool_values: bool = Default.scale_bool_properties,
             num_hidden_layers: int = Default.num_hidden_layers,
@@ -286,16 +314,17 @@ class TrainingState:
         vcf_tensor_data_loader = vcf_training_data_loader.VcfTrainingTensorDataLoader(
             parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
             truth_json=truth_json, scale_bool_values=scale_bool_values,
+            keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
             variants_per_batch=variants_per_batch, shuffle=shuffle,
-            random_generator=random_state, excluded_properties=excluded_properties,
+            random_generator=random_state, non_filtration_properties=non_filtration_properties,
             torch_device_kind=torch_device_kind, progress_logger=training_logger,
+            temp_dir=temp_dir,
             process_executor=process_executor, max_look_ahead_batches=max_look_ahead_batches
         )
         training_logger(
             f"training len: {len(vcf_tensor_data_loader)}\n"
             f"num_samples: {vcf_tensor_data_loader.num_samples}\n"
-            f"num_properties: {vcf_tensor_data_loader.num_properties}\n"
-            f"parquet_files: {vcf_tensor_data_loader._parquet_files}"
+            f"num_properties: {vcf_tensor_data_loader.num_properties}"
         )
         # create the neural net, move to requested device, and set to train
         gq_recalibrator = gq_recalibrator_net.GqRecalibratorNet(
@@ -319,9 +348,13 @@ class TrainingState:
             parquet_path: Path,
             properties_scaling_json: Path,
             truth_json: Path,
+            temp_dir: Path,
+            keep_multiallelic: bool = Default.keep_multiallelic,
+            keep_homref: bool = Default.keep_homref,
+            keep_homvar: bool = Default.keep_homvar,
             variants_per_batch: int = Default.variants_per_batch,
             shuffle: bool = Default.shuffle,
-            excluded_properties: set[str] = Default.excluded_properties,
+            non_filtration_properties: set[str] = Default.non_filtration_properties,
             torch_device_kind: training_utils.TorchDeviceKind = Default.torch_device_kind,
             scale_bool_values: bool = Default.scale_bool_properties,
             max_look_ahead_batches: int = Default.max_look_ahead_batches
@@ -336,10 +369,12 @@ class TrainingState:
         vcf_tensor_data_loader = vcf_training_data_loader.VcfTrainingTensorDataLoader(
             parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
             truth_json=truth_json, scale_bool_values=scale_bool_values,
+            keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
             variants_per_batch=variants_per_batch, shuffle=shuffle, random_generator=0,
-            excluded_properties=excluded_properties, torch_device_kind=torch_device_kind,
-            progress_logger=training_logger, process_executor=process_executor,
-            max_look_ahead_batches=max_look_ahead_batches,
+            non_filtration_properties=non_filtration_properties,
+            torch_device_kind=torch_device_kind, progress_logger=training_logger,
+            temp_dir=temp_dir,
+            process_executor=process_executor, max_look_ahead_batches=max_look_ahead_batches,
             **pickle_dict[Keys.data_loader_state]
         )
 
