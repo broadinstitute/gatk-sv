@@ -13,6 +13,14 @@
 
 #Print traceback on error
 options(warn = 2)
+options(error = function() {
+  sink(stderr())
+  on.exit(sink(NULL))
+  traceback(3, max.lines = 1L)
+  if (!interactive()) {
+    q(status = 1)
+  }
+})
 
 #Loads required packages; installs if necessary
 RPackages <- c("optparse", "plyr", "MASS", "zoo","methods","metap", "e1071", "fpc", "BSDA", "DAAG", "pwr", "reshape", "perm", "hash")
@@ -227,7 +235,7 @@ fillGapsInCoverageMatrixWithZeroCountBins <- function (cov1, BinSize, chromosome
 
       ##Use sapply to convert files to numeric only more than one column in cov1 matrix. If not matrix will already be numeric##
       if (nrow(cov1) > 1) {
-        cov1 <- data.frame(sapply(cov1, as.numeric), check.names = FALSE)
+        cov1[2:length(names(cov1))] <- lapply(cov1[2:length(names(cov1))], as.numeric)
       } else {cov1<-data.frame(t(sapply(cov1,as.numeric)),check.names=FALSE)}
       cov1 <- cov1[order(cov1[, 2]), ]
     }
