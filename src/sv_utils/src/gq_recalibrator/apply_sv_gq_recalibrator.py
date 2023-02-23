@@ -20,13 +20,13 @@ from gq_recalibrator import (
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import dask.dataframe
-from typing import Optional, Union
+from typing import Optional
 
 tqdm.monitor_interval = 0
 
 DaskDataFrame = dask.dataframe.DataFrame
 PandasDataFrame = pandas.DataFrame
-DataFrame = Union[DaskDataFrame, PandasDataFrame]
+DataFrame = DaskDataFrame | PandasDataFrame
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 
 
@@ -118,7 +118,7 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--num-processes", type=int, default=Default.num_processes,
-        help="Number of cpu processes to use. One for training, the rest for loading data."
+        help="Number of cpu processes to use. One for filtering, the rest for loading data."
     )
     return parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
 
@@ -132,15 +132,26 @@ def main(argv: Optional[list[str]] = None):
         model_path=args.model,
         input_vcf=args.input_vcf,
         output_vcf=args.output_vcf,
+        temp_dir=args.temp_dir,
+        keep_multiallelic=args.keep_multiallelic,
+        keep_homref=args.keep_homref,
+        keep_homvar=args.keep_homvar,
         variants_per_batch=args.variants_per_batch,
         excluded_properties=set(args.excluded_properties.split(',')),
         torch_device_kind=training_utils.TorchDeviceKind(args.torch_device),
+        original_gq_field=args.original_gq_field,
+        scaled_logits_field=args.scaled_logits_field,
         num_processes=args.num_processes
     )
 
 
 @attr.frozen
 class QualityCalculator:
+    """Converts between probability, scaled-logits, and phred (GQ). Ensures appropriate device is
+    used.
+    Should be produced by the QualityCalculator.build method, which sets auxiliary values to
+    handle round-off errors and integer min/max values correctly.
+    """
     logit_scale: torch.Tensor
     min_sl_value: torch.Tensor
     max_sl_value: torch.Tensor
@@ -153,12 +164,15 @@ class QualityCalculator:
     quality_dtype: torch.dtype
 
     @staticmethod
-    def make(
+    def build(
             in_device: torch.device,
             out_device: torch.device,
             percent_likelihood_per_logit: float = Default.percent_likelihood_per_logit,
             quality_dtype: torch.dtype = torch.short
     ) -> "QualityCalculator":
+        """Produce a new QualityCalculator using converting between integer quality values and
+        float32 torch tensors.
+        """
         # compute logit scale
         logit_scale = QualityCalculator.calc_logit_scale(
             torch.tensor(percent_likelihood_per_logit, dtype=torch.float32, device=in_device)
@@ -213,6 +227,7 @@ class QualityCalculator:
 
     @staticmethod
     def calc_logit_scale(percent_likelihood_per_logit: torch.Tensor) -> torch.Tensor:
+        """Compute logit scale given the requested % change in likelihood / logit at p=0.5"""
         return 1.0 / torch.log(
             (0.5 + percent_likelihood_per_logit / 100) / (0.5 - percent_likelihood_per_logit / 100)
         )
@@ -222,6 +237,7 @@ class QualityCalculator:
             scaled_logits: torch.Tensor,
             logit_scale: torch.Tensor
     ) -> torch.Tensor:
+        """Static private method to convert scaled logits to probability"""
         return 1.0 / (1.0 + torch.exp(-scaled_logits / logit_scale))
 
     @staticmethod
@@ -229,6 +245,7 @@ class QualityCalculator:
         predicted_probabilities: torch.Tensor,
         logit_scale: torch.Tensor
     ) -> torch.Tensor:
+        """Static private method to convert probability to scaled logits"""
         return 1 + torch.floor(
             logit_scale * torch.log(
                 predicted_probabilities / (1.0 - predicted_probabilities)
@@ -237,17 +254,24 @@ class QualityCalculator:
 
     def p_to_scaled_logits(
         self,
-        predicted_probabilities: torch.Tensor,
+        probabilities: torch.Tensor,
         to_out_device: bool = True
     ) -> torch.Tensor:
+        """Convert probability tensor to scaled logits, handling extreme values correctly
+
+        Args:
+            probabilities: tensor of probabilities
+            to_out_device: if True, move tensor to output torch Device. If False, leave on input
+                           torch Device.
+        """
         scaled_logits = torch.where(
-            predicted_probabilities <= self.min_sl_prob,
+            probabilities <= self.min_sl_prob,
             self.min_sl_value,
             torch.where(
-                predicted_probabilities >= self.max_sl_prob,
+                probabilities >= self.max_sl_prob,
                 self.max_sl_value,
                 QualityCalculator._p_to_scaled_logits(
-                    predicted_probabilities=predicted_probabilities, logit_scale=self.logit_scale,
+                    predicted_probabilities=probabilities, logit_scale=self.logit_scale,
                 ).to(self.quality_dtype)
             )
         )
@@ -260,7 +284,7 @@ class QualityCalculator:
         original_gqs: torch.Tensor
     ) -> torch.Tensor:
         return self.p_to_scaled_logits(
-            predicted_probabilities=torch.where(
+            probabilities=torch.where(
                 is_filterable,
                 predicted_probabilities,
                 self.phred_to_p(phred=original_gqs, to_out_device=False)
@@ -314,6 +338,7 @@ def apply_sv_gq_recalibrator(
         model_path: Path,
         input_vcf: Path,
         output_vcf: Path,
+        temp_dir: Path = Default.temp_dir,
         keep_multiallelic: bool = Default.keep_multiallelic,
         keep_homref: bool = Default.keep_homref,
         keep_homvar: bool = Default.keep_homvar,
@@ -326,6 +351,9 @@ def apply_sv_gq_recalibrator(
         scaled_logits_field: str = Default.scaled_logits_field,
         num_processes: int = Default.num_processes
 ):
+    print(f"keep_multiallelic={keep_multiallelic}")
+    print(f"keep_homref={keep_homref}")
+    print(f"keep_homvar={keep_homvar}")
     non_filtration_properties = Default.non_filtration_properties.union(excluded_properties)
     num_batches = 0
     num_variants = 0
@@ -356,20 +384,21 @@ def apply_sv_gq_recalibrator(
             keep_homvar=keep_homvar,
             torch_device_kind=torch_device_kind,
             progress_logger=filter_logger,
+            temp_dir=temp_dir,
             scale_bool_values=scale_bool_values,
             non_filtration_properties=non_filtration_properties,
             process_executor=process_executor
         )
         gq_recalibrator = load_gq_recalibrator(model_path=model_path,
                                                torch_device=vcf_tensor_data_loader.torch_device)
-        quality_calculator = QualityCalculator.make(
+        quality_calculator = QualityCalculator.build(
             in_device=vcf_tensor_data_loader.torch_device,
             out_device=cpu_torch_device,
             percent_likelihood_per_logit=percent_likelihood_per_logit,
             quality_dtype=torch.short
         )
 
-        for batch_tensor, original_gqs, is_filterable in tqdm(
+        for batch_tensor, variant_ids, original_gqs, is_filterable, ac in tqdm(
                 vcf_tensor_data_loader, desc="batch", mininterval=0.5, maxinterval=float('inf'),
                 smoothing=0
         ):
@@ -378,8 +407,10 @@ def apply_sv_gq_recalibrator(
                 vcf_in=vcf_in,
                 vcf_out=vcf_out,
                 predicted_probabilities=predicted_probabilities,
+                variant_ids=variant_ids,
                 original_gqs=original_gqs,
                 is_filterable=is_filterable,
+                ac=ac,
                 quality_calculator=quality_calculator,
                 original_gq_field=original_gq_field,
                 scaled_logits_field=scaled_logits_field
@@ -417,8 +448,10 @@ def output_batch(
         vcf_in: pysam.VariantFile,
         vcf_out: pysam.VariantFile,
         predicted_probabilities: torch.Tensor,
+        variant_ids: ArrowStringArray,
         original_gqs: torch.Tensor,
         is_filterable: torch.Tensor,
+        ac: torch.Tensor,
         quality_calculator: QualityCalculator,
         original_gq_field: str,
         scaled_logits_field: str
@@ -439,7 +472,26 @@ def output_batch(
     for batch_row in range(num_rows):
         in_record = next(vcf_in)
         out_record = in_record.copy()
+        variant_id = str(variant_ids[batch_row])
+        if out_record.id != variant_id:
+            raise ValueError(f"vcf_id='{out_record.id}', properties_id='{variant_id}'")
         for column_ind, out_gt in enumerate(out_record.samples.itervalues()):
+            # if out_gt.get("GT") == (1, 1):
+            #     raise ValueError(
+            #         f"HOMVAR: is_filterable={bool(is_filterable[batch_row, column_ind])}, "
+            #         f"ac={int(ac[batch_row, column_ind])}, "
+            #         f"ogq={int(original_gqs[batch_row, column_ind])}, "
+            #         f"gq={int(gqs[batch_row, column_ind])}"
+            #     )
+            # this_ac = int(ac[batch_row, column_ind])
+            # if this_ac != 0:
+            #     raise ValueError(
+            #         f"ac={this_ac}: is_filterable={bool(is_filterable[batch_row, column_ind])}, "
+            #         f"gt={out_gt.get('GT')}, "
+            #         f"ogq={int(original_gqs[batch_row, column_ind])}, "
+            #         f"gq={int(gqs[batch_row, column_ind])}"
+            #     )
+
             out_gt.update({
                 VcfKeys.gq: int(gqs[batch_row, column_ind]),
                 original_gq_field: int(original_gqs[batch_row, column_ind]),

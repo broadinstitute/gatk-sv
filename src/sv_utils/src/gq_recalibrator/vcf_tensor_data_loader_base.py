@@ -209,23 +209,26 @@ class SupplementalPropertyGetter:
     filtering and/or training but may not be fed into the neural net. e.g. variant id,
     variant weights, etc.
     """
-    __slots__ = ("tensor_ind", "buffer_ind", "scale", "baseline", "dtype")
+    __slots__ = (
+        "tensor_ind", "buffer_ind", "scale", "baseline", "dtype", "_is_variant", "_is_format"
+    )
 
     def __init__(
             self,
             tensor_ind: Optional[torch.Tensor],
-            buffer_ind: int | list[int] | None,
+            buffer_ind: int | list[int],
             scale: Optional[torch.Tensor],
             baseline: Optional[torch.Tensor],
             dtype: DType
     ):
-        if (tensor_ind is None) == (buffer_ind is None):
-            raise ValueError("Exactly one of tensor_ind and buffer_ind must be specified.")
         self.tensor_ind = tensor_ind
         self.buffer_ind = buffer_ind
         self.scale = scale
         self.baseline = baseline
         self.dtype = dtype
+        assert isinstance(buffer_ind, (int, list)), f"Bad buffer_ind type: {type(buffer_ind)}"
+        self._is_variant = isinstance(buffer_ind, int)
+        self._is_format = isinstance(buffer_ind, list)
 
     @staticmethod
     def build(
@@ -245,20 +248,18 @@ class SupplementalPropertyGetter:
         )
         if len(sample_ids) > 1 or sample_ids[0] is not None:
             # it's a format property
-            try:
-                # if we can find it in the list of tensor properties, we can get it that way
-                tensor_ind = torch.tensor(
-                    tensor_property_names.index(property_name), dtype=torch.int64
-                )
-                buffer_ind = None
-            except ValueError:
-                # we'll have to get it from the buffer and pass it back
-                tensor_ind = None
-                buffer_ind = buffer_inds
+            buffer_ind = list(buffer_inds)
         else:
             # it's a variant property
-            tensor_ind = None
             buffer_ind = buffer_inds[0]
+        try:
+            # if we can find it in the list of tensor properties, we can get it that way
+            tensor_ind = torch.tensor(
+                tensor_property_names.index(property_name), dtype=torch.int64
+            )
+        except ValueError:
+            # we'll have to get it from the buffer and pass it back
+            tensor_ind = None
         parquet_dtype = next(
             _dtype for (_sample_id, _property_name), _dtype in dtypes.items()
             if property_name == _property_name
@@ -316,18 +317,18 @@ class SupplementalPropertyGetter:
 
     @property
     def is_tensor(self) -> bool:
-        return self.buffer_ind is None
+        return self.tensor_ind is not None
 
     @property
     def is_variant(self) -> bool:
-        return self.is_buffer and isinstance(self.buffer_ind, int)
+        return self._is_variant
 
     @property
     def is_format(self) -> bool:
-        return self.is_tensor or isinstance(self.buffer_ind, list)
+        return self._is_format
 
     def get_from_tensor(self, tensor: ArrayType) -> ArrayType:
-        return tensor[:, :, self.tensor_ind]
+        return tensor[:, :, self.tensor_ind] if self._is_format else tensor[:, 0, self.tensor_ind]
 
     def get_from_buffer(self, buffer: ArrayType) -> ArrayType:
         return buffer.take(self.buffer_ind, axis=1)
@@ -340,7 +341,7 @@ class SupplementalPropertyGetter:
     def get_empty_array(self, variants_per_batch: int) -> Optional[PandasArray | numpy.ndarray]:
         if self.is_tensor:
             return None
-        shape: tuple[int, ...] = (variants_per_batch,) if self.is_variant \
+        shape: tuple[int, ...] = (variants_per_batch,) if self._is_variant \
             else (variants_per_batch, len(self.buffer_ind))
         if isinstance(self.dtype, numpy.dtype):
             return numpy.empty(shape, dtype=self.dtype)
@@ -556,8 +557,11 @@ class VcfTensorDataLoaderBase:
             dtype=torch.float32, device=self.torch_device
         )
 
-    def get_all_parquet_files(self) -> Iterable[Path]:
-        return self.parquet_path.glob(f"*{Keys.parquet_suffix}")
+    def get_all_parquet_files(self) -> list[Path]:
+        return sorted(
+            self.parquet_path.glob(f"*{Keys.parquet_suffix}"),
+            key=lambda p: int(p.name.split('.')[1])
+        )
 
     def _set_parquet_files(self):
         self._parquet_files = list(self.get_all_parquet_files())

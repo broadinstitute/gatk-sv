@@ -97,9 +97,13 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--keep-multiallelic", type=bool, default=Default.keep_multiallelic,
                         help="If True, do not train on multiallelic variants; if False, do so")
     parser.add_argument("--keep-homref", type=bool, default=Default.keep_homref,
-                        help="If True, do not train on HOMREF genotypes; if False, do so")
+                        help="If True, treat all HOMREF genotypes as good/correct for training, as"
+                             f"though they were specified in the truth json; if False, train on "
+                             f"HOMREF genotypes as usual.")
     parser.add_argument("--keep-homvar", type=bool, default=Default.keep_homvar,
-                        help="If True, do not train on HOMVAR genotypes; if False, do so")
+                        help="If True, treat all HOMVAR genotypes as good/correct for training, as"
+                             f"though they were specified in the truth json; if False, train on "
+                             f"HOMVAR genotypes as usual.")
     parser.add_argument("--variants-per-batch", type=int, default=Default.variants_per_batch,
                         help="number of variants used in each training batch")
     parser.add_argument("--batches-per-mini-epoch", type=int,
@@ -147,6 +151,9 @@ def main(argv: Optional[list[str]] = None):
         output_model_path=args.model,
         input_model_path=args.input_model,
         temp_dir=args.temp_dir,
+        keep_multiallelic=args.keep_multiallelic,
+        keep_homref=args.keep_homref,
+        keep_homvar=args.keep_homvar,
         variants_per_batch=args.variants_per_batch,
         batches_per_mini_epoch=args.batches_per_mini_epoch,
         max_train_variants=args.max_train_variants,

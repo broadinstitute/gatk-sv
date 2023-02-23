@@ -202,7 +202,7 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             FilterFuture(future=future, pickle_folder=pickle_folder)
         )
 
-    def __next__(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __next__(self) -> tuple[torch.Tensor, ArrowStringArray, torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         emit tensors for next batch
         Returns:
@@ -238,12 +238,18 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
 
         return (
             scaled_filtration_properties_tensor,
+            supplemental_properties_buffers[Keys.id],
             self.get_unscaled_property_tensor(
                 property_name=Keys.gq,
                 filtration_properties_tensor=filtration_properties_tensor,
                 supplemental_properties_buffers=supplemental_properties_buffers
             ),
-            torch.tensor(is_filterable, dtype=torch.bool, device=self.torch_device)
+            torch.tensor(is_filterable, dtype=torch.bool, device=self.torch_device),
+            self.get_unscaled_property_tensor(
+                property_name=Keys.allele_count,
+                filtration_properties_tensor=filtration_properties_tensor,
+                supplemental_properties_buffers=supplemental_properties_buffers
+            )
         )
 
 

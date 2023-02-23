@@ -994,20 +994,73 @@ def _get_wanted_columns(
     return wanted_columns
 
 
+def get_arbritrary_parquet_file(
+        input_path: Path,
+        base_dir: Optional[Path] = None,
+        remove_input_tar: bool = Default.remove_input_tar
+) -> Path:
+    if input_path.suffix == ".tar":
+        input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
+                                           remove_input_tar=remove_input_tar)
+    return next(input_path.glob("*.parquet"))
+
+
+def get_parquet_file_schema(parquet_file: Path) -> pyarrow.Schema:
+    return pyarrow.parquet.read_schema(parquet_file)
+
+
+def get_parquet_folder_sample_ids(
+        input_path: Path,
+        base_dir: Optional[Path] = None,
+        remove_input_tar: bool = Default.remove_input_tar
+) -> list[str]:
+    return get_parquet_file_sample_ids(
+        get_arbritrary_parquet_file(
+            input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
+        )
+    )
+
+
 def get_parquet_folder_columns(
         input_path: Path,
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar
 ) -> list[str]:
-    if input_path.suffix == ".tar":
-        input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
-                                           remove_input_tar=remove_input_tar)
-    parquet_file = next(input_path.glob("*.parquet"))
-    return get_parquet_file_columns(parquet_file)
+    return get_parquet_file_columns(
+        get_arbritrary_parquet_file(
+            input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
+        )
+    )
 
 
 def get_parquet_file_columns(parquet_file: Path) -> list[str]:
-    return pyarrow.parquet.read_schema(parquet_file).names
+    return get_parquet_file_schema(parquet_file).names
+
+
+def get_parquet_file_unflat_columns(
+    parquet_file: Path
+) -> list[tuple[Optional[str], str]]:
+    return [
+        unflatten_column_name(flat_column_name)
+        for flat_column_name in get_parquet_file_columns(parquet_file)
+        if flat_column_name != Keys.row
+    ]
+
+
+def get_parquet_file_sample_ids(parquet_file: Path) -> list[str]:
+    seen_samples = set()
+
+    def _first_time_seen(_sample_id: str) -> bool:
+        if _sample_id in seen_samples:
+            return False
+        else:
+            seen_samples.add(_sample_id)
+            return True
+
+    return [
+        sample_id for (sample_id, property_name) in get_parquet_file_unflat_columns(parquet_file)
+        if sample_id is not None and _first_time_seen(sample_id)
+    ]
 
 
 def get_parquet_folder_num_rows(
@@ -1021,7 +1074,7 @@ def get_parquet_folder_num_rows(
     return get_parquet_files_num_rows(parquet_files=input_path.glob("*.parquet"))
 
 
-def get_parquet_files_num_rows(parquet_files: Iterable[Path]) -> int:
+def get_parquet_files_num_rows0(parquet_files: Iterable[Path]) -> int:
     return dask.compute(
         sum(
             dask.delayed(get_parquet_file_num_rows(parquet_file))
@@ -1030,16 +1083,26 @@ def get_parquet_files_num_rows(parquet_files: Iterable[Path]) -> int:
     )[0]
 
 
+def get_parquet_files_num_rows(parquet_files: Iterable[Path]) -> int:
+    return sum(
+        get_parquet_file_num_rows(parquet_file)
+        for parquet_file in parquet_files
+    )
+
+
+def get_parquet_file_num_rows(parquet_file: Path) -> int:
+    return pyarrow.parquet.ParquetFile(parquet_file).metadata.num_rows
+
+
 def get_parquet_folder_dtypes(
         input_path: Path,
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar,
         unflatten_column_names: bool = False
 ) -> dict[str, DType]:
-    if input_path.suffix == ".tar":
-        input_path = extract_tar_to_folder(input_path, base_dir=base_dir,
-                                           remove_input_tar=remove_input_tar)
-    parquet_file = next(input_path.glob("*.parquet"))
+    parquet_file = get_arbritrary_parquet_file(
+        input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
+    )
     return get_parquet_file_dtypes(parquet_file, unflatten_column_names=unflatten_column_names)
 
 
@@ -1047,17 +1110,13 @@ def get_parquet_file_dtypes(
         parquet_file: Path,
         unflatten_column_names: bool = False
 ) -> dict[str, DType]:
-    schema = pyarrow.parquet.read_schema(parquet_file)
+    schema = get_parquet_file_schema(parquet_file)
     return {
         unflatten_column_name(name) if unflatten_column_names else name:
             pyarrow_dtype.to_pandas_dtype()
         for name, pyarrow_dtype in zip(schema.names, schema.types)
         if name != "row"
     }
-
-
-def get_parquet_file_num_rows(parquet_file: Path) -> int:
-    return pyarrow.parquet.ParquetFile(parquet_file).metadata.num_rows
 
 
 def output_properties_scaling(properties: DataFrame, properties_scaling_json: Path):

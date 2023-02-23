@@ -10,6 +10,7 @@ import torch
 from collections import defaultdict
 from typing import Optional, Union, Any
 from collections.abc import Sequence
+
 from gq_recalibrator import (
     training_utils, tarred_properties_to_parquet, vcf_tensor_data_loader_base
 )
@@ -27,11 +28,13 @@ class Keys:
     row = vcf_tensor_data_loader_base.Keys.row
     id = tarred_properties_to_parquet.Keys.id
     variant_weights = tarred_properties_to_parquet.Keys.variant_weights
+    gq = genomics_io.Keys.gq
+    allele_count = genomics_io.Keys.allele_count
+    is_multiallelic = tarred_properties_to_parquet.Keys.is_multiallelic
     training = "training"
     validation = "validation"
     pickle_suffix = vcf_tensor_data_loader_base.Keys.pickle_suffix
     remainder = "remainder"
-    gq = genomics_io.Keys.gq
     remainder_sizes = f"{remainder}_sizes{pickle_suffix}"
     training_remainder = f"{training}_{remainder}"
     validation_remainder = f"{validation}_{remainder}"
@@ -41,7 +44,9 @@ class Default:
     shuffle = True
     random_seed = 0
     non_filtration_properties = vcf_tensor_data_loader_base.Default.non_filtration_properties
-    supplemental_columns_for_training = frozenset({Keys.id, Keys.variant_weights, Keys.gq})
+    supplemental_columns_for_training = frozenset({
+        Keys.id, Keys.variant_weights, Keys.gq, Keys.is_multiallelic, Keys.allele_count
+    })
     scale_bool_properties = vcf_tensor_data_loader_base.Default.scale_bool_properties,
     validation_proportion = 0.2
     temp_dir = vcf_tensor_data_loader_base.Default.temp_dir
@@ -52,9 +57,13 @@ class Default:
 
 class TrainingBatchIterator(BatchIteratorBase):
     """
-    Iterator class that approximately iterates at the appropriate validation proportion. Works over
-    batches and doesn't allow rounding error to gradually accumulate excess training or validation
-    variants in the remainder
+    Iterator class that approximately iterates at the appropriate validation proportion.
+    Each parquet file represents a set of batches (segmented at variants_per_batch). This iterator
+    works over a single set of batches, storing any extra ("remainder") variant IDs so the next
+    TrainingBatchIterator can start with them.
+    The iterator design iterates at *APPROXIMATELY* the appropriate validation proportion so as to
+    not allow rounding error to gradually accumulate excess training or validation variants in the
+    remainder.
     """
     __slots__ = (
         "num_training_variants", "num_validation_variants", "training_batch", "validation_batch",
@@ -101,10 +110,9 @@ class TrainingBatchIterator(BatchIteratorBase):
 
     @property
     def is_training_batch(self) -> Optional[bool]:
-        """
-        return True if next batch is training,
-               False if it's validation,
-               None if it's time to stop iteration
+        """return True if next batch is training,
+                  False if it's validation,
+                  None if it's time to stop iteration
         """
         if self.training_batch >= self.num_training_batches:
             return None if self.validation_batch >= self.num_validation_batches else False
@@ -117,6 +125,7 @@ class TrainingBatchIterator(BatchIteratorBase):
 
     @property
     def has_next(self) -> bool:
+        """return True if there is another batch, False if iteration has completed"""
         return (
             self.training_batch < self.num_training_batches or
             self.validation_batch < self.num_validation_batches
@@ -124,9 +133,11 @@ class TrainingBatchIterator(BatchIteratorBase):
 
     @property
     def has_remainders(self) -> bool:
+        """return True if there are any remainders that must be passed to next iterator"""
         return self.num_training_remainder > 0 or self.num_validation_remainder > 0
 
     def __next__(self) -> (bool, str, int):
+        """Get the next batch info"""
         is_training_batch = self.is_training_batch
         if is_training_batch is None:
             raise StopIteration
@@ -141,11 +152,13 @@ class TrainingBatchIterator(BatchIteratorBase):
 
     @property
     def remainder_ids(self) -> set[str]:
+        """Get all variant IDs from training or validation remainder"""
         return set(self.training_remainder_ids).union(self.validation_remainder_ids)
 
     def get_nth_pickle_file(self, n: Union[int, str], is_training: bool) -> Path:
-        return self.pickle_folder / (
-            f"{Keys.training if is_training else Keys.validation}_{n}{Keys.pickle_suffix}"
+        """Get the nth pickle file"""
+        return VcfTrainingTensorDataLoader.get_nth_pickle_file(
+            pickle_folder=self.pickle_folder, n=n, is_training=is_training
         )
 
 
@@ -159,8 +172,8 @@ class TrainingFuture:
 class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     __slots__ = (
         "validation_proportion", "_training_batch", "_validation_batch", "_batch_iterator",
-        "_previous_batch_iterators", "_genotype_is_good_dict", "_genotype_is_bad_dict",
-        "_genotype_is_good_tensor", "_genotype_is_bad_tensor", "_trainable_variant_ids",
+        "_previous_batch_iterators", "truth_json",
+        "_genotype_is_good_tensor", "_genotype_is_bad_tensor",
         "max_look_ahead_batches", "_resume_generator_state", "_training_futures",
     )
     __state_keys__ = (
@@ -233,7 +246,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 TrainingBatchPickler.restart_pickle_previous_remainders,
                 previous_batch_iterators=self._previous_batch_iterators,
                 wanted_columns=self._wanted_columns,
-                variant_id_column=self._variant_id_flat_column_name,
+                variant_id_flat_column_name=self._variant_id_flat_column_name,
                 supplemental_property_getters=self.supplemental_property_getters
             )
             self._training_futures.append(
@@ -252,13 +265,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         self.validation_proportion = validation_proportion
         self._training_batch = _training_batch
         self._validation_batch = _validation_batch
-        self._genotype_is_good_dict, self._genotype_is_bad_dict = \
-            self._reorganize_confident_variants(
-                benchmark_variant_filter.TruthData.load_confident_variants(f"{truth_json}")
-            )
-        self._trainable_variant_ids = frozenset(
-            self._genotype_is_good_dict.keys()
-        ).union(self._genotype_is_bad_dict.keys())
+        self.truth_json = truth_json
         self._genotype_is_good_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
                                                     dtype=numpy.float32)
         self._genotype_is_bad_tensor = numpy.empty((self.variants_per_batch, self.num_samples),
@@ -268,32 +275,6 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         """ return the number of remaining batches in the iterator """
         n_batches, extra_rows = divmod(self._num_rows - self._current_row, self.variants_per_batch)
         return n_batches + 1 if extra_rows else n_batches
-
-    def _reorganize_confident_variants(
-            self,
-            confident_variants: ConfidentVariants
-    ) -> tuple[dict[str, numpy.ndarray], dict[str, numpy.ndarray]]:
-        genotype_is_good = defaultdict(list)
-        genotype_is_bad = defaultdict(list)
-        sample_index_map = {sample_id: index for index, sample_id in enumerate(self.sample_ids)}
-        for sample_id, sample_confident_variants in confident_variants.items():
-            sample_index = sample_index_map[sample_id]
-            for variant_id in sample_confident_variants.good_variant_ids:
-                genotype_is_good[variant_id].append(sample_index)
-            for variant_id in sample_confident_variants.bad_variant_ids:
-                genotype_is_bad[variant_id].append(sample_index)
-
-        int_dtype = numpy.min_scalar_type(self.num_samples)
-        genotype_is_good = {
-            variant_id: numpy.array(sample_indices, dtype=int_dtype)
-            for variant_id, sample_indices in genotype_is_good.items()
-        }
-        genotype_is_bad = {
-            variant_id: numpy.array(sample_indices, dtype=int_dtype)
-            for variant_id, sample_indices in genotype_is_bad.items()
-        }
-
-        return genotype_is_good, genotype_is_bad
 
     def __iter__(self) -> "VcfTrainingTensorDataLoader":
         """ initialize for iteration over next full epoch """
@@ -376,14 +357,16 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             TrainingBatchPickler.pickle_batch_tensors,
             parquet_file=self._current_parquet_file, pickle_folder=pickle_folder,
             previous_pickle_folder=previous_pickle_folder,
+            truth_json=self.truth_json,
             wanted_columns=self._wanted_columns, random_seed=self._next_random_seed,
-            variants_per_batch=self.variants_per_batch, num_samples=self.num_samples,
+            variants_per_batch=self.variants_per_batch,
             num_properties=self.num_properties,
             variant_columns=self._variant_columns, format_columns=self._format_columns,
             validation_proportion=self.validation_proportion,
-            trainable_variant_ids=self._trainable_variant_ids,
             variant_id_flat_column_name=self._variant_id_flat_column_name,
-            supplemental_property_getters=self.supplemental_property_getters
+            supplemental_property_getters=self.supplemental_property_getters,
+            keep_multiallelic=self.keep_multiallelic, keep_homref=self.keep_homref,
+            keep_homvar=self.keep_homvar
         )
         self._training_futures.append(
             TrainingFuture(future=future, pickle_folder=pickle_folder,
@@ -441,19 +424,19 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
         with locked_read(
                 pickle_file, mode="rb", delete_after_read=True, sleep_time_s=Default.sleep_time_s
         ) as f_in:
-            filtration_properties_tensor, supplemental_properties_buffers = pickle.load(f_in)
-        # fill good and bad truth tensors. Note variant ID is always a non-filtration property,
-        # so we know the buffer was passed back
-        VcfTrainingTensorDataLoader._fill_truth_tensor(
-            supplemental_properties_buffers[Keys.id],
-            self._genotype_is_good_dict,
-            self._genotype_is_good_tensor
-        )
-        VcfTrainingTensorDataLoader._fill_truth_tensor(
-            supplemental_properties_buffers[Keys.id],
-            self._genotype_is_bad_dict,
-            self._genotype_is_bad_tensor
-        )
+            (
+                filtration_properties_tensor,
+                supplemental_properties_buffers,
+                packed_genotype_is_good,
+                packed_genotype_is_bad,
+            ) = pickle.load(f_in)
+        # unpack truth tenors
+        self._genotype_is_good_tensor[:] = numpy.unpackbits(
+            packed_genotype_is_good, count=self._genotype_is_good_tensor.size
+        ).astype(bool).reshape(self._genotype_is_good_tensor.shape)
+        self._genotype_is_bad_tensor[:] = numpy.unpackbits(
+            packed_genotype_is_bad, count=self._genotype_is_bad_tensor.size
+        ).astype(bool).reshape(self._genotype_is_bad_tensor.shape)
         # scale filtration properties for learning
         scaled_filtration_properties_tensor = self._tensor_scale * (
             torch.tensor(
@@ -478,18 +461,6 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             torch.tensor(self._genotype_is_bad_tensor, dtype=torch.float32,
                          device=self.torch_device)
         )
-
-    @staticmethod
-    def _fill_truth_tensor(
-            variant_ids: numpy.ndarray,
-            variant_id_trainable_map: dict[str, numpy.ndarray],
-            truth_tensor: numpy.ndarray
-    ):
-        truth_tensor[:] = 0.0
-        for row, variant_id in enumerate(variant_ids):
-            truth_indices = variant_id_trainable_map.get(variant_id, None)
-            if truth_indices is not None:
-                truth_tensor[row, :].put(truth_indices, 1.0)
 
     @staticmethod
     def get_nth_pickle_file(pickle_folder: Path, n: Union[int, str], is_training: bool) -> Path:
@@ -538,27 +509,46 @@ class TrainingBatchPickler(BatchPicklerBase):
             parquet_file: Path,
             pickle_folder: Path,
             previous_pickle_folder: Optional[Path],
+            truth_json: Path,
             wanted_columns: list[str],
             random_seed: Optional[int],
             variants_per_batch: int,
-            num_samples: int,
             num_properties: int,
             variant_columns: numpy.ndarray,
             format_columns: numpy.ndarray,
             validation_proportion: float,
-            trainable_variant_ids: set[str],
             variant_id_flat_column_name: str,
             supplemental_property_getters: dict[str, SupplementalPropertyGetter],
             keep_multiallelic: bool,
             keep_homref: bool,
             keep_homvar: bool
     ) -> dict[str, Any]:
+        # get the sample IDs from the parquet, and figure out the good/bad/trainable variant IDs
+        # from the truth JSON
+        sample_ids = tarred_properties_to_parquet.get_parquet_file_sample_ids(parquet_file)
+        num_samples = len(sample_ids)
+        genotype_is_good_dict, genotype_is_bad_dict = cls._reorganize_confident_variants(
+            confident_variants=benchmark_variant_filter.TruthData.load_confident_variants(
+                f"{truth_json}"
+            ),
+            sample_ids=sample_ids
+        )
+        trainable_variant_ids = frozenset(
+            genotype_is_good_dict.keys()
+        ).union(genotype_is_bad_dict.keys())
+
         # read the basic buffer into a numpy array, only loading trainable variant IDs
-        buffer = cls._load_buffer(
-            parquet_file=parquet_file,
-            wanted_columns=wanted_columns,
-            wanted_ids=trainable_variant_ids,
-            variant_id_flat_column_name=variant_id_flat_column_name
+        buffer = cls._filter_trainable_variants(
+            cls._load_buffer(
+                parquet_file=parquet_file,
+                wanted_columns=wanted_columns,
+                wanted_ids=trainable_variant_ids,
+                variant_id_flat_column_name=variant_id_flat_column_name
+            ),
+            supplemental_property_getters=supplemental_property_getters,
+            keep_multiallelic=keep_multiallelic,
+            keep_homref=keep_homref,
+            keep_homvar=keep_homvar
         )
         # split new buffer up so that the first block of rows is for validation, remaining for
         # training, and randomly permute the indices within training / permutation blocks if
@@ -628,7 +618,12 @@ class TrainingBatchPickler(BatchPicklerBase):
         filtration_properties_tensor = numpy.empty(
             (variants_per_batch, num_samples, num_properties), dtype=numpy.float32
         )
-
+        gt_is_good_tensor = numpy.empty(
+            (variants_per_batch, num_samples), dtype=numpy.bool
+        )
+        gt_is_bad_tensor = numpy.empty(
+            (variants_per_batch, num_samples), dtype=numpy.bool
+        )
         supplemental_property_buffers = {
             property_name: property_getter.get_empty_array(variants_per_batch)
             for property_name, property_getter in supplemental_property_getters.items()
@@ -695,10 +690,151 @@ class TrainingBatchPickler(BatchPicklerBase):
                     filtration_properties_tensor=filtration_properties_tensor,
                     supplemental_property_buffers=supplemental_property_buffers
                 )
+            # fill out the truth tensors
+            allele_counts = (
+                None if not (keep_homref or keep_homvar)
+                else supplemental_property_buffers[Keys.allele_count]
+                if supplemental_property_getters[Keys.allele_count].is_buffer
+                else supplemental_property_getters[Keys.allele_count].get_from_tensor(
+                    filtration_properties_tensor
+                )
+            )
+            cls._fill_gt_is_good_tensor(
+                variant_ids=supplemental_property_buffers[Keys.id],
+                variant_id_is_good_map=genotype_is_good_dict,
+                gt_is_good=gt_is_good_tensor,
+                allele_counts=allele_counts,
+                keep_homref=keep_homref,
+                keep_homvar=keep_homvar
+            )
+            cls._fill_gt_is_bad_tensor(
+                variant_ids=supplemental_property_buffers[Keys.id],
+                variant_id_is_bad_map=genotype_is_bad_dict,
+                gt_is_bad=gt_is_bad_tensor,
+                allele_counts=allele_counts,
+                keep_homref=keep_homref,
+                keep_homvar=keep_homvar
+            )
             with locked_write(pickle_file, mode="wb") as f_out:
-                pickle.dump((filtration_properties_tensor, supplemental_property_buffers), f_out,
-                            protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(
+                    (
+                        filtration_properties_tensor,
+                        supplemental_property_buffers,
+                        numpy.packbits(gt_is_good_tensor),
+                        numpy.packbits(gt_is_bad_tensor)
+                    ),
+                    f_out,
+                    protocol=pickle.HIGHEST_PROTOCOL
+                )
         return training_batch_iterator.state_dict
+
+    @classmethod
+    def _reorganize_confident_variants(
+        cls,
+        confident_variants: ConfidentVariants,
+        sample_ids: list[str]
+    ) -> tuple[dict[str, numpy.ndarray], dict[str, numpy.ndarray]]:
+        genotype_is_good = defaultdict(list)
+        genotype_is_bad = defaultdict(list)
+        sample_index_map = {sample_id: index for index, sample_id in enumerate(sample_ids)}
+        for sample_id, sample_confident_variants in confident_variants.items():
+            sample_index = sample_index_map[sample_id]
+            for variant_id in sample_confident_variants.good_variant_ids:
+                genotype_is_good[variant_id].append(sample_index)
+            for variant_id in sample_confident_variants.bad_variant_ids:
+                genotype_is_bad[variant_id].append(sample_index)
+
+        int_dtype = numpy.min_scalar_type(len(sample_ids))
+        genotype_is_good = {
+            variant_id: numpy.array(sample_indices, dtype=int_dtype)
+            for variant_id, sample_indices in genotype_is_good.items()
+        }
+        genotype_is_bad = {
+            variant_id: numpy.array(sample_indices, dtype=int_dtype)
+            for variant_id, sample_indices in genotype_is_bad.items()
+        }
+
+        return genotype_is_good, genotype_is_bad
+
+    @classmethod
+    def _filter_trainable_variants(
+            cls,
+            buffer: numpy.ndarray,
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
+            keep_multiallelic: bool,
+            keep_homref: bool,
+            keep_homvar: bool
+    ) -> numpy.ndarray:
+        """Filter buffer to remove rows that are not trainable due to being multiallelic (if
+        keep_multiallelic is True) or having no trainable genotypes (depending on keep_homref and
+        keep_homvar)
+        """
+        if not (keep_multiallelic or keep_homref or keep_homvar):
+            return buffer
+
+        is_trainable = numpy.logical_not(
+            supplemental_property_getters[Keys.is_multiallelic].get_from_buffer(
+                buffer
+            )
+        ) if keep_multiallelic else numpy.empty((0,), dtype=bool)
+
+        def _trainable_and_equals(_new_trainable: numpy.ndarray) -> None:
+            if is_trainable.size == 0:
+                is_trainable.resize(_new_trainable.shape)
+                is_trainable[:] = _new_trainable
+            else:
+                is_trainable[:] = numpy.logical_and(is_trainable, _new_trainable)
+
+        if keep_homref or keep_homvar:
+            allele_counts = supplemental_property_getters[Keys.allele_count]
+            if keep_homref:
+                # noinspection PyTypeChecker
+                _trainable_and_equals(allele_counts != 0)
+            if keep_homvar:
+                # noinspection PyTypeChecker
+                _trainable_and_equals(allele_counts != 2)
+
+        return buffer if is_trainable is None else buffer.compress(is_trainable, axis=0)
+
+    @staticmethod
+    def _fill_gt_is_good_tensor(
+        variant_ids: numpy.ndarray,
+        variant_id_is_good_map: dict[str, numpy.ndarray],
+        gt_is_good: numpy.ndarray,
+        allele_counts: Optional[numpy.ndarray],
+        keep_homref: bool,
+        keep_homvar: bool,
+    ) -> None:
+        gt_is_good[:] = False
+        for row, variant_id in enumerate(variant_ids):
+            truth_indices = variant_id_is_good_map.get(variant_id, None)
+            if truth_indices is not None:
+                gt_is_good[row, :].put(truth_indices, 1.0)
+        if keep_homref:
+            gt_is_good[:] = numpy.logical_or(gt_is_good, allele_counts == 0)
+        if keep_homvar:
+            gt_is_good[:] = numpy.logical_or(gt_is_good, allele_counts == 2)
+
+    @staticmethod
+    def _fill_gt_is_bad_tensor(
+        variant_ids: numpy.ndarray,
+        variant_id_is_bad_map: dict[str, numpy.ndarray],
+        gt_is_bad: numpy.ndarray,
+        allele_counts: Optional[numpy.ndarray],
+        keep_homref: bool,
+        keep_homvar: bool,
+    ):
+        gt_is_bad[:] = False
+        for row, variant_id in enumerate(variant_ids):
+            truth_indices = variant_id_is_bad_map.get(variant_id, None)
+            if truth_indices is not None:
+                gt_is_bad[row, :].put(truth_indices, 1.0)
+        # NOCALL GT is always bad
+        gt_is_bad[:] = numpy.logical_or(gt_is_bad, allele_counts < 0)
+        if keep_homref:
+            gt_is_bad[:] = numpy.logical_and(gt_is_bad, allele_counts != 0)
+        if keep_homvar:
+            gt_is_bad[:] = numpy.logical_and(gt_is_bad, allele_counts != 2)
 
     @classmethod
     @training_utils.reraise_with_stack
@@ -707,17 +843,12 @@ class TrainingBatchPickler(BatchPicklerBase):
             previous_batch_iterators: list[TrainingBatchIterator],
             wanted_columns: list[str],
             variant_id_flat_column_name: str,
-            supplemental_property_getters: dict[str, SupplementalPropertyGetter],
-            keep_multiallelic: bool,
-            keep_homref: bool,
-            keep_homvar: bool
+            supplemental_property_getters: dict[str, SupplementalPropertyGetter]
     ) -> None:
         """
         For restarting training after interruption, recreate the remainder tensor for the batch
         prior to the resumed batch
         """
-        for ind, batch_iterator in enumerate(previous_batch_iterators):
-            print(f"{ind}: {json.dumps(batch_iterator.json_dict, indent='  ')}")
         last_batch_iterator = previous_batch_iterators[-1]
         if not last_batch_iterator.has_remainders:
             raise ValueError("Should not _restart_pickle_previous_remainders with no remainders")
