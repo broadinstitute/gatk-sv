@@ -202,12 +202,13 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
             FilterFuture(future=future, pickle_folder=pickle_folder)
         )
 
-    def __next__(self) -> tuple[torch.Tensor, ArrowStringArray, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def __next__(self) -> tuple[torch.Tensor, ArrowStringArray, torch.Tensor, torch.Tensor]:
         """
         emit tensors for next batch
         Returns:
             filtration_properties_tensor: num_variants x num_samples x num_properties 32-bit float
                                           tensor of properties to be injested by neural network
+            variant_ids: array of length num_variants with variant IDs
             original_gq: num_variants x num_samples torch tensor with GQ values from original
                          VCF
             is_filterable: num_variants x num_samples boolean array, set to True if the
@@ -245,11 +246,6 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
                 supplemental_properties_buffers=supplemental_properties_buffers
             ),
             torch.tensor(is_filterable, dtype=torch.bool, device=self.torch_device),
-            self.get_unscaled_property_tensor(
-                property_name=Keys.allele_count,
-                filtration_properties_tensor=filtration_properties_tensor,
-                supplemental_properties_buffers=supplemental_properties_buffers
-            )
         )
 
 
@@ -293,6 +289,12 @@ class FilterBatchPickler(BatchPicklerBase):
         for is_remainder_batch, pickle_file, num_variants_in_batch in filter_batch_iterator:
             buffer_begin = buffer_end
             buffer_end += num_variants_in_batch
+            if is_remainder_batch:
+                # shorten supplemental_property_buffers
+                supplemental_property_buffers = {
+                    name: None if buffer is None else buffer[:num_variants_in_batch]
+                    for name, buffer in supplemental_property_buffers.items()
+                }
             cls._fill_next_tensor_blocks(
                 buffer_matrix=buffer[buffer_begin:buffer_end, :],
                 variant_columns=variant_columns,

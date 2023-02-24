@@ -864,12 +864,13 @@ def df_to_parquet(
         archive_to_tar(folder_to_archive=parquet_folder, tar_file=tar_file, remove_files=True)
 
 
-def flatten_columns(df: DataFrame):
+def flatten_columns(df: DataFrame) -> DataFrame:
     old_columns = df.columns
     if df.columns.nlevels > 1:
         df.columns = pandas.Index(
             [str(column) for column in old_columns.to_flat_index()]
         )
+    return df
 
 
 def archive_to_tar(
@@ -926,7 +927,7 @@ def unflatten_column_name(flat_column_name: str) -> tuple[Optional[str], str]:
         raise
 
 
-def unflatten_columns(df: DataFrame):
+def unflatten_columns(df: DataFrame) -> DataFrame:
     old_columns = df.columns
     try:
         multicolumns = pandas.MultiIndex.from_tuples(
@@ -939,6 +940,7 @@ def unflatten_columns(df: DataFrame):
         if multicolumns.nlevels == 2:
             multicolumns.names = Default.column_levels
         df.columns = multicolumns
+    return DataFrame
 
 
 def _get_wanted_columns(

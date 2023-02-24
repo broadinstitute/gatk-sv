@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import shutil
 import sys
 from pathlib import Path
 import tempfile
@@ -20,7 +21,8 @@ from gq_recalibrator import (
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import dask.dataframe
-from typing import Optional
+from collections.abc import Iterator
+from typing import Optional, TypeVar
 
 tqdm.monitor_interval = 0
 
@@ -28,22 +30,14 @@ DaskDataFrame = dask.dataframe.DataFrame
 PandasDataFrame = pandas.DataFrame
 DataFrame = DaskDataFrame | PandasDataFrame
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
+PandasArray = pandas.core.arrays.PandasArray
+ArrayType = TypeVar("ArrayType", numpy.ndarray, PandasArray, torch.Tensor)
 
 
 class Keys:
     id = tarred_properties_to_parquet.Keys.id
-    variant_weights = tarred_properties_to_parquet.Keys.variant_weights
-    positive_value = tarred_properties_to_parquet.Keys.positive_value
-    negative_value = tarred_properties_to_parquet.Keys.negative_value
-    baseline = tarred_properties_to_parquet.Keys.baseline
-    scale = tarred_properties_to_parquet.Keys.scale
-    logger_kwargs = "logger_kwargs"
-    data_loader_state = "data_loader_state"
+    row = tarred_properties_to_parquet.Keys.row
     net_kwargs = "neural_net_kwargs"
-    optimizer_kwargs = "optimizer_kwargs"
-    optimizer_type = "optimizer_type"
-    training_losses = "training_losses"
-    validation_losses = "validation_losses"
 
 
 class VcfKeys:
@@ -52,7 +46,7 @@ class VcfKeys:
 
 class Default:
     temp_dir = Path(tempfile.gettempdir())
-    variants_per_batch = 100
+    variants_per_batch = 10000
     batches_per_mini_epoch = 50
     non_filtration_properties = vcf_filter_data_loader.Default.non_filtration_properties
     torch_device_kind = training_utils.TorchDeviceKind.cpu
@@ -65,12 +59,13 @@ class Default:
     keep_multiallelic = True
     keep_homref = False
     keep_homvar = False
+    compression_algorithm = tarred_properties_to_parquet.Default.compression_algorithm
 
 
 def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Predict likelihood each genotype is good using trained neural network and "
-                    "extracted VCF properties and update VCF with recalibrated qualities",
+                    "extracted VCF properties. Output predicted VCF annotations to parquet",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         prog=argv[0]
     )
@@ -81,10 +76,9 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
                              "filtering properties")
     parser.add_argument("--model", "-m", type=Path, required=True,
                         help="path to input file with trained model")
-    parser.add_argument("--input-vcf", "-i", type=Path, required=True,
-                        help="path to input VCF to be recalibrated")
-    parser.add_argument("--output-vcf", "-o", type=Path, required=True,
-                        help="path to output VCF with recalibrated GQs/SLs")
+    parser.add_argument("--output-parquet", "-o", type=Path, required=True,
+                        help="path to output parquet files with GQs/SLs. If the path ends with"
+                             ".tar, it will be tarred, otherwise, a folder with parquet files")
     parser.add_argument("--keep-multiallelic", type=bool, default=Default.keep_multiallelic,
                         help="If True, do not recalibrate multiallelic variants; if False, do so")
     parser.add_argument("--keep-homref", type=bool, default=Default.keep_homref,
@@ -120,18 +114,22 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
         "--num-processes", type=int, default=Default.num_processes,
         help="Number of cpu processes to use. One for filtering, the rest for loading data."
     )
+    parser.add_argument(
+        "--compression-algorithm", type=str, default=Default.compression_algorithm,
+        choices=tarred_properties_to_parquet.CompressionAlgorithms.list(),
+        help="compression algorithm for parquet data"
+    )
+
     return parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
 
 
 def main(argv: Optional[list[str]] = None):
     args = __parse_arguments(sys.argv if argv is None else argv)
-
-    apply_sv_gq_recalibrator(
+    recalibrate_gq(
         properties_path=args.properties,
         properties_scaling_json=args.properties_scaling_json,
         model_path=args.model,
-        input_vcf=args.input_vcf,
-        output_vcf=args.output_vcf,
+        output_parquet=args.output_parquet,
         temp_dir=args.temp_dir,
         keep_multiallelic=args.keep_multiallelic,
         keep_homref=args.keep_homref,
@@ -141,7 +139,8 @@ def main(argv: Optional[list[str]] = None):
         torch_device_kind=training_utils.TorchDeviceKind(args.torch_device),
         original_gq_field=args.original_gq_field,
         scaled_logits_field=args.scaled_logits_field,
-        num_processes=args.num_processes
+        num_processes=args.num_processes,
+        compression_algorithm=args.compression_algorithm
     )
 
 
@@ -332,12 +331,11 @@ class QualityCalculator:
         ).to(self.out_device)
 
 
-def apply_sv_gq_recalibrator(
+def recalibrate_gq(
         properties_path: Path,
         properties_scaling_json: Path,
         model_path: Path,
-        input_vcf: Path,
-        output_vcf: Path,
+        output_parquet: Path,
         temp_dir: Path = Default.temp_dir,
         keep_multiallelic: bool = Default.keep_multiallelic,
         keep_homref: bool = Default.keep_homref,
@@ -349,31 +347,27 @@ def apply_sv_gq_recalibrator(
         percent_likelihood_per_logit: float = Default.percent_likelihood_per_logit,
         original_gq_field: str = Default.original_gq_field,
         scaled_logits_field: str = Default.scaled_logits_field,
-        num_processes: int = Default.num_processes
+        num_processes: int = Default.num_processes,
+        compression_algorithm: str = Default.compression_algorithm
 ):
-    print(f"keep_multiallelic={keep_multiallelic}")
-    print(f"keep_homref={keep_homref}")
-    print(f"keep_homvar={keep_homvar}")
     non_filtration_properties = Default.non_filtration_properties.union(excluded_properties)
     num_batches = 0
     num_variants = 0
     filter_logger = training_utils.ProgressLogger()
     cpu_torch_device = torch_device_kind.cpu.get_device(progress_logger=None)
 
+    if output_parquet.suffix == ".tar":
+        output_tar = output_parquet
+        parquet_folder = output_parquet.with_suffix("")
+    else:
+        output_tar = None
+        parquet_folder = output_parquet
+    shutil.rmtree(parquet_folder, ignore_errors=True)
+    parquet_folder.mkdir(parents=True, exist_ok=False)
+
     with (
         torch.no_grad(),
-        concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as process_executor,
-        pysam.VariantFile(f"{input_vcf}", mode='r', threads=2) as vcf_in,
-        pysam.VariantFile(
-            f"{output_vcf}",
-            mode='w',
-            threads=2,
-            header=_get_output_header(
-                input_header=vcf_in.header,
-                original_gq_field=original_gq_field,
-                scaled_logits_field=scaled_logits_field
-            )
-        ) as vcf_out
+        concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as process_executor
     ):
         vcf_tensor_data_loader = vcf_filter_data_loader.VcfFilterTensorDataLoader(
             parquet_path=properties_path,
@@ -398,25 +392,32 @@ def apply_sv_gq_recalibrator(
             quality_dtype=torch.short
         )
 
-        for batch_tensor, variant_ids, original_gqs, is_filterable, ac in tqdm(
+        for batch_tensor, variant_ids, original_gqs, is_filterable in tqdm(
                 vcf_tensor_data_loader, desc="batch", mininterval=0.5, maxinterval=float('inf'),
                 smoothing=0
         ):
             predicted_probabilities = gq_recalibrator(batch_tensor)
             output_batch(
-                vcf_in=vcf_in,
-                vcf_out=vcf_out,
+                parquet_file=parquet_folder / f"part.{num_batches}.parquet",
+                start_row=num_variants,
+                sample_ids=vcf_tensor_data_loader.sample_ids,
                 predicted_probabilities=predicted_probabilities,
                 variant_ids=variant_ids,
                 original_gqs=original_gqs,
                 is_filterable=is_filterable,
-                ac=ac,
                 quality_calculator=quality_calculator,
                 original_gq_field=original_gq_field,
-                scaled_logits_field=scaled_logits_field
+                scaled_logits_field=scaled_logits_field,
+                compression_algorithm=compression_algorithm
             )
             num_batches += 1
             num_variants += len(predicted_probabilities)
+
+    if output_tar is not None:
+        tarred_properties_to_parquet.archive_to_tar(
+            folder_to_archive=parquet_folder, tar_file=output_tar, remove_files=True
+        )
+
     print(f"Filtered {num_variants} in {num_batches} batches in {filter_logger.elapsed_time}")
 
 
@@ -445,17 +446,33 @@ def load_gq_recalibrator(
 
 
 def output_batch(
-        vcf_in: pysam.VariantFile,
-        vcf_out: pysam.VariantFile,
+        parquet_file: Path,
+        start_row: int,
+        sample_ids: list[str],
         predicted_probabilities: torch.Tensor,
         variant_ids: ArrowStringArray,
         original_gqs: torch.Tensor,
         is_filterable: torch.Tensor,
-        ac: torch.Tensor,
         quality_calculator: QualityCalculator,
         original_gq_field: str,
-        scaled_logits_field: str
+        scaled_logits_field: str,
+        compression_algorithm: str = Default.compression_algorithm
 ):
+    """Write parquet file for this batch with GQ, original GQ, and scaled logits for each sample
+
+    Args:
+        parquet_file: Path to output parquet file for this batch
+        start_row: first row of index for this dataframe
+        sample_ids: list of sample IDs in order
+        predicted_probabilities: torch.Tensor,
+        variant_ids: ArrowStringArray,
+        original_gqs: torch.Tensor,
+        is_filterable: torch.Tensor,
+        quality_calculator: QualityCalculator,
+        original_gq_field: str,
+        scaled_logits_field: str,
+        compression_algorithm: str = Default.compression_algorithm
+    """
     gqs = quality_calculator.get_output_gqs(
         predicted_probabilities=predicted_probabilities,
         is_filterable=is_filterable,
@@ -468,36 +485,24 @@ def output_batch(
     )
     out_device = quality_calculator.out_device
     original_gqs = original_gqs.detach().to(out_device)
-    num_rows = gqs.shape[0]
-    for batch_row in range(num_rows):
-        in_record = next(vcf_in)
-        out_record = in_record.copy()
-        variant_id = str(variant_ids[batch_row])
-        if out_record.id != variant_id:
-            raise ValueError(f"vcf_id='{out_record.id}', properties_id='{variant_id}'")
-        for column_ind, out_gt in enumerate(out_record.samples.itervalues()):
-            # if out_gt.get("GT") == (1, 1):
-            #     raise ValueError(
-            #         f"HOMVAR: is_filterable={bool(is_filterable[batch_row, column_ind])}, "
-            #         f"ac={int(ac[batch_row, column_ind])}, "
-            #         f"ogq={int(original_gqs[batch_row, column_ind])}, "
-            #         f"gq={int(gqs[batch_row, column_ind])}"
-            #     )
-            # this_ac = int(ac[batch_row, column_ind])
-            # if this_ac != 0:
-            #     raise ValueError(
-            #         f"ac={this_ac}: is_filterable={bool(is_filterable[batch_row, column_ind])}, "
-            #         f"gt={out_gt.get('GT')}, "
-            #         f"ogq={int(original_gqs[batch_row, column_ind])}, "
-            #         f"gq={int(gqs[batch_row, column_ind])}"
-            #     )
 
-            out_gt.update({
-                VcfKeys.gq: int(gqs[batch_row, column_ind]),
-                original_gq_field: int(original_gqs[batch_row, column_ind]),
-                scaled_logits_field: int(scaled_logits[batch_row, column_ind])
-            })
-        vcf_out.write(out_record)
+    def _dict_items_iter() -> Iterator[tuple[Optional[str], str], ArrayType]:
+        """Yield column_name, column pairs for constructing pandas DataFrame"""
+        yield (None, Keys.id), variant_ids
+        for column_ind, sample_id in enumerate(sample_ids):
+            yield (sample_id, original_gq_field), original_gqs[:, column_ind]
+            yield (sample_id, VcfKeys.gq), gqs[:, column_ind]
+            yield (sample_id, scaled_logits_field), scaled_logits[:, column_ind]
+
+    stop_row = start_row + gqs.shape[0]
+    df = pandas.DataFrame(
+        {column_name: column_values for column_name, column_values in _dict_items_iter()},
+        index=pandas.RangeIndex(start=start_row, stop=stop_row, name=Keys.row)
+    )
+    tarred_properties_to_parquet.flatten_columns(df)
+    df.to_parquet(
+        f"{parquet_file}", engine="pyarrow", compression=compression_algorithm
+    )
 
 
 if __name__ == "__main__":
