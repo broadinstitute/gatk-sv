@@ -477,9 +477,6 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     } else {
       cnv_matrix <- as.matrix(res1)
     }
-
-    # remember to delete
-    #write.table(cnv_matrix, file=paste0("tabixit_", bins, ".dat"), sep="\t", row.names = FALSE, quote = FALSE)
     return(list(cnv_matrix=cnv_matrix, raw_cov=raw_coverage))
   }
 
