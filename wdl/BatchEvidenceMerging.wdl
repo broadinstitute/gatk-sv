@@ -11,6 +11,8 @@ workflow BatchEvidenceMerging {
     Array[File]? SD_files
     File? sd_locs_vcf
     File reference_dict
+    File primary_contigs_fai
+    Boolean subset_primary_contigs  # If true, input PE/SR/BAF files will be subsetted to primary contigs only
     String batch
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -23,6 +25,8 @@ workflow BatchEvidenceMerging {
       evidence = "sr",
       samples = samples,
       reference_dict = reference_dict,
+      primary_contigs_fai=primary_contigs_fai,
+      subset_primary_contigs=subset_primary_contigs,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
   }
@@ -34,6 +38,8 @@ workflow BatchEvidenceMerging {
       evidence = "pe",
       samples = samples,
       reference_dict = reference_dict,
+      primary_contigs_fai=primary_contigs_fai,
+      subset_primary_contigs=subset_primary_contigs,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
   }
@@ -46,6 +52,8 @@ workflow BatchEvidenceMerging {
         evidence = "baf",
         samples = samples,
         reference_dict = reference_dict,
+        primary_contigs_fai=primary_contigs_fai,
+        subset_primary_contigs=subset_primary_contigs,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_override
     }
@@ -79,12 +87,16 @@ task MergeEvidence {
     String batch
     String evidence
     Array[String] samples
+    File primary_contigs_fai
+    Boolean subset_primary_contigs
     File reference_dict
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  Int disk_size = 10 + ceil(size(files, "GiB") * 2)
+  Float file_size = size(files, "GiB")
+  Float subset_disk = if subset_primary_contigs then file_size else 0
+  Int disk_size = 10 + ceil(file_size * 2 + subset_disk)
   Int java_heap_size_mb = round(42.0 * length(files) + 1024.0)
   Float mem_size_gb = java_heap_size_mb / 1024.0 + 2.5
 
@@ -109,6 +121,28 @@ task MergeEvidence {
 
     mv ~{write_lines(files)} evidence.list
     mv ~{write_lines(samples)} samples.list
+
+    # For legacy evidence files that were not dictionary sorted, removing non-primary contigs fixes the GATK error
+    if ~{subset_primary_contigs}; then
+      mkdir evidence
+      touch evidence.tmp
+      cut -f1 ~{primary_contigs_fai} > contigs.list
+      while read fil; do
+        FILENAME=$(basename $fil)
+        OUT="evidence/$FILENAME"
+        if [[ "~{evidence}" == "pe" ]]; then
+          zcat $fil \
+            | awk -F'\t' -v OFS='\t' '!second_file{chroms[$1]; next} {if ($1 in chroms && $4 in chroms) print }' contigs.list second_file=1 - \
+            | bgzip > $OUT
+        else
+          zcat $fil \
+            | awk -F'\t' -v OFS='\t' '!second_file{chroms[$1]; next} {if ($1 in chroms) print }' contigs.list second_file=1 - \
+            | bgzip > $OUT
+        fi
+        echo "$OUT" >> evidence.tmp
+      done < evidence.list
+      mv evidence.tmp evidence.list
+    fi
 
     awk '/txt\.gz$/' evidence.list | while read fil; do
       tabix -f -s1 -b2 -e2 $fil
