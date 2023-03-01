@@ -174,8 +174,7 @@ task PrepSampleVcfs {
       --out tmp2.vcf.gz \
       --ploidy-table ~{ploidy_table}
     python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" main_script} tmp2.vcf.gz \
-      | bgzip \
-      > ~{output_prefix}.main.vcf.gz
+      | bcftools sort -Oz -o ~{output_prefix}.main.vcf.gz
     tabix ~{output_prefix}.main.vcf.gz
 
     # Convert format
