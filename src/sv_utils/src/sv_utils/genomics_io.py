@@ -12,12 +12,17 @@ from typing import Text, Union, Tuple, Mapping, Optional, Any, Dict, Callable, S
     Collection, ValuesView, Iterator, Set, Iterable, TypeVar
 import numpy
 import pandas
+import pandas.core.arrays
 import pandas.core.dtypes.base
 import pandas.core.dtypes.cast
+import dask
+import dask.dataframe
+from dask.delayed import Delayed
 import pysam
 
 from sv_utils import common
 
+PandasStringDtype = pandas.core.arrays.string_.StringDtype()
 NA = pandas.NA  # missing field_type, allows for nullable integer
 NAType = type(NA)
 NoneType = type(None)
@@ -108,6 +113,7 @@ class VaporKeys:
 
 
 class Keys:
+    row = "row"
     id = "id"
     contig = "contig"
     begin = "begin"
@@ -209,6 +215,7 @@ class Default:
     use_copy_number = False
     # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present:
     use_cn = False
+    vcf_entries_per_dask_partition = 10**7
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -434,7 +441,10 @@ class CategoryPropertyCollator(VcfPropertyCollator):
                 not CategoryPropertyCollator._is_compressible(len(categories), len(values))
         ):
             # this data is not compressible, use an object
-            return numpy.dtype("object")
+            if all(isinstance(category, str) for category in categories):
+                return PandasStringDtype
+            else:
+                return numpy.dtype("object")
         else:
             # this data is compressible, use categorical.
             return pandas.CategoricalDtype(categories=self.categories, ordered=self.ordered)
@@ -896,7 +906,7 @@ def pandas_to_tsv(
         ),
         columns=columns, first_columns=first_columns, copy_on_change=True
     ).applymap(_tuple_to_str)
-    with pysam.BGZFile(data_file, "wb") as f_out:
+    with pysam.BGZFile(data_file, "wb", index=None) as f_out:
         if write_header and header_start:
             f_out.write(header_start.encode(encoding))
         f_out.write(
@@ -1043,7 +1053,7 @@ def tsv_to_pandas(
     # call pandas.read_csv on the buffer than it is to load line-by-line with python code.
     header_start = header_start.encode(encoding)
     buffer = io.StringIO()
-    with pysam.BGZFile(data_file, "rb") as f_in:
+    with pysam.BGZFile(data_file, "rb", index=None) as f_in:
         file_start = f_in.read(len(header_start)) if header_start else "".encode(encoding)
         if require_header:
             if header_start and file_start != header_start:
@@ -1612,6 +1622,280 @@ def vcf_to_pandas(
     return variants
 
 
+def vcf_to_dask(
+        vcf: Path,
+        samples: Optional[Collection[str]] = None,
+        wanted_properties: Optional[Collection[str]] = None,
+        genome_origin: int = Default.genome_origin,
+        vcf_origin: int = Default.vcf_origin,
+        int_type: type = Default.int_type,
+        float_type: type = Default.float_type,
+        missing_value: str = Default.missing_value,
+        drop_missing_columns: bool = Default.drop_missing_columns,
+        drop_trivial_multi_index: bool = Default.drop_trivial_multi_index,
+        cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int,
+        missing_samples_action: ErrorAction = Default.missing_samples_action,
+        missing_properties_action: ErrorAction = Default.missing_properties_action,
+        category_prop_getter_ordered: bool = Default.category_prop_getter_ordered,
+        log_progress: bool = Default.log_progress,
+        entries_per_partition: int = Default.vcf_entries_per_dask_partition,
+        num_threads: int = common.num_logical_cpus
+) -> dask.dataframe.DataFrame:
+    f"""
+    Load data from VCF into a pandas DataFrame.
+      -Because there may be multiple samples, each with multiple properties, the DataFrame columns are multi-index by
+       default. The first level indicates the sample the property refers to (None for variant properties like
+       {Keys.begin}), and the second level gives the property name.
+      -Property (DataFrame column) names will be lowercase. Standard properties will be renamed to the elements of the
+       static Keys class, providing consistency between VCFs, BEDs, and other formats for genomic loci.
+      -Column values are compressed like so:
+        -position columns are set to {int_type}, other integers are compressed to smallest int type that will hold their
+         value
+        -float columns are set to {float_type}
+        -string values (e.g. SVTYPE) are stored as CategoricalDTypes
+    Args:
+        vcf: str
+            Full path to VCF
+        samples: Optional[Sequence[str]] (default=None)
+            If None, get data for all samples in VCF. Otherwise, get only the samples provided. If extra sample IDs are
+            requested that are not present in the VCF, behavior is controlled by the value of missing_samples_action.
+        wanted_properties: Optional[Collection[str] (default=None)
+            If None, get all available properties in the VCF (determined by call to _get_all_properties()).
+            Otherwise get the requested properties (which should be lower-case, and standard properties are elements of
+            Keys). If extra property names are requested that are not present in the VCF, behavior is controlled by the
+            value of missing_properties_action
+        genome_origin: int (default={Default.genome_origin})
+            Desired origin of genome (e.g. 0 or 1) for the table. If needed, {Keys.begin} will be shifted to match
+            the desired origin.
+        vcf_origin: int (default={Default.vcf_origin})
+            Origin of genome for data in the VCF file.
+        int_type: type (default={Default.int_type})
+            Type for position values ({Keys.begin}, {Keys.end})
+        float_type: (default={Default.float_type})
+            Type for any floating values.
+        missing_value: str (default={Default.missing_value})
+            Value to use for missing non-numerical (e.g. string/categorical) properties.
+        drop_missing_columns: bool (default={Default.drop_missing_columns})
+            If True and an entire column is missing data, drop the column. Otherwise keep it.
+        drop_trivial_multi_index: bool (default={Default.drop_trivial_multi_index})
+            If True and one of the levels of the multi-index columns is trivial (e.g. there is no format data)
+            the drop the trivial level. Otherwise keep it.
+        cast_whole_nums_to_int: bool (default={Default.cast_whole_nums_to_int})
+            If True then check if all the elements of a float column are whole numbers, and if so, cast to the minimal
+            int that can store them (to save memory). If False, don't check and don't convert.
+        missing_samples_action: ErrorAction (default={Default.missing_samples_action})
+            If there are requested samples that are not present in the VCF, then based on this value:
+                -If Ignore, then do nothing
+                -If Warn, then raise a warning showing which samples are missing
+                -If RaiseException, then raise a ValueError
+        missing_properties_action: bool (default={Default.missing_properties_action})
+            If properties are requested that are not present in the VCF, then based on this value:
+                -If Ignore, then do nothing
+                -If Warn, then raise a warning showing which properties are missing
+                -If RaiseException, then raise a ValueError
+        category_prop_getter_ordered: bool (default={Default.category_prop_getter_ordered})
+            If True, create categorical properties as ordered CategoricalDTypes. Don't mess with
+            this unless you're 100% sure you know what you're doing.
+        log_progress: bool (default={Default.log_progress})
+            If True, display a few lines to indicate how loading the VCF is proceeding.
+        entries_per_partition: int (default={Default.vcf_entries_per_dask_partition}
+        num_threads: int (default={common.num_logical_cpus})
+            Use this many threads for decompression while reading the VCF.
+    Returns:
+        variants: pandas.DataFrame
+            Table with variant data.
+    """
+    if log_progress:
+        if wanted_properties is None:
+            print(f"Loading {vcf} ...", flush=True, file=sys.stderr, end="")
+        else:
+            print(f"Reading {','.join(wanted_properties)} from {vcf} ...", flush=True, file=sys.stderr, end="")
+    with pysam.VariantFile(vcf, 'r', threads=num_threads) as f_in:
+        if samples is None:
+            samples = tuple(f_in.header.samples)
+        else:
+            samples = set(samples)
+            bad_samples = samples.difference(f_in.header.samples)
+            if bad_samples:
+                missing_samples_action.handle_error(f"Requested samples are not present in VCF: {bad_samples}")
+            samples = tuple(sample for sample in f_in.header.samples if sample in samples)
+            f_in.subset_samples(samples)
+        if wanted_properties is None:
+            properties = _get_all_properties(f_in.header)
+        else:
+            # we always want variant id, but it's easy to forget
+            wanted_properties = {Keys.id}.union(wanted_properties)
+            properties = _get_allowed_properties(f_in.header)
+            bad_properties = wanted_properties.difference(properties.values())
+            if bad_properties:
+                missing_properties_action.handle_error(
+                    f"Requested properties are not present in VCF: {bad_properties}\n"
+                    f"Allowed_properties: {properties.values}"
+                )
+            properties = {key: value for key, value in properties.items() if value in wanted_properties}
+
+        genotype_properties = {
+            vcf_prop_name: table_prop_name for vcf_prop_name, table_prop_name in properties.items()
+            if vcf_prop_name in f_in.header.formats
+        }
+        variant_properties = {
+            vcf_prop_name: table_prop_name for vcf_prop_name, table_prop_name in properties.items()
+            if vcf_prop_name not in genotype_properties
+        }
+
+        variant_extractors = tuple(
+            _get_variant_extractor(vcf_prop_name, header=f_in.header, missing_value=missing_value)
+            for vcf_prop_name in variant_properties.keys()
+        )
+        if samples:
+            genotype_extractors = tuple(
+                _get_genotype_extractor(vcf_prop_name, header=f_in.header)
+                for vcf_prop_name in genotype_properties.keys()
+            )
+
+            def _row_extractor(variant_record: pysam.VariantRecord) -> Iterator[EncodedVcfField]:
+                for variant_extractor in variant_extractors:
+                    yield variant_extractor(variant_record)
+                for genotype_record in variant_record.samples.itervalues():
+                    for genotype_extractor in genotype_extractors:
+                        yield genotype_extractor(genotype_record)
+        else:
+            def _row_extractor(variant_record: pysam.VariantRecord) -> Iterator[EncodedVcfField]:
+                for variant_extractor in variant_extractors:
+                    yield variant_extractor(variant_record)
+
+        encoded_rows_iter = (
+            tuple(_row_extractor(variant_record))
+            for variant_record in f_in
+        )
+
+        property_collators = tuple(
+            VcfPropertyCollator.get_collator(
+                vcf_prop_name=vcf_prop_name, column_name=(None, table_prop_name), header=f_in.header,
+                missing_value=missing_value, int_type=int_type, float_type=float_type,
+                cast_whole_nums_to_int=cast_whole_nums_to_int, ordered=category_prop_getter_ordered
+            )
+            for vcf_prop_name, table_prop_name in variant_properties.items()
+        ) + tuple(
+            VcfPropertyCollator.get_collator(
+                vcf_prop_name=vcf_prop_name, column_name=(sample_id, table_prop_name), header=f_in.header,
+                missing_value=missing_value, int_type=int_type, float_type=float_type,
+                cast_whole_nums_to_int=cast_whole_nums_to_int, ordered=category_prop_getter_ordered
+            )
+            for sample_id in samples
+            for vcf_prop_name, table_prop_name in genotype_properties.items()
+        )
+
+        num_samples = len(samples)
+        entries_per_row = len(variant_properties) + num_samples * len(genotype_properties)
+        rows_per_partition = max(1, entries_per_partition // entries_per_row)
+
+        def _dict_to_pandas(
+            _dict: dict[tuple[Optional[str], str], pandas.Series],
+            _start_index: int,
+            _stop_index: int,
+            _genome_origin: int,
+            _vcf_origin: int,
+        ) -> pandas.DataFrame:
+            index = pandas.RangeIndex(start=_start_index, stop=_stop_index, name=Keys.row)
+            for series in _dict.values():
+                series.index = index
+            return shift_origin(
+                pandas.DataFrame(
+                    _dict, index=index
+                ).rename_axis(
+                    columns=Default.column_levels
+                ).sort_index(
+                    axis=1, level=Keys.sample_id, sort_remaining=True
+                ),
+                desired_origin=_genome_origin, current_origin=_vcf_origin,
+                copy_on_change=False
+            )
+
+        meta = pandas.DataFrame(None)
+
+        def _chunk_to_dict(
+                _rows: list[tuple[EncodedVcfField, ...]],
+                _property_collators: tuple[VcfPropertyCollator, ...]
+        ) -> dict[tuple[Optional[str], str], pandas.Series]:
+            _chunk_dict = {
+                property_collator.column_name: property_collator.get_pandas_series(
+                    property_values
+                )
+                for property_collator, property_values in zip(
+                    _property_collators, zip(*_rows)
+                )
+            }
+            meta.index = pandas.RangeIndex(0, name=Keys.row)
+            for _column in sorted(
+                _chunk_dict.keys(),
+                key=lambda col: (col[0] is not None, "" if col[0] is None else col[0], col[1])
+            ):
+                meta[_column] = pandas.Series([], dtype=_chunk_dict[_column].dtype)
+            return _chunk_dict
+        dask_divisions = []
+
+        def _iter_dicts() -> Iterator[Delayed]:
+            rows_chunk = []
+            n_chunks = 0
+            index = 0
+            dask_divisions.append(index)
+            index_start = 0
+            for row in encoded_rows_iter:
+                index += 1
+                rows_chunk.append(row)
+                if len(rows_chunk) == rows_per_partition:
+                    n_chunks += 1
+                    yield (
+                        index_start,
+                        index,
+                        _chunk_to_dict(_rows=rows_chunk, _property_collators=property_collators)
+                    )
+                    index_start = index
+                    dask_divisions.append(index)
+                    rows_chunk = []
+            if len(rows_chunk) > 0:
+                yield (
+                    index_start,
+                    index,
+                    _chunk_to_dict(_rows=rows_chunk, _property_collators=property_collators)
+                )
+                dask_divisions.append(index - 1)
+
+        # to do: unsure why, but passing meta results in
+        # AttributeError: 'Index' object has no attribute 'codes'
+        with dask.config.set(scheduler="threads"):
+            variants = dask.dataframe.from_delayed(
+                [
+                    dask.delayed(_dict_to_pandas)(
+                        _dict=_dict, _start_index=_start_index, _stop_index=_stop_index,
+                        _genome_origin=genome_origin, _vcf_origin=vcf_origin
+                    )
+                    for _start_index, _stop_index, _dict in _iter_dicts()
+                ],
+                divisions=tuple(dask_divisions),
+                meta=meta,
+                verify_meta=False
+            )
+
+    # if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
+    #     # all IDs are unique, use ID as the index
+    #     variants.set_index((None, Keys.id), inplace=True)
+    #     variants.rename_axis(index=Keys.id, inplace=True)
+
+    if drop_missing_columns:  # drop non-sample columns where all data is missing
+        for column in set(variants.columns).difference(samples):
+            if is_missing(variants[column], missing_value=missing_value).all():
+                variants.drop(columns=column, inplace=True)
+
+    if drop_trivial_multi_index:
+        drop_trivial_columns_multi_index(variants)
+
+    if log_progress:
+        print(" done", flush=True, file=sys.stderr, end='\n')
+    return variants
+
+
 def get_sample_ids_from_variants(variants: pandas.DataFrame) -> List[str]:
     """
     Get sample IDs from variants table
@@ -1647,7 +1931,11 @@ def list_format_properties(variants: pandas.DataFrame) -> Set[str]:
 def get_format_property(variants: pandas.DataFrame, property_name: str) -> pandas.DataFrame:
     """ """
     try:
+        # this works normally, but raises TypeError("unhashable type: 'slice'") when called from
+        # a dask partition
         prop_df = variants.loc[:, (slice(None), property_name)]
+        #idx = pandas.IndexSlice
+        #prop_df = variants.loc[:, idx[:, property_name]]
         prop_df.columns = prop_df.columns.droplevel(Keys.property)
         return prop_df
     except KeyError as key_error:
@@ -1708,7 +1996,9 @@ def combine_call_properties(
     return alternate_properties.astype(min_type).where(use_alternate_properties, preferred_properties)
 
 
-def get_copy_number(variants: pandas.DataFrame, use_cn: bool = Default.use_cn) -> Optional[pandas.DataFrame]:
+def get_copy_number(
+    variants: pandas.DataFrame, use_cn: bool = Default.use_cn
+) -> Optional[pandas.DataFrame]:
     """ Return table of copy number if it is available, otherwise None """
     available_props = set(variants.columns.get_level_values(Keys.property))
     if use_cn and Keys.cn in available_props:
@@ -1881,27 +2171,39 @@ def get_or_estimate_allele_frequency(
 
 
 @common.static_vars(genotype_to_allele_count_map={})
-def genotype_to_allele_count(genotype: Genotype) -> Union[int, NAType]:
+def genotype_to_allele_count(
+    genotype: Genotype,
+    no_call_ac: Union[int, NAType] = pandas.NA
+) -> Union[int, NAType]:
     if genotype in genotype_to_allele_count.genotype_to_allele_count_map:
         return genotype_to_allele_count.genotype_to_allele_count_map[genotype]
     else:
         if genotype is None:
-            allele_count = pandas.NA
+            allele_count = no_call_ac
         else:
-            allele_count = sum(1 for a in genotype if a is not None and a > 0)
+            try:
+                allele_count = sum(1 for a in genotype if a is not None and a > 0)
+            except TypeError as type_error:
+                common.add_exception_context(type_error, f"genotype={genotype}")
+                raise
+
             if allele_count == 0 and any(a is None for a in genotype):
-                allele_count = pandas.NA
+                allele_count = no_call_ac
         genotype_to_allele_count.genotype_to_allele_count_map[genotype] = allele_count
         return allele_count
 
 
 def get_allele_counts(
-        variants: pandas.DataFrame, use_copy_number: bool = Default.use_copy_number, use_cn: bool = Default.use_cn
+        variants: pandas.DataFrame,
+        use_copy_number: bool = Default.use_copy_number,
+        use_cn: bool = Default.use_cn,
+        no_call_ac: Union[int, NAType] = pandas.NA
 ) -> pandas.DataFrame:
     f"""
-    return allele_counts as num_variants x num_samples table, with each entry being a Uint8DType:
+    return allele_counts as num_variants x num_samples table, with each entry being an int8 or
+    Uint8DType:
       - Number of non-REF counts if the sample GT is called for that variant
-      - pandas.NA if it is not called
+      - no_no_call_ac if it is not called
     Args:
         variants: pandas.DataFrame
             Multi-index table of raw properties loaded from VCF
@@ -1912,11 +2214,19 @@ def get_allele_counts(
         use_cn: bool (default={Default.use_cn})
             If False, ignore CN data, which duplicates RD_CN by the end of CleanVcf. If True, check CN *and* RD_CN*.
             This value has no effect if use_copy_number is False.
+        no_call_ac: int or pandas.NA (default=pandas.NA)
+            Value of ac for genotypes that are no-call
     Returns:
         allele_counts:
             Normal (non-multi-index) table of allele counts
+            The dtype will be int8 if no_call_ac is an integer, and Uint8DType otherwise
     """
-    gt_allele_count = get_format_property(variants, Keys.gt).applymap(genotype_to_allele_count).astype(pandas.UInt8Dtype())
+    out_dtype = numpy.dtype(numpy.int8) if isinstance(no_call_ac, int) else pandas.UInt8Dtype()
+    gt_allele_count = get_format_property(
+        variants, Keys.gt
+    ).applymap(
+        genotype_to_allele_count, no_call_ac=no_call_ac
+    ).astype(out_dtype)
     if not use_copy_number:
         return gt_allele_count
     copy_number = get_copy_number(variants, use_cn=use_cn)
@@ -1925,7 +2235,11 @@ def get_allele_counts(
     # Use copy number where GT is no-call, otherwise use GT allele counts
     return combine_call_properties(
         preferred_properties=gt_allele_count,
-        alternate_properties=(copy_number != 2).astype(pandas.UInt8Dtype()),
+        alternate_properties=(copy_number != 2).fillna(no_call_ac).astype(out_dtype),
+        use_alternate_properties=gt_allele_count == no_call_ac
+    ) if isinstance(no_call_ac, int) else combine_call_properties(
+        preferred_properties=gt_allele_count,
+        alternate_properties=(copy_number != 2).astype(out_dtype),
         use_alternate_properties=gt_allele_count.isna()
     )
 

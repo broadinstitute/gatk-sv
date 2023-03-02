@@ -89,6 +89,7 @@ def annotate_recalibrated_gq(
         remove_input_tar: bool = Default.remove_input_tar
 ):
     t0 = time.time()
+    # open input and output VCFs, and set the dask config
     with (
         dask.config.set(
             temporary_directory=temp_dir, scheduler="processes", num_workers=num_processes
@@ -102,12 +103,16 @@ def annotate_recalibrated_gq(
                 input_header=vcf_in.header,
                 original_gq_field=original_gq_field,
                 scaled_logits_field=scaled_logits_field
-            )
+            ),
+            index_filename=f"{output_vcf}.tbi"
         ) as vcf_out
     ):
+        # load dask dataframe with the variant IDs and annotation properties
         annotations_df = tarred_properties_to_parquet.parquet_to_df(
             input_path=annotations_path, remove_input_tar=remove_input_tar,
         )
+        # get the properties as individual dask dataframes with the samples in the same order as
+        # the VCF records
         sample_ids = list(vcf_in.header.samples)
         variant_ids = annotations_df.loc[:, (None, Keys.id)]
         variant_ids.columns = [Keys.id]
@@ -120,6 +125,7 @@ def annotate_recalibrated_gq(
         scaled_logits = _get_property_dataframe_in_order(
             annotations_df=annotations_df, property_name=scaled_logits_field, sample_ids=sample_ids
         )
+        # loop over records in input VCF and annotation properties
         num_variants = len(variant_ids)
         for vcf_in_record, variant_id, record_gqs, record_ogqs, record_sls in tqdm(
             zip(
@@ -132,7 +138,9 @@ def annotate_recalibrated_gq(
             desc="variant", mininterval=0.5, maxinterval=float('inf'),
             smoothing=0, total=num_variants
         ):
+            # the VCF variant ID and the annotation variant ID should be the same
             assert vcf_in_record.id == variant_id
+            # transfer the annotation properties to the output record
             transfer_annotation(
                 vcf_in_record=vcf_in_record,
                 record_gqs=record_gqs,
@@ -152,6 +160,10 @@ def _get_output_header(
         original_gq_field: str,
         scaled_logits_field: str
 ) -> pysam.VariantHeader:
+    """Get output header for VCF by adding header fields. Note this actually adds fields to the
+    input header too: this is necessary because otherwise we'd have to build a new output record
+    from scratch rather than copying over the old one.
+    """
     output_header = input_header
     output_header.formats.add(id=original_gq_field, number=1, type="Integer",
                               description="GQ values from original unrecalibrated VCF")

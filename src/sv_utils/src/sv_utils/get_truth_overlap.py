@@ -64,8 +64,6 @@ class Default:
     point_sv_scale_factor = interval_overlaps.Default.point_sv_scale_factor
     expand_non_point_svs_bp = interval_overlaps.Default.expand_non_point_svs_bp
     non_point_sv_scale_factor = interval_overlaps.Default.non_point_sv_scale_factor
-    dev_module_03_dir = os.path.dirname(os.path.realpath(__file__))
-    project_dir = os.path.realpath(os.path.join(dev_module_03_dir, "..", ".."))
     check_some_overlap_key = f"max_{Keys.all_overlappers}_{Keys.overlap_support}"
     sv_selector_size_ranges = MappingProxyType(
         {"off-size": (-numpy.inf, 50), "small": (50, 500), "large": (500, numpy.inf)}
