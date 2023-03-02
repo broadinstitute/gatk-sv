@@ -31,7 +31,7 @@ higher compute costs for [GatherSampleEvidence](/docs/modules/gse).
 - Be unique within the cohort
 - Contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters)
 
-Sample IDs should not:
+#### Sample IDs should not
 
 - Contain only numeric characters
 - Be a substring of another sample ID in the same cohort
