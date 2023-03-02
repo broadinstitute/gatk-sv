@@ -5,7 +5,7 @@ sidebar_position: 0
 ---
 
 The pipeline is written in [Workflow Description Language (WDL)](https://openwdl.org),
-consisting of multiple modules as listed in the following. 
+consisting of multiple modules to be executed in the following order. 
 
 - **GatherSampleEvidence** SV evidence collection, including calls from a configurable set of 
   algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), 
