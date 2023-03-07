@@ -123,18 +123,22 @@ def main():
 
                 if gt5kb_del:
                     for sample_obj in record.samples.itervalues():
-                        if not sample_obj['GQ'] is None and sample_obj['RD_CN'] >= 2:
+                        if not sample_obj['GQ'] is None and \
+                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] >= 2):
                             sample_obj['GT'] = (0, 0)
-                        elif not sample_obj['GQ'] is None and sample_obj['RD_CN'] == 1:
+                        elif not sample_obj['GQ'] is None and \
+                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] == 1):
                             sample_obj['GT'] = (0, 1)
                         elif not sample_obj['GQ'] is None:
                             sample_obj['GT'] = (1, 1)  # RD_CN 0 DEL
 
                 if gt5kb_dup:
                     for sample_obj in record.samples.itervalues():
-                        if not sample_obj['GQ'] is None and sample_obj['RD_CN'] <= 2:
+                        if not sample_obj['GQ'] is None and \
+                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] <= 2):
                             sample_obj['GT'] = (0, 0)
-                        elif not sample_obj['GQ'] is None and sample_obj['RD_CN'] == 3:
+                        elif not sample_obj['GQ'] is None and \
+                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] == 3):
                             sample_obj['GT'] = (0, 1)
                         elif not sample_obj['GQ'] is None:
                             sample_obj['GT'] = (1, 1)  # RD_CN > 3 DUP
@@ -160,8 +164,9 @@ def main():
                 if record.id in sexchr_revise:
                     for sample in record.samples:
                         if sample in male_samples:
-                            cn = int(record.samples[sample]['RD_CN'])
-                            if cn is not None and cn > 0:
+                            cn = record.samples[sample]['RD_CN']
+                            if cn is not None and int(cn) > 0:
+                                cn = int(cn)
                                 record.samples[sample]['RD_CN'] = cn - 1
                                 if 'CN' in record.samples[sample]:
                                     record.samples[sample]['CN'] = cn - 1  # the old script didn't do this but I think it should
