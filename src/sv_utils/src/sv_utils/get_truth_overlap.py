@@ -2,6 +2,8 @@
 
 import sys
 import os
+from pathlib import Path
+import enum
 import argparse
 import json
 import warnings
@@ -120,6 +122,17 @@ class SvTypeCutoffInfo:
 CutoffInfo = Dict[str, SvTypeCutoffInfo]
 
 
+class ConfidentVariantsCombineStrategy(enum.Enum):
+    PreferFirst = "prefer-first"
+    PreferLast = "prefer-last"
+    OmitConflicting = "omit-conflicting"
+
+    # noinspection PyTypeChecker,PyMethodParameters
+    @common.classproperty
+    def choices(cls) -> list[str]:
+        return [kind.value for kind in cls]
+
+
 class SampleConfidentVariants:
     __slots__ = ("good_variant_ids", "bad_variant_ids")
     good_variant_ids: Tuple[str, ...]
@@ -133,17 +146,78 @@ class SampleConfidentVariants:
     def __dict__(self) -> Dict[str, Tuple[str, ...]]:
         return {"good_variant_ids": self.good_variant_ids, "bad_variant_ids": self.bad_variant_ids}
 
+    @classmethod
+    def from_json(cls, json_dict: dict[str, list[float]]) -> "SampleConfidentVariants":
+        return SampleConfidentVariants(**json_dict)
+
     @property
     def all_confident_variant_ids(self) -> Set[str]:
         return set(self.good_variant_ids).union(self.bad_variant_ids)
 
-    def select(self, selector: SvTypeCutoffSelector, metrics: pandas.DataFrame) -> "SampleConfidentVariants":
+    def select(
+        self, selector: SvTypeCutoffSelector, metrics: pandas.DataFrame
+    ) -> "SampleConfidentVariants":
         selected_ids = set(metrics.index[selector(metrics)])
         return SampleConfidentVariants(selected_ids.intersection(self.good_variant_ids),
                                        selected_ids.intersection(self.bad_variant_ids))
 
+    def append_good(self, variant_id: str):
+        self.good_variant_ids += (variant_id,)
 
-ConfidentVariants = Mapping[str, SampleConfidentVariants]  # mapping from sample ID to SampleConfidentVariants
+    def append_bad(self, variant_id: str):
+        self.bad_variant_ids += (variant_id,)
+
+    def combine(
+        self: "SampleConfidentVariants",
+        other: "SampleConfidentVariants",
+        combine_strategy: ConfidentVariantsCombineStrategy
+    ) -> "SampleConfidentVariants":
+        if combine_strategy == ConfidentVariantsCombineStrategy.PreferFirst:
+            good_variant_ids = set(other.good_variant_ids) \
+                .difference(self.bad_variant_ids).union(self.good_variant_ids)
+            bad_variant_ids = set(other.bad_variant_ids) \
+                .difference(self.good_variant_ids).union(self.bad_variant_ids)
+        elif combine_strategy == ConfidentVariantsCombineStrategy.PreferLast:
+            good_variant_ids = set(self.good_variant_ids) \
+                .difference(other.bad_variant_ids).union(other.good_variant_ids)
+            bad_variant_ids = set(self.bad_variant_ids) \
+                .difference(other.good_variant_ids).union(other.bad_variant_ids)
+        else:
+            good_variant_ids = set(self.good_variant_ids).difference(other.bad_variant_ids).union(
+                set(other.good_variant_ids).difference(self.bad_variant_ids)
+            )
+            bad_variant_ids = set(self.bad_variant_ids).difference(other.good_variant_ids).union(
+                set(other.bad_variant_ids).difference(self.good_variant_ids)
+            )
+        return SampleConfidentVariants(
+            good_variant_ids=tuple(sorted(good_variant_ids)),
+            bad_variant_ids=tuple(sorted(bad_variant_ids))
+        )
+
+
+# mapping from sample ID to SampleConfidentVariants
+class ConfidentVariants(dict[str, SampleConfidentVariants]):
+
+    @classmethod
+    def from_json(
+        cls, json_dict: dict[str, list[float]] | dict[str, SampleConfidentVariants]
+    ) -> Union[SampleConfidentVariants, "ConfidentVariants"]:
+        if isinstance(next(iter(json_dict.values())), SampleConfidentVariants):
+            return ConfidentVariants(json_dict)
+        else:
+            return SampleConfidentVariants.from_json(json_dict)
+
+    def combine(
+        self,
+        other: "ConfidentVariants",
+        combine_strategy: ConfidentVariantsCombineStrategy
+    ) -> "ConfidentVariants":
+        confident_variants = ConfidentVariants(self.copy())
+        for sample_id, other_sample_confident_variants in other.items():
+            confident_variants[sample_id] = confident_variants[sample_id].combine(
+                other=other_sample_confident_variants, combine_strategy=combine_strategy
+            ) if sample_id in confident_variants else other_sample_confident_variants
+        return confident_variants
 
 
 class PrecisionRecallCurve:
@@ -199,52 +273,70 @@ class PrecisionRecallCurve:
                                     is_sorted=is_sorted, f_beta=f_beta, is_high_cutoff=is_high_cutoff)
 
     @staticmethod
+    def from_good_bad_value_counts(
+        good_value_counts: pandas.Series,
+        bad_value_counts: pandas.Series,
+        f_beta: float = Default.f_beta,
+        is_high_cutoff: bool = True
+    ) -> "PrecisionRecallCurve":
+        n_good = good_value_counts.sum()
+        n_bad = bad_value_counts.sum()
+        if n_good == 0 or n_bad == 0:
+            # noinspection PyTypeChecker
+            return PrecisionRecallCurve.empty_curve
+
+        def _replace_nan_value(_s: pandas.Series) -> pandas.Series:
+            # map NaN thresholds to -inf/+inf (depending on high/low cutoff), because they will
+            # never be selected
+            _nan_replacement = -numpy.inf if is_high_cutoff else numpy.inf
+            if _s.index.hasnans:
+                if _nan_replacement in _s.index:
+                    _s[_nan_replacement] += _s[_s.index.isna()]
+                    _s = _s[~_s.index.isna()]
+                else:
+                    _s.index = _s.index.fillna(_nan_replacement)
+            return _s
+
+        good_value_counts = _replace_nan_value(good_value_counts)
+        bad_value_counts = _replace_nan_value(bad_value_counts)
+
+        # form combined counts of good and bad values, sort them into correct order (by index, i.e.
+        # the underlying values), and keep the sorting index
+        threshold_counts = good_value_counts.add(bad_value_counts, fill_value=0)
+        sort_ind = (
+            numpy.argsort(threshold_counts.index)[::-1] if is_high_cutoff
+            else numpy.argsort(threshold_counts.index)
+        )
+        threshold_counts = threshold_counts.iloc[sort_ind]
+        # add bad values onto the good_value_counts index, giving zero points for each bad value
+        good_value_counts = good_value_counts.add(pandas.Series(0, index=bad_value_counts.index),
+                                                  fill_value=0)
+        # recall is the cumulative proportion of good values less than a given threshold
+        recall = good_value_counts.iloc[sort_ind].cumsum() / n_good
+        # precision is the proportion of total counts that are good, for values less than a given
+        # threshold
+        precision = good_value_counts.iloc[sort_ind].cumsum() / threshold_counts.cumsum()
+
+        # return as a DataFrame for organization purposes
+        return PrecisionRecallCurve.from_arrays(
+            thresholds=threshold_counts.index, precision=precision.values, recall=recall.values,
+            num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
+            is_high_cutoff=is_high_cutoff
+        )
+
+    @staticmethod
     def from_good_bad_thresholds(
             good_thresholds: numpy.ndarray,
             bad_thresholds: numpy.ndarray,
             f_beta: float = Default.f_beta,
             is_high_cutoff: bool = True
     ) -> "PrecisionRecallCurve":
-        # map NaN thresholds to -inf/+inf (depending on high/low cutoff), because they will never be selected
-        nan_replacement = -numpy.inf if is_high_cutoff else numpy.inf
-        thresholds = numpy.nan_to_num(numpy.concatenate((good_thresholds, bad_thresholds)), nan=nan_replacement)
-        # construct precision-recall curve (vs threshold)
-        n_good = len(good_thresholds)
-        n_bad = len(bad_thresholds)
-        if n_good == 0 or n_bad == 0:
-            # noinspection PyTypeChecker
-            return PrecisionRecallCurve.empty_curve
-
-        sort_ind = numpy.argsort(thresholds)[::-1] if is_high_cutoff else numpy.argsort(thresholds)
-        thresholds = thresholds.take(sort_ind)
-        recall = numpy.concatenate(
-            (numpy.full(n_good, 1.0 / n_good), numpy.zeros(n_bad))
-        ).take(sort_ind).cumsum()
-        precision = numpy.concatenate(
-            (numpy.ones(n_good), numpy.zeros(n_bad))
-        ).take(sort_ind).cumsum() \
-            / numpy.arange(1, len(sort_ind) + 1)
-
-        if is_high_cutoff:
-            # de-duplicate thresholds, taking the *LAST* match to a threshold, since it's all-or-nothing if multiple
-            # variants match
-            __, de_dup_index = numpy.unique(thresholds[::-1], return_index=True)
-
-            def _de_dup(_arr):
-                return _arr[::-1].take(de_dup_index)[::-1]
-        else:
-            # de-duplicate thresholds, taking the *FIRST* match to a threshold, since it's all-or-nothing if multiple
-            # variants match
-            __, de_dup_index = numpy.unique(thresholds, return_index=True)
-
-            def _de_dup(_arr):
-                return _arr.take(de_dup_index)
-
-        thresholds, recall, precision = _de_dup(thresholds), _de_dup(recall), _de_dup(precision)
-        # return as a DataFrame for organization purposes
-        return PrecisionRecallCurve.from_arrays(thresholds=thresholds, precision=precision, recall=recall,
-                                                num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,
-                                                is_high_cutoff=is_high_cutoff)
+        return PrecisionRecallCurve.from_good_bad_value_counts(
+            good_value_counts=pandas.Series(good_thresholds).value_counts(dropna=False),
+            bad_value_counts=pandas.Series(bad_thresholds).value_counts(dropna=False),
+            f_beta=f_beta,
+            is_high_cutoff=is_high_cutoff
+        )
 
     def loc(self, indexer: pandas.api.indexers.BaseIndexer) -> "PrecisionRecallCurve":
         # note: don't know that the indexer leaves dataframe sorted, but presumably the point of doing the indexer is
@@ -1363,17 +1455,17 @@ def reconcile_confident_variants(
 
 
 def output_confident_variants(
-        overlap_info: ConfidentVariants,
+        confident_variants: ConfidentVariants,
         output_file: str
 ):
     """ Output the confident variants, either to a json file or stdout """
     if output_file == '-':
-        json.dump(overlap_info, sys.stdout, indent=2, default=lambda x: x.__dict__)
+        json.dump(confident_variants, sys.stdout, indent=2, default=lambda x: x.__dict__)
         sys.stdout.flush()
     else:
         _log(f"Saving overlaps to {output_file} ...", end='')
         with open(output_file, 'w') as f_out:
-            json.dump(overlap_info, f_out, default=lambda x: x.__dict__)
+            json.dump(confident_variants, f_out, default=lambda x: x.__dict__)
         _log(" okay")
 
 

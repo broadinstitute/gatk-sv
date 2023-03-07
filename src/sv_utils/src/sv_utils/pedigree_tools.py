@@ -272,11 +272,17 @@ class PedigreeFileInfo:
         """
         return len(self.parents_ids)
 
-    def subset_participants(self, participant_ids: Collection[ParticipantId]) -> "PedigreeFileInfo":
+    def subset_participants(
+        self,
+        participant_ids: Collection[ParticipantId],
+        allow_unknown: bool = True
+    ) -> "PedigreeFileInfo":
         """
         Return subset of these data by including only the supplied participant IDs. Note that some participant IDs
         """
-        allowed_participant_ids = set(participant_ids).union({ParticipantId.UNKNOWN})
+        allowed_participant_ids = set(participant_ids)
+        if allow_unknown:
+            allowed_participant_ids.add(ParticipantId.UNKNOWN)
         return PedigreeFileInfo(
             [pedigree_line for pedigree_line in self.pedigree_lines
              if all(participant_id in allowed_participant_ids for participant_id in pedigree_line.trio_ids)]

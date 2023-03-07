@@ -12,13 +12,15 @@ from typing import Optional, Union, Any
 from collections.abc import Sequence
 
 from gq_recalibrator import (
-    training_utils, tarred_properties_to_parquet, vcf_tensor_data_loader_base
+    training_utils, tarred_properties_to_parquet, vcf_tensor_data_loader_base,
+    benchmark_variant_filter
 )
 from gq_recalibrator.vcf_tensor_data_loader_base import (
     locked_read, locked_write, BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase,
     SupplementalPropertyGetter
 )
-from sv_utils import common, genomics_io, get_truth_overlap, benchmark_variant_filter
+from gq_recalibrator.tarred_properties_to_parquet import PropertiesSummary, PropertiesScaling
+from sv_utils import common, genomics_io, get_truth_overlap
 
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 ConfidentVariants = get_truth_overlap.ConfidentVariants
@@ -184,7 +186,6 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     def __init__(
             self,
             parquet_path: Path,
-            properties_scaling_json: Path,
             truth_json: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             variants_per_batch: int,
@@ -212,7 +213,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
     ):
         # basically it's the VcfTensorDataLoaderBase with a train/test split
         super().__init__(
-            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
+            parquet_path=parquet_path, properties_scaling=None, properties_summary=None,
             process_executor=process_executor, variants_per_batch=variants_per_batch,
             torch_device_kind=torch_device_kind, progress_logger=progress_logger,
             temp_dir=temp_dir, shuffle=shuffle, keep_multiallelic=keep_multiallelic,
@@ -246,6 +247,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 TrainingBatchPickler.restart_pickle_previous_remainders,
                 previous_batch_iterators=self._previous_batch_iterators,
                 wanted_columns=self._wanted_columns,
+                properties_summary=self.properties_summary,
                 variant_id_flat_column_name=self._variant_id_flat_column_name,
                 supplemental_property_getters=self.supplemental_property_getters
             )
@@ -257,7 +259,7 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
                 )
             )
         else:
-            self.progress_logger("skipped restart_pickle_previous_remainders")
+            self.progress_logger("No previous remainders, starting new iteration")
             self._previous_batch_iterators = []
 
         if validation_proportion <= 0 or validation_proportion >= 1:
@@ -358,7 +360,9 @@ class VcfTrainingTensorDataLoader(VcfTensorDataLoaderBase):
             parquet_file=self._current_parquet_file, pickle_folder=pickle_folder,
             previous_pickle_folder=previous_pickle_folder,
             truth_json=self.truth_json,
-            wanted_columns=self._wanted_columns, random_seed=self._next_random_seed,
+            wanted_columns=self._wanted_columns,
+            properties_summary=self.properties_summary,
+            random_seed=self._next_random_seed,
             variants_per_batch=self.variants_per_batch,
             num_properties=self.num_properties,
             variant_columns=self._variant_columns, format_columns=self._format_columns,
@@ -511,6 +515,7 @@ class TrainingBatchPickler(BatchPicklerBase):
             previous_pickle_folder: Optional[Path],
             truth_json: Path,
             wanted_columns: list[str],
+            properties_summary: PropertiesSummary,
             random_seed: Optional[int],
             variants_per_batch: int,
             num_properties: int,
@@ -529,7 +534,7 @@ class TrainingBatchPickler(BatchPicklerBase):
         num_samples = len(sample_ids)
         genotype_is_good_dict, genotype_is_bad_dict = cls._reorganize_confident_variants(
             confident_variants=benchmark_variant_filter.TruthData.load_confident_variants(
-                f"{truth_json}"
+                truth_json
             ),
             sample_ids=sample_ids
         )
@@ -542,6 +547,7 @@ class TrainingBatchPickler(BatchPicklerBase):
             cls._load_buffer(
                 parquet_file=parquet_file,
                 wanted_columns=wanted_columns,
+                properties_summary=properties_summary,
                 wanted_ids=trainable_variant_ids,
                 variant_id_flat_column_name=variant_id_flat_column_name
             ),
@@ -619,10 +625,10 @@ class TrainingBatchPickler(BatchPicklerBase):
             (variants_per_batch, num_samples, num_properties), dtype=numpy.float32
         )
         gt_is_good_tensor = numpy.empty(
-            (variants_per_batch, num_samples), dtype=numpy.bool
+            (variants_per_batch, num_samples), dtype=numpy.bool_
         )
         gt_is_bad_tensor = numpy.empty(
-            (variants_per_batch, num_samples), dtype=numpy.bool
+            (variants_per_batch, num_samples), dtype=numpy.bool_
         )
         supplemental_property_buffers = {
             property_name: property_getter.get_empty_array(variants_per_batch)
@@ -842,6 +848,7 @@ class TrainingBatchPickler(BatchPicklerBase):
             cls,
             previous_batch_iterators: list[TrainingBatchIterator],
             wanted_columns: list[str],
+            properties_summary: PropertiesSummary,
             variant_id_flat_column_name: str,
             supplemental_property_getters: dict[str, SupplementalPropertyGetter]
     ) -> None:
@@ -863,6 +870,7 @@ class TrainingBatchPickler(BatchPicklerBase):
             tuple(
                 cls._load_buffer(
                     parquet_file=_batch_iterator.parquet_file, wanted_columns=wanted_columns,
+                    properties_summary=properties_summary,
                     wanted_ids=_batch_iterator.remainder_ids,
                     variant_id_flat_column_name=variant_id_flat_column_name
                 )
@@ -904,7 +912,6 @@ class TrainingBatchPickler(BatchPicklerBase):
                         f_out,
                         protocol=pickle.HIGHEST_PROTOCOL
                     )
-                print(f"pickled {pickle_file}")
 
         # pickle remainders
         _pickle_last_remainder(is_training=True)

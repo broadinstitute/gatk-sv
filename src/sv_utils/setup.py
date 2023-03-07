@@ -27,9 +27,10 @@ setup(
     },
     python_requires=">3.8",
     install_requires=[
-        "numpy",
-        "scipy",
-        "pandas",
+        "numpy=1.24.2",
+        "scipy=1.10.1",
+        "pandas=1.5.3",
+        "dask=2023.3.0",
         "tqdm",
         "psutil",
         "pysam",
@@ -40,7 +41,7 @@ setup(
     ],
     extras_require={
         "tests": ["pytest", "pytest-cov"],
-        "machine-learning": ["dask>=22.9.1", "pyarrow>=9.0.0", "torch>=1.10.2"]
+        "machine-learning": ["dask>=22.9.1", "pyarrow=11.0.0", "torch=1.13.1"]
     },
     include_package_data=True,
     zip_safe=False

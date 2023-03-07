@@ -2,7 +2,6 @@
 
 import sys
 import os
-import ast
 from pathlib import Path
 import warnings
 import argparse
@@ -22,8 +21,9 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import dask.dataframe
 from sv_utils import common, genomics_io
-from typing import Optional, Union
-from collections.abc import Mapping, Iterable
+from gq_recalibrator import dask_utils
+from typing import Optional, Union, Any
+from collections.abc import Mapping, Iterable, Iterator
 from types import MappingProxyType
 import enum
 
@@ -36,7 +36,7 @@ class Keys:
     start_row = "start_row"
     sample_id = genomics_io.Keys.sample_id
     property = genomics_io.Keys.property
-    row = "row"
+    row = genomics_io.Keys.row
     category = "category"
     one_hot = "one-hot"
     positive_value = "positive_value"
@@ -44,8 +44,8 @@ class Keys:
     baseline = "baseline"
     scale = "scale"
     id = genomics_io.Keys.id
-    pos = genomics_io.VcfKeys.pos
-    end = genomics_io.VcfKeys.end
+    begin = genomics_io.Keys.begin
+    end = genomics_io.Keys.end
     contig = genomics_io.Keys.contig
     svtype = genomics_io.Keys.svtype
     svlen = genomics_io.Keys.svlen
@@ -54,6 +54,8 @@ class Keys:
     is_multiallelic = "is_multiallelic"
     is_autosome = "is_autosome"
     parquet_suffix = ".parquet"
+    properties_scaling_json = "properties_scaling.json"
+    properties_summary_json = "properties_summary.json"
 
 
 class CompressionAlgorithms:
@@ -84,27 +86,63 @@ class CompressionAlgorithms:
 
 class Default:
     temp_dir = Path(tempfile.gettempdir())
-    compute_weights: bool = False
+    compute_weights = True
     remove_input_tar = False
     column_levels = genomics_io.Default.column_levels
-    dask_partition_size_mb = 75.0
+    dask_partition_size_mb = 250.0
     compression_algorithm = CompressionAlgorithms.snappy
     error_on_missing_property = True
     error_on_missing_sample = True
-    category_encoding = Keys.one_hot
+    category_encoding = Keys.category
     property_names_to_lower = True
     num_jobs = common.num_physical_cpus
     training_weight_properties = ()
+    omit_properties_stats = False
 
 
 non_ml_properties = frozenset((
-    Keys.id, Keys.pos, Keys.end, Keys.contig, Keys.variant_weights, Keys.is_multiallelic,
+    Keys.id, Keys.begin, Keys.end, Keys.contig, Keys.variant_weights, Keys.is_multiallelic,
     Keys.is_autosome
 ))
 training_weight_bins = MappingProxyType({
     Keys.svlen: numpy.array([50, 500, 5000]),
     Keys.allele_frequency: numpy.array([0.1, 0.9])
 })
+
+
+@attr.frozen(slots=True)
+class PropertyScaling:
+    baseline: float
+    scale: float
+    positive_value: Optional[float] = None
+    negative_value: Optional[float] = None
+
+    def to_json(self) -> dict[str, float]:
+        return {
+            key: value for key, value in (
+                (key, getattr(self, key)) for key in self.__slots__
+            ) if value is not None
+        }
+
+    @classmethod
+    def from_json(cls, json_dict: dict[str, float]) -> "PropertyScaling":
+        return PropertyScaling(**json_dict)
+
+    @property
+    def is_bool_property(self) -> bool:
+        return self.positive_value is not None
+
+
+class PropertiesScaling(dict[str, PropertyScaling]):
+    @classmethod
+    def from_json(
+            cls, json_dict: dict[str, float] | dict[str, PropertyScaling]
+    ) -> Union[PropertyScaling, "PropertiesScaling"]:
+        if isinstance(next(iter(json_dict.values())), PropertyScaling):
+            return PropertiesScaling(json_dict)
+        else:
+            return PropertyScaling.from_json(json_dict)
+
 
 # Mapping holds data for summary of an individual property
 PropertySummaryJsonDict = dict[str, int | str | list[str]]
@@ -156,12 +194,12 @@ PropertyType._dtype_map = MappingProxyType({
 })
 
 
-@attr.s(frozen=True, slots=True)
+@attr.frozen(slots=True)
 class PropertySummary:
-    property_type: PropertyType = attr.ib()
-    num_rows: int = attr.ib()
-    num_samples: int = attr.ib(default=0)
-    codes: list[str] = attr.ib(default=[])
+    property_type: PropertyType
+    num_rows: int
+    num_samples: int = 0
+    codes: list[str] = []
 
     @classmethod
     def from_json(
@@ -173,13 +211,22 @@ class PropertySummary:
             codes=json_dict.get(Keys.codes, [])
         )
 
+    def to_json(self) -> dict[str, float]:
+        return {
+            Keys.property_type: self.property_type.value,
+            Keys.num_rows: self.num_rows,
+            Keys.num_samples: self.num_samples,
+            Keys.codes: self.codes
+        }
+
     @property
     def encoding_dtype(self) -> numpy.dtype:
         """get the pure numpy dtype that would be used for ordinal encoding of String/StringSet,
-        for storing to disk; hencs booleans should be represented as uint8 0 or 1
+        for storing to disk; hence booleans should be represented as uint8 0 or 1
         """
         if self.has_codes:
-            return numpy.dtype(numpy.min_scalar_type(len(self.codes)))
+            # use signed integers so that -1 can be reserved for missing data
+            return numpy.dtype(numpy.min_scalar_type(-len(self.codes)))
         elif self.is_bool_type:
             return numpy.dtype(numpy.uint8)
         else:
@@ -224,16 +271,55 @@ class PropertySummary:
             codes=self.codes + added_codes
         )
 
+    @staticmethod
+    def combine(property_summaries: list["PropertySummary"]) -> "PropertySummary":
+        property_types = {
+            property_summary.property_type for property_summary in property_summaries
+        }
+        if len(property_types) != 1:
+            raise ValueError(f"Inconsistent .property_type: {property_types}")
+        num_samples = {
+            property_summary.num_samples for property_summary in property_summaries
+        }
+        if len(num_samples) != 1:
+            raise ValueError(f"Inconsistent num_samples: {num_samples}")
+        codes = sorted(
+            {code for property_summary in property_summaries for code in property_summary.codes}
+        )
+        return PropertySummary(
+            property_type=property_types.pop(),
+            num_rows=sum(summary.num_rows for summary in property_summaries),
+            num_samples=num_samples.pop(),
+            codes=codes
+        )
+
 
 class PropertiesSummary(dict[str, PropertySummary]):
     @classmethod
     def from_json(
             cls, json_dict: PropertySummaryJsonDict | dict[str, PropertySummary]
     ) -> Union[PropertySummary, "PropertiesSummary"]:
-        if Keys.property_type in json_dict:
-            return PropertySummary.from_json(json_dict)
-        else:
+        if isinstance(next(iter(json_dict.values())), PropertySummary):
             return PropertiesSummary(json_dict)
+        else:
+            return PropertySummary.from_json(json_dict)
+
+    @staticmethod
+    def combine(properties_summaries: list["PropertiesSummary"]) -> "PropertiesSummary":
+        """Combine the properties_summaries from each shard to make them consistent. Also convert
+        from VCF names (generally upper-case) to table/DataFrame names (snake case) since this will
+        be used to process Dataframes, not VCFs
+        """
+        #def _to_table_key(_key: str) -> str:
+        #    return genomics_io.Default.basic_vcf_columns.get(_key, _key.lower())
+        first_summary = next(iter(properties_summaries))
+        return PropertiesSummary(
+            {
+                key.lower(): PropertySummary.combine(
+                    [properties_summary[key] for properties_summary in properties_summaries]
+                ) for key in first_summary.keys()
+            }
+        )
 
 
 # keep track of tar files that have already been extracted
@@ -258,16 +344,21 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
         help="If true, compute the weight that each variant should have for training."
     )
     parser.add_argument(
-        "--properties-scaling-json", type=Path, default=None,
-        help="path to output JSON that will store properties baseline and scale needed for "
-             "training and filtering. Note: should only be generated from training data set, then "
-             "those stats should be reused for filtering."
+        "--omit-properties-stats", type=bool, default=Default.omit_properties_stats,
+        help="The properties stats JSONs are only needed for training (filtering will use the "
+             "values stored from the training set). If these data will ONLY be used for filtering "
+             "then this argument can safely be set to True and time can be saved not calculating "
+             "these values."
     )
     parser.add_argument("--temp-dir", "-t", type=Path, default=Default.temp_dir,
                         help="Path to preferred temporary directory")
     parser.add_argument(
         "--remove-input-tar", type=common.argparse_bool, default=Default.remove_input_tar,
         help="if true, remove input tar to save space, if false, leave it in place"
+    )
+    parser.add_argument(
+        "--wanted-properties", type=str, default=None,
+        help="comma-separated list of properties to load. If omitted, take all properties"
     )
     parser.add_argument(
         "--dask-partition-size-mb", type=float, default=Default.dask_partition_size_mb,
@@ -299,7 +390,10 @@ def main(argv: Optional[list[str]] = None):
         input_tar=args.input_tar,
         output_path=args.output_parquet,
         compute_weights=args.compute_weights,
-        properties_scaling_json=args.properties_scaling_json,
+        omit_properties_stats=args.omit_properties_stats,
+        wanted_properties=(
+            None if args.wanted_properties is None else set(args.wanted_properies.split(","))
+        ),
         temp_dir=args.temp_dir,
         remove_input_tar=args.remove_input_tar,
         dask_partition_size_mb=args.dask_partition_size_mb,
@@ -314,7 +408,8 @@ def tarred_properties_to_parquet(
         input_tar: Path | list[Path],
         output_path: Path,
         compute_weights: bool = Default.compute_weights,
-        properties_scaling_json: Optional[Path] = None,
+        omit_properties_stats: bool = Default.omit_properties_stats,
+        wanted_properties: Optional[set[str]] = None,
         temp_dir: Path = Default.temp_dir,
         remove_input_tar: bool = Default.remove_input_tar,
         dask_partition_size_mb: float = Default.dask_partition_size_mb,
@@ -332,20 +427,38 @@ def tarred_properties_to_parquet(
         # load all the properties extracted by
         properties = load_properties_from_map(
             input_folder=input_folders, properties_summary=properties_summaries,
-            sample_ids=sample_ids, dask_partition_size_mb=dask_partition_size_mb,
-            category_encoding=category_encoding, property_names_to_lower=property_names_to_lower
+            sample_ids=sample_ids, wanted_properties=wanted_properties,
+            dask_partition_size_mb=dask_partition_size_mb, category_encoding=category_encoding,
+            property_names_to_lower=property_names_to_lower
         )
         if compute_weights:
             # add variant_weights property
             properties = add_variant_weights(properties)
         with warnings.catch_warnings():
             warnings.filterwarnings(action="ignore", category=FutureWarning)
-            print(properties.head())
-        df_to_parquet(df=properties, output_path=output_path,
-                      compression_algorithm=compression_algorithm)
 
-        if properties_scaling_json is not None:
-            output_properties_scaling(properties, properties_scaling_json)
+        # we want to add metadata into the parquet folder, so if it will be tarred, delay that
+        # action
+        if output_path.suffix == ".tar":
+            tar_path = output_path
+            parquet_folder = output_path.with_suffix(Keys.parquet_suffix)
+        else:
+            tar_path = None
+            parquet_folder = output_path
+        df_to_parquet(
+            df=properties, output_path=parquet_folder, compression_algorithm=compression_algorithm
+        )
+
+        if not omit_properties_stats:
+            properties_scaling = get_properties_scaling(properties)
+            with open(parquet_folder / Keys.properties_scaling_json, 'w') as f_out:
+                json.dump(properties_scaling, f_out, indent="  ", default=PropertyScaling.to_json)
+            with open(parquet_folder / Keys.properties_summary_json, 'w') as f_out:
+                json.dump(PropertiesSummary.combine(properties_summaries), f_out, indent="  ",
+                          default=PropertySummary.to_json)
+
+        if tar_path is not None:
+            archive_to_tar(folder_to_archive=parquet_folder, tar_file=tar_path, remove_files=True)
 
 
 def _get_gzipped_metadata(
@@ -420,14 +533,25 @@ def extract_tar_to_folder(
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar
 ) -> Path:
+    """Extract contents of tarfile to a folder and return the path to the extracted folder. The
+    folder name will be set by the root path of the tarred archive.
+
+    Args:
+        input_tar: path to input tar file
+        base_dir: If specifie, use as the parent dir of extracted tarred folder. If None, then
+                  use the parent dir of input_tar
+        remove_input_tar: if True, remove the input tar file after extracting.
+    """
     if input_tar in _extracted_tar_files:
         if remove_input_tar:
             input_tar.unlink(missing_ok=True)
         return _extracted_tar_files[input_tar]
     if base_dir is None:
         base_dir = input_tar.parent
+    base_dir.mkdir(parents=True, exist_ok=True)
     with tarfile.open(input_tar, 'r') as tar_in:
         tar_folder = base_dir / _get_tar_top_level_folder(tar_in)
+        shutil.rmtree(tar_folder, ignore_errors=True)
         _extracted_tar_files[input_tar] = tar_folder
         tar_in.extractall(path=base_dir)
     if remove_input_tar:
@@ -509,6 +633,7 @@ def load_properties_from_map(
         input_folder: Path | list[Path],
         properties_summary: PropertiesSummary | list[PropertiesSummary],
         sample_ids: list[str],
+        wanted_properties: Optional[set[str]] = None,
         dask_partition_size_mb: float = Default.dask_partition_size_mb,
         category_encoding: str = Default.category_encoding,
         property_names_to_lower: bool = Default.property_names_to_lower
@@ -529,6 +654,16 @@ def load_properties_from_map(
             )
         input_folders = input_folder
         properties_summaries = properties_summary
+
+    if wanted_properties is not None:
+        properties_summaries = [
+            {
+                property_name: property_summary
+                for property_name, property_summary in properties_summary.items()
+                if property_name in wanted_properties
+            }
+            for properties_summary in properties_summaries
+        ]
 
     # decompress files, and form structure of the map
     divisions = [0]
@@ -639,18 +774,43 @@ def _tsvs_to_df_partition(
         row_start + data_set_row_start, row_end + data_set_row_start,
         dtype=numpy.dtype(numpy.min_scalar_type(-total_num_rows)), name=Keys.row
     )
-    # return DataFrame sorted so that:
-    #  1) per-variant columns are first, followed by per-sample/GT properties in blocks
-    #  2) all the properties for a given sample are sequential, sorted in alphabetical order
-    #  3) the samples are in the original order listed in the VCF
-    # e.g. if the VCF had two samples: NA19088 and NA19001, listed in that order, the properties
-    # might look like:
-    # None             NA19088         190001
-    # SVTYPE   SVLEN   AC       GQ     AC       GQ
-    return df[
-        sorted(df.columns.to_list(),
-               key=lambda c: (sample_ids.index(c[0]) if isinstance(c[0], str) else -1, c[1]))
-    ]
+    return standard_sort_properties(df, sample_ids=sample_ids)
+
+
+def standard_sort_properties(
+    properties_dataframe: pandas.DataFrame,
+    sample_ids: Optional[list[str]] = None,
+) -> pandas.DataFrame:
+    """return DataFrame sorted so that:
+     1) per-variant columns are first, followed by per-sample/GT properties in blocks
+     2) all the properties for a given sample are sequential, sorted in alphabetical order
+     3) the samples are in the original order listed in the VCF
+    e.g. if the VCF had two samples: NA19088 and NA19001, listed in that order, the properties
+    might look like:
+    None             NA19088         190001
+    SVTYPE   SVLEN   AC       GQ     AC       GQ
+
+    Args:
+        properties_dataframe: DataFrame to sort
+        sample_ids: if known, passing sample IDs can omit recomputing them
+    """
+    if sample_ids is None:
+        sample_ids = properties_dataframe.columns.get_level_values(level=Keys.sample_id).tolist()
+    sample_order = {
+        sample_id: sample_ids.index(sample_id)
+        for sample_id in set(sample_ids)
+        if isinstance(sample_id, str)
+    }
+
+    def _sort_columns_key(_columns: pandas.Index) -> pandas.Index:
+        return pandas.Index(
+            [sample_order.get(sample_id, -1) for sample_id in _columns], name=Keys.sample_id,
+            dtype="string[pyarrow]"
+        ) if _columns.name == Keys.sample_id else _columns
+
+    return properties_dataframe.sort_index(
+        axis=1, inplace=False, key=_sort_columns_key, level=[Keys.sample_id, Keys.property]
+    ).rename_axis(index=Keys.row)
 
 
 def _read_csv_chunk(
@@ -702,10 +862,14 @@ def _read_csv_chunk(
     return df
 
 
-def categorical_df_to_one_hot(
+def categorical_properties_to_one_hot(
         properties_dataframe: pandas.DataFrame,
         properties_summary: PropertiesSummary,
-        property_names_to_lower: bool = Default.property_names_to_lower
+        property_names_to_lower: bool = Default.property_names_to_lower,
+        do_not_1_hot_properties: set[str] = frozenset(
+            {Keys.variant_weights, Keys.id, Keys.contig}
+        ),
+        excluded_1_hot_properties: set[str] = frozenset({})
 ) -> pandas.DataFrame:
     """
     Convert a properties DataFrame with MultiIndex columns, where encoding is categorical to one
@@ -717,8 +881,9 @@ def categorical_df_to_one_hot(
     def _iter_properties() -> tuple[str, pandas.DataFrame, PropertySummary]:
         for property_name in property_names:
             property_values = properties_dataframe.loc[:, (slice(None), property_name)]
-            property_summary = properties_summary[property_name]
-            if property_summary.codes:
+            property_summary = None if property_name in do_not_1_hot_properties \
+                else properties_summary[property_name]
+            if property_summary is not None and property_summary.codes:
                 inverse_codes = {code_word: ind for ind, code_word in
                                  enumerate(property_summary.codes)}
                 # expect that property_values is probably CategoricalDtype. If so, need to convert
@@ -737,17 +902,20 @@ def categorical_df_to_one_hot(
                 property_summary
             )
 
-    return pandas.concat(
-        (
-            codes_to_one_hot(
-                property_values,
-                codewords_map=_get_codewords_map(property_summary),
-                property_name=property_name,
-                is_format_property=property_summary.num_samples > 0
-            ) if property_summary.codes else property_values
-            for property_name, property_values, property_summary in _iter_properties()
-        ),
-        axis=1
+    return standard_sort_properties(
+        pandas.concat(
+            (
+                codes_to_one_hot(
+                    property_values,
+                    codewords_map=_get_codewords_map(property_summary),
+                    property_name=property_name,
+                    is_format_property=property_summary.num_samples > 0,
+                    excluded_properties=excluded_1_hot_properties
+                ) if property_summary is not None and property_summary.codes else property_values
+                for property_name, property_values, property_summary in _iter_properties()
+            ),
+            axis=1
+        )
     )
 
 
@@ -762,13 +930,15 @@ def _get_codewords_map(property_summary: PropertySummary) -> dict[str, numpy.arr
         codewords_map: dict[str, numpy.array]
             Map from code to 1-hot encoding for that code
     """
-    if PropertySummary.property_type == PropertyType.String:
+    if property_summary.property_type == PropertyType.String:
         # this property is a single string
         # easy: the nth code is all false except for the nth value in the map
         num_codewords = len(property_summary.codes)
 
         def _basis(_ind: int) -> numpy.ndarray:
-            _arr = numpy.zeros(num_codewords, dtype=bool)
+            # add last code as always False for "missing" code (-1), corresponding to unwanted
+            # properties
+            _arr = numpy.zeros(num_codewords + 1, dtype=bool)
             _arr[_ind] = True
             return _arr
         return {code: _basis(ind) for ind, code in enumerate(property_summary.codes)}
@@ -779,15 +949,26 @@ def _get_codewords_map(property_summary: PropertySummary) -> dict[str, numpy.arr
         all_codewords = sorted(set.union(*code_sets))
 
         def _contains(_codeword: str) -> numpy.ndarray:
-            return numpy.array([_codeword in code_set for code_set in code_sets], dtype=bool)
+            # add last code as always False for "missing" code (-1), corresponding to unwanted
+            # properties
+            return numpy.array([_codeword in code_set for code_set in code_sets] + [False],
+                               dtype=bool)
         return {codeword: _contains(codeword) for codeword in all_codewords}
+
+
+def codeword_to_one_hot_property_name(codeword: str, property_name: str) -> str:
+    return (
+        codeword if codeword.lower().startswith(f"{property_name}=".lower())
+        else f"{property_name}={codeword}"
+    )
 
 
 def codes_to_one_hot(
         df: DataFrame,
         codewords_map: dict[str, numpy.array],
         property_name: str,
-        is_format_property: bool
+        is_format_property: bool,
+        excluded_properties: set[str] = frozenset({})
 ) -> DataFrame:
     """
     Convert DataFrame of codes (words for String property, comma-separated words for StringSet
@@ -800,13 +981,22 @@ def codes_to_one_hot(
         property_name: str
             Name of the property
         is_format_property: bool
-
+            True if a per-sample / Format property, False otherwise
+        excluded_properties: set[str]
+            List of any properties to omit from final DataFrame
     """
+    # make sensible but non-redundant property names
+    one_hot_property_names = [
+        codeword_to_one_hot_property_name(codeword=codeword, property_name=property_name)
+        for codeword in codewords_map.keys()
+    ]
     try:
         # make one dataframe for each code, indicating if that code is present for that row
         mapped_dfs = {
-            codeword: df.applymap(code_is_included.take)
-            for codeword, code_is_included in codewords_map.items()
+            one_hot_property_name: df.applymap(code_is_included.take)
+            for one_hot_property_name, (codeword, code_is_included) in zip(
+                one_hot_property_names, codewords_map.items()
+            ) if one_hot_property_name not in excluded_properties
         }
     except IndexError as index_error:
         common.add_exception_context(
@@ -815,12 +1005,7 @@ def codes_to_one_hot(
         )
         raise
 
-    for codeword, mapped_df in mapped_dfs.items():
-        # make a sensible but non-redundant property name
-        one_hot_property_name = (
-            codeword if codeword.lower().startswith(f"{property_name}=".lower())
-            else f"{property_name}={codeword}"
-        )
+    for one_hot_property_name, mapped_df in mapped_dfs.items():
         mapped_df.columns = pandas.MultiIndex.from_product(
             [df.columns.tolist(), [one_hot_property_name]] if is_format_property
             else [[None], [one_hot_property_name]],
@@ -836,12 +1021,13 @@ def codes_to_one_hot(
 def df_to_parquet(
         df: DataFrame,
         output_path: Path,
-        compression_algorithm: str = Default.compression_algorithm
+        compression_algorithm: str = Default.compression_algorithm,
+        write_metadata: Optional[bool] = None
 ):
     CompressionAlgorithms.assert_valid(compression_algorithm)
     # flatten columns to be compatible with parquet
     old_columns = df.columns
-    flatten_columns(df)
+    dask_utils.flatten_columns(df)
     if output_path.suffix == ".tar":
         # request final output as a tarred parquet folder
         tar_file = output_path
@@ -854,7 +1040,8 @@ def df_to_parquet(
     with warnings.catch_warnings():
         warnings.filterwarnings(action="ignore", category=FutureWarning)
         print(f"writing parquet files to {parquet_folder}")
-        df.to_parquet(parquet_folder, engine="pyarrow", compression=compression_algorithm)
+        df.to_parquet(parquet_folder, engine="pyarrow", compression=compression_algorithm,
+                      write_metadata_file=write_metadata)
         os.system(f"ls -alh {parquet_folder}")
 
     # restore the old columns
@@ -862,15 +1049,6 @@ def df_to_parquet(
 
     if tar_file is not None:
         archive_to_tar(folder_to_archive=parquet_folder, tar_file=tar_file, remove_files=True)
-
-
-def flatten_columns(df: DataFrame) -> DataFrame:
-    old_columns = df.columns
-    if df.columns.nlevels > 1:
-        df.columns = pandas.Index(
-            [str(column) for column in old_columns.to_flat_index()]
-        )
-    return df
 
 
 def archive_to_tar(
@@ -896,51 +1074,74 @@ def archive_to_tar(
 
 
 def parquet_to_df(
-        input_path: Path,
+        input_path: Path | list[Path],
         base_dir: Optional[Path] = None,
         remove_input_tar: bool = Default.remove_input_tar,
+        index_column: Optional[str] = Keys.row,
         wanted_properties: Optional[list[str]] = None,
         wanted_samples: Optional[list[str]] = None,
         error_on_missing_property: bool = Default.error_on_missing_property,
-        error_on_missing_sample: bool = Default.error_on_missing_sample
+        error_on_missing_sample: bool = Default.error_on_missing_sample,
+        filters: Union[list[tuple[str, str, Any]], list[list[tuple[str, str, Any]]]] = None,
+        engine: str = "pyarrow",
+        unflatten_columns: bool = True,
 ) -> DataFrame:
-    if input_path.suffix == ".tar":
-        input_path = extract_tar_to_folder(
-            input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
-        )
+    """Load parquet folder into dask DataFrame with multi-index columns. If the parquet folder is
+    tarred, manage untarring.
+
+    Args:
+        input_path: path to parquet folder (or tarfile of parquet folder). Can pass a list of
+                    such parquet folders, which will then be combined into a single dask dataframe.
+        base_dir: Optional path to extract tarred parquet folder into
+        remove_input_tar: if True and the input_path is a parquet folder, remove tarfile after
+                          extracting
+        index_column: which column to use for index if available
+        wanted_properties: list of properties to extract. If None, take all
+        wanted_samples: list of samples to take genotype data for. If None, take all
+        error_on_missing_property: if True and a requested property is not present, throw error. If
+                                 False, continue anyway
+        error_on_missing_sample: if True and a requested sample is not present, throw error. If
+                                 False, continue anyway
+        filters: Row filters to specify which variants to take. See documentation for
+                 pyarrow.parquet.read_table
+                 https://arrow.apache.org/docs/python/generated/pyarrow.parquet.read_table.html
+        engine: which engine to use. In general this code expects pyarrow.
+        unflatten_columns: if True, return columns in multi-index form
+    """
+    if isinstance(input_path, Path):
+        input_path = [input_path]
+
+    input_path = [
+        extract_tar_to_folder(
+            parquet_path, base_dir=base_dir, remove_input_tar=remove_input_tar
+        ) if parquet_path.suffix == ".tar" else parquet_path
+        for parquet_path in input_path
+    ]
+
+    index = (
+        index_column
+        if (isinstance(index_column, str)
+            and index_column in get_parquet_folder_columns(input_path[0]))
+        else None
+    )
+    # convert input argument to form dask can definitely read: input files listed in order if there
+    # is more than one input path, otherwise just the folder if there is only one.
+    input_file_arg = [
+        f"{input_file}"
+        for parquet_path in input_path
+        for input_file in get_parquet_files(parquet_path)
+    ] if len(input_path) > 1 else f"{input_path[0]}"
+
     with warnings.catch_warnings():
         df = dask.dataframe.read_parquet(
-            str(input_path), engine="pyarrow", index=Keys.row, calculate_divisions=True,
-            columns=_get_wanted_columns(input_path, wanted_properties, wanted_samples,
+            input_file_arg, engine=engine, index=index, calculate_divisions=True,
+            columns=_get_wanted_columns(input_path[0], wanted_properties, wanted_samples,
                                         error_on_missing_property=error_on_missing_property,
-                                        error_on_missing_sample=error_on_missing_sample)
+                                        error_on_missing_sample=error_on_missing_sample),
+            filters=filters
         )
-    unflatten_columns(df)
-    return df
 
-
-def unflatten_column_name(flat_column_name: str) -> tuple[Optional[str], str]:
-    try:
-        return ast.literal_eval(flat_column_name.replace("(nan,", "(None,"))
-    except ValueError as value_error:
-        common.add_exception_context(value_error, f"unflattening '{flat_column_name}'")
-        raise
-
-
-def unflatten_columns(df: DataFrame) -> DataFrame:
-    old_columns = df.columns
-    try:
-        multicolumns = pandas.MultiIndex.from_tuples(
-            [unflatten_column_name(flat_column_name) for flat_column_name in old_columns]
-        )
-    except (SyntaxError, ValueError):
-        # couldn't unflatten, so probably not a flattened DataFrame. just return df unchanged
-        multicolumns = None
-    if multicolumns is not None and multicolumns.nlevels > 1:
-        if multicolumns.nlevels == 2:
-            multicolumns.names = Default.column_levels
-        df.columns = multicolumns
-    return DataFrame
+    return dask_utils.unflatten_columns(df) if unflatten_columns else df
 
 
 def _get_wanted_columns(
@@ -1008,7 +1209,11 @@ def get_arbritrary_parquet_file(
 
 
 def get_parquet_file_schema(parquet_file: Path) -> pyarrow.Schema:
-    return pyarrow.parquet.read_schema(parquet_file)
+    try:
+        return pyarrow.parquet.read_schema(parquet_file)
+    except Exception as exception:
+        common.add_exception_context(exception, f"Reading {parquet_file}")
+        raise
 
 
 def get_parquet_folder_sample_ids(
@@ -1026,24 +1231,34 @@ def get_parquet_folder_sample_ids(
 def get_parquet_folder_columns(
         input_path: Path,
         base_dir: Optional[Path] = None,
-        remove_input_tar: bool = Default.remove_input_tar
+        remove_input_tar: bool = Default.remove_input_tar,
 ) -> list[str]:
-    return get_parquet_file_columns(
-        get_arbritrary_parquet_file(
-            input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
-        )
+    parquet_file = get_arbritrary_parquet_file(
+        input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
     )
+    return get_parquet_file_columns(parquet_file)
 
 
 def get_parquet_file_columns(parquet_file: Path) -> list[str]:
     return get_parquet_file_schema(parquet_file).names
 
 
+def get_parquet_folder_unflat_columns(
+    input_path: Path,
+    base_dir: Optional[Path] = None,
+    remove_input_tar: bool = Default.remove_input_tar,
+) -> list[tuple[Optional[str], str]]:
+    parquet_file = get_arbritrary_parquet_file(
+        input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
+    )
+    return get_parquet_file_unflat_columns(parquet_file)
+
+
 def get_parquet_file_unflat_columns(
     parquet_file: Path
 ) -> list[tuple[Optional[str], str]]:
     return [
-        unflatten_column_name(flat_column_name)
+        dask_utils.unflatten_column_name(flat_column_name)
         for flat_column_name in get_parquet_file_columns(parquet_file)
         if flat_column_name != Keys.row
     ]
@@ -1076,10 +1291,17 @@ def get_parquet_folder_num_rows(
     return get_parquet_files_num_rows(parquet_files=input_path.glob("*.parquet"))
 
 
+def get_parquet_files(parquet_folder: Path) -> list[Path]:
+    return sorted(
+        parquet_folder.glob(f"*{Keys.parquet_suffix}"),
+        key=lambda p: int(p.name.split('.')[1])
+    )
+
+
 def get_parquet_files_num_rows0(parquet_files: Iterable[Path]) -> int:
     return dask.compute(
         sum(
-            dask.delayed(get_parquet_file_num_rows(parquet_file))
+            dask.delayed(get_parquet_file_num_rows)(parquet_file)
             for parquet_file in parquet_files
         )
     )[0]
@@ -1096,45 +1318,40 @@ def get_parquet_file_num_rows(parquet_file: Path) -> int:
     return pyarrow.parquet.ParquetFile(parquet_file).metadata.num_rows
 
 
-def get_parquet_folder_dtypes(
-        input_path: Path,
-        base_dir: Optional[Path] = None,
-        remove_input_tar: bool = Default.remove_input_tar,
-        unflatten_column_names: bool = False
-) -> dict[str, DType]:
-    parquet_file = get_arbritrary_parquet_file(
-        input_path=input_path, base_dir=base_dir, remove_input_tar=remove_input_tar
-    )
-    return get_parquet_file_dtypes(parquet_file, unflatten_column_names=unflatten_column_names)
-
-
 def get_parquet_file_dtypes(
         parquet_file: Path,
-        unflatten_column_names: bool = False
-) -> dict[str, DType]:
+        properties_summary: PropertiesSummary
+) -> dict[str, DType] | dict[tuple[Optional[str], str], DType]:
     schema = get_parquet_file_schema(parquet_file)
+
+    def _to_pandas_dtype(
+            _name: tuple[Optional[str], str], _pyarrow_dtype: pyarrow.DataType
+    ) -> DType:
+        try:
+            return _pyarrow_dtype.to_pandas_dtype()
+        except NotImplementedError:  # hand-override for category dtypes
+            return pandas.CategoricalDtype(properties_summary[_name[1]].codes)
+
+    unflattened_names = [name if name == Keys.row else dask_utils.unflatten_column_name(name)
+                         for name in schema.names]
+
     return {
-        unflatten_column_name(name) if unflatten_column_names else name:
-            pyarrow_dtype.to_pandas_dtype()
-        for name, pyarrow_dtype in zip(schema.names, schema.types)
-        if name != "row"
+        name: _to_pandas_dtype(name, pyarrow_dtype)
+        for name, pyarrow_dtype in zip(unflattened_names, schema.types)
+        if name != Keys.row
     }
 
 
-def output_properties_scaling(properties: DataFrame, properties_scaling_json: Path):
-    properties_scaling = get_properties_scaling(properties)
-    print(f"properties scaling: {json.dumps(properties_scaling, indent='  ')}")
-    with open(properties_scaling_json, 'w') as f_out:
-        json.dump(properties_scaling, f_out, indent="  ")
-
-
-def get_properties_scaling(properties: DataFrame) -> dict[str, dict[str, float]]:
+def get_properties_scaling(properties: DataFrame) -> PropertiesScaling:
     def _get_bool_counts_dict(_partition: pandas.DataFrame) -> dict[str, int]:
         n_elements = _partition.size
         n_true = _partition.values.ravel().sum()
-        return {Keys.positive_value: n_true, Keys.negative_value: n_elements - n_true}
+        return {
+            Keys.positive_value: n_true,
+            Keys.negative_value: n_elements - n_true
+        }
 
-    def _get_int_counts_dict(_partition: pandas.DataFrame) -> dict[int, int]:
+    def _get_value_counts_dict(_partition: pandas.DataFrame) -> dict[int, int]:
         return pandas.Series(_partition.values.ravel()).value_counts().sort_index().to_dict()
 
     def _get_percentiles_dict(_partition: pandas.DataFrame) -> dict[str, list[float]]:
@@ -1148,12 +1365,14 @@ def get_properties_scaling(properties: DataFrame) -> dict[str, dict[str, float]]
         dtypes = set(_property_partition.dtypes.values)
         if dtypes == {numpy.dtype(bool)}:
             return _get_bool_counts_dict(_property_partition)
-        elif all(pandas.api.types.is_integer_dtype(_dtype)
-                 for _dtype in set(_property_partition.dtypes.values)):
-            return _get_int_counts_dict(_property_partition)
+        elif any(
+            pandas.api.types.is_float_dtype(_dtype)
+            for _dtype in set(_property_partition.dtypes.values)
+        ):
+            return _get_percentiles_dict(_property_partition)
         else:
             try:
-                return _get_percentiles_dict(_property_partition)
+                return _get_value_counts_dict(_property_partition)
             except TypeError as type_error:
                 common.add_exception_context(type_error, f"getting stats for {property_name}")
                 raise
@@ -1185,94 +1404,143 @@ def get_properties_scaling(properties: DataFrame) -> dict[str, dict[str, float]]
                         _reduced_dict[_value] = _reduced_dict.get(_value, 0) + _counts_list
         return _reduced_properties_dict
 
-    all_properties_stats = properties.reduction(
-        _get_all_stats_dict, _reduce_all_stats_dict, meta={}
-    ).compute()[0]
+    stats_properties = [
+        property_name for property_name in set(properties.columns.get_level_values(Keys.property))
+        if property_name not in non_ml_properties
+    ]
+    print(f"Getting stats for {stats_properties}")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        all_properties_stats = properties.reduction(
+            _get_all_stats_dict, _reduce_all_stats_dict, meta={}
+        ).compute()[0]
+
     # now need to do final computation of baseline and scale
 
-    def _compute_property_scaling(_property_stats: PropertyStatsDict) -> dict[str, float]:
-        if Keys.positive_value in _property_stats:
-            # boolean property
-            if (
-                    _property_stats[Keys.positive_value] == 0 or
-                    _property_stats[Keys.negative_value] == 0
-            ):
-                # there's no real data in this property
-                positive_value = 0.0
-                negative_value = 0.0
-                mean_value = 0.0
-                scale = 1.0
-            else:
-                mean_value = (
-                        _property_stats[Keys.positive_value] / (
-                            _property_stats[Keys.positive_value] +
-                            _property_stats[Keys.negative_value]
-                        )
+    def _iter_property_scaling(
+        _all_properties_stats: dict[str, Any]
+    ) -> Iterator[tuple[str, PropertyScaling]]:
+        for _property_name, _property_stats in _all_properties_stats.items():
+            if Keys.positive_value in _property_stats:
+                # boolean property
+                if (
+                        _property_stats[Keys.positive_value] == 0 or
+                        _property_stats[Keys.negative_value] == 0
+                ):
+                    # there's no real data in this property
+                    positive_value = 0.0
+                    negative_value = 0.0
+                    mean_value = 0.0
+                    scale = 1.0
+                else:
+                    mean_value = (
+                            _property_stats[Keys.positive_value] / (
+                                _property_stats[Keys.positive_value] +
+                                _property_stats[Keys.negative_value]
+                            )
+                    )
+                    scale = (mean_value * (1.0 - mean_value)) ** 0.5
+                    positive_value = (1.0 - mean_value) / scale
+                    negative_value = -mean_value / scale
+                yield _property_name, PropertyScaling(
+                    baseline=mean_value, scale=scale,
+                    positive_value=positive_value, negative_value=negative_value
                 )
-                scale = (mean_value * (1.0 - mean_value)) ** 0.5
-                positive_value = (1.0 - mean_value) / scale
-                negative_value = -mean_value / scale
-            return {
-                Keys.positive_value: positive_value, Keys.negative_value: negative_value,
-                Keys.baseline: mean_value, Keys.scale: scale
-            }
-        elif Keys.baseline in _property_stats:
-            # float property
-            baseline = numpy.median(_property_stats[Keys.baseline])
-            scale = numpy.median(_property_stats["high"]) - numpy.median(_property_stats["low"])
-            return {Keys.baseline: baseline, Keys.scale: 1.0 if scale == 0.0 else scale}
-        else:
-            # int property
-            num_counts = sum(_property_stats.values())
+            elif Keys.baseline in _property_stats:
+                # float property
+                # noinspection PyTypeChecker
+                baseline: float = numpy.median(_property_stats[Keys.baseline])
+                scale = numpy.median(_property_stats["high"]) \
+                    - numpy.median(_property_stats["low"])
+                yield _property_name, PropertyScaling(
+                    baseline=baseline, scale=1.0 if scale == 0.0 else scale
+                )
+            elif all(isinstance(key, int) for key in _property_stats.keys()):
+                # int property
+                num_counts = sum(_property_stats.values())
 
-            def _get_value_at_quantile(_quantile: float) -> int:
-                _target_counts = _quantile * num_counts
-                for _value, _counts in sorted(_property_stats.items(), key=lambda t: t[0]):
-                    _target_counts -= _counts
-                    if _target_counts <= 0:
-                        return _value
+                def _get_value_at_quantile(_quantile: float) -> int:
+                    _target_counts = _quantile * num_counts
+                    for _value, _counts in sorted(_property_stats.items(), key=lambda t: t[0]):
+                        _target_counts -= _counts
+                        if _target_counts <= 0:
+                            return _value
 
-            baseline = _get_value_at_quantile(0.5)  # baseline is median
-            # scale is the range of the central 80% of data
-            scale = _get_value_at_quantile(0.9) - _get_value_at_quantile(0.1)
-            if scale == 0:
-                # if the data is mostly constant, set scale to 1.0
-                scale = 1.0
+                baseline = _get_value_at_quantile(0.5)  # baseline is median
+                # scale is the range of the central 80% of data
+                scale = _get_value_at_quantile(0.9) - _get_value_at_quantile(0.1)
+                if scale == 0:
+                    # if the data is mostly constant, set scale to 1.0
+                    scale = 1.0
 
-            return {Keys.baseline: baseline, Keys.scale: scale}
-    return {
-        property_name: _compute_property_scaling(property_stats)
-        for property_name, property_stats in all_properties_stats.items()
+                yield _property_name, PropertyScaling(baseline=baseline, scale=scale)
+            else:
+                # object / categorical properties: make stats for 1-hot encoding
+                num_entries = sum(_property_stats.values())
+                sub_category_counts_dict = {
+                    sub_category: 0 for category in _property_stats.keys()
+                    for sub_category in category.split(',')
+                }
+                for category, category_counts in _property_stats.items():
+                    for sub_category in category.split(','):
+                        sub_category_counts_dict[sub_category] += category_counts
+                one_hot_stats = {
+                    codeword_to_one_hot_property_name(sub_category, property_name=_property_name):
+                        {Keys.positive_value: sub_category_counts,
+                         Keys.negative_value: num_entries - sub_category_counts}
+                    for sub_category, sub_category_counts in sub_category_counts_dict.items()
+                }
+                yield from _iter_property_scaling(one_hot_stats)
+
+    return PropertiesScaling({
+        property_name: property_scaling
+        for property_name, property_scaling in _iter_property_scaling(all_properties_stats)
+    })
+
+
+def add_variant_weights(properties: DataFrame, temp_dir: Path = Default.temp_dir) -> DataFrame:
+    properties = dask.dataframe.concat(
+        [get_variant_weights(properties, temp_dir=temp_dir), properties],
+        axis=1, interleave_partitions=True, ignore_order=True
+    )
+    return properties
+
+
+def get_variant_weights(
+        properties: DataFrame, temp_dir: Path = Default.temp_dir
+) -> dask.dataframe.Series:
+    variant_category_columns = {
+        prop for prop in properties.columns.get_level_values(level="property")
+        if prop in training_weight_bins or prop == Keys.svtype
     }
 
-
-def add_variant_weights(properties: DataFrame) -> DataFrame:
-    properties[Keys.variant_weights] = get_variant_weights(properties)
-    # rename and re-order to put variant weights at the beginning with other non-GT properties
-    columns = properties.columns.tolist()
-    columns[-1] = (None, Keys.variant_weights)
-    properties.columns = pandas.MultiIndex.from_tuples(columns, names=Default.column_levels)
-    return properties[[properties.columns[-1]] + properties.columns.tolist()[:-1]]
-
-
-def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
-    def _get_categories_dataframe() -> DataFrame:
-        variant_category_columns = {
-            prop for prop in properties.columns.get_level_values(level="property")
-            if prop in training_weight_bins or prop.startswith("svtype=")
-        }
-        categories_df = properties.loc[:, [(None, prop) for prop in variant_category_columns]]
-        categories_df.columns = categories_df.columns.droplevel(Keys.sample_id)
-        return categories_df
+    def _get_categories_dataframe(_df: DataFrame) -> DataFrame:
+        _raw_categories_df = _df[[(None, prop) for prop in variant_category_columns]]
+        _raw_categories_df.columns = _raw_categories_df.columns.droplevel(Keys.sample_id)
+        dtypes = _raw_categories_df.dtypes
+        for prop_name in training_weight_bins.keys():
+            dtypes[prop_name] = numpy.int64
+        _categories_df = _raw_categories_df.map_partitions(
+            _bin_categories,
+            meta=pandas.DataFrame(
+                {
+                    _name: pandas.Series(dtype=_dtype, name=_name)
+                    for _name, _dtype in dtypes.items()
+                }
+            )
+        )
+        _categories_df.index = _df.index
+        return _categories_df
 
     def _bin_categories(_partition: pandas.DataFrame):
         for prop_name, prop_bins in training_weight_bins.items():
             _partition[prop_name] = numpy.searchsorted(
                 prop_bins, _partition.loc[:, prop_name], side="right"
             )
+        return _partition.copy()
 
     def _get_category_counts(_partition: pandas.DataFrame) -> CategoryCounts:
-        _bin_categories(_partition)
         # explicitly convert to dict so that it can be edited (otherwise get Mapping)
         return dict(_partition.value_counts(sort=False).to_dict())
 
@@ -1287,11 +1555,16 @@ def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
             for _category, _counts in sorted(_reduced_counts.items(), key=lambda t: t[0])
         }
 
-    variant_category_counts = _get_categories_dataframe().reduction(
+    # get dataframe of binned categories
+    categories_dataframe = _get_categories_dataframe(properties)
+
+    variant_category_counts = categories_dataframe.reduction(
         _get_category_counts, _reduce_category_counts, meta={}
     ).compute()[0]
 
-    variant_category_weights = get_variant_category_weights(variant_category_counts)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        variant_category_weights = get_variant_category_weights(variant_category_counts)
     # we want to compress weights as a categorical Series, but it can't handle non-unique values,
     # so we will need to merge the weights that are equal
 
@@ -1312,8 +1585,7 @@ def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
 
     _dtype = pandas.CategoricalDtype(unique_weights)
 
-    def _get_partition_variant_weights(_partition: pandas.DataFrame) -> pandas.Series:
-        _bin_categories(_partition)
+    def _get_partition_variant_weights_categorical(_partition: pandas.DataFrame) -> pandas.Series:
         return pandas.Series(
             pandas.Categorical.from_codes(
                 [
@@ -1322,12 +1594,19 @@ def get_variant_weights(properties: DataFrame) -> dask.dataframe.Series:
                 ],
                 categories=unique_weights
             ),
-            index=_partition.index, name="variant_weight", dtype=_dtype
+            index=_partition.index, name=Keys.variant_weights, dtype=_dtype
         )
 
-    variant_weights = _get_categories_dataframe().map_partitions(
-        _get_partition_variant_weights, meta=pandas.Series(name=Keys.variant_weights, dtype=_dtype)
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        variant_weights = categories_dataframe.map_partitions(
+            _get_partition_variant_weights_categorical,
+            meta=pandas.Series(
+                [], dtype=pandas.CategoricalDtype(categories=unique_weights),
+                name=Keys.variant_weights
+            )
+        )
+
     variant_weights.name = (None, Keys.variant_weights)
     return variant_weights
 
@@ -1344,7 +1623,7 @@ def get_variant_category_weights(
     """
     Given counts of number of variants in each variant category, compute weights such that:
      - weight is inversely proportional to the counts in each category
-     - the mean weight is 1.0
+     - the mean weight (over variants) is 1.0
     After computing initial weights, restrain values so that no weight is greater than max_weight,
     or less than 1.0 / max_weight
 
@@ -1352,14 +1631,15 @@ def get_variant_category_weights(
         variant_category_counts:
         max_weight:
     Returns:
-
+    sum_c N_c * w_c = N_v
+    w_c = A / N_c
+    sum_c A = N_v
     """
-    num_variants = sum(variant_category_counts.values())
     num_categories = len(variant_category_counts)
-    weight_coefficient = num_variants / num_categories
+    num_variants = sum(variant_category_counts.values())
     min_weight = 1.0 / max_weight
     return {
-        category: max(min(weight_coefficient / counts, max_weight), min_weight)
+        category: max(min(num_variants / float(num_categories * counts), max_weight), min_weight)
         for category, counts in variant_category_counts.items()
     }
 

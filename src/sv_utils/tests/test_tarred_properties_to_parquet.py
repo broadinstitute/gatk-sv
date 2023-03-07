@@ -123,7 +123,7 @@ def properties_dataframe(
 def one_hot_properties_dataframe(
         properties_dataframe_and_summary: tuple[pandas.DataFrame, PropertiesSummary]
 ) -> pandas.DataFrame:
-    yield tarred_properties_to_parquet.categorical_df_to_one_hot(
+    yield tarred_properties_to_parquet.categorical_properties_to_one_hot(
         properties_dataframe=properties_dataframe_and_summary[0],
         properties_summary=properties_dataframe_and_summary[1]
     )

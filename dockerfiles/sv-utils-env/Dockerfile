@@ -14,18 +14,19 @@ RUN apt-get -qqy update --fix-missing && \
 
 # install python packages
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda \
-          psutil=5.8.0 pympler=0.9 tqdm=4.62.3 \
-          numpy=1.23.0 pandas=1.4.3 scipy=1.7.3 dill=0.3.5.1 \
+          attrs=22.1.0 psutil=5.8.0 pympler=0.9 tqdm=4.62.3 \
+          numpy=1.22.4 pandas=1.5.3 scipy=1.10.1 dill=0.3.5.1 dask=2023.3.0 pyarrow=11.0.0 \
           seaborn=0.11.2 matplotlib-base=3.5.1 ghostscript=9.54.0 \
           cython=0.29.28 \
           pytest=7.1.2 pytest-cov=3.0.0
 
-# As of March 29, 2022 the newest pysam version is 0.19.0, however that version does not allow setting END < POS, which
-# causes a problem for our BND handling. The newest version that is compatible with our BND processing is 0.15.4
-# In general, pysam needs to be pip installed or built, because you want to use the installed HTSLIB rather than copy in
-# duplicate libraries. The older pysam that needs to be installed for BND issues has problems with cython during pip
-# install, so must be built from source. One last pysam wrinkle: it's install can't handle the newest versions of
-# setuptools, so we're going to downgrade then re-upgrade them just for pysam
+# As of March 29, 2022 the newest pysam version is 0.19.0, however that version does not allow
+# setting END < POS, which causes a problem for our BND handling. The newest version that is
+# compatible with our BND processing is 0.15.4. In general, pysam needs to be pip installed or
+# built, because you want to use the installed HTSLIB rather than copy in duplicate libraries. The
+# older pysam that needs to be installed for BND issues has problems with cython during pip install,
+# so must be built from source. One last pysam wrinkle: it's install can't handle the newest
+# versions of setuptools, so we're going to downgrade then re-upgrade them just for pysam
 ARG PYSAM_VERSION=0.15.4
 RUN export SETUPTOOLS_VERSION=$(python -c 'import setuptools; print(setuptools.__version__)') && \
     pip install setuptools==57.5.0 && \

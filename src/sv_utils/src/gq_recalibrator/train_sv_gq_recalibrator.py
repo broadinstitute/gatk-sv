@@ -40,11 +40,17 @@ class Keys:
     scale = tarred_properties_to_parquet.Keys.scale
     logger_kwargs = "logger_kwargs"
     data_loader_state = "data_loader_state"
+    properties_scaling = "properties_scaling"
+    properties_summary = "properties_summary"
     net_kwargs = "neural_net_kwargs"
     optimizer_kwargs = "optimizer_kwargs"
     optimizer_type = "optimizer_type"
     training_losses = "training_losses"
+    training_truth_agreement_losses = "training_truth_agreement_losses"
+    training_gq_correlations = "training_gq_correlations"
     validation_losses = "validation_losses"
+    validation_truth_agreement_losses = "validation_truth_agreement_losses"
+    validation_gq_correlations = "validation_gq_correlations"
 
 
 class Default:
@@ -82,9 +88,6 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--properties", "-p", type=Path, required=True,
                         help="full path to tarred parquet file with variant properties")
-    parser.add_argument("--properties-scaling-json", "-j", type=Path, required=True,
-                        help="full path to JSON with baseline and scales needed for training / "
-                             "filtering properties")
     parser.add_argument(
         "--truth-json", type=Path, required=True,
         help="full path to JSON with info about which GTs are good for each variant x sample"
@@ -146,7 +149,6 @@ def main(argv: Optional[list[str]] = None):
     args = __parse_arguments(sys.argv if argv is None else argv)
     train_sv_gq_recalibrator(
         properties_path=args.properties,
-        properties_scaling_json=args.properties_scaling_json,
         truth_json=args.truth_json,
         output_model_path=args.model,
         input_model_path=args.input_model,
@@ -167,7 +169,6 @@ def main(argv: Optional[list[str]] = None):
 
 def train_sv_gq_recalibrator(
         properties_path: Path,
-        properties_scaling_json: Path,
         truth_json: Path,
         output_model_path: Path,
         input_model_path: Optional[Path] = None,
@@ -203,7 +204,7 @@ def train_sv_gq_recalibrator(
         if input_model_path is None or not input_model_path.is_file():
             training_state = TrainingState.build(
                 process_executor=process_executor, properties_path=properties_path,
-                properties_scaling_json=properties_scaling_json, truth_json=truth_json,
+                truth_json=truth_json,
                 temp_dir=temp_dir,
                 keep_multiallelic=keep_multiallelic, keep_homref=keep_homref,
                 keep_homvar=keep_homvar,
@@ -218,7 +219,7 @@ def train_sv_gq_recalibrator(
         else:
             training_state = TrainingState.load(
                 save_path=input_model_path, process_executor=process_executor,
-                parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
+                parquet_path=properties_path,
                 temp_dir=temp_dir,
                 keep_multiallelic=keep_multiallelic, keep_homref=keep_homref,
                 keep_homvar=keep_homvar,
@@ -233,7 +234,7 @@ def train_sv_gq_recalibrator(
             if is_training_batch:
                 training_state.optimizer.zero_grad()
                 predicted_probabilities = training_state.gq_recalibrator(batch_tensor)
-                loss = loss_function(
+                loss, truth_agreement_loss, gq_correlation = loss_function(
                     predicted_probabilities=predicted_probabilities, variant_weights=batch_weights,
                     scaled_gq_values=scaled_gq, genotype_is_good=is_good_gt,
                     genotype_is_bad=is_bad_gt, correlation_loss_scale=correlation_loss_weight
@@ -249,7 +250,10 @@ def train_sv_gq_recalibrator(
                     )
                 training_state.optimizer.step()
 
-                training_state.training_losses.append(loss.item())
+                training_state.append_loss(
+                    training=True, loss=loss, truth_agreement_loss=truth_agreement_loss,
+                    correlation=gq_correlation
+                )
                 variants_trained += variants_per_batch
                 if training_state.training_losses.num_mini_epoch_batches >= batches_per_mini_epoch:
                     # log progress summary and save
@@ -263,14 +267,15 @@ def train_sv_gq_recalibrator(
             else:
                 with torch.no_grad():
                     predicted_probabilities = training_state.gq_recalibrator(batch_tensor)
-
-                    training_state.validation_losses.append(
-                        loss_function(
+                    loss, truth_agreement_loss, gq_correlation = loss_function(
                             predicted_probabilities=predicted_probabilities,
                             variant_weights=batch_weights, scaled_gq_values=scaled_gq,
                             genotype_is_good=is_good_gt, genotype_is_bad=is_bad_gt,
                             correlation_loss_scale=correlation_loss_weight
-                        ).item()
+                        )
+                    training_state.append_loss(
+                        training=False, loss=loss, truth_agreement_loss=truth_agreement_loss,
+                        correlation=gq_correlation
                     )
 
     training_state.summarize_training_progress()
@@ -285,18 +290,23 @@ def train_sv_gq_recalibrator(
 @attr.define(slots=True, frozen=True)
 class TrainingState:
     """ Class to store, init, save, and resume state of objects needed for training """
-    training_logger: training_utils.ProgressLogger = attr.field()
-    vcf_tensor_data_loader: vcf_training_data_loader.VcfTrainingTensorDataLoader = attr.field()
-    gq_recalibrator: gq_recalibrator_net.GqRecalibratorNet = attr.field()
-    optimizer: Default.optim_type = attr.field()
-    training_losses: training_utils.BatchLosses = attr.field()
-    validation_losses: training_utils.BatchLosses = attr.field()
+    training_logger: training_utils.ProgressLogger
+    vcf_tensor_data_loader: vcf_training_data_loader.VcfTrainingTensorDataLoader
+    properties_summary: tarred_properties_to_parquet.PropertiesSummary
+    properties_scaling: tarred_properties_to_parquet.PropertiesScaling
+    gq_recalibrator: gq_recalibrator_net.GqRecalibratorNet
+    optimizer: Default.optim_type
+    training_losses: training_utils.BatchLosses
+    training_truth_agreement_losses: training_utils.BatchLosses
+    training_gq_correlations: training_utils.BatchLosses
+    validation_losses: training_utils.BatchLosses
+    validation_truth_agreement_losses: training_utils.BatchLosses
+    validation_gq_correlations: training_utils.BatchLosses
 
     @staticmethod
     def build(
             process_executor: concurrent.futures.ProcessPoolExecutor,
             properties_path: Path,
-            properties_scaling_json: Path,
             truth_json: Path,
             temp_dir: Path,
             keep_multiallelic: bool = Default.keep_multiallelic,
@@ -319,7 +329,7 @@ class TrainingState:
     ) -> "TrainingState":
         training_logger = training_utils.ProgressLogger()
         vcf_tensor_data_loader = vcf_training_data_loader.VcfTrainingTensorDataLoader(
-            parquet_path=properties_path, properties_scaling_json=properties_scaling_json,
+            parquet_path=properties_path,
             truth_json=truth_json, scale_bool_values=scale_bool_values,
             keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
             variants_per_batch=variants_per_batch, shuffle=shuffle,
@@ -342,10 +352,16 @@ class TrainingState:
         ).to(vcf_tensor_data_loader.torch_device).train()
         return TrainingState(
             training_logger=training_logger, vcf_tensor_data_loader=vcf_tensor_data_loader,
+            properties_summary=vcf_tensor_data_loader.properties_summary,
+            properties_scaling=vcf_tensor_data_loader.properties_scaling,
             gq_recalibrator=gq_recalibrator,
             optimizer=optim_type(gq_recalibrator.parameters(), **optim_kwargs),
             training_losses=training_utils.BatchLosses(),
-            validation_losses=training_utils.BatchLosses()
+            training_truth_agreement_losses=training_utils.BatchLosses(),
+            training_gq_correlations=training_utils.BatchLosses(),
+            validation_losses=training_utils.BatchLosses(),
+            validation_truth_agreement_losses=training_utils.BatchLosses(),
+            validation_gq_correlations=training_utils.BatchLosses()
         )
 
     @staticmethod
@@ -353,7 +369,6 @@ class TrainingState:
             save_path: Path,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             parquet_path: Path,
-            properties_scaling_json: Path,
             truth_json: Path,
             temp_dir: Path,
             keep_multiallelic: bool = Default.keep_multiallelic,
@@ -374,7 +389,7 @@ class TrainingState:
         training_logger.replay()  # print out the logs from the previous run(s)
         # init
         vcf_tensor_data_loader = vcf_training_data_loader.VcfTrainingTensorDataLoader(
-            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
+            parquet_path=parquet_path,
             truth_json=truth_json, scale_bool_values=scale_bool_values,
             keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
             variants_per_batch=variants_per_batch, shuffle=shuffle, random_generator=0,
@@ -399,10 +414,24 @@ class TrainingState:
         )
         return TrainingState(
             training_logger=training_logger, vcf_tensor_data_loader=vcf_tensor_data_loader,
+            properties_summary=pickle_dict[Keys.properties_summary],
+            properties_scaling=pickle_dict[Keys.properties_scaling],
             gq_recalibrator=gq_recalibrator,
             optimizer=optimizer,
             training_losses=training_utils.BatchLosses(**pickle_dict[Keys.training_losses]),
-            validation_losses=training_utils.BatchLosses(**pickle_dict[Keys.validation_losses])
+            training_truth_agreement_losses=training_utils.BatchLosses(
+                **pickle_dict[Keys.training_truth_agreement_losses]
+            ),
+            training_gq_correlations=training_utils.BatchLosses(
+                **pickle_dict[Keys.training_gq_correlations]
+            ),
+            validation_losses=training_utils.BatchLosses(**pickle_dict[Keys.validation_losses]),
+            validation_truth_agreement_losses=training_utils.BatchLosses(
+                **pickle_dict[Keys.validation_truth_agreement_losses]
+            ),
+            validation_gq_correlations=training_utils.BatchLosses(
+                **pickle_dict[Keys.validation_gq_correlations]
+            )
         )
 
     @staticmethod
@@ -433,20 +462,44 @@ class TrainingState:
         pickle_dict = {
             Keys.logger_kwargs: self.training_logger.save_dict,
             Keys.data_loader_state: self.vcf_tensor_data_loader.state_dict,
+            Keys.properties_summary: self.properties_summary,
+            Keys.properties_scaling: self.properties_scaling,
             Keys.net_kwargs: self.gq_recalibrator.to(cpu_torch_device).save_dict,
             Keys.optimizer_type: type(self.optimizer),
             Keys.optimizer_kwargs: TrainingState._state_dict_to(
                 state_dict=self.optimizer.state_dict(), device=cpu_torch_device
             ),
             Keys.training_losses: self.training_losses.save_dict,
-            Keys.validation_losses: self.validation_losses.save_dict
+            Keys.training_truth_agreement_losses: self.training_truth_agreement_losses.save_dict,
+            Keys.training_gq_correlations: self.training_gq_correlations.save_dict,
+            Keys.validation_losses: self.validation_losses.save_dict,
+            Keys.validation_truth_agreement_losses:
+                self.validation_truth_agreement_losses.save_dict,
+            Keys.validation_gq_correlations: self.validation_gq_correlations.save_dict
         }
         with open(save_path, "wb") as f_out:
             torch.save(pickle_dict, f_out)
 
+    def append_loss(
+        self, training: bool, loss: torch.Tensor, truth_agreement_loss: float, correlation: float
+    ):
+        if training:
+            self.training_losses.append(loss.item())
+            self.training_truth_agreement_losses.append(truth_agreement_loss)
+            self.training_gq_correlations.append(correlation)
+        else:
+            self.validation_losses.append(loss.item())
+            self.validation_truth_agreement_losses.append(loss.item())
+            self.validation_gq_correlations.append(loss.item())
+
     def summarize_training_progress(self):
         self.training_logger.summarize_training_progress(
-            training_losses=self.training_losses, validation_losses=self.validation_losses
+            training_losses=self.training_losses,
+            training_truth_agreement_losses=self.training_truth_agreement_losses,
+            training_gq_correlations=self.training_gq_correlations,
+            validation_losses=self.validation_losses,
+            validation_truth_agreement_losses=self.validation_truth_agreement_losses,
+            validation_gq_correlations=self.validation_gq_correlations
         )
 
     def summarize_batches_processed(self):
@@ -463,7 +516,7 @@ def loss_function(
         genotype_is_bad: torch.Tensor,
         correlation_loss_scale: float,
         scaled_gq_values: torch.Tensor,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, float, float]:
     """
     Compute differentiable loss for predicted_probabilities
         predicted_probabilities: num_variants x num_samples tensor
@@ -478,19 +531,19 @@ def loss_function(
     Args:
 
     """
-    tal = truth_agreement_loss(
+    truth_agreement_loss = get_truth_agreement_loss(
         genotype_is_good=genotype_is_good, genotype_is_bad=genotype_is_bad,
         predicted_probabilities=predicted_probabilities, variant_weights=variant_weights
     )
-    cc = correlation_coefficient(
+    gq_correlation = get_correlation_coefficient(
         scaled_target_values=scaled_gq_values, predicted_values=predicted_probabilities,
         variant_weights=variant_weights
     )
-    print(f"tal: {tal}, cc: {cc}")
-    return tal + correlation_loss_scale * (1.0 - cc)
+    loss = truth_agreement_loss + correlation_loss_scale * (1.0 - gq_correlation)
+    return loss, truth_agreement_loss.item(), gq_correlation.item()
 
 
-def truth_agreement_loss(
+def get_truth_agreement_loss(
         genotype_is_good: torch.Tensor,
         genotype_is_bad: torch.Tensor,
         predicted_probabilities: torch.Tensor,
@@ -506,7 +559,7 @@ def truth_agreement_loss(
 
     Returns:
     """
-    # logically the forumula is:
+    # logically the formula is:
     # genotype_loss = genotype_is_good * (1.0 - predicted_probabilities)
     #               + genotype_is_bad * predicted_probabilities
     # compute this mathematically-equivalent way to get fewer operations and better float accuracy:
@@ -523,7 +576,7 @@ def truth_agreement_loss(
     return (variant_loss * variant_weights).mean()
 
 
-def correlation_coefficient(
+def get_correlation_coefficient(
         scaled_target_values: torch.Tensor,
         predicted_values: torch.Tensor,
         variant_weights: torch.Tensor

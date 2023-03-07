@@ -167,20 +167,29 @@ class ProgressLogger:
     def summarize_training_progress(
             self,
             training_losses: BatchLosses,
-            validation_losses: BatchLosses
+            training_truth_agreement_losses: BatchLosses,
+            training_gq_correlations: BatchLosses,
+            validation_losses: BatchLosses,
+            validation_truth_agreement_losses: BatchLosses,
+            validation_gq_correlations: BatchLosses,
     ):
         if not self._has_header:
             # this is the first log, print a header
             self.log(
-                f"{'timestamp':23s} epoch {'elapsed-time':12s} {'train-loss':10s} "
-                f"{'valid-loss':10s}",
+                f"{'timestamp':23s} epoch {'elapsed-time':12s} "
+                f"{'train-loss':10s} {'train-agrL':10s} {'train-corr':10s} "
+                f"{'valid-loss':10s} {'valid-agrL':10s} {'valid-corr':10s}",
                 add_timestamp=False
             )
             self._has_header = True
         self.log(
             f"{training_losses.num_mini_epochs:5d} {self.elapsed_time:12s} "
             f"{training_losses.mini_epoch_loss:<10.3f} "
-            f"{validation_losses.mini_epoch_loss:<10.3f}"
+            f"{training_truth_agreement_losses.mini_epoch_loss:<10.3f} "
+            f"{training_gq_correlations.mini_epoch_loss:<10.3f} "
+            f"{validation_losses.mini_epoch_loss:<10.3f} "
+            f"{validation_truth_agreement_losses.mini_epoch_loss:<10.3f} "
+            f"{validation_gq_correlations.mini_epoch_loss:<10.3f}"
         )
 
 
@@ -196,7 +205,7 @@ class TorchDeviceKind(enum.Enum):
     # noinspection PyTypeChecker,PyMethodParameters
     @common.classproperty
     def choices(cls) -> list[str]:
-        return [kind.name for kind in cls]
+        return [kind.value for kind in cls]
 
     def get_device(self, progress_logger: Optional[ProgressLogger] = None) -> torch.device:
         """Return appropriate torch.device based on requested device

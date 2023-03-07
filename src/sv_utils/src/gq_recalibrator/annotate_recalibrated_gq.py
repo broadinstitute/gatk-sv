@@ -103,8 +103,7 @@ def annotate_recalibrated_gq(
                 input_header=vcf_in.header,
                 original_gq_field=original_gq_field,
                 scaled_logits_field=scaled_logits_field
-            ),
-            index_filename=f"{output_vcf}.tbi"
+            )
         ) as vcf_out
     ):
         # load dask dataframe with the variant IDs and annotation properties
@@ -153,6 +152,9 @@ def annotate_recalibrated_gq(
 
     t1 = time.time()
     print(f"Annotated {num_variants} in {common.elapsed_time(t1 - t0, seconds_precision=0)}")
+    pysam.tabix_index(f"{output_vcf}", preset="vcf", force=True)
+    t2 = time.time()
+    print(f"Indexed {output_vcf} in {common.elapsed_time(t2 - t1, seconds_precision=1)}")
 
 
 def _get_output_header(

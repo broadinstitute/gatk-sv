@@ -508,6 +508,40 @@ task GetVcfSize {
     }
 }
 
+task IndexVcf {
+    input {
+        File vcf
+        String samtools_cloud_docker
+    }
+
+    parameter_meta {
+        vcf: {
+          localization_optional: true
+        }
+    }
+    String vcf_index_filename = basename(vcf) + ".tbi"
+    Int disk_gb = 10
+
+    runtime {
+        docker: samtools_cloud_docker
+        cpu: 1
+        preemptible: 3
+        max_retries: 1
+        memory: "2 GiB"
+        disks: "local-disk " + disk_gb + " HDD"
+    }
+
+    command <<<
+        set -euo pipefail
+
+        bcftools index -f -t -o "~{vcf_index_filename}" "~{vcf}"
+    >>>
+
+    output {
+        File vcf_index = vcf_index_filename
+    }
+}
+
 
 task MaxInts {
     input {

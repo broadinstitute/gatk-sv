@@ -16,8 +16,10 @@ import concurrent.futures
 
 from sv_utils import common, genomics_io
 from gq_recalibrator import (
-    tarred_properties_to_parquet, vcf_filter_data_loader, training_utils, gq_recalibrator_net
+    tarred_properties_to_parquet, vcf_filter_data_loader, training_utils, gq_recalibrator_net,
+    train_sv_gq_recalibrator
 )
+from gq_recalibrator.tarred_properties_to_parquet import PropertiesScaling, PropertiesSummary
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     import dask.dataframe
@@ -38,6 +40,8 @@ class Keys:
     id = tarred_properties_to_parquet.Keys.id
     row = tarred_properties_to_parquet.Keys.row
     net_kwargs = "neural_net_kwargs"
+    properties_scaling = train_sv_gq_recalibrator.Keys.properties_scaling
+    properties_summary = train_sv_gq_recalibrator.Keys.properties_summary
 
 
 class VcfKeys:
@@ -71,9 +75,6 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--properties", "-p", type=Path, required=True,
                         help="path to tarred parquet file with variant properties")
-    parser.add_argument("--properties-scaling-json", "-j", type=Path, required=True,
-                        help="path to JSON with baseline and scales needed for training / "
-                             "filtering properties")
     parser.add_argument("--model", "-m", type=Path, required=True,
                         help="path to input file with trained model")
     parser.add_argument("--output-parquet", "-o", type=Path, required=True,
@@ -127,7 +128,6 @@ def main(argv: Optional[list[str]] = None):
     args = __parse_arguments(sys.argv if argv is None else argv)
     recalibrate_gq(
         properties_path=args.properties,
-        properties_scaling_json=args.properties_scaling_json,
         model_path=args.model,
         output_parquet=args.output_parquet,
         temp_dir=args.temp_dir,
@@ -333,7 +333,6 @@ class QualityCalculator:
 
 def recalibrate_gq(
         properties_path: Path,
-        properties_scaling_json: Path,
         model_path: Path,
         output_parquet: Path,
         temp_dir: Path = Default.temp_dir,
@@ -369,9 +368,15 @@ def recalibrate_gq(
         torch.no_grad(),
         concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as process_executor
     ):
+        recalibrator_net, properties_scaling, properties_summary \
+            = load_recalibrator_and_data_transformer(
+                model_path=model_path,
+                torch_device=torch_device_kind.get_device(progress_logger=filter_logger)
+            )
         vcf_tensor_data_loader = vcf_filter_data_loader.VcfFilterTensorDataLoader(
             parquet_path=properties_path,
-            properties_scaling_json=properties_scaling_json,
+            properties_scaling=properties_scaling,
+            properties_summary=properties_summary,
             variants_per_batch=variants_per_batch,
             keep_multiallelic=keep_multiallelic,
             keep_homref=keep_homref,
@@ -383,8 +388,7 @@ def recalibrate_gq(
             non_filtration_properties=non_filtration_properties,
             process_executor=process_executor
         )
-        gq_recalibrator = load_gq_recalibrator(model_path=model_path,
-                                               torch_device=vcf_tensor_data_loader.torch_device)
+
         quality_calculator = QualityCalculator.build(
             in_device=vcf_tensor_data_loader.torch_device,
             out_device=cpu_torch_device,
@@ -396,7 +400,7 @@ def recalibrate_gq(
                 vcf_tensor_data_loader, desc="batch", mininterval=0.5, maxinterval=float('inf'),
                 smoothing=0
         ):
-            predicted_probabilities = gq_recalibrator(batch_tensor)
+            predicted_probabilities = recalibrator_net(batch_tensor)
             output_batch(
                 parquet_file=parquet_folder / f"part.{num_batches}.parquet",
                 start_row=num_variants,
@@ -434,15 +438,19 @@ def _get_output_header(
     return output_header
 
 
-def load_gq_recalibrator(
+def load_recalibrator_and_data_transformer(
         model_path: Path,
         torch_device: torch.device
-) -> gq_recalibrator_net.GqRecalibratorNet:
+) -> tuple[gq_recalibrator_net.GqRecalibratorNet, PropertiesScaling, PropertiesSummary]:
     with open(model_path, "rb") as f_in:
         pickle_dict = torch.load(f_in)
-    return gq_recalibrator_net.GqRecalibratorNet(
-        **pickle_dict[Keys.net_kwargs]
-    ).to(torch_device).eval()
+    return (
+        gq_recalibrator_net.GqRecalibratorNet(
+            **pickle_dict[Keys.net_kwargs]
+        ).to(torch_device).eval(),
+        pickle_dict[Keys.properties_scaling],
+        pickle_dict[Keys.properties_summary]
+    )
 
 
 def output_batch(
@@ -501,7 +509,7 @@ def output_batch(
     )
     tarred_properties_to_parquet.flatten_columns(df)
     df.to_parquet(
-        f"{parquet_file}", engine="pyarrow", compression=compression_algorithm
+        f"{parquet_file}", engine="pyarrow", compression=compression_algorithm, index=True
     )
 
 

@@ -14,7 +14,7 @@ import pandas.core.arrays
 import pandas.core.dtypes.api
 import torch
 from typing import Optional, Any, IO, TypeVar
-from collections.abc import Iterator, Collection, Iterable
+from collections.abc import Iterator, Collection
 from gq_recalibrator import tarred_properties_to_parquet, training_utils
 from sv_utils import common, get_truth_overlap, genomics_io
 
@@ -23,6 +23,7 @@ ConfidentVariants = get_truth_overlap.ConfidentVariants
 DType = numpy.dtype | pandas.api.extensions.ExtensionDtype
 PandasArray = pandas.core.arrays.PandasArray
 ArrayType = TypeVar("ArrayType", numpy.ndarray, PandasArray, torch.Tensor)
+from gq_recalibrator.tarred_properties_to_parquet import PropertiesScaling, PropertiesSummary
 
 _debug_file_locks = False
 
@@ -39,6 +40,8 @@ class Keys:
     pickle_suffix = ".pickle"
     lock_suffix = ".lock"
     parquet_suffix = tarred_properties_to_parquet.Keys.parquet_suffix
+    properties_scaling_json = tarred_properties_to_parquet.Keys.properties_scaling_json
+    properties_summary_json = tarred_properties_to_parquet.Keys.properties_summary_json
 
 
 class Default:
@@ -142,24 +145,24 @@ else:
 
 def _get_baseline(
         property_name: str,
-        properties_scaling: dict[str, dict[str, float]],
+        properties_scaling: PropertiesScaling,
         scale_bool_values: bool
 ) -> float:
     """get baseline to (approximately) z-score output tensor"""
-    if scale_bool_values or Keys.positive_value not in properties_scaling[property_name]:
-        return properties_scaling[property_name][Keys.baseline]
+    if scale_bool_values or not properties_scaling[property_name].is_bool_property:
+        return properties_scaling[property_name].baseline
     else:
         return 0.0
 
 
 def _get_scale(
         property_name: str,
-        properties_scaling: dict[str, dict[str, float]],
+        properties_scaling: PropertiesScaling,
         scale_bool_values: bool
 ) -> float:
     """get multiplicative scale to (approximately) z-score output tensor"""
-    if scale_bool_values or Keys.positive_value not in properties_scaling[property_name]:
-        return 1.0 / properties_scaling[property_name][Keys.scale]
+    if scale_bool_values or not properties_scaling[property_name].is_bool_property:
+        return 1.0 / properties_scaling[property_name].scale
     else:
         return 1.0
 
@@ -235,7 +238,7 @@ class SupplementalPropertyGetter:
         property_name: str,
         unflatted_columns: list[tuple[Optional[str], str]],
         tensor_property_names: list[str],
-        properties_scaling: dict[str, dict[str, float]],
+        properties_scaling: PropertiesScaling,
         scale_bool_values: bool,
         dtypes: dict[str, DType]
     ) -> "SupplementalPropertyGetter":
@@ -272,7 +275,7 @@ class SupplementalPropertyGetter:
                 else numpy.dtype(numpy.float32)
         else:
             # it's a string
-            dtype = pandas.core.dtypes.api.pandas_dtype("string[pyarrow]")
+            dtype = pandas.core.dtypes.api.pandas_dtype("object")
         if property_name in properties_scaling:
             scale = torch.tensor(
                 _get_scale(
@@ -294,13 +297,14 @@ class SupplementalPropertyGetter:
             scale = None
             baseline = None
 
-        return SupplementalPropertyGetter(
+        getter = SupplementalPropertyGetter(
             tensor_ind=tensor_ind,
             buffer_ind=buffer_ind,
             scale=scale,
             baseline=baseline,
             dtype=dtype
         )
+        return getter
 
     def to(self, device: torch.device) -> "SupplementalPropertyGetter":
         return SupplementalPropertyGetter(
@@ -331,7 +335,7 @@ class SupplementalPropertyGetter:
         return tensor[:, :, self.tensor_ind] if self._is_format else tensor[:, 0, self.tensor_ind]
 
     def get_from_buffer(self, buffer: ArrayType) -> ArrayType:
-        return buffer.take(self.buffer_ind, axis=1)
+        return buffer.take(self.buffer_ind, axis=1).astype(self.dtype)
 
     def scale_array(self, array: numpy.ndarray, device: torch.device) -> torch.tensor:
         return self.scale * (
@@ -363,6 +367,7 @@ class VcfTensorDataLoaderBase:
         "parquet_path", "variants_per_batch", "torch_device", "progress_logger", "shuffle",
         "keep_multiallelic", "keep_homref", "keep_homvar",
         "random_generator", "_current_parquet_file", "process_executor",
+        "properties_scaling", "properties_summary",
         "_wanted_columns", "_parquet_files", "_temp_dir",
         "_num_rows", "_current_row", "_columns", "_variant_columns", "_format_columns",
         "_supplemental_property_getters", "_sample_ids", "_property_names",
@@ -373,7 +378,8 @@ class VcfTensorDataLoaderBase:
     def __init__(
             self,
             parquet_path: Path,
-            properties_scaling_json: Path,
+            properties_scaling: Optional[PropertiesScaling],
+            properties_summary: Optional[PropertiesSummary],
             process_executor: concurrent.futures.ProcessPoolExecutor,
             variants_per_batch: int,
             keep_multiallelic: bool,
@@ -391,8 +397,18 @@ class VcfTensorDataLoaderBase:
             _parquet_files: Optional[list[str]] = None,
             _current_row: int = 0
     ):
-        self.parquet_path = tarred_properties_to_parquet.extract_tar_to_folder(parquet_path) \
-            if parquet_path.suffix == ".tar" else parquet_path
+        if parquet_path.suffix == ".tar":
+            parquet_path = tarred_properties_to_parquet.extract_tar_to_folder(parquet_path)
+        self.parquet_path = parquet_path
+        if properties_scaling is None:
+            # get properties scaling from parquet folder
+            with open(self.parquet_path / Keys.properties_scaling_json, 'r') as f_in:
+                properties_scaling = json.load(f_in, object_hook=PropertiesScaling.from_json)
+        self.properties_scaling = properties_scaling
+        if properties_summary is None:
+            with open(self.parquet_path / Keys.properties_summary_json, 'r') as f_in:
+                properties_summary = json.load(f_in, object_hook=PropertiesSummary.from_json)
+        self.properties_summary = properties_summary
         self.process_executor = process_executor
         self.variants_per_batch = variants_per_batch
         self.progress_logger = progress_logger
@@ -407,7 +423,6 @@ class VcfTensorDataLoaderBase:
         self._set_column_info(
             non_filtration_properties=non_filtration_properties,
             supplemental_properties=supplemental_properties,
-            properties_scaling_json=properties_scaling_json,
             scale_bool_values=scale_bool_values
         )
         self._parquet_files = [] if _parquet_files is None else _parquet_files
@@ -428,11 +443,34 @@ class VcfTensorDataLoaderBase:
     def _get_pickle_folder(self) -> Path:
         return Path(tempfile.mkdtemp(dir=self._temp_dir))
 
+    @staticmethod
+    def _parquet_to_1_hot(
+        parquet_file: Path, properties_summary: PropertiesSummary
+    ) -> Path:
+        one_hot_parquet_file = parquet_file.with_suffix(".1hot")
+        if (
+            one_hot_parquet_file.is_file()
+            and one_hot_parquet_file.stat().st_mtime > parquet_file.stat().st_mtime
+        ):
+            return one_hot_parquet_file
+        # load parquet file, unflatten columns, convert to 1-hot, re-flatten columns, and save
+        df = pandas.read_parquet(parquet_file)
+        df = tarred_properties_to_parquet.unflatten_columns(df)
+        df = tarred_properties_to_parquet.categorical_properties_to_one_hot(
+            df, properties_summary=properties_summary
+        )
+        df = tarred_properties_to_parquet.flatten_columns(df)
+        df.to_parquet(
+            one_hot_parquet_file,
+            engine="pyarrow",
+            compression=tarred_properties_to_parquet.Default.compression_algorithm
+        )
+        return one_hot_parquet_file
+
     def _set_column_info(
             self,
             non_filtration_properties: set[str],
             supplemental_properties: set[str],
-            properties_scaling_json: Path,
             scale_bool_values: bool
     ):
         f"""
@@ -447,6 +485,7 @@ class VcfTensorDataLoaderBase:
             SupplementalPropertyGetter to manage getting properties needed for training or
             filtering that are not fed into neural network
         Have a few annoying issues to work around:
+          - Need to 1-hot encode dataframes before doing the hard work of figuring out columns
           - Absolutely don't want {Keys.row} in any columns (it's the name of the row index, not a
             column).
           - Can only determine if a column is for an excluded property after unflattening
@@ -454,26 +493,24 @@ class VcfTensorDataLoaderBase:
             non_filtration_properties: properties that will not be used for training or filtering
             supplemental_properties: properties that may or may not be injested by the neural
                                      network, but are otherwise required for training or filtering,
-                                     but are needed. e.g. variant_weights, variant_id, etc 
-            properties_scaling_json: Path to JSON file with information about each property's
-                                     baseline and scale, used to nominally center them on zero
-                                     and in the rough range (-1, 1)
+                                     e.g. variant_weights, variant_id, etc 
             scale_bool_values: If true, scale boolean values too. If False, render True -> 1 and
                                False -> 0. Generally a bad idea, because some boolean values are
                                extremely unbalanced.
         """
-        with open(properties_scaling_json, 'r') as f_in:
-            properties_scaling = json.load(f_in)
-
         # get flat_columns and _columns, explicitly removing Keys.row, the name of the row index
         # -flat_columns are ALL the columns in the dataframe, flattened so columns are not
         #  multi-index (this is what's stored in the parquet file)
         # -self.columns is the unflattened multi-index (tuple of sample_id, property_name) columns
         #  that are easier to process and organize
+        first_parquet_file = self.get_all_parquet_files()[0]
+        first_parquet_file = VcfTensorDataLoaderBase._parquet_to_1_hot(
+            parquet_file=first_parquet_file, properties_summary=self.properties_summary
+        )
         flat_columns, self._columns = zip(*(
             (flat_column, tarred_properties_to_parquet.unflatten_column_name(flat_column))
-            for flat_column in tarred_properties_to_parquet.get_parquet_folder_columns(
-                self.parquet_path
+            for flat_column in tarred_properties_to_parquet.get_parquet_file_columns(
+                first_parquet_file
             )
             if flat_column != Keys.row
         ))
@@ -525,15 +562,16 @@ class VcfTensorDataLoaderBase:
                 self._property_names.append(prop_name)
 
         # get the dtypes for each property, needed by supplemental property getters
-
-        # get the supplemental property getters
-        dtypes = tarred_properties_to_parquet.get_parquet_folder_dtypes(
-            self.parquet_path, unflatten_column_names=True
+        dtypes = tarred_properties_to_parquet.get_parquet_file_dtypes(
+            first_parquet_file,
+            properties_summary=self.properties_summary
         )
+        # get the supplemental property getters
         self._supplemental_property_getters = {
             supplemental_property: SupplementalPropertyGetter.build(
                 property_name=supplemental_property, unflatted_columns=self._columns,
-                tensor_property_names=self._property_names, properties_scaling=properties_scaling,
+                tensor_property_names=self._property_names,
+                properties_scaling=self.properties_scaling,
                 scale_bool_values=scale_bool_values, dtypes=dtypes
             ).to(device=self.torch_device)
             for supplemental_property in supplemental_properties
@@ -542,7 +580,7 @@ class VcfTensorDataLoaderBase:
         # get baseline and scale to (approximately) z-score output tensor
         self._tensor_baseline = torch.tensor(
             [
-                _get_baseline(property_name=prop_name, properties_scaling=properties_scaling,
+                _get_baseline(property_name=prop_name, properties_scaling=self.properties_scaling,
                               scale_bool_values=scale_bool_values)
                 for prop_name in self._property_names
             ],
@@ -550,7 +588,7 @@ class VcfTensorDataLoaderBase:
         )
         self._tensor_scale = torch.tensor(
             [
-                _get_scale(property_name=prop_name, properties_scaling=properties_scaling,
+                _get_scale(property_name=prop_name, properties_scaling=self.properties_scaling,
                            scale_bool_values=scale_bool_values)
                 for prop_name in self._property_names
             ],
@@ -644,7 +682,8 @@ class BatchPicklerBase:
             cls,
             parquet_file: Path,
             wanted_columns: list[str],
-            wanted_ids: Optional[Collection[str]] = None,
+            properties_summary: PropertiesSummary,
+            wanted_ids: Optional[set[str]] = None,
             variant_id_flat_column_name: Optional[str] = "(nan, 'id')"
     ) -> numpy.ndarray:
         """get the buffer (2D numpy array) that contains desired rows and columns
@@ -660,6 +699,12 @@ class BatchPicklerBase:
                                          variant IDs. Typically "(nan, 'id')". Must be specified
                                          if wanted_ids is specified.
         """
+                # ensure parquet file is 1-hot encoded
+        # noinspection PyProtectedMember
+        parquet_file = VcfTensorDataLoaderBase._parquet_to_1_hot(
+            parquet_file=parquet_file, properties_summary=properties_summary
+        )
+
         if wanted_ids is None:
             filters = None
         else:
@@ -667,11 +712,25 @@ class BatchPicklerBase:
                 raise ValueError(
                     "Must specify variant_id_flat_column_name when specifying wanted_ids"
                 )
+            ids = pandas.read_parquet(
+                parquet_file, columns=[variant_id_flat_column_name], engine="pyarrow"
+            )[variant_id_flat_column_name]
+            wanted_ids = wanted_ids.intersection(ids)
             _id_filter = (
                 variant_id_flat_column_name, "in", wanted_ids
             )
             filters = [_id_filter]
-        return pandas.read_parquet(parquet_file, columns=wanted_columns, filters=filters).values
+
+        # return matrix of desired one-hot encoded values
+        try:
+            buffer = pandas.read_parquet(
+                parquet_file, columns=wanted_columns, engine="pyarrow", filters=filters
+            ).values
+        except Exception as exception:
+            common.add_exception_context(exception, f"Opening {parquet_file}, num_wanted={0 if wanted_ids is None else len(wanted_ids)}")
+            raise
+        #buffer = buffer.loc[buffer[variant_id_flat_column_name].isin(wanted_ids)].values
+        return buffer
 
     @classmethod
     def _fill_next_tensor_blocks(

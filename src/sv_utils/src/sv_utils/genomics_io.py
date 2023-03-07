@@ -153,6 +153,7 @@ VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRe
 
 
 class VcfFieldTypes:
+    flag = "Flag"
     string = "String"
     integer = "Integer"
     float = "Float"
@@ -218,8 +219,13 @@ class Default:
     vcf_entries_per_dask_partition = 10**7
 
 
-def _number_more_than_1(vcf_number: str) -> bool:
-    return vcf_number > 1 if isinstance(vcf_number, int) else True
+def _number_more_than_1(vcf_number: Union[str, int]) -> bool:
+    if isinstance(vcf_number, str):
+        try:
+            return int(vcf_number) > 1
+        except ValueError:
+            return True
+    return vcf_number > 1
 
 
 def _get_genotype_extractor(
@@ -329,7 +335,7 @@ class VcfPropertyCollator:
             raise
 
     @staticmethod
-    def get_field_type_and_number(vcf_prop_name: str, header: pysam.VariantHeader) -> (str, int):
+    def get_field_type_and_number_gt_1(vcf_prop_name: str, header: pysam.VariantHeader) -> (str, bool):
         if vcf_prop_name in header.info:
             # get from info
             header_field = header.info.get(vcf_prop_name)
@@ -338,7 +344,7 @@ class VcfPropertyCollator:
             header_field = header.formats.get(vcf_prop_name)
             field_type, number = header_field.type, header_field.number
         elif vcf_prop_name == VcfKeys.filter:
-            field_type, number = VcfFieldTypes.string, -1
+            field_type, number = VcfFieldTypes.string, 2
         else:
             # get property directly from record. These are fields defined in the vcf spec
             if vcf_prop_name in {VcfKeys.pos, VcfKeys.stop, VcfKeys.rlen}:
@@ -349,10 +355,12 @@ class VcfPropertyCollator:
                                    VcfKeys.alleles, VcfKeys.ref}:
                 # note: pysam allows querying chrom as contig, so check for both here in case user
                 # overrides default properties
-                field_type, number = VcfFieldTypes.string, -1
+                field_type, number = VcfFieldTypes.string, 2
             else:
                 raise ValueError(f"Unknown vcf property '{vcf_prop_name}'")
-        return field_type, number
+
+        number_gt_1 = _number_more_than_1(number)
+        return field_type, number_gt_1
 
     @staticmethod
     def get_collator(
@@ -365,16 +373,17 @@ class VcfPropertyCollator:
             cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int,
             ordered: bool = Default.category_prop_getter_ordered
     ) -> "VcfPropertyCollator":
-        field_type, number = VcfPropertyCollator.get_field_type_and_number(
+        field_type, number_gt_1 = VcfPropertyCollator.get_field_type_and_number_gt_1(
             vcf_prop_name=vcf_prop_name, header=header
         )
 
-        if field_type == VcfFieldTypes.integer:
-            if number == 1:
+        if not number_gt_1:
+            if field_type == VcfFieldTypes.flag:
+                return BoolPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name)
+            elif field_type == VcfFieldTypes.integer:
                 return IntPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
                                            int_type=int_type)
-        if field_type == VcfFieldTypes.float:
-            if number == 1:
+            elif field_type == VcfFieldTypes.float:
                 return FloatPropertyCollator(
                     vcf_prop_name=vcf_prop_name, column_name=column_name, float_type=float_type,
                     cast_whole_nums_to_int=cast_whole_nums_to_int
@@ -432,7 +441,7 @@ class CategoryPropertyCollator(VcfPropertyCollator):
 
     @staticmethod
     def _is_compressible(num_categories: int, num_values: int) -> bool:
-        return num_categories < num_values // 2
+        return 0 < num_categories < num_values // 2
 
     def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
         categories = self.categories
@@ -480,6 +489,25 @@ class CategoryPropertyCollator(VcfPropertyCollator):
                 err, f"making series for sample {self.sample_id}, property {self.table_prop_name}"
             )
             raise
+
+
+class BoolPropertyCollator(VcfPropertyCollator):
+
+    def __init__(self, vcf_prop_name: str, column_name: Tuple[Optional[Text], Text]):
+        # ignore missing_value: for ints, we need to use NA
+        super().__init__(vcf_prop_name=vcf_prop_name, column_name=column_name)
+
+    def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
+        try:
+            _has_missing = any(pandas.isna(value) for value in values) if isinstance(values, Tuple) \
+                else pandas.isna(values).any()
+        except AttributeError as attribute_error:
+            common.add_exception_context(attribute_error, f"values={values}")
+            raise
+        return pandas.BooleanDtype() if _has_missing else numpy.dtype(bool)
+
+    def get_pandas_series(self, values: Sequence[EncodedVcfField]) -> pandas.Series:
+        return pandas.Series(values, dtype=self.get_dtype(values), name=self.column_name)
 
 
 class IntPropertyCollator(VcfPropertyCollator):
@@ -1429,7 +1457,7 @@ def drop_trivial_columns_multi_index(variants: pandas.DataFrame) -> pandas.DataF
 
 
 def vcf_to_pandas(
-        vcf: str,
+        vcf: str | Path,
         samples: Optional[Collection[str]] = None,
         wanted_properties: Optional[Collection[str]] = None,
         genome_origin: int = Default.genome_origin,
@@ -1514,7 +1542,7 @@ def vcf_to_pandas(
             print(f"Loading {vcf} ...", flush=True, file=sys.stderr, end="")
         else:
             print(f"Reading {','.join(wanted_properties)} from {vcf} ...", flush=True, file=sys.stderr, end="")
-    with pysam.VariantFile(vcf, 'r', threads=num_threads) as f_in:
+    with pysam.VariantFile(f"{vcf}", 'r', threads=num_threads) as f_in:
         if samples is None:
             samples = tuple(f_in.header.samples)
         else:
@@ -1832,6 +1860,9 @@ def vcf_to_dask(
                 key=lambda col: (col[0] is not None, "" if col[0] is None else col[0], col[1])
             ):
                 meta[_column] = pandas.Series([], dtype=_chunk_dict[_column].dtype)
+            meta.columns = pandas.MultiIndex.from_tuples(
+                meta.columns, names=Default.column_levels
+            )
             return _chunk_dict
         dask_divisions = []
 
@@ -1862,8 +1893,6 @@ def vcf_to_dask(
                 )
                 dask_divisions.append(index - 1)
 
-        # to do: unsure why, but passing meta results in
-        # AttributeError: 'Index' object has no attribute 'codes'
         with dask.config.set(scheduler="threads"):
             variants = dask.dataframe.from_delayed(
                 [
@@ -1878,6 +1907,7 @@ def vcf_to_dask(
                 verify_meta=False
             )
 
+    # can't set variant ID to be the index: dask REQUIRES index to be sorted
     # if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
     #     # all IDs are unique, use ID as the index
     #     variants.set_index((None, Keys.id), inplace=True)

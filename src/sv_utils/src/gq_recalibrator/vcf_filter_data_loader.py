@@ -15,6 +15,7 @@ from gq_recalibrator.vcf_tensor_data_loader_base import (
     BatchIteratorBase, VcfTensorDataLoaderBase, BatchPicklerBase, SupplementalPropertyGetter
 )
 
+from gq_recalibrator.tarred_properties_to_parquet import PropertiesScaling, PropertiesSummary
 ArrowStringArray = pandas.core.arrays.string_arrow.ArrowStringArray
 ConfidentVariants = get_truth_overlap.ConfidentVariants
 
@@ -102,7 +103,8 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
     def __init__(
             self,
             parquet_path: Path,
-            properties_scaling_json: Path,
+            properties_scaling: PropertiesScaling,
+            properties_summary: PropertiesSummary,
             process_executor: concurrent.futures.ProcessPoolExecutor,
             variants_per_batch: int,
             keep_multiallelic: bool,
@@ -119,12 +121,13 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         # basically it's the VcfTensorDataLoaderBase with variant weights property excluded and
         # explicitly no validation
         super().__init__(
-            parquet_path=parquet_path, properties_scaling_json=properties_scaling_json,
-            process_executor=process_executor, variants_per_batch=variants_per_batch,
-            keep_multiallelic=keep_multiallelic, keep_homref=keep_homref, keep_homvar=keep_homvar,
-            torch_device_kind=torch_device_kind, progress_logger=progress_logger, shuffle=False,
-            temp_dir=temp_dir, scale_bool_values=scale_bool_values,
-            random_generator=None, non_filtration_properties=non_filtration_properties,
+            parquet_path=parquet_path, properties_scaling=properties_scaling,
+            properties_summary=properties_summary, process_executor=process_executor,
+            variants_per_batch=variants_per_batch, keep_multiallelic=keep_multiallelic,
+            keep_homref=keep_homref, keep_homvar=keep_homvar, torch_device_kind=torch_device_kind,
+            progress_logger=progress_logger, shuffle=False, temp_dir=temp_dir,
+            scale_bool_values=scale_bool_values, random_generator=None,
+            non_filtration_properties=non_filtration_properties,
             supplemental_properties=supplemental_properties
         )
         self.max_look_ahead_batches = max_look_ahead_batches
@@ -191,9 +194,10 @@ class VcfFilterTensorDataLoader(VcfTensorDataLoaderBase):
         future = self.process_executor.submit(
             FilterBatchPickler.pickle_batch_tensors,
             parquet_file=self._current_parquet_file, pickle_folder=pickle_folder,
-            wanted_columns=self._wanted_columns, variants_per_batch=self.variants_per_batch,
-            num_samples=self.num_samples, num_properties=self.num_properties,
-            variant_columns=self._variant_columns, format_columns=self._format_columns,
+            wanted_columns=self._wanted_columns, properties_summary=self.properties_summary,
+            variants_per_batch=self.variants_per_batch, num_samples=self.num_samples,
+            num_properties=self.num_properties, variant_columns=self._variant_columns,
+            format_columns=self._format_columns,
             supplemental_property_getters=self.supplemental_property_getters,
             keep_multiallelic=self.keep_multiallelic, keep_homref=self.keep_homref,
             keep_homvar=self.keep_homvar
@@ -257,6 +261,7 @@ class FilterBatchPickler(BatchPicklerBase):
             parquet_file: Path,
             pickle_folder: Path,
             wanted_columns: list[str],
+            properties_summary: PropertiesSummary,
             variants_per_batch: int,
             num_samples: int,
             num_properties: int,
@@ -268,7 +273,8 @@ class FilterBatchPickler(BatchPicklerBase):
             keep_homvar: bool
     ) -> dict[str, Any]:
         # read the basic buffer into a pandas array
-        buffer = cls._load_buffer(parquet_file=parquet_file, wanted_columns=wanted_columns)
+        buffer = cls._load_buffer(parquet_file=parquet_file, wanted_columns=wanted_columns,
+                                  properties_summary=properties_summary)
         filter_batch_iterator = FilterBatchIterator(
             pickle_folder=pickle_folder, variants_per_batch=variants_per_batch,
             parquet_file=parquet_file, num_variants=buffer.shape[0]
