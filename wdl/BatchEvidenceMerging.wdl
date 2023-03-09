@@ -13,6 +13,7 @@ workflow BatchEvidenceMerging {
     File reference_dict
     File primary_contigs_fai
     Boolean subset_primary_contigs  # If true, input PE/SR/BAF files will be subsetted to primary contigs only
+    Boolean rename_samples  # If true, rename samples to IDs in the input array
     String batch
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -27,6 +28,7 @@ workflow BatchEvidenceMerging {
       reference_dict = reference_dict,
       primary_contigs_fai=primary_contigs_fai,
       subset_primary_contigs=subset_primary_contigs,
+      rename_samples=rename_samples,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
   }
@@ -40,6 +42,7 @@ workflow BatchEvidenceMerging {
       reference_dict = reference_dict,
       primary_contigs_fai=primary_contigs_fai,
       subset_primary_contigs=subset_primary_contigs,
+      rename_samples=rename_samples,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
   }
@@ -54,6 +57,7 @@ workflow BatchEvidenceMerging {
         reference_dict = reference_dict,
         primary_contigs_fai=primary_contigs_fai,
         subset_primary_contigs=subset_primary_contigs,
+        rename_samples=rename_samples,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_override
     }
@@ -89,6 +93,7 @@ task MergeEvidence {
     Array[String] samples
     File primary_contigs_fai
     Boolean subset_primary_contigs
+    Boolean rename_samples
     File reference_dict
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -127,20 +132,25 @@ task MergeEvidence {
       mkdir evidence
       touch evidence.tmp
       cut -f1 ~{primary_contigs_fai} > contigs.list
-      while read fil; do
+      while read fil sample; do
         FILENAME=$(basename $fil)
         OUT="evidence/$FILENAME"
         if [[ "~{evidence}" == "pe" ]]; then
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' '!second_file{chroms[$1]; next} {if ($1 in chroms && $4 in chroms) print }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms && $4 in chroms) print ~{if rename_samples then "$1,$2,$3,$4,$5,$6,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | bgzip > $OUT
+        elif [[ "~{evidence}" == "sr" ]]; then
+          zcat $fil \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms) print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         else
+          # baf
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' '!second_file{chroms[$1]; next} {if ($1 in chroms) print }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms) print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         fi
         echo "$OUT" >> evidence.tmp
-      done < evidence.list
+      done < <(paste evidence.list samples.list)
       mv evidence.tmp evidence.list
     fi
 
