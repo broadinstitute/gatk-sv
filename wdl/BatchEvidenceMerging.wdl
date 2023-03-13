@@ -128,7 +128,7 @@ task MergeEvidence {
     mv ~{write_lines(samples)} samples.list
 
     # For legacy evidence files that were not dictionary sorted, removing non-primary contigs fixes the GATK error
-    if ~{subset_primary_contigs}; then
+    if ~{subset_primary_contigs} || ~{rename_samples}; then
       mkdir evidence
       touch evidence.tmp
       cut -f1 ~{primary_contigs_fai} > contigs.list
@@ -137,16 +137,16 @@ task MergeEvidence {
         OUT="evidence/$FILENAME"
         if [[ "~{evidence}" == "pe" ]]; then
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms && $4 in chroms) print ~{if rename_samples then "$1,$2,$3,$4,$5,$6,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms && $4 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,$5,$6,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         elif [[ "~{evidence}" == "sr" ]]; then
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms) print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         else
           # baf
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {if ($1 in chroms) print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         fi
         echo "$OUT" >> evidence.tmp
