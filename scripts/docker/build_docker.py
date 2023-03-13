@@ -308,14 +308,14 @@ class ProjectBuilder:
                 else 1 + max((self.get_build_priority(build_dep)[0] for build_dep in build_deps.keys()), default=0)
         return self.build_priority[target_name], target_name
 
-    def _add_image_prereqs(self, build_targets: Set[str]) -> Set[str]:
+    def _add_image_prereqs(self, registry: ContainerRegistry, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
         # (This should almost never happen unless someone has messed with dockers.json or added a brand-new image.)
         prereqs = {
             prereq
             for target in build_targets
             for prereq in self.dependencies[target].docker_dependencies.keys()
-            if self.get_current_image(prereq, throw_error_on_no_image=False) is None
+            if self.get_current_image(registry, prereq, throw_error_on_no_image=False) is None
         }.difference(build_targets)
         while prereqs:
             build_targets.update(prereqs)
@@ -323,13 +323,14 @@ class ProjectBuilder:
                 prereq
                 for target in prereqs
                 for prereq in self.dependencies[target].docker_dependencies.keys()
-                if self.get_current_image(prereq, throw_error_on_no_image=False) is None
+                if self.get_current_image(registry, prereq, throw_error_on_no_image=False) is None
             }.difference(prereqs)
         return build_targets
 
-    def get_ordered_build_chain_list(self) -> List[str]:
+    def get_ordered_build_chain_list(self, registry: ContainerRegistry) -> List[str]:
         # seed with all targets that should be built
         new_targets_to_build = self._add_image_prereqs(
+            registry,
             {
                 target for target in self.project_arguments.targets
                 if not ImageBuilder(target, self).do_not_rebuild
@@ -346,6 +347,7 @@ class ProjectBuilder:
             while new_targets_to_build:
                 targets_to_build.update(new_targets_to_build)
                 new_targets_to_build = self._add_image_prereqs(
+                    registry,
                     {
                         image
                         for image, dependencies in self.dependencies.items()
@@ -420,8 +422,13 @@ class ProjectBuilder:
                 print(f"targets = {self.project_arguments.targets}")
             elif "all" in self.project_arguments.targets:
                 self.project_arguments.targets = ProjectBuilder.images_built_by_all
+
             # get targets + their dependencies in order (so that builds succeed)
-            expanded_build_targets = self.get_ordered_build_chain_list()
+            # `self.registries[next(iter(self.registries))]` implies getting the first item in the dictionary.
+            # For simplicity, we are using the first item instead of iterating through all the registries
+            # in the dictionary. However, this results in requiring the input-json of multiple
+            # repositories to be in sync in terms of the images they contain.
+            expanded_build_targets = self.get_ordered_build_chain_list(self.registries[next(iter(self.registries))])
 
             # build each required dependency
             print("Building and pushing the following targets in order:" if self.remote_docker_repos else
@@ -439,7 +446,7 @@ class ProjectBuilder:
                     )
 
                     build_time_args = {
-                        arg: self.get_current_image(self.registries[0], image_name)
+                        arg: self.get_current_image(self.registries[next(iter(self.registries))], image_name)
                         for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()
                     }
 
@@ -524,7 +531,7 @@ class ImageBuilder:  # class for building and pushing a single image
         return self.project_builder.remote_docker_repos
 
     @property
-    def remote_images(self): # -> Tuple[str, ...]:
+    def remote_images(self):
         remote_tags = (self.tag, ProjectBuilder.latest_tag) if self.project_builder.project_arguments.update_latest \
             else (self.tag,)
         return tuple(
@@ -593,7 +600,7 @@ class ImageBuilder:  # class for building and pushing a single image
         """
         Push everything related to this image to remote repo
         """
-        for (registry_name, remote_image) in self.remote_images:
+        for (_, remote_image) in self.remote_images:
             # do not push images with very restrictive licenses
             if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
                 print_colored(
@@ -668,7 +675,7 @@ def print_colored(text: str, color: str):
     print(f"{color}{text}{Colors.ENDC}")
 
 
-def __validate_json_arg(docker_repo: str, argument: str, value: List[str] | str) -> List[str]:
+def __validate_json_arg(docker_repo: str, argument: str, value: Union[str, List[str]]) -> List[str]:
     if isinstance(value, str):
         value = [value]
     for filename in value:
