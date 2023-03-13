@@ -263,7 +263,7 @@ class ProjectBuilder:
 
     def update_dockers_json(self, registry: ContainerRegistry):
         output_json = registry.output_dockers_json
-        if not output_json: # is None or not output_json or output_json == Paths.dev_null:
+        if not output_json:
             return  # no update is desired
         new_dockers_json = {
             json_key: (self.get_current_image(registry, ProjectBuilder.get_target_from_image(docker_image))
@@ -527,7 +527,7 @@ class ImageBuilder:  # class for building and pushing a single image
         return f"{self.name}:{self.tag}"
 
     @property
-    def remote_docker_repos(self) -> Dict[str, ContainerRegistry]: # Tuple[str, ...]:
+    def remote_docker_repos(self) -> Dict[str, ContainerRegistry]:
         return self.project_builder.remote_docker_repos
 
     @property
