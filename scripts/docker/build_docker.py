@@ -744,7 +744,10 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
              "If you provide one repository, you may skip specifying the --input-json"
              "and --output-json arguments, in which case, their default values will be used."
              "However, if you specify more than one repository, then each of the repositories "
-             "should have a corresponding --input-json and --output-json."
+             "should have a corresponding --input-json and --output-json. "
+             "It is currently required that the JSON files contain the same keys. "
+             "For instance, we do not currently support the case where `dockers_gcp.json` contains "
+             "`sv_base_docker: us.gcr.io/sv-base:latest` while `dockers_azure.json` misses `sv_base_docker`. "
     )
 
     docker_remote_args_group.add_argument(
@@ -759,7 +762,8 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
              "the most up-to-date docker tag for each docker image."
              "If you provide more than one docker repo, you would need to provide "
              "one input JSON file for each. The input JSON files will be used for the "
-             "docker repositories in their corresponding order."
+             "docker repositories in their corresponding order. All the JSON files "
+             "are currently required to contain the same list of docker image names."
     )
 
     docker_remote_args_group.add_argument(
