@@ -209,7 +209,7 @@ class ProjectBuilder:
         self.working_dir = None
         self.build_priority = {}
         self.registries = {}
-        for i in range(len(self.project_arguments.docker_repo)):
+        for i in range(len(self.project_arguments.docker_repo or [])):
             name = self.project_arguments.docker_repo[i]
             self.registries[name] = ContainerRegistry(
                 name=name,
