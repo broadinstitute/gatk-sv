@@ -144,9 +144,10 @@ task MergeEvidence {
             | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
             | bgzip > $OUT
         else
-          # baf
+          # baf - also uniquify records from old files
           zcat $fil \
             | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' '!_[$1"_"$2]++' - \
             | bgzip > $OUT
         fi
         echo "$OUT" >> evidence.tmp
