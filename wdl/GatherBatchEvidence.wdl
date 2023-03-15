@@ -44,6 +44,8 @@ workflow GatherBatchEvidence {
     File? ref_panel_bincov_matrix
     File? bincov_matrix
     File? bincov_matrix_index
+    Boolean subset_primary_contigs = false  # PE/SR/BAF files will be subsetted to primary contigs only (for legacy files with bad sorting)
+    Boolean rename_samples = false  # Rename samples in PE/SR/BAF to IDs in the "samples" array (always done for RD)
     Array[File?]? BAF_files         # Required for MatrixQC
     Array[File] PE_files
     Array[File]? ref_panel_PE_files
@@ -241,6 +243,9 @@ workflow GatherBatchEvidence {
       SD_files = all_SD_files,
       sd_locs_vcf = sd_locs_vcf,
       reference_dict = ref_dict,
+      primary_contigs_fai = primary_contigs_fai,
+      subset_primary_contigs = subset_primary_contigs,
+      rename_samples = rename_samples,
       batch = batch,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_bem
