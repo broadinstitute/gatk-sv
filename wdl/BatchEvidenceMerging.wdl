@@ -128,6 +128,7 @@ task MergeEvidence {
     mv ~{write_lines(samples)} samples.list
 
     # For legacy evidence files that were not dictionary sorted, removing non-primary contigs fixes the GATK error
+    # BAF records will be deduplicated by contig/coordinate
     if ~{subset_primary_contigs} || ~{rename_samples}; then
       mkdir evidence
       touch evidence.tmp

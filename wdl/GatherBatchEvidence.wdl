@@ -44,8 +44,8 @@ workflow GatherBatchEvidence {
     File? ref_panel_bincov_matrix
     File? bincov_matrix
     File? bincov_matrix_index
-    Boolean subset_primary_contigs = false  # If true, input PE/SR/BAF files will be subsetted to primary contigs only
-    Boolean rename_samples = false  # If true, rename samples to IDs in the input array
+    Boolean subset_primary_contigs = false  # PE/SR/BAF files will be subsetted to primary contigs only (for legacy files with bad sorting)
+    Boolean rename_samples = false  # Rename samples in PE/SR/BAF to IDs in the "samples" array (always done for RD)
     Array[File?]? BAF_files         # Required for MatrixQC
     Array[File] PE_files
     Array[File]? ref_panel_PE_files
