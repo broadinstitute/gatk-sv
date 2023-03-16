@@ -96,7 +96,7 @@ class ProjectBuilder:
     """
     class to track dependencies, control build and push of entire job
     """
-    github_org = "broadinstitute"
+    github_org = "productionpipelines"
     github_repo = "gatk-sv"
     # mapping from target to its dependencies
     #   each dependency is either None, or a mapping from each dependency name to the docker ARG it is passed via
@@ -105,9 +105,9 @@ class ProjectBuilder:
         "manta": ImageDependencies(
             git_dependencies="dockerfiles/manta/*"
         ),
-        "melt": ImageDependencies(
-            git_dependencies="dockerfiles/melt/*"
-        ),
+        # "melt": ImageDependencies(
+        #     git_dependencies="dockerfiles/melt/*"
+        # ),
         "wham": ImageDependencies(
             git_dependencies="dockerfiles/wham/*"
         ),
@@ -562,13 +562,6 @@ class ImageBuilder:  # class for building and pushing a single image
         Push everything related to this image to remote repo
         """
         for remote_image in self.remote_images:
-            # do not push images with very restrictive licenses
-            if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
-                print_colored(
-                    f"Refusing to push non-public image {self.name} to non us.grc.io repo at {remote_image}",
-                    Colors.RED
-                )
-                continue
             if ImageBuilder.docker_tag(self.local_image, remote_image) != 0:
                 raise RuntimeError(f"Failed to tag image ({remote_image}) for pushing to remote")
             if ImageBuilder.docker_push(remote_image) != 0:
@@ -679,12 +672,6 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         help="Docker repo to push images to. This will push images that are built "
              "this run of build_docker.py, or that currently have only a local image "
              "in --input-json."
-    )
-
-    docker_remote_args_group.add_argument(
-        "--gcr-project", type=str,
-        help="Deprecated. Used to determine which docker repo to push images to. Use "
-             "--docker-repo instead."
     )
 
     docker_remote_args_group.add_argument(
@@ -815,11 +802,6 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
             raise ValueError(
                 "Current directory has uncommitted changes or untracked files. Cautiously refusing to proceed.")
 
-    if parsed_args.gcr_project is not None:
-        if parsed_args.docker_repo is not None:
-            raise ValueError("Both --gcr-project and --docker-repo were specified, but only one is allowed.")
-        print_colored("--gcr-project is deprecated, use --docker-repo instead.", Colors.RED)
-        parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project.strip('/')}"
     return parsed_args
 
 

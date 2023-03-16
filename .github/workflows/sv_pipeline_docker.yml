@@ -156,7 +156,7 @@ jobs:
       matrix:
         python-version: ['3.8']
     env:
-      DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
+      # DOCKERS_AZURE: "./inputs/values/dockers_azure.json"
       DOCKERS_GCP: "./inputs/values/dockers.json"
     steps:
       - name: Checkout code
@@ -180,15 +180,13 @@ jobs:
       - name: Setup gcloud CLI
         uses: google-github-actions/setup-gcloud@v0.3.0
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_GCR_SA_KEY }}
-          # xref: https://github.com/google-github-actions/setup-gcloud#inputs
-          # If you need to set `export_default_credentials: true`
-          # make sure to pass the `--disable-git-protect` flag to
-          # build_docker.py; because the setting export_default_credentials
-          # to true will cause creating an untracked file in the root of
-          # GATK-SV cloned directory which will cause build_docker.py to
-          # raise an exception about the uncommitted file.
+          project_id: cpg-common
+
+      - name: gcloud auth
+        uses: 'google-github-actions/auth@v0'
+        with:
+          # secret needs to be set up for this repo
+          credentials_json: ${{ secrets.GH_IMAGES_DEPLOYER_JSON }}
 
       - name: Configure Docker using gcloud
         # This step uses gcloud to configure docker credentials to access GCR
@@ -200,7 +198,7 @@ jobs:
         # experimental features are enabled, hence the features are enabled
         # in this flag.
         run: |
-          gcloud auth configure-docker
+          gcloud auth configure-docker australia-southeast1-docker.pkg.dev
           tmp=$(mktemp)
           sudo jq '.+{experimental:true}' /etc/docker/daemon.json > "$tmp"
           sudo mv "$tmp" /etc/docker/daemon.json
@@ -212,7 +210,7 @@ jobs:
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --docker-repo us.gcr.io/${{ secrets.GCP_PROJECT_ID }}/gatk-sv \
+            --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images/ \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_GCP \
             --output-json $DOCKERS_GCP
@@ -220,31 +218,32 @@ jobs:
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
           echo "::set-output name=CHANGED::$CHANGED"
 
-      - name: Azure login
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ secrets.AZ_CR }}
-          username: ${{ secrets.AZ_USERNAME }}
-          password: ${{ secrets.AZ_PASSWORD }}
-
-      - name: Build and Publish Docker Images to ACR
-        run: |
-          python ./scripts/docker/build_docker.py \
-            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
-            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --docker-repo ${{ secrets.AZ_CR }} \
-            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-            --input-json $DOCKERS_AZURE \
-            --output-json $DOCKERS_AZURE \
-            --prune-after-each-image \
-            --disable-git-protect
-
-      - name: Commit Changes to dockers_*.json
-        if: steps.build_and_publish.outputs.CHANGED
-        run: |
-          COMMIT_SHA=${{ needs.build_args_job.outputs.head_sha }}
-          git config --global user.name 'gatk-sv-bot'
-          git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
-          git commit $DOCKERS_AZURE $DOCKERS_GCP -m "Update docker images list, triggered by "${COMMIT_SHA::8}
-          git pull --rebase origin main
-          git push
+## commented out Azure versions
+#      - name: Azure login
+#        uses: azure/docker-login@v1
+#        with:
+#          login-server: ${{ secrets.AZ_CR }}
+#          username: ${{ secrets.AZ_USERNAME }}
+#          password: ${{ secrets.AZ_PASSWORD }}
+#
+#      - name: Build and Publish Docker Images to ACR
+#        run: |
+#          python ./scripts/docker/build_docker.py \
+#            --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
+#            --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
+#            --docker-repo ${{ secrets.AZ_CR }} \
+#            --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
+#            --input-json $DOCKERS_AZURE \
+#            --output-json $DOCKERS_AZURE \
+#            --prune-after-each-image \
+#            --disable-git-protect
+#
+#      - name: Commit Changes to dockers_*.json
+#        if: steps.build_and_publish.outputs.CHANGED
+#        run: |
+#          COMMIT_SHA=${{ needs.build_args_job.outputs.head_sha }}
+#          git config --global user.name 'gatk-sv-bot'
+#          git config --global user.email '101641599+gatk-sv-bot@users.noreply.github.com'
+#          git commit $DOCKERS_AZURE $DOCKERS_GCP -m "Update docker images list, triggered by "${COMMIT_SHA::8}
+#          git pull --rebase origin main
+#          git push
