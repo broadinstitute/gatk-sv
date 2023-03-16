@@ -126,6 +126,7 @@ VcfMappingClasses = (pysam.libcbcf.VariantRecordSamples, pysam.libcbcf.VariantRe
 
 
 class VcfFieldTypes:
+    flag = "Flag"
     string = "String"
     integer = "Integer"
     float = "Float"
@@ -185,8 +186,13 @@ class Default:
     use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
 
 
-def _number_more_than_1(vcf_number: str) -> bool:
-    return vcf_number > 1 if isinstance(vcf_number, int) else True
+def _number_more_than_1(vcf_number: Union[str, int]) -> bool:
+    if isinstance(vcf_number, str):
+        try:
+            return int(vcf_number) > 1
+        except ValueError:
+            return True
+    return vcf_number > 1
 
 
 def _get_genotype_extractor(vcf_prop_name: str, header: pysam.VariantHeader) -> GenotypePropertyExtractor:
@@ -285,7 +291,7 @@ class VcfPropertyCollator:
             raise
 
     @staticmethod
-    def get_field_type_and_number(vcf_prop_name: str, header: pysam.VariantHeader) -> (str, int):
+    def get_field_type_and_number_gt_1(vcf_prop_name: str, header: pysam.VariantHeader) -> (str, bool):
         if vcf_prop_name in header.info:
             # get from info
             header_field = header.info.get(vcf_prop_name)
@@ -294,7 +300,7 @@ class VcfPropertyCollator:
             header_field = header.formats.get(vcf_prop_name)
             field_type, number = header_field.type, header_field.number
         elif vcf_prop_name == VcfKeys.filter:
-            field_type, number = VcfFieldTypes.string, -1
+            field_type, number = VcfFieldTypes.string, 2
         else:
             # get property directly from record. These are fields defined in the vcf spec
             if vcf_prop_name in {VcfKeys.pos, VcfKeys.stop, VcfKeys.rlen}:
@@ -304,10 +310,11 @@ class VcfPropertyCollator:
             elif vcf_prop_name in {VcfKeys.id, VcfKeys.chrom, Keys.contig, VcfKeys.alts, VcfKeys.alleles, VcfKeys.ref}:
                 # note: pysam allows querying chrom as contig, so check for both here in case user overrides default
                 # properties
-                field_type, number = VcfFieldTypes.string, -1
+                field_type, number = VcfFieldTypes.string, 2
             else:
                 raise ValueError(f"Unknown vcf property '{vcf_prop_name}'")
-        return field_type, number
+        number_gt_1 = _number_more_than_1(number)
+        return field_type, number_gt_1
 
     @staticmethod
     def get_collator(
@@ -320,13 +327,16 @@ class VcfPropertyCollator:
             cast_whole_nums_to_int: bool = Default.cast_whole_nums_to_int,
             ordered: bool = Default.category_prop_getter_ordered
     ) -> "VcfPropertyCollator":
-        field_type, number = VcfPropertyCollator.get_field_type_and_number(vcf_prop_name=vcf_prop_name, header=header)
+        field_type, number_gt_1 = VcfPropertyCollator.get_field_type_and_number_gt_1(
+            vcf_prop_name=vcf_prop_name, header=header
+        )
 
-        if field_type == VcfFieldTypes.integer:
-            if number == 1:
+        if not number_gt_1:
+            if field_type == VcfFieldTypes.flag:
+                return BoolPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name)
+            elif field_type == VcfFieldTypes.integer:
                 return IntPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name, int_type=int_type)
-        if field_type == VcfFieldTypes.float:
-            if number == 1:
+            elif field_type == VcfFieldTypes.float:
                 return FloatPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
                                              float_type=float_type, cast_whole_nums_to_int=cast_whole_nums_to_int)
         return CategoryPropertyCollator(vcf_prop_name=vcf_prop_name, column_name=column_name,
@@ -374,7 +384,7 @@ class CategoryPropertyCollator(VcfPropertyCollator):
 
     @staticmethod
     def _is_compressable(num_categories: int, num_values: int) -> bool:
-        return num_categories < num_values // 2
+        return 0 < num_categories < num_values // 2
 
     def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
         categories = self.categories
@@ -408,6 +418,25 @@ class CategoryPropertyCollator(VcfPropertyCollator):
             common.add_exception_context(err,
                                          f"making series for sample {self.sample_id}, property {self.table_prop_name}")
             raise
+
+
+class BoolPropertyCollator(VcfPropertyCollator):
+
+    def __init__(self, vcf_prop_name: str, column_name: Tuple[Optional[Text], Text]):
+        # ignore missing_value: for ints, we need to use NA
+        super().__init__(vcf_prop_name=vcf_prop_name, column_name=column_name)
+
+    def get_dtype(self, values: Sequence[EncodedVcfField]) -> dtype:
+        try:
+            _has_missing = any(pandas.isna(value) for value in values) if isinstance(values, Tuple) \
+                else pandas.isna(values).any()
+        except AttributeError as attribute_error:
+            common.add_exception_context(attribute_error, f"values={values}")
+            raise
+        return pandas.BooleanDtype() if _has_missing else numpy.dtype(bool)
+
+    def get_pandas_series(self, values: Sequence[EncodedVcfField]) -> pandas.Series:
+        return pandas.Series(values, dtype=self.get_dtype(values), name=self.column_name)
 
 
 class IntPropertyCollator(VcfPropertyCollator):
