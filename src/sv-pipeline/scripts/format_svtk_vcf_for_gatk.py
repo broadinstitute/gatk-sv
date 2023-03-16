@@ -152,6 +152,11 @@ def convert(record: pysam.VariantRecord,
     contig = record.contig
     new_record = vcf_out.new_record(id=record.id, contig=contig, start=record.start, stop=record.stop, alleles=alleles,
                                     info={key: value for key, value in record.info.items() if key not in remove_infos})
+    # Version of htsjdk currently in gatk only supports these base alleles
+    if new_record.ref in ['A', 'C', 'G', 'T', 'a', 'c', 'g', 't', 'N', 'n']:
+        new_record.ref = new_record.ref
+    else:
+        new_record.ref = 'N'
     # fix SVLEN, STRANDS, CHR2, and END2 where needed
     if svtype == 'INS':
         new_record.info['SVLEN'] = record.info['SVLEN']
