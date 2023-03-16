@@ -7,8 +7,8 @@
 
   "RecalibrateGq.annotations_vcf": {{ test_batch.concordance_vcf | tojson }},
   "RecalibrateGq.annotations_vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
-  "RecalibrateGq.format_keys_to_transfer": ["CONC_ST"],
-  "RecalibrateGq.info_keys_to_transfer": ["STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF"],
+  "RecalibrateGq.format_keys_to_transfer": "CONC_ST",
+  "RecalibrateGq.info_keys_to_transfer": "STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF",
 
   "RecalibrateGq.standardize_vcf_args": [],
   "RecalibrateGq.recalibrate_gq_args": [
