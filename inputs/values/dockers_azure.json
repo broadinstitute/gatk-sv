@@ -30,7 +30,7 @@
   "sv-pipeline-virtual-env": "vahid.azurecr.io/gatk-sv/sv-pipeline-virtual-env:2023-02-01-v0.26.8-beta-9b25c72d",
   "samtools-cloud-virtual-env": "vahid.azurecr.io/vjalili/samtools-cloud-virtual-env:5994670",
   "sv-utils-env": "vahid.azurecr.io/gatk-sv/sv-utils-env:2023-02-01-v0.26.8-beta-9b25c72d",
-  "sv_utils_docker": "vahid.azurecr.io/gatk-sv/sv-utils:2023-02-01-v0.26.8-beta-9b25c72d",
+  "sv_utils_docker": "vahid.azurecr.io/gatk-sv/sv-utils:2023-03-16-v0.27-beta-906c6272",
   "gq_recalibrator_docker": "vahid.azurecr.io/tbrookin/gatk:0a7e1d86f",
   "str": "vahid.azurecr.io/vjalili/str:5994670"
 }
