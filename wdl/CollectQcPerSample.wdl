@@ -98,13 +98,15 @@ task CollectVidsPerSample {
     # sample, and write one .tsv file per sample to output directory
     if [ ~{vcf_format_has_cn} == "true" ]; then
       bcftools view -S ~{samples_list} ~{vcf} \
-      | bcftools view --min-ac 1 \
+      | bcftools +fill-tags -- -t AC \
+      | bcftools view -i 'SVTYPE=="CNV" || AC>0' \
       | bcftools query -f '[%SAMPLE\t%ID\t%ALT\t%GT\t%GQ\t%CN\t%CNQ\n]' \
       | awk '{OFS="\t"; gt = $4; gq = $5; if ($3 == "<CNV>") { gq = $7; if ($6 == 2) { gt = "0/0" } else if ($6 == 1 || $6 == 3) { gt = "0/1" } else { gt = "1/1"} }; print $1, $2, gt, gq}' \
       | awk -v outprefix="~{outdirprefix}" '$3 != "0/0" && $3 != "./." {OFS="\t"; print $2, $3, $4 >> outprefix"/"$1".VIDs_genotypes.txt" }'
     else
       bcftools view -S ~{samples_list} ~{vcf} \
-      | bcftools view --min-ac 1 \
+      | bcftools +fill-tags -- -t AC \
+      | bcftools view -i 'SVTYPE=="CNV" || AC>0' \
       | bcftools query -f '[%SAMPLE\t%ID\t%ALT\t%GT\t%GQ\n]' \
       | awk '{OFS="\t"; gt = $4; gq = $5; if ($3 ~ /CN0/) { if ($4 == "0/2") { gt = "0/0" } else if ($4 == "0/1" || $4 == "0/3") { gt = "0/1" } else { gt = "1/1"} }; print $1, $2, gt, gq}' \
       | awk -v outprefix="~{outdirprefix}" '$3 != "0/0" && $3 != "./." {OFS="\t"; print $2, $3, $4 >> outprefix"/"$1".VIDs_genotypes.txt" }'

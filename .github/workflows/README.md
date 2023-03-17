@@ -56,7 +56,7 @@ specifically:
 
 
 3. `Publish`. This job is triggered when a PR is merged to a commit 
-  is pushed to the `master` branch. Similar to the `Test Images Build` job,
+  is pushed to the `main` branch. Similar to the `Test Images Build` job,
   this job builds Docker images and fails if the build process was 
   unsuccessful. However, in addition, this job pushes the built images
   to GCR. To authorize access to GCR, this job assumes a GCP service 
@@ -133,7 +133,7 @@ In order to set up the `Deploy` environment, you may take the following steps:
 
 Once the `Deploy` environment is set up, and the `Required reviewers`
 option under the section `Environment protection rules` is checked, 
-with every push to the `master` branch (e.g., merging a PR), the
+with every push to the `main` branch (e.g., merging a PR), the
 DIW execution will pause at the `Publish` job with the following 
 message: 
 

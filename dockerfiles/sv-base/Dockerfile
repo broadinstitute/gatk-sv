@@ -24,9 +24,8 @@ RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-upgrade --no-install-recommends \
                  $GATK_BUILD_DEP $GATK_RUN_DEP
 # clone requested GATK_COMMIT
-RUN git clone https://github.com/broadinstitute/gatk.git && \
+RUN GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
-    git lfs install && \
     git checkout ${GATK_COMMIT}
 # build GATK_JAR
 RUN cd gatk && \

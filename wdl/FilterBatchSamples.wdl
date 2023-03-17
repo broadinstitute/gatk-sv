@@ -26,7 +26,7 @@ workflow FilterBatchSamples {
     String sv_base_mini_docker
     String linux_docker
     RuntimeAttr? runtime_attr_identify_outliers
-    RuntimeAttr? runtime_attr_exclude_outliers
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_cat_outliers
     RuntimeAttr? runtime_attr_filter_samples
     RuntimeAttr? runtime_attr_ids_from_vcf
@@ -69,13 +69,14 @@ workflow FilterBatchSamples {
 
   scatter (i in range(num_algorithms)) {
     if (defined(vcfs[i])) {
-      call filter_outliers.ExcludeOutliers {
+      call util.SubsetVcfBySamplesList {
         input:
           vcf = select_first([vcfs[i]]),
-          outliers_list = CatOutliers.outliers_list,
-          outfile = "${batch}.${algorithms[i]}.outliers_removed.vcf.gz",
+          list_of_samples = CatOutliers.outliers_file,
+          outfile_name = "${batch}.${algorithms[i]}.outliers_removed.vcf.gz",
+          remove_samples = true,
           sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_override = runtime_attr_exclude_outliers
+          runtime_attr_override = runtime_attr_subset_vcf
       }
     }
   }
@@ -97,8 +98,8 @@ workflow FilterBatchSamples {
       runtime_attr_override = runtime_attr_filter_samples
   }
 
-  Array[File] pesr_vcfs_no_outliers = select_all([ExcludeOutliers.vcf_no_outliers[0], ExcludeOutliers.vcf_no_outliers[1], ExcludeOutliers.vcf_no_outliers[2], ExcludeOutliers.vcf_no_outliers[3], ExcludeOutliers.vcf_no_outliers[4]])
-  Array[File] pesr_vcfs_no_outliers_index = select_all([ExcludeOutliers.vcf_no_outliers_index[0], ExcludeOutliers.vcf_no_outliers_index[1], ExcludeOutliers.vcf_no_outliers_index[2], ExcludeOutliers.vcf_no_outliers_index[3], ExcludeOutliers.vcf_no_outliers_index[4]])
+  Array[File] pesr_vcfs_no_outliers = select_all([SubsetVcfBySamplesList.vcf_subset[0], SubsetVcfBySamplesList.vcf_subset[1], SubsetVcfBySamplesList.vcf_subset[2], SubsetVcfBySamplesList.vcf_subset[3]])
+  Array[File] pesr_vcfs_no_outliers_index = select_all([SubsetVcfBySamplesList.vcf_subset_index[0], SubsetVcfBySamplesList.vcf_subset_index[1], SubsetVcfBySamplesList.vcf_subset_index[2], SubsetVcfBySamplesList.vcf_subset_index[3]])
   call tasks_mcv.ConcatVcfs as MergePesrVcfs {
     input:
       vcfs=pesr_vcfs_no_outliers,
@@ -110,17 +111,17 @@ workflow FilterBatchSamples {
   }
 
   output {
-    File? outlier_filtered_manta_vcf = ExcludeOutliers.vcf_no_outliers[0]
-    File? outlier_filtered_wham_vcf = ExcludeOutliers.vcf_no_outliers[1]
-    File? outlier_filtered_melt_vcf = ExcludeOutliers.vcf_no_outliers[2]
-    File? outlier_filtered_scramble_vcf = ExcludeOutliers.vcf_no_outliers[3]
-    File? outlier_filtered_depth_vcf = ExcludeOutliers.vcf_no_outliers[4]
+    File? outlier_filtered_manta_vcf = SubsetVcfBySamplesList.vcf_subset[0]
+    File? outlier_filtered_wham_vcf = SubsetVcfBySamplesList.vcf_subset[1]
+    File? outlier_filtered_melt_vcf = SubsetVcfBySamplesList.vcf_subset[2]
+    File? outlier_filtered_scramble_vcf = SubsetVcfBySamplesList.vcf_subset[3]
+    File? outlier_filtered_depth_vcf = SubsetVcfBySamplesList.vcf_subset[4]
 
-    File? outlier_filtered_manta_vcf_index = ExcludeOutliers.vcf_no_outliers_index[0]
-    File? outlier_filtered_wham_vcf_index = ExcludeOutliers.vcf_no_outliers_index[1]
-    File? outlier_filtered_melt_vcf_index = ExcludeOutliers.vcf_no_outliers_index[2]
-    File? outlier_filtered_scramble_vcf_index = ExcludeOutliers.vcf_no_outliers_index[3]
-    File? outlier_filtered_depth_vcf_index = ExcludeOutliers.vcf_no_outliers_index[4]
+    File? outlier_filtered_manta_vcf_index = SubsetVcfBySamplesList.vcf_subset_index[0]
+    File? outlier_filtered_wham_vcf_index = SubsetVcfBySamplesList.vcf_subset_index[1]
+    File? outlier_filtered_melt_vcf_index = SubsetVcfBySamplesList.vcf_subset_index[2]
+    File? outlier_filtered_scramble_vcf_index = SubsetVcfBySamplesList.vcf_subset_index[3]
+    File? outlier_filtered_depth_vcf_index = SubsetVcfBySamplesList.vcf_subset_index[4]
 
     File outlier_filtered_pesr_vcf = MergePesrVcfs.concat_vcf
     File outlier_filtered_pesr_vcf_index = MergePesrVcfs.concat_vcf_idx

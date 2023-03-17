@@ -3,38 +3,58 @@ name: Test WDLs
 on:
   push:
     branches:
-      - master
+      - main
     paths:
       - 'wdl/**'
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - 'wdl/**'
 
 jobs:
-  miniwdl_job:
+  syntax_test_job:
     runs-on: ubuntu-22.04
-    name: miniwdl validation
+    name: Check WDL Syntax
     strategy:
       matrix:
         python-version: ['3.8']
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Setup Python
         uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install dependencies
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          # See https://github.com/actions/setup-java for the available options.
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup
         run: |
           python -m pip install --upgrade pip
+          # Setup for running miniwdl
           pip install miniwdl
+          
+          # Setup for running womtool
+          pip install jinja2==3.1.2
+          wget -O womtool.jar https://github.com/broadinstitute/cromwell/releases/download/84/womtool-84.jar
+          echo \
+            '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' \
+            > inputs/values/google_cloud.my_project.json
+          scripts/inputs/build_default_inputs.sh -d . -c google_cloud.my_project
 
-      - name: Run Tests
+      - name: Test with Miniwdl
         run: |
           python scripts/test/miniwdl_validation.py \
             --imports-dir wdl \
             wdl/*.wdl
+
+      - name: Test with WOMtool
+        run: |
+          scripts/test/validate.sh -d . -j womtool.jar

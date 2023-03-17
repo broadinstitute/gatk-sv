@@ -650,20 +650,25 @@ task SubsetVcfBySamplesList {
   input {
     File vcf
     File? vcf_idx
-    File list_of_samples_to_keep
-    String subset_name = "subset"
+    File list_of_samples  # List of samples to keep (default, remove_samples = false) or remove (remove_samples = true)
+    String? outfile_name
+    Boolean remove_samples = false  # If false (default), keep samples in provided list. If true, remove them.
+    Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String vcf_subset_filename = basename(vcf, ".vcf.gz") + ".~{subset_name}.vcf.gz"
+  String vcf_subset_filename = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".subset.vcf.gz"])
   String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
+
+  String remove_private_sites_flag = if remove_private_sites then " | bcftools +fill-tags -- -t AC | bcftools view -i 'SVTYPE==\"CNV\" || AC>0' " else ""
+  String complement_flag = if remove_samples then "^" else ""
 
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
     mem_gb: 3.75,
-    disk_gb: ceil(10.0 + (input_size * 1.5)),
+    disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -676,11 +681,10 @@ task SubsetVcfBySamplesList {
     set -euo pipefail
 
     bcftools view \
-      -S ~{list_of_samples_to_keep} \
+      -S ~{complement_flag}~{list_of_samples} \
       --force-samples \
       ~{vcf} \
-    | bcftools view \
-      --min-ac 1 \
+      ~{remove_private_sites_flag} \
       -O z \
       -o ~{vcf_subset_filename}
 
@@ -690,7 +694,7 @@ task SubsetVcfBySamplesList {
 
   output {
     File vcf_subset = vcf_subset_filename
-    File vcf_subset_idx = vcf_subset_idx_filename
+    File vcf_subset_index = vcf_subset_idx_filename
   }
 
   runtime {

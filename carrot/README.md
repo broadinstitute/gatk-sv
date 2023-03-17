@@ -133,7 +133,7 @@ a publicly accessible GitHub repository. Therefore, in order to define/update
 tests, `carrot_helper` requires to know the GitHub repository and the git 
 branch where the test and evaluation WDLs are available. If you want to run 
 existing tests, you may use `https://github.com/broadinstitute/gatk-sv` and
-`master` for repository and branch respectively. If you are developing 
+`main` for repository and branch respectively. If you are developing 
 a carrot test for a WDL, then you may set the repository to your fork
 of `github.com/broadinstitute/gatk-sv` and set the branch to your feature
 branch.
@@ -181,7 +181,7 @@ and any necessary mapping between them) in the `.carrot_pipelines.json`.
 
 The `.carrot_pipelines.json` file tracked on git contains metadata belonging
 to the `carrot` resources defined for tests and WDLs available from the 
-`master` branch of the 
+`main` branch of the 
 [`github.com/broadinstitute/gatk-sv`](https://github.com/broadinstitute/gatk-sv) 
 repository on a `carrot` server maintained for internal use at the Broad 
 institute. You may use this file to run and updated (read the following)
