@@ -138,7 +138,7 @@ jobs:
           cd ./scripts/docker/
           python build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
-            --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images/ \
+            --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --prune-after-each-image \
@@ -212,7 +212,7 @@ jobs:
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images/ \
+            --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_GCP \
             --output-json $DOCKERS_GCP \
