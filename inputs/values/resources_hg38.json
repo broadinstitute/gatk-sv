@@ -40,14 +40,11 @@
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
   "recalibrate_gq_genome_tracks": [
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38-RepeatMasker.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38-Segmental-Dups.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38-Simple-Repeats.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_gaps.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_umap_s100.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_umap_s24.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_umap_s36.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_umap_s50.bed.gz"
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
   ],
 
   "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
