@@ -140,7 +140,8 @@ jobs:
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
-            --prune-after-each-image
+            --prune-after-each-image \
+            --dry-run
 
   publish_job:
     # This job first configures gcloud with the authentication of a
