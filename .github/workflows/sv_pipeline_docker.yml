@@ -206,7 +206,7 @@ jobs:
           sudo mv "$tmp" /etc/docker/daemon.json
           sudo systemctl restart docker.service
 
-      - name: Build and Publish Docker Images to GCR
+      - name: Build and Publish Docker Images to Artifact Registry
         id: build_and_publish
         run: |
           python ./scripts/docker/build_docker.py \
