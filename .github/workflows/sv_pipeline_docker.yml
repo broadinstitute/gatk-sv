@@ -213,7 +213,8 @@ jobs:
             --docker-repo australia-southeast1-docker.pkg.dev/cpg-common/images/ \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_GCP \
-            --output-json $DOCKERS_GCP
+            --output-json $DOCKERS_GCP \
+            --dry-run
           
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
           echo "::set-output name=CHANGED::$CHANGED"

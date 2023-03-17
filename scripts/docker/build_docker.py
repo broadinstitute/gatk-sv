@@ -256,10 +256,10 @@ class ProjectBuilder:
         old_dockers_json = ProjectBuilder.load_json(output_json)
 
         if new_dockers_json != old_dockers_json:
+            print(json.dumps(new_dockers_json, indent=2))
             # update dockers.json with the new data
             if self.project_arguments.dry_run:
                 print(f"Write output dockers json at {output_json}")
-                print(json.dumps(new_dockers_json, indent=2))
             else:
                 with open(output_json, "w") as f_out:
                     json.dump(new_dockers_json, f_out, indent=2)
