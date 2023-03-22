@@ -12,25 +12,25 @@ workflow VaPoRVcf {
     File ref_fasta
     File ref_fai
     File ref_dict
-    Array[String] contigs
+    File contigs
     String vapor_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_Vapor 
+    RuntimeAttr? runtime_attr_vapor 
     RuntimeAttr? runtime_attr_bcf2vcf
     RuntimeAttr? runtime_attr_vcf2bed
-    RuntimeAttr? runtime_attr_SplitVcf
-    RuntimeAttr? runtime_attr_ConcatBeds
+    RuntimeAttr? runtime_attr_split_vcf
+    RuntimeAttr? runtime_attr_concat_beds
   }
 
-  scatter ( contig in contigs ) {
+  scatter ( contig in read_lines(contigs) ) {
 
       call tasks10.SplitVcf as SplitVcf{
         input:
           contig = contig,
           vcf_file = vcf_file,
           sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_SplitVcf
+          runtime_attr_override=runtime_attr_split_vcf
       }
 
       call tasks10.vcf2bed as vcf2bed{
@@ -54,7 +54,7 @@ workflow VaPoRVcf {
           ref_fai = ref_fai,
           ref_dict = ref_dict,
           vapor_docker = vapor_docker,
-          runtime_attr_override = runtime_attr_Vapor
+          runtime_attr_override = runtime_attr_vapor
       }
   }
 
@@ -64,7 +64,7 @@ workflow VaPoRVcf {
       shard_plots = RunVaPoR.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_ConcatBeds
+      runtime_attr_override=runtime_attr_concat_beds
       }
 
   output{
@@ -152,7 +152,7 @@ task RunVaPoRWithCram{
     mem_gb: 15, 
     disk_gb: 30,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 

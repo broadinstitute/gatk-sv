@@ -95,7 +95,7 @@ task LocalizeCram {
     mem_gb: 15, 
     disk_gb: 40,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
@@ -147,7 +147,7 @@ task LocalizeCramRequestPay {
     mem_gb: 3.75, 
     disk_gb: 10,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
@@ -197,7 +197,7 @@ task SplitBed {
     mem_gb: 3.75, 
     disk_gb: 10,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
@@ -275,7 +275,7 @@ task SplitVcf {
     mem_gb: 3.75, 
     disk_gb: 10,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
@@ -323,7 +323,7 @@ task vcf2bed {
     mem_gb: 10, 
     disk_gb: 100,
     boot_disk_gb: 10,
-    preemptible_tries: 0,
+    preemptible_tries: 3,
     max_retries: 1
   }
 
