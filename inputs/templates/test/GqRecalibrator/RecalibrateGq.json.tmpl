@@ -1,6 +1,6 @@
 {
   "RecalibrateGq.vcf": {{ test_batch.clean_vcf | tojson }},
-  "RecalibrateGq.vcf_index": {{ test_batch.clean_vcf | tojson }},
+  "RecalibrateGq.vcf_index": {{ test_batch.clean_vcf_index | tojson }},
   "RecalibrateGq.standardize_vcf": true,
   "RecalibrateGq.gq_recalibrator_model_file":  {{ test_batch.recalibrate_gq_model_file | tojson }},
   "RecalibrateGq.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},

@@ -1,8 +1,8 @@
 {
-  "TrainGqRecalibrator.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
-  "TrainGqRecalibrator.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
+  "TrainGqRecalibrator.train_vcf": {{ test_batch.clean_vcf | tojson }},
+  "TrainGqRecalibrator.train_vcf_index": {{ test_batch.clean_vcf_index | tojson }},
   "TrainGqRecalibrator.standardize_vcf": true,
-  "TrainGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
+  "TrainGqRecalibrator.ped_file": {{ test_batch.ped_file | tojson }},
   "TrainGqRecalibrator.truth_vcfs": [
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
     "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
