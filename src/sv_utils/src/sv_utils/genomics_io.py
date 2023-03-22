@@ -133,6 +133,7 @@ class Keys:
     cnq = VcfKeys.cnq.lower()
     rd_cn = VcfKeys.rd_cn.lower()
     rd_gq = VcfKeys.rd_gq.lower()
+    vapor_gt = VaporKeys.gt.lower()
     vapor_qs = VaporKeys.qs.lower()
     vapor_gs = VaporKeys.gs.lower()
     vapor_read_scores = VaporKeys.read_scores.lower()
@@ -196,7 +197,6 @@ class Default:
     location_columns = frozenset({Keys.begin, Keys.end, Keys.bnd_end_2, Keys.other_begin, Keys.other_end})
     use_copy_number = False
     use_cn = False  # Note: By the end of CleanVcf, CN/CNQ is identical to RD_CN/RD_GQ when it's present
-    column_levels = (Keys.sample_id, Keys.property)
 
 
 def _number_more_than_1(vcf_number: str) -> bool:
@@ -1286,7 +1286,7 @@ def get_vcf_variant_ids(vcf: str) -> pandas.Index:
 
 def drop_trivial_columns_multi_index(variants: pandas.DataFrame) -> pandas.DataFrame:
     if len(variants.columns) > 0:
-        for level in Default.column_levels:
+        for level in (Keys.sample_id, Keys.property):
             level_values = variants.columns.get_level_values(level)
             # noinspection PyUnresolvedReferences
             if level_values.isnull().all() or (level_values == level_values[0]).all():
@@ -1459,7 +1459,7 @@ def vcf_to_pandas(
         variants = pandas.DataFrame(
             {property_collator.column_name: property_collator.get_pandas_series(property_values)
              for property_collator, property_values in zip(property_collators, zip(*encoded_rows_iter))}
-        ).rename_axis(columns=Default.column_levels)\
+        ).rename_axis(columns=(Keys.sample_id, Keys.property))\
             .sort_index(axis=1, level=Keys.sample_id)
 
     if variants[(None, Keys.id)].nunique() == len(variants[(None, Keys.id)]):
@@ -1904,12 +1904,11 @@ def assign_dataframe_column(
         # adding a single column (e.g. adding an info field to a variants DataFrame)
         if isinstance(df.columns, pandas.MultiIndex):
             values.name = (None, name)
-            is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
+            is_new_prop = name in df.columns.get_level_values(level=Keys.property)
             if is_new_prop:
-                df = pandas.concat((df, values), axis=1)
+                df = df.join(values)
             else:
                 df.loc[:, (None, name)] = values
-
             # need to sort to put the table back into well-organized form
             sort_multi_index_dataframe_columns(df)
         else:
@@ -1919,12 +1918,12 @@ def assign_dataframe_column(
         # adding a multi-index property (e.g. adding a genotype field to a variants DataFrame)
         if not isinstance(df.columns, pandas.MultiIndex):
             # adding a multi-index property to a regular DataFrame: need to promote df to multi-index
-            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=Default.column_levels)
+            df.columns = pandas.MultiIndex.from_product([[None], df.columns], names=[Keys.sample_id, Keys.property])
 
-        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=Default.column_levels)
+        values.columns = pandas.MultiIndex.from_product([values.columns, [name]], names=[Keys.sample_id, Keys.property])
         is_new_prop = name not in df.columns.get_level_values(level=Keys.property)
         if is_new_prop:
-            df = pandas.concat((df, values), axis=1)
+            df = df.join(values)
         else:
             df.loc[:, (slice(None), name)] = values
         # need to sort to put the table back into well-organized form

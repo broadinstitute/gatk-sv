@@ -75,7 +75,8 @@ class Default:
     use_copy_number = genomics_io.Default.use_copy_number
     p_misaligned_long_read = 0.1
     vapor_good_alt_reads_threshold = 2
-    min_ref_reads_threshold = 6
+    vapor_bad_alt_reads_threshold = 0
+    vapor_bad_cov_threshold = 5
 
 
 class SvTypeCutoffInfo:
@@ -376,7 +377,6 @@ def split_vcf_dataframe(
                pandas.NA: carrier status is unknown (due to no-calls)
     """
     # variant properties are columns where sample = None (as opposed to sample properties)
-    # noinspection PyTypeChecker
     variant_properties = variants.xs(None, level=Keys.sample_id, axis=1)
 
     for prop in [Keys.contig, Keys.begin, Keys.end, Keys.svtype, Keys.svlen]:
@@ -1025,7 +1025,7 @@ def get_trios_overlap_info(
     )
 
 
-def _get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
+def get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
     p_gt_bad = 10 ** -vapor_variants[Keys.gq]
     return pandas.DataFrame(
@@ -1037,7 +1037,7 @@ def _get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFra
     )
 
 
-def _get_vapor_p_non_ref(
+def get_vapor_p_non_ref(
         vapor_variants: pandas.DataFrame,
         p_misaligned: float = Default.p_misaligned_long_read
 ) -> pandas.DataFrame:
@@ -1061,20 +1061,21 @@ def _get_vapor_p_non_ref(
     )
 
 
-def _get_vapor_p_non_ref_threshold(
+def get_vapor_p_non_ref_threshold(
         vapor_variants: pandas.DataFrame,
         good_alt_reads_threshold: int = Default.vapor_good_alt_reads_threshold,
-        min_ref_reads_threshold: int = Default.min_ref_reads_threshold
+        bad_alt_reads_threshold: int = Default.vapor_bad_alt_reads_threshold,
+        bad_cov_threshold: int = Default.vapor_bad_cov_threshold
 ) -> pandas.DataFrame:
     """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
     vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
         lambda scores: [float(score) for score in scores.split(',')] if scores else []
     )
     num_alt_reads = vapor_read_scores.apply(lambda _scores: sum(1 for _score in _scores if _score > 0))
-    num_reads = vapor_read_scores.apply(len)
+    num_reads = vapor_read_scores.apply(lambda _scores: len(_scores))
     return pandas.DataFrame(
         numpy.where(
-            numpy.logical_and(num_alt_reads == 0, num_reads >= min_ref_reads_threshold),
+            numpy.logical_and(num_alt_reads <= bad_alt_reads_threshold, num_reads >= bad_cov_threshold),
             0.0,
             numpy.where(num_alt_reads >= good_alt_reads_threshold, 1.0, 0.5)
         ),
@@ -1176,7 +1177,7 @@ def get_optimal_overlap_cutoffs(
     # augment overlap stats with probability the variant is non-ref, as estimated by VaPoR:
     vapor_info = {
         sample_id:
-            _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+            get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
             .join(overlap_stats[sample_id], how="inner")
         for sample_id, vapor_file in vapor_files.items()
         if sample_id in overlap_stats
@@ -1309,6 +1310,10 @@ def apply_overlap_cutoffs(
 def select_confident_vapor_variants(
         vapor_file: str,
         valid_variant_ids: Set[str],
+        strategy: str,
+        read_strategy_good_support_threshold: int,
+        read_strategy_bad_support_threshold: int,
+        read_strategy_bad_cov_threshold: int,
         precision: float = Default.min_vapor_precision
 ) -> SampleConfidentVariants:
     f"""
@@ -1324,7 +1329,18 @@ def select_confident_vapor_variants(
         sample_confident_variants: SampleConfidentVariants
             Object holding the confident variants for this sample
     """
-    vapor_p_non_ref = _get_vapor_p_non_ref(genomics_io.vapor_to_pandas(vapor_file))
+    vapor_data = genomics_io.vapor_to_pandas(vapor_file)
+    if strategy == 'GQ':
+        vapor_p_non_ref = get_vapor_p_non_ref_old(vapor_data)
+    elif strategy == 'GT':
+        vapor_p_non_ref = get_vapor_p_non_ref(vapor_data)
+    elif strategy == 'READS':
+        vapor_p_non_ref = get_vapor_p_non_ref_threshold(vapor_data,
+                                                            read_strategy_good_support_threshold,
+                                                            read_strategy_bad_support_threshold,
+                                                            read_strategy_bad_cov_threshold)
+    else:
+        raise ValueError("Unsupported strategy: {}".format(strategy))
     return SampleConfidentVariants(
         good_variant_ids=sorted(
             valid_variant_ids.intersection(
@@ -1568,7 +1584,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="beta factor for f-score, weighting importance of recall relative to precision")
     parser.add_argument("--inheritance-af-rareness", type=float, default=Default.inheritance_af_rareness,
                         help="Maximum allele frequency for a variant to use trio inheritance as a truth signal.")
-    parser.add_argument("--use-copy-number", type=common.argparse_bool, default=Default.use_copy_number,
+    parser.add_argument("--use-copy-number", type=bool, default=Default.use_copy_number,
                         help="Where genotype is insufficient, use copy number for estimating allele frequency and "
                              "carrier status")
     parser.add_argument("--num_threads", "-@", type=int, default=Default.num_threads,
