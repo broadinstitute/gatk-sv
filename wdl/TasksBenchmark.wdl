@@ -182,12 +182,12 @@ task LocalizeCramRequestPay {
   }
 }
 
-#extract specific contig from vcf
+#extract specific contig from BED
 task SplitBed {
   input {
     String contig
     String? sample_to_extract
-    File bed_file
+    File bed_file  # first 5 columns must be chrom, start, end, name, svtype (or VaPoR description). if >5 columns, use header or assume samples is 6th. Need header & SVLEN column unless already appended to INS descriptions
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -204,15 +204,50 @@ task SplitBed {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File contig_bed = "~{contig}.bed"
+    File contig_bed = "~{contig}.vapor.bed"
   }
 
   command <<<
-    if [[ ~{bed_file} == *.gz ]] ;  then
-      zcat ~{bed_file} | ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}'  > ~{contig}.bed
-    else
-      ~{if defined(sample_to_extract) then "grep ~{sample_to_extract} | cut -f1-5 |" else ""} awk '{if ($1=="~{contig}") print}' ~{bed_file} > ~{contig}.bed
-    fi
+    python3 <<CODE
+    import gzip
+
+    def is_gzipped(path):
+      return path.endswith(".gz")
+
+
+    open_fn = gzip.open if is_gzipped("~{bed_file}") else open
+    open_mode = 'rt' if is_gzipped("~{bed_file}") else 'r'
+
+    remove_types = {"BND", "CPX", "CNV"}
+
+    default_columns = "chrom start end name svtype".split()
+    default_num_columns = len(default_columns)
+    columns = dict(zip(default_columns, range(default_num_columns)))
+    first = True
+    with open_fn("~{bed_file}", open_mode) as inp, open("~{contig}.vapor.bed", 'w') as out:
+      for line in inp:
+        fields = line.lstrip("#").rstrip('\n').split('\t')
+        if first:
+          if line.startswith("#"):
+            for i, name in enumerate(fields[default_num_columns:]):
+              columns[name] = default_num_columns + i  # get column names beyond first default ones from header if available
+          else:
+            if len(fields) >= default_num_columns:
+              columns['samples'] = default_num_columns  # if no header but extra fields, assume samples is next column
+        if fields[columns["chrom"]] != "~{contig}":
+          continue  # extract only contig of interest. also drops header if exists
+        if fields[columns["svtype"]] in remove_types:
+          continue  # drop BND, CNV, CPX
+        if "~{sample_to_extract}" != "" and "samples" in columns and "~{sample_to_extract}" not in fields[columns["samples"]]:
+          continue  # extract events in sample of interest if provided
+        svtype_write = fields[columns["svtype"]]
+        if "INS" in svtype_write or "MEI" in svtype_write:
+          if "SVLEN" in columns:
+            svtype_write = f"INS_{fields[columns['SVLEN']]}"  # for INS, format svtype as INS_SVLEN for VaPoR if SVLEN column in input BED
+        # write chrom, pos, end, SVID, svtype/description for vapor
+        out.write("\t".join([fields[columns["chrom"]], fields[columns["start"]], fields[columns["end"]], fields[columns["name"]], svtype_write]) + "\n")
+    CODE
+
   >>>
 
   runtime {
