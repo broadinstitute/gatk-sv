@@ -1,0 +1,19 @@
+{
+  "RefinePacbioTruthset.cohort": {{ test_batch.name | tojson }},
+  "RefinePacbioTruthset.cleaned_vcf": {{ test_batch.clean_vcf | tojson }},
+  "RefinePacbioTruthset.sample_ids": {{ test_batch.pacbio_samples | tojson }},
+  "RefinePacbioTruthset.gq_recalibrator_training_json": {{ test_batch.vapor_irs_training_json | tojson }},
+  "RefinePacbioTruthset.ploidy_table": {{ test_batch.ploidy_table | tojson }},
+
+  "RefinePacbioTruthset.pbsv_vcfs": {{ test_batch.pacbio_pbsv_vcfs | tojson }},
+  "RefinePacbioTruthset.pav_vcfs": {{ test_batch.pacbio_pav_vcfs | tojson }},
+  "RefinePacbioTruthset.sniffles_vcfs": {{ test_batch.pacbio_sniffles_vcfs | tojson }},
+
+  "RefinePacbioTruthset.reference_fasta" : {{ reference_resources.reference_fasta | tojson }},
+  "RefinePacbioTruthset.reference_fasta_fai" : {{ reference_resources.reference_index | tojson }},
+  "RefinePacbioTruthset.reference_dict": {{ reference_resources.reference_dict | tojson }},
+
+  "RefinePacbioTruthset.gatk_docker" : {{ dockers.gatk_docker | tojson }},
+  "RefinePacbioTruthset.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
+  "RefinePacbioTruthset.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }}
+}

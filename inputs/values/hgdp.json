@@ -23,6 +23,8 @@
   "merged_melt_vcf": "",
   "merged_wham_vcf": "",
 
+  "vapor_irs_training_json": "",
+
   "pacbio_samples": [
     "HG00512",
     "HG00513",
@@ -37,7 +39,6 @@
     "NA24385"
   ],
   "vapor_files": [
-
   ],
   "pacbio_crams": [
     "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram",
