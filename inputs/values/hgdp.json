@@ -36,6 +36,9 @@
     "NA19240",
     "NA24385"
   ],
+  "vapor_files": [
+
+  ],
   "pacbio_crams": [
     "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram",
     "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00513/HG00513.cram",
