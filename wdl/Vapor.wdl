@@ -110,7 +110,7 @@ task RunVaporWithCram {
 
     # localize cram files
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    samtools view -h -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
+    samtools view -h -T ~{ref_fasta} -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
     samtools index ~{contig}.bam
   
     #run vapor
