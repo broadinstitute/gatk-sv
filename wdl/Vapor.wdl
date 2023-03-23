@@ -9,7 +9,7 @@ workflow Vapor {
     File bam_or_cram_file
     File bam_or_cram_index
     File bed_file
-    String? sample_to_extract
+    String sample_id
 
     File ref_fasta
     File ref_fai
@@ -33,7 +33,7 @@ workflow Vapor {
     call tasks10.SplitBed as SplitBed {
       input:
         contig = contig,
-        sample_to_extract = sample_to_extract,
+        sample_to_extract = sample_id,
         bed_file = bed_file,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
