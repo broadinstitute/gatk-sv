@@ -1,9 +1,9 @@
 version 1.0
 
 import "Structs.wdl"
-import "VaPoR.wdl" as vapor_bed
+import "Vapor.wdl" as vapor_bed
 
-workflow VaPoRBatch {
+workflow VaporBatch {
   input {
     Array[String] samples
     Array[File] bam_or_cram_files
@@ -27,7 +27,7 @@ workflow VaPoRBatch {
   }
 
   scatter (i in range(length(bam_or_cram_files))) {
-    call vapor_bed.VaPoR {
+    call vapor_bed.Vapor {
       input:
         prefix = samples[i],
         bam_or_cram_file = bam_or_cram_files[i],
@@ -49,8 +49,8 @@ workflow VaPoRBatch {
     }
   }
   output {
-    Array[File] bed_out = VaPoR.bed
-    Array[File] bed_plots = VaPoR.plots
+    Array[File] bed_out = Vapor.bed
+    Array[File] bed_plots = Vapor.plots
   }
 }
 

@@ -3,7 +3,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as tasks10
 
-workflow VaPoR {
+workflow Vapor {
   input {
     String prefix
     File bam_or_cram_file
@@ -41,7 +41,7 @@ workflow VaPoR {
     
     File contig_bed = SplitBed.contig_bed
 
-    call RunVaPoRWithCram {
+    call RunVaporWithCram {
       input:
         prefix = prefix,
         contig = contig,
@@ -56,22 +56,22 @@ workflow VaPoR {
     }
   }
 
-  call tasks10.ConcatVaPoR {
+  call tasks10.ConcatVapor {
     input:
-      shard_bed_files=RunVaPoRWithCram.vapor,
-      shard_plots=RunVaPoRWithCram.vapor_plot,
+      shard_bed_files=RunVaporWithCram.vapor,
+      shard_plots=RunVaporWithCram.vapor_plot,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_beds
   }
 
   output {
-    File bed = ConcatVaPoR.merged_bed_file
-    File plots = ConcatVaPoR.merged_bed_plot
+    File bed = ConcatVapor.merged_bed_file
+    File plots = ConcatVapor.merged_bed_plot
   }
 }
 
-task RunVaPoRWithCram {
+task RunVaporWithCram {
   input {
     String prefix
     String contig

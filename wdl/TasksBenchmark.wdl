@@ -2,8 +2,8 @@ version 1.0
 
 import "Structs.wdl"
 
-# Merge shards after VaPoR
-task ConcatVaPoR {
+# Merge shards after Vapor
+task ConcatVapor {
   input {
     Array[File] shard_bed_files
     Array[File] shard_plots
@@ -187,7 +187,7 @@ task SplitBed {
   input {
     String contig
     String? sample_to_extract
-    File bed_file  # first 5 columns must be chrom, start, end, name, svtype (or VaPoR description). if >5 columns, use header or assume samples is 6th. Need header & SVLEN column unless already appended to INS descriptions
+    File bed_file  # first 5 columns must be chrom, start, end, name, svtype (or Vapor description). if >5 columns, use header or assume samples is 6th. Need header & SVLEN column unless already appended to INS descriptions
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -243,7 +243,7 @@ task SplitBed {
         svtype_write = fields[columns["svtype"]]
         if "INS" in svtype_write or "MEI" in svtype_write:
           if "SVLEN" in columns:
-            svtype_write = f"INS_{fields[columns['SVLEN']]}"  # for INS, format svtype as INS_SVLEN for VaPoR if SVLEN column in input BED
+            svtype_write = f"INS_{fields[columns['SVLEN']]}"  # for INS, format svtype as INS_SVLEN for Vapor if SVLEN column in input BED
         # write chrom, pos, end, SVID, svtype/description for vapor
         out.write("\t".join([fields[columns["chrom"]], fields[columns["start"]], fields[columns["end"]], fields[columns["name"]], svtype_write]) + "\n")
     CODE

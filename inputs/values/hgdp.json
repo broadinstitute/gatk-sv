@@ -19,8 +19,8 @@
   "clean_vcf_qc": "",
   "clean_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.vcf2bed.bed.gz",
 
-  "concordance_vcf": "",
-  "concordance_vcf_index": "",
+  "concordance_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz",
+  "concordance_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz.tbi",
   "joined_raw_calls_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz",
   "vapor_irs_training_json": "",
   "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
