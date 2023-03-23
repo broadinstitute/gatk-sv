@@ -108,8 +108,8 @@ task RunVaporWithCram {
 
     set -Eeuo pipefail
 
-    #localize cram files
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`   
+    # localize cram files
+    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     samtools view -h -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
     samtools index ~{contig}.bam
   
