@@ -2,15 +2,6 @@
   "name": "hgdp",
   "ped_file": "gs://broad-dsde-methods-markw/hgdp/HGDP_1KGP.ped",
   "ploidy_table": "gs://broad-dsde-methods-markw/hgdp/hgdp.ploidy_table.tsv",
-  "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
-
-  "clean_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz",
-  "clean_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
-  "clean_bed": "",
-  "clean_vcf_qc": "",
-  "concordance_vcf": "",
-  "concordance_vcf_index": "",
-  "joined_raw_calls_vcf": "",
 
   "del_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.DEL.bed.gz",
   "dup_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.DUP.bed.gz",
@@ -18,12 +9,21 @@
   "std_manta_vcf_tar": "gs://broad-dsde-methods-markw/hgdp/hgdp.manta.std_vcfs.37_missing.tar.gz",
   "std_melt_vcf_tar": "gs://broad-dsde-methods-markw/hgdp/hgdp.melt.std_vcfs.37_missing.tar.gz",
 
-  "merged_depth_vcf": "",
-  "merged_manta_vcf": "",
-  "merged_melt_vcf": "",
-  "merged_wham_vcf": "",
+  "merged_depth_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.cluster_batch.depth.vcf.gz",
+  "merged_manta_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.cluster_batch.manta.vcf.gz",
+  "merged_melt_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.cluster_batch.melt.vcf.gz",
+  "merged_wham_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.cluster_batch.wham.vcf.gz",
 
+  "clean_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz",
+  "clean_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
+  "clean_vcf_qc": "",
+  "clean_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.vcf2bed.bed.gz",
+
+  "concordance_vcf": "",
+  "concordance_vcf_index": "",
+  "joined_raw_calls_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz",
   "vapor_irs_training_json": "",
+  "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
 
   "pacbio_samples": [
     "HG00512",
