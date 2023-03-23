@@ -66,8 +66,8 @@ workflow Vapor {
   }
 
   output {
-    File bed = ConcatVapor.merged_bed_file
-    File plots = ConcatVapor.merged_bed_plot
+    File vapor_bed = ConcatVapor.merged_bed_file
+    File vapor_plots = ConcatVapor.merged_bed_plot
   }
 }
 
