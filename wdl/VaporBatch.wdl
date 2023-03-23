@@ -49,8 +49,8 @@ workflow VaporBatch {
     }
   }
   output {
-    Array[File] bed_out = Vapor.bed
-    Array[File] bed_plots = Vapor.plots
+    Array[File] vapor_batch_beds = Vapor.bed
+    Array[File] vapor_batch_plots = Vapor.plots
   }
 }
 
