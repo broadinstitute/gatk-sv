@@ -104,9 +104,9 @@ class ContainerRegistry:
 
         self.name = name
         self.input_dockers_json = input_dockers_json
-        self.dockers = dockers or ProjectBuilder.load_json(self.input_dockers_json)
+        self.dockers = ProjectBuilder.load_json(self.input_dockers_json) if dockers is None else dockers
         self.output_dockers_json = None if output_dockers_json == Paths.dev_null else output_dockers_json
-        self.current_docker_images = current_docker_json or {}
+        self.current_docker_images = {} if current_docker_json is None else current_docker_json
 
 
 class ProjectBuilder:
@@ -460,7 +460,7 @@ class ProjectBuilder:
 
                 print_colored("BUILD PROCESS SUCCESS!", Colors.GREEN)
 
-            for name, registry in self.remote_docker_repos.items():
+            for registry in self.remote_docker_repos.values():
                 # push any images that are purely local (this can happen if e.g. images are built without specifying
                 # --docker-repo during development, but upon successful build the developer wants to push them)
                 local_images_to_push = [
@@ -480,7 +480,7 @@ class ProjectBuilder:
 
             build_completed = True
         finally:
-            for name, registry in self.registries.items():
+            for registry in self.registries.values():
                 self.update_dockers_json(registry)
             if not self.project_arguments.skip_cleanup:
                 self.cleanup(possible_tmp_dir_path, build_completed)
@@ -531,7 +531,7 @@ class ImageBuilder:  # class for building and pushing a single image
         return self.project_builder.remote_docker_repos
 
     @property
-    def remote_images(self):
+    def remote_images(self) -> Tuple[Tuple[str, str], ...]:
         remote_tags = (self.tag, ProjectBuilder.latest_tag) if self.project_builder.project_arguments.update_latest \
             else (self.tag,)
         return tuple(
@@ -600,7 +600,7 @@ class ImageBuilder:  # class for building and pushing a single image
         """
         Push everything related to this image to remote repo
         """
-        for (_, remote_image) in self.remote_images:
+        for _, remote_image in self.remote_images:
             # do not push images with very restrictive licenses
             if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
                 print_colored(
@@ -675,7 +675,7 @@ def print_colored(text: str, color: str):
     print(f"{color}{text}{Colors.ENDC}")
 
 
-def __validate_json_arg(docker_repo: str, argument: str, value: Union[str, List[str]]) -> List[str]:
+def _validate_json_arg(docker_repo: str, argument: str, value: Union[str, List[str]]) -> List[str]:
     if isinstance(value, str):
         value = [value]
     for filename in value:
@@ -843,8 +843,8 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         sys.exit(0)
     parsed_args = parser.parse_args(args_list[1:])
 
-    parsed_args.input_json = __validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.input_json)
-    parsed_args.output_json = __validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.output_json)
+    parsed_args.input_json = _validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.input_json)
+    parsed_args.output_json = _validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.output_json)
 
     if parsed_args.base_git_commit is None:
         if parsed_args.targets is None:
