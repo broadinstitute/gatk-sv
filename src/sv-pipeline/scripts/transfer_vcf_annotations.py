@@ -235,8 +235,6 @@ def annotate_record(in_record: pysam.VariantRecord,
             dest[key] = val
     for key in info_keys:
         val = ann_record.info.get(key, None)
-        if in_record.info['SVTYPE'] == 'INS' and key == 'TRUTH_AF':
-            print(val)
         if val is not None and not (isinstance(val, Iterable) and val[0] is None):
             new_record.info[key] = val
     for sample_id in sample_list:
