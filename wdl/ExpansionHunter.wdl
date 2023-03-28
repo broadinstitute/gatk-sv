@@ -233,7 +233,8 @@ task ConcatEHOutputs {
 
         if ~{generate_realigned_bam}; then
             BAMS="~{write_lines(realigned_bams)}"
-            samtools merge ~{output_prefix}.bam -b ${BAMS}
+            samtools merge ~{output_prefix}_unsorted.bam -b ${BAMS}
+            samtools sort ~{output_prefix}_unsorted.bam -o ~{output_prefix}.bam
         else
             touch ~{output_prefix}.bam
         fi
