@@ -39,6 +39,17 @@
     "NA24385"
   ],
   "vapor_files": [
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00512.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00513.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00514.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00731.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00732.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/HG00733.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/NA12878.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/NA19238.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/NA19239.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/NA19240.bed.gz",
+    "gs://broad-dsde-methods-markw/hgdp/vapor/NA24385.bed.gz"
   ],
   "pacbio_crams": [
     "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram",
