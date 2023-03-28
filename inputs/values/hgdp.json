@@ -16,7 +16,7 @@
 
   "clean_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz",
   "clean_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
-  "clean_vcf_qc": "",
+  "clean_vcf_qc": "gs://broad-dsde-methods-markw/hgdp/hgdp_SV_VCF_QC_output.tar.gz",
   "clean_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.vcf2bed.bed.gz",
 
   "concordance_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz",

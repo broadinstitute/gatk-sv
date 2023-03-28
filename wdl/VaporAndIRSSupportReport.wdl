@@ -12,10 +12,10 @@ workflow VaporAndIRSSupportReport {
     Array[File] irs_test_reports
     Boolean write_detail_report = false
     File? irs_contigs_fai
-    Float? vapor_min_precision = 0.999
+    Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
-    Int? irs_min_cnv_size = 10000
-    Float? irs_good_pvalue_threshold = 0.000001
+    Int? irs_min_cnv_size = 50000
+    Float? irs_good_pvalue_threshold = 0.001
     Int? irs_min_probes = 5
     Int? vapor_pos_read_threshold = 2
     String? output_prefix
@@ -27,7 +27,7 @@ workflow VaporAndIRSSupportReport {
     if defined(output_prefix) then
       select_first([output_prefix])
     else
-      basename(vcf, ".vcf.gz")
+        basename(vcf, ".vcf.gz")
 
   call VaporAndIRSSupportReport {
     input:
