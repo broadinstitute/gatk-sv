@@ -104,8 +104,8 @@ task TransferVcfAnnotationsTask {
       ~{"--infos " + info_keys_list} \
       ~{"--formats " + format_keys_list} \
       --ann-vcf ~{vcf_with_annotations} \
-      --out ~{output_file_name} \
-      ~{vcf_to_annotate}
+      ~{vcf_to_annotate} \
+      | bgzip > ~{output_file_name}
     tabix ~{output_file_name}
   >>>
 

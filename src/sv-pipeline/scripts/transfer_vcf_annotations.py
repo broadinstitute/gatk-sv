@@ -52,12 +52,6 @@ def create_header(header_in: pysam.VariantHeader,
     header: pysam.VariantHeader
         output header
     """
-    header = pysam.VariantHeader()
-    for sample in header_in.samples:
-        header.add_sample(sample)
-    for line in header_in.records:
-        header.add_line(str(line))
-
     # Check annotation fields exist
     for k in info_keys:
         if k not in header_ann.info:
@@ -70,8 +64,8 @@ def create_header(header_in: pysam.VariantHeader,
     for line in header_ann.records:
         if len(line.attrs) > 0 and 'ID' in line.keys() and \
                 (line['ID'] in info_keys or line['ID'] in format_keys):
-            header.add_line(str(line))
-    return header
+            header_in.add_line(str(line))
+    return header_in
 
 
 class ContigComparator(str):
@@ -201,7 +195,7 @@ def pairs(vcf_a: pysam.VariantFile,
 
 def annotate_record(in_record: pysam.VariantRecord,
                     ann_record: pysam.VariantRecord,
-                    vcf_out: pysam.VariantFile,
+                    samples: List[Text],
                     info_keys: Set[Text],
                     format_keys: Set[Text]) -> pysam.VariantRecord:
     """
@@ -213,8 +207,8 @@ def annotate_record(in_record: pysam.VariantRecord,
         base record
     ann_record: pysam.VariantRecord
         annotation source record
-    vcf_out: pysam.VariantFile
-        output vcf object
+    samples: List[Text]
+        list of samples to transfer annotations of
     info_keys: List[Text]
         list of format keys as ordered in format_dict
     format_keys: List[Text]
@@ -225,35 +219,26 @@ def annotate_record(in_record: pysam.VariantRecord,
     pysam.VariantRecord
         annotated record
     """
-    new_record = vcf_out.new_record(alleles=in_record.alleles, contig=in_record.contig, filter=in_record.filter,
-                                    id=in_record.id, info=in_record.info, start=in_record.start,
-                                    qual=in_record.qual, stop=in_record.stop)
-    sample_list = sorted(list(set(vcf_out.header.samples).intersection(set(ann_record.samples))))
-    for sample, dest in new_record.samples.items():
-        source = in_record.samples[sample]
-        for key, val in source.items():
-            dest[key] = val
     for key in info_keys:
         val = ann_record.info.get(key, None)
         if val is not None and not (isinstance(val, Iterable) and val[0] is None):
-            new_record.info[key] = val
-    for sample_id in sample_list:
+            in_record.info[key] = val
+    for sample_id in samples:
         ann_format = ann_record.samples[sample_id]
-        new_sample_format = new_record.samples[sample_id]
+        new_sample_format = in_record.samples[sample_id]
         for key in format_keys:
             val = ann_format.get(key, None)
             if val is not None and not (isinstance(val, Iterable) and val[0] is None):
                 new_sample_format[key] = val
-    return new_record
+    return in_record
 
 
 def annotate_vcf(vcf_in: pysam.VariantFile,
                  vcf_ann: pysam.VariantFile,
-                 vcf_out: pysam.VariantFile,
                  info_keys: Set[Text],
                  format_keys: Set[Text]) -> None:
     """
-    Transfers annotations from one vcf to another, matching on variant ID. Result is written to the given output vcf.
+    Transfers annotations from one vcf to another, matching on variant ID. Result is written to stdout.
 
     Parameters
     ----------
@@ -261,26 +246,25 @@ def annotate_vcf(vcf_in: pysam.VariantFile,
         Base vcf to add annotations to
     vcf_ann: pysam.VariantFile
         Vcf containing source annotations
-    vcf_out: pysam.VariantFile
-        Output vcf
     info_keys: Set[Text]
         Annotation INFO keys
     format_keys: Set[Text]
         Annotation FORMAT keys
     """
-    for in_rec, ann_rec in pairs(vcf_in, vcf_ann, vcf_out.header):
+    common_samples = list(set(vcf_in.header.samples).intersection(set(vcf_ann.header.samples)))
+    for in_rec, ann_rec in pairs(vcf_in, vcf_ann, vcf_in.header):
         if in_rec is None:
             continue
         if ann_rec is None:
-            vcf_out.write(in_rec)
+            print(in_rec)
         else:
             if in_rec.id != ann_rec.id:
                 raise ValueError(f"Record ids do not match: {in_rec.id} {ann_rec.id}")
             if in_rec.chrom != ann_rec.chrom or in_rec.pos != ann_rec.pos:
                 raise ValueError(f"Record positions do not match for {in_rec.id}: "
                                  f"{in_rec.chrom}:{in_rec.pos} {ann_rec.chrom}:{ann_rec.pos}")
-            vcf_out.write(annotate_record(in_record=in_rec, ann_record=ann_rec, vcf_out=vcf_out,
-                                          info_keys=info_keys, format_keys=format_keys))
+            print(annotate_record(in_record=in_rec, ann_record=ann_rec, samples=common_samples,
+                                  info_keys=info_keys, format_keys=format_keys))
 
 
 def _parse_arg_list(arg: Text) -> List[Text]:
@@ -298,8 +282,6 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     )
     parser.add_argument("vcf", type=str,
                         help="VCF to annotate")
-    parser.add_argument("--out", type=str, required=True,
-                        help="Output VCF")
     parser.add_argument("--ann-vcf", type=str, required=True,
                         help="Vcf with source annotations")
     parser.add_argument("--formats", type=str,
@@ -329,9 +311,8 @@ def main(argv: Optional[List[Text]] = None):
             info_keys=info_keys,
             format_keys=format_keys
         )
-        with pysam.VariantFile(arguments.out, mode='w', header=header) as vcf_out:
-            annotate_vcf(vcf_in=vcf_in, vcf_ann=vcf_ann, vcf_out=vcf_out,
-                         info_keys=info_keys, format_keys=format_keys)
+        print(header)
+        annotate_vcf(vcf_in=vcf_in, vcf_ann=vcf_ann, info_keys=info_keys, format_keys=format_keys)
 
 
 if __name__ == "__main__":
