@@ -3,11 +3,6 @@
 import sys
 import argparse
 import gzip
-import numpy
-import json
-import warnings
-
-import pandas as pd
 
 from pysam import VariantFile, VariantRecord
 
@@ -82,11 +77,11 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
                         help="Min Number of supporting vapor reads required for positive example")
     parser.add_argument("--irs-sample-batch-lists", type=str,
-                        help="list of lists of samples used in each IRS test batch", required=True)
+                        help="list of lists of samples used in each IRS test batch")
     parser.add_argument("--irs-contigs-file", type=str,
                         help="list of contigs to restrict IRS variants to")
     parser.add_argument("--irs-test-report-list", type=str,
-                        help="list of IRS results files", required=True)
+                        help="list of IRS results files")
     parser.add_argument("--irs-good-pvalue-threshold", type=float, default=0.001,
                         help="Maximum pvalue to choose a good record from the IRS report")
     parser.add_argument("--irs-min-probes", type=int, default=4,
@@ -143,8 +138,11 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         variants_df['p_non_ref_genotyped'] = p_non_ref_genotyped['p_non_ref']
         variants_df['p_non_ref_read_threshold'] = p_non_ref_read_threshold['p_non_ref']
 
-    sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
-                                                  read_list_file(arguments.irs_test_report_list))
+    if arguments.irs_sample_batch_lists is not None:
+        sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
+                                                      read_list_file(arguments.irs_test_report_list))
+    else:
+        sample_list_file_to_report_file_mapping = {}
 
     sample_to_irs_report = {}
     for sample_list_file_report_pair in sample_list_file_to_report_file_mapping:

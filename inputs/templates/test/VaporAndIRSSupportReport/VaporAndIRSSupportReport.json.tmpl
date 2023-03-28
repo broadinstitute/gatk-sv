@@ -1,9 +1,0 @@
-{
-  "VaporAndIRSSupportReport.output_prefix": {{ test_batch.name | tojson }},
-  "VaporAndIRSSupportReport.vapor_sample_ids": {{ test_batch.pacbio_samples | tojson }},
-  "VaporAndIRSSupportReport.vcf": {{ test_batch.clean_vcf | tojson }},
-  "VaporAndIRSSupportReport.vapor_files": {{ test_batch.vapor_files | tojson }},
-  "VaporAndIRSSupportReport.irs_sample_batches": [],
-  "VaporAndIRSSupportReport.irs_test_reports": [],
-  "VaporAndIRSSupportReport.sv_utils_docker" : {{ dockers.sv_utils_docker | tojson }}
-}

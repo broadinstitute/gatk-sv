@@ -2,15 +2,19 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow GetVariantListsFromVaporAndIRSReports {
+workflow MakeGqRecalibratorTrainingSetFromVapor {
 
   input {
     File vcf
+    String? output_prefix
     Array[String] vapor_sample_ids
     Array[File] vapor_files
+
+    # Optional: array intensity ratio files
     Array[File]? irs_sample_batches
     Array[File]? irs_test_reports
     File? irs_contigs_fai
+
     Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
     String vapor_strategy = "READS"
@@ -21,7 +25,10 @@ workflow GetVariantListsFromVaporAndIRSReports {
     Float? irs_good_pvalue_threshold = 0.001
     Float? irs_bad_pvalue_threshold = 0.6
     Int? irs_min_probes = 5
-    String? output_prefix
+
+    # For debugging
+    File? script
+
     String sv_utils_docker
     RuntimeAttr? runtime_attr
   }
@@ -32,9 +39,10 @@ workflow GetVariantListsFromVaporAndIRSReports {
     else
         basename(vcf, ".vcf.gz")
 
-  call GetVariantListsFromVaporAndIRSReports {
+  call GetVariantListsFromVaporAndIRS {
     input:
       vcf=vcf,
+      output_prefix=output_prefix_,
       vapor_sample_ids=vapor_sample_ids,
       vapor_files=vapor_files,
       irs_sample_batches=irs_sample_batches,
@@ -50,24 +58,27 @@ workflow GetVariantListsFromVaporAndIRSReports {
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_bad_pvalue_threshold=irs_bad_pvalue_threshold,
       irs_min_probes=irs_min_probes,
-      output_prefix=output_prefix_,
+      script=script,
       sv_utils_docker=sv_utils_docker,
       runtime_attr_override=runtime_attr
   }
 
   output {
-    File output_json = GetVariantListsFromVaporAndIRSReports.output_json
+    File vapor_and_irs_output_json = GetVariantListsFromVaporAndIRS.output_json
   }
 }
 
-task GetVariantListsFromVaporAndIRSReports {
+task GetVariantListsFromVaporAndIRS {
   input {
     File vcf
+    String output_prefix
     Array[String] vapor_sample_ids
     Array[File] vapor_files
+
     Array[File]? irs_sample_batches
     Array[File]? irs_test_reports
     File? irs_contigs_fai
+
     Int? vapor_max_cnv_size
     Float? vapor_min_precision
     String vapor_strategy
@@ -78,7 +89,9 @@ task GetVariantListsFromVaporAndIRSReports {
     Float? irs_good_pvalue_threshold
     Float? irs_bad_pvalue_threshold
     Int? irs_min_probes
-    String output_prefix
+
+    File? script
+
     String sv_utils_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -86,7 +99,7 @@ task GetVariantListsFromVaporAndIRSReports {
   String vapor_json = "vapor_data.json"
 
   output {
-    File output_json = "${output_prefix}.json"
+    File output_json = "${output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json"
   }
 
 
@@ -113,7 +126,7 @@ task GetVariantListsFromVaporAndIRSReports {
     printf "~{vapor_json}: "
     cat ~{vapor_json}
 
-    /opt/sv_utils/src/sv_utils/get_confident_variant_lists_from_vapor_and_irs_test.py \
+    python ~{default="/opt/sv_utils/src/sv_utils/get_confident_variant_lists_from_vapor_and_irs_test.py" script} \
       --vapor-json ~{vapor_json}  \
       --vcf ~{vcf} \
       ~{if defined(irs_sample_batches) then "--irs-sample-batch-lists " + write_lines(select_first([irs_sample_batches])) else ""} \
@@ -129,7 +142,7 @@ task GetVariantListsFromVaporAndIRSReports {
       ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
       ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
       ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
-    -O ~{output_prefix}.json
+      -O ~{output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json
   >>>
 
   RuntimeAttr runtime_attr_str_profile_default = object {

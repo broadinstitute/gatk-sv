@@ -2,8 +2,6 @@
 
 import sys
 import argparse
-import json
-import warnings
 
 import pandas as pd
 

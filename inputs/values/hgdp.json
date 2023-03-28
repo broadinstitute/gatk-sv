@@ -22,7 +22,7 @@
   "concordance_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz",
   "concordance_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz.tbi",
   "joined_raw_calls_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz",
-  "vapor_irs_training_json": "",
+  "vapor_irs_training_json": "gs://broad-dsde-methods-markw/hgdp/hgdp.gq_recalibrator_labels.from_vapor_and_irs.json",
   "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
 
   "pacbio_samples": [

@@ -2,23 +2,30 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow VaporAndIRSSupportReport {
+workflow SummarizeGqRecalibratorTrainingSetFromVapor {
 
   input {
     File vcf
+    String? output_prefix
     Array[String] vapor_sample_ids
     Array[File] vapor_files
-    Array[File] irs_sample_batches
-    Array[File] irs_test_reports
-    Boolean write_detail_report = false
+
+    # Optional: array intensity ratio files
+    Array[File]? irs_sample_batches
+    Array[File]? irs_test_reports
     File? irs_contigs_fai
+
+    Boolean write_detail_report = false
     Float? vapor_min_precision = 0.99
     Int? vapor_max_cnv_size = 5000
     Int? irs_min_cnv_size = 50000
     Float? irs_good_pvalue_threshold = 0.001
     Int? irs_min_probes = 5
     Int? vapor_pos_read_threshold = 2
-    String? output_prefix
+
+    # For debugging
+    File? script
+
     String sv_utils_docker
     RuntimeAttr? runtime_attr
   }
@@ -32,6 +39,7 @@ workflow VaporAndIRSSupportReport {
   call VaporAndIRSSupportReport {
     input:
       vcf=vcf,
+      output_prefix=output_prefix_,
       vapor_sample_ids=vapor_sample_ids,
       vapor_files=vapor_files,
       irs_sample_batches=irs_sample_batches,
@@ -43,25 +51,26 @@ workflow VaporAndIRSSupportReport {
       irs_min_cnv_size=irs_min_cnv_size,
       irs_good_pvalue_threshold=irs_good_pvalue_threshold,
       irs_min_probes=irs_min_probes,
-      output_prefix=output_prefix_,
+      script=script,
       write_detail_report=write_detail_report,
       sv_utils_docker=sv_utils_docker,
       runtime_attr_override=runtime_attr
   }
 
   output {
-    File summary_report = VaporAndIRSSupportReport.summary
-    File detail_report = VaporAndIRSSupportReport.detail
+    File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
+    File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
   }
 }
 
 task VaporAndIRSSupportReport {
   input {
     File vcf
+    String output_prefix
     Array[String] vapor_sample_ids
     Array[File] vapor_files
-    Array[File] irs_sample_batches
-    Array[File] irs_test_reports
+    Array[File]? irs_sample_batches
+    Array[File]? irs_test_reports
     Boolean write_detail_report
     File? irs_contigs_fai
     Int? vapor_max_cnv_size
@@ -70,7 +79,9 @@ task VaporAndIRSSupportReport {
     Int? irs_min_cnv_size
     Float? irs_good_pvalue_threshold
     Int? irs_min_probes
-    String output_prefix
+
+    File? script
+
     String sv_utils_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -106,11 +117,11 @@ task VaporAndIRSSupportReport {
     cat ~{vapor_json}
 
     touch ~{output_prefix}.irs_vapor_support.detail.tsv.gz
-    /opt/sv_utils/src/sv_utils/report_confident_irs_vapor_variants.py \
+    python ~{default="/opt/sv_utils/src/sv_utils/report_confident_irs_vapor_variants.py" script} \
       --vapor-json ~{vapor_json}  \
       --vcf ~{vcf} \
-      --irs-sample-batch-lists ~{write_lines(irs_sample_batches)} \
-      --irs-test-report-list ~{write_lines(irs_test_reports)} \
+      ~{if defined(irs_sample_batches) then "--irs-sample-batch-lists " + write_lines(select_first([irs_sample_batches])) else ""} \
+      ~{if defined(irs_test_reports) then "--irs-test-report-list " + write_lines(select_first([irs_test_reports])) else ""} \
       ~{"--irs-contigs-file " + irs_contigs_fai} \
       ~{"--vapor-max-cnv-size " + vapor_max_cnv_size} \
       ~{"--vapor-min-precision " + vapor_min_precision} \

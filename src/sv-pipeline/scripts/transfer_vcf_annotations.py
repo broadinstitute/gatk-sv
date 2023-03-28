@@ -256,15 +256,15 @@ def annotate_vcf(vcf_in: pysam.VariantFile,
         if in_rec is None:
             continue
         if ann_rec is None:
-            print(in_rec)
+            sys.stdout.write(str(in_rec))
         else:
             if in_rec.id != ann_rec.id:
                 raise ValueError(f"Record ids do not match: {in_rec.id} {ann_rec.id}")
             if in_rec.chrom != ann_rec.chrom or in_rec.pos != ann_rec.pos:
                 raise ValueError(f"Record positions do not match for {in_rec.id}: "
                                  f"{in_rec.chrom}:{in_rec.pos} {ann_rec.chrom}:{ann_rec.pos}")
-            print(annotate_record(in_record=in_rec, ann_record=ann_rec, samples=common_samples,
-                                  info_keys=info_keys, format_keys=format_keys))
+            sys.stdout.write(str(annotate_record(in_record=in_rec, ann_record=ann_rec, samples=common_samples,
+                                  info_keys=info_keys, format_keys=format_keys)))
 
 
 def _parse_arg_list(arg: Text) -> List[Text]:
@@ -311,7 +311,7 @@ def main(argv: Optional[List[Text]] = None):
             info_keys=info_keys,
             format_keys=format_keys
         )
-        print(header)
+        sys.stdout.write(str(header))
         annotate_vcf(vcf_in=vcf_in, vcf_ann=vcf_ann, info_keys=info_keys, format_keys=format_keys)
 
 

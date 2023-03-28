@@ -14,6 +14,7 @@ workflow CrossValidateGqRecalibrator {
         File? annotations_vcf
         File? annotations_vcf_index
         Int? transfer_annotations_shard_size
+        File? transfer_script
         String? info_keys_to_transfer
         String? format_keys_to_transfer
         String train_vcf_label
@@ -64,6 +65,7 @@ workflow CrossValidateGqRecalibrator {
                 vcf=select_first([StandardizeVcfForGatk.fixed_vcf, train_vcf]),
                 vcf_with_annotations=select_first([annotations_vcf]),
                 shard_size=select_first([transfer_annotations_shard_size, 20000]),
+                transfer_script=transfer_script,
                 info_keys_list=info_keys_to_transfer,
                 format_keys_list=format_keys_to_transfer,
                 prefix=basename(train_vcf, ".vcf.gz") + ".transfer_annot",

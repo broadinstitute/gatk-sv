@@ -10,7 +10,9 @@
   "RecalibrateGq.format_keys_to_transfer": "CONC_ST",
   "RecalibrateGq.info_keys_to_transfer": "STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF",
 
-  "RecalibrateGq.standardize_vcf_args": [],
+  "RecalibrateGq.standardize_vcf_args": [
+    "--gq-scale 0.1"
+  ],
   "RecalibrateGq.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",
