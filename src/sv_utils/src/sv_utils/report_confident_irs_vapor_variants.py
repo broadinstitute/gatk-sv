@@ -186,7 +186,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
             open(arguments.output_summary, 'w') as out_summary:
         if arguments.output_detail is not None:
             out_detail = gzip.open(arguments.output_detail, 'wt')
-            out_detail.write("SVID\tSAMPLE\tSVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tVAPORT_SUPPORT_READS\tIRS_PVALUE\n")
+            out_detail.write("SVID\tSAMPLE\tSVTYPE\tSVLEN\tCALLED_GT\tCALLED_GQ\tVAPOR_SUPPORT_GT\tVAPOR_SUPPORT_GQ\tVAPOR_SUPPORT_READS\tIRS_PVALUE\n")
         else:
             out_detail = None
 
