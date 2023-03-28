@@ -95,6 +95,7 @@ workflow ExpansionHunter {
         File alleles_tsv = ConcatEHOutputs.alleles_tsv
         File vcf_gz = ConcatEHOutputs.vcf_gz
         File realigned_bam = ConcatEHOutputs.realigned_bam
+        File realigned_bam_index = ConcatEHOutputs.realigned_bam_index
         Array[File] jsons_gz = RunExpansionHunter.json_gz
     }
 }
@@ -219,6 +220,7 @@ task ConcatEHOutputs {
         File alleles_tsv = "${output_prefix}_alleles.tsv"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
+        File realigned_bam_index = "${output_prefix}.bam.bai"
     }
 
     command <<<
@@ -235,8 +237,10 @@ task ConcatEHOutputs {
             BAMS="~{write_lines(realigned_bams)}"
             samtools merge ~{output_prefix}_unsorted.bam -b ${BAMS}
             samtools sort ~{output_prefix}_unsorted.bam -o ~{output_prefix}.bam
+            samtools index ~{output_prefix}.bam
         else
             touch ~{output_prefix}.bam
+            touch ~{output_prefix}.bam.bai
         fi
 
         function merge_tsv {

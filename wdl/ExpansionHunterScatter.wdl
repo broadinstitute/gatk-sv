@@ -80,6 +80,7 @@ workflow ExpansionHunterScatter {
         Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
         Array[File] vcfs_gz = ExpansionHunter.vcf_gz
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
+        Array[File] realigned_bam_index = ExpansionHunter.realigned_bam_index
         Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
     }
 }
