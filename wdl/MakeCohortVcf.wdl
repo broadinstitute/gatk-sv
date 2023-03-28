@@ -498,6 +498,24 @@ workflow MakeCohortVcf {
     File? complex_genotype_vcf = GenotypeComplexVariants.complex_genotype_merged_vcf
     File? complex_genotype_vcf_index = GenotypeComplexVariants.complex_genotype_merged_vcf_index
 
+    # CombineBatches
+    Array[File] combined_vcfs = CombineBatches.combined_vcfs
+    Array[File] combined_vcf_indexes = CombineBatches.combined_vcf_indexes
+    Array[File] cluster_bothside_pass_lists = CombineBatches.cluster_bothside_pass_lists
+    Array[File] cluster_background_fail_lists = CombineBatches.cluster_background_fail_lists
+
+    # ResolveComplexVariants
+    Array[File] complex_resolve_vcfs = ResolveComplexVariants.complex_resolve_vcfs
+    Array[File] complex_resolve_vcf_indexes = ResolveComplexVariants.complex_resolve_vcf_indexes
+    Array[File] complex_resolve_bothside_pass_lists = ResolveComplexVariants.complex_resolve_bothside_pass_lists
+    Array[File] complex_resolve_background_fail_lists = ResolveComplexVariants.complex_resolve_background_fail_lists
+    Array[File] breakpoint_overlap_dropped_record_vcfs = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcfs
+    Array[File] breakpoint_overlap_dropped_record_vcf_indexes = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcf_indexes
+
+    # GenotypeComplexVariants
+    Array[File] complex_genotype_vcfs = GenotypeComplexVariants.complex_genotype_vcfs
+    Array[File] complex_genotype_vcf_indexes = GenotypeComplexVariants.complex_genotype_vcfs
+
     File? metrics_file_makecohortvcf = CleanVcf.metrics_file_makecohortvcf
   }
 }
