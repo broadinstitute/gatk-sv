@@ -91,8 +91,8 @@ workflow ExpansionHunter {
     }
 
     output {
-        File variants_tsv = ConcatEHOutputs.variants_tsv
-        File alleles_tsv = ConcatEHOutputs.alleles_tsv
+        File variants_tsv_gz = ConcatEHOutputs.variants_tsv_gz
+        File alleles_tsv_gz = ConcatEHOutputs.alleles_tsv_gz
         File vcf_gz = ConcatEHOutputs.vcf_gz
         File realigned_bam = ConcatEHOutputs.realigned_bam
         File realigned_bam_index = ConcatEHOutputs.realigned_bam_index
@@ -216,8 +216,8 @@ task ConcatEHOutputs {
     }
 
     output {
-        File variants_tsv = "${output_prefix}_variants.tsv"
-        File alleles_tsv = "${output_prefix}_alleles.tsv"
+        File variants_tsv_gz = "${output_prefix}_variants.tsv.gz"
+        File alleles_tsv_gz = "${output_prefix}_alleles.tsv.gz"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
         File realigned_bam_index = "${output_prefix}.bam.bai"
@@ -256,6 +256,9 @@ task ConcatEHOutputs {
 
         merge_tsv "~{write_lines(alleles_tsvs)}" "~{output_prefix}_alleles.tsv"
         merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
+
+        gzip "~{output_prefix}_alleles.tsv"
+        gzip "~{output_prefix}_variants.tsv"
     >>>
 
     RuntimeAttr runtime_default = object {

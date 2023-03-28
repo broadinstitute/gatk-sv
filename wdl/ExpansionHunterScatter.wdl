@@ -76,8 +76,8 @@ workflow ExpansionHunterScatter {
     }
 
     output {
-        Array[File] variants_tsv = ExpansionHunter.variants_tsv
-        Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
+        Array[File] variants_tsv_gz = ExpansionHunter.variants_tsv_gz
+        Array[File] alleles_tsv_gz = ExpansionHunter.alleles_tsv_gz
         Array[File] vcfs_gz = ExpansionHunter.vcf_gz
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
         Array[File] realigned_bam_index = ExpansionHunter.realigned_bam_index
