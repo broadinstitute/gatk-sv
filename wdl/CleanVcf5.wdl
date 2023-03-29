@@ -257,7 +257,7 @@ task Polish {
         # Don't sort contigs lexicographically, which would result in incorrect chr1, chr10, chr11, ... ordering
         cat original_header.vcf | fgrep '##contig' >> new_header.vcf
         cat original_header.vcf | fgrep '#CHROM' >> new_header.vcf
-        bcftools reheader polished.need_reheader.vcf.gz -h new_header.vcf -o reheadered.vcf.gz
+        bcftools reheader polished.need_reheader.vcf.gz -h new_header.vcf -o ~{prefix}.vcf.gz
     >>>
 
     output {
