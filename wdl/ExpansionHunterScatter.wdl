@@ -17,6 +17,7 @@ workflow ExpansionHunterScatter {
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
+        Boolean? generate_reviewer_images
         Int? thread_count
         String expansion_hunter_docker
         String python_docker
@@ -67,6 +68,7 @@ workflow ExpansionHunterScatter {
                 generate_realigned_bam = generate_realigned_bam,
                 generate_vcf = generate_vcf,
                 seeking_analysis_mode = seeking_analysis_mode,
+                generate_reviewer_images = generate_reviewer_images,
                 thread_count = thread_count,
                 expansion_hunter_docker = expansion_hunter_docker,
                 python_docker = python_docker,
@@ -82,9 +84,9 @@ workflow ExpansionHunterScatter {
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
         Array[File] realigned_bam_index = ExpansionHunter.realigned_bam_index
         Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
-        Array[Array[Array[File]]] images_svg = ExpansionHunter.images_svg
-        Array[Array[Array[File]]] metrics_tsv = ExpansionHunter.metrics_tsv
-        Array[Array[Array[File]]] phasing_tsv = ExpansionHunter.phasing_tsv
+        Array[Array[Array[File]?]] images_svg = ExpansionHunter.images_svg
+        Array[Array[Array[File]?]] metrics_tsv = ExpansionHunter.metrics_tsv
+        Array[Array[Array[File]?]] phasing_tsv = ExpansionHunter.phasing_tsv
     }
 }
 

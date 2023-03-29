@@ -24,6 +24,7 @@ workflow ExpansionHunter {
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
+        Boolean? generate_reviewer_images
         Int? thread_count
         File? ped_file
         String expansion_hunter_docker
@@ -38,6 +39,10 @@ workflow ExpansionHunter {
         sample_id: "The ped_file needs to be provided as well to determine sample sex. The ID must match the sample ID given in the second column (`Individual ID` column) of the given PED file. This ID will also be used as an output prefix."
     }
 
+    Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
+    Boolean generate_vcf_ = select_first([generate_vcf, false])
+    Boolean generate_reviewer_images_ = select_first([generate_reviewer_images, false])
+
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
     File bam_or_cram_index_ =
         if defined(bam_or_cram_index) then
@@ -50,9 +55,6 @@ workflow ExpansionHunter {
         reference_fasta + ".fai"])
 
     Int thread_count_ = select_first([thread_count, 2])
-    Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
-    Boolean generate_vcf_ = select_first([generate_vcf, false])
-    Boolean seeking_analysis_mode_ = select_first([seeking_analysis_mode, true])
     String analysis_mode =
         if select_first([seeking_analysis_mode, true]) then
             "seeking"
@@ -77,19 +79,20 @@ workflow ExpansionHunter {
                 runtime_override = runtime_eh
         }
 
-        call RunReviewer {
-            input:
-                sample_id = sample_id,
-                realigned_bam = RunExpansionHunter.realigned_bam,
-                realigned_bam_index = RunExpansionHunter.realigned_bam_index,
-                vcf_gz = RunExpansionHunter.vcf_gz,
-                reference_fasta = reference_fasta,
-                reference_fasta_index = reference_fasta_index_,
-                variant_catalog_json = split_variant_catalogs[i],
-                expansion_hunter_docker = expansion_hunter_docker,
-                runtime_override = runtime_reviewer
+        if (generate_reviewer_images_ == true && generate_realigned_bam_ == true && generate_vcf_ == true) {
+            call RunReviewer {
+                input:
+                    sample_id = sample_id,
+                    realigned_bam = RunExpansionHunter.realigned_bam,
+                    realigned_bam_index = RunExpansionHunter.realigned_bam_index,
+                    vcf_gz = RunExpansionHunter.vcf_gz,
+                    reference_fasta = reference_fasta,
+                    reference_fasta_index = reference_fasta_index_,
+                    variant_catalog_json = split_variant_catalogs[i],
+                    expansion_hunter_docker = expansion_hunter_docker,
+                    runtime_override = runtime_reviewer
+            }
         }
-#        }
     }
 
     call ConcatEHOutputs {
@@ -113,9 +116,9 @@ workflow ExpansionHunter {
         File realigned_bam = ConcatEHOutputs.realigned_bam
         File realigned_bam_index = ConcatEHOutputs.realigned_bam_index
         Array[File] jsons_gz = RunExpansionHunter.json_gz
-        Array[Array[File]] images_svg = RunReviewer.images_svg
-        Array[Array[File]] metrics_tsv = RunReviewer.metrics_tsv
-        Array[Array[File]] phasing_tsv = RunReviewer.phasing_tsv
+        Array[Array[File]?] images_svg = RunReviewer.images_svg
+        Array[Array[File]?] metrics_tsv = RunReviewer.metrics_tsv
+        Array[Array[File]?] phasing_tsv = RunReviewer.phasing_tsv
     }
 }
 
@@ -327,9 +330,9 @@ task RunReviewer {
     }
 
     output {
-        Array[File] images_svg = glob("${sample_id}_*.svg")
-        Array[File] metrics_tsv = glob("${sample_id}_*_metrics.tsv")
-        Array[File] phasing_tsv = glob("${sample_id}_*_phasing.tsv")
+        Array[File]? images_svg = glob("${sample_id}_*.svg")
+        Array[File]? metrics_tsv = glob("${sample_id}_*_metrics.tsv")
+        Array[File]? phasing_tsv = glob("${sample_id}_*_phasing.tsv")
     }
 
     command <<<
