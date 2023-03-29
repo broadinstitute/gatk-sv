@@ -2,6 +2,7 @@
   "CrossValidateGqRecalibrator.train_vcf_label": {{ test_batch.name | tojson }},
   "CrossValidateGqRecalibrator.train_vcf": {{ test_batch.clean_vcf | tojson }},
   "CrossValidateGqRecalibrator.train_vcf_index": {{ test_batch.clean_vcf_index | tojson }},
+  "CrossValidateGqRecalibrator.truth_json": {{ test_batch.vapor_irs_training_json | tojson }},
   "CrossValidateGqRecalibrator.ped_file": {{ test_batch.ped_file | tojson }},
   "CrossValidateGqRecalibrator.standardize_vcf": true,
   "CrossValidateGqRecalibrator.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
