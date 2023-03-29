@@ -83,6 +83,7 @@ workflow ExpansionHunter {
             variants_tsvs = RunExpansionHunter.variants_tsv,
             alleles_tsvs = RunExpansionHunter.alleles_tsv,
             realigned_bams = RunExpansionHunter.realigned_bam,
+            realigned_bams_index = RunExpansionHunter.realigned_bam_index,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             output_prefix = sample_id,
@@ -123,6 +124,7 @@ task RunExpansionHunter {
         File vcf_gz = "${sample_id}.vcf.gz"
         File json_gz = "${sample_id}.json.gz"
         File realigned_bam = "${sample_id}_realigned.bam"
+        File realigned_bam_index = "${sample_id}_realigned.bam.bai"
     }
 
     command <<<
@@ -160,6 +162,11 @@ task RunExpansionHunter {
         if [ ~{generate_realigned_bam} = false ]; then
             rm ~{sample_id}_realigned.bam
             touch ~{sample_id}_realigned.bam
+            touch ~{sample_id}_realigned.bam.bai
+        else
+            mv ~{sample_id}_realigned.bam ~{sample_id}_realigned_unsorted.bam
+            samtools sort ~{sample_id}_realigned_unsorted.bam -o ~{sample_id}_realigned.bam
+            samtools index ~{sample_id}_realigned.bam
         fi
 
         if ~{generate_vcf}; then
@@ -208,6 +215,7 @@ task ConcatEHOutputs {
         Array[File] variants_tsvs
         Array[File] alleles_tsvs
         Array[File] realigned_bams
+        Array[File] realigned_bams_index
         Boolean generate_realigned_bam
         Boolean generate_vcf
         String? output_prefix
