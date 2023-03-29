@@ -82,6 +82,9 @@ workflow ExpansionHunterScatter {
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
         Array[File] realigned_bam_index = ExpansionHunter.realigned_bam_index
         Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
+        Array[Array[Array[File]]] images_svg = ExpansionHunter.images_svg
+        Array[Array[Array[File]]] metrics_tsv = ExpansionHunter.metrics_tsv
+        Array[Array[Array[File]]] phasing_tsv = ExpansionHunter.phasing_tsv
     }
 }
 

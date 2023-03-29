@@ -30,6 +30,7 @@ workflow ExpansionHunter {
         String python_docker
         RuntimeAttr? runtime_eh
         RuntimeAttr? runtime_concat
+        RuntimeAttr? runtime_reviewer
     }
 
     parameter_meta {
@@ -75,6 +76,20 @@ workflow ExpansionHunter {
                 expansion_hunter_docker = expansion_hunter_docker,
                 runtime_override = runtime_eh
         }
+
+        call RunReviewer {
+            input:
+                sample_id = sample_id,
+                realigned_bam = RunExpansionHunter.realigned_bam,
+                realigned_bam_index = RunExpansionHunter.realigned_bam_index,
+                vcf_gz = RunExpansionHunter.vcf_gz,
+                reference_fasta = reference_fasta,
+                reference_fasta_index = reference_fasta_index_,
+                variant_catalog_json = split_variant_catalogs[i],
+                expansion_hunter_docker = expansion_hunter_docker,
+                runtime_override = runtime_reviewer
+        }
+#        }
     }
 
     call ConcatEHOutputs {
@@ -98,6 +113,9 @@ workflow ExpansionHunter {
         File realigned_bam = ConcatEHOutputs.realigned_bam
         File realigned_bam_index = ConcatEHOutputs.realigned_bam_index
         Array[File] jsons_gz = RunExpansionHunter.json_gz
+        Array[Array[File]] images_svg = RunReviewer.images_svg
+        Array[Array[File]] metrics_tsv = RunReviewer.metrics_tsv
+        Array[Array[File]] phasing_tsv = RunReviewer.phasing_tsv
     }
 }
 
@@ -281,6 +299,97 @@ task ConcatEHOutputs {
                 size(variants_tsvs, "GiB") +
                 size(alleles_tsvs, "GiB") +
                 size(realigned_bams, "GiB")))
+    }
+    RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
+
+    runtime {
+        docker: expansion_hunter_docker
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
+    }
+}
+
+task RunReviewer {
+    input {
+        String sample_id
+        File realigned_bam
+        File realigned_bam_index
+        File vcf_gz
+        File reference_fasta
+        File? reference_fasta_index
+        File variant_catalog_json
+        String expansion_hunter_docker
+        RuntimeAttr? runtime_override
+    }
+
+    output {
+        Array[File] images_svg = glob("${sample_id}_*.svg")
+        Array[File] metrics_tsv = glob("${sample_id}_*_metrics.tsv")
+        Array[File] phasing_tsv = glob("${sample_id}_*_phasing.tsv")
+    }
+
+    command <<<
+        REF="$(basename "~{reference_fasta}")"
+        mv ~{reference_fasta} $REF
+        mv ~{reference_fasta_index} $REF.fai
+
+        gunzip -c ~{vcf_gz} > genotypes.vcf
+
+        for LOCUS in $(jq -c '.[]' ~{variant_catalog_json}); do
+            LOCUS_ID=$(echo $LOCUS | jq -r '.LocusId')
+
+            reviewer \
+                --reads ~{realigned_bam} \
+                --vcf genotypes.vcf \
+                --reference $REF \
+                --catalog ~{variant_catalog_json} \
+                --locus $LOCUS_ID \
+                --output-prefix ~{sample_id}_$LOCUS_ID
+
+            mv ~{sample_id}_$LOCUS_ID.*.svg ~{sample_id}_$LOCUS_ID.svg
+            mv ~{sample_id}_$LOCUS_ID.metrics.tsv ~{sample_id}_$LOCUS_ID\_metrics.tsv
+            mv ~{sample_id}_$LOCUS_ID.phasing.tsv ~{sample_id}_$LOCUS_ID\_phasing.tsv
+
+            python /opt/str/get_reviewer_image_sections.py \
+                ~{sample_id}_$LOCUS_ID.svg \
+                ~{sample_id}_$LOCUS_ID\_output1 \
+                ~{sample_id}_$LOCUS_ID\_output2
+
+            bash /opt/str/count_nucleotides_from_reads_Total.sh \
+                ~{sample_id}_$LOCUS_ID.svg \
+                ~{sample_id}_$LOCUS_ID\_output2 \
+                > ~{sample_id}_$LOCUS_ID\_TotalCounts
+
+            bash /opt/str/count_nucleotides_from_reads_ORANGE.sh \
+                ~{sample_id}_$LOCUS_ID.svg \
+                ~{sample_id}_$LOCUS_ID\_output2 \
+                > ~{sample_id}_$LOCUS_ID\_OrangeCounts
+
+            python /opt/str/combine_files.py \
+                ~{sample_id}_$LOCUS_ID\_metrics.tsv \
+                ~{sample_id}_$LOCUS_ID.svg \
+                ~{sample_id}_$LOCUS_ID\_TotalCounts \
+                ~{sample_id}_$LOCUS_ID\_OrangeCounts \
+                ~{sample_id}_$LOCUS_ID\_AllMetrics
+        done
+    >>>
+
+    RuntimeAttr runtime_default = object {
+        cpu_cores: 1,
+        mem_gb: 4,
+        boot_disk_gb: 10,
+        preemptible_tries: 3,
+        max_retries: 1,
+        disk_gb: 20 +
+            (2 * ceil(
+                size(realigned_bam, "GiB") +
+                size(vcf_gz, "GiB") +
+                size(reference_fasta, "GiB") +
+                size(variant_catalog_json, "GiB")))
     }
     RuntimeAttr runtime_attr = select_first([runtime_override, runtime_default])
 
