@@ -356,22 +356,22 @@ task RunReviewer {
 
             python /opt/str/get_reviewer_image_sections.py \
                 ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_output1 \
-                ~{sample_id}_$LOCUS_ID\_output2
+                ~{sample_id}_$LOCUS_ID\_GapsCounts \
+                ~{sample_id}_$LOCUS_ID\_info
 
             bash /opt/str/count_nucleotides_from_reads_Total.sh \
                 ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_output2 \
+                ~{sample_id}_$LOCUS_ID\_info \
                 > ~{sample_id}_$LOCUS_ID\_TotalCounts
 
             bash /opt/str/count_nucleotides_from_reads_ORANGE.sh \
                 ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_output2 \
+                ~{sample_id}_$LOCUS_ID\_info \
                 > ~{sample_id}_$LOCUS_ID\_OrangeCounts
 
             python /opt/str/combine_files.py \
                 ~{sample_id}_$LOCUS_ID\_metrics.tsv \
-                ~{sample_id}_$LOCUS_ID.svg \
+                ~{sample_id}_$LOCUS_ID\_GapsCounts \
                 ~{sample_id}_$LOCUS_ID\_TotalCounts \
                 ~{sample_id}_$LOCUS_ID\_OrangeCounts \
                 ~{sample_id}_$LOCUS_ID\_AllMetrics
