@@ -19,12 +19,21 @@
   "clean_vcf_qc": "gs://broad-dsde-methods-markw/hgdp/hgdp_SV_VCF_QC_output.tar.gz",
   "clean_bed": "gs://broad-dsde-methods-markw/hgdp/hgdp.vcf2bed.bed.gz",
 
+  "clean_vcf_gatk_formatter_args": "--use-end2 --scale-down-gq",
+  "gatk_formatted_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.gatk_formatted.vcf.gz",
+  "gatk_formatted_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.gatk_formatted.vcf.gz.tbi",
+
+  "joined_raw_calls_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz",
+  "joined_raw_calls_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz.tbi",
   "concordance_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz",
   "concordance_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.vcf.gz.tbi",
-  "joined_raw_calls_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.join_raw_calls.vcf.gz",
+
+  "pacbio_sample_concordance_vcf": "",
+  "pacbio_sample_concordance_vcf_index": "",
   "vapor_irs_training_json": "gs://broad-dsde-methods-markw/hgdp/hgdp.gq_recalibrator_labels.from_vapor_and_irs.json",
   "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
 
+  "pacbio_samples_list": "gs://broad-dsde-methods-markw/hgdp/hgdp.pacbio_samples.list",
   "pacbio_samples": [
     "HG00512",
     "HG00513",

@@ -4,9 +4,12 @@ import argparse
 import pysam
 import sys
 import gzip
+from math import floor
 from typing import Any, List, Text, Set, Dict, Optional
 
 _gt_sum_map = dict()
+
+GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
 
 
 def _parse_bnd_ends(vcf_path: Text) -> Dict[Text, int]:
@@ -84,9 +87,17 @@ def update_header(header: pysam.VariantHeader) -> None:
     header.add_line('##INFO=<ID=CHR2,Number=1,Type=String,Description="Second contig">')
 
 
+def rescale_gq(record):
+    for sample in record.samples:
+        for gq_field in GQ_FIELDS:
+            if gq_field in record.samples[sample] and record.samples[sample][gq_field] is not None:
+                record.samples[sample][gq_field] = floor(record.samples[sample][gq_field] / 10)
+
+
 def convert(record: pysam.VariantRecord,
             bnd_end_dict: Optional[Dict[Text, int]],
-            ploidy_dict: Dict[Text, Dict[Text, int]]) -> pysam.VariantRecord:
+            ploidy_dict: Dict[Text, Dict[Text, int]],
+            scale_down_gq: bool) -> pysam.VariantRecord:
     """
     Converts a record from svtk to gatk style. This includes updating all GT fields with proper ploidy, and adding
     necessary fields such as ECN.
@@ -99,6 +110,8 @@ def convert(record: pysam.VariantRecord,
         map from BND variant ID to END coordinate
     ploidy_dict: Dict[Text, Dict[Text, int]]
         map from sample to contig to ploidy
+    scale_down_gq: bool
+        scale GQs to 0-99 range
 
     Returns
     -------
@@ -133,6 +146,8 @@ def convert(record: pysam.VariantRecord,
     # copy FORMAT fields
     for sample, genotype in record.samples.items():
         genotype['ECN'] = ploidy_dict[sample][contig]
+    if scale_down_gq:
+        rescale_gq(record)
     return record
 
 
@@ -177,7 +192,8 @@ def _process(vcf_in: pysam.VariantFile,
     ploidy_dict = _parse_ploidy_table(arguments.ploidy_table)
 
     for record in vcf_in:
-        out = convert(record=record, bnd_end_dict=bnd_end_dict, ploidy_dict=ploidy_dict)
+        out = convert(record=record, bnd_end_dict=bnd_end_dict,
+                      ploidy_dict=ploidy_dict, scale_down_gq=arguments.scale_down_gq)
         vcf_out.write(out)
 
 
@@ -198,6 +214,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              "ploidy values for that sample.")
     parser.add_argument("--use-end2", action='store_true',
                         help="Use existing END2 fields rather than getting them from END")
+    parser.add_argument("--scale-down-gq", action='store_true',
+                        help="Scales all GQs down from [0-999] to [0-99]")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)

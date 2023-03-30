@@ -25,7 +25,7 @@ workflow TrainGqRecalibrator {
         Array[String] standardize_vcf_args = []
         Array[String] train_args = []
         Array[String] get_truth_overlap_args = []
-        Boolean standardize_vcf = true
+        Boolean standardize_vcf = false
         String sv_utils_docker
         String gatk_docker
         String sv_base_mini_docker

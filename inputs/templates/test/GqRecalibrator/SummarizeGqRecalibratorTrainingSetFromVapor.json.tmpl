@@ -1,7 +1,7 @@
 {
   "SummarizeGqRecalibratorTrainingSetFromVapor.output_prefix": {{ test_batch.name | tojson }},
   "SummarizeGqRecalibratorTrainingSetFromVapor.vapor_sample_ids": {{ test_batch.pacbio_samples | tojson }},
-  "SummarizeGqRecalibratorTrainingSetFromVapor.vcf": {{ test_batch.clean_vcf | tojson }},
+  "SummarizeGqRecalibratorTrainingSetFromVapor.vcf": {{ test_batch.pacbio_sample_concordance_vcf | tojson }},
   "SummarizeGqRecalibratorTrainingSetFromVapor.vapor_files": {{ test_batch.vapor_files | tojson }},
   "SummarizeGqRecalibratorTrainingSetFromVapor.write_detail_report": "true",
   "SummarizeGqRecalibratorTrainingSetFromVapor.sv_utils_docker" : {{ dockers.sv_utils_docker | tojson }}

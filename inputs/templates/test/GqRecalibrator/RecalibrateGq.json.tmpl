@@ -1,18 +1,8 @@
 {
-  "RecalibrateGq.vcf": {{ test_batch.clean_vcf | tojson }},
-  "RecalibrateGq.vcf_index": {{ test_batch.clean_vcf_index | tojson }},
-  "RecalibrateGq.standardize_vcf": true,
+  "RecalibrateGq.vcf": {{ test_batch.concordance_vcf | tojson }},
+  "RecalibrateGq.vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
   "RecalibrateGq.gq_recalibrator_model_file":  {{ test_batch.recalibrate_gq_model_file | tojson }},
   "RecalibrateGq.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
-
-  "RecalibrateGq.annotations_vcf": {{ test_batch.concordance_vcf | tojson }},
-  "RecalibrateGq.annotations_vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
-  "RecalibrateGq.format_keys_to_transfer": "CONC_ST",
-  "RecalibrateGq.info_keys_to_transfer": "STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF",
-
-  "RecalibrateGq.standardize_vcf_args": [
-    "--gq-scale 0.1"
-  ],
   "RecalibrateGq.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",

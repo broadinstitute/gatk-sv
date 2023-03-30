@@ -26,7 +26,7 @@ workflow CrossValidateGqRecalibrator {
         File? truth_json
         Array[File] genome_tracks
         File? optimal_overlap_cutoffs
-        Boolean standardize_vcf = true
+        Boolean standardize_vcf = false
         Int num_splits = 5
         String sv_utils_docker
         String gatk_docker

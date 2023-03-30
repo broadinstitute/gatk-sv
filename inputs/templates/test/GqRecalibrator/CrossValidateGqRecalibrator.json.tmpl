@@ -1,16 +1,16 @@
 {
   "CrossValidateGqRecalibrator.train_vcf_label": {{ test_batch.name | tojson }},
-  "CrossValidateGqRecalibrator.train_vcf": {{ test_batch.clean_vcf | tojson }},
-  "CrossValidateGqRecalibrator.train_vcf_index": {{ test_batch.clean_vcf_index | tojson }},
+  "CrossValidateGqRecalibrator.train_vcf": {{ test_batch.pacbio_sample_concordance_vcf | tojson }},
+  "CrossValidateGqRecalibrator.train_vcf_index": {{ test_batch.pacbio_sample_concordance_vcf_index | tojson }},
   "CrossValidateGqRecalibrator.truth_json": {{ test_batch.vapor_irs_training_json | tojson }},
   "CrossValidateGqRecalibrator.ped_file": {{ test_batch.ped_file | tojson }},
-  "CrossValidateGqRecalibrator.standardize_vcf": true,
   "CrossValidateGqRecalibrator.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
 
-  "CrossValidateGqRecalibrator.annotations_vcf": {{ test_batch.concordance_vcf | tojson }},
-  "CrossValidateGqRecalibrator.annotations_vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
-  "CrossValidateGqRecalibrator.format_keys_to_transfer": "CONC_ST",
-  "CrossValidateGqRecalibrator.info_keys_to_transfer": "STATUS,NON_REF_GENOTYPE_CONCORDANCE,VAR_PPV,VAR_SENSITIVITY,TRUTH_AF",
+  "CrossValidateGqRecalibrator.benchmark_args": ["--size-ranges small:50:500,medium:500:5000,large:5000:inf"],
+  "CrossValidateGqRecalibrator.new_pipeline_score_property": "sl",
+  "CrossValidateGqRecalibrator.num_splits": 5,
+  "CrossValidateGqRecalibrator.old_pipeline_passing_score": "1",
+  "CrossValidateGqRecalibrator.old_pipeline_score_property": "gq",
 
   "CrossValidateGqRecalibrator.BenchmarkGqFilter.make_figures": [
     "precision-recall",
@@ -19,22 +19,12 @@
     "violation-curve",
     "scores-histogram"
   ],
-  "CrossValidateGqRecalibrator.standardize_vcf_args": [
-    "--gq-scale 0.1"
-  ],
   "CrossValidateGqRecalibrator.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",
     "--keep-multiallelic true",
     "--min-scaled-logits -1000"
   ],
-
-  "CrossValidateGqRecalibrator.benchmark_args": ["--size-ranges small:50:500,medium:500:5000,large:5000:inf"],
-  "CrossValidateGqRecalibrator.new_pipeline_score_property": "sl",
-  "CrossValidateGqRecalibrator.num_splits": 5,
-  "CrossValidateGqRecalibrator.old_pipeline_passing_score": "1",
-  "CrossValidateGqRecalibrator.old_pipeline_score_property": "gq",
-
   "CrossValidateGqRecalibrator.train_args": [
     "--learning-rate 0.002",
     "--target-precision 0.8",

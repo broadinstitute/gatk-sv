@@ -1115,6 +1115,7 @@
     ],
     "clean_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/MakeCohortVcf/8a209488-c928-449d-92cd-0a5131e92b7c/call-CleanVcf/CleanVcf/277f3f25-bb99-4fe4-a48b-567fd3f344f9/call-ConcatCleanedVcfs/ref_panel_1kg.cleaned.vcf.gz",
     "clean_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/MakeCohortVcf/8a209488-c928-449d-92cd-0a5131e92b7c/call-CleanVcf/CleanVcf/277f3f25-bb99-4fe4-a48b-567fd3f344f9/call-ConcatCleanedVcfs/ref_panel_1kg.cleaned.vcf.gz.tbi",
+    "clean_vcf_gatk_formatter_args": "--use-end2",
     "gq_filtered_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/qg_filter/aou_model/ref_panel_1kg.filtered.vcf.gz",
     "gq_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/qg_filter/aou_model/ref_panel_1kg.filtered.vcf.gz.tbi",
     "gq_recalibrated_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/qg_filter/aou_model/ref_panel_1kg.cleaned.gq_recalibrated.vcf.gz",

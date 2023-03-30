@@ -26,6 +26,7 @@
   "preprocessed_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
   "primary_contigs_fai" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "primary_contigs_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
+  "contigs_header": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_contigs_header.vcf",
   "protein_coding_gtf" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/MANE.GRCh38.v0.95.select_ensembl_genomic.gtf",
   "reference_build" : "hg38",
   "reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",

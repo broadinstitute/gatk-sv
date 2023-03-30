@@ -8,7 +8,7 @@ workflow VaporBatch {
     Array[String] samples
     Array[File] bam_or_cram_files
     Array[File] bam_or_cram_indexes
-    File bed_file  # Multi-sample bed file, generated from MainVcfQc
+    File bed_file  # Multi-sample bed file, generated with svtk vcf2bed (e.g. as in MainVcfQc)
 
     File ref_fasta
     File ref_fai
@@ -32,6 +32,7 @@ workflow VaporBatch {
         prefix = samples[i],
         bam_or_cram_file = bam_or_cram_files[i],
         bam_or_cram_index = bam_or_cram_indexes[i],
+        vcf = vcf,
         bed_file = bed_file,
         sample_to_extract = samples[i],
         ref_fasta = ref_fasta,

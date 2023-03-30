@@ -1,6 +1,6 @@
 {
   "RefinePacbioTruthset.cohort": {{ test_batch.name | tojson }},
-  "RefinePacbioTruthset.cleaned_vcf": {{ test_batch.clean_vcf | tojson }},
+  "RefinePacbioTruthset.cleaned_vcf": {{ test_batch.pacbio_sample_concordance_vcf | tojson }},
   "RefinePacbioTruthset.sample_ids": {{ test_batch.pacbio_samples | tojson }},
   "RefinePacbioTruthset.gq_recalibrator_training_json": {{ test_batch.vapor_irs_training_json | tojson }},
   "RefinePacbioTruthset.ploidy_table": {{ test_batch.ploidy_table | tojson }},
