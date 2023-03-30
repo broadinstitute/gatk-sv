@@ -104,6 +104,9 @@ workflow ExpansionHunter {
             realigned_bams_index = RunExpansionHunter.realigned_bam_index,
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
+            sample_id = sample_id,
+            reviewer_outputs_gz = RunReviewer.reviewer_outputs_gz,
+            all_metrics = RunReviewer.all_metrics,
             output_prefix = sample_id,
             expansion_hunter_docker = expansion_hunter_docker,
             runtime_override = runtime_concat
@@ -116,9 +119,9 @@ workflow ExpansionHunter {
         File realigned_bam = ConcatEHOutputs.realigned_bam
         File realigned_bam_index = ConcatEHOutputs.realigned_bam_index
         Array[File] jsons_gz = RunExpansionHunter.json_gz
-        Array[Array[File]?] images_svg = RunReviewer.images_svg
-        Array[Array[File]?] metrics_tsv = RunReviewer.metrics_tsv
-        Array[Array[File]?] phasing_tsv = RunReviewer.phasing_tsv
+        File reviewer_metrics = ConcatEHOutputs.reviewer_metrics
+        File reviewer_missing_metrics = ConcatEHOutputs.reviewer_missing_metrics
+        File reviewer_outputs_gz = ConcatEHOutputs.reviewer_outputs_gz
     }
 }
 
@@ -237,6 +240,9 @@ task ConcatEHOutputs {
         Array[File] alleles_tsvs
         Array[File] realigned_bams
         Array[File] realigned_bams_index
+        Array[File?] reviewer_outputs_gz
+        Array[Array[File]?] all_metrics
+        String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
         String? output_prefix
@@ -250,7 +256,13 @@ task ConcatEHOutputs {
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
         File realigned_bam_index = "${output_prefix}.bam.bai"
+        File reviewer_metrics = "reviewer_all_metrics.txt"
+        File reviewer_missing_metrics = "missing_metrics.txt"
+        File reviewer_outputs_gz = "reviewer_outputs.tar.gz"
     }
+
+    Array[File] all_metrics_flat = flatten(select_all(all_metrics))
+    Array[File] reviewer_outputs_gz_ = select_all(reviewer_outputs_gz)
 
     command <<<
         set -euxo pipefail
@@ -288,6 +300,15 @@ task ConcatEHOutputs {
 
         gzip "~{output_prefix}_alleles.tsv"
         gzip "~{output_prefix}_variants.tsv"
+
+        python /opt/str/combine_files_final.py ~{write_lines(all_metrics_flat)}
+
+        # Combine multiple archives into one archive,
+        # by first extracting the files then re-archiving it.
+        # This allows preserving a flat structure with one archive,
+        # otherwise, it would create an archive containing archives.
+        mkdir temp_dir
+        cat ~{write_lines(reviewer_outputs_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf reviewer_outputs.tar.gz -C temp_dir/ .
     >>>
 
     RuntimeAttr runtime_default = object {
@@ -330,12 +351,13 @@ task RunReviewer {
     }
 
     output {
-        Array[File]? images_svg = glob("${sample_id}_*.svg")
-        Array[File]? metrics_tsv = glob("${sample_id}_*_metrics.tsv")
-        Array[File]? phasing_tsv = glob("${sample_id}_*_phasing.tsv")
+        File? reviewer_outputs_gz = "reviewer_outputs.tar.gz"
+        Array[File]? all_metrics = glob("${sample_id}_*_AllMetrics")
     }
 
     command <<<
+        set -euxo pipefail
+
         REF="$(basename "~{reference_fasta}")"
         mv ~{reference_fasta} $REF
         mv ~{reference_fasta_index} $REF.fai
@@ -379,6 +401,8 @@ task RunReviewer {
                 ~{sample_id}_$LOCUS_ID\_OrangeCounts \
                 ~{sample_id}_$LOCUS_ID\_AllMetrics
         done
+
+        tar -czvf reviewer_outputs.tar.gz ~{sample_id}_*.svg ~{sample_id}_*_metrics.tsv ~{sample_id}_*_phasing.tsv
     >>>
 
     RuntimeAttr runtime_default = object {
