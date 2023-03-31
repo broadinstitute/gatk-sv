@@ -102,7 +102,7 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
         img_contents = f.read()
 
     img_contents_no_def = img_contents.replace("</svg>", "").split("</defs>")[-1]
-    matches = list(re.finditer("<line[^>]+y1=\"(\d+)\"[^>]+#arrow[^>]+>", img_contents_no_def, re.DOTALL))
+    matches = list(re.finditer(r"<line[^>]+y1=\"(\d+)\"[^>]+#arrow[^>]+>", img_contents_no_def, re.DOTALL))
 
     ex = ExtendedMetrics()
 
@@ -116,10 +116,10 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
         # The output is not the total number of nucleotides.
 
         section_upper_contents = img_contents_no_def
-        ex.t_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_upper_contents, re.DOTALL))
-        ex.a_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_upper_contents, re.DOTALL))
-        ex.g_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_upper_contents, re.DOTALL))
-        ex.c_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_upper_contents, re.DOTALL))
+        ex.t_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_upper_contents, re.DOTALL))
+        ex.a_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_upper_contents, re.DOTALL))
+        ex.g_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_upper_contents, re.DOTALL))
+        ex.c_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_upper_contents, re.DOTALL))
         ex.t_upper_count = len(ex.t_upper)
         ex.a_upper_count = len(ex.a_upper)
         ex.g_upper_count = len(ex.g_upper)
@@ -128,9 +128,9 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
         ex.results_total_upper = []
 
         upper_match = str(matches[0])
-        start_upper_x_orange_match = list(re.finditer("x1=\"(\d+)\"", upper_match, re.DOTALL))
-        end_upper_x_orange_match = list(re.finditer("x2=\"(\d+)\"", upper_match, re.DOTALL))
-        start_upper_y_match = list(re.finditer("y1=\"(\d+)\"", upper_match, re.DOTALL))
+        start_upper_x_orange_match = list(re.finditer(r"x1=\"(\d+)\"", upper_match, re.DOTALL))
+        end_upper_x_orange_match = list(re.finditer(r"x2=\"(\d+)\"", upper_match, re.DOTALL))
+        start_upper_y_match = list(re.finditer(r"y1=\"(\d+)\"", upper_match, re.DOTALL))
         ex.start_upper_x_orange = start_upper_x_orange_match[0].group(1)
         ex.end_upper_x_orange = end_upper_x_orange_match[0].group(1)
         ex.start_upper_y = start_upper_y_match[0].group(1)
@@ -151,7 +151,7 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
             content_c_y_axis = int(ex.c_upper[i].group(3))
             if content_c_y_axis not in ex.results_total_upper:
                 ex.results_total_upper.append(content_c_y_axis)
-        gap_upper = list(re.finditer("</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
+        gap_upper = list(re.finditer(r"</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
         ex.gap_upper_count = len(gap_upper)
         ex.gap_bottom_count = np.nan
         ex.results_total_bottom = []
@@ -161,10 +161,10 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
         ex.start_bottom_y = np.nan
     if len(matches) == 2:
         section_upper_contents = img_contents_no_def[matches[0].start():matches[1].start()]
-        ex.t_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_upper_contents, re.DOTALL))
-        ex.a_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_upper_contents, re.DOTALL))
-        ex.g_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_upper_contents, re.DOTALL))
-        ex.c_upper = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_upper_contents, re.DOTALL))
+        ex.t_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_upper_contents, re.DOTALL))
+        ex.a_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_upper_contents, re.DOTALL))
+        ex.g_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_upper_contents, re.DOTALL))
+        ex.c_upper = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_upper_contents, re.DOTALL))
         ex.t_upper_count = len(ex.t_upper)
         ex.a_upper_count = len(ex.a_upper)
         ex.g_upper_count = len(ex.g_upper)
@@ -172,9 +172,9 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
         ex.total_upper_interrupt = ex.a_upper_count + ex.t_upper_count + ex.g_upper_count + ex.c_upper_count
         ex.results_total_upper = []
         upper_match = str(matches[0])
-        start_upper_x_orange_match = list(re.finditer("x1=\"(\d+)\"", upper_match, re.DOTALL))
-        end_upper_x_orange_match = list(re.finditer("x2=\"(\d+)\"", upper_match, re.DOTALL))
-        start_upper_y_match = list(re.finditer("y1=\"(\d+)\"", upper_match, re.DOTALL))
+        start_upper_x_orange_match = list(re.finditer(r"x1=\"(\d+)\"", upper_match, re.DOTALL))
+        end_upper_x_orange_match = list(re.finditer(r"x2=\"(\d+)\"", upper_match, re.DOTALL))
+        start_upper_y_match = list(re.finditer(r"y1=\"(\d+)\"", upper_match, re.DOTALL))
         ex.start_upper_x_orange = start_upper_x_orange_match[0].group(1)
         ex.end_upper_x_orange = end_upper_x_orange_match[0].group(1)
         ex.start_upper_y = start_upper_y_match[0].group(1)
@@ -194,23 +194,23 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
             content_c_y_axis = int(ex.c_upper[i].group(3))
             if content_c_y_axis not in ex.results_total_upper:
                 ex.results_total_upper.append(content_c_y_axis)
-        gap_upper = list(re.finditer("</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
+        gap_upper = list(re.finditer(r"</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
         ex.gap_upper_count = len(gap_upper)
         section_bottom_contents = img_contents_no_def[matches[1].start():]
         ex.results_total_bottom = []
-        t_bottom = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_bottom_contents, re.DOTALL))
-        a_bottom = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_bottom_contents, re.DOTALL))
-        g_bottom = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_bottom_contents, re.DOTALL))
-        c_bottom = list(re.finditer("fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_bottom_contents, re.DOTALL))
+        t_bottom = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FCA100\">T<", section_bottom_contents, re.DOTALL))
+        a_bottom = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#FF6347\">A<", section_bottom_contents, re.DOTALL))
+        g_bottom = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#2F8734\">G<", section_bottom_contents, re.DOTALL))
+        c_bottom = list(re.finditer(r"fill=\"#cdcdcd\"\sopacity=\"(1|0.7)\"\s/>\s<text\sx=\"(\d+)\"\sy=\"(\d+)\"\sdy=\"0.25em\"\stext-anchor=\"middle\"\sfont-family=\"monospace\"\sfont-size=\"11px\"\sstroke=\"#393939\">C<", section_bottom_contents, re.DOTALL))
         t_bottom_count = len(t_bottom)
         a_bottom_count = len(a_bottom)
         g_bottom_count = len(g_bottom)
         c_bottom_count = len(c_bottom)
         ex.total_bottom_interrupt = a_bottom_count + t_bottom_count + g_bottom_count + c_bottom_count
         bottom_match = str(matches[1])
-        start_bottom_x_orange_match = list(re.finditer("x1=\"(\d+)\"", bottom_match, re.DOTALL))
-        end_bottom_x_orange_match = list(re.finditer("x2=\"(\d+)\"", bottom_match, re.DOTALL))
-        start_bottom_y_match = list(re.finditer("y1=\"(\d+)\"", bottom_match, re.DOTALL))
+        start_bottom_x_orange_match = list(re.finditer(r"x1=\"(\d+)\"", bottom_match, re.DOTALL))
+        end_bottom_x_orange_match = list(re.finditer(r"x2=\"(\d+)\"", bottom_match, re.DOTALL))
+        start_bottom_y_match = list(re.finditer(r"y1=\"(\d+)\"", bottom_match, re.DOTALL))
         ex.start_bottom_x_orange = start_bottom_x_orange_match[0].group(1)
         ex.end_bottom_x_orange = end_bottom_x_orange_match[0].group(1)
         ex.start_bottom_y = start_bottom_y_match[0].group(1)
@@ -230,13 +230,11 @@ def get_metrics_from_image(svg_filename: str) -> ExtendedMetrics:
             content_c_y_axis = int(c_bottom[i].group(3))
             if content_c_y_axis not in ex.results_total_bottom:
                 ex.results_total_bottom.append(content_c_y_axis)
-        gap_upper = list(re.finditer("</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
+        gap_upper = list(re.finditer(r"</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_upper_contents, re.DOTALL))
         ex.gap_upper_count = len(gap_upper)
-        gap_bottom = list(re.finditer("</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_bottom_contents, re.DOTALL))
+        gap_bottom = list(re.finditer(r"</text><line\sx1=\"(\d+)\".y1=\"(\d+)\"\sx2=\"(\d+)\"\sy2=\"(\d+)\"\sstroke=\"black\"\s/>", section_bottom_contents, re.DOTALL))
         ex.gap_bottom_count = len(gap_bottom)
     return ex
-        # ex.total_upper_interrupt, len(ex.results_total_upper), ex.gap_upper_count, ex.total_bottom_interrupt, len(
-        # ex.results_total_bottom), ex.gap_bottom_count, ex.results_total_upper, ex.results_total_bottom, ex.start_upper_x_orange, ex.end_upper_x_orange, ex.start_upper_y, ex.start_bottom_x_orange, ex.end_bottom_x_orange, ex.start_bottom_y
 
 
 def get_nucleotides_count(
@@ -310,7 +308,7 @@ def extract_metrics(
         # however, that may lead to out-of-memory issues if processing many loci.
         # Hence, the measurements of each locus is appended to a file.
         metrics_df.to_csv(output_filename, mode="a", header=write_header, sep="\t", index=False)
-        write_header=False
+        write_header = False
 
 
 def main():
