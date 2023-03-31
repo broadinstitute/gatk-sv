@@ -8,7 +8,7 @@ import sys
 from typing import Any, List, Text, Set, Dict, Optional, Tuple
 
 """
-Refines a GQRecalibrator training sites json files with SV calls from PacBio data.
+Creates a GQRecalibrator training sites json file with SV calls from PacBio data.
 
 Looks for calls clustered together in the input vcfs and comes up with consensus positive/negative labels 
 for small/med dup/del/ins calls. Note large del/dup/ins and all inv from the input json are passed through 
@@ -17,30 +17,28 @@ automatically. Other SV types are not included.
 
 GOOD_VARIANTS_KEY = 'good_variant_ids'
 BAD_VARIANTS_KEY = 'bad_variant_ids'
+VAPOR_LABEL = 'vapor'
 
 
-def _unlabeled():
-    return 'unlabeled'
-
-
-def parse_input_labels(json_path: Text,
+def parse_vapor_labels(json_path: Text,
                        sample_id: Text) -> Dict:
     # Load good/bad training site lists for the sample
-    labels = defaultdict(_unlabeled)
+    true_labels = set()
+    false_labels = set()
     with open(json_path) as f:
         training_json = json.load(f)
         if sample_id not in training_json:
             raise ValueError(f"Could not find sample {sample_id} in training json {json_path}")
         for vid in training_json[sample_id][GOOD_VARIANTS_KEY]:
-            labels[vid] = 'True'
+            true_labels.add(vid)
         for vid in training_json[sample_id][BAD_VARIANTS_KEY]:
-            labels[vid] = 'False'
-    return labels
+            false_labels.add(vid)
+    return true_labels, false_labels
 
 
 def get_vids_and_bypass(vcf: pysam.VariantFile,
                         cnv_size_cutoff: int,
-                        ins_size_cutoff: int) -> Tuple[Set[Text], Set[Text]]:
+                        non_cnv_size_cutoff: int) -> Tuple[Set[Text], Set[Text]]:
     vids = set()
     bypass_vids = set()
     cnv_types = ['DEL', 'DUP']
@@ -49,56 +47,51 @@ def get_vids_and_bypass(vcf: pysam.VariantFile,
         svtype = record.info['SVTYPE']
         svlen = record.info['SVLEN'] if 'SVLEN' in record.info else record.stop - record.pos
         if (svtype in cnv_types and svlen >= cnv_size_cutoff) or \
-           (svtype == 'INS' and svlen >= ins_size_cutoff) or svtype == 'INV':
+           ((svtype == 'INS' or svtype == 'INV') and svlen >= non_cnv_size_cutoff):
             bypass_vids.add(record.id)
     return vids, bypass_vids
 
 
-def parse_truth_support(vcf: pysam.VariantFile,
-                        label_type: bool,
+def parse_truth_support(labels: Dict[Text, List[Text]],
+                        vcf: pysam.VariantFile,
                         main_vids: Set[Text],
-                        truth_algs: Set[Text],
-                        min_alg_count: int,
-                        max_alg_count: int) -> Dict:
-    truth_dict = defaultdict(_unlabeled)
+                        truth_alg: Text) -> Dict:
     for record in vcf:
-        vids = [v for v in record.info['MEMBERS'] if v in main_vids]
-        if len(vids) == 0:
-            continue
-        algs = record.info['ALGORITHMS']
-        if isinstance(algs, str):
-            algs = tuple(algs)
-        algs = [a for a in algs if a in truth_algs]
-        if label_type and len(algs) >= min_alg_count:
-            label = 'True'
-        elif (not label_type) and len(algs) <= max_alg_count:
-            label = 'False'
-        else:
-            continue
-        for v in vids:
-            if v in truth_dict:
-                raise ValueError(f"Duplicate variant ID {v}")
-            truth_dict[v] = label
-    return truth_dict
+        if record.id in main_vids and record.info.get("STATUS", "") == "TP":
+            labels[record.id].append(truth_alg)
 
 
 def refine_labels(vids: Set[Text],
-                  bypass_vids: Set[Text],
-                  labels1: Dict,
-                  labels2: Dict) -> Dict:
-    return {key: labels1[key] for key in vids
-            if (key in labels1 and key in labels2
-            and (labels1[key] == labels2[key] and (labels1[key] == 'True' or labels1[key] == 'False')))
-            or key in bypass_vids}
-
-
-def write_json(path: Text,
-               sample_id: Text,
-               labels: Dict) -> None:
-    out = {sample_id: {GOOD_VARIANTS_KEY: [vid for vid, label in labels.items() if label == 'True'],
-                       BAD_VARIANTS_KEY: [vid for vid, label in labels.items() if label == 'False']}}
-    with open(path, 'w') as f:
-        f.write(json.dumps(out))
+                  sample_id: Text,
+                  vapor_only_vids: Set[Text],
+                  vapor_true: Set[Text],
+                  vapor_false: Set[Text],
+                  strict_labels: Dict[Text, List[Text]],
+                  loose_labels: Dict[Text, List[Text]],
+                  strict_support_threshold: int,
+                  loose_support_threshold: int) -> Dict:
+    labels = {GOOD_VARIANTS_KEY: list(), BAD_VARIANTS_KEY: list()}
+    for vid in vids:
+        in_vapor_true = vid in vapor_true
+        in_vapor_false = vid in vapor_false
+        if vid in vapor_only_vids:
+            # Calls where are going to use the vapor label
+            if in_vapor_true:
+                true_labels.add(vid)
+            elif in_vapor_false:
+                false_labels.add(vid)
+        elif not (in_vapor_true or in_vapor_false):
+            # Don't label vapor no-calls
+            continue
+        else:
+            vapor_score = 1 if in_vapor_true else 0
+            support_strict = len(strict_labels[vid]) + vapor_score
+            support_loose = len(loose_labels[vid]) + vapor_score
+            if support_strict >= strict_support_threshold:
+                labels[GOOD_VARIANTS_KEY].append(vid)
+            elif support_loose <= loose_support_threshold:
+                labels[BAD_VARIANTS_KEY].append(vid)
+    return {sample_id: labels}
 
 
 def _parse_arg_list(arg: Text) -> List[Text]:
@@ -114,30 +107,24 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         description="Refine truth set labels using a VCF containing clustered variants.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument("--loose-clustered-vcf", type=str, required=True,
-                        help="Usually this will be the cleaned vcf clustered with truth calls using strict "
-                             "clustering parameters")
-    parser.add_argument("--strict-clustered-vcf", type=str, required=True,
-                        help="Usually this will be the cleaned vcf clustered with truth calls using loose "
-                             "clustering parameters")
+    parser.add_argument("--loose-concordance-vcfs", nargs='+', default=[], required=True,
+                        help="Space-separated list of vcfs, this will be the cleaned vcf evaluated with  "
+                             "SVConcordance using loose concordance parameters against each tool")
+    parser.add_argument("--strict-clustered-vcfs", nargs='+', default=[], required=True,
+                        help="Space-separated list of vcfs, this will be the cleaned vcf evaluated with "
+                             " SVConcordance using strict concordance parameters against each tool")
     parser.add_argument("--main-vcf", type=str, required=True,  help="Usually this will be the cleaned vcf")
-    parser.add_argument("--truth-json", type=str, required=True, help="GQRecalibrator truth set json")
+    parser.add_argument("--vapor-json", type=str, required=True, help="Vapor truth set json")
     parser.add_argument("--out", type=str, required=True, help="Output json path")
     parser.add_argument("--sample-id", type=str, required=True, help="Sample id")
-    parser.add_argument("--strict-min-algorithm-count", type=int, default=1,
-                        help="Minimum number of truth algorithms required for call to be true for "
-                             "strictly clustered vcf")
-    parser.add_argument("--strict-max-algorithm-count", type=int, default=0,
-                        help="Maximum number of truth algorithms for call to be false for strictly clustered vcf")
-    parser.add_argument("--loose-min-algorithm-count", type=int, default=1,
-                        help="Minimum number of truth algorithms required for call to be true for "
-                             "loosely clustered vcf")
-    parser.add_argument("--loose-max-algorithm-count", type=int, default=0,
-                        help="Maximum number of truth algorithms for call to be false for loosely clustered vcf")
+    parser.add_argument("--min-strict-algorithm-count", type=int, default=1,
+                        help="Minimum number of strictly concordant truth algorithms required for call to be true")
+    parser.add_argument("--max-loose-algorithm-count", type=int, default=0,
+                        help="Maximum number of loosely concordant truth algorithms allowed for call to be false")
     parser.add_argument("--cnv-size-cutoff", type=int, default=5000,
                         help="Retain DEL and DUP variants in the input truth json that are above this size")
-    parser.add_argument("--ins-size-cutoff", type=int, default=5000,
-                        help="Retain INS variants in the input truth json that are above this size")
+    parser.add_argument("--non-cnv-size-cutoff", type=int, default=5000,
+                        help="Retain INS/INV variants in the input truth json that are above this size")
     parser.add_argument("--truth-algorithms", type=str, default="pbsv,sniffles,pav",
                         help="Comma-delimited list of truth ALGORITHMS values")
 
@@ -145,6 +132,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         parser.parse_args(["--help"])
         sys.exit(0)
     parsed_arguments = parser.parse_args(argv[1:])
+    if len(parsed_arguments.loose_concordance_vcfs) != len(parsed_arguments.strict_concordance_vcfs):
+        raise ValueError(f"Must have same number of strict concordance vcfs as loose concordance vcfs")
     if parsed_arguments.strict_min_algorithm_count <= parsed_arguments.strict_max_algorithm_count:
         raise ValueError(f"Min algorithm count ({parsed_arguments.strict_min_algorithm_count} must be "
                          f"strictly greater than max algorithm count ({parsed_arguments.strict_max_algorithm_count})")
@@ -160,37 +149,34 @@ def main(argv: Optional[List[Text]] = None):
     arguments = _parse_arguments(argv)
 
     # Training json labels
-    original_labels = parse_input_labels(json_path=arguments.truth_json, sample_id=arguments.sample_id)
+    vapor_true, vapor_false = parse_vapor_labels(json_path=arguments.vapor_json, sample_id=arguments.sample_id)
 
     # Get vids we're looking for
     with pysam.VariantFile(arguments.main_vcf) as vcf:
-        main_vids, bypass_vids = get_vids_and_bypass(vcf, cnv_size_cutoff=arguments.cnv_size_cutoff,
-                                                     ins_size_cutoff=arguments.ins_size_cutoff)
+        main_vids, vapor_only_vids = get_vids_and_bypass(vcf, cnv_size_cutoff=arguments.cnv_size_cutoff,
+                                                         non_cnv_size_cutoff=arguments.non_cnv_size_cutoff)
 
     # Parse clustered vcfs and generate labels
     truth_algs = _parse_arg_list(arguments.truth_algorithms)
-    with pysam.VariantFile(arguments.strict_clustered_vcf) as vcf:
-        strict_clustering_labels = parse_truth_support(vcf=vcf, label_type=True, main_vids=main_vids,
-                                                       truth_algs=truth_algs,
-                                                       min_alg_count=arguments.strict_min_algorithm_count,
-                                                       max_alg_count=arguments.strict_max_algorithm_count)
-    with pysam.VariantFile(arguments.loose_clustered_vcf) as vcf:
-        loose_clustering_labels = parse_truth_support(vcf=vcf, label_type=False, main_vids=main_vids,
-                                                      truth_algs=truth_algs,
-                                                      min_alg_count=arguments.loose_min_algorithm_count,
-                                                      max_alg_count=arguments.loose_max_algorithm_count)
-    clustering_labels = dict()
-    clustering_labels.update(strict_clustering_labels)
-    common_vids = set(strict_clustering_labels.keys()).intersection(set(loose_clustering_labels.keys()))
-    if len(common_vids) > 0:
-        raise ValueError(f"Found {len(common_vids)} variant IDs with both true and false labels. An example is "
-                         f"{list(common_vids)[0]}")
-    clustering_labels.update(loose_clustering_labels)
+    strict_labels = defaultdict()
+    if len(arguments.loose_concordance_vcfs) != len(truth_algs):
+        raise ValueError(f"Must enter same number of strict and loose concordance vcfs as truth algorithms")
+    for i in range(len(arguments.strict_concordance_vcfs)):
+        with pysam.VariantFile(arguments.strict_concordance_vcfs[i]) as vcf:
+            parse_truth_support(labels=strict_labels, vcf=vcf, main_vids=main_vids, truth_alg=truth_algs[i])
+    loose_labels = defaultdict()
+    for i in range(len(arguments.loose_concordance_vcfs)):
+        with pysam.VariantFile(arguments.loose_concordance_vcfs[i]) as vcf:
+            parse_truth_support(labels=loose_labels, vcf=vcf, main_vids=main_vids, truth_alg=truth_algs[i])
 
     # Get consensus
-    refined_labels = refine_labels(vids=main_vids, bypass_vids=bypass_vids,
-                                   labels1=original_labels, labels2=clustering_labels)
-    write_json(path=arguments.out, sample_id=arguments.sample_id, labels=refined_labels)
+    refined_labels = refine_labels(vids=main_vids, sample_id=arguments.sample_id, vapor_only_vids=vapor_only_vids,
+                                   vapor_true=vapor_true, vapor_false=vapor_false,
+                                   strict_labels=strict_labels, loose_labels=loose_labels,
+                                   strict_support_threshold=arguments.min_strict_algorithm_count,
+                                   loose_support_threshold=arguments.max_loose_algorithm_count)
+    with open(arguments.out, 'w') as f:
+        f.write(json.dumps(refined_labels))
 
 
 if __name__ == "__main__":
