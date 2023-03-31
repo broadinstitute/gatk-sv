@@ -3,59 +3,62 @@ version 1.0
 import "Structs.wdl"
 import "SVConcordance.wdl" as conc
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
+import "Utils.wdl" as utils
 
 workflow SVConcordancePacBio {
   input {
-    String cohort
-    File vcf
 
-    # Sample ids as they appear in the vcfs. Pacbio vcf samples will be renamed
+    # Sample ids as they appear in the sample vcfs. Pacbio vcf samples will be renamed.
     Array[String] sample_ids
+    Array[File] sample_vcfs
     Array[File] pacbio_sample_vcfs
+    String prefix
+    File ploidy_table
+
     String pacbio_tool_name
     Int? pacbio_min_size
 
-    File ploidy_table
+    Float? pesr_interval_overlap
+    Float? pesr_size_similarity
+    Int? pesr_breakend_window
 
-    File reference_fasta
-    File reference_fasta_fai
     File reference_dict
 
-    File? svtk_to_gatk_formatter_script
-    File? main_vcf_preprocess_script
-    File? pacbio_vcf_preprocess_script
+    # For debugging
+    File? preprocess_script
 
     String gatk_docker
     String sv_pipeline_docker
+    String linux_docker
 
     Float? java_mem_fraction
 
     RuntimeAttr? runtime_attr_combine_truth
     RuntimeAttr? runtime_attr_sv_concordance
+    RuntimeAttr? runtime_attr_tar
   }
 
   scatter (i in range(length(sample_ids))) {
-    call PrepSampleVcfs {
+    call PrepPacBioVcf {
       input:
         sample_id=sample_ids[i],
-        main_vcf=vcf,
-        main_vcf_index=vcf + ".tbi",
-        truth_vcf=pacbio_sample_vcfs[i],
-        min_size=select_first([pacbio_min_size, 25]),
+        vcf=pacbio_sample_vcfs[i],
+        min_size=pacbio_min_size,
         truth_tool_name=pacbio_tool_name,
         ploidy_table=ploidy_table,
-        output_prefix="~{cohort}.prep_sample_vcfs.~{sample_ids[i]}",
-        svtk_to_gatk_formatter_script=svtk_to_gatk_formatter_script,
-        main_script=main_vcf_preprocess_script,
-        truth_script=pacbio_vcf_preprocess_script,
+        output_prefix="~{prefix}.prep_~{pacbio_tool_name}_vcf.~{sample_ids[i]}",
+        script=preprocess_script,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_combine_truth
     }
     call conc.SVConcordanceTask {
       input:
-        eval_vcf=PrepSampleVcfs.main_out,
-        truth_vcf=PrepSampleVcfs.truth_out,
-        output_prefix="~{cohort}.concordance.~{sample_ids[i]}",
+        truth_vcf=sample_vcfs[i],
+        eval_vcf=PrepPacBioVcf.out,
+        output_prefix="~{prefix}.concordance.~{pacbio_tool_name}.~{sample_ids[i]}",
+        pesr_interval_overlap=pesr_interval_overlap,
+        pesr_size_similarity=pesr_size_similarity,
+        pesr_breakend_window=pesr_breakend_window,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
@@ -63,24 +66,27 @@ workflow SVConcordancePacBio {
     }
   }
 
+  call utils.TarFiles {
+    input:
+      files=flatten([SVConcordanceTask.out, SVConcordanceTask.out_index]),
+      prefix="~{prefix}.concordance.~{pacbio_tool_name}",
+      linux_docker=linux_docker,
+      runtime_attr_override=runtime_attr_tar
+  }
+
   output {
-    Array[File] pacbio_sample_concordance_vcfs = SVConcordanceTask.out
-    Array[File] pacbio_sample_concordance_vcf_indexes = SVConcordanceTask.out_index
+    File pacbio_concordance_vcfs_tar = TarFiles.out
   }
 }
 
-task PrepSampleVcfs {
+task PrepPacBioVcf {
   input {
     String sample_id
-    File main_vcf
-    File main_vcf_index
-    File truth_vcf
+    File vcf
     String truth_tool_name
-    Int min_size
+    Int min_size = 25
     File ploidy_table
-    File? svtk_to_gatk_formatter_script
-    File? main_script
-    File? truth_script
+    File? script
     String output_prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -88,8 +94,8 @@ task PrepSampleVcfs {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 3.75,
-                               disk_gb: ceil(50 + size(truth_vcf, "GB") * 3 + size(main_vcf, "GB")),
+                               mem_gb: 1,
+                               disk_gb: ceil(10 + 3 * size(vcf, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 1,
                                max_retries: 1
@@ -97,35 +103,23 @@ task PrepSampleVcfs {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File truth_out = "~{output_prefix}.~{truth_tool_name}.vcf.gz"
-    File truth_out_index = "~{output_prefix}.~{truth_tool_name}.vcf.gz.tbi"
-    File main_out = "~{output_prefix}.main.vcf.gz"
-    File main_out_index = "~{output_prefix}.main.vcf.gz.tbi"
+    File out = "~{output_prefix}.~{sample_id}.~{truth_tool_name}.vcf.gz"
+    File out_index = "~{output_prefix}.~{sample_id}.~{truth_tool_name}.vcf.gz.tbi"
   }
   command <<<
     set -euxo pipefail
 
-    # Subset to DEL/DUP/INS and convert DUP to INS
-    bcftools view -s "~{sample_id}" ~{main_vcf} | bcftools view --min-ac 1 -Oz -o tmp1.vcf.gz
-    python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" svtk_to_gatk_formatter_script} \
-      --vcf tmp1.vcf.gz \
-      --out tmp2.vcf.gz \
-      --ploidy-table ~{ploidy_table}
-    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" main_script} tmp2.vcf.gz \
-      | bcftools sort -Oz -o ~{output_prefix}.main.vcf.gz
-    tabix ~{output_prefix}.main.vcf.gz
-
     # Convert format
-    bcftools reheader -s <(echo "~{sample_id}") ~{truth_vcf} > tmp1.vcf.gz
-    python ~{default="/opt/sv-pipeline/scripts/format_pb_for_gatk.py" truth_script} \
+    bcftools reheader -s <(echo "~{sample_id}") ~{vcf} > tmp1.vcf.gz
+    python ~{default="/opt/sv-pipeline/scripts/format_pb_for_gatk.py" script} \
       --vcf tmp1.vcf.gz \
       --algorithm ~{truth_tool_name} \
       --min-size ~{min_size} \
       --out tmp2.vcf.gz \
       --ploidy-table ~{ploidy_table}
     bcftools sort tmp2.vcf.gz \
-      | bcftools annotate --set-id '~{truth_tool_name}_%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN' -Oz -o ~{output_prefix}.~{truth_tool_name}.vcf.gz
-    tabix ~{output_prefix}.~{truth_tool_name}.vcf.gz
+      | bcftools annotate --set-id '~{truth_tool_name}_%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN' -Oz -o ~{output_prefix}.~{sample_id}.~{truth_tool_name}.vcf.gz
+    tabix ~{output_prefix}.~{sample_id}.~{truth_tool_name}.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

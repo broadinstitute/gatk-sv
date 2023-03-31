@@ -62,7 +62,12 @@ task SVConcordanceTask {
     String output_prefix
     File reference_dict
     String? contig
+
+    Float? pesr_interval_overlap
+    Float? pesr_size_similarity
+    Int? pesr_breakend_window
     String? additional_args
+
     Float? java_mem_fraction
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -113,6 +118,9 @@ task SVConcordanceTask {
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
+      ~{"--pesr-interval-overlap " + pesr_interval_overlap} \
+      ~{"--pesr-size-similarity " + pesr_size_similarity} \
+      ~{"--pesr-breakend-window " + pesr_breakend_window} \
       ~{additional_args}
   >>>
   runtime {
