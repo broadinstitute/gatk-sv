@@ -572,7 +572,7 @@ task TarFiles {
 
   command <<<
     set -euo pipefail
-    tar xzf ~{prefix}.tar.gz -T ~{write_lines(files)}
+    tar czf ~{prefix}.tar.gz -T ~{write_lines(files)}
   >>>
 
   output {
