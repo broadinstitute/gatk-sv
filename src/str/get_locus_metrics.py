@@ -67,10 +67,14 @@ def call_reviewer(
     result = subprocess.run(cmd, shell=True)
 
     svg_filename = f"{prefix}.svg"
+    metrics_filename = f"{prefix}_phasing.csv"
+    phasing_filename = f"{prefix}_phasing.csv"
     os.rename(f"{prefix}.{locus_id}.svg", svg_filename)
+    os.rename(f"{prefix}.metrics.tsv", metrics_filename)
+    os.rename(f"{prefix}.phasing.tsv", phasing_filename)
 
-    metrics_df = pd.read_csv(f"{prefix}.metrics.tsv", delimiter="\t")
-    phasing_df = pd.read_csv(f"{prefix}.phasing.tsv", delimiter="\t")
+    metrics_df = pd.read_csv(metrics_filename, delimiter="\t")
+    phasing_df = pd.read_csv(phasing_filename, delimiter="\t")
 
     # The two dfs may have different shapes, so row count is get for each df separately.
     metrics_df[SAMPLE_ID_COL_NAME] = [sample_id] * metrics_df.shape[0]
