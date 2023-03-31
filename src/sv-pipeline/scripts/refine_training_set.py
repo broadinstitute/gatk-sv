@@ -110,12 +110,13 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--loose-concordance-vcfs", nargs='+', default=[], required=True,
                         help="Space-separated list of vcfs, this will be the cleaned vcf evaluated with  "
                              "SVConcordance using loose concordance parameters against each tool")
-    parser.add_argument("--strict-clustered-vcfs", nargs='+', default=[], required=True,
+    parser.add_argument("--strict-concordance-vcfs", nargs='+', default=[], required=True,
                         help="Space-separated list of vcfs, this will be the cleaned vcf evaluated with "
                              " SVConcordance using strict concordance parameters against each tool")
     parser.add_argument("--main-vcf", type=str, required=True,  help="Usually this will be the cleaned vcf")
     parser.add_argument("--vapor-json", type=str, required=True, help="Vapor truth set json")
-    parser.add_argument("--out", type=str, required=True, help="Output json path")
+    parser.add_argument("--json-out", type=str, required=True, help="Output json path")
+    parser.add_argument("--table-out", type=str, required=True, help="Output tsv path")
     parser.add_argument("--sample-id", type=str, required=True, help="Sample id")
     parser.add_argument("--min-strict-algorithm-count", type=int, default=1,
                         help="Minimum number of strictly concordant truth algorithms required for call to be true")
@@ -134,12 +135,6 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parsed_arguments = parser.parse_args(argv[1:])
     if len(parsed_arguments.loose_concordance_vcfs) != len(parsed_arguments.strict_concordance_vcfs):
         raise ValueError(f"Must have same number of strict concordance vcfs as loose concordance vcfs")
-    if parsed_arguments.strict_min_algorithm_count <= parsed_arguments.strict_max_algorithm_count:
-        raise ValueError(f"Min algorithm count ({parsed_arguments.strict_min_algorithm_count} must be "
-                         f"strictly greater than max algorithm count ({parsed_arguments.strict_max_algorithm_count})")
-    if parsed_arguments.loose_min_algorithm_count <= parsed_arguments.loose_max_algorithm_count:
-        raise ValueError(f"Min algorithm count ({parsed_arguments.loose_min_algorithm_count} must be "
-                         f"strictly greater than max algorithm count ({parsed_arguments.loose_max_algorithm_count})")
     return parsed_arguments
 
 
@@ -158,13 +153,13 @@ def main(argv: Optional[List[Text]] = None):
 
     # Parse clustered vcfs and generate labels
     truth_algs = _parse_arg_list(arguments.truth_algorithms)
-    strict_labels = defaultdict()
+    strict_labels = defaultdict(list)
     if len(arguments.loose_concordance_vcfs) != len(truth_algs):
         raise ValueError(f"Must enter same number of strict and loose concordance vcfs as truth algorithms")
     for i in range(len(arguments.strict_concordance_vcfs)):
         with pysam.VariantFile(arguments.strict_concordance_vcfs[i]) as vcf:
             parse_truth_support(labels=strict_labels, vcf=vcf, main_vids=main_vids, truth_alg=truth_algs[i])
-    loose_labels = defaultdict()
+    loose_labels = defaultdict(list)
     for i in range(len(arguments.loose_concordance_vcfs)):
         with pysam.VariantFile(arguments.loose_concordance_vcfs[i]) as vcf:
             parse_truth_support(labels=loose_labels, vcf=vcf, main_vids=main_vids, truth_alg=truth_algs[i])
@@ -175,8 +170,20 @@ def main(argv: Optional[List[Text]] = None):
                                    strict_labels=strict_labels, loose_labels=loose_labels,
                                    strict_support_threshold=arguments.min_strict_algorithm_count,
                                    loose_support_threshold=arguments.max_loose_algorithm_count)
-    with open(arguments.out, 'w') as f:
+    with open(arguments.json_out, 'w') as f:
         f.write(json.dumps(refined_labels))
+    refined_label_sets = {key: set(val) for key, val in refined_labels[arguments.sample_id].items()}
+    print(strict_labels)
+    with open(arguments.table_out, 'w') as f:
+        f.write("vid\tsample\tlabel\tvapor\t" + "\t".join([f"{a}_strict" for a in truth_algs])
+                + "\t" + "\t".join([f"{a}_loose" for a in truth_algs]) + "\n")
+        for vid in main_vids:
+            label_col = "1" if vid in refined_label_sets[GOOD_VARIANTS_KEY] \
+                else "0" if vid in refined_label_sets[BAD_VARIANTS_KEY] else "NA"
+            vapor_col = "1" if vid in vapor_true else "0" if vid in vapor_false else "NA"
+            strict_cols = "\t".join(["1" if alg in strict_labels[vid] else "0" for alg in truth_algs])
+            loose_cols = "\t".join(["1" if alg in loose_labels[vid] else "0" for alg in truth_algs])
+            f.write(f"{vid}\t{arguments.sample_id}\t{label_col}\t{vapor_col}\t{strict_cols}\t{loose_cols}\n")
 
 
 if __name__ == "__main__":

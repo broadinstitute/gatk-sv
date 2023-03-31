@@ -7,12 +7,10 @@ import "Utils.wdl" as utils
 
 workflow SVConcordancePacBioSample {
   input {
-
-    # Sample ids as they appear in the sample vcfs. Pacbio vcf samples will be renamed.
-    String sample_id
-    File sample_vcf
-    Array[File] pacbio_sample_vcfs
-    Array[String] tool_names
+    String sample_id  # Sample IDs will be renamed to this in the PacBio vcfs
+    File sample_vcf  # Single-sample vcf, usually derived from the concordance vcf. Sample ID should match sample_id.
+    Array[File] pacbio_sample_vcfs  # Raw single-sample vcfs from each tool. Sample ID will be changed to sample_id.
+    Array[String] tool_names  # Names of PacBio tools in same order as pacbio_sample_vcfs
     String prefix
     File ploidy_table
 
@@ -53,8 +51,8 @@ workflow SVConcordancePacBioSample {
     }
     call conc.SVConcordanceTask {
       input:
-        truth_vcf=sample_vcf,
-        eval_vcf=PrepPacBioVcf.out,
+        truth_vcf=PrepPacBioVcf.out,
+        eval_vcf=sample_vcf,
         output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}",
         pesr_interval_overlap=pesr_interval_overlap,
         pesr_size_similarity=pesr_size_similarity,
