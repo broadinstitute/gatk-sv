@@ -86,7 +86,7 @@ workflow ExpansionHunterScatter {
         Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
         Array[File] reviewer_metrics = ExpansionHunter.reviewer_metrics
         Array[File] reviewer_missing_metrics = ExpansionHunter.reviewer_missing_metrics
-        Array[File] reviewer_outputs_gz = ExpansionHunter.reviewer_outputs_gz
+        Array[File] reviewer_images_gz = ExpansionHunter.reviewer_images_gz
     }
 }
 

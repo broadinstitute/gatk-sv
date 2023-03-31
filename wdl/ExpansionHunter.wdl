@@ -105,8 +105,8 @@ workflow ExpansionHunter {
             generate_realigned_bam = generate_realigned_bam_,
             generate_vcf = generate_vcf_,
             sample_id = sample_id,
-            reviewer_outputs_gz = RunReviewer.reviewer_outputs_gz,
-            all_metrics = RunReviewer.all_metrics,
+            reviewer_images_gzs = RunReviewer.reviewer_images_gz,
+            sample_metrics = RunReviewer.sample_metrics,
             output_prefix = sample_id,
             expansion_hunter_docker = expansion_hunter_docker,
             runtime_override = runtime_concat
@@ -121,7 +121,7 @@ workflow ExpansionHunter {
         Array[File] jsons_gz = RunExpansionHunter.json_gz
         File reviewer_metrics = ConcatEHOutputs.reviewer_metrics
         File reviewer_missing_metrics = ConcatEHOutputs.reviewer_missing_metrics
-        File reviewer_outputs_gz = ConcatEHOutputs.reviewer_outputs_gz
+        File reviewer_images_gz = ConcatEHOutputs.reviewer_images_gz
     }
 }
 
@@ -240,8 +240,8 @@ task ConcatEHOutputs {
         Array[File] alleles_tsvs
         Array[File] realigned_bams
         Array[File] realigned_bams_index
-        Array[File?] reviewer_outputs_gz
-        Array[Array[File]?] all_metrics
+        Array[File?] reviewer_images_gzs
+        Array[File?] sample_metrics
         String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
@@ -256,13 +256,13 @@ task ConcatEHOutputs {
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
         File realigned_bam_index = "${output_prefix}.bam.bai"
-        File reviewer_metrics = "reviewer_all_metrics.txt"
-        File reviewer_missing_metrics = "missing_metrics.txt"
-        File reviewer_outputs_gz = "reviewer_outputs.tar.gz"
+        File reviewer_metrics = "metrics.csv"
+        File reviewer_missing_metrics = "missing_metrics.csv"
+        File reviewer_images_gz = "reviewer_images.tar.gz"
     }
 
-    Array[File] all_metrics_flat = flatten(select_all(all_metrics))
-    Array[File] reviewer_outputs_gz_ = select_all(reviewer_outputs_gz)
+    Array[File] sample_metrics_ = select_all(sample_metrics)
+    Array[File] reviewer_images_gz_ = select_all(reviewer_images_gzs)
 
     command <<<
         set -euxo pipefail
@@ -301,14 +301,17 @@ task ConcatEHOutputs {
         gzip "~{output_prefix}_alleles.tsv"
         gzip "~{output_prefix}_variants.tsv"
 
-        python /opt/str/combine_files_final.py ~{write_lines(all_metrics_flat)}
+        python /opt/str/merge_csv_files.py \
+            --input-filename ~{write_lines(sample_metrics_)} \
+            --metrics metrics.csv \
+            --missing-metrics missing_metrics.csv
 
         # Combine multiple archives into one archive,
         # by first extracting the files then re-archiving it.
         # This allows preserving a flat structure with one archive,
         # otherwise, it would create an archive containing archives.
         mkdir temp_dir
-        cat ~{write_lines(reviewer_outputs_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf reviewer_outputs.tar.gz -C temp_dir/ .
+        cat ~{write_lines(reviewer_images_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf reviewer_images.tar.gz -C temp_dir/ .
     >>>
 
     RuntimeAttr runtime_default = object {
@@ -351,8 +354,8 @@ task RunReviewer {
     }
 
     output {
-        File? reviewer_outputs_gz = "reviewer_outputs.tar.gz"
-        Array[File]? all_metrics = glob("${sample_id}_*_AllMetrics")
+        File? reviewer_images_gz = "reviewer_images.tar.gz"
+        File? sample_metrics = "${sample_id}_metrics.csv"
     }
 
     command <<<
@@ -364,45 +367,15 @@ task RunReviewer {
 
         gunzip -c ~{vcf_gz} > genotypes.vcf
 
-        for LOCUS in $(jq -c '.[]' ~{variant_catalog_json}); do
-            LOCUS_ID=$(echo $LOCUS | jq -r '.LocusId')
+        python /opt/str/get_locus_metrics.py \
+            --sample-id ~{sample_id} \
+            --realigned-bam ~{realigned_bam} \
+            --reference $REF \
+            --genotypes genotypes.vcf \
+            --variant-catalog ~{variant_catalog_json} \
+            --output ~{sample_id}_metrics.csv
 
-            reviewer \
-                --reads ~{realigned_bam} \
-                --vcf genotypes.vcf \
-                --reference $REF \
-                --catalog ~{variant_catalog_json} \
-                --locus $LOCUS_ID \
-                --output-prefix ~{sample_id}_$LOCUS_ID
-
-            mv ~{sample_id}_$LOCUS_ID.*.svg ~{sample_id}_$LOCUS_ID.svg
-            mv ~{sample_id}_$LOCUS_ID.metrics.tsv ~{sample_id}_$LOCUS_ID\_metrics.tsv
-            mv ~{sample_id}_$LOCUS_ID.phasing.tsv ~{sample_id}_$LOCUS_ID\_phasing.tsv
-
-            python /opt/str/get_reviewer_image_sections.py \
-                ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_GapsCounts \
-                ~{sample_id}_$LOCUS_ID\_info
-
-            bash /opt/str/count_nucleotides_from_reads_Total.sh \
-                ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_info \
-                > ~{sample_id}_$LOCUS_ID\_TotalCounts
-
-            bash /opt/str/count_nucleotides_from_reads_ORANGE.sh \
-                ~{sample_id}_$LOCUS_ID.svg \
-                ~{sample_id}_$LOCUS_ID\_info \
-                > ~{sample_id}_$LOCUS_ID\_OrangeCounts
-
-            python /opt/str/combine_files.py \
-                ~{sample_id}_$LOCUS_ID\_metrics.tsv \
-                ~{sample_id}_$LOCUS_ID\_GapsCounts \
-                ~{sample_id}_$LOCUS_ID\_TotalCounts \
-                ~{sample_id}_$LOCUS_ID\_OrangeCounts \
-                ~{sample_id}_$LOCUS_ID\_AllMetrics
-        done
-
-        tar -czvf reviewer_outputs.tar.gz ~{sample_id}_*.svg ~{sample_id}_*_metrics.tsv ~{sample_id}_*_phasing.tsv
+        tar -czvf reviewer_images.tar.gz ~{sample_id}_*.svg
     >>>
 
     RuntimeAttr runtime_default = object {
