@@ -122,12 +122,12 @@ fi
 
 printf '%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\n' Total_interrupting_nucleotides_upper Median_upper Total_interrupting_nucleotides_bottom Median_bottom $Total $median $Total_bottom $median_bottom
 
-rm "$image"_TEMP
-rm "$image"_TEMP2
-rm "$image"_TEMP3
-rm "$image"_TEMP_bottom
-rm "$image"_TEMP2_bottom
-rm "$image"_TEMP3_bottom
+rm -f "$image"_TEMP || true
+rm -f "$image"_TEMP2 || true
+rm -f "$image"_TEMP3 || true
+rm -f "$image"_TEMP_bottom || true
+rm -f "$image"_TEMP2_bottom || true
+rm -f "$image"_TEMP3_bottom || true
 rm RANGE
-rm "$image"_Sum.txt
-rm "$image"_Sum_bottom.txt
+rm -f "$image"_Sum.txt || true
+rm -f "$image"_Sum_bottom.txt || true

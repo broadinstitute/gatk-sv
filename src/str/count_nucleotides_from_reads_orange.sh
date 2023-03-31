@@ -107,7 +107,7 @@ then
   Lines2=$(cat "$image"_TEMP3_bottom_or)
   for line2 in $Lines2
   do
-    Yaxis_bottom=$(echo $line2 | awk '{print "y=""\""$1"\""}' | awk '{ gsub (" ", "", $0); print}')    
+    Yaxis_bottom=$(echo $line2 | awk '{print "y=""\""$1"\""}' | awk '{ gsub (" ", "", $0); print}')
     A_bottom=$(sed 's/<text/\n/g' $image | grep -w $Yaxis_bottom| awk '{gsub("x=\"","",$1);print}' | awk '{gsub("\"","",$1);print}' | awk -v x="$StartX_bottom" -v xe="$EndX_bottom" '{if ($1>x && $1<xe) print}' | grep -o '>A<' | wc -l)
     T_bottom=$(sed 's/<text/\n/g' $image | grep -w $Yaxis_bottom| awk '{gsub("x=\"","",$1);print}' | awk '{gsub("\"","",$1);print}' | awk -v x="$StartX_bottom" -v xe="$EndX_bottom" '{if ($1>x && $1<xe) print}' | grep -o '>T<' | wc -l)
     G_bottom=$(sed 's/<text/\n/g' $image | grep -w $Yaxis_bottom| awk '{gsub("x=\"","",$1);print}' | awk '{gsub("\"","",$1);print}' | awk -v x="$StartX_bottom" -v xe="$EndX_bottom" '{if ($1>x && $1<xe) print}' | grep -o '>G<' | wc -l)
@@ -115,7 +115,7 @@ then
     Acount_orange_bottom=$((Acount_orange_bottom+A_bottom))
     Tcount_orange_bottom=$((Tcount_orange_bottom+T_bottom))
     Gcount_orange_bottom=$((Gcount_orange_bottom+G_bottom))
-    Ccount_orange_bottom=$((Ccount_orange_bottom+C_bottom))      
+    Ccount_orange_bottom=$((Ccount_orange_bottom+C_bottom))
     sum_tot_bottom=$((C_bottom+A_bottom+T_bottom+G_bottom))
     echo $sum_tot_bottom
   done >> "$image"_Sum_Line_bottom_or.txt
@@ -144,16 +144,15 @@ then
 fi
 
 
-rm "$image"_TEMP_or
-rm "$image"_TEMP2_or
-rm "$image"_TEMP3_or
-rm "$image"_TEMP_bottom_or
-rm "$image"_TEMP2_bottom_or
-rm "$image"_TEMP3_bottom_or
+rm -f "$image"_TEMP_or || true
+rm -f "$image"_TEMP2_or || true
+rm -f "$image"_TEMP3_or || true
+rm -f "$image"_TEMP_bottom_or || true
+rm -f "$image"_TEMP2_bottom_or || true
+rm -f "$image"_TEMP3_bottom_or || true
 rm RANGE_x_or
 rm RANGE_or
-rm "$image"_Sum_Line_bottom_or.txt
-rm "$image"_Sum_Line_or.txt
-
+rm -f "$image"_Sum_Line_bottom_or.txt || true
+rm -f "$image"_Sum_Line_or.txt || true
 
 printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' A_upper_Orange T_upper_Orange G_upper_Orange C_upper_Orange Total_upper_Orange Median_orange_upper Total_read_upper Count_Orange_Upper_reads_with_interruptions A_bottom_Orange T_bottom_Orange G_bottom_Orange C_bottom_Orange Total_bottom_Orange Median_orange_bottom Total_read_bottom Count_Orange_Bottom_reads_with_interruptions $Acount_orange $Tcount_orange $Gcount_orange $Ccount_orange $Total_orange $median $Total_read $Count_Orange_Upper_reads_with_interruptions $Acount_orange_bottom $Tcount_orange_bottom $Gcount_orange_bottom $Ccount_orange_bottom $Total_orange_bottom $median_bottom $Total_read_bottom $Count_Orange_Bottom_reads_with_interruptions
