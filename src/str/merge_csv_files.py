@@ -2,7 +2,7 @@ import argparse
 import pandas as pd
 
 
-def merge_files(input_filename: str, metrics_filename:str, missing_metrics_filename:str):
+def merge_files(input_filename: str, metrics_filename: str, missing_metrics_filename: str):
     with open(input_filename, "r") as fin:
         files = [line.rstrip() for line in fin]
 
@@ -19,8 +19,8 @@ def merge_files(input_filename: str, metrics_filename:str, missing_metrics_filen
         df = pd.concat(dfs, axis=0, ignore_index=True)
         na_free = df.dropna()
         only_na = df[df.isna().any(axis=1)]
-        na_free.to_csv(metrics_filename,sep='\t',index=None)
-        only_na.to_csv(missing_metrics_filename,sep='\t',index=None)
+        na_free.to_csv(metrics_filename, sep='\t', index=None)
+        only_na.to_csv(missing_metrics_filename, sep='\t', index=None)
     else:
         open(metrics_filename, "w").close()
         open(missing_metrics_filename, "w").close()
