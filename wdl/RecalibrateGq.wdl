@@ -18,7 +18,7 @@ workflow RecalibrateGq {
         Int? transfer_annotations_shard_size
         Array[File] genome_tracks
         File gq_recalibrator_model_file
-        Boolean standardize_vcf = true
+        Boolean standardize_vcf = false
         Array[String] standardize_vcf_args = []
         Array[String] recalibrate_gq_args = []
         String samtools_cloud_docker

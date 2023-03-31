@@ -5,7 +5,6 @@
   "SVConcordance.eval_vcf" : {{ test_batch.gatk_formatted_vcf | tojson }},
   "SVConcordance.truth_vcf" : {{ test_batch.joined_raw_calls_vcf | tojson }},
 
-  "SVConcordance.ploidy_table": {{ test_batch.ploidy_table | tojson }},
   "SVConcordance.output_prefix": {{ test_batch.name | tojson }},
 
   "SVConcordance.contig_list": {{ reference_resources.primary_contigs_list | tojson }},

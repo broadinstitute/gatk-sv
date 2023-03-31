@@ -11,6 +11,7 @@ workflow SubsetVcfBySamples {
     String? outfile_name
     Boolean? remove_samples  # If false (default), keep samples in provided list. If true, remove them.
     Boolean? remove_private_sites  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
+    Boolean? keep_af  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
 
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_subset_by_samples
@@ -24,6 +25,7 @@ workflow SubsetVcfBySamples {
       outfile_name = outfile_name,
       remove_samples = remove_samples,
       remove_private_sites = remove_private_sites,
+      keep_af = keep_af,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_subset_by_samples
   }

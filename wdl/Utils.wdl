@@ -648,6 +648,7 @@ task SubsetVcfBySamplesList {
     String? outfile_name
     Boolean remove_samples = false  # If false (default), keep samples in provided list. If true, remove them.
     Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
+    Boolean keep_af = true  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -655,7 +656,8 @@ task SubsetVcfBySamplesList {
   String vcf_subset_filename = select_first([outfile_name, basename(vcf, ".vcf.gz") + ".subset.vcf.gz"])
   String vcf_subset_idx_filename = vcf_subset_filename + ".tbi"
 
-  String remove_private_sites_flag = if remove_private_sites then " | bcftools +fill-tags -- -t AC | bcftools view -i 'SVTYPE==\"CNV\" || AC>0' " else ""
+  String remove_private_sites_flag = if remove_private_sites then " | bcftools view -e 'SVTYPE!=\"CNV\" && COUNT(GT=\"alt\")==0' " else ""
+  String keep_af_flag = if keep_af then "--no-update" else ""
   String complement_flag = if remove_samples then "^" else ""
 
   # Disk must be scaled proportionally to the size of the VCF
@@ -677,6 +679,7 @@ task SubsetVcfBySamplesList {
     bcftools view \
       -S ~{complement_flag}~{list_of_samples} \
       --force-samples \
+      ~{keep_af_flag} \
       ~{vcf} \
       ~{remove_private_sites_flag} \
       -O z \

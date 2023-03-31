@@ -118,6 +118,10 @@ def convert(record: pysam.VariantRecord,
     header: pysam.VariantRecord
         gatk-style record
     """
+
+    def is_null(val):
+        return val is None or val == "."
+
     svtype = record.info['SVTYPE']
     contig = record.contig
     if svtype == 'BND':
@@ -143,6 +147,12 @@ def convert(record: pysam.VariantRecord,
                 # Sometimes SOURCE is not set (may be from CPX review workflow)
                 record.info['CHR2'] = record.chrom
                 record.info['END2'] = record.stop
+    # Delete empty INFO fields (GATK does not like "." for non-String types)
+    keys = record.info.keys()
+    for k in keys:
+        val = record.info[k]
+        if is_null(val) or (isinstance(val, tuple) and len(val) == 1 and is_null(val[0])):
+            del record.info[k]
     # copy FORMAT fields
     for sample, genotype in record.samples.items():
         genotype['ECN'] = ploidy_dict[sample][contig]
