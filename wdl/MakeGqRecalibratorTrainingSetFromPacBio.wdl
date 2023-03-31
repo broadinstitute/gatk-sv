@@ -55,9 +55,27 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     else
         basename(vcf, ".vcf.gz")
 
+  call utils.WriteLines {
+    input:
+      lines = pacbio_sample_ids,
+      output_filename = "~{output_prefix}.pacbio_sample_ids.list",
+      linux_docker = linux_docker
+  }
+
+  call utils.SubsetVcfBySamplesList {
+    input:
+      vcf = vcf,
+      vcf_idx = vcf + ".tbi",
+      list_of_samples = WriteLines.out,
+      remove_samples = true,
+      remove_private_sites = true,
+      keep_af = true,
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
   call GetVariantListsFromVaporAndIRS {
     input:
-      vcf=vcf,
+      vcf=SubsetVcfBySamplesList.vcf_subset,
       output_prefix=output_prefix_,
       vapor_sample_ids=pacbio_sample_ids,
       vapor_files=vapor_files,
@@ -75,7 +93,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
   call VaporAndIRSSupportReport {
     input:
-      vcf=vcf,
+      vcf=SubsetVcfBySamplesList.vcf_subset,
       output_prefix=output_prefix_,
       vapor_sample_ids=pacbio_sample_ids,
       vapor_files=vapor_files,
@@ -96,8 +114,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     call PrepSampleVcf {
       input:
         sample_id=sample,
-        vcf=vcf,
-        vcf_index=vcf + ".tbi",
+        vcf=SubsetVcfBySamplesList.vcf_subset,
+        vcf_index=SubsetVcfBySamplesList.vcf_subset_index,
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
