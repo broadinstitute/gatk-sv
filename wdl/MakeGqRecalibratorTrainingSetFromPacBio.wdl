@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "SVConcordancePerSamplePacBio.wdl" as concordance
+import "SVConcordancePacBioSample.wdl" as concordance
 import "Utils.wdl" as utils
 
 workflow MakeGqRecalibratorTrainingSetFromPacBio {
@@ -110,7 +110,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_utils_docker=sv_utils_docker
   }
 
-  scatter (i in length(pacbio_sample_ids)) {
+  scatter (i in range(length(pacbio_sample_ids))) {
     call PrepSampleVcf {
       input:
         sample_id=pacbio_sample_ids[i],
@@ -119,12 +119,12 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    call concordance.SVConcordancePerSamplePacBio as SVConcordanceLoose {
+    call concordance.SVConcordancePacBioSample as SVConcordanceLoose {
       input:
         sample_id=pacbio_sample_ids[i],
-        sample_vcfs=PrepSampleVcf.out,
+        sample_vcf=PrepSampleVcf.out,
         pacbio_sample_vcfs=pacbio_vcfs[i],
-        pacbio_tool_name=tool_names[i],
+        tool_names=tool_names,
         prefix=output_prefix_,
         ploidy_table=ploidy_table,
         reference_dict=reference_dict,
@@ -135,12 +135,12 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
-    call concordance.SVConcordancePerSamplePacBio as SVConcordanceStrict {
+    call concordance.SVConcordancePacBioSample as SVConcordanceStrict {
       input:
         sample_id=pacbio_sample_ids[i],
-        sample_vcfs=PrepSampleVcf.out,
+        sample_vcf=PrepSampleVcf.out,
         pacbio_sample_vcfs=pacbio_vcfs[i],
-        pacbio_tool_name=tool_names[i],
+        tool_names=tool_names,
         prefix=output_prefix_,
         ploidy_table=ploidy_table,
         reference_dict=reference_dict,
