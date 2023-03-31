@@ -151,9 +151,38 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
+    call RefineSampleLabels {
+      input:
+        sample_id=pacbio_sample_ids[i],
+        main_vcf=PrepSampleVcf.out,
+        vapor_irs_json=GetVariantListsFromVaporAndIRS.output_json,
+        tool_names=tool_names,
+        loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
+        strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
+        output_prefix="~{output_prefix_}.gq_training_labels.~{pacbio_sample_ids[i]}",
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+  }
+
+  call MergeJsons {
+    input:
+      base_json=GetVariantListsFromVaporAndIRS.output_json,
+      jsons=RefineSampleLabels.out_json,
+      output_prefix="~{output_prefix_}.gq_training_labels",
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  call MergeHeaderedTables {
+    input:
+      tables=RefineSampleLabels.out_table,
+      output_prefix="~{output_prefix_}.gq_training_labels",
+      linux_docker=linux_docker
   }
 
   output {
+    File gq_recalibrator_training_json = MergeJsons.out
+    File pacbio_support_summary_table = MergeHeaderedTables.out
+
     File vapor_and_irs_output_json = GetVariantListsFromVaporAndIRS.output_json
     File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
     File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
@@ -403,9 +432,63 @@ task VaporAndIRSSupportReport {
 }
 
 
+task RefineSampleLabels {
+  input {
+    String sample_id
+    File main_vcf
+    File vapor_irs_json
+    Array[String] tool_names
+    Array[File] loose_concordance_vcfs
+    Array[File] strict_concordance_vcfs
+    String? additional_args
+    File? script
+    String output_prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String additional_args_ = if defined(additional_args) then additional_args else ""
+
+  output {
+    File out_json = "~{output_prefix}.json"
+    File out_table = "~{output_prefix}.tsv"
+  }
+  command <<<
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/scripts/refine_training_set.py" script} \
+      --loose-concordance-vcfs ~{sep=" " loose_concordance_vcfs} \
+      --strict-concordance-vcfs ~{sep=" " strict_concordance_vcfs} \
+      --main-vcf ~{main_vcf} \
+      --vapor-json ~{vapor_irs_json} \
+      --sample-id ~{sample_id} \
+      --json-out ~{output_prefix}.json \
+      --table-out ~{output_prefix}.tsv \
+      --truth-algorithms pav,pbsv,sniffles \
+      ~{additional_args_}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task MergeJsons {
   input {
-    File input_json
+    File base_json
     Array[File] jsons
     String output_prefix
     String sv_pipeline_docker
@@ -415,7 +498,7 @@ task MergeJsons {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 7.5,
-                               disk_gb: ceil(50 + size(jsons, "GB") * 2 + size(input_json, "GB")),
+                               disk_gb: ceil(10 + size(jsons, "GB") * 2 + size(base_json, "GB") * 2),
                                boot_disk_gb: 10,
                                preemptible_tries: 1,
                                max_retries: 1
@@ -435,8 +518,8 @@ task MergeJsons {
     for p in paths:
         with open(p) as f:
             data.update(json.load(f))
-    with open('~{input_json}') as f:
-        # Add short-read-only sample sites, e.g. from arrays
+    with open('~{base_json}') as f:
+        # Add samples without pacbio data
         for key, value in json.load(f).items():
             if key not in data:
                 data[key] = value
@@ -450,6 +533,53 @@ task MergeJsons {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task MergeHeaderedTables {
+  input {
+    Array[File] tables
+    String output_prefix
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1,
+                               disk_gb: ceil(10 + 2 * size(tables, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 1,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.tsv"
+  }
+  command <<<
+    set -euo pipefail
+    OUT_FILE="~{output_prefix}.tsv"
+    i=0
+    while read path; do
+      if [ $i == 0 ]; then
+        # Get header from first line of first file
+        awk 'NR==1' $path > $OUT_FILE
+      fi
+      # Get data from each file, skipping header line
+      awk 'NR>1' $path >> $OUT_FILE
+      i=$((i+1))
+    done < ~{write_lines(tables)}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

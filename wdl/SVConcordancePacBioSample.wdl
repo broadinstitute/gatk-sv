@@ -36,7 +36,7 @@ workflow SVConcordancePacBioSample {
     RuntimeAttr? runtime_attr_tar
   }
 
-  scatter (i in range(length(pacbio_sample_vcfs))) {
+  scatter (i in range(length(tool_names))) {
     call PrepPacBioVcf {
       input:
         sample_id=sample_id,
@@ -73,6 +73,7 @@ workflow SVConcordancePacBioSample {
   }
 
   output {
+    Array[File] pacbio_concordance_vcfs = SVConcordanceTask.out
     File pacbio_concordance_vcfs_tar = TarFiles.out
   }
 }
@@ -95,7 +96,7 @@ task PrepPacBioVcf {
                                mem_gb: 1,
                                disk_gb: ceil(10 + 3 * size(vcf, "GB")),
                                boot_disk_gb: 10,
-                               preemptible_tries: 1,
+                               preemptible_tries: 3,
                                max_retries: 1
                              }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -129,3 +130,4 @@ task PrepPacBioVcf {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
