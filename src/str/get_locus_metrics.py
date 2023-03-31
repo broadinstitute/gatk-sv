@@ -326,7 +326,7 @@ def main():
     )
 
     parser.add_argument(
-        "-i", "--realigned_bam",
+        "-i", "--realigned-bam",
         help="The file containing realigned read in the BAM format. "
              "This full MUST be the output of ExpansionHunter, "
              "other BAM files are not supported. "
