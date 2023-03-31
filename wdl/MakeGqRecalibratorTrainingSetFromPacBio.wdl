@@ -1,7 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "SVConcordancePacBio.wdl" as concordance
+import "SVConcordancePerSamplePacBio.wdl" as concordance
 import "Utils.wdl" as utils
 
 workflow MakeGqRecalibratorTrainingSetFromPacBio {
@@ -47,7 +47,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
   }
 
   Array[String] tool_names = ["pbsv", "pav", "sniffles"]
-  Array[Array[File]] pacbio_vcfs = [pbsv_vcfs, pav_vcfs, sniffles_vcfs]
+  Array[Array[File]] pacbio_vcfs = transpose([pbsv_vcfs, pav_vcfs, sniffles_vcfs])
 
   String output_prefix_ =
     if defined(output_prefix) then
@@ -67,7 +67,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       vcf = vcf,
       vcf_idx = vcf + ".tbi",
       list_of_samples = WriteLines.out,
-      remove_samples = true,
+      remove_samples = false,
       remove_private_sites = true,
       keep_af = true,
       sv_base_mini_docker = sv_base_mini_docker
@@ -110,21 +110,18 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_utils_docker=sv_utils_docker
   }
 
-  scatter (sample in pacbio_sample_ids) {
+  scatter (i in length(pacbio_sample_ids)) {
     call PrepSampleVcf {
       input:
-        sample_id=sample,
+        sample_id=pacbio_sample_ids[i],
         vcf=SubsetVcfBySamplesList.vcf_subset,
         vcf_index=SubsetVcfBySamplesList.vcf_subset_index,
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
-  }
-
-  scatter (i in range(length(tool_names))) {
-    call concordance.SVConcordancePacBio as SVConcordancePacBioLoose {
+    call concordance.SVConcordancePerSamplePacBio as SVConcordanceLoose {
       input:
-        sample_ids=pacbio_sample_ids,
+        sample_id=pacbio_sample_ids[i],
         sample_vcfs=PrepSampleVcf.out,
         pacbio_sample_vcfs=pacbio_vcfs[i],
         pacbio_tool_name=tool_names[i],
@@ -138,9 +135,9 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
-    call concordance.SVConcordancePacBio as SVConcordancePacBioStrict {
+    call concordance.SVConcordancePerSamplePacBio as SVConcordanceStrict {
       input:
-        sample_ids=pacbio_sample_ids,
+        sample_id=pacbio_sample_ids[i],
         sample_vcfs=PrepSampleVcf.out,
         pacbio_sample_vcfs=pacbio_vcfs[i],
         pacbio_tool_name=tool_names[i],
@@ -160,8 +157,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     File vapor_and_irs_output_json = GetVariantListsFromVaporAndIRS.output_json
     File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
     File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
-    Array[File] loose_concordance_vcf_tars = SVConcordancePacBioLoose.pacbio_concordance_vcfs_tar
-    Array[File] strict_concordance_vcf_tars = SVConcordancePacBioStrict.pacbio_concordance_vcfs_tar
+    Array[File] loose_pacbio_concordance_vcf_tars = SVConcordanceLoose.pacbio_concordance_vcfs_tar
+    Array[File] strict_pacbio_concordance_vcf_tars = SVConcordanceStrict.pacbio_concordance_vcfs_tar
   }
 }
 
@@ -402,5 +399,58 @@ task VaporAndIRSSupportReport {
     bootDiskSizeGb: runtime_attr.boot_disk_gb
     preemptible: runtime_attr.preemptible_tries
     maxRetries: runtime_attr.max_retries
+  }
+}
+
+
+task MergeJsons {
+  input {
+    File input_json
+    Array[File] jsons
+    String output_prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 7.5,
+                               disk_gb: ceil(50 + size(jsons, "GB") * 2 + size(input_json, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 1,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.json"
+  }
+  command <<<
+    set -euo pipefail
+    python3 <<CODE
+    import json
+    with open('~{write_lines(jsons)}') as f:
+        paths = [line.strip() for line in f]
+    data = {}
+    for p in paths:
+        with open(p) as f:
+            data.update(json.load(f))
+    with open('~{input_json}') as f:
+        # Add short-read-only sample sites, e.g. from arrays
+        for key, value in json.load(f).items():
+            if key not in data:
+                data[key] = value
+    with open('~{output_prefix}.json', 'w') as f:
+        f.write(json.dumps(data))
+    CODE
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
