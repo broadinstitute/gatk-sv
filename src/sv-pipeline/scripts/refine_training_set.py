@@ -173,7 +173,6 @@ def main(argv: Optional[List[Text]] = None):
     with open(arguments.json_out, 'w') as f:
         f.write(json.dumps(refined_labels))
     refined_label_sets = {key: set(val) for key, val in refined_labels[arguments.sample_id].items()}
-    print(strict_labels)
     with open(arguments.table_out, 'w') as f:
         f.write("vid\tsample\tlabel\tvapor\t" + "\t".join([f"{a}_strict" for a in truth_algs])
                 + "\t" + "\t".join([f"{a}_loose" for a in truth_algs]) + "\n")
