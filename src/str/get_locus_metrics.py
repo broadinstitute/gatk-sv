@@ -67,7 +67,7 @@ def call_reviewer(
     result = subprocess.run(cmd, shell=True)
 
     svg_filename = f"{prefix}.svg"
-    metrics_filename = f"{prefix}_phasing.csv"
+    metrics_filename = f"{prefix}_metrics.csv"
     phasing_filename = f"{prefix}_phasing.csv"
     os.rename(f"{prefix}.{locus_id}.svg", svg_filename)
     os.rename(f"{prefix}.metrics.tsv", metrics_filename)
