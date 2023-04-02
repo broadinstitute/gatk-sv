@@ -31,7 +31,14 @@
   "pacbio_sample_concordance_vcf": "gs://broad-dsde-methods-markw/hgdp/training/hgdp.concordance.subset.vcf.gz",
   "pacbio_sample_concordance_vcf_index": "gs://broad-dsde-methods-markw/hgdp/training/hgdp.concordance.subset.vcf.gz.tbi",
   "recalibrate_gq_truth_json": "gs://broad-dsde-methods-markw/hgdp/training/hgdp.gq_training_labels.json",
-  "recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/gq_recalibrator.model",
+
+  "hgdp_recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/hgdp/hgdp.gq_recalibrator.model",
+  "hgdp_recalibrated_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.hgdp_gq_recalibrated.vcf.gz",
+  "hgdp_recalibrated_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.hgdp_gq_recalibrated.vcf.gz.tbi",
+
+  "aou_recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/aou.gq_recalibrator.model",
+  "aou_recalibrated_vcf": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.aou_gq_recalibrated.vcf.gz",
+  "aou_recalibrated_vcf_index": "gs://broad-dsde-methods-markw/hgdp/hgdp.concordance.aou_gq_recalibrated.vcf.gz.tbi",
 
   "pacbio_samples_list": "gs://broad-dsde-methods-markw/hgdp/hgdp.pacbio_samples.list",
   "pacbio_samples": [

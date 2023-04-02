@@ -1,7 +1,7 @@
 {
   "RecalibrateGq.vcf": {{ test_batch.concordance_vcf | tojson }},
   "RecalibrateGq.vcf_index": {{ test_batch.concordance_vcf_index | tojson }},
-  "RecalibrateGq.gq_recalibrator_model_file":  {{ test_batch.recalibrate_gq_model_file | tojson }},
+  "RecalibrateGq.gq_recalibrator_model_file":  {{ test_batch.aou_recalibrate_gq_model_file | tojson }},
   "RecalibrateGq.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
   "RecalibrateGq.recalibrate_gq_args": [
     "--keep-homvar false",

@@ -136,8 +136,8 @@ task RecalibrateGqTask {
           --output ~{filtered_vcf_name} \
           ~{sep=' ' recalibrate_gq_args}
 
-        # gatk indices still have problems, overwrite with bcftools index
-        bcftools index --force --tbi --threads 2 ~{filtered_vcf_name}
+        # gatk indices still have problems, overwrite with tabix
+        tabix -f ~{filtered_vcf_name}
     >>>
 
     output {

@@ -285,9 +285,6 @@ task MakeCrossValidationVcfs {
 
     String fixed_vcf_name = sub(sub(basename(vcf), ".gz$", ""), ".vcf$", "_fixed.vcf.gz")
     String index_file_name = fixed_vcf_name + ".tbi"
-    String pedigree_arg = if defined(ped_file)
-        then "--pedigree " + ped_file
-        else ""
 
     Int disk_gb = 1000 + round((1 + num_splits) * size(vcf, "GiB") + size(truth_vcfs, "GiB") + size(ped_file, "GiB"))
     Float mem_gb = 2.0
@@ -324,7 +321,7 @@ CODE
 } >> "$TRUTH_SAMPLES_FILE"
 
         sv-utils make-cross-validation-vcfs ~{vcf} \
-            ~{pedigree_arg} \
+            ~{"--ped-file " + ped_file} \
             --truth-samples-file "$TRUTH_SAMPLES_FILE" \
             --num-splits ~{num_splits} \
             --index-output-vcf true
