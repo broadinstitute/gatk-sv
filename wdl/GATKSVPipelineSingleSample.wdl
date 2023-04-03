@@ -644,7 +644,6 @@ workflow GATKSVPipelineSingleSample {
         scramble_docker=scramble_docker_,
         wham_docker=wham_docker_,
         gatk_docker=gatk_docker,
-        gatk_docker = gatk_docker,
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,

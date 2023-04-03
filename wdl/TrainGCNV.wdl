@@ -89,7 +89,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
-    String? sv_pipeline_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
+    String sv_pipeline_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr

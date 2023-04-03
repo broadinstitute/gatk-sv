@@ -79,7 +79,6 @@ workflow GatherSampleEvidenceBatch {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -154,7 +153,6 @@ workflow GatherSampleEvidenceBatch {
         melt_docker = melt_docker,
         scramble_docker = scramble_docker,
         wham_docker = wham_docker,
-        gatk_docker = gatk_docker,
         gatk_docker = gatk_docker,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
