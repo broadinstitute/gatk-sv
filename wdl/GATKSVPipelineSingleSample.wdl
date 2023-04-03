@@ -96,9 +96,6 @@ workflow GATKSVPipelineSingleSample {
     File? bam_or_cram_file
     File? bam_or_cram_index
 
-    # Use only for crams in requester pays buckets
-    Boolean requester_pays_cram = false
-
     # Common parameters
     String? reference_version   # Either "38" or "19"
 
@@ -132,9 +129,7 @@ workflow GATKSVPipelineSingleSample {
     Boolean? run_sampleevidence_metrics = false
 
     # Runtime configuration overrides
-    RuntimeAttr? runtime_attr_baf
-    RuntimeAttr? runtime_attr_baf_gather
-    RuntimeAttr? runtime_attr_cram_to_bam
+    RuntimeAttr? runtime_attr_localize_reads
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
@@ -142,7 +137,6 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_scramble
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_include_list
 
     ############################################################
     ## EvidenceQC
@@ -618,7 +612,6 @@ workflow GATKSVPipelineSingleSample {
       input:
         bam_or_cram_file=select_first([bam_or_cram_file]),
         bam_or_cram_index=bam_or_cram_index,
-        requester_pays_crams=requester_pays_cram,
         sample_id=sample_id,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
@@ -655,15 +648,14 @@ workflow GATKSVPipelineSingleSample {
         genomes_in_the_cloud_docker=genomes_in_the_cloud_docker,
         samtools_cloud_docker=samtools_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
-        runtime_attr_cram_to_bam=runtime_attr_cram_to_bam,
+        runtime_attr_localize_reads=runtime_attr_localize_reads,
         runtime_attr_manta=runtime_attr_manta,
         runtime_attr_melt_coverage=runtime_attr_melt_coverage,
         runtime_attr_melt_metrics=runtime_attr_melt_metrics,
         runtime_attr_melt=runtime_attr_melt,
         runtime_attr_scramble=runtime_attr_scramble,
         runtime_attr_pesr=runtime_attr_pesr,
-        runtime_attr_wham=runtime_attr_wham,
-        runtime_attr_wham_include_list=runtime_attr_wham_include_list,
+        runtime_attr_wham=runtime_attr_wham
     }
   }
 

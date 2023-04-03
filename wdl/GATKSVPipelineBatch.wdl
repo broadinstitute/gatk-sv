@@ -23,7 +23,6 @@ workflow GATKSVPipelineBatch {
     # Required unless caller and evidence outputs are provided (below)
     Array[File]? bam_or_cram_files
     Array[File]? bam_or_cram_indexes
-    Boolean requester_pays_crams = false
 
     # Optionally provide calls and evidence (override caller flags below)
     Array[File]? counts_files_input
@@ -130,7 +129,6 @@ workflow GATKSVPipelineBatch {
       input:
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
-        requester_pays_crams=requester_pays_crams,
         collect_coverage=collect_coverage_,
         collect_pesr=collect_pesr_,
         sample_ids=samples,

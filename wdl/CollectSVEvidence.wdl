@@ -5,13 +5,15 @@ import "Structs.wdl"
 # Workflow to run PE/SR collection on a single sample
 workflow CollectSVEvidence {
   input {
-    File cram
-    File cram_index
+    File bam_or_cram_file
+    File bam_or_cram_index
     String sample_id
     File reference_fasta
     File reference_index
     File reference_dict
     File sd_locs_vcf
+    File preprocessed_intervals
+    File? primary_contigs_list
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
@@ -19,13 +21,15 @@ workflow CollectSVEvidence {
 
   call RunCollectSVEvidence {
     input:
-      cram = cram,
-      cram_index = cram_index,
+      bam_or_cram_file = bam_or_cram_file,
+      bam_or_cram_index = bam_or_cram_index,
       sample_id = sample_id,
       reference_fasta = reference_fasta,
       reference_index = reference_index,
       reference_dict = reference_dict,
       sd_locs_vcf = sd_locs_vcf,
+      preprocessed_intervals = preprocessed_intervals,
+      primary_contigs_list = primary_contigs_list,
       gatk_jar_override = gatk_jar_override,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
@@ -44,8 +48,8 @@ workflow CollectSVEvidence {
 # Task to run collect-pesr on a single sample
 task RunCollectSVEvidence {
   input {
-    File cram
-    File cram_index
+    File bam_or_cram_file
+    File bam_or_cram_index
     String sample_id
     File reference_fasta
     File reference_index
@@ -53,19 +57,24 @@ task RunCollectSVEvidence {
     File sd_locs_vcf
     Int site_depth_min_mapq = 6
     Int site_depth_min_baseq = 10
+    File preprocessed_intervals
+    File? primary_contigs_list
     File? gatk_jar_override
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
 
   parameter_meta {
-      cram: {
+      bam_or_cram_file: {
+        localization_optional: true
+      }
+      bam_or_cram_index: {
         localization_optional: true
       }
   }
 
-  Float cram_size = size(cram, "GiB")
-  Int vm_disk_size = ceil(cram_size + 50)
+  Float bam_or_cram_size = size(bam_or_cram_file, "GiB")
+  Int vm_disk_size = ceil(bam_or_cram_size + 50)
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
@@ -95,15 +104,16 @@ task RunCollectSVEvidence {
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk_jar_override}
 
     /gatk/gatk --java-options "-Xmx~{command_mem_mb}m" CollectSVEvidence \
-        -I ~{cram} \
-        --sr-file "~{sample_id}.sr.txt.gz" \
-        --pe-file "~{sample_id}.pe.txt.gz" \
-        --sd-file "~{sample_id}.sd.txt.gz" \
-        --site-depth-locs-vcf ~{sd_locs_vcf} \
-        --sample-name ~{sample_id} \
+        -I "~{bam_or_cram_file}" \
+        --sample-name "~{sample_id}" \
+        -F "~{sd_locs_vcf}" \
+        -SR "~{sample_id}.sr.txt.gz" \
+        -PE "~{sample_id}.pe.txt.gz" \
+        -SD "~{sample_id}.sd.txt.gz" \
         --site-depth-min-mapq "~{site_depth_min_mapq}" \
         --site-depth-min-baseq "~{site_depth_min_baseq}" \
-        -R ~{reference_fasta}
+        ~{"-R " + reference_fasta} \
+        ~{"-L " + primary_contigs_list}
 
   >>>
   runtime {

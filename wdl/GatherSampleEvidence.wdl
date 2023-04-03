@@ -2,14 +2,13 @@ version 1.0
 
 import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
-import "CramToBam.wdl" as ctb
-import "CramToBam.ReviseBase.wdl" as ctb_revise
+import "CollectSVEvidence.wdl" as coev
+import "CramToBam.ReviseBase.wdl" as rb
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
 import "Scramble.wdl" as scramble
-import "GatherSampleEvidenceMetrics.wdl" as metrics
-import "CollectSVEvidence.wdl" as coev
 import "Whamg.wdl" as wham
+import "GatherSampleEvidenceMetrics.wdl" as metrics
 
 # Runs selected tools on BAM/CRAM files
 
@@ -18,18 +17,6 @@ workflow GatherSampleEvidence {
     File bam_or_cram_file
     File? bam_or_cram_index
 
-    # Use only for crams in requester pays buckets
-    Boolean requester_pays_crams = false
-
-    # Provide path to service account credentials JSON if required to access CRAM file. 
-    # Not supported for requester pays CRAMs, BAM access, or revising bases
-    String? service_account_json
-
-    # Use to revise Y, R, W, S, K, M, D, H, V, B, X bases in BAM to N. Use only if providing a CRAM file as input 
-    # May be more expensive - use only if necessary
-    Boolean revise_base_cram_to_bam = false
-    File? primary_contigs_fai # required if using revise_base_cram_to_bam (or if run_module_metrics = true)
-
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
 
@@ -37,9 +24,9 @@ workflow GatherSampleEvidence {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
-    # If true, any intermediate BAM files will be deleted after the algorithms have completed.
-    # NOTE: If the workflow (ie any algorithm) fails, the bam will NOT be deleted.
-    Boolean delete_intermediate_bam = false
+    # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
+    # Only use if encountering errors (expensive!)
+    Boolean revise_base = false
 
     # Common parameters
     File primary_contigs_list
@@ -78,12 +65,16 @@ workflow GatherSampleEvidence {
 
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
-    Boolean? run_module_metrics
+    Boolean run_module_metrics = true
+    File? primary_contigs_fai # required if run_module_metrics = true
     String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
+
+    # Remove intermediate files
+    Boolean remove_intermediates = true
 
     # Docker
     String sv_pipeline_docker
@@ -99,9 +90,10 @@ workflow GatherSampleEvidence {
     String cloud_sdk_docker
 
     # Runtime configuration overrides
-    RuntimeAttr? runtime_attr_merge_vcfs
-    RuntimeAttr? runtime_attr_baf_sample
-    RuntimeAttr? runtime_attr_cram_to_bam
+    RuntimeAttr? runtime_attr_localize_reads
+    RuntimeAttr? runtime_attr_split_cram
+    RuntimeAttr? runtime_attr_revise_base
+    RuntimeAttr? runtime_attr_concat_bam
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
@@ -109,10 +101,6 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_scramble
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
-    RuntimeAttr? runtime_attr_wham_include_list
-    RuntimeAttr? runtime_attr_ReviseBaseInBam
-    RuntimeAttr? runtime_attr_ConcatBam
-    RuntimeAttr? runtime_attr_localize_cram
 
     # Never assign these values! (workaround until None type is implemented)
     Float? NONE_FLOAT_
@@ -127,50 +115,40 @@ workflow GatherSampleEvidence {
 
   Boolean is_bam_ = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
   String index_ext_ = if is_bam_ then ".bai" else ".crai"
-  File bam_or_cram_index_ = if defined(bam_or_cram_index) then select_first([bam_or_cram_index]) else bam_or_cram_file + index_ext_
+  File bam_or_cram_index_ = select_first([bam_or_cram_index, bam_or_cram_file + index_ext_])
 
-  # Convert to BAM if we have a CRAM
-  if (!is_bam_) {
-    if (!revise_base_cram_to_bam) {
-      call ctb.CramToBam {
-        input:
-          cram_file = bam_or_cram_file,
-          reference_fasta = reference_fasta,
-          reference_index = reference_index,
-          requester_pays = requester_pays_crams,
-          service_account_json = service_account_json,
-          samtools_cloud_docker = samtools_cloud_docker,
-          cloud_sdk_docker = cloud_sdk_docker,
-          runtime_attr_localize_cram = runtime_attr_localize_cram,
-          runtime_attr_override = runtime_attr_cram_to_bam
-      }
-    }
-    if (revise_base_cram_to_bam) {
-      call ctb_revise.CramToBamReviseBase {
-        input:
-          cram_file = bam_or_cram_file,
-          cram_index = bam_or_cram_index_,
-          reference_fasta = reference_fasta,
-          reference_index = reference_index,
-          requester_pays = requester_pays_crams,
-          contiglist = select_first([primary_contigs_fai]),
-          samtools_cloud_docker = samtools_cloud_docker,
-          runtime_attr_override = runtime_attr_cram_to_bam,
-          runtime_attr_ReviseBaseInBam = runtime_attr_ReviseBaseInBam,
-          runtime_attr_ConcatBam = runtime_attr_ConcatBam
-      }
+  # move the reads nearby -- handles requester_pays and makes cross-region transfers just once
+  call LocalizeReads {
+    input:
+      reads_path = bam_or_cram_file,
+      reads_index = bam_or_cram_index_,
+      runtime_attr_override = runtime_attr_localize_reads
+  }
+
+  if (revise_base) {
+    call rb.CramToBamReviseBase {
+      input:
+        cram_file = LocalizeReads.output_file,
+        cram_index = LocalizeReads.output_index,
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        contiglist = select_first([primary_contigs_fai]),
+        samtools_cloud_docker = samtools_cloud_docker,
+        runtime_attr_split_cram = runtime_attr_split_cram,
+        runtime_attr_revise_base = runtime_attr_revise_base,
+        runtime_attr_concat_bam = runtime_attr_concat_bam
     }
   }
 
-  File bam_file_ = select_first([CramToBam.bam_file, CramToBamReviseBase.bam_file, bam_or_cram_file])
-  File bam_index_ = select_first([CramToBam.bam_index, CramToBamReviseBase.bam_index, bam_or_cram_index_])
+  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
+  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
 
-  if (collect_coverage) {
+  if (collect_coverage || run_melt || run_module_metrics) {
     call cov.CollectCounts {
       input:
         intervals = preprocessed_intervals,
-        bam = bam_file_,
-        bam_idx = bam_index_,
+        cram_or_bam = reads_file_,
+        cram_or_bam_idx = reads_index_,
         sample_id = sample_id,
         ref_fasta = reference_fasta,
         ref_fasta_fai = reference_index,
@@ -185,8 +163,8 @@ workflow GatherSampleEvidence {
   if (run_manta) {
     call manta.Manta {
       input:
-        bam_or_cram_file = bam_file_,
-        bam_or_cram_index = bam_index_,
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
@@ -199,16 +177,18 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (collect_pesr) {
+  if (collect_pesr || run_module_metrics) {
     call coev.CollectSVEvidence {
       input:
-        cram = bam_file_,
-        cram_index = bam_index_,
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
         sd_locs_vcf = sd_locs_vcf,
+        primary_contigs_list = primary_contigs_list,
+        preprocessed_intervals = preprocessed_intervals,
         gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
         runtime_attr_override = runtime_attr_pesr
     }
@@ -217,12 +197,13 @@ workflow GatherSampleEvidence {
   if (run_melt) {
     call melt.MELT {
       input:
-        bam_or_cram_file = bam_file_,
-        bam_or_cram_index = bam_index_,
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
         counts_file = select_first([CollectCounts.counts]),
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
+        reference_dict = reference_dict,
         reference_version = reference_version,
         melt_standard_vcf_header = select_first([melt_standard_vcf_header]),
         insert_size = insert_size,
@@ -245,8 +226,8 @@ workflow GatherSampleEvidence {
   if (run_scramble) {
     call scramble.Scramble {
       input:
-        bam_or_cram_file = bam_file_,
-        bam_or_cram_index = bam_index_,
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
         sample_name = sample_id,
         reference_fasta = reference_fasta,
         detect_deletions = false,
@@ -258,35 +239,19 @@ workflow GatherSampleEvidence {
   if (run_wham) {
     call wham.Whamg {
       input:
-        bam_or_cram_file = bam_file_,
-        bam_or_cram_index = bam_index_,
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         include_bed_file = wham_include_list_bed_file,
-        chr_file = primary_contigs_list,
-        samtools_cloud_docker = samtools_cloud_docker,
+        primary_contigs_list = primary_contigs_list,
         wham_docker = select_first([wham_docker]),
-        runtime_attr_includelist = runtime_attr_wham_include_list,
         runtime_attr_wham = runtime_attr_wham
     }
   }
 
-  # Avoid storage costs
-  if (!is_bam_) {
-    if (delete_intermediate_bam) {
-      Array[File] ctb_dummy = select_all([CollectCounts.counts, Manta.vcf, CollectSVEvidence.disc_out, CollectSVEvidence.split_out, CollectSVEvidence.sd_out, MELT.vcf, Scramble.vcf, Whamg.vcf])
-      call DeleteIntermediateFiles {
-        input:
-          intermediates = select_all([CramToBam.bam_file, MELT.filtered_bam]),
-          dummy = ctb_dummy,
-          cloud_sdk_docker = cloud_sdk_docker
-      }
-    }
-  }
-
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
-  if (run_module_metrics_) {
+  if (run_module_metrics) {
     call metrics.GatherSampleEvidenceMetrics {
       input:
         sample = sample_id,
@@ -307,9 +272,18 @@ workflow GatherSampleEvidence {
     }
   }
 
+  if (remove_intermediates) {
+    Array[File?] ctb_dummy = [CollectCounts.counts, Manta.vcf, CollectSVEvidence.disc_out, MELT.vcf, Scramble.vcf, Whamg.vcf]
+    call DeleteIntermediateFiles {
+      input:
+        intermediates = select_all([LocalizeReads.output_file, CramToBamReviseBase.bam_file]),
+        dummy = ctb_dummy,
+        cloud_sdk_docker = cloud_sdk_docker
+    }
+  }
+
   output {
     File? coverage_counts = CollectCounts.counts
-
 
     File? manta_vcf = Manta.vcf
     File? manta_index = Manta.index
@@ -337,80 +311,49 @@ workflow GatherSampleEvidence {
   }
 }
 
-task GetBamID {
+task LocalizeReads {
   input {
-    File bam_file
-    String samtools_cloud_docker
+    File reads_path
+    File reads_index
+    RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    bam_file: {
-      localization_optional: true
-    }
-  }
-
-  output {
-    String out = read_lines("sample.txt")[0]
-  }
-  command <<<
-    set -euo pipefail
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
-    samtools view -H ~{bam_file} \
-      | grep "^@RG" \
-      | awk -F "\t" '{for(i=2;i<=NF;i++){if($i~/^SM:/){a=$i}} print substr(a,4)}' \
-      | sort \
-      | uniq \
-      > sample.txt
-    NUM_IDS=$(wc -l < sample.txt)
-    if [[ ${NUM_IDS} -eq 0 ]]; then
-      echo "No sample IDs were found in the BAM header"
-      exit 1
-    fi
-    if [[ ${NUM_IDS} -gt 1 ]]; then
-      echo "Multiple sample IDs were found in the BAM header"
-      exit 1
-    fi
-  >>>
+  Float input_size = size(reads_path, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(50.0 + input_size),
+                                  cpu_cores: 2,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
   runtime {
-    docker: samtools_cloud_docker
-    memory: "1 GB"
-    cpu: "1"
-    disks: "local-disk 10 HDD"
-    preemptible: "3"
-    maxRetries: "1"
-  }
-}
-
-task InternalSampleID {
-  input {
-    String external_sample_id
-    Int hash_length
-    String sv_pipeline_docker
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: "ubuntu:18.04"
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
+  Int disk_size = ceil(50 + size(reads_path, "GB"))
+
+  command {
+    ln -s ~{reads_path}
+    ln -s ~{reads_index}
+  }
   output {
-    String out = read_lines("external_id.txt")[0]
-  }
-  command <<<
-    set -euo pipefail
-    HASH=$(echo -n "~{external_sample_id}" | openssl sha1 | awk '{print substr($2,0,~{hash_length})}')
-    SAFE_ID=$(echo -n "~{external_sample_id}" | sed 's/[^a-zA-Z0-9]/_/g')
-    echo "__${SAFE_ID}__${HASH}" > external_id.txt
-  >>>
-  runtime {
-    docker: sv_pipeline_docker
-    memory: "1 GB"
-    cpu: "1"
-    disks: "local-disk 10 HDD"
-    preemptible: "3"
-    maxRetries: "1"
+    File output_file = basename(reads_path)
+    File output_index = basename(reads_index)
   }
 }
 
 task DeleteIntermediateFiles {
   input {
     Array[File] intermediates
-    Array[File]? dummy # Pass in outputs that must be complete before cleanup
+    Array[File?] dummy # Pass in outputs that must be complete before cleanup
     String cloud_sdk_docker # Cloud provider SDK docker image. For GCP use "google/cloud-sdk" and for AWS use "amazon/aws-cli"
   }
   parameter_meta {
@@ -423,12 +366,13 @@ task DeleteIntermediateFiles {
   }
 
   command <<<
+    ln -s ~{write_lines(intermediates)} intermediates.list
     {
-      gsutil rm -I < ~{write_lines(intermediates)}
+      gsutil rm -I < intermediates.list
     } || {
       while read line; do
         aws s3 rm $line
-      done < ${write_lines(intermediates)}
+      done < intermediates.list
     }
   >>>
   runtime {
