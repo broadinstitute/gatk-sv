@@ -102,7 +102,7 @@ task MergeEvidence {
 
   Float file_size = size(files, "GiB")
   Float subset_disk = if (subset_primary_contigs || rename_samples) then file_size else 0
-  Int disk_size = 10 + ceil(file_size * 2 + subset_disk)
+  Int disk_size = 10 + ceil(file_size * 3 + subset_disk)
   Int java_heap_size_mb = round(42.0 * length(files) + 1024.0)
   Float mem_size_gb = java_heap_size_mb / 1024.0 + 2.5
 
@@ -190,7 +190,7 @@ task SDtoBAF {
 
   Float file_size = size(SD_files, "GiB")
   Float subset_disk = if rename_samples then file_size else 0
-  Int disk_size = ceil(10 + file_size * 2 + subset_disk)
+  Int disk_size = ceil(10 + file_size * 3 + subset_disk)
   Int java_heap_size_mb = round(42.0 * length(SD_files) + 1024.0)
   Float mem_size_gb = java_heap_size_mb / 1024.0 + 2.5
 
