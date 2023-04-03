@@ -157,10 +157,6 @@ task BenchmarkFilter {
         Float pickled_files_size
     }
 
-    String pedigree_arg = if defined(ped_file)
-        then "--pedigree " + ped_file
-        else ""
-
     # High disk size for large throughput. A large proportion of run time is loading data from large files. Disk is cheap.
     Int disk_gb = round(100 + pickled_files_size)
     Float mem_scale_vcf_entries =
@@ -216,7 +212,7 @@ CODE
 
         sv-utils benchmark-variant-filter \
             --overlap-results ~{truth_overlap_info} \
-            ~{pedigree_arg} \
+            ~{"--ped-file " + ped_file} \
             --scores-data-json ~{scores_data_json} \
             --figure-save-file ~{benchmark_figure_filename} \
             --make-figure ~{make_figure} \
