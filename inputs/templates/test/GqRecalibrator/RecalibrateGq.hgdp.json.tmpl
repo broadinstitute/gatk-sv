@@ -8,7 +8,7 @@
     "--keep-homref true",
     "--keep-multiallelic true",
     "--skip-genotype-filtering true",
-    "--min-samples-to-estimate-allele-frequency 5"
+    "--min-samples-to-estimate-allele-frequency 1"
   ],
   "RecalibrateGq.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
   "RecalibrateGq.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
