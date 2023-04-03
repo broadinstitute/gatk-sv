@@ -244,7 +244,7 @@ def get_nucleotides_count(
         locus_id: str) -> pd.DataFrame:
 
     tmp_info_header = "\t".join(["start_upper_X_orange", "end_upper_X_orange", "start_upper_Y", "start_bottom_X_orange", "end_bottom_X_orange", "start_bottom_Y"])
-    tmp_info_line = "\t".join([metrics.start_upper_x_orange, metrics.end_upper_x_orange, metrics.start_upper_y, metrics.start_bottom_x_orange, metrics.end_bottom_x_orange, metrics.start_bottom_y])
+    tmp_info_line = "\t".join([str(metrics.start_upper_x_orange), str(metrics.end_upper_x_orange), str(metrics.start_upper_y), str(metrics.start_bottom_x_orange), str(metrics.end_bottom_x_orange), str(metrics.start_bottom_y)])
     tmp_info_filename = tempfile.NamedTemporaryFile(delete=False).name
     with open(tmp_info_filename, "w") as tmp_info_file:
         tmp_info_file.write(tmp_info_header + "\n")
