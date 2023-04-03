@@ -24,7 +24,7 @@ workflow Module09VisualizeSingleSample{
         Array[File] crai_list
 
         String sv_base_mini_docker
-        String sv_pipeline_rdtest_docker
+        String sv_pipeline_docker
         String igv_docker
 
         RuntimeAttr? runtime_attr_override
@@ -41,7 +41,7 @@ workflow Module09VisualizeSingleSample{
             medianfile = medianfile,
             batch_bincov=batch_bincov,
             sample_batches = sample_batches,
-            sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             runtime_attr_rdtest=runtime_attr_rdtest
         }
     

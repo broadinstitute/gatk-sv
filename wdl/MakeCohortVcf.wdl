@@ -69,7 +69,6 @@ workflow MakeCohortVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -79,10 +78,6 @@ workflow MakeCohortVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
-    String sv_pipeline_rdtest_docker
-    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_overide_get_discfile_size
@@ -253,9 +248,8 @@ workflow MakeCohortVcf {
       empty_file=empty_file,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
       runtime_override_update_sr_list=runtime_override_update_sr_list_cluster,
       runtime_override_merge_pesr_depth=runtime_override_merge_pesr_depth,
       runtime_override_clean_background_fail=runtime_override_clean_background_fail,
@@ -295,10 +289,9 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       max_shard_size=max_shard_size_resolve,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list_pass=runtime_override_update_sr_list_pass,
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_integrate_resolved_vcfs=runtime_override_integrate_resolved_vcfs,
@@ -349,10 +342,7 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
       runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -398,12 +388,9 @@ workflow MakeCohortVcf {
       baseline_cleaned_vcf = baseline_cleaned_vcf,
       primary_contigs_list=primary_contigs_list,
       run_module_metrics=run_module_metrics,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
@@ -456,7 +443,6 @@ workflow MakeCohortVcf {
       sample_renaming_tsv=sample_renaming_tsv,
       primary_contigs_fai=contig_list,
       random_seed=random_seed,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_site_level_benchmark_plot=runtime_override_site_level_benchmark_plot,

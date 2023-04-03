@@ -30,7 +30,6 @@ workflow GenotypePESRPart2 {
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker
-    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_make_subset_vcf
     RuntimeAttr? runtime_attr_count_pe
@@ -81,7 +80,7 @@ workflow GenotypePESRPart2 {
       input:
         PE_counts = CountPEUnder5kb.pe_counts,
         PE_metrics = PE_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
@@ -103,7 +102,7 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSRUnder5kb.sr_counts,
         SR_sum = CountSRUnder5kb.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -122,7 +121,7 @@ workflow GenotypePESRPart2 {
         prefix = basename(lt5kb_bed, ".bed"),
         generate_melted_genotypes = true,
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
@@ -175,7 +174,7 @@ workflow GenotypePESRPart2 {
       input:
         PE_counts = CountPEOver5kb.pe_counts,
         PE_metrics = PE_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
@@ -197,7 +196,7 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSROver5kb.sr_counts,
         SR_sum = CountSROver5kb.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -216,7 +215,7 @@ workflow GenotypePESRPart2 {
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = true,
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
@@ -269,7 +268,7 @@ workflow GenotypePESRPart2 {
       input:
         PE_counts = CountPEBca.pe_counts,
         PE_metrics = PE_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_pe
     }
 
@@ -291,7 +290,7 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSRBca.sr_counts,
         SR_sum = CountSRBca.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -498,7 +497,7 @@ task GenotypePEPart2 {
   input {
     File PE_counts
     File PE_metrics
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -528,7 +527,7 @@ task GenotypePEPart2 {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -540,7 +539,7 @@ task GenotypeSRPart2 {
     File SR_counts
     File SR_sum
     File SR_metrics
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -574,7 +573,7 @@ task GenotypeSRPart2 {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

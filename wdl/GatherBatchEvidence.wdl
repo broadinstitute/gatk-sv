@@ -129,7 +129,6 @@ workflow GatherBatchEvidence {
     # Module metrics parameters
     # Run module metrics workflow at the end - off by default for GatherBatchEvidence because of runtime/expense
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
 
     # baseline files are optional for metrics workflow
@@ -142,11 +141,9 @@ workflow GatherBatchEvidence {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_qc_docker
     String linux_docker
     String condense_counts_docker
     String gatk_docker
-    String? gcnv_gatk_docker
     String cnmops_docker
 
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
@@ -207,7 +204,7 @@ workflow GatherBatchEvidence {
         bincov_matrix = merged_bincov_,
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }
@@ -318,7 +315,7 @@ workflow GatherBatchEvidence {
       count_entity_ids = samples,
       contig_ploidy_model_tar = contig_ploidy_model_tar,
       gcnv_model_tars = gcnv_model_tars,
-      gatk_docker = select_first([gcnv_gatk_docker, gatk_docker]),
+      gatk_docker = gatk_docker,
       linux_docker = linux_docker,
       sv_base_mini_docker = sv_base_mini_docker,
       gatk4_jar_override = gatk4_jar_override,
@@ -381,7 +378,7 @@ workflow GatherBatchEvidence {
     input:
       bincov_matrix = merged_bincov_,
       cohort_id = batch,
-      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = median_cov_runtime_attr,
       mem_gb_override = median_cov_mem_gb
   }
@@ -451,7 +448,7 @@ workflow GatherBatchEvidence {
         baseline_merged_dups = baseline_merged_dups,
         baseline_median_cov = baseline_median_cov,
         contig_list = select_first([primary_contigs_list]),
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         linux_docker = linux_docker
     }
   }

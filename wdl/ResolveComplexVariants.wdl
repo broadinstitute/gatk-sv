@@ -28,7 +28,6 @@ workflow ResolveComplexVariants {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_update_sr_list_pass
@@ -100,7 +99,6 @@ workflow ResolveComplexVariants {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
         runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx_inv,
@@ -145,7 +143,6 @@ workflow ResolveComplexVariants {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
         runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,

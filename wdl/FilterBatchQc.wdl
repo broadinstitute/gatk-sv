@@ -29,7 +29,6 @@ workflow FilterBatchQc {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
@@ -109,7 +108,6 @@ workflow FilterBatchQc {
           max_gq=max_gq_,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_override_subset_vcf=runtime_override_subset_vcf,
           runtime_override_preprocess_vcf=runtime_override_preprocess_vcf,
           runtime_override_plot_qc_vcf_wide=runtime_override_plot_qc_vcf_wide,

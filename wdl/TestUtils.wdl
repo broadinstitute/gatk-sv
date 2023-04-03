@@ -51,7 +51,7 @@ task StandardizeVCF {
     String caller
     File contig_index
     Int min_size
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -79,7 +79,7 @@ task StandardizeVCF {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -92,7 +92,7 @@ task VCFMetrics {
     String types
     String prefix
     File contig_list
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -129,7 +129,7 @@ task VCFMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -138,7 +138,7 @@ task BAFMetrics {
   input {
     File baf_file
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -169,7 +169,7 @@ task BAFMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -178,7 +178,7 @@ task SRMetrics {
   input {
     File sr_file
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -209,7 +209,7 @@ task SRMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -218,7 +218,7 @@ task PEMetrics {
   input {
     File pe_file
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -249,7 +249,7 @@ task PEMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -258,7 +258,7 @@ task CountsMetrics {
   input {
     File counts_file
     String sample_id
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -286,7 +286,7 @@ task CountsMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -295,7 +295,7 @@ task BincovMetrics {
   input {
     File bincov_matrix
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -326,7 +326,7 @@ task BincovMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -336,7 +336,7 @@ task MedcovMetrics {
     File medcov_file
     Array[String] samples
     File? baseline_medcov_file
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -370,7 +370,7 @@ task MedcovMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -381,7 +381,7 @@ task MergedDepthMetricsWithBaseline {
     File baseline_bed
     String type
     File contig_list
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -419,7 +419,7 @@ task MergedDepthMetricsWithBaseline {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -429,7 +429,7 @@ task MergedDepthMetricsWithoutBaseline {
     File bed
     String type
     File contig_list
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -457,7 +457,7 @@ task MergedDepthMetricsWithoutBaseline {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -468,7 +468,7 @@ task MetricsFileMetrics {
     File contig_list
     Boolean common
     String prefix
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -498,7 +498,7 @@ task MetricsFileMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -509,7 +509,7 @@ task CutoffAndOutlierMetrics {
     File outlier_list
     File filtered_ped_file
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -542,7 +542,7 @@ task CutoffAndOutlierMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -551,7 +551,7 @@ task GenotypingCutoffMetrics {
   input {
     File cutoffs
     String name
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -577,7 +577,7 @@ task GenotypingCutoffMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
@@ -625,7 +625,7 @@ task PlotMetrics {
     File test_metrics
     File base_metrics
     Array[String] samples
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -656,7 +656,7 @@ task PlotMetrics {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 }
