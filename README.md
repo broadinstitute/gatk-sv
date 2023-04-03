@@ -123,11 +123,6 @@ apply, users may use placeholder values for the cloud configuration and simply d
 
 The input values are provided only as an example and are not publicly accessible. In order to include MELT, these values must be provided by the user. MELT can be disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to `false`.
 
-#### Requester pays buckets
-**Important**: The following parameters must be set when certain input data is in requester pays (RP) buckets:
-
-* `GATKSVPipelineSingleSample.requester_pays_cram` and `GATKSVPipelineBatch.GatherSampleEvidenceBatch.requester_pays_crams` - set to `True` if inputs are CRAM format and in an RP bucket, otherwise `False`.
-
 #### Execution
 We recommend running the pipeline on a dedicated [Cromwell](https://github.com/broadinstitute/cromwell) server with a [cromshell](https://github.com/broadinstitute/cromshell) client. A batch run can be started with the following commands:
 
