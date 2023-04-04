@@ -162,8 +162,8 @@ task RunExpansionHunter {
         fi
 
         REF="$(basename "~{reference_fasta}")"
-        mv ~{reference_fasta} $REF
-        mv ~{reference_fasta_index} $REF.fai
+        ln -s ~{reference_fasta} $REF
+        ln -s ~{reference_fasta_index} $REF.fai
 
         sex=""
         if ~{defined(ped_file)}; then
@@ -362,8 +362,8 @@ task RunReviewer {
         set -euxo pipefail
 
         REF="$(basename "~{reference_fasta}")"
-        mv ~{reference_fasta} $REF
-        mv ~{reference_fasta_index} $REF.fai
+        ln -s ~{reference_fasta} $REF
+        ln -s ~{reference_fasta_index} $REF.fai
 
         gunzip -c ~{vcf_gz} > genotypes.vcf
 
