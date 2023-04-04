@@ -165,9 +165,32 @@ def process_directory(input_dict, template_dir, target_directory):
             process_file(input_dict, subdir, file, target_subdir)
 
 
-def process_file(input_dict, template_subdir, template_file, target_subdir):
-    template_file_path = os.sep.join([template_subdir, template_file])
+def transpose_tsv(input_file, output_file):
+    with open(input_file) as f:
+        # read lines from the file and remove trailing whitespace
+        lines = [line.rstrip('\n') for line in f.readlines()]
 
+    # group the lines by their column number
+    groups = {}
+    for line in lines:
+        if line:
+            columns = line.split('\t')
+            for i, column in enumerate(columns):
+                if i not in groups:
+                    groups[i] = []
+                groups[i].append(column)
+    # write the transposed data to a new file
+    with open(input_file, 'w') as f:
+        for i in sorted(groups.keys()):
+            f.write('\t'.join(groups[i]) + '\n')
+
+
+def process_file(input_dict, template_subdir, template_file, target_subdir):
+    # transpose files that starts with workspace for Terra processing
+    if template_file.startswith("workspace"):
+        template_file_path = os.sep.join([template_subdir, template_file])
+        transpose_tsv(template_file_path, template_file_path)
+    template_file_path = os.sep.join([template_subdir, template_file])
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
         logging.warning("skipping file " + template_file_path +
@@ -189,6 +212,9 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
         target_file = open(target_file_path, "w")
         target_file.write(processed_content)
         target_file.close()
+    if template_file.startswith("workspace"):
+        template_file_path = os.sep.join([template_subdir, template_file])
+        transpose_tsv(template_file_path, template_file_path)
 
 
 if __name__ == "__main__":
