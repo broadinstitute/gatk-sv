@@ -256,9 +256,9 @@ task ConcatEHOutputs {
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
         File realigned_bam_index = "${output_prefix}.bam.bai"
-        File reviewer_metrics = "metrics.csv"
-        File reviewer_missing_metrics = "missing_metrics.csv"
-        File reviewer_images_gz = "reviewer_images.tar.gz"
+        File reviewer_metrics = "${output_prefix}_metrics.csv"
+        File reviewer_missing_metrics = "${output_prefix}_missing_metrics.csv"
+        File reviewer_images_gz = "${output_prefix}_reviewer_images.tar.gz"
     }
 
     Array[File] sample_metrics_ = select_all(sample_metrics)
@@ -303,15 +303,15 @@ task ConcatEHOutputs {
 
         python /opt/str/merge_csv_files.py \
             --input-filename ~{write_lines(sample_metrics_)} \
-            --metrics metrics.csv \
-            --missing-metrics missing_metrics.csv
+            --metrics ~{output_prefix}_metrics.csv \
+            --missing-metrics ~{output_prefix}_missing_metrics.csv
 
         # Combine multiple archives into one archive,
         # by first extracting the files then re-archiving it.
         # This allows preserving a flat structure with one archive,
         # otherwise, it would create an archive containing archives.
         mkdir temp_dir
-        cat ~{write_lines(reviewer_images_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf reviewer_images.tar.gz -C temp_dir/ .
+        cat ~{write_lines(reviewer_images_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf ~{output_prefix}_reviewer_images.tar.gz -C temp_dir/ .
     >>>
 
     RuntimeAttr runtime_default = object {
