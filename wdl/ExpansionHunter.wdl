@@ -79,7 +79,7 @@ workflow ExpansionHunter {
                 runtime_override = runtime_eh
         }
 
-        if (generate_reviewer_images_ == true && generate_realigned_bam_ == true && generate_vcf_ == true) {
+        if (generate_reviewer_images_ && generate_realigned_bam_ && generate_vcf_) {
             call RunReviewer {
                 input:
                     sample_id = sample_id,
