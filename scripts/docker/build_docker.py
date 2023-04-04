@@ -209,19 +209,12 @@ class ProjectBuilder:
         self.working_dir = None
         self.build_priority = {}
         self.registries = {}
-        for i in range(len(self.project_arguments.docker_repo or [])):
+        for i in range(len(self.project_arguments.docker_repo)):
             name = self.project_arguments.docker_repo[i]
             self.registries[name] = ContainerRegistry(
                 name=name,
                 input_dockers_json=self.project_arguments.input_json[i],
                 output_dockers_json=self.project_arguments.output_json[i]
-            )
-        if len(self.registries) == 0:
-            name = self.local_reg_name
-            self.registries[name] = ContainerRegistry(
-                name=name,
-                input_dockers_json=self.project_arguments.input_json[0],
-                output_dockers_json=self.project_arguments.output_json[0]
             )
 
     @staticmethod
@@ -737,7 +730,7 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
 
     docker_remote_args_group.add_argument(
-        "--docker-repo", type=str, nargs="+",
+        "--docker-repo", type=str, nargs="+", default=[ProjectBuilder.local_reg_name],
         help="Docker repo to push images to. This will push images that are built "
              "this run of build_docker.py, or that currently have only a local image "
              "in --input-json. You may provide any number of docker repositories. "
