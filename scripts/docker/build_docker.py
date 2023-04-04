@@ -528,8 +528,8 @@ class ImageBuilder:  # class for building and pushing a single image
         remote_tags = (self.tag, ProjectBuilder.latest_tag) if self.project_builder.project_arguments.update_latest \
             else (self.tag,)
         return tuple(
-            (name, f"{name}/{self.name}:{remote_tag}")
-            for name, registry in self.remote_docker_repos.items()
+            (registry_name, f"{registry_name}/{self.name}:{remote_tag}")
+            for registry_name, registry in self.remote_docker_repos.items()
             for remote_tag in remote_tags
         )
 
