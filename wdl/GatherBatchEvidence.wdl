@@ -149,6 +149,8 @@ workflow GatherBatchEvidence {
     String? gcnv_gatk_docker
     String cnmops_docker
 
+    Boolean? run_tiny_resolve
+
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
 
@@ -399,7 +401,7 @@ workflow GatherBatchEvidence {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = preprocess_calls_runtime_attr
   }
-  if (defined(manta_vcfs)) {
+  if (run_tiny_resolve) {
       call tiny.TinyResolve as TinyResolve {
         input:
           samples = samples,
