@@ -307,11 +307,14 @@ task ConcatEHOutputs {
             --missing-metrics ~{output_prefix}_missing_metrics.csv
 
         # Combine multiple archives into one archive,
-        # by first extracting the files then re-archiving it.
-        # This allows preserving a flat structure with one archive,
-        # otherwise, it would create an archive containing archives.
-        mkdir temp_dir
-        cat ~{write_lines(reviewer_images_gz_)} | xargs -I{} tar -xzvf {} -C temp_dir/ && tar -czvf ~{output_prefix}_reviewer_images.tar.gz -C temp_dir/ .
+        # by first unzipping all to a common directory,
+        # the archiving all the contents of the directory into a single archive.
+        TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
+        mkdir $TEMP_DIR_NAME
+        while read -r archive_filename; do
+            tar -xzvf "$archive_filename" -C $TEMP_DIR_NAME
+        done < ~{write_lines(reviewer_images_gz_)}
+        tar -czvf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
     >>>
 
     RuntimeAttr runtime_default = object {
