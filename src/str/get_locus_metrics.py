@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 
 SAMPLE_ID_COL_NAME = "sample_id"
@@ -53,7 +53,7 @@ def call_reviewer(
         reference: str,
         genotypes: str,
         catalog: str,
-        locus_id: str) -> Tuple[int, str, pd.DataFrame, pd.DataFrame]:
+        locus_id: str) -> Tuple[int, Union[str, None], Union[pd.DataFrame, None], Union[pd.DataFrame]]:
 
     prefix = f"{sample_id}_{locus_id.replace('-', '_')}"
 
@@ -66,12 +66,20 @@ def call_reviewer(
           f"--output-prefix {prefix}"
     result = subprocess.run(cmd, shell=True)
 
+    # Expected filename of the reviewer outputs.
+    ro_svg_filename = f"{prefix}.{locus_id}.svg"
+    ro_metrics_filename = f"{prefix}.metrics.tsv"
+    ro_phasing_filename = f"{prefix}.phasing.tsv"
+
+    if any(not os.path.isfile(x) for x in [ro_svg_filename, ro_metrics_filename, ro_phasing_filename]):
+        return result.returncode, None, None, None
+
     svg_filename = f"{prefix}.svg"
     metrics_filename = f"{prefix}_metrics.csv"
     phasing_filename = f"{prefix}_phasing.csv"
-    os.rename(f"{prefix}.{locus_id}.svg", svg_filename)
-    os.rename(f"{prefix}.metrics.tsv", metrics_filename)
-    os.rename(f"{prefix}.phasing.tsv", phasing_filename)
+    os.rename(ro_svg_filename, svg_filename)
+    os.rename(ro_metrics_filename, metrics_filename)
+    os.rename(ro_phasing_filename, phasing_filename)
 
     metrics_df = pd.read_csv(metrics_filename, delimiter="\t")
     phasing_df = pd.read_csv(phasing_filename, delimiter="\t")
@@ -288,9 +296,16 @@ def extract_metrics(
     loci = get_loci(variant_catalog)
     write_header = True
 
+    # This is added to address a corner case where the realigned bam
+    # does not have reads overlapping with any of the given target loci.
+    open(output_filename, "w").close()
+
     for locus_id in loci:
         _, svg_f, metrics_df, phasing_df = call_reviewer(
             sample_id, realigned_reads, reference, genotypes, variant_catalog, locus_id)
+
+        if any(x is None for x in (svg_f, metrics_df, phasing_df)):
+            continue
 
         ex = get_metrics_from_image(svg_f)
 
