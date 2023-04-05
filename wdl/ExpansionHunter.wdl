@@ -390,7 +390,7 @@ task RunReviewer {
         disk_gb: 20 +
             (2 * ceil(
                 size(realigned_bam, "GiB") +
-                size(vcf_gz, "GiB") +
+                (size(vcf_gz, "GiB") * 10) +
                 size(reference_fasta, "GiB") +
                 size(variant_catalog_json, "GiB")))
     }
@@ -400,7 +400,7 @@ task RunReviewer {
         docker: expansion_hunter_docker
         cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
         memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
         preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
