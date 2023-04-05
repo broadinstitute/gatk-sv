@@ -401,7 +401,8 @@ workflow GatherBatchEvidence {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = preprocess_calls_runtime_attr
   }
-  if (run_tiny_resolve) {
+    Boolean run_tiny_resolve_ = if defined(run_tiny_resolve) then select_first([run_tiny_resolve]) else false
+    if (run_tiny_resolve_){
       call tiny.TinyResolve as TinyResolve {
         input:
           samples = samples,
