@@ -24,6 +24,7 @@ workflow ExpansionHunterScatter {
         RuntimeAttr? runtime_split_var_catalog
         RuntimeAttr? runtime_eh
         RuntimeAttr? runtime_concat
+        RuntimeAttr? runtime_reviewer
     }
 
     parameter_meta {
@@ -73,7 +74,8 @@ workflow ExpansionHunterScatter {
                 expansion_hunter_docker = expansion_hunter_docker,
                 python_docker = python_docker,
                 runtime_eh = runtime_eh,
-                runtime_concat = runtime_concat
+                runtime_concat = runtime_concat,
+                runtime_reviewer = runtime_reviewer
         }
     }
 
