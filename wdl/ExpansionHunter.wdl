@@ -312,9 +312,9 @@ task ConcatEHOutputs {
         TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
         mkdir $TEMP_DIR_NAME
         while read -r archive_filename; do
-            tar -xzvf "$archive_filename" -C $TEMP_DIR_NAME
+            tar -xzf "$archive_filename" -C $TEMP_DIR_NAME
         done < ~{write_lines(reviewer_images_gz_)}
-        tar -czvf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
+        tar -czf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
     >>>
 
     RuntimeAttr runtime_default = object {
@@ -378,7 +378,7 @@ task RunReviewer {
             --variant-catalog ~{variant_catalog_json} \
             --output ~{sample_id}_metrics.csv
 
-        tar -czvf reviewer_images.tar.gz ~{sample_id}_*.svg
+        tar -czf reviewer_images.tar.gz ~{sample_id}_*.svg
     >>>
 
     RuntimeAttr runtime_default = object {
