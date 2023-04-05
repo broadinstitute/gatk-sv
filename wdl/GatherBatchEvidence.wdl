@@ -126,6 +126,9 @@ workflow GatherBatchEvidence {
     # QC files
     Int matrix_qc_distance
 
+    #run TinyResolve
+    Boolean? run_tiny_resolve
+    
     # Module metrics parameters
     # Run module metrics workflow at the end - off by default for GatherBatchEvidence because of runtime/expense
     Boolean? run_module_metrics
@@ -148,8 +151,6 @@ workflow GatherBatchEvidence {
     String gatk_docker
     String? gcnv_gatk_docker
     String cnmops_docker
-
-    Boolean? run_tiny_resolve
 
     RuntimeAttr? median_cov_runtime_attr        # Memory ignored, use median_cov_mem_gb_per_sample
     Float? median_cov_mem_gb_per_sample
