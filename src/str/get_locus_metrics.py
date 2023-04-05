@@ -13,6 +13,7 @@ import pandas as pd
 import re
 import subprocess
 import tempfile
+import time
 
 from dataclasses import dataclass
 from typing import List, Tuple, Union
@@ -57,6 +58,7 @@ def call_reviewer(
 
     prefix = f"{sample_id}_{locus_id.replace('-', '_')}"
 
+    start_time = time.time()
     cmd = f"reviewer " \
           f"--reads {realigned_reads} " \
           f"--vcf {genotypes} " \
@@ -65,6 +67,7 @@ def call_reviewer(
           f"--locus {locus_id} " \
           f"--output-prefix {prefix}"
     result = subprocess.run(cmd, shell=True)
+    print(f"REViewer runtime: {time.time() - start_time :.2f} seconds")
 
     # Expected filename of the reviewer outputs.
     ro_svg_filename = f"{prefix}.{locus_id}.svg"
@@ -307,7 +310,9 @@ def extract_metrics(
         if any(x is None for x in (svg_f, metrics_df, phasing_df)):
             continue
 
+        start_time = time.time()
         ex = get_metrics_from_image(svg_f)
+        print(f"Get metrics from image runtime: {time.time() - start_time:.2f} seconds")
 
         metrics_df["Times_Upper_Interruptions"] = ex.total_upper_interrupt
         metrics_df["Count_Upper_reads_with_interruptions"] = len(ex.results_total_upper)
@@ -316,7 +321,9 @@ def extract_metrics(
         metrics_df["Count_Bottom_reads_with_interruptions"] = len(ex.results_total_bottom)
         metrics_df["Times_Bottom_Gaps"] = ex.gap_bottom_count
 
+        start_time = time.time()
         nucleotides_count_df = get_nucleotides_count(svg_f, ex, sample_id, locus_id)
+        print(f"Get nucleotides count from image runtime: {time.time() - start_time:.2f} seconds")
         metrics_df = pd.merge(metrics_df, nucleotides_count_df, on=[SAMPLE_ID_COL_NAME, LOCUS_ID_COL_NAME])
 
         # It could be ideal to collect all the metrics of all the loci in one dataframe;
@@ -373,6 +380,7 @@ def main():
     )
 
     args = parser.parse_args()
+    start_time = time.time()
     extract_metrics(
         args.sample_id,
         args.realigned_bam,
@@ -380,6 +388,7 @@ def main():
         args.genotypes,
         args.variant_catalog,
         args.output)
+    print(f"Total runtime: {time.time() - start_time:.2f} seconds")
 
 
 if __name__ == '__main__':
