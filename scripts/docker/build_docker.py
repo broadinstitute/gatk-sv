@@ -122,6 +122,41 @@ class ContainerRegistry:
             )
         return current_image
 
+    def update_dockers_json(self, dependencies: Dict, dry_run: bool) -> None:
+        output_json = self.output_dockers_json
+        if not output_json:
+            return  # no update is desired
+        new_dockers_json = {
+            json_key: (self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
+                       if ProjectBuilder.get_target_from_image(docker_image) in dependencies
+                       else docker_image)
+
+            for json_key, docker_image in self.dockers.items()
+        }
+        # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
+        # of what tag is current
+        dockers_json_images = set(new_dockers_json.values())
+        for target, image in self.current_docker_images.items():
+            if image not in dockers_json_images:
+                if target in new_dockers_json:
+                    # this requires coincidences bordering on malicious, but check and throw a sensible error message
+                    raise ValueError(
+                        f"Unable to update {output_json} because {image} is not used in input dockers json but its "
+                        f"target name {target} conflicts with an existing key."
+                    )
+                new_dockers_json[target] = image
+
+        old_dockers_json = ProjectBuilder.load_json(output_json)
+
+        if new_dockers_json != old_dockers_json:
+            # update dockers.json with the new data
+            if dry_run:
+                print(f"Write output dockers json at {output_json}")
+                print(json.dumps(new_dockers_json, indent=2))
+            else:
+                with open(output_json, "w") as f_out:
+                    json.dump(new_dockers_json, f_out, indent=2)
+
 
 class ProjectBuilder:
     """
@@ -252,41 +287,6 @@ class ProjectBuilder:
     @staticmethod
     def is_image_local(docker_image: str) -> bool:
         return ProjectBuilder.get_image_repo(docker_image) is None
-
-    def update_dockers_json(self, registry: ContainerRegistry):
-        output_json = registry.output_dockers_json
-        if not output_json:
-            return  # no update is desired
-        new_dockers_json = {
-            json_key: (registry.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
-                       if ProjectBuilder.get_target_from_image(docker_image) in self.dependencies
-                       else docker_image)
-
-            for json_key, docker_image in registry.dockers.items()
-        }
-        # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
-        # of what tag is current
-        dockers_json_images = set(new_dockers_json.values())
-        for target, image in registry.current_docker_images.items():
-            if image not in dockers_json_images:
-                if target in new_dockers_json:
-                    # this requires coincidences bordering on malicious, but check and throw a sensible error message
-                    raise ValueError(
-                        f"Unable to update {output_json} because {image} is not used in input dockers json but its "
-                        f"target name {target} conflicts with an existing key."
-                    )
-                new_dockers_json[target] = image
-
-        old_dockers_json = ProjectBuilder.load_json(output_json)
-
-        if new_dockers_json != old_dockers_json:
-            # update dockers.json with the new data
-            if self.project_arguments.dry_run:
-                print(f"Write output dockers json at {output_json}")
-                print(json.dumps(new_dockers_json, indent=2))
-            else:
-                with open(output_json, "w") as f_out:
-                    json.dump(new_dockers_json, f_out, indent=2)
 
     def get_build_priority(self, target_name: str) -> (int, str):
         """
@@ -473,7 +473,7 @@ class ProjectBuilder:
             build_completed = True
         finally:
             for registry in self.registries.values():
-                self.update_dockers_json(registry)
+                registry.update_dockers_json(self.dependencies, self.project_arguments.dry_run)
             if not self.project_arguments.skip_cleanup:
                 self.cleanup(possible_tmp_dir_path, build_completed)
 
