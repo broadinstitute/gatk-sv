@@ -108,6 +108,20 @@ class ContainerRegistry:
         self.output_dockers_json = None if output_dockers_json == Paths.dev_null else output_dockers_json
         self.current_docker_images = {} if current_docker_json is None else current_docker_json
 
+    def get_current_image(self, target: str, throw_error_on_no_image: bool = True) -> str:
+        current_image = self.current_docker_images.get(target, None)
+        if current_image is None:
+            for image in self.dockers.values():
+                if ProjectBuilder.get_target_from_image(image) == target:
+                    self.current_docker_images[target] = image
+                    current_image = image
+                    break
+        if throw_error_on_no_image and current_image is None:
+            raise ValueError(
+                f"{target} has no current image. ProjectBuilder should build images in order. This is a bug!"
+            )
+        return current_image
+
 
 class ProjectBuilder:
     """
@@ -239,27 +253,12 @@ class ProjectBuilder:
     def is_image_local(docker_image: str) -> bool:
         return ProjectBuilder.get_image_repo(docker_image) is None
 
-    @staticmethod
-    def get_current_image(registry: ContainerRegistry, target: str, throw_error_on_no_image: bool = True) -> str:
-        current_image = registry.current_docker_images.get(target, None)
-        if current_image is None:
-            for image in registry.dockers.values():
-                if ProjectBuilder.get_target_from_image(image) == target:
-                    registry.current_docker_images[target] = image
-                    current_image = image
-                    break
-        if throw_error_on_no_image and current_image is None:
-            raise ValueError(
-                f"{target} has no current image. ProjectBuilder should build images in order. This is a bug!"
-            )
-        return current_image
-
     def update_dockers_json(self, registry: ContainerRegistry):
         output_json = registry.output_dockers_json
         if not output_json:
             return  # no update is desired
         new_dockers_json = {
-            json_key: (self.get_current_image(registry, ProjectBuilder.get_target_from_image(docker_image))
+            json_key: (registry.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
                        if ProjectBuilder.get_target_from_image(docker_image) in self.dependencies
                        else docker_image)
 
@@ -308,7 +307,7 @@ class ProjectBuilder:
             prereq
             for target in build_targets
             for prereq in self.dependencies[target].docker_dependencies.keys()
-            if self.get_current_image(registry, prereq, throw_error_on_no_image=False) is None
+            if registry.get_current_image(prereq, throw_error_on_no_image=False) is None
         }.difference(build_targets)
         while prereqs:
             build_targets.update(prereqs)
@@ -316,7 +315,7 @@ class ProjectBuilder:
                 prereq
                 for target in prereqs
                 for prereq in self.dependencies[target].docker_dependencies.keys()
-                if self.get_current_image(registry, prereq, throw_error_on_no_image=False) is None
+                if registry.get_current_image(prereq, throw_error_on_no_image=False) is None
             }.difference(prereqs)
         return build_targets
 
@@ -439,7 +438,7 @@ class ProjectBuilder:
                     )
 
                     build_time_args = {
-                        arg: self.get_current_image(self.registries[next(iter(self.registries))], image_name)
+                        arg: self.registries[next(iter(self.registries))].get_current_image(image_name)
                         for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()
                     }
 
@@ -459,7 +458,7 @@ class ProjectBuilder:
                 local_images_to_push = [
                     image
                     for image in [
-                        self.get_current_image(registry, target, throw_error_on_no_image=False)
+                        registry.get_current_image(target, throw_error_on_no_image=False)
                         for target in self.dependencies.keys()
                     ]
                     if image is not None and ProjectBuilder.is_image_local(image)
