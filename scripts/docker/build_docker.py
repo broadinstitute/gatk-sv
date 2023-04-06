@@ -420,7 +420,8 @@ class ProjectBuilder:
             # For simplicity, we are using the first item instead of iterating through all the registries
             # in the dictionary. However, this results in requiring the input-json of multiple
             # repositories to be in sync in terms of the images they contain.
-            expanded_build_targets = self.get_ordered_build_chain_list(self.registries[next(iter(self.registries))])
+            arbitrary_registry = next(iter(self.registries.values()))
+            expanded_build_targets = self.get_ordered_build_chain_list(arbitrary_registry)
 
             # build each required dependency
             print("Building and pushing the following targets in order:" if self.remote_docker_repos else
