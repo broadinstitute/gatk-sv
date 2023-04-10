@@ -17,12 +17,14 @@ workflow ExpansionHunterScatter {
         Boolean? generate_realigned_bam
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
+        Boolean? generate_reviewer_images
         Int? thread_count
         String expansion_hunter_docker
         String python_docker
         RuntimeAttr? runtime_split_var_catalog
         RuntimeAttr? runtime_eh
         RuntimeAttr? runtime_concat
+        RuntimeAttr? runtime_reviewer
     }
 
     parameter_meta {
@@ -67,20 +69,26 @@ workflow ExpansionHunterScatter {
                 generate_realigned_bam = generate_realigned_bam,
                 generate_vcf = generate_vcf,
                 seeking_analysis_mode = seeking_analysis_mode,
+                generate_reviewer_images = generate_reviewer_images,
                 thread_count = thread_count,
                 expansion_hunter_docker = expansion_hunter_docker,
                 python_docker = python_docker,
                 runtime_eh = runtime_eh,
-                runtime_concat = runtime_concat
+                runtime_concat = runtime_concat,
+                runtime_reviewer = runtime_reviewer
         }
     }
 
     output {
-        Array[File] variants_tsv = ExpansionHunter.variants_tsv
-        Array[File] alleles_tsv = ExpansionHunter.alleles_tsv
+        Array[File] variants_tsv_gz = ExpansionHunter.variants_tsv_gz
+        Array[File] alleles_tsv_gz = ExpansionHunter.alleles_tsv_gz
         Array[File] vcfs_gz = ExpansionHunter.vcf_gz
         Array[File] realigned_bam = ExpansionHunter.realigned_bam
+        Array[File] realigned_bam_index = ExpansionHunter.realigned_bam_index
         Array[Array[File]] jsons_gz = ExpansionHunter.jsons_gz
+        Array[File] reviewer_metrics = ExpansionHunter.reviewer_metrics
+        Array[File] reviewer_missing_metrics = ExpansionHunter.reviewer_missing_metrics
+        Array[File] reviewer_images_gz = ExpansionHunter.reviewer_images_gz
     }
 }
 
