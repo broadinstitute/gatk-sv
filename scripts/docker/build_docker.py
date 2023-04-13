@@ -387,11 +387,19 @@ class ProjectBuilder:
             if self.project_arguments.base_git_commit is not None:
                 changed_project_files = self.changed_project_files
                 print(f"changed_project_files: {changed_project_files}", file=sys.stderr)
-                self.project_arguments.targets = [
-                    target for target, image_dependencies in self.dependencies.items()
-                    if image_dependencies.has_change(changed_project_files) and target not in self.non_public_images
-                ]
-                print(f"targets = {self.project_arguments.targets}")
+                self.project_arguments.targets = []
+                for target, image_dependencies in self.dependencies.items():
+                    if image_dependencies.has_change(changed_project_files):
+                        if target not in self.non_public_images:
+                            self.project_arguments.targets.append(target)
+                        else:
+                            print_colored(
+                                f"Skipping building the Docker image `{target}` since it cannot be hosted publicly. "
+                                f"This image needs to be rebuilt, please consider building using the "
+                                f"`--targets` tag and hosting it in a non-public registry.",
+                                Colors.YELLOW
+                            )
+                print_colored(f"targets = {self.project_arguments.targets}", Colors.GREEN)
             elif "all" in self.project_arguments.targets:
                 self.project_arguments.targets = ProjectBuilder.images_built_by_all
             # get targets + their dependencies in order (so that builds succeed)
