@@ -323,8 +323,20 @@ class ProjectBuilder:
                         for image, dependencies in self.dependencies.items()
                         if dependencies.depends_on(new_targets_to_build) and
                         not ImageBuilder(image, self).do_not_rebuild
-                    }.difference(targets_to_build, self.non_public_images)
+                    }.difference(targets_to_build)
                 )
+
+                # Implementation note: it would be less verbose to add `self.non_public_images` to the `difference`
+                # method above. However, the following implementation enables simpler logging of the skipped images.
+                for non_public_image in self.non_public_images:
+                    if non_public_image in new_targets_to_build:
+                        new_targets_to_build.remove(non_public_image)
+                        print_colored(
+                            f"Skipping building the Docker image `{non_public_image}` since it cannot be hosted "
+                            f"publicly. This image needs to be rebuilt, please consider building using the "
+                            f"`--targets` tag and hosting it in a non-public registry.",
+                            Colors.YELLOW
+                        )
 
         # noinspection PyTypeChecker
         return sorted(targets_to_build, key=self.get_build_priority)
