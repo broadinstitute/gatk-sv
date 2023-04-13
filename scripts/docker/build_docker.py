@@ -409,7 +409,7 @@ class ProjectBuilder:
                 print(f"changed_project_files: {changed_project_files}", file=sys.stderr)
                 self.project_arguments.targets = [
                     target for target, image_dependencies in self.dependencies.items()
-                    if image_dependencies.has_change(changed_project_files)
+                    if image_dependencies.has_change(changed_project_files) and target not in self.non_public_images
                 ]
                 print(f"targets = {self.project_arguments.targets}")
             elif "all" in self.project_arguments.targets:
