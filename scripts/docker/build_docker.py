@@ -323,7 +323,7 @@ class ProjectBuilder:
                         for image, dependencies in self.dependencies.items()
                         if dependencies.depends_on(new_targets_to_build) and
                         not ImageBuilder(image, self).do_not_rebuild
-                    }.difference(targets_to_build)
+                    }.difference(targets_to_build, self.non_public_images)
                 )
 
         # noinspection PyTypeChecker
