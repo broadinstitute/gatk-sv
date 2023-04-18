@@ -12,7 +12,7 @@ workflow BatchEvidenceMerging {
     File? sd_locs_vcf
     File reference_dict
     File primary_contigs_fai
-    Boolean subset_primary_contigs  # If true, input PE/SR/BAF files will be subsetted to primary contigs only
+    Boolean fix_legacy_pe_sr_baf  # If true, input PE/SR/BAF files will be subsetted to primary contigs only
     Boolean rename_samples  # If true, rename samples to IDs in the input array
     String batch
     String gatk_docker
@@ -27,7 +27,7 @@ workflow BatchEvidenceMerging {
       samples = samples,
       reference_dict = reference_dict,
       primary_contigs_fai=primary_contigs_fai,
-      subset_primary_contigs=subset_primary_contigs,
+      fix_legacy_pe_sr_baf=fix_legacy_pe_sr_baf,
       rename_samples=rename_samples,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
@@ -41,7 +41,7 @@ workflow BatchEvidenceMerging {
       samples = samples,
       reference_dict = reference_dict,
       primary_contigs_fai=primary_contigs_fai,
-      subset_primary_contigs=subset_primary_contigs,
+      fix_legacy_pe_sr_baf=fix_legacy_pe_sr_baf,
       rename_samples=rename_samples,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_override
@@ -56,7 +56,7 @@ workflow BatchEvidenceMerging {
         samples = samples,
         reference_dict = reference_dict,
         primary_contigs_fai=primary_contigs_fai,
-        subset_primary_contigs=subset_primary_contigs,
+        fix_legacy_pe_sr_baf=fix_legacy_pe_sr_baf,
         rename_samples=rename_samples,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_override
@@ -92,7 +92,7 @@ task MergeEvidence {
     String evidence
     Array[String] samples
     File primary_contigs_fai
-    Boolean subset_primary_contigs
+    Boolean fix_legacy_pe_sr_baf
     Boolean rename_samples
     File reference_dict
     String gatk_docker
@@ -100,7 +100,7 @@ task MergeEvidence {
   }
 
   Float file_size = size(files, "GiB")
-  Float subset_disk = if subset_primary_contigs then file_size else 0
+  Float subset_disk = if fix_legacy_pe_sr_baf then file_size else 0
   Int disk_size = 10 + ceil(file_size * 2 + subset_disk)
   Int java_heap_size_mb = round(42.0 * length(files) + 1024.0)
   Float mem_size_gb = java_heap_size_mb / 1024.0 + 2.5
@@ -129,7 +129,7 @@ task MergeEvidence {
 
     # For legacy evidence files that were not dictionary sorted, removing non-primary contigs fixes the GATK error
     # BAF records will be deduplicated by contig/coordinate
-    if ~{subset_primary_contigs} || ~{rename_samples}; then
+    if ~{fix_legacy_pe_sr_baf} || ~{rename_samples}; then
       mkdir evidence
       touch evidence.tmp
       cut -f1 ~{primary_contigs_fai} > contigs.list
@@ -138,16 +138,19 @@ task MergeEvidence {
         OUT="evidence/$FILENAME"
         if [[ "~{evidence}" == "pe" ]]; then
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms && $4 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,$5,$6,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if fix_legacy_pe_sr_baf then "if ($1 in chroms && $4 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,$5,$6,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            ~{if fix_legacy_pe_sr_baf then "| sort -k1,1V -k2,2n" else ""} \
             | bgzip > $OUT
         elif [[ "~{evidence}" == "sr" ]]; then
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if fix_legacy_pe_sr_baf then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,$4,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            ~{if fix_legacy_pe_sr_baf then "| sort -k1,1V -k2,2n" else ""} \
             | bgzip > $OUT
         else
           # baf - also uniquify records from old files
           zcat $fil \
-            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if subset_primary_contigs then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            | awk -F'\t' -v OFS='\t' -v SAMPLE="$sample" '!second_file{chroms[$1]; next} {~{if fix_legacy_pe_sr_baf then "if ($1 in chroms)" else ""} print ~{if rename_samples then "$1,$2,$3,SAMPLE" else "$0"} }' contigs.list second_file=1 - \
+            ~{if fix_legacy_pe_sr_baf then "| sort -k1,1V -k2,2n" else ""} \
             | awk -F'\t' -v OFS='\t' '!_[$1"_"$2]++' - \
             | bgzip > $OUT
         fi
