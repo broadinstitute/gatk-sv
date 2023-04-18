@@ -472,7 +472,7 @@ task RefineSampleLabels {
       --sample-id ~{sample_id} \
       --json-out ~{output_prefix}.json \
       --table-out ~{output_prefix}.tsv \
-      --truth-algorithms pav,pbsv,sniffles \
+      --truth-algorithms ~{sep="," tool_names} \
       ~{additional_args_}
   >>>
   runtime {

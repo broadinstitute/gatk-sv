@@ -1,5 +1,5 @@
 {
-  "FilterRecalibratedVcf.vcf": {{ test_batch.gq_recalibrated_vcf | tojson }},
+  "FilterRecalibratedVcf.vcf": {{ test_batch.aou_recalibrated_vcf | tojson }},
   "FilterRecalibratedVcf.ploidy_table": {{ test_batch.ploidy_table | tojson }},
   "FilterRecalibratedVcf.records_per_shard": "40000",
   "FilterRecalibratedVcf.filter_args": "--replace-gq --small-del-threshold -37 --medium-del-threshold -8 --large-del-threshold -60 --small-dup-threshold -74 --medium-dup-threshold -47 --large-dup-threshold -99 --ins-threshold -45 --inv-threshold -36 --bnd-threshold -48",
