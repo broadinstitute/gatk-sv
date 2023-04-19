@@ -248,11 +248,14 @@ task Polish {
                 --output-type z -o polished.need_reheader.vcf.gz --threads ~{threads}
 
         # do the last bit of header cleanup
-        bcftools view -h polished.need_reheader.vcf.gz | awk 'NR == 1' > new_header.vcf
-        bcftools view -h polished.need_reheader.vcf.gz \
-            | awk 'NR > 1' \
-            | egrep -v "CIPOS|CIEND|RMSSTD|EVENT|INFO=<ID=UNRESOLVED,|source|varGQ|bcftools|ALT=<ID=UNR|INFO=<ID=MULTIALLELIC," \
-            | sort -k1,1 >> new_header.vcf
+        bcftools view -h polished.need_reheader.vcf.gz > original_header.vcf
+        cat original_header.vcf | fgrep '##fileformat' > new_header.vcf
+        cat original_header.vcf \
+            | egrep -v "CIPOS|CIEND|RMSSTD|EVENT|INFO=<ID=UNRESOLVED,|source|varGQ|bcftools|ALT=<ID=UNR|INFO=<ID=MULTIALLELIC|GATKCommandLine|#CHROM|##contig|##fileformat" \
+            | sort >> new_header.vcf
+        # Don't sort contigs lexicographically, which would result in incorrect chr1, chr10, chr11, ... ordering
+        cat original_header.vcf | fgrep '##contig' >> new_header.vcf
+        cat original_header.vcf | fgrep '#CHROM' >> new_header.vcf
         bcftools reheader polished.need_reheader.vcf.gz -h new_header.vcf -o ~{prefix}.vcf.gz
     >>>
 
