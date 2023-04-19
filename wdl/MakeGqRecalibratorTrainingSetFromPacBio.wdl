@@ -9,11 +9,11 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
   input {
     File vcf  # Concordance vcf
     String? output_prefix
-    Array[String] pacbio_sample_ids
-    Array[File] vapor_files
-    Array[File] pbsv_vcfs
-    Array[File] pav_vcfs
-    Array[File] sniffles_vcfs
+    Array[String] training_sample_ids
+    Array[File?] vapor_files
+    Array[File?] pbsv_vcfs
+    Array[File?] pav_vcfs
+    Array[File?] sniffles_vcfs
     File ploidy_table
 
     # Optional: array intensity ratio files
@@ -47,7 +47,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
   }
 
   Array[String] tool_names = ["pbsv", "pav", "sniffles"]
-  Array[Array[File]] pacbio_vcfs = transpose([pbsv_vcfs, pav_vcfs, sniffles_vcfs])
+  Array[Array[File?]] pacbio_vcfs = transpose([pbsv_vcfs, pav_vcfs, sniffles_vcfs])
 
   String output_prefix_ =
     if defined(output_prefix) then
@@ -57,8 +57,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
   call utils.WriteLines {
     input:
-      lines = pacbio_sample_ids,
-      output_filename = "~{output_prefix}.pacbio_sample_ids.list",
+      lines = training_sample_ids,
+      output_filename = "~{output_prefix}.training_sample_ids.list",
       linux_docker = linux_docker
   }
 
@@ -73,12 +73,18 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_base_mini_docker = sv_base_mini_docker
   }
 
+  scatter (i in range(length(training_sample_ids))) {
+    if (defined(vapor_files[i])) {
+      String vapor_sample_ids = training_sample_ids[i]
+    }
+  }
+
   call GetVariantListsFromVaporAndIRS {
     input:
       vcf=SubsetVcfBySamplesList.vcf_subset,
       output_prefix=output_prefix_,
-      vapor_sample_ids=pacbio_sample_ids,
-      vapor_files=vapor_files,
+      vapor_sample_ids=select_all(vapor_sample_ids),
+      vapor_files=select_all(vapor_files),
       irs_sample_batches=irs_sample_batches,
       irs_test_reports=irs_test_reports,
       irs_contigs_fai=irs_contigs_fai,
@@ -91,12 +97,13 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_utils_docker=sv_utils_docker
   }
 
-  call VaporAndIRSSupportReport {
+  call VaporAndIRSSupportReport
+  {
     input:
       vcf=SubsetVcfBySamplesList.vcf_subset,
       output_prefix=output_prefix_,
-      vapor_sample_ids=pacbio_sample_ids,
-      vapor_files=vapor_files,
+      vapor_sample_ids=select_all(vapor_sample_ids),
+      vapor_files=select_all(vapor_files),
       write_detail_report=write_detail_report,
       irs_sample_batches=irs_sample_batches,
       irs_test_reports=irs_test_reports,
@@ -110,71 +117,73 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_utils_docker=sv_utils_docker
   }
 
-  scatter (i in range(length(pacbio_sample_ids))) {
-    call PrepSampleVcf {
-      input:
-        sample_id=pacbio_sample_ids[i],
-        vcf=SubsetVcfBySamplesList.vcf_subset,
-        vcf_index=SubsetVcfBySamplesList.vcf_subset_index,
-        output_prefix=output_prefix_,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
-    call concordance.SVConcordancePacBioSample as SVConcordanceLoose {
-      input:
-        sample_id=pacbio_sample_ids[i],
-        sample_vcf=PrepSampleVcf.out,
-        pacbio_sample_vcfs=pacbio_vcfs[i],
-        tool_names=tool_names,
-        prefix="~{output_prefix_}.loose",
-        ploidy_table=ploidy_table,
-        reference_dict=reference_dict,
-        pesr_interval_overlap=pesr_interval_overlap_loose,
-        pesr_size_similarity=pesr_size_similarity_loose,
-        pesr_breakend_window=pesr_breakend_window_loose,
-        sv_pipeline_docker=sv_pipeline_docker,
-        gatk_docker=gatk_docker,
-        linux_docker=linux_docker
-    }
-    call concordance.SVConcordancePacBioSample as SVConcordanceStrict {
-      input:
-        sample_id=pacbio_sample_ids[i],
-        sample_vcf=PrepSampleVcf.out,
-        pacbio_sample_vcfs=pacbio_vcfs[i],
-        tool_names=tool_names,
-        prefix="~{output_prefix_}.strict",
-        ploidy_table=ploidy_table,
-        reference_dict=reference_dict,
-        pesr_interval_overlap=pesr_interval_overlap_strict,
-        pesr_size_similarity=pesr_size_similarity_strict,
-        pesr_breakend_window=pesr_breakend_window_strict,
-        sv_pipeline_docker=sv_pipeline_docker,
-        gatk_docker=gatk_docker,
-        linux_docker=linux_docker
-    }
-    call RefineSampleLabels {
-      input:
-        sample_id=pacbio_sample_ids[i],
-        main_vcf=PrepSampleVcf.out,
-        vapor_irs_json=GetVariantListsFromVaporAndIRS.output_json,
-        tool_names=tool_names,
-        loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
-        strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
-        output_prefix="~{output_prefix_}.gq_training_labels.~{pacbio_sample_ids[i]}",
-        sv_pipeline_docker=sv_pipeline_docker
+  scatter (i in range(length(training_sample_ids))) {
+    if (defined(vapor_files[i]) && defined(pbsv_vcfs[i]) && defined(pav_vcfs[i]) && defined(sniffles_vcfs[i])) {
+      call PrepSampleVcf {
+        input:
+          sample_id=training_sample_ids[i],
+          vcf=SubsetVcfBySamplesList.vcf_subset,
+          vcf_index=SubsetVcfBySamplesList.vcf_subset_index,
+          output_prefix=output_prefix_,
+          sv_pipeline_docker=sv_pipeline_docker
+      }
+      call concordance.SVConcordancePacBioSample as SVConcordanceLoose {
+        input:
+          sample_id=training_sample_ids[i],
+          sample_vcf=PrepSampleVcf.out,
+          pacbio_sample_vcfs=select_all(pacbio_vcfs[i]),
+          tool_names=tool_names,
+          prefix="~{output_prefix_}.loose",
+          ploidy_table=ploidy_table,
+          reference_dict=reference_dict,
+          pesr_interval_overlap=pesr_interval_overlap_loose,
+          pesr_size_similarity=pesr_size_similarity_loose,
+          pesr_breakend_window=pesr_breakend_window_loose,
+          sv_pipeline_docker=sv_pipeline_docker,
+          gatk_docker=gatk_docker,
+          linux_docker=linux_docker
+      }
+      call concordance.SVConcordancePacBioSample as SVConcordanceStrict {
+        input:
+          sample_id=training_sample_ids[i],
+          sample_vcf=PrepSampleVcf.out,
+          pacbio_sample_vcfs=select_all(pacbio_vcfs[i]),
+          tool_names=tool_names,
+          prefix="~{output_prefix_}.strict",
+          ploidy_table=ploidy_table,
+          reference_dict=reference_dict,
+          pesr_interval_overlap=pesr_interval_overlap_strict,
+          pesr_size_similarity=pesr_size_similarity_strict,
+          pesr_breakend_window=pesr_breakend_window_strict,
+          sv_pipeline_docker=sv_pipeline_docker,
+          gatk_docker=gatk_docker,
+          linux_docker=linux_docker
+      }
+      call RefineSampleLabels {
+        input:
+          sample_id=training_sample_ids[i],
+          main_vcf=PrepSampleVcf.out,
+          vapor_irs_json=GetVariantListsFromVaporAndIRS.output_json,
+          tool_names=tool_names,
+          loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
+          strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
+          output_prefix="~{output_prefix_}.gq_training_labels.~{training_sample_ids[i]}",
+          sv_pipeline_docker=sv_pipeline_docker
+      }
     }
   }
 
   call MergeJsons {
     input:
       base_json=GetVariantListsFromVaporAndIRS.output_json,
-      jsons=RefineSampleLabels.out_json,
+      jsons=select_all(RefineSampleLabels.out_json),
       output_prefix="~{output_prefix_}.gq_training_labels",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
   call MergeHeaderedTables {
     input:
-      tables=RefineSampleLabels.out_table,
+      tables=select_all(RefineSampleLabels.out_table),
       output_prefix="~{output_prefix_}.gq_training_labels",
       linux_docker=linux_docker
   }
@@ -186,8 +195,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     File vapor_and_irs_output_json = GetVariantListsFromVaporAndIRS.output_json
     File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
     File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
-    Array[File] loose_pacbio_concordance_vcf_tars = SVConcordanceLoose.pacbio_concordance_vcfs_tar
-    Array[File] strict_pacbio_concordance_vcf_tars = SVConcordanceStrict.pacbio_concordance_vcfs_tar
+    Array[File] loose_pacbio_concordance_vcf_tars = select_all(SVConcordanceLoose.pacbio_concordance_vcfs_tar)
+    Array[File] strict_pacbio_concordance_vcf_tars = select_all(SVConcordanceStrict.pacbio_concordance_vcfs_tar)
   }
 }
 

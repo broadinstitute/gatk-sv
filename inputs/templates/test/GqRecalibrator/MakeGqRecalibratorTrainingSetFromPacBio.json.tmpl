@@ -1,6 +1,6 @@
 {
   "MakeGqRecalibratorTrainingSetFromPacBio.output_prefix": {{ test_batch.name | tojson }},
-  "MakeGqRecalibratorTrainingSetFromPacBio.pacbio_sample_ids": {{ test_batch.pacbio_samples | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.training_sample_ids": {{ test_batch.pacbio_samples | tojson }},
   "MakeGqRecalibratorTrainingSetFromPacBio.vcf": {{ test_batch.concordance_vcf | tojson }},
   "MakeGqRecalibratorTrainingSetFromPacBio.vapor_files": {{ test_batch.vapor_files | tojson }},
   "MakeGqRecalibratorTrainingSetFromPacBio.pbsv_vcfs": {{ test_batch.pacbio_pbsv_vcfs | tojson }},
