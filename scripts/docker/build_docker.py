@@ -92,6 +92,72 @@ class ImageDependencies:
         return not changed_docker_images.isdisjoint(self.docker_dependencies.keys())
 
 
+class ContainerRegistry:
+
+    def __init__(
+            self,
+            name: str,
+            input_dockers_json: str,
+            output_dockers_json: str,
+            dockers: Dict[str, str] = None,
+            current_docker_json: Dict[str, str] = None):
+
+        self.name = name
+        self.input_dockers_json = input_dockers_json
+        self.dockers = ProjectBuilder.load_json(self.input_dockers_json) if dockers is None else dockers
+        self.output_dockers_json = None if output_dockers_json == Paths.dev_null else output_dockers_json
+        self.current_docker_images = {} if current_docker_json is None else current_docker_json
+
+    def get_current_image(self, target: str, throw_error_on_no_image: bool = True) -> str:
+        current_image = self.current_docker_images.get(target, None)
+        if current_image is None:
+            for image in self.dockers.values():
+                if ProjectBuilder.get_target_from_image(image) == target:
+                    self.current_docker_images[target] = image
+                    current_image = image
+                    break
+        if throw_error_on_no_image and current_image is None:
+            raise ValueError(
+                f"{target} has no current image. ProjectBuilder should build images in order. This is a bug!"
+            )
+        return current_image
+
+    def update_dockers_json(self, dependencies: Dict, dry_run: bool) -> None:
+        output_json = self.output_dockers_json
+        if not output_json:
+            return  # no update is desired
+        new_dockers_json = {
+            json_key: (self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
+                       if ProjectBuilder.get_target_from_image(docker_image) in dependencies
+                       else docker_image)
+
+            for json_key, docker_image in self.dockers.items()
+        }
+        # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
+        # of what tag is current
+        dockers_json_images = set(new_dockers_json.values())
+        for target, image in self.current_docker_images.items():
+            if image not in dockers_json_images:
+                if target in new_dockers_json:
+                    # this requires coincidences bordering on malicious, but check and throw a sensible error message
+                    raise ValueError(
+                        f"Unable to update {output_json} because {image} is not used in input dockers json but its "
+                        f"target name {target} conflicts with an existing key."
+                    )
+                new_dockers_json[target] = image
+
+        old_dockers_json = ProjectBuilder.load_json(output_json)
+
+        if new_dockers_json != old_dockers_json:
+            # update dockers.json with the new data
+            if dry_run:
+                print(f"Write output dockers json at {output_json}")
+                print(json.dumps(new_dockers_json, indent=2))
+            else:
+                with open(output_json, "w") as f_out:
+                    json.dump(new_dockers_json, f_out, indent=2)
+
+
 class ProjectBuilder:
     """
     class to track dependencies, control build and push of entire job
@@ -181,6 +247,7 @@ class ProjectBuilder:
     images_built_by_all = frozenset(dependencies.keys()).difference({"melt"})
     accepted_target_values = frozenset(dependencies.keys()).union({"all"})
     latest_tag = "latest"
+    local_reg_name = "local"
 
     def __init__(
             self,
@@ -194,8 +261,14 @@ class ProjectBuilder:
         self.launch_script_path = launch_script_path
         self.working_dir = None
         self.build_priority = {}
-        self.dockers_json = ProjectBuilder.load_json(self.project_arguments.input_json)
-        self.current_docker_images = {}
+        self.registries = {}
+        for i in range(len(self.project_arguments.docker_repo)):
+            name = self.project_arguments.docker_repo[i]
+            self.registries[name] = ContainerRegistry(
+                name=name,
+                input_dockers_json=self.project_arguments.input_json[i],
+                output_dockers_json=self.project_arguments.output_json[i]
+            )
 
     @staticmethod
     def load_json(json_file: str) -> Dict[str, str]:
@@ -219,55 +292,6 @@ class ProjectBuilder:
     def is_image_local(docker_image: str) -> bool:
         return ProjectBuilder.get_image_repo(docker_image) is None
 
-    def get_current_image(self, target: str, throw_error_on_no_image: bool = True) -> str:
-        current_image = self.current_docker_images.get(target, None)
-        if current_image is None:
-            for image in self.dockers_json.values():
-                if ProjectBuilder.get_target_from_image(image) == target:
-                    self.current_docker_images[target] = image
-                    current_image = image
-                    break
-        if throw_error_on_no_image and current_image is None:
-            raise ValueError(
-                f"{target} has no current image. ProjectBuilder should build images in order. This is a bug!"
-            )
-        return current_image
-
-    def update_dockers_json(self):
-        output_json = self.project_arguments.output_json
-        if output_json is None or not output_json or output_json == Paths.dev_null:
-            return  # no update is desired
-        new_dockers_json = {
-            json_key: (self.get_current_image(ProjectBuilder.get_target_from_image(docker_image))
-                       if ProjectBuilder.get_target_from_image(docker_image) in self.dependencies
-                       else docker_image)
-
-            for json_key, docker_image in self.dockers_json.items()
-        }
-        # if a new image has been added that is not used by dockers json, store it as a distinct value to have a record
-        # of what tag is current
-        dockers_json_images = set(new_dockers_json.values())
-        for target, image in self.current_docker_images.items():
-            if image not in dockers_json_images:
-                if target in new_dockers_json:
-                    # this requires coincidences bordering on malicious, but check and throw a sensible error message
-                    raise ValueError(
-                        f"Unable to update {output_json} because {image} is not used in input dockers json but its"
-                        f"target name {target} conflicts with an existing key."
-                    )
-                new_dockers_json[target] = image
-
-        old_dockers_json = ProjectBuilder.load_json(output_json)
-
-        if new_dockers_json != old_dockers_json:
-            # update dockers.json with the new data
-            if self.project_arguments.dry_run:
-                print(f"Write output dockers json at {output_json}")
-                print(json.dumps(new_dockers_json, indent=2))
-            else:
-                with open(output_json, "w") as f_out:
-                    json.dump(new_dockers_json, f_out, indent=2)
-
     def get_build_priority(self, target_name: str) -> (int, str):
         """
         Return sort key that sorts targets so that:
@@ -280,14 +304,14 @@ class ProjectBuilder:
                 else 1 + max((self.get_build_priority(build_dep)[0] for build_dep in build_deps.keys()), default=0)
         return self.build_priority[target_name], target_name
 
-    def _add_image_prereqs(self, build_targets: Set[str]) -> Set[str]:
+    def _add_image_prereqs(self, registry: ContainerRegistry, build_targets: Set[str]) -> Set[str]:
         # Ensure that image prerequisite that a target requires exists. If not, add them to targets to build.
         # (This should almost never happen unless someone has messed with dockers.json or added a brand-new image.)
         prereqs = {
             prereq
             for target in build_targets
             for prereq in self.dependencies[target].docker_dependencies.keys()
-            if self.get_current_image(prereq, throw_error_on_no_image=False) is None
+            if registry.get_current_image(prereq, throw_error_on_no_image=False) is None
         }.difference(build_targets)
         while prereqs:
             build_targets.update(prereqs)
@@ -295,13 +319,14 @@ class ProjectBuilder:
                 prereq
                 for target in prereqs
                 for prereq in self.dependencies[target].docker_dependencies.keys()
-                if self.get_current_image(prereq, throw_error_on_no_image=False) is None
+                if registry.get_current_image(prereq, throw_error_on_no_image=False) is None
             }.difference(prereqs)
         return build_targets
 
-    def get_ordered_build_chain_list(self) -> List[str]:
+    def get_ordered_build_chain_list(self, registry: ContainerRegistry) -> List[str]:
         # seed with all targets that should be built
         new_targets_to_build = self._add_image_prereqs(
+            registry,
             {
                 target for target in self.project_arguments.targets
                 if not ImageBuilder(target, self).do_not_rebuild
@@ -318,6 +343,7 @@ class ProjectBuilder:
             while new_targets_to_build:
                 targets_to_build.update(new_targets_to_build)
                 new_targets_to_build = self._add_image_prereqs(
+                    registry,
                     {
                         image
                         for image, dependencies in self.dependencies.items()
@@ -360,10 +386,8 @@ class ProjectBuilder:
         return tmp_dir_path
 
     @property
-    def remote_docker_repos(self) -> Tuple[str, ...]:
-        return () if self.project_arguments.docker_repo is None \
-            else (self.project_arguments.docker_repo,) if isinstance(self.project_arguments.docker_repo, str) \
-            else tuple(self.project_arguments.docker_repo)
+    def remote_docker_repos(self) -> Dict[str, ContainerRegistry]:
+        return {name: registry for name, registry in self.registries.items() if name != self.local_reg_name}
 
     @property
     def built_images(self) -> List[str]:
@@ -394,8 +418,14 @@ class ProjectBuilder:
                 print(f"targets = {self.project_arguments.targets}")
             elif "all" in self.project_arguments.targets:
                 self.project_arguments.targets = ProjectBuilder.images_built_by_all
+
             # get targets + their dependencies in order (so that builds succeed)
-            expanded_build_targets = self.get_ordered_build_chain_list()
+            # `self.registries[next(iter(self.registries))]` implies getting the first item in the dictionary.
+            # For simplicity, we are using the first item instead of iterating through all the registries
+            # in the dictionary. However, this results in requiring the input-json of multiple
+            # repositories to be in sync in terms of the images they contain.
+            arbitrary_registry = next(iter(self.registries.values()))
+            expanded_build_targets = self.get_ordered_build_chain_list(arbitrary_registry)
 
             # build each required dependency
             print("Building and pushing the following targets in order:" if self.remote_docker_repos else
@@ -413,7 +443,7 @@ class ProjectBuilder:
                     )
 
                     build_time_args = {
-                        arg: self.get_current_image(image_name)
+                        arg: self.registries[next(iter(self.registries))].get_current_image(image_name)
                         for image_name, arg in ProjectBuilder.dependencies[target_name].docker_dependencies.items()
                     }
 
@@ -427,26 +457,28 @@ class ProjectBuilder:
 
                 print_colored("BUILD PROCESS SUCCESS!", Colors.GREEN)
 
-            if self.remote_docker_repos:
+            for registry in self.remote_docker_repos.values():
                 # push any images that are purely local (this can happen if e.g. images are built without specifying
                 # --docker-repo during development, but upon successful build the developer wants to push them)
                 local_images_to_push = [
                     image
                     for image in [
-                        self.get_current_image(target, throw_error_on_no_image=False)
+                        registry.get_current_image(target, throw_error_on_no_image=False)
                         for target in self.dependencies.keys()
                     ]
                     if image is not None and ProjectBuilder.is_image_local(image)
                 ]
                 if local_images_to_push:
-                    print(f"Also push local images {local_images_to_push} to {self.remote_docker_repos}")
+                    print(f"Also push local images {local_images_to_push} to "
+                          f"{[key for key, _ in self.remote_docker_repos.items()]}")
                 if not self.project_arguments.dry_run:
                     for local_image in local_images_to_push:
                         ImageBuilder(local_image, self).push()
 
             build_completed = True
         finally:
-            self.update_dockers_json()
+            for registry in self.registries.values():
+                registry.update_dockers_json(self.dependencies, self.project_arguments.dry_run)
             if not self.project_arguments.skip_cleanup:
                 self.cleanup(possible_tmp_dir_path, build_completed)
 
@@ -492,16 +524,16 @@ class ImageBuilder:  # class for building and pushing a single image
         return f"{self.name}:{self.tag}"
 
     @property
-    def remote_docker_repos(self) -> Tuple[str, ...]:
+    def remote_docker_repos(self) -> Dict[str, ContainerRegistry]:
         return self.project_builder.remote_docker_repos
 
     @property
-    def remote_images(self) -> Tuple[str, ...]:
+    def remote_images(self) -> Tuple[Tuple[str, str], ...]:
         remote_tags = (self.tag, ProjectBuilder.latest_tag) if self.project_builder.project_arguments.update_latest \
             else (self.tag,)
         return tuple(
-            f"{repo}/{self.name}:{remote_tag}"
-            for repo in self.remote_docker_repos
+            (registry_name, f"{registry_name}/{self.name}:{remote_tag}")
+            for registry_name, registry in self.remote_docker_repos.items()
             for remote_tag in remote_tags
         )
 
@@ -565,7 +597,7 @@ class ImageBuilder:  # class for building and pushing a single image
         """
         Push everything related to this image to remote repo
         """
-        for remote_image in self.remote_images:
+        for _, remote_image in self.remote_images:
             # do not push images with very restrictive licenses
             if self.name in ProjectBuilder.non_public_images and not remote_image.startswith("us.gcr.io"):
                 print_colored(
@@ -581,8 +613,13 @@ class ImageBuilder:  # class for building and pushing a single image
         self.update_current_image()
 
     def update_current_image(self):
-        self.project_builder.current_docker_images[self.name] = \
-            self.remote_images[0] if self.remote_docker_repos else self.local_image
+        if self.remote_docker_repos:
+            for (registry_name, remote_image) in self.remote_images:
+                self.project_builder.registries[registry_name].current_docker_images[self.name] = \
+                    remote_image
+        else:
+            self.project_builder.registries[ProjectBuilder.local_reg_name].current_docker_images[self.name] = \
+                self.local_image
 
     @staticmethod
     def docker_tag(source_image: str, target_image: str) -> int:
@@ -635,6 +672,24 @@ def print_colored(text: str, color: str):
     print(f"{color}{text}{Colors.ENDC}")
 
 
+def _validate_json_arg(docker_repo: str, argument: str, value: Union[str, List[str]]) -> List[str]:
+    if isinstance(value, str):
+        value = [value]
+    for filename in value:
+        if not os.access(filename, os.R_OK):
+            raise ValueError(
+                f"{argument} must specify a path to a file with read access. Given filename: {filename}")
+
+    if docker_repo is not None:
+        if 1 < len(docker_repo) != len(value):
+            raise ValueError(
+                f"Please provide each container registry with a separate {argument}. "
+                f"You have specified {len(docker_repo)} container registries (--docker-repo) and "
+                f"{len(value)} JSON files in {argument}.")
+
+    return value
+
+
 def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Tool for building docker images for GATK-SV pipeline" + "\n" + program_operation_description,
@@ -679,16 +734,17 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
 
     docker_remote_args_group.add_argument(
-        "--docker-repo", type=str,
+        "--docker-repo", type=str, nargs="+", default=[ProjectBuilder.local_reg_name],
         help="Docker repo to push images to. This will push images that are built "
              "this run of build_docker.py, or that currently have only a local image "
-             "in --input-json."
-    )
-
-    docker_remote_args_group.add_argument(
-        "--gcr-project", type=str,
-        help="Deprecated. Used to determine which docker repo to push images to. Use "
-             "--docker-repo instead."
+             "in --input-json. You may provide any number of docker repositories. "
+             "If you provide one repository, you may skip specifying the --input-json"
+             "and --output-json arguments, in which case, their default values will be used."
+             "However, if you specify more than one repository, then each of the repositories "
+             "should have a corresponding --input-json and --output-json. "
+             "It is currently required that the JSON files contain the same keys. "
+             "For instance, we do not currently support the case where `dockers_gcp.json` contains "
+             "`sv_base_docker: us.gcr.io/sv-base:latest` while `dockers_azure.json` misses `sv_base_docker`. "
     )
 
     docker_remote_args_group.add_argument(
@@ -697,15 +753,22 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
     )
 
     docker_remote_args_group.add_argument(
-        "--input-json", type=str, default=Paths.dockers_json_path,
+        "--input-json", type=str, nargs="+", default=Paths.dockers_json_path,
         help="Path to dockers.json to use as input. This file serves as a store for "
              "both the default docker image to use for various gatk-sv WDLs, and for "
              "the most up-to-date docker tag for each docker image."
+             "If you provide more than one docker repo, you would need to provide "
+             "one input JSON file for each. The input JSON files will be used for the "
+             "docker repositories in their corresponding order. All the JSON files "
+             "are currently required to contain the same list of docker image names."
     )
 
     docker_remote_args_group.add_argument(
-        "--output-json", type=str, default=Paths.dockers_json_path,
-        help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn off updates."
+        "--output-json", type=str, nargs="+", default=Paths.dockers_json_path,
+        help=f"Path to output updated dockers.json. Set to {Paths.dev_null} to turn off updates. "
+             f"If you specify more than one docker repositories, you would need to provide one "
+             f"output JSON file for each. The output JSON files will be used for the "
+             f"docker repositories in their corresponding order."
     )
 
     parser.add_argument(
@@ -777,8 +840,8 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
         sys.exit(0)
     parsed_args = parser.parse_args(args_list[1:])
 
-    if not os.access(parsed_args.input_json, os.R_OK):
-        raise ValueError("--input-json must specify a path to a file with read access.")
+    parsed_args.input_json = _validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.input_json)
+    parsed_args.output_json = _validate_json_arg(parsed_args.docker_repo, "--input-json", parsed_args.output_json)
 
     if parsed_args.base_git_commit is None:
         if parsed_args.targets is None:
@@ -819,11 +882,6 @@ def __parse_arguments(args_list: List[str]) -> argparse.Namespace:
             raise ValueError(
                 "Current directory has uncommitted changes or untracked files. Cautiously refusing to proceed.")
 
-    if parsed_args.gcr_project is not None:
-        if parsed_args.docker_repo is not None:
-            raise ValueError("Both --gcr-project and --docker-repo were specified, but only one is allowed.")
-        print_colored("--gcr-project is deprecated, use --docker-repo instead.", Colors.RED)
-        parsed_args.docker_repo = f"us.gcr.io/{parsed_args.gcr_project.strip('/')}"
     return parsed_args
 
 
