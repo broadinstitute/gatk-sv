@@ -352,6 +352,18 @@ class ProjectBuilder:
                     }.difference(targets_to_build)
                 )
 
+                # Implementation note: it would be less verbose to add `self.non_public_images` to the `difference`
+                # method above. However, the following implementation enables simpler logging of the skipped images.
+                for non_public_image in self.non_public_images:
+                    if non_public_image in new_targets_to_build:
+                        new_targets_to_build.remove(non_public_image)
+                        print_colored(
+                            f"Skipping building the Docker image `{non_public_image}` since it cannot be hosted "
+                            f"publicly. This image needs to be rebuilt, please consider building using the "
+                            f"`--targets` tag and hosting it in a non-public registry.",
+                            Colors.YELLOW
+                        )
+
         # noinspection PyTypeChecker
         return sorted(targets_to_build, key=self.get_build_priority)
 
@@ -411,11 +423,19 @@ class ProjectBuilder:
             if self.project_arguments.base_git_commit is not None:
                 changed_project_files = self.changed_project_files
                 print(f"changed_project_files: {changed_project_files}", file=sys.stderr)
-                self.project_arguments.targets = [
-                    target for target, image_dependencies in self.dependencies.items()
-                    if image_dependencies.has_change(changed_project_files)
-                ]
-                print(f"targets = {self.project_arguments.targets}")
+                self.project_arguments.targets = []
+                for target, image_dependencies in self.dependencies.items():
+                    if image_dependencies.has_change(changed_project_files):
+                        if target not in self.non_public_images:
+                            self.project_arguments.targets.append(target)
+                        else:
+                            print_colored(
+                                f"Skipping building the Docker image `{target}` since it cannot be hosted publicly. "
+                                f"This image needs to be rebuilt, please consider building using the "
+                                f"`--targets` tag and hosting it in a non-public registry.",
+                                Colors.YELLOW
+                            )
+                print_colored(f"targets = {self.project_arguments.targets}", Colors.GREEN)
             elif "all" in self.project_arguments.targets:
                 self.project_arguments.targets = ProjectBuilder.images_built_by_all
 
