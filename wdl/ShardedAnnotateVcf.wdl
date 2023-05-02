@@ -137,8 +137,8 @@ workflow ShardedAnnotateVcf {
 
   #Array[File?] sharded_annotated_vcf = select_first([AnnotateExternalAF.annotated_vcf, PruneAndAddVafs.output_vcf])
   #Array[File?] sharded_annotated_vcf_idx = select_first([AnnotateExternalAF.annotated_vcf_tbi, PruneAndAddVafs.output_vcf_idx])
-  Array[File] sharded_annotated_vcf = PruneAndAddVafs.output_vcf
-  Array[File] sharded_annotated_vcf_idx = PruneAndAddVafs.output_vcf_idx
+  Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAF.annotated_vcf), PruneAndAddVafs.output_vcf])
+  Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAF.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
 
 
   if (length(sharded_annotated_vcf) == 0) {
