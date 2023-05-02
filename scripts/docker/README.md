@@ -3,7 +3,7 @@
 The scripts here are to be used for building all, or any combination of dockers that are listed in `dockerfiles` directory
 (and have their dependencies specified in build_docker.py).
 
-We support both building from your local git repo, and remote Github repo.
+We support both building from your local git repo, and remote GitHub repo.
 
 ### Dependencies
 This set of python script depends on Python 3.
@@ -21,7 +21,7 @@ Conda packages `termcolor` and `pprint` are assumed to be available.
 2. Run the docker build script:
     ```
     $ cd scripts/docker
-    $ python build_docker.py --targets sv-pipeline --image-tag my-branch-a3fd92 --dockerhub-root myrepo 
+    $ python build_docker.py --targets sv-pipeline --image-tag my-branch-a3fd92 --docker-repo myrepo 
     ```
     This example will build and push `myrepo/sv-pipeline:my-branch-a3fd92`. All required base images will 
     also be included automatically. Additional options can be viewed by running `python build_docker.py`.
@@ -38,7 +38,7 @@ Conda packages `termcolor` and `pprint` are assumed to be available.
 
 * When building from local files, we cautiously refuse to build when there are uncommitted changes, and/or un-tracked files, unless you specifically turn off that protection with `--disable-git-protect`.
 
-* When building from Github tag/hash values, we assume you'd provide an **existing** temporary locations where we'll pull the files to. When we are done, the pulled files will be cleaned up, but not the temporary location you provided. When you'd like to pull from Github using SSH instead of https, simply turn on flag `--use_ssh`.
+* When building from GitHub tag/hash values, we assume you'd provide an **existing** temporary locations where we'll pull the files to. When we are done, the pulled files will be cleaned up, but not the temporary location you provided. When you'd like to pull from GitHub using SSH instead of https, simply turn on flag `--use_ssh`.
 
 * `test_build_docker.ipynb` is for debugging and testing purposes
 
