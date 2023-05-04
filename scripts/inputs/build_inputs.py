@@ -17,20 +17,16 @@ import logging
 # should consist of single dictionaries. If an input dictionary contains a "name" key, its value will be used to report
 # missing value accesses.
 #
-# Input value maps can then be aliased in to resource bundles accessible in the template files.  For example,
-# if the "resources_h38" is aliased to "reference_resources", a template accessing the "reference_resources" bundle
-# will pull values from the "resources_hg38.json" input values file.
+# Input value maps can then be aliased in to resource bundles accessible in the template files.  For example, if the "resources_h38"
+# is aliased to "reference_resources", a template accessing the "reference_resources" bundle will pull values from the
+# "resources_hg38.json" input values file.
 #
-# Values can be referred to by their resource bundle name + "." + attribute. For example, if the values directory
-# contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
-# and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template the string
-# {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
+# Values can be referred to by their resource bundle name + "." + attribute. For example, if the values
+# directory contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
+# and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template
+# the string {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
 #
-# The 'transpose_tsv' function simplifies the editing, viewing of diffs, and tracking of changes in Git for
-# 'workspace.tsv.tmpl' files that are in a two-row-wide format. The `transpose_tsv` function is used to transpose the
-# 'workspace.tsv.tmpl' data to two columns so that it is in a more manageable format.
-#
-# By default, the following resource bundle aliases are applied:
+# By default the following resource bundle aliases are applied:
 #
 #   dockers -> dockers
 #   ref_panel -> ref_panel_1kg
@@ -39,27 +35,25 @@ import logging
 #
 # Where the empty resource bundle is just an empty map.
 #
-# Resource bundles can be aliased in on the command line with the -a parameter, which takes a JSON dict string. For
-# example, the parameter
+# Resource bundles can be aliased in on the command line with the -a parameter, which takes a JSON dict string. For example,
+# the parameter
 #
 #    -a '{"test_batch" : "test_batch_small"}'
 #
 # Will cause the "test_batch_small" input value set to be aliased to the "test_batch" resource bundle.
 #
-# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing
-# which properties are missing. This feature can be used purposefully to generate different sets of input files from
-# the same sets of templates depending on which properties are present in the input value files. For example,
-# the build_default_inputs.sh script generates inputs three times from the test_input_templates directory,
-# with the test_batch bundle aliased to the small, large, and single sample test batches, respectively. Each run will
-# generate a different set of outputs -- for example the run based on test_batch_small does not currently produce
-# results for module03 and beyond because those files depend resources not defined for the small batch (but defined
-# for the large batch).
+# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing which
+# properties are missing. This feature can be used purposefully to generate different sets of input files from the same sets
+# of templates depending on which properties are present in the input value files. For example, the build_default_inputs.sh
+# script generates inputs three times from the test_input_templates directory, with the test_batch bundle aliased to the
+# small, large, and single sample test batches, respectively. Each run will generate a different set of outputs -- for example
+# the run based on test_batch_small does not currently produce results for module03 and beyond because those files depend
+# resources not defined for the small batch (but defined for the large batch).
 #
 # Jinja2 filters can be applied. For example, to ensure that string values are quoted in json files, use the tojson
 # filter: {{ dockers.sv_pipeline_docker | tojson }}
 
 # this class drops logs undefined value references in the "undefined_names" list
-
 undefined_names = []
 
 
@@ -113,7 +107,7 @@ def main():
     input_directory = args.input_values_directory
     input_files = glob.glob(input_directory + "/*.json")
     raw_input_bundles = {os.path.splitext(os.path.basename(input_file))[
-                             0]: json.load(open(input_file, "r")) for input_file in input_files}
+        0]: json.load(open(input_file, "r")) for input_file in input_files}
     raw_input_bundles['ref_panel_empty'] = {}
     raw_input_bundles['ref_panel_empty']['name'] = 'ref_panel'
     raw_input_bundles['test_batch_empty'] = {}
@@ -171,36 +165,15 @@ def process_directory(input_dict, template_dir, target_directory):
             process_file(input_dict, subdir, file, target_subdir)
 
 
-def transpose_tsv(input_str):
-    # Split input string into lines and remove trailing whitespace
-    lines = [line.rstrip('\n') for line in input_str.split('\n')]
-
-    # Group the lines by their column number
-    groups = {}
-    for line in lines:
-        if line:
-            columns = line.split('\t')
-            for i, column in enumerate(columns):
-                if i not in groups:
-                    groups[i] = []
-                groups[i].append(column)
-
-    # Transpose the groups and write the result to a new string
-    transposed_groups = []
-    for i in sorted(groups.keys()):
-        transposed_groups.append('\t'.join(groups[i]))
-    transposed_str = '\n'.join(transposed_groups)
-
-    return transposed_str
-
-
 def process_file(input_dict, template_subdir, template_file, target_subdir):
     template_file_path = os.sep.join([template_subdir, template_file])
+
     # only process files that end with .tmpl
     if not template_file.endswith(".tmpl"):
         logging.warning("skipping file " + template_file_path +
                         " because it does not have .tmpl extension")
         return
+
     target_file = template_file.rsplit('.', 1)[0]
     target_file_path = os.sep.join([target_subdir, target_file])
     env = Environment(loader=FileSystemLoader(template_subdir),
@@ -208,11 +181,6 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     env.policies['json.dumps_function'] = to_json_custom
     logging.info(template_file_path + " -> " + target_file_path)
     processed_content = env.get_template(template_file).render(input_dict)
-    # Check if the template_file starts with "workspace"
-    if template_file.startswith("workspace"):
-        # Transpose the TSV data in processed_content
-        processed_content = transpose_tsv(processed_content)
-
     if len(undefined_names) > 0:
         logging.warning("skipping file " + template_file_path +
                         " due to missing values " + str(undefined_names))
