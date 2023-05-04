@@ -15,10 +15,23 @@ import pandas as pd
 def rewrite_SR_coords(record, metrics, pval_cutoff, bg_cutoff):
     row = metrics.loc[record.id]
     if row.SR_sum_log_pval >= pval_cutoff and row.SR_sum_bg_frac >= bg_cutoff:
-        record.pos = int(row.SR_posA_pos)
-        record.stop = int(row.SR_posB_pos)
-        if record.info['SVTYPE'] == 'INV':
-            record.pos, record.stop = sorted([record.pos, record.stop])
+        posA = int(row.SR_posA_pos)
+        posB = int(row.SR_posB_pos)
+        if record.info['SVTYPE'] == 'INS':
+            # posA is always (+) strand and posB (-) strand; need to set order so pos <= end
+            if posB < posA:
+                record.pos = int(posB)
+                record.stop = int(posA)
+                record.info['STRANDS'] = '-+'
+            else:
+                record.pos = int(posA)
+                record.stop = int(posB)
+                record.info['STRANDS'] = '+-'
+        elif record.info['SVTYPE'] == 'INV':
+            record.pos, record.stop = sorted([posA, posB])
+        else:
+            record.pos = posA
+            record.stop = posB
         if record.info['SVTYPE'] not in 'INS BND'.split():
             record.info['SVLEN'] = record.stop - record.pos
 

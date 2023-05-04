@@ -29,6 +29,9 @@ def sr_test(argv):
     parser.add_argument('-w', '--window', type=int, default=100,
                         help='Window around variant start/end to consider for '
                         'split read support. [100]')
+    parser.add_argument('--insertion-window', type=int, default=50,
+                        help='Maximum distance between left and right breakpoint for INS. Allows for crossing in '
+                             'cases of microhomology. [50]')
     parser.add_argument('--common', default=False,
                         action='store_true', help='Ignore background for common AF')
     parser.add_argument('-b', '--background', type=int, default=160,
@@ -84,8 +87,9 @@ def sr_test(argv):
     else:
         medians = None
 
-    runner = SRTestRunner(vcf, countfile, fout, args.background, args.common,
-                          args.window, whitelist, medians=medians, log=args.log)
+    runner = SRTestRunner(vcf, countfile, fout, args.background, common=args.common,
+                          window=args.window, ins_window=args.insertion_window,
+                          whitelist=whitelist, medians=medians, log=args.log)
     runner.run()
 
 
