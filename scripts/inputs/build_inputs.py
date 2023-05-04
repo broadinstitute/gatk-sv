@@ -208,6 +208,10 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     env.policies['json.dumps_function'] = to_json_custom
     logging.info(template_file_path + " -> " + target_file_path)
     processed_content = env.get_template(template_file).render(input_dict)
+    # Check if the template_file starts with "workspace"
+    if template_file.startswith("workspace"):
+        # Transpose the TSV data in processed_content
+        processed_content = transpose_tsv(processed_content)
     if len(undefined_names) > 0:
         logging.warning("skipping file " + template_file_path +
                         " due to missing values " + str(undefined_names))
