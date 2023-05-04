@@ -17,20 +17,16 @@ import logging
 # should consist of single dictionaries. If an input dictionary contains a "name" key, its value will be used to report
 # missing value accesses.
 #
-# Input value maps can then be aliased in to resource bundles accessible in the template files.  For example,
-# if the "resources_h38" is aliased to "reference_resources", a template accessing the "reference_resources" bundle
-# will pull values from the "resources_hg38.json" input values file.
+# Input value maps can then be aliased in to resource bundles accessible in the template files.  For example, if the "resources_h38"
+# is aliased to "reference_resources", a template accessing the "reference_resources" bundle will pull values from the
+# "resources_hg38.json" input values file.
 #
-# Values can be referred to by their resource bundle name + "." + attribute. For example, if the values directory
-# contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
-# and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template the string
-# {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
+# Values can be referred to by their resource bundle name + "." + attribute. For example, if the values
+# directory contains a file called dockers.json containing the map { "sv_pipeline_docker" : "gatksv/sv-pipeline:tag" },
+# and the "dockers.json" input file has been aliased to the "dockers" resource bundle, then in a template
+# the string {{ dockers.sv_pipeline_docker }} will be replaced with the string gatksv/sv-pipeline:tag.
 #
-# The 'transpose_tsv' function simplifies the editing, viewing of diffs, and tracking of changes in Git for
-# 'workspace.tsv.tmpl' files that are in a two-row-wide format. The `transpose_tsv` function is used to transpose the
-# 'workspace.tsv.tmpl' data to two columns so that it is in a more manageable format.
-#
-# By default, the following resource bundle aliases are applied:
+# By default the following resource bundle aliases are applied:
 #
 #   dockers -> dockers
 #   ref_panel -> ref_panel_1kg
@@ -39,21 +35,20 @@ import logging
 #
 # Where the empty resource bundle is just an empty map.
 #
-# Resource bundles can be aliased in on the command line with the -a parameter, which takes a JSON dict string. For
-# example, the parameter
+# Resource bundles can be aliased in on the command line with the -a parameter, which takes a JSON dict string. For example,
+# the parameter
 #
 #    -a '{"test_batch" : "test_batch_small"}'
 #
 # Will cause the "test_batch_small" input value set to be aliased to the "test_batch" resource bundle.
 #
-# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing
-# which properties are missing. This feature can be used purposefully to generate different sets of input files from
-# the same sets of templates depending on which properties are present in the input value files. For example,
-# the build_default_inputs.sh script generates inputs three times from the test_input_templates directory,
-# with the test_batch bundle aliased to the small, large, and single sample test batches, respectively. Each run will
-# generate a different set of outputs -- for example the run based on test_batch_small does not currently produce
-# results for module03 and beyond because those files depend resources not defined for the small batch (but defined
-# for the large batch).
+# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing which
+# properties are missing. This feature can be used purposefully to generate different sets of input files from the same sets
+# of templates depending on which properties are present in the input value files. For example, the build_default_inputs.sh
+# script generates inputs three times from the test_input_templates directory, with the test_batch bundle aliased to the
+# small, large, and single sample test batches, respectively. Each run will generate a different set of outputs -- for example
+# the run based on test_batch_small does not currently produce results for module03 and beyond because those files depend
+# resources not defined for the small batch (but defined for the large batch).
 #
 # Jinja2 filters can be applied. For example, to ensure that string values are quoted in json files, use the tojson
 # filter: {{ dockers.sv_pipeline_docker | tojson }}
