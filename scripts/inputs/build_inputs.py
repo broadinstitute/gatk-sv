@@ -147,6 +147,7 @@ def main():
         process_file(input_dict, os.path.dirname(template_path),
                      os.path.basename(template_path), target_directory)
 
+
 def transpose_tsv(input_str):
     # Split input string into lines and remove trailing whitespace
     lines = [line.rstrip('\n') for line in input_str.split('\n')]
