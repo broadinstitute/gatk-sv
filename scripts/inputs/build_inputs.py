@@ -147,6 +147,28 @@ def main():
         process_file(input_dict, os.path.dirname(template_path),
                      os.path.basename(template_path), target_directory)
 
+def transpose_tsv(input_str):
+    # Split input string into lines and remove trailing whitespace
+    lines = [line.rstrip('\n') for line in input_str.split('\n')]
+
+    # Group the lines by their column number
+    groups = {}
+    for line in lines:
+        if line:
+            columns = line.split('\t')
+            for i, column in enumerate(columns):
+                if i not in groups:
+                    groups[i] = []
+                groups[i].append(column)
+
+    # Transpose the groups and write the result to a new string
+    transposed_groups = []
+    for i in sorted(groups.keys()):
+        transposed_groups.append('\t'.join(groups[i]))
+    transposed_str = '\n'.join(transposed_groups)
+
+    return transposed_str
+
 
 def process_directory(input_dict, template_dir, target_directory):
     template_dir_split = template_dir.split(os.sep)
