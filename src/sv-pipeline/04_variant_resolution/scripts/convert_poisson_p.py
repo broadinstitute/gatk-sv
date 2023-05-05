@@ -22,7 +22,7 @@ def convert_poisson_p(log_pval):
         pval_cmp = -np.log10(ss.poisson.cdf(0, count))
 
         if pval_cmp > log_pval:
-            return count - 1
+            return max(1, count - 1)
 
         count += 1
 
