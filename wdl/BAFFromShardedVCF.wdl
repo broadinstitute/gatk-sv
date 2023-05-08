@@ -78,14 +78,14 @@ task ScatterBAFBySample {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out = "BAF.~{sample}.txt.gz"
-    File out_index = "BAF.~{sample}.txt.gz.tbi"
+    File out = "~{sample}.baf.txt.gz"
+    File out_index = "~{sample}.baf.txt.gz.tbi"
   }
   command <<<
 
     set -euo pipefail
-    zcat ~{BAF} | awk -F "\t" -v OFS="\t" '{if ($4=="~{sample}") print}' | bgzip -c > BAF.~{sample}.txt.gz
-    tabix -s 1 -b 2 -e 2 BAF.~{sample}.txt.gz
+    zcat ~{BAF} | awk -F "\t" -v OFS="\t" '{if ($4=="~{sample}") print}' | bgzip -c > ~{sample}.baf.txt.gz
+    tabix -s 1 -b 2 -e 2 ~{sample}.baf.txt.gz
 
   >>>
   runtime {
