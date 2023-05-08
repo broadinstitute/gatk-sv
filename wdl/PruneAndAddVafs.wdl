@@ -72,7 +72,7 @@ task ComputeShardAFs {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 1.5,
     disk_gb: ceil(20 + size(vcf, "GB") * 2),
     boot_disk_gb: 10,
@@ -98,7 +98,7 @@ task ComputeShardAFs {
     File shard_wAFs = "~{prefix}.wAFs.vcf.gz"
     File shard_wAFs_idx = "~{prefix}.wAFs.vcf.gz.tbi"
   }
-  
+
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
