@@ -61,7 +61,6 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_preconcat_sharded_cluster
     RuntimeAttr? runtime_attr_hail_merge_sharded_cluster
     RuntimeAttr? runtime_attr_fix_header_sharded_cluster
-    RuntimeAttr? runtime_attr_get_vcf_header_with_members_info_line
   }
 
   call MiniTasks.ScatterVcf {
@@ -91,28 +90,28 @@ workflow ShardedAnnotateVcf {
 
     call pav.PruneAndAddVafs as PruneAndAddVafs {
       input:
-        vcf                    = AnnotateFunctionalConsequences.annotated_vcf,
-        vcf_idx                = AnnotateFunctionalConsequences.annotated_vcf_index,
-        prefix                 = prefix,
-        contig                 = contig,
-        ped_file               = ped_file,
-        par_bed                = par_bed,
-        sample_keep_list       = sample_keep_list,
-        allosomes_list         = allosomes_list,
+        vcf = AnnotateFunctionalConsequences.annotated_vcf,
+        vcf_idx = AnnotateFunctionalConsequences.annotated_vcf_index,
+        prefix = prefix,
+        contig = contig,
+        ped_file = ped_file,
+        par_bed = par_bed,
+        sample_keep_list = sample_keep_list,
+        allosomes_list = allosomes_list,
         sample_pop_assignments = sample_pop_assignments,
 
-        sv_base_mini_docker     = sv_base_mini_docker,
+        sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_shard_vcf    = runtime_attr_shard_vcf,
-        runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
+        runtime_attr_shard_vcf = runtime_attr_shard_vcf,
+        runtime_attr_compute_AFs = runtime_attr_compute_AFs,
         runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
-        runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs
+        runtime_attr_concat_vcfs = runtime_attr_concat_vcfs
     }
 
     if (defined(ref_bed)) {
       call eaf.AnnotateExternalAF as AnnotateExternalAF {
         input:
-          vcf     = PruneAndAddVafs.output_vcf,
+          vcf = PruneAndAddVafs.output_vcf,
           vcf_idx = PruneAndAddVafs.output_vcf_idx,
           ref_bed = select_first([ref_bed]),
           population = select_first([population]),
@@ -138,51 +137,37 @@ workflow ShardedAnnotateVcf {
   Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAF.annotated_vcf), PruneAndAddVafs.output_vcf])
   Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAF.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
 
-
-  if (length(sharded_annotated_vcf) == 0) {
-    call MiniTasks.GetVcfHeaderWithMembersInfoLine as GetVcfHeader_annotated {
+  if (use_hail) {
+    call HailMerge.HailMerge {
       input:
-        vcf_gz=vcf,
+        vcfs=sharded_annotated_vcf,
         prefix="~{prefix}.annotated",
+        gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_get_vcf_header_with_members_info_line
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
+        runtime_override_preconcat=runtime_attr_preconcat_sharded_cluster,
+        runtime_override_hail_merge=runtime_attr_hail_merge_sharded_cluster,
+        runtime_override_fix_header=runtime_attr_fix_header_sharded_cluster
     }
   }
 
-  if (length(sharded_annotated_vcf) > 0) {
-    if (use_hail) {
-      call HailMerge.HailMerge as ConcatVcfsHail_annotated {
-        input:
-          vcfs=sharded_annotated_vcf,
-          prefix="~{prefix}.annotated",
-          gcs_project=gcs_project,
-          sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
-          runtime_override_preconcat=runtime_attr_preconcat_sharded_cluster,
-          runtime_override_hail_merge=runtime_attr_hail_merge_sharded_cluster,
-          runtime_override_fix_header=runtime_attr_fix_header_sharded_cluster
-      }
+  if (!use_hail) {
+    call MiniTasks.ConcatVcfs {
+      input:
+        vcfs=sharded_annotated_vcf,
+        vcfs_idx=sharded_annotated_vcf_idx,
+        allow_overlaps=true,
+        outfile_prefix="~{prefix}.annotatedd",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat_sharded_cluster
     }
-
-    if (!use_hail) {
-      call MiniTasks.ConcatVcfs as ConcatVcfs_annotated {
-        input:
-          vcfs=sharded_annotated_vcf,
-          vcfs_idx=sharded_annotated_vcf_idx,
-          allow_overlaps=true,
-          outfile_prefix="~{prefix}.annotatedd",
-          sv_base_mini_docker=sv_base_mini_docker,
-          runtime_attr_override=runtime_attr_concat_sharded_cluster
-      }
-    }
-
   }
 
 
   output {
-    File output_vcf = select_first([GetVcfHeader_annotated.out, ConcatVcfs_annotated.concat_vcf, ConcatVcfsHail_annotated.merged_vcf])
-    File output_vcf_idx = select_first([GetVcfHeader_annotated.out_idx, ConcatVcfs_annotated.concat_vcf_idx, ConcatVcfsHail_annotated.merged_vcf_index])
+    File output_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
+    File output_vcf_idx = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
   }
 }
 

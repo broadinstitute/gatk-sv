@@ -56,7 +56,6 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_preconcat_sharded_cluster
     RuntimeAttr? runtime_attr_hail_merge_sharded_cluster
     RuntimeAttr? runtime_attr_fix_header_sharded_cluster
-    RuntimeAttr? runtime_attr_get_vcf_header_with_members_info_line
   }
 
   Array[String] contigs = read_lines(contig_list)
@@ -96,23 +95,22 @@ workflow AnnotateVcf {
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_hail_docker = sv_pipeline_hail_docker,
 
-        runtime_attr_svannotate = runtime_attr_svannotate ,
-        runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs  ,
-        runtime_attr_shard_vcf  = runtime_attr_shard_vcf  ,
-        runtime_attr_compute_AFs  = runtime_attr_compute_AFs  ,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs ,
-        runtime_attr_modify_vcf = runtime_attr_modify_vcf ,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs ,
-        runtime_attr_split_vcf  = runtime_attr_split_vcf  ,
-        runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed  ,
-        runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf  ,
-        runtime_attr_bedtools_closest = runtime_attr_bedtools_closest ,
-        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs ,
-        runtime_attr_concat_sharded_cluster = runtime_attr_concat_sharded_cluster ,
-        runtime_attr_preconcat_sharded_cluster  = runtime_attr_preconcat_sharded_cluster  ,
-        runtime_attr_hail_merge_sharded_cluster = runtime_attr_hail_merge_sharded_cluster ,
-        runtime_attr_fix_header_sharded_cluster = runtime_attr_fix_header_sharded_cluster ,
-        runtime_attr_get_vcf_header_with_members_info_line  = runtime_attr_get_vcf_header_with_members_info_line
+        runtime_attr_svannotate = runtime_attr_svannotate,
+        runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs,
+        runtime_attr_shard_vcf  = runtime_attr_shard_vcf,
+        runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
+        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
+        runtime_attr_modify_vcf = runtime_attr_modify_vcf,
+        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
+        runtime_attr_split_vcf  = runtime_attr_split_vcf,
+        runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
+        runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
+        runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+        runtime_attr_concat_sharded_cluster = runtime_attr_concat_sharded_cluster,
+        runtime_attr_preconcat_sharded_cluster  = runtime_attr_preconcat_sharded_cluster,
+        runtime_attr_hail_merge_sharded_cluster = runtime_attr_hail_merge_sharded_cluster,
+        runtime_attr_fix_header_sharded_cluster = runtime_attr_fix_header_sharded_cluster
     }
   }
 
