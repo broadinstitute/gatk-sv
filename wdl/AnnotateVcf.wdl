@@ -6,10 +6,11 @@ import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 workflow AnnotateVcf {
 
   input {
-    Array[File] vcf_list
+    Array[File] vcf_list  # Must be either single full VCF (array of length 1) or array of VCFs sharded by contig. Index & prefix list inputs should match
     Array[File] vcf_idx_list
     File contig_list
     Array[String] prefix_list
+    Boolean sharded_by_contig  # True if providing a vcf_list sharded by contig. False if providing a single full VCF
 
     File protein_coding_gtf
     File? noncoding_bed
@@ -60,13 +61,14 @@ workflow AnnotateVcf {
 
   Array[String] contigs = read_lines(contig_list)
 
-  scatter (i in range(length(vcf_list))) {
+  scatter (i in range(length(contigs))) {
+    Int array_index = if (sharded_by_contig && length(vcf_list) > 1) then i else 0
     call sharded_annotate_vcf.ShardedAnnotateVcf as ShardedAnnotateVcf{
       input:
-        vcf = vcf_list[i],
-        vcf_idx = vcf_idx_list[i],
+        vcf = vcf_list[array_index],
+        vcf_idx = vcf_idx_list[array_index],
         contig = contigs[i],
-        prefix = prefix_list[i],
+        prefix = prefix_list[array_index],
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
         promoter_window = promoter_window,

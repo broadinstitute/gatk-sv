@@ -69,6 +69,7 @@ workflow ShardedAnnotateVcf {
       vcf = vcf,
       prefix = prefix,
       records_per_shard = sv_per_shard,
+      contig = contig,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_scatter_vcf
   }
@@ -135,8 +136,6 @@ workflow ShardedAnnotateVcf {
 
   }
 
-  #Array[File?] sharded_annotated_vcf = select_first([AnnotateExternalAF.annotated_vcf, PruneAndAddVafs.output_vcf])
-  #Array[File?] sharded_annotated_vcf_idx = select_first([AnnotateExternalAF.annotated_vcf_tbi, PruneAndAddVafs.output_vcf_idx])
   Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAF.annotated_vcf), PruneAndAddVafs.output_vcf])
   Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAF.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
 
