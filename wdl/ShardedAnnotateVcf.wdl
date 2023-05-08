@@ -44,9 +44,8 @@ workflow ShardedAnnotateVcf {
     String gatk_docker
 
     RuntimeAttr? runtime_attr_svannotate
-    RuntimeAttr? runtime_attr_concat_vcfs
-    RuntimeAttr? runtime_attr_shard_vcf
     RuntimeAttr? runtime_attr_compute_AFs
+    RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
     RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_modify_vcf
     RuntimeAttr? runtime_attr_combine_vcfs
@@ -92,7 +91,7 @@ workflow ShardedAnnotateVcf {
       input:
         vcf = AnnotateFunctionalConsequences.annotated_vcf,
         vcf_idx = AnnotateFunctionalConsequences.annotated_vcf_index,
-        prefix = prefix,
+        prefix = "~{prefix}.~{contig}.~{i}",
         contig = contig,
         ped_file = ped_file,
         par_bed = par_bed,
@@ -102,10 +101,8 @@ workflow ShardedAnnotateVcf {
 
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_shard_vcf = runtime_attr_shard_vcf,
+        runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
         runtime_attr_compute_AFs = runtime_attr_compute_AFs,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
-        runtime_attr_concat_vcfs = runtime_attr_concat_vcfs
     }
 
     if (defined(ref_bed)) {
@@ -116,7 +113,7 @@ workflow ShardedAnnotateVcf {
           ref_bed = select_first([ref_bed]),
           population = select_first([population]),
           ref_prefix = select_first([ref_prefix]),
-          prefix = prefix,
+          prefix = "~{prefix}.~{contig}.~{i}",
           contigs = [contig],
           max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
           min_records_per_shard_step1 = min_records_per_shard_step1,
@@ -158,7 +155,7 @@ workflow ShardedAnnotateVcf {
         vcfs=sharded_annotated_vcf,
         vcfs_idx=sharded_annotated_vcf_idx,
         allow_overlaps=true,
-        outfile_prefix="~{prefix}.annotatedd",
+        outfile_prefix="~{prefix}.annotated",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_attr_concat_sharded_cluster
     }

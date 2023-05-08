@@ -43,6 +43,7 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_svannotate
     RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_shard_vcf
+    RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_modify_vcf
@@ -96,8 +97,7 @@ workflow AnnotateVcf {
         sv_pipeline_hail_docker = sv_pipeline_hail_docker,
 
         runtime_attr_svannotate = runtime_attr_svannotate,
-        runtime_attr_concat_vcfs  = runtime_attr_concat_vcfs,
-        runtime_attr_shard_vcf  = runtime_attr_shard_vcf,
+        runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
         runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
         runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
         runtime_attr_modify_vcf = runtime_attr_modify_vcf,
