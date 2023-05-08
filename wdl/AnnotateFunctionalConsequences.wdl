@@ -5,7 +5,7 @@ import "Structs.wdl"
 workflow AnnotateFunctionalConsequences {
   input {
     File vcf
-    File vcf_index
+    File? vcf_index
     String prefix
 
     File protein_coding_gtf
@@ -41,7 +41,7 @@ workflow AnnotateFunctionalConsequences {
 task SVAnnotate {
   input {
     File vcf
-    File vcf_index
+    File? vcf_index
     String prefix
 
     File protein_coding_gtf

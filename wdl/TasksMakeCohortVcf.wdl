@@ -959,19 +959,19 @@ task RenameVariantIds {
 task ScatterVcf {
   input {
     File vcf
+    File? vcf_index
     String prefix
     Int records_per_shard
     Int? threads = 1
+    String? contig
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   Float input_size = size(vcf, "GB")
-  Float base_disk_gb = 10.0
-
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(base_disk_gb + input_size * 5.0),
+                                  disk_gb: ceil(10.0 + input_size * 5.0),
                                   cpu_cores: 2,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -991,20 +991,18 @@ task ScatterVcf {
   command <<<
     set -euo pipefail
     # in case the file is empty create an empty shard
-    bcftools view -h ~{vcf} | bgzip -c > ~{prefix}.0.vcf.gz
-    bcftools +scatter ~{vcf} -o . -O z -p ~{prefix}. --threads ~{threads} -n ~{records_per_shard}
+    bcftools view -h ~{vcf} | bgzip -c > "~{prefix}.0.vcf.gz"
+    bcftools +scatter ~{vcf} -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}
 
-    ls ~{prefix}.*.vcf.gz | sort -k1,1V > vcfs.list
+    ls "~{prefix}".*.vcf.gz | sort -k1,1V > vcfs.list
     i=0
-    while read vcf; do
+    while read VCF; do
       shard_no=`printf %06d $i`
-      mv ${vcf} ~{prefix}.shard_${shard_no}.vcf.gz
-      tabix -p vcf ~{prefix}.shard_${shard_no}.vcf.gz
+      mv "$VCF" "~{prefix}.shard_${shard_no}.vcf.gz"
       i=$((i+1))
     done < vcfs.list
   >>>
   output {
     Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
-    Array[File] shards_idx = glob("~{prefix}.shard_*.vcf.gz.tbi")
   }
 }

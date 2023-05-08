@@ -79,8 +79,7 @@ workflow ShardedAnnotateVcf {
     call func.AnnotateFunctionalConsequences {
       input:
         vcf = ScatterVcf.shards[i],
-        vcf_index = ScatterVcf.shards_idx[i],
-        prefix = "~{prefix}.~{i}",
+        prefix = "~{prefix}.~{contig}.~{i}",
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
         promoter_window = promoter_window,
