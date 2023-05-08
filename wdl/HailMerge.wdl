@@ -12,9 +12,9 @@ workflow HailMerge {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
-    RuntimeAttr? runtime_attr_preconcat
-    RuntimeAttr? runtime_attr_hail_merge
-    RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_override_preconcat
+    RuntimeAttr? runtime_override_hail_merge
+    RuntimeAttr? runtime_override_fix_header
   }
 
   # Concatenate vcfs naively to prevent ClassTooLargeException in Hail
@@ -26,27 +26,27 @@ workflow HailMerge {
         generate_index=false,
         outfile_prefix="~{prefix}.preconcat",
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_preconcat
+        runtime_attr_override=runtime_override_preconcat
     }
   }
 
-  call HailMerge {
+  call HailMergeTask {
     input:
       vcfs = [select_first([Preconcat.concat_vcf, vcfs[0]])],
       prefix = prefix,
       gcs_project = select_first([gcs_project]),
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-      runtime_attr_override=runtime_attr_hail_merge
+      runtime_attr_override=runtime_override_hail_merge
   }
 
   call FixHeader {
     input:
-      merged_vcf = HailMerge.merged_vcf,
+      merged_vcf = HailMergeTask.merged_vcf,
       example_vcf = vcfs[0],
       prefix = prefix + ".reheadered",
       reset_cnv_gts = select_first([reset_cnv_gts, false]),
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_fix_header
+      runtime_attr_override=runtime_override_fix_header
   }
 
   output {
@@ -55,7 +55,7 @@ workflow HailMerge {
   }
 }
 
-task HailMerge {
+task HailMergeTask {
   input {
     Array[File] vcfs
     String prefix

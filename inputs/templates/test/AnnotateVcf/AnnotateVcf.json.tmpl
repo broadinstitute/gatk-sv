@@ -16,6 +16,7 @@
   "AnnotateVcf.min_records_per_shard_step1" :  5000,
 
   "AnnotateVcf.prefix_list" : [{{ test_batch.name | tojson }}],
+  "AnnotateVcf.sharded_by_contig": "false",
   "AnnotateVcf.use_hail": "false",
 
   "AnnotateVcf.gatk_docker":{{ dockers.gatk_docker | tojson }},

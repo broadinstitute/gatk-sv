@@ -1389,9 +1389,9 @@ workflow GATKSVPipelineSingleSample {
 
   call annotate.AnnotateVcf {
        input:
-        vcf = FilterSample.out,
-        vcf_idx = FilterSample.out_idx,
-        prefix = batch,
+        vcf_list = [FilterSample.out],
+        vcf_idx_list = [FilterSample.out_idx],
+        prefix_list = [batch],
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
@@ -1400,6 +1400,8 @@ workflow GATKSVPipelineSingleSample {
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
+        use_hail = false,
+        sharded_by_contig = false,
         sv_per_shard = annotation_sv_per_shard,
         max_shards_per_chrom_step1 = annotation_max_shards_per_chrom_step1,
         min_records_per_shard_step1 = annotation_min_records_per_shard_step1,
@@ -1411,18 +1413,18 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = AnnotateVcf.output_vcf,
+      vcf = AnnotateVcf.output_vcf_list[0],
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.UpdateBreakendRepresentation {
     input:
-      vcf=AnnotateVcf.output_vcf,
-      vcf_idx=AnnotateVcf.output_vcf_idx,
+      vcf=AnnotateVcf.output_vcf_list[0],
+      vcf_idx=AnnotateVcf.output_vcf_idx_list[0],
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
-      prefix=basename(AnnotateVcf.output_vcf, ".vcf.gz") + ".final_cleanup",
+      prefix=basename(AnnotateVcf.output_vcf_list[0], ".vcf.gz") + ".final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1462,8 +1464,8 @@ workflow GATKSVPipelineSingleSample {
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
-    File pre_cleanup_vcf = AnnotateVcf.output_vcf
-    File pre_cleanup_vcf_idx = AnnotateVcf.output_vcf_idx
+    File pre_cleanup_vcf = AnnotateVcf.output_vcf_list[0]
+    File pre_cleanup_vcf_idx = AnnotateVcf.output_vcf_idx_list[0]
 
     File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
     File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])

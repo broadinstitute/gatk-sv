@@ -6,7 +6,7 @@ import "ShardedAnnotateVcf.wdl" as sharded_annotate_vcf
 workflow AnnotateVcf {
 
   input {
-    Array[File] vcf_list  # Must be either single full VCF (array of length 1) or array of VCFs sharded by contig. Index & prefix list inputs should match
+    Array[File] vcf_list  # Must be either single full VCF (array of length 1) or array of VCFs sharded by contig. Outputs will match
     Array[File] vcf_idx_list
     File contig_list
     Array[String] prefix_list
