@@ -20,7 +20,7 @@ workflow FilterGenotypes {
     File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args.
     String? sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
 
-    Int optimize_vcf_records_per_shard = 20000
+    Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
 
     # For MainVcfQc
