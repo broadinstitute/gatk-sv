@@ -26,7 +26,7 @@ def count_samples(vcf_path):
 
 
 def create_vcf_tsv(out_path, truth_json_path, vcf_path, min_size_medium,
-                   min_size_large, downsample_factor=None):
+                   min_size_large, downsample_factor=None, labeled_only=False):
     # Info fields to load (double-check these if you get an invalid header error)
     info_fields = [
         'END2', 'CHR2', 'ALGORITHMS', 'EVIDENCE', 'SVLEN', 'SVTYPE', 'AF', 'STATUS', 'NON_REF_GENOTYPE_CONCORDANCE',
@@ -88,7 +88,9 @@ def create_vcf_tsv(out_path, truth_json_path, vcf_path, min_size_medium,
                       else 0 if r.id in training_sites[s]['bad_variant_ids'] else -1]
                       + [s if k == 'SAMPLE' else _reformat_field(r.samples[s].get(k, None), k) for k in format_fields]
                       + [_reformat_field(r.info.get(k, None), k) for k in info_fields]
-                      for s in samples if _is_non_ref_or_no_call(r.samples[s]['GT'])]
+                      for s in samples if _is_non_ref_or_no_call(r.samples[s]['GT']) and
+                      ((not labeled_only) or r.id in training_sites[s]['good_variant_ids']
+                       or r.id in training_sites[s]['bad_variant_ids'])]
             type_counter[r_class] += len(r_data)
             if i % 10000 == 0:
                 print(f"Processed {i} records; position {r.chrom}:{r.pos}")
@@ -108,6 +110,9 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--out', type=str, help='Output table path, will be gzipped (.gz)')
     parser.add_argument("--downsample-factor", type=int,
                         help="If provided, load only every DOWNSAMPLE_FACTOR variants from the vcf")
+    parser.add_argument("--labeled-only", action='store_true',
+                        help="Limit output to labeled sites; intended for very large call sets with "
+                             "sparsely labeled genotypes.")
     parser.add_argument("--medium-size", type=float, default=500,
                         help="Min size for medium DEL/DUP")
     parser.add_argument("--large-size", type=float, default=10000,
@@ -128,7 +133,7 @@ def main(argv: Optional[List[Text]] = None):
     print("Reading VCF and writing to data table...")
     create_vcf_tsv(out_path=args.out, truth_json_path=args.truth_json, vcf_path=args.vcf,
                    min_size_medium=args.medium_size, min_size_large=args.large_size,
-                   downsample_factor=args.downsample_factor)
+                   downsample_factor=args.downsample_factor, labeled_only=args.labeled_only)
     print("Done!")
 
 
