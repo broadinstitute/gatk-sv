@@ -14,13 +14,8 @@
   "MainVcfQc.prefix": {{ test_batch.name | tojson }},
   "MainVcfQc.ped_file": {{ test_batch.ped_file | tojson }},
 
-  "MainVcfQc.vcfs": [ {{ test_batch.gatk_formatted_vcf | tojson }} ],
+  "MainVcfQc.vcfs": [ {{ test_batch.clean_vcf | tojson }} ],
 
   "MainVcfQc.sv_per_shard": 2500,
-  "MainVcfQc.samples_per_shard": 600,
-
-  "MainVcfQc.runtime_override_plot_qc_per_family": {
-    "mem_gb": 15,
-    "disk_gb": 100
-  }
+  "MainVcfQc.samples_per_shard": 600
 }
