@@ -762,3 +762,56 @@ task TransferVcfAnnotations {
     File annotated_vcf_index = output_file_name + ".tbi"
   }
 }
+
+task ShardVcfPair {
+  input {
+    File vcf_a
+    File vcf_b
+    Int shard_size  # Max records per shard
+    String prefix_a
+    String prefix_b
+    Boolean drop_a  # Drop records in vcf_a that don't have matching vid in vcf_b
+    Boolean drop_b  # Drop records in vcf_b that don't have matching vid in vcf_a
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10.0 + size([vcf_a, vcf_b], "GB") * 2),
+                               cpu_cores: 1,
+                               preemptible_tries: 3,
+                               max_retries: 1,
+                               boot_disk_gb: 10
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+  command <<<
+    set -euo pipefail
+    mkdir shards/
+    python /opt/sv-pipeline/scripts/shard_vcf_pair.py \
+      --shard-size ~{shard_size} \
+      ~{if drop_a then "--drop-a" else ""} \
+      ~{if drop_b then "--drop-b" else ""} \
+      --out-dir ./shards \
+      --prefix-a ~{prefix_a} \
+      --prefix-b ~{prefix_b} \
+      ~{vcf_a} \
+      ~{vcf_b}
+  >>>
+
+  output {
+    Array[File] shards_a = glob("shards/~{prefix_a}*.vcf.gz")
+    Array[File] shards_b = glob("shards/~{prefix_b}*.vcf.gz")
+  }
+}
