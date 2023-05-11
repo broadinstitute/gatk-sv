@@ -4,7 +4,7 @@ import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
-import "VaPoR.wdl" as vapor
+import "Vapor.wdl" as vapor
 import "Duphold.wdl" as duphold
 import "RdPeSrAnno.wdl" as rdpesr
 
@@ -102,7 +102,7 @@ workflow BenchmarkAnnotation {
         runtime_attr_override = runtime_attr_bcf2vcf
       }
  
-    call RunVaPoR{
+    call RunVapor{
       input:
         prefix = prefix,
         contig = contig,
@@ -189,7 +189,7 @@ workflow BenchmarkAnnotation {
 
   call MiniTasks.ConcatBeds as ConcatBeds{
     input:
-      shard_bed_files=RunVaPoR.vapor,
+      shard_bed_files=RunVapor.vapor,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ConcatBeds
@@ -431,7 +431,7 @@ task RunDuphold{
   }
 }
 
-task RunVaPoR{
+task RunVapor{
   input{
     String prefix
     String contig

@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 
-import "VaPoR.wdl" as vapor
 import "Duphold.wdl" as duphold
 import "RdPeSrAnno.wdl" as rdpesr
 
@@ -28,7 +27,7 @@ workflow AnnoRdPeSr {
         String sv_base_mini_docker
         String sv_pipeline_docker
 
-        RuntimeAttr? runtime_attr_Vapor 
+        RuntimeAttr? runtime_attr_Vapor
         RuntimeAttr? runtime_attr_duphold
         RuntimeAttr? runtime_attr_rdpesr
         RuntimeAttr? runtime_attr_bcf2vcf
