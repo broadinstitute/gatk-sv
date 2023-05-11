@@ -1,6 +1,7 @@
 #!/bin/env python
 
 import argparse
+from collections import deque
 import re
 import pysam
 import sys
@@ -264,7 +265,7 @@ def annotate_vcf(vcf_in: pysam.VariantFile,
                 raise ValueError(f"Record positions do not match for {in_rec.id}: "
                                  f"{in_rec.chrom}:{in_rec.pos} {ann_rec.chrom}:{ann_rec.pos}")
             sys.stdout.write(str(annotate_record(in_record=in_rec, ann_record=ann_rec, samples=common_samples,
-                                  info_keys=info_keys, format_keys=format_keys)))
+                                                 info_keys=info_keys, format_keys=format_keys)))
 
 
 def _parse_arg_list(arg: Text) -> List[Text]:

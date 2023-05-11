@@ -5,7 +5,7 @@ import os
 import pysam
 import re
 import sys
-from typing import Optional, List, Text, Set, Dict, Tuple, Iterable
+from typing import Optional, List, Text, Dict, Tuple, Iterable
 
 from more_itertools import peekable
 
@@ -152,10 +152,10 @@ def shard_vcfs(vcf_a: pysam.VariantFile,
         Base vcf to add annotations to
     vcf_ann: pysam.VariantFile
         Vcf containing source annotations
-    vcf_out: pysam.VariantFile
-        Output vcf
-    info_keys: Set[Text]
-        Annotation INFO keys
+    prefix_a: Text
+        First vcf file prefix
+    prefix_b: Text
+        Second vcf file prefix
     format_keys: Set[Text]
         Annotation FORMAT keys
     """
