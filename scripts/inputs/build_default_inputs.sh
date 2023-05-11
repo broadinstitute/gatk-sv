@@ -51,6 +51,10 @@ echo "########## Building ref_panel_1kg cohort Terra workspace ##########"
 scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/terra_workspaces/cohort_mode ${BASE_DIR}/inputs/build/ref_panel_1kg/terra \
   -a '{ "test_batch" : "ref_panel_1kg", "cloud_env" : "'$CLOUD_ENV'" }'
 
+echo "########## Building hgdp test ##########"
+scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test ${BASE_DIR}/inputs/build/hgdp/test \
+  -a '{ "test_batch" : "hgdp", "cloud_env" : "'$CLOUD_ENV'" }'
+
 # Note CLOUD_ENV is not currently required for the single-sample workflow
 echo "########## Building NA19240 single-sample test ##########"
 scripts/inputs/build_inputs.py ${BASE_DIR}/inputs/values ${BASE_DIR}/inputs/templates/test/GATKSVPipelineSingleSample ${BASE_DIR}/inputs/build/NA19240/test \
