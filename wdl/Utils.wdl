@@ -87,7 +87,7 @@ task GetSampleIdsFromVcfArray {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
+  
 task GetSampleIdsFromVcfTar {
   input {
     File vcf_tar
@@ -99,7 +99,7 @@ task GetSampleIdsFromVcfTar {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 0.9,
-                               disk_gb: 10 + ceil(size(vcf_tar, "GiB")),
+                               disk_gb: ceil(50 + 2 * size(vcf_tar, "GiB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -107,16 +107,10 @@ task GetSampleIdsFromVcfTar {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   command <<<
-
     set -euo pipefail
-    # Using a named pipe keeps pipefail from triggering
-    mkfifo tmppipe
-    while read f
-    do
-      tar -Ozxf ~{vcf_tar} $f &>2 /dev/null > tmppipe &
-      bcftools query -l tmppipe
-    done < <(tar -tzf ~{vcf_tar} | grep '\.vcf\.gz$') | sort -u > ~{prefix}.txt
-
+    mkdir vcfs
+    tar xzf ~{vcf_tar} -C vcfs/
+    ls vcfs/*.vcf.gz | xargs -n1 bcftools query -l | sort -u > ~{prefix}.txt
   >>>
 
   output {
