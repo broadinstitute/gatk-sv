@@ -496,30 +496,15 @@ task RunMELT {
 
     # create a bam file from the input bam or cram, filtering out high coverage intervals
     # and ambiguous bases
-
-    # use a fifo as the output, because PrintReads doesn't know how to write to stdout
-    mkfifo tmp.sam
     java -Xmx~{java_mem_mb}m -jar /opt/gatk.jar PrintReads \
-      -XL highCountIntervals.bed \
-      --interval-exclusion-padding ~{interval_padding} \
-      -I ~{bam_or_cram_file} \
-      -R ~{reference_fasta} \
-      -O tmp.sam &
-
-    # a harmless command that will eventually open and close the fifo without writing anything
-    # this is a failsafe so that the awk command that follows will not hang forever in the
-    #   event that the previous command fails without opening its output file
-    # the amount of sleeping isn't critical -- it has to be long enough that PrintReads will have
-    #   opened its output file (if it's ever going to do so)
-    ( sleep 60; cat /dev/null > tmp.sam ) &
-
-    # read from the fifo and replace ambiguous bases with 'N'
-    awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' < tmp.sam | \
+          -XL highCountIntervals.bed \
+          --interval-exclusion-padding ~{interval_padding} \
+          -I ~{bam_or_cram_file} \
+          -R ~{reference_fasta} \
+          -O /dev/stdout | \
+      samtools view -h - \
+      awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' | \
       samtools view -b1 > ~{sample_id}.bam
-
-    # the wait command's return code is the return code of the PrintReads command
-    # so if PrintReads fails, the script will fail
-    wait %1
 
     samtools index ~{sample_id}.bam
 
