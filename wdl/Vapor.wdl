@@ -30,24 +30,23 @@ workflow Vapor {
 
   scatter ( contig in read_lines(contigs) ) {
 
-    call tasks10.SplitBed as SplitBed {
+    call tasks10.PreprocessBedForVapor {
       input:
+        prefix = "~{prefix}.~{contig}.preprocess",
         contig = contig,
         sample_to_extract = sample_id,
         bed_file = bed_file,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
     }
-    
-    File contig_bed = SplitBed.contig_bed
 
     call RunVaporWithCram {
       input:
-        prefix = prefix,
+        prefix = "~{prefix}.~{contig}",
         contig = contig,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
-        bed = contig_bed,
+        bed = PreprocessBedForVapor.contig_bed,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -93,13 +92,9 @@ task RunVaporWithCram {
     preemptible_tries: 3,
     max_retries: 1
   }
-
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
   output {
-    #File local_bam = "~{contig}.bam"
     File vapor = "~{prefix}.~{contig}.vapor.gz"
     File vapor_plot = "~{prefix}.~{contig}.tar.gz"
   }
