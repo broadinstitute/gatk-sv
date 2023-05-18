@@ -502,9 +502,9 @@ task RunMELT {
           -I ~{bam_or_cram_file} \
           -R ~{reference_fasta} \
           -O /dev/stdout | \
-      samtools view -h - \
+      samtools view -h - | \
       awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' | \
-      samtools view -b1 > ~{sample_id}.bam
+      samtools view -b1 - > ~{sample_id}.bam
 
     samtools index ~{sample_id}.bam
 
