@@ -50,13 +50,12 @@ import logging
 # the run based on test_batch_small does not currently produce results for module03 and beyond because those files depend
 # resources not defined for the small batch (but defined for the large batch).
 #
-# Any template files with a filename that begins with the string 'workspace' will be transposed before the final inputs are written. 
-# This functionality allows us to simplify the editing, viewing of diffs, 
+# Any template files with a filename that begins with the string 'workspace' will be transposed before the final inputs are written.
+# This functionality allows us to simplify the editing, viewing of diffs,
 # and tracking of changes in Git of workspace TSV files that Terra expects in a two-row format.
 #
 # Jinja2 filters can be applied. For example, to ensure that string values are quoted in json files, use the tojson
 # filter: {{ dockers.sv_pipeline_docker | tojson }}
-
 # this class drops logs undefined value references in the "undefined_names" list
 undefined_names = []
 
