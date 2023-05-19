@@ -50,9 +50,9 @@ import logging
 # the run based on test_batch_small does not currently produce results for module03 and beyond because those files depend
 # resources not defined for the small batch (but defined for the large batch).
 #
-# The 'transpose_tsv' function simplifies the editing, viewing of diffs, and tracking of changes in Git for
-# 'workspace.tsv.tmpl' files that are in a two-column-wide format. The `transpose_tsv` function is used to transpose the
-# 'workspace.tsv.tmpl' data to two rows and generate 'workspace.tsv' in the correct format for Terra.
+# Any template files with a filename that begins with the string 'workspace' will be transposed before the final inputs are written. 
+# This functionality allows us to simplify the editing, viewing of diffs, 
+# and tracking of changes in Git of workspace TSV files that Terra expects in a two-row format.
 #
 # Jinja2 filters can be applied. For example, to ensure that string values are quoted in json files, use the tojson
 # filter: {{ dockers.sv_pipeline_docker | tojson }}
