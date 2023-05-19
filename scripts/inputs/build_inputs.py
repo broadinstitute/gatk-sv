@@ -165,7 +165,7 @@ def transpose_tsv(input_str):
     transposed_groups = []
     for i in sorted(groups.keys()):
         transposed_groups.append('\t'.join(groups[i]))
-    transposed_str = '\n'.join(transposed_groups)
+    transposed_str = '\n'.join(transposed_groups) + '\n'
 
     return transposed_str
 
