@@ -18,6 +18,7 @@ workflow ExpansionHunterScatter {
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
         Boolean? generate_reviewer_images
+        Boolean? include_all_fields
         Int? thread_count
         String expansion_hunter_docker
         String python_docker
@@ -70,6 +71,7 @@ workflow ExpansionHunterScatter {
                 generate_vcf = generate_vcf,
                 seeking_analysis_mode = seeking_analysis_mode,
                 generate_reviewer_images = generate_reviewer_images,
+                include_all_fields = include_all_fields,
                 thread_count = thread_count,
                 expansion_hunter_docker = expansion_hunter_docker,
                 python_docker = python_docker,

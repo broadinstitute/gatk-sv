@@ -25,6 +25,7 @@ workflow ExpansionHunter {
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
         Boolean? generate_reviewer_images
+        Boolean? include_all_fields
         Int? thread_count
         File? ped_file
         String expansion_hunter_docker
@@ -42,6 +43,7 @@ workflow ExpansionHunter {
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
     Boolean generate_reviewer_images_ = select_first([generate_reviewer_images, false])
+    Boolean include_all_fields_ = select_first([include_all_fields, false])
 
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
     File bam_or_cram_index_ =
@@ -72,6 +74,7 @@ workflow ExpansionHunter {
                 sample_id = sample_id,
                 generate_realigned_bam = generate_realigned_bam_,
                 generate_vcf = generate_vcf_,
+                include_all_fields = include_all_fields_,
                 analysis_mode = analysis_mode,
                 thread_count = thread_count_,
                 ped_file = ped_file,
@@ -135,6 +138,7 @@ task RunExpansionHunter {
         String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
+        Boolean include_all_fields
         String analysis_mode
         Int thread_count
         File? ped_file
@@ -200,7 +204,9 @@ task RunExpansionHunter {
             touch ~{sample_id}.vcf.gz
         fi
 
-        python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
+        python /opt/str/combine_expansion_hunter_json_to_tsv.py \
+            ~{if (defined(include_all_fields)) then "--include-all-fields " else ""} \
+            -o ~{sample_id} ~{sample_id}.json
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
 
