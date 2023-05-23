@@ -106,6 +106,7 @@ workflow ExpansionHunter {
             realigned_bams = RunExpansionHunter.realigned_bam,
             realigned_bams_index = RunExpansionHunter.realigned_bam_index,
             generate_realigned_bam = generate_realigned_bam_,
+            generate_reviewer_images = generate_reviewer_images_,
             generate_vcf = generate_vcf_,
             sample_id = sample_id,
             reviewer_images_gzs = RunReviewer.reviewer_images_gz,
@@ -250,6 +251,7 @@ task ConcatEHOutputs {
         Array[File?] sample_metrics
         String sample_id
         Boolean generate_realigned_bam
+        Boolean generate_reviewer_images
         Boolean generate_vcf
         String? output_prefix
         String expansion_hunter_docker
@@ -307,20 +309,26 @@ task ConcatEHOutputs {
         gzip "~{output_prefix}_alleles.tsv"
         gzip "~{output_prefix}_variants.tsv"
 
-        python /opt/str/merge_csv_files.py \
-            --input-filename ~{write_lines(sample_metrics_)} \
-            --metrics ~{output_prefix}_metrics.csv \
-            --missing-metrics ~{output_prefix}_missing_metrics.csv
+        if ~{generate_reviewer_images}; then
+            # This will output two files: prefix_metrics.csv & prefix_missing_metrics.csv
+            python /opt/str/merge_csv_files.py \
+                --input-filename ~{write_lines(sample_metrics_)} \
+                --output-prefix ~{output_prefix}
 
-        # Combine multiple archives into one archive,
-        # by first unzipping all to a common directory,
-        # the archiving all the contents of the directory into a single archive.
-        TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
-        mkdir $TEMP_DIR_NAME
-        while read -r archive_filename; do
-            tar -xzf "$archive_filename" -C $TEMP_DIR_NAME
-        done < ~{write_lines(reviewer_images_gz_)}
-        tar -czf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
+            # Combine multiple archives into one archive,
+            # by first unzipping all to a common directory,
+            # the archiving all the contents of the directory into a single archive.
+            TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
+            mkdir $TEMP_DIR_NAME
+            while read -r archive_filename; do
+                tar -xzf "$archive_filename" -C $TEMP_DIR_NAME
+            done < ~{write_lines(reviewer_images_gz_)}
+            tar -czf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
+        else
+            touch ~{output_prefix}_metrics.csv
+            touch ~{output_prefix}_missing_metrics.csv
+            touch ~{output_prefix}_reviewer_images.tar.gz
+        fi
     >>>
 
     RuntimeAttr runtime_default = object {
