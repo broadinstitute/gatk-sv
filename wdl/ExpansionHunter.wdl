@@ -206,7 +206,7 @@ task RunExpansionHunter {
         fi
 
         python /opt/str/combine_expansion_hunter_json_to_tsv.py \
-            ~{if (defined(include_all_fields)) then "--include-all-fields " else ""} \
+            ~{if include_all_fields then "--include-all-fields " else ""} \
             -o ~{sample_id} ~{sample_id}.json
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
