@@ -496,15 +496,16 @@ task RunMELT {
 
     # create a bam file from the input bam or cram, filtering out high coverage intervals
     # and ambiguous bases
-    mkfifo tmp.sam
     java -Xmx~{java_mem_mb}m -jar /opt/gatk.jar PrintReads \
-      -XL highCountIntervals.bed \
-      --interval-exclusion-padding ~{interval_padding} \
-      -I ~{bam_or_cram_file} \
-      -R ~{reference_fasta} \
-      -O tmp.sam &
-    awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' tmp.sam | \
-      samtools view -b1 > ~{sample_id}.bam
+          -XL highCountIntervals.bed \
+          --interval-exclusion-padding ~{interval_padding} \
+          -I ~{bam_or_cram_file} \
+          -R ~{reference_fasta} \
+          -O /dev/stdout | \
+      samtools view -h - | \
+      awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' | \
+      samtools view -b1 - > ~{sample_id}.bam
+
     samtools index ~{sample_id}.bam
 
     # these locations should be stable
