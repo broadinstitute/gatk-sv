@@ -6,7 +6,12 @@ import pandas as pd
 def merge_files(input_filename: str, metrics_filename: str, missing_metrics_filename: str):
     with open(input_filename, "r") as fin:
         lines = fin.read().splitlines()
-        files = [x for x in lines if os.path.isfile(x)]
+        files = []
+        for x in lines:
+            if os.path.isfile(x):
+                files.append(x)
+            else:
+                print(f"Skipping the invalid filename `{x}`.")
 
     dfs = []
     for filename in files:
