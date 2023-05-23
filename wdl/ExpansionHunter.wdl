@@ -25,6 +25,7 @@ workflow ExpansionHunter {
         Boolean? generate_vcf
         Boolean? seeking_analysis_mode
         Boolean? generate_reviewer_images
+        Boolean? include_all_fields
         Int? thread_count
         File? ped_file
         String expansion_hunter_docker
@@ -42,6 +43,7 @@ workflow ExpansionHunter {
     Boolean generate_realigned_bam_ = select_first([generate_realigned_bam, false])
     Boolean generate_vcf_ = select_first([generate_vcf, false])
     Boolean generate_reviewer_images_ = select_first([generate_reviewer_images, false])
+    Boolean include_all_fields_ = select_first([include_all_fields, false])
 
     Boolean is_bam = basename(bam_or_cram, ".bam") + ".bam" == basename(bam_or_cram)
     File bam_or_cram_index_ =
@@ -72,6 +74,7 @@ workflow ExpansionHunter {
                 sample_id = sample_id,
                 generate_realigned_bam = generate_realigned_bam_,
                 generate_vcf = generate_vcf_,
+                include_all_fields = include_all_fields_,
                 analysis_mode = analysis_mode,
                 thread_count = thread_count_,
                 ped_file = ped_file,
@@ -103,6 +106,7 @@ workflow ExpansionHunter {
             realigned_bams = RunExpansionHunter.realigned_bam,
             realigned_bams_index = RunExpansionHunter.realigned_bam_index,
             generate_realigned_bam = generate_realigned_bam_,
+            generate_reviewer_images = generate_reviewer_images_,
             generate_vcf = generate_vcf_,
             sample_id = sample_id,
             reviewer_images_gzs = RunReviewer.reviewer_images_gz,
@@ -135,6 +139,7 @@ task RunExpansionHunter {
         String sample_id
         Boolean generate_realigned_bam
         Boolean generate_vcf
+        Boolean include_all_fields
         String analysis_mode
         Int thread_count
         File? ped_file
@@ -200,7 +205,9 @@ task RunExpansionHunter {
             touch ~{sample_id}.vcf.gz
         fi
 
-        python /opt/str/combine_expansion_hunter_json_to_tsv.py -o ~{sample_id} ~{sample_id}.json
+        python /opt/str/combine_expansion_hunter_json_to_tsv.py \
+            ~{if include_all_fields then "--include-all-fields " else ""} \
+            -o ~{sample_id} ~{sample_id}.json
         mv ~{sample_id}.*_json_files_alleles.tsv ~{sample_id}_alleles.tsv
         mv ~{sample_id}.*_json_files_variants.tsv ~{sample_id}_variants.tsv
 
@@ -244,6 +251,7 @@ task ConcatEHOutputs {
         Array[File?] sample_metrics
         String sample_id
         Boolean generate_realigned_bam
+        Boolean generate_reviewer_images
         Boolean generate_vcf
         String? output_prefix
         String expansion_hunter_docker
@@ -301,20 +309,26 @@ task ConcatEHOutputs {
         gzip "~{output_prefix}_alleles.tsv"
         gzip "~{output_prefix}_variants.tsv"
 
-        python /opt/str/merge_csv_files.py \
-            --input-filename ~{write_lines(sample_metrics_)} \
-            --metrics ~{output_prefix}_metrics.csv \
-            --missing-metrics ~{output_prefix}_missing_metrics.csv
+        if ~{generate_reviewer_images}; then
+            # This will output two files: prefix_metrics.csv & prefix_missing_metrics.csv
+            python /opt/str/merge_csv_files.py \
+                --input-filename ~{write_lines(sample_metrics_)} \
+                --output-prefix ~{output_prefix}
 
-        # Combine multiple archives into one archive,
-        # by first unzipping all to a common directory,
-        # the archiving all the contents of the directory into a single archive.
-        TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
-        mkdir $TEMP_DIR_NAME
-        while read -r archive_filename; do
-            tar -xzf "$archive_filename" -C $TEMP_DIR_NAME
-        done < ~{write_lines(reviewer_images_gz_)}
-        tar -czf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
+            # Combine multiple archives into one archive,
+            # by first unzipping all to a common directory,
+            # the archiving all the contents of the directory into a single archive.
+            TEMP_DIR_NAME="~{output_prefix}_reviewer_images"
+            mkdir $TEMP_DIR_NAME
+            while read -r archive_filename; do
+                tar -xzf "$archive_filename" -C $TEMP_DIR_NAME
+            done < ~{write_lines(reviewer_images_gz_)}
+            tar -czf ~{output_prefix}_reviewer_images.tar.gz -C $TEMP_DIR_NAME .
+        else
+            touch ~{output_prefix}_metrics.csv
+            touch ~{output_prefix}_missing_metrics.csv
+            touch ~{output_prefix}_reviewer_images.tar.gz
+        fi
     >>>
 
     RuntimeAttr runtime_default = object {
