@@ -1,10 +1,12 @@
 import argparse
+import os.path
 import pandas as pd
 
 
 def merge_files(input_filename: str, metrics_filename: str, missing_metrics_filename: str):
     with open(input_filename, "r") as fin:
-        files = [line.rstrip() for line in fin]
+        lines = fin.read().splitlines()
+        files = [x for x in lines if os.path.isfile(x)]
 
     dfs = []
     for filename in files:
