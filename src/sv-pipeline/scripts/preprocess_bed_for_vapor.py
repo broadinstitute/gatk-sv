@@ -87,7 +87,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--contig", help="Contig to extract")
     parser.add_argument("--bed-in", help="Input SV BED file")
-    parser.add_argument("--bed-out", help="Input SV BED file")
+    parser.add_argument("--bed-out", help="Output Vapor-formatted SV BED file")
     parser.add_argument("-s", "--sample",
                         help="Sample to extract (if input BED file is multi-sample)",
                         required=False)

@@ -4,10 +4,6 @@ import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "TasksBenchmark.wdl" as tasks10
 
-import "Vapor.wdl" as vapor
-import "Duphold.wdl" as duphold
-import "RdPeSrAnno.wdl" as rdpesr
-
 # WARNING: This workflow is potentially very expensive! Start small and scale gradually, or consider running the
 # subworkflows separately.
 
