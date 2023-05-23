@@ -36,21 +36,21 @@ def main():
 
     parser.add_argument(
         "-i", "--input-filename",
+        required=True,
         help="A text file containing the list of CSV files to merge, with one file per line."
     )
 
     parser.add_argument(
-        "-o", "--metrics",
-        help="The output filename containing all the metrics (excluding the NaN values)."
-    )
-
-    parser.add_argument(
-        "-m", "--missing-metrics",
-        help="The output filename containing only the missing metrics."
+        "-p", "--output-prefix",
+        help="Sets a prefix to be used for the output files generated."
     )
 
     args = parser.parse_args()
-    merge_files(args.input_filename, args.metrics, args.missing_metrics)
+    merge_files(
+        args.input_filename,
+        f"{args.output_prefix}_metrics.csv",
+        f"{args.output_prefix}_missing_metrics.csv"
+    )
 
 
 if __name__ == '__main__':
