@@ -43,8 +43,8 @@ def handle_header(line, columns, fields, default_num_columns, sample_to_extract)
 
 
 def reformat(bed_in, bed_out, contig, sample_to_extract):
-    open_fn = gzip.open if is_gzipped(bed_file) else open
-    open_mode = 'rt' if is_gzipped(bed_file) else 'r'
+    open_fn = gzip.open if is_gzipped(bed_in) else open
+    open_mode = 'rt' if is_gzipped(bed_in) else 'r'
 
     default_columns = "chrom start end name svtype".split()
     default_num_columns = len(default_columns)
