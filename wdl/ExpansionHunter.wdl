@@ -307,10 +307,10 @@ task ConcatEHOutputs {
         gzip "~{output_prefix}_alleles.tsv"
         gzip "~{output_prefix}_variants.tsv"
 
+        # This will output two files: prefix_metrics.csv & prefix_missing_metrics.csv
         python /opt/str/merge_csv_files.py \
             --input-filename ~{write_lines(sample_metrics_)} \
-            --metrics ~{output_prefix}_metrics.csv \
-            --missing-metrics ~{output_prefix}_missing_metrics.csv
+            --output-prefix ~{output_prefix}
 
         # Combine multiple archives into one archive,
         # by first unzipping all to a common directory,
