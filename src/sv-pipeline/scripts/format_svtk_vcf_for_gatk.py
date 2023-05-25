@@ -5,7 +5,7 @@ import pysam
 import sys
 import gzip
 from math import floor
-from typing import Any, List, Text, Set, Dict, Optional
+from typing import Any, List, Text, Dict, Optional
 
 _gt_sum_map = dict()
 
