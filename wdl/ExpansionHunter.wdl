@@ -215,8 +215,8 @@ task ConcatEHOutputs {
     }
 
     output {
-        File variants_tsv = "${output_prefix}_variants.tsv"
-        File alleles_tsv = "${output_prefix}_alleles.tsv"
+        File variants_tsv = "${output_prefix}_variants.tsv.gz"
+        File alleles_tsv = "${output_prefix}_alleles.tsv.gz"
         File vcf_gz = "${output_prefix}.vcf.gz"
         File realigned_bam = "${output_prefix}.bam"
     }
@@ -251,6 +251,9 @@ task ConcatEHOutputs {
 
         merge_tsv "~{write_lines(alleles_tsvs)}" "~{output_prefix}_alleles.tsv"
         merge_tsv "~{write_lines(variants_tsvs)}" "~{output_prefix}_variants.tsv"
+
+        gzip "~{output_prefix}_alleles.tsv"
+        gzip "~{output_prefix}_variants.tsv"
     >>>
 
     RuntimeAttr runtime_default = object {
