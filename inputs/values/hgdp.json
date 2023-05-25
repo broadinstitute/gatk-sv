@@ -48,6 +48,10 @@
   "aou_sl_filtered_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.aou_gq_recalibrated.filtered.vcf.gz",
   "aou_sl_filtered_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.aou_gq_recalibrated.filtered.vcf.gz.tbi",
 
+  "example_pacbio_sample_id": "HG00512",
+  "example_pacbio_cram": "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram",
+  "example_pacbio_cram_index": "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram.crai",
+
   "pacbio_samples_list": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.pacbio_samples.list",
   "pacbio_samples": [
     "HG00512",
