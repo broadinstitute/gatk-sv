@@ -491,7 +491,7 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 Add annotations, such as the inferred function and allele frequencies of variants, to final VCF.
 
 Annotations methods include:
-* Functional annotation - [annotate](https://gatk.broadinstitute.org/hc/en-us/articles/13832752531355-SVAnnotate) SVs with inferred functional consequence on protein-coding regions, regulatory regions such as UTR and promoters, and other non-coding elements.
+* Functional annotation - The GATK tool [SVAnnotate](https://gatk.broadinstitute.org/hc/en-us/articles/13832752531355-SVAnnotate) is used to annotate SVs with inferred functional consequence on protein-coding regions, regulatory regions such as UTR and promoters, and other non-coding elements.
 * Allele Frequency annotation - annotate SVs with their allele frequencies across all samples, and samples of specific sex, as well as specific sub-populations.
 * Allele Frequency annotation with external callset - annotate SVs with the allele frequencies of their overlapping SVs in another callset, eg. gnomad SV callset.
 
