@@ -40,10 +40,6 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
   * [Cromwell](https://github.com/broadinstitute/cromwell) (v36 or higher). A dedicated server is highly recommended.
   * or [Terra](https://terra.bio/) (note preconfigured GATK-SV workflows are not yet available for this platform)
 * Recommended: [MELT](https://melt.igs.umaryland.edu/). Due to licensing restrictions, we cannot provide a public docker image or reference panel VCFs for this algorithm.
-* Recommended: [Manta](https://github.com/Illumina/manta). Calls SVs and indels from mapped PE reads based on split read and discordant read pair evidence.
-* Recommended: [Wham](https://github.com/zeeev/wham). Used to predict SV breakpoints after integrating all evidence.
-* Recommended: [cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/). Used to detect CNVs from variations in read depth using a mixture of Poisson models.
-* Recommended: [gatk-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152). Detects germline CNVs from variations in read depth.
 * Recommended: [cromshell](https://github.com/broadinstitute/cromshell) for interacting with a dedicated Cromwell server.
 * Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
 
@@ -254,7 +250,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
 
 #### Outputs:
-* Caller VCFs (Manta, MELT, and/or Wham)
+* Caller VCFs ([Manta](https://github.com/Illumina/manta), [MELT](https://melt.igs.umaryland.edu/), and/or [Wham](https://github.com/zeeev/wham))
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file
@@ -291,7 +287,7 @@ The purpose of sample filtering at this stage after EvidenceQC is to prevent ver
 
 
 ## <a name="gcnv-training">TrainGCNV</a>
-Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
+Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
@@ -308,7 +304,7 @@ Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). Th
 ## <a name="gather-batch-evidence">GatherBatchEvidence</a>
 *Formerly Module00c*
 
-Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
+Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [gatk-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
