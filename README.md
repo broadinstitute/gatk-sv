@@ -304,7 +304,7 @@ Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) 
 ## <a name="gather-batch-evidence">GatherBatchEvidence</a>
 *Formerly Module00c*
 
-Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [gatk-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
+Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [GATK-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
