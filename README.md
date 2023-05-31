@@ -242,7 +242,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
+Runs raw evidence collection on each sample with the following SV callers: [Manta](https://github.com/Illumina/manta), [Wham](https://github.com/zeeev/wham), and/or [MELT](https://melt.igs.umaryland.edu/). For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
