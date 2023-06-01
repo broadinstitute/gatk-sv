@@ -197,7 +197,7 @@ For larger cohorts, samples should be split up into batches of about 100-500 sam
 `GATKSVPipelineSingleSample.wdl` runs the pipeline on a single sample using a fixed reference panel. An example run with reference panel containing 156 samples from the [NYGC 1000G Terra workspace](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019) can be found in `inputs/build/NA12878/test` after [building inputs](#building-inputs)).
 
 ## <a name="gcnv-training-overview">gCNV Training</a>
-Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline, which requires a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) as input. The samples used for training should be technically homogeneous and similar to the samples to be processed (i.e. same sample type, library prep protocol, sequencer, sequencing center, etc.). The samples to be processed may comprise all or a subset of the training set. For small, relatively homogenous cohorts, a single gCNV model is usually sufficient. If a cohort contains multiple data sources, we recommend training a separate model for each [batch](#batching) or group of batches with similar dosage score (WGD). The model may be trained on all or a subset of the samples to which it will be applied; a reasonable default is 100 randomly-selected samples from the batch (the random selection can be done as part of the workflow by specifying a number of samples to the `n_samples_subsample` input parameter in `/wdl/TrainGCNV.wdl`).
+Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline, which requires a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) [trained model](#gcnv-training) as input. The samples used for training should be technically homogeneous and similar to the samples to be processed (i.e. same sample type, library prep protocol, sequencer, sequencing center, etc.). The samples to be processed may comprise all or a subset of the training set. For small, relatively homogenous cohorts, a single gCNV model is usually sufficient. If a cohort contains multiple data sources, we recommend training a separate model for each [batch](#batching) or group of batches with similar dosage score (WGD). The model may be trained on all or a subset of the samples to which it will be applied; a reasonable default is 100 randomly-selected samples from the batch (the random selection can be done as part of the workflow by specifying a number of samples to the `n_samples_subsample` input parameter in `/wdl/TrainGCNV.wdl`).
 
 ## <a name="reference-panel-generation">Generating a reference panel</a>
 New reference panels can be generated easily from a single run of the `GATKSVPipelineBatch` workflow. If using a Cromwell server, we recommend copying the outputs to a permanent location by adding the following option to the workflow configuration file:
@@ -250,7 +250,7 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
 
 #### Outputs:
-* Caller VCFs ([Manta](https://github.com/Illumina/manta), [MELT](https://melt.igs.umaryland.edu/), and/or [Wham](https://github.com/zeeev/wham))
+* Caller VCFs (Manta, Melt, and/or Wham)
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file
@@ -287,7 +287,7 @@ The purpose of sample filtering at this stage after EvidenceQC is to prevent ver
 
 
 ## <a name="gcnv-training">TrainGCNV</a>
-Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
+Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) [model](#train-) for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
