@@ -287,7 +287,7 @@ The purpose of sample filtering at this stage after EvidenceQC is to prevent ver
 
 
 ## <a name="gcnv-training">TrainGCNV</a>
-Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) [model](#train-) for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
+Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
