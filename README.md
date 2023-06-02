@@ -197,7 +197,7 @@ For larger cohorts, samples should be split up into batches of about 100-500 sam
 `GATKSVPipelineSingleSample.wdl` runs the pipeline on a single sample using a fixed reference panel. An example run with reference panel containing 156 samples from the [NYGC 1000G Terra workspace](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019) can be found in `inputs/build/NA12878/test` after [building inputs](#building-inputs)).
 
 ## <a name="gcnv-training-overview">gCNV Training</a>
-Both the cohort and single-sample modes use the GATK gCNV depth calling pipeline, which requires a [trained model](#gcnv-training) as input. The samples used for training should be technically homogeneous and similar to the samples to be processed (i.e. same sample type, library prep protocol, sequencer, sequencing center, etc.). The samples to be processed may comprise all or a subset of the training set. For small, relatively homogenous cohorts, a single gCNV model is usually sufficient. If a cohort contains multiple data sources, we recommend training a separate model for each [batch](#batching) or group of batches with similar dosage score (WGD). The model may be trained on all or a subset of the samples to which it will be applied; a reasonable default is 100 randomly-selected samples from the batch (the random selection can be done as part of the workflow by specifying a number of samples to the `n_samples_subsample` input parameter in `/wdl/TrainGCNV.wdl`).
+Both the cohort and single-sample modes use the [GATK-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) depth calling pipeline, which requires a [trained model](#gcnv-training) as input. The samples used for training should be technically homogeneous and similar to the samples to be processed (i.e. same sample type, library prep protocol, sequencer, sequencing center, etc.). The samples to be processed may comprise all or a subset of the training set. For small, relatively homogenous cohorts, a single gCNV model is usually sufficient. If a cohort contains multiple data sources, we recommend training a separate model for each [batch](#batching) or group of batches with similar dosage score (WGD). The model may be trained on all or a subset of the samples to which it will be applied; a reasonable default is 100 randomly-selected samples from the batch (the random selection can be done as part of the workflow by specifying a number of samples to the `n_samples_subsample` input parameter in `/wdl/TrainGCNV.wdl`).
 
 ## <a name="reference-panel-generation">Generating a reference panel</a>
 New reference panels can be generated easily from a single run of the `GATKSVPipelineBatch` workflow. If using a Cromwell server, we recommend copying the outputs to a permanent location by adding the following option to the workflow configuration file:
@@ -242,7 +242,7 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample with the following SV callers: Manta, Wham, and/or MELT. For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
+Runs raw evidence collection on each sample with the following SV callers: [Manta](https://github.com/Illumina/manta), [Wham](https://github.com/zeeev/wham), and/or [MELT](https://melt.igs.umaryland.edu/). For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -287,7 +287,7 @@ The purpose of sample filtering at this stage after EvidenceQC is to prevent ver
 
 
 ## <a name="gcnv-training">TrainGCNV</a>
-Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
+Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) model for use in [GatherBatchEvidence](#gather-batch-evidence). The WDL can be found at `/wdl/TrainGCNV.wdl`. See the [gCNV training overview](#gcnv-training-overview) for more information.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
@@ -304,7 +304,7 @@ Trains a gCNV model for use in [GatherBatchEvidence](#gather-batch-evidence). Th
 ## <a name="gather-batch-evidence">GatherBatchEvidence</a>
 *Formerly Module00c*
 
-Runs CNV callers (cnMOPs, GATK gCNV) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
+Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [GATK-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
@@ -487,7 +487,7 @@ gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2
 Add annotations, such as the inferred function and allele frequencies of variants, to final VCF.
 
 Annotations methods include:
-* Functional annotation - annotate SVs with inferred functional consequence on protein-coding regions, regulatory regions such as UTR and promoters, and other non-coding elements.
+* Functional annotation - The GATK tool [SVAnnotate](https://gatk.broadinstitute.org/hc/en-us/articles/13832752531355-SVAnnotate) is used to annotate SVs with inferred functional consequence on protein-coding regions, regulatory regions such as UTR and promoters, and other non-coding elements.
 * Allele Frequency annotation - annotate SVs with their allele frequencies across all samples, and samples of specific sex, as well as specific sub-populations.
 * Allele Frequency annotation with external callset - annotate SVs with the allele frequencies of their overlapping SVs in another callset, eg. gnomad SV callset.
 
