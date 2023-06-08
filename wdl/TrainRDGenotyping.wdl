@@ -10,7 +10,6 @@ workflow TrainRDGenotyping {
     File coveragefile        # batch coverage file
     File? coveragefile_index # batch coverage file
     File medianfile          # batch median file
-    File famfile             # batch famfile
     File rf_cutoffs          # Random forest cutoffs
     File seed_cutoffs
     Array[String] samples    # List of samples in batch
@@ -50,7 +49,6 @@ workflow TrainRDGenotyping {
       coveragefile = coveragefile,
       coveragefile_index = coveragefile_index,
       medianfile = medianfile,
-      famfile = famfile,
       samples = samples,
       gt_cutoffs = seed_cutoffs,
       n_bins = n_bins,
@@ -97,7 +95,6 @@ workflow TrainRDGenotyping {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = UpdateCutoff.pesr_sepcutoff,
         n_bins = n_bins,
@@ -118,7 +115,6 @@ workflow TrainRDGenotyping {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = UpdateCutoff.depth_sepcutoff,
         n_bins = n_bins,

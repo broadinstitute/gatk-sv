@@ -10,7 +10,7 @@ workflow Regenotype {
     File coveragefile
     File coveragefile_idx
     File medianfile
-    File famfile
+    File? famfile
     File RD_depth_sepcutoff
     Int n_per_split
     Int n_RdTest_bins
@@ -153,7 +153,7 @@ task RdTestGenotypeRegeno {
     File coveragefile
     File coveragefile_idx
     File medianfile
-    File famfile
+    File? famfile
     Array[String] samples
     File gt_cutoffs
     Int n_bins
@@ -198,7 +198,7 @@ task RdTestGenotypeRegeno {
       -b ~{bed} \
       -c local_coverage.bed.gz \
       -m ~{medianfile} \
-      -f ~{famfile} \
+      ~{"-f " + famfile} \
       -n ~{prefix} \
       -v TRUE \
       -w ~{write_lines(samples)} \
