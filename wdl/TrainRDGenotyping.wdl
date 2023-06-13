@@ -21,7 +21,6 @@ workflow TrainRDGenotyping {
     File ref_dict
 
     String sv_base_mini_docker
-    String sv_pipeline_rdtest_docker
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_training_bed
     RuntimeAttr? runtime_attr_genotype_train
@@ -38,7 +37,7 @@ workflow TrainRDGenotyping {
     input:
       sample_ID = samples[0],
       reference_build = reference_build,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_training_bed
   }
 
@@ -57,7 +56,7 @@ workflow TrainRDGenotyping {
       prefix = prefix,
       generate_melted_genotypes = false,
       ref_dict = ref_dict,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_genotype_train
   }
 
@@ -66,7 +65,7 @@ workflow TrainRDGenotyping {
       copy_states = GenotypeTrain.copy_states,
       max_copystate = 4,
       prefix = prefix,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_generate_cutoff
   }
 
@@ -104,7 +103,7 @@ workflow TrainRDGenotyping {
         prefix = basename(pesr_bed),
         generate_melted_genotypes = false,
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
   }
@@ -125,7 +124,7 @@ workflow TrainRDGenotyping {
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = false,
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
   }
@@ -156,7 +155,7 @@ task MakeTrainingBed {
   input {
     String sample_ID
     String reference_build
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -188,7 +187,7 @@ task MakeTrainingBed {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -321,7 +320,7 @@ task GenerateCutoff {
     File copy_states
     Int max_copystate
     String prefix
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -348,7 +347,7 @@ task GenerateCutoff {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

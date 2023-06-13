@@ -40,7 +40,6 @@ workflow EvidenceQC {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_qc_docker
 
     Int? disk_overhead_bincov_gb
 
@@ -78,7 +77,7 @@ workflow EvidenceQC {
     input:
       bincov_matrix = MakeBincovMatrix.merged_bincov,
       cohort_id = batch,
-      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr = runtime_attr_mediancov,
       mem_gb_override = median_cov_mem_gb
   }
@@ -89,7 +88,7 @@ workflow EvidenceQC {
         bincov_matrix = MakeBincovMatrix.merged_bincov,
         batch = batch,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
         runtime_attr_build = ploidy_build_runtime_attr
     }
@@ -100,7 +99,7 @@ workflow EvidenceQC {
       batch = batch,
       wgd_scoring_mask = wgd_scoring_mask,
       bincov_matrix = MakeBincovMatrix.merged_bincov,
-      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_build = wgd_build_runtime_attr,
       runtime_attr_score = wgd_score_runtime_attr
   }

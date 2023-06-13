@@ -220,7 +220,7 @@ task RunQC {
     String name
     File metrics
     File qc_definitions
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     Float mem_gib = 1
     Int disk_gb = 10
     Int preemptible_attempts = 3
@@ -241,7 +241,7 @@ task RunQC {
     memory: "~{mem_gib} GiB"
     disks: "local-disk ~{disk_gb} HDD"
     bootDiskSizeGb: 10
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: preemptible_attempts
     maxRetries: 1
   }
@@ -254,7 +254,7 @@ task RandomSubsampleStringArray {
     Int seed
     Int subset_size
     String prefix
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -303,7 +303,7 @@ task RandomSubsampleStringArray {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -314,7 +314,7 @@ task GetSubsampledIndices {
     File all_strings
     File subset_strings
     String prefix
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -355,7 +355,7 @@ task GetSubsampledIndices {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

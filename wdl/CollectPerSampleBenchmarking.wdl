@@ -18,7 +18,6 @@ workflow CollectPerSampleBenchmarking {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_benchmark_samples
@@ -63,7 +62,7 @@ workflow CollectPerSampleBenchmarking {
         prefix=output_prefix,
         contigs=contigs,
         comparison_set_name=comparison_set_name,
-        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_benchmark_samples
     }
   }
@@ -168,7 +167,7 @@ task BenchmarkSamples {
     String prefix
     Array[String] contigs
     String comparison_set_name
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -191,7 +190,7 @@ task BenchmarkSamples {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 

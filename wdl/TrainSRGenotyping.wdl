@@ -20,7 +20,6 @@ workflow TrainSRGenotyping {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_count_sr
     RuntimeAttr? runtime_attr_merge_counts

@@ -7,7 +7,7 @@ workflow WGD {
     String batch
     File wgd_scoring_mask
     File bincov_matrix
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_build
     RuntimeAttr? runtime_attr_score
   }
@@ -16,7 +16,7 @@ workflow WGD {
     input:
       bincov_matrix = bincov_matrix,
       wgd_scoring_mask = wgd_scoring_mask,
-      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       batch = batch,
       runtime_attr_override=runtime_attr_build
   }
@@ -25,7 +25,7 @@ workflow WGD {
     input:
       wgd_scoring_mask = wgd_scoring_mask,
       WGD_matrix = BuildWGDMatrix.WGD_matrix,
-      sv_pipeline_qc_docker = sv_pipeline_qc_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       batch = batch,
       runtime_attr_override=runtime_attr_score
   }
@@ -42,7 +42,7 @@ task BuildWGDMatrix {
     File bincov_matrix
     File wgd_scoring_mask
     String batch
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -83,7 +83,7 @@ task BuildWGDMatrix {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -95,7 +95,7 @@ task WGDScore {
     File wgd_scoring_mask
     File WGD_matrix
     String batch
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -126,7 +126,7 @@ task WGDScore {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

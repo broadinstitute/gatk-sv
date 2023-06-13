@@ -43,14 +43,12 @@ workflow GenotypeBatch {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_genotyped_depth_vcf  # baseline files are optional for metrics workflow
     File? baseline_genotyped_pesr_vcf
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String linux_docker
 
     # Common
@@ -159,7 +157,6 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_split_vcf = runtime_attr_split_vcf,
         runtime_attr_merge_counts = runtime_attr_merge_counts,
         runtime_attr_make_batch_bed = runtime_attr_make_batch_bed,
@@ -200,7 +197,6 @@ workflow GenotypeBatch {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       linux_docker = linux_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
@@ -235,7 +231,6 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_training_bed = runtime_attr_training_bed,
         runtime_attr_genotype_train = runtime_attr_genotype_train,
         runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,
@@ -262,7 +257,6 @@ workflow GenotypeBatch {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
       runtime_attr_rdtest_genotype = runtime_attr_rdtest_genotype,
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
@@ -290,7 +284,7 @@ workflow GenotypeBatch {
         baseline_genotyped_depth_vcf = baseline_genotyped_depth_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
 

@@ -64,7 +64,6 @@ workflow GatherSampleEvidenceBatch {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     String? batch  # required if run_module_metrics = true
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     String? linux_docker  # required if run_module_metrics = true
     File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
@@ -80,7 +79,6 @@ workflow GatherSampleEvidenceBatch {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -144,7 +142,6 @@ workflow GatherSampleEvidenceBatch {
         pf_reads_improper_pairs = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[i] else NONE_INT_,
         wham_include_list_bed_file = wham_include_list_bed_file,
         run_module_metrics = run_module_metrics_,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_melt_vcf = baseline_melt_vcf,
         baseline_scramble_vcf = baseline_scramble_vcf,
@@ -157,7 +154,6 @@ workflow GatherSampleEvidenceBatch {
         scramble_docker = scramble_docker,
         wham_docker = wham_docker,
         gatk_docker = gatk_docker,
-        gatk_docker_pesr_override = gatk_docker_pesr_override,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         cloud_sdk_docker = cloud_sdk_docker,
         runtime_attr_merge_vcfs = runtime_attr_merge_vcfs,

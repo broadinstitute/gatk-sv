@@ -34,7 +34,6 @@ workflow CleanVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -47,8 +46,6 @@ workflow CleanVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
 
     # overrides for mini tasks
     RuntimeAttr? runtime_override_preconcat_clean_final
@@ -125,9 +122,7 @@ workflow CleanVcf {
         chr_y=chr_y,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
         runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
         runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
@@ -172,7 +167,6 @@ workflow CleanVcf {
         reset_cnv_gts=true,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_override_preconcat_clean_final,
         runtime_override_hail_merge=runtime_override_hail_merge_clean_final,
         runtime_override_fix_header=runtime_override_fix_header_clean_final
@@ -207,7 +201,7 @@ workflow CleanVcf {
         baseline_cleaned_vcf = baseline_cleaned_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
     }
   }

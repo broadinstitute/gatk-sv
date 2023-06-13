@@ -32,9 +32,8 @@ workflow MinGQStep2MergePcrStatus {
     File trios_famfile
     File contiglist
 
-    String sv_pipeline_qc_docker
-    String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_base_mini_docker
     RuntimeAttr? runtime_override_collect_vids_per_sample
   }
 
@@ -85,9 +84,8 @@ workflow MinGQStep2MergePcrStatus {
       sv_per_shard=10000,
       samples_per_shard=100,
       random_seed=random_seed,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
       runtime_override_collect_vids_per_sample=runtime_override_collect_vids_per_sample
   }
 

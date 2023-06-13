@@ -79,7 +79,6 @@ workflow GatherSampleEvidence {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? baseline_manta_vcf # baseline files are optional for metrics workflow
     File? baseline_wham_vcf
     File? baseline_melt_vcf
@@ -94,7 +93,6 @@ workflow GatherSampleEvidence {
     String? scramble_docker
     String? wham_docker
     String gatk_docker
-    String? gatk_docker_pesr_override
     String genomes_in_the_cloud_docker
     String cloud_sdk_docker
 
@@ -209,7 +207,7 @@ workflow GatherSampleEvidence {
         reference_index = reference_index,
         reference_dict = reference_dict,
         sd_locs_vcf = sd_locs_vcf,
-        gatk_docker = select_first([gatk_docker_pesr_override, gatk_docker]),
+        gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_pesr
     }
   }
@@ -303,7 +301,7 @@ workflow GatherSampleEvidence {
         baseline_wham_vcf = baseline_wham_vcf,
         contig_list = primary_contigs_list,
         contig_index = select_first([primary_contigs_fai]),
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
 

@@ -30,7 +30,6 @@ workflow MainVcfQc {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_qc_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_plot_qc_vcf_wide
@@ -135,7 +134,7 @@ workflow MainVcfQc {
       vcf_stats=MergeVcfWideStats.merged_bed_file,
       samples_list=CollectQcVcfWide.samples_list[0],
       prefix=prefix,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_plot_qc_vcf_wide
   }
 
@@ -151,7 +150,7 @@ workflow MainVcfQc {
           contigs=contigs,
           benchmark_url=comparison_dataset_info[1],
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
           runtime_override_site_level_benchmark=runtime_override_site_level_benchmark,
           runtime_override_merge_site_level_benchmark=runtime_override_merge_site_level_benchmark
@@ -163,7 +162,7 @@ workflow MainVcfQc {
           benchmarking_tarball=CollectSiteLevelBenchmarking.benchmarking_results_tarball,
           tarball_dir_name=CollectSiteLevelBenchmarking.tarball_dir_name,
           benchmark_name=comparison_dataset_info[0],
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_site_level_benchmark_plot
       }
     }
@@ -214,7 +213,7 @@ workflow MainVcfQc {
       prefix=prefix,
       max_gq=max_gq_,
       downsample_qc_per_sample=downsample_qc_per_sample,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_plot_qc_per_sample
   }
 
@@ -229,7 +228,7 @@ workflow MainVcfQc {
         per_sample_tarball=TarShardVidLists.vid_lists,
         prefix=prefix,
         max_gq=max_gq_,
-        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_plot_qc_per_family
     }
   }
@@ -253,7 +252,6 @@ workflow MainVcfQc {
           random_seed=random_seed,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
           runtime_override_benchmark_samples=runtime_override_benchmark_samples,
           runtime_override_split_shuffled_list=runtime_override_split_shuffled_list,
           runtime_override_merge_and_tar_shard_benchmarks=runtime_override_merge_and_tar_shard_benchmarks
@@ -266,7 +264,7 @@ workflow MainVcfQc {
           samples_list=CollectQcVcfWide.samples_list[0],
           comparison_set_name=comparison_dataset_info[0],
           prefix=prefix,
-          sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+          sv_pipeline_docker=sv_pipeline_docker,
           runtime_attr_override=runtime_override_per_sample_benchmark_plot
       }
     }
@@ -303,7 +301,7 @@ task PlotQcVcfWide {
     File vcf_stats
     File samples_list
     String prefix
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -321,7 +319,7 @@ task PlotQcVcfWide {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -404,7 +402,7 @@ task PlotSiteLevelBenchmarking {
     File benchmarking_tarball
     String tarball_dir_name
     String benchmark_name
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -422,7 +420,7 @@ task PlotSiteLevelBenchmarking {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -455,7 +453,7 @@ task PlotQcPerSample {
     String prefix
     Int max_gq
     Int? downsample_qc_per_sample
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr runtime_default = object {
@@ -474,7 +472,7 @@ task PlotQcPerSample {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -524,7 +522,7 @@ task PlotQcPerFamily {
     Int? random_seed
     String prefix
     Int max_gq
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   Int random_seed_ = select_first([random_seed, 0])
@@ -543,7 +541,7 @@ task PlotQcPerFamily {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
@@ -633,7 +631,7 @@ task PlotPerSampleBenchmarking {
     File samples_list
     String comparison_set_name
     String prefix
-    String sv_pipeline_qc_docker
+    String sv_pipeline_docker
     Int? max_samples = 3000
     Int? random_seed
     RuntimeAttr? runtime_attr_override
@@ -655,7 +653,7 @@ task PlotPerSampleBenchmarking {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_pipeline_qc_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 

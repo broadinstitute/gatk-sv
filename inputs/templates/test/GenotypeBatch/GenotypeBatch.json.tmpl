@@ -1,7 +1,6 @@
 {
   "GenotypeBatch.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
   "GenotypeBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "GenotypeBatch.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "GenotypeBatch.linux_docker" : {{ dockers.linux_docker | tojson }},
 
   "GenotypeBatch.n_RD_genotype_bins": "100000", 
@@ -12,7 +11,6 @@
   "GenotypeBatch.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
   "GenotypeBatch.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
-  "GenotypeBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
 
   "GenotypeBatch.batch": {{ test_batch.name | tojson }},
   "GenotypeBatch.rf_cutoffs": {{ test_batch.cutoffs | tojson }},
