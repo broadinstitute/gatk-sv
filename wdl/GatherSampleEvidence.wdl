@@ -73,9 +73,6 @@ workflow GatherSampleEvidence {
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
 
-    # Remove intermediate files
-    Boolean remove_intermediates = true
-
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -272,16 +269,6 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (remove_intermediates) {
-    Array[File?] ctb_dummy = [CollectCounts.counts, Manta.vcf, CollectSVEvidence.disc_out, MELT.vcf, Scramble.vcf, Whamg.vcf]
-    call DeleteIntermediateFiles {
-      input:
-        intermediates = select_all([LocalizeReads.output_file, CramToBamReviseBase.bam_file]),
-        dummy = ctb_dummy,
-        cloud_sdk_docker = cloud_sdk_docker
-    }
-  }
-
   output {
     File? coverage_counts = CollectCounts.counts
 
@@ -347,40 +334,5 @@ task LocalizeReads {
   output {
     File output_file = basename(reads_path)
     File output_index = basename(reads_index)
-  }
-}
-
-task DeleteIntermediateFiles {
-  input {
-    Array[File] intermediates
-    Array[File?] dummy # Pass in outputs that must be complete before cleanup
-    String cloud_sdk_docker # Cloud provider SDK docker image. For GCP use "google/cloud-sdk" and for AWS use "amazon/aws-cli"
-  }
-  parameter_meta {
-    intermediates: {
-      localization_optional: true
-    }
-    dummy: {
-      localization_optional: true
-    }
-  }
-
-  command <<<
-    ln -s ~{write_lines(intermediates)} intermediates.list
-    {
-      gsutil rm -I < intermediates.list
-    } || {
-      while read line; do
-        aws s3 rm $line
-      done < intermediates.list
-    }
-  >>>
-  runtime {
-    docker: cloud_sdk_docker
-    memory: "1 GB"
-    cpu: "1"
-    disks: "local-disk 10 HDD"
-    preemptible: "3"
-    maxRetries: "1"
   }
 }
