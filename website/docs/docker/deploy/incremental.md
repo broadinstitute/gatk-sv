@@ -10,7 +10,7 @@ images offers a significant advantage: when updating the codebase,
 not every Docker image is affected, minimizing the impact of changes. 
 This means that not all Docker images need to be rebuilt and 
 published with each pipeline modification. The 
-[`build_docker`]([`build_docker.py`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py)) 
+[`build_docker`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py)
 script efficiently tracks these changes and determines which 
 Docker images are impacted. Consequently, only the affected Docker 
 images are built, saving both storage space and build time.

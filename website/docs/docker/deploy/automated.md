@@ -145,13 +145,13 @@ this job runs the following steps.
   To authorize access to the Azure Container Registry (ACR), 
   this job logs in to Docker by assuming an Azure service principal.
   The credentials required for the login are defined as 
-  [encrypted environment secrets](docs.github.com/en/actions/security-guides/encrypted-secrets).
+  [encrypted environment secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets).
 
 - **Login to GCR**:
   Similar to ACR, to authorize access to GCR, 
   this job assumes a Google Cloud Platform service account. 
   The secrets related to the service account are defined as 
-  [encrypted environment secrets](docs.github.com/en/actions/security-guides/encrypted-secrets).
+  [encrypted environment secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets).
 
 - **Build and publish to ACR and GCR**:
   Similar to the [build job](#build), this job builds Docker images 
