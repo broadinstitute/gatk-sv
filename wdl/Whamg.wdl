@@ -199,15 +199,6 @@ task RunWhamgOnCram {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    cram_file: {
-      localization_optional: true
-    }
-    cram_index: {
-      localization_optional: true
-    }
-  }
-
   Array[String] chr_list = read_lines(primary_contigs_list)
 
   # Calculate default disk size
@@ -249,9 +240,6 @@ task RunWhamgOnCram {
     # print some info that may be useful for debugging
     df -h
     echo "whamg $(whamg 2>&1 | grep Version)"
-
-    # necessary for getting permission to read from google bucket directly
-    export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
 
     # covert cram to bam
     samtools view -b1@ ~{cpu_cores} -T "~{reference_fasta}" "~{cram_file}" > sample.bam
