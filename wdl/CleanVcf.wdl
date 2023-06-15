@@ -13,7 +13,7 @@ workflow CleanVcf {
     Array[File] complex_genotype_vcfs
     Array[File] complex_resolve_bothside_pass_lists
     Array[File] complex_resolve_background_fail_lists
-    File merged_ped_file
+    File ped_file
 
     File contig_list
     File allosome_fai
@@ -102,7 +102,7 @@ workflow CleanVcf {
 
   call TasksCluster.CreatePloidyTableFromPed {
     input:
-      ped_file=merged_ped_file,
+      ped_file=ped_file,
       contig_list=contig_list,
       retain_female_chr_y=false,
       chr_x=chr_x,
@@ -122,7 +122,7 @@ workflow CleanVcf {
         vcf=complex_genotype_vcfs[i],
         contig=contig,
         background_list=complex_resolve_background_fail_lists[i],
-        ped_file=merged_ped_file,
+        ped_file=ped_file,
         bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
         allosome_fai=allosome_fai,
         prefix="~{cohort_name}.~{contig}",

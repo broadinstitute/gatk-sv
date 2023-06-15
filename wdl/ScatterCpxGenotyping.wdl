@@ -22,7 +22,7 @@ workflow ScatterCpxGenotyping {
     Int n_per_split_large
     Int n_rd_test_bins
     String prefix
-    File merged_ped_file
+    File ped_file
     String contig
     File ref_dict
 
@@ -82,7 +82,7 @@ workflow ScatterCpxGenotyping {
         n_per_split_small=n_per_split_small,
         n_rd_test_bins=n_rd_test_bins,
         prefix=prefix,
-        merged_ped_file=merged_ped_file,
+        ped_file=ped_file,
         contig=contig,
         ref_dict=ref_dict,
         linux_docker=linux_docker,
