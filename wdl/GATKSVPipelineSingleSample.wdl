@@ -1068,7 +1068,6 @@ workflow GATKSVPipelineSingleSample {
       discfile_index=GatherBatchEvidence.merged_PE_index,
       splitfile=GatherBatchEvidence.merged_SR,
       splitfile_index=GatherBatchEvidence.merged_SR_index,
-      ped_file=combined_ped_file,
       ref_dict=reference_dict,
       n_RD_genotype_bins=n_RD_genotype_bins,
       genotype_pesr_pesr_sepcutoff=genotype_pesr_pesr_sepcutoff,

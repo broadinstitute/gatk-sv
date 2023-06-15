@@ -17,7 +17,6 @@ workflow GenotypePESRPart2 {
     File ref_dict
 
     File medianfile
-    File famfile
     Array[String] samples
 
     File coveragefile
@@ -115,7 +114,6 @@ workflow GenotypePESRPart2 {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = RD_pesr_sepcutoff,
         n_bins = n_RdTest_bins,
@@ -209,7 +207,6 @@ workflow GenotypePESRPart2 {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         medianfile = medianfile,
-        famfile = famfile,
         samples = samples,
         gt_cutoffs = RD_depth_sepcutoff,
         n_bins = n_RdTest_bins,

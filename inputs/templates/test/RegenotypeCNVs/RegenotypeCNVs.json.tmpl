@@ -14,7 +14,6 @@
 
   "RegenotypeCNVs.cohort_depth_vcf": {{ test_batch.cohort_depth_vcf | tojson }},
 
-  "RegenotypeCNVs.ped_file": {{ test_batch.ped_file | tojson }},
   "RegenotypeCNVs.batch_depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
 
   "RegenotypeCNVs.depth_vcfs": [{{ test_batch.genotyped_depth_vcf | tojson }}],

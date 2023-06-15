@@ -291,7 +291,7 @@ task RDTestGenotype {
     File coveragefile
     File? coveragefile_index
     File medianfile
-    File famfile
+    File? famfile
     File ref_dict
     Array[String] samples
     File gt_cutoffs
@@ -353,7 +353,7 @@ task RDTestGenotype {
       -b ~{bed} \
       -c local.RD.txt.gz \
       -m ~{medianfile} \
-      -f ~{famfile} \
+      ~{"-f " + famfile} \
       -n ~{prefix} \
       -w ~{write_lines(samples)} \
       -i ~{n_bins} \
