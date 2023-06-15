@@ -7,8 +7,6 @@ import gzip
 from math import floor
 from typing import Any, List, Text, Dict, Optional
 
-_gt_sum_map = dict()
-
 GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
 
 
@@ -99,7 +97,7 @@ def convert(record: pysam.VariantRecord,
             ploidy_dict: Dict[Text, Dict[Text, int]],
             scale_down_gq: bool) -> pysam.VariantRecord:
     """
-    Converts a record from svtk to gatk style. This includes updating all GT fields with proper ploidy, and adding
+    Converts a record from svtk to gatk style. This includes updating END/END2 and adding
     necessary fields such as ECN.
 
     Parameters
@@ -129,7 +127,7 @@ def convert(record: pysam.VariantRecord,
         record.ref = record.ref
     else:
         record.ref = 'N'
-    if svtype == 'BND':
+    if svtype == 'BND' or svtype == 'CTX':
         record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
             else record.info.get('END2', record.stop)
     # Fix this weird edge case (may be from CPX review workflow)
@@ -166,21 +164,6 @@ def convert(record: pysam.VariantRecord,
     return record
 
 
-def _cache_gt_sum(gt):
-    s = _gt_sum_map.get(gt, None)
-    if s is None:
-        s = sum([1 for a in gt if a is not None and a > 0])
-        _gt_sum_map[gt] = s
-    return s
-
-
-def _parse_arg_list(arg: Text) -> List[Text]:
-    if arg is None:
-        return set()
-    else:
-        return arg.split(',')
-
-
 def _process(vcf_in: pysam.VariantFile,
              vcf_out: pysam.VariantFile,
              arguments: Dict[Text, Any]) -> None:
@@ -200,7 +183,7 @@ def _process(vcf_in: pysam.VariantFile,
     -------
     header: pysam.VariantRecord
         record with ECN fields added"""
-    if not arguments.use_end2:
+    if arguments.fix_end:
         bnd_end_dict = _parse_bnd_ends(arguments.vcf)
     else:
         bnd_end_dict = None
@@ -227,8 +210,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              "first column is SAMPLE, and the remaining columns are contig names. For each row "
                              "thereafter, the first column is the sample name, and remaining columns are the contig "
                              "ploidy values for that sample.")
-    parser.add_argument("--use-end2", action='store_true',
-                        help="Use existing END2 fields rather than getting them from END")
+    parser.add_argument("--fix-end", action='store_true',
+                        help="Fix END tags and assign END2 to END")
     parser.add_argument("--scale-down-gq", action='store_true',
                         help="Scales all GQs down from [0-999] to [0-99]")
     if len(argv) <= 1:

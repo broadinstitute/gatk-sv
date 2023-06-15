@@ -23,7 +23,7 @@
   "clean_vcf_qc": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp_SV_VCF_QC_output.tar.gz",
   "clean_bed": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.vcf2bed.bed.gz",
 
-  "clean_vcf_gatk_formatter_args": "--use-end2 --scale-down-gq",
+  "clean_vcf_gatk_formatter_args": "--scale-down-gq",
   "gatk_formatted_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gatk_formatted.vcf.gz",
   "gatk_formatted_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gatk_formatted.vcf.gz.tbi",
 

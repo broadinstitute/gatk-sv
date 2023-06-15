@@ -42,7 +42,7 @@ import logging
 #
 # Will cause the "test_batch_small" input value set to be aliased to the "test_batch" resource bundle.
 #
-# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing which
+# If a template refers to missing property from a resource bundle, it will be skipped, with an info message listing which
 # properties are missing. This feature can be used purposefully to generate different sets of input files from the same sets
 # of templates depending on which properties are present in the input value files. For example, the build_default_inputs.sh
 # script generates inputs three times from the test_input_templates directory, with the test_batch bundle aliased to the
@@ -96,7 +96,7 @@ def main():
     parser.add_argument('-a', '--aliases', type=json.loads,
                         default={}, help="Aliases for input value bundles")
     parser.add_argument('--log-info', action='store_true',
-                        help="Show INFO-level logging messages")
+                        help="Show INFO-level logging messages. Use for troubleshooting.")
     args = parser.parse_args()
 
     # Set logger
@@ -212,8 +212,8 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
         # Transpose the TSV data in processed_content
         processed_content = transpose_tsv(processed_content)
     if len(undefined_names) > 0:
-        logging.warning("skipping file " + template_file_path +
-                        " due to missing values " + str(undefined_names))
+        logging.info("skipping file " + template_file_path +
+                     " due to missing values " + str(undefined_names))
     else:
         os.makedirs(target_subdir, exist_ok=True)
         target_file = open(target_file_path, "w")

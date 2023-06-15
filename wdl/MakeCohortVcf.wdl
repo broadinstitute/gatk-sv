@@ -170,7 +170,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -182,6 +181,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_clean
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -380,6 +380,7 @@ workflow MakeCohortVcf {
       allosome_fai=allosome_fai,
       chr_x=chr_x,
       chr_y=chr_y,
+      ped_file=ped_file,
       max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
@@ -441,7 +442,7 @@ workflow MakeCohortVcf {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+      runtime_attr_format=runtime_attr_format_clean
   }
 
   call VcfQc.MainVcfQc {

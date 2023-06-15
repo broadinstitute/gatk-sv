@@ -147,7 +147,7 @@ def __parse_arg_list(arg: Text) -> List[Text]:
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Convert a GATK-style SV VCF to SVTK-style",
+        description="Convert a GATK-style SV VCF from ClusterBatch for consumption by GenerateBatchMetrics.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--vcf", type=str, required=True,

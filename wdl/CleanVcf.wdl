@@ -1,6 +1,7 @@
 version 1.0
 
 import "CleanVcfChromosome.wdl" as CleanVcfChromosome
+import "TasksClusterBatch.wdl" as TasksCluster
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
 import "MakeCohortVcfMetrics.wdl" as metrics
@@ -23,6 +24,7 @@ workflow CleanVcf {
     Int clean_vcf1b_records_per_shard
     Int clean_vcf5_records_per_shard
 
+    File ped_file
     String chr_x
     String chr_y
 
@@ -55,7 +57,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
     RuntimeAttr? runtime_override_concat_cleaned_vcfs
-    RuntimeAttr? runtime_override_fix_bad_ends
+    RuntimeAttr? runtime_attr_create_ploidy
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -68,6 +70,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format
 
     # Clean vcf 1b
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
@@ -98,6 +101,18 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
   }
 
+  call TasksCluster.CreatePloidyTableFromPed {
+    input:
+      ped_file=ped_file,
+      contig_list=contig_list,
+      retain_female_chr_y=false,
+      chr_x=chr_x,
+      chr_y=chr_y,
+      output_prefix="~{cohort_name}.ploidy",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_create_ploidy
+  }
+
   #Scatter per chromosome
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( i in range(length(contigs)) ) {
@@ -121,6 +136,7 @@ workflow CleanVcf {
         gcs_project=gcs_project,
         clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
         clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
+        ploidy_table=CreatePloidyTableFromPed.out,
         chr_x=chr_x,
         chr_y=chr_y,
         linux_docker=linux_docker,
@@ -159,7 +175,7 @@ workflow CleanVcf {
         runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
         runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
         runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
-        runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+        runtime_attr_format=runtime_attr_format,
     }
   }
 

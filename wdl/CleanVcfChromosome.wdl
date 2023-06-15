@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "FormatVcfForGatk.wdl" as fvcf
 import "CleanVcf1b.wdl" as c1b
 import "CleanVcf5.wdl" as c5
 import "HailMerge.wdl" as HailMerge
@@ -24,8 +25,11 @@ workflow CleanVcfChromosome {
     File? outlier_samples_list
     Int? max_samples_per_shard_step3
 
+    File ploidy_table
     String chr_x
     String chr_y
+
+    File? svtk_to_gatk_script  # For debugging
 
     Boolean use_hail
     String? gcs_project
@@ -76,7 +80,7 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_drop_redundant_cnvs
     RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
-    RuntimeAttr? runtime_override_fix_bad_ends
+    RuntimeAttr? runtime_attr_format
 
   }
 
@@ -293,20 +297,22 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_final_cleanup
-
   }
 
-  call MiniTasks.FixEndsRescaleGQ {
+  call fvcf.FormatVcf {
     input:
-      vcf = FinalCleanup.final_cleaned_shard,
-      prefix = prefix + ".cleaned",
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_override_fix_bad_ends
+      vcf=FinalCleanup.final_cleaned_shard,
+      ploidy_table=ploidy_table,
+      args="--fix-end --scale-down-gq",
+      output_prefix="~{prefix}.final_format",
+      script=svtk_to_gatk_script,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_format
   }
   
   output {
-    File out=FixEndsRescaleGQ.out
-    File out_idx=FixEndsRescaleGQ.out_idx
+    File out = FormatVcf.out
+    File out_idx = FormatVcf.out_index
   }
 }
 
