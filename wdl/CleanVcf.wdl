@@ -24,7 +24,6 @@ workflow CleanVcf {
     Int clean_vcf1b_records_per_shard
     Int clean_vcf5_records_per_shard
 
-    File ped_file
     String chr_x
     String chr_y
 
@@ -103,7 +102,7 @@ workflow CleanVcf {
 
   call TasksCluster.CreatePloidyTableFromPed {
     input:
-      ped_file=ped_file,
+      ped_file=merged_ped_file,
       contig_list=contig_list,
       retain_female_chr_y=false,
       chr_x=chr_x,
