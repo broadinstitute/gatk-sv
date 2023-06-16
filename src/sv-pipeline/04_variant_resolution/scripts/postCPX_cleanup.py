@@ -83,12 +83,13 @@ def cleanup(vcf, fout):
         # Clean up BNDs
         elif svtype == 'BND':
 
+            # copy bnd data to CHR2, END2
             if "[" in record.alts[0] or "]" in record.alts[0]:
                 chr2, end2 = standardize.parse_bnd_pos(record.alts[0])
-
-                # copy bnd data to CHR2, END2
                 record.info['CHR2'] = chr2
                 record.info['END2'] = end2
+            else:
+                record.info['END2'] = record.stop
 
             # Correct alt syntax
             record.alts = ('<BND>', )
