@@ -73,7 +73,7 @@ readDatPerSample <- function(ID){
   }
 }
 #Filters VIDs for a single sample based on GQ
-GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=99){
+GQfilterVIDs <- function(ID,min.GQ=0){
   #Check input variant list
   if(ID %in% names(VID.lists)){
     vlist <- VID.lists[[which(names(VID.lists)==ID)]]
@@ -82,7 +82,7 @@ GQfilterVIDs <- function(ID,min.GQ=0,max.GQ=99){
   }
   if(!is.null(vlist)){
     #Filter variant list on GQ
-    vlist <- vlist[which(vlist$GQ>=min.GQ & vlist$GQ<=max.GQ),]
+    vlist <- vlist[which(vlist$GQ>=min.GQ),]
   }
   #Return result
   return(vlist)
@@ -114,7 +114,7 @@ countVarsSingle <- function(dat,vlist,count="variants"){
 }
 #Create matrix of variant/allele counts for a list of samples
 countVarsMulti <- function(dat,samples,count="variants",
-                           min.GQ=0,max.GQ=99,biallelic=F){
+                           min.GQ=0,biallelic=F){
   #Exclude non-biallelic sites, if optioned
   if(biallelic==T){
     dat <- dat[which(dat$carriers>0 & dat$other_gts==0),]
@@ -122,7 +122,7 @@ countVarsMulti <- function(dat,samples,count="variants",
   
   #Iterate over samples and count variants/alleles
   mat <- as.data.frame(t(sapply(samples,function(ID){
-    vlist <- GQfilterVIDs(ID=ID,min.GQ=min.GQ,max.GQ=max.GQ)
+    vlist <- GQfilterVIDs(ID=ID,min.GQ=min.GQ)
     countVarsSingle(dat=dat,vlist=vlist,count=count)
   })))
 
@@ -193,11 +193,11 @@ mediansByFreq <- function(dat,samples,svtypes,max.freqs,freq.labs,count="variant
   return(median.mat)
 }
 #Gather median count of variants per sample by minimum GQ
-mediansByGQ <- function(dat,samples,svtypes,min.GQs=seq(0,90,10),count="variants",biallelic=F,max.GQ=99){
+mediansByGQ <- function(dat,samples,svtypes,min.GQs,count="variants",biallelic=F){
   #Iterate over min GQs and compose matrix of medians
   median.mat <- t(sapply(min.GQs,function(min.GQ){
     #Get matrix of variants per sample
-    mat.sub <- countVarsMulti(dat=dat,samples=samples,count=count,min.GQ=min.GQ,biallelic=biallelic,max.GQ=max.GQ)
+    mat.sub <- countVarsMulti(dat=dat,samples=samples,count=count,min.GQ=min.GQ,biallelic=biallelic)
     
     #Get median per sample
     medians <- apply(mat.sub,2,median,na.rm=T)
@@ -995,7 +995,7 @@ plot.data <- lapply(list("variants","alleles"),function(count){
   
   #Medians per sample
   stepgq <- ceiling(maxgq / 10)
-  median.GQ <- t(mediansByGQ(dat=dat,samples=samples,count=count,max.GQ=maxgq,min.GQs=seq(0,stepgq*9,stepgq)))
+  median.GQ <- t(mediansByGQ(dat=dat,samples=samples,count=count,min.GQs=seq(0,stepgq*9,stepgq)))
   median.size <- mediansBySize(dat=dat,samples=samples,count=count,
                                max.sizes=c(tiny.max.size,small.max.size,medium.max.size,
                                            medlarge.max.size,large.max.size,huge.max.size),
