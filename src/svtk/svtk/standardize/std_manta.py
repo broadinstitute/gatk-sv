@@ -8,8 +8,8 @@ Standardize a Manta record.
 
 
 from collections import deque
-from svtk.utils import is_smaller_chrom
-from .standardize import VCFStandardizer, parse_bnd_pos, parse_bnd_strands
+from svtk.utils import is_smaller_chrom, parse_bnd_pos, parse_bnd_strands
+from .standardize import VCFStandardizer
 
 
 @VCFStandardizer.register('manta')

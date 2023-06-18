@@ -256,9 +256,12 @@ def vcf2bedtool(vcf, split_bnd=True, include_samples=False,
 
                 # Second end of breakpoint
                 if split_bnd:
-                    chrom = record.info['CHR2']
-                    start = max([0, int(record.stop) - 1])
-                    end = record.stop
+                    if '[' in record.alts[0] or ']' in record.alts[0]:
+                        chrom, end = parse_bnd_pos(record.alts[0])
+                    else:
+                        chrom = record.info.get('CHR2', None)
+                        end = record.stop
+                    start = max([0, int(end) - 1])
                     yield entry.format(**locals())
 
             elif record.info.get('SVTYPE', None) == 'INS':
@@ -401,3 +404,59 @@ def samples_overlap(samplesA, samplesB, upper_thresh=0.5, lower_thresh=0.5):
     min_frac, max_frac = sorted([fracA, fracB])
 
     return min_frac >= lower_thresh and max_frac >= upper_thresh
+
+
+def parse_bnd_pos(alt):
+    """
+    Parses standard VCF BND ALT (e.g. N]1:1000]) into chrom, pos
+
+    Parameters
+    ----------
+    alt : str
+        VCF-formatted BND ALT
+
+    Returns
+    -------
+    chrom : str
+    pos : int
+    """
+    alt = alt.strip('ATCGNRYSWKMBDHV')
+    # Strip brackets separately, otherwise GL contigs will be altered
+    alt = alt.strip('[]')
+
+    # HLA contigs include colons, so be careful when parsing
+    data = alt.split(':')
+    chr2 = ':'.join(data[:-1]).replace("CHR", "chr")
+    end = int(data[-1])
+
+    return chr2, end
+
+
+def parse_bnd_strands(alt):
+    """
+    Parses standard VCF BND ALT (e.g. N]1:1000]) for strandedness
+
+    Note about parsing strands from BND ALT:
+    t[p[ piece extending to the right of p is joined after t (+-)
+    t]p] reverse comp piece extending left of p is joined after t (++)
+    ]p]t piece extending to the left of p is joined before t (-+)
+    [p[t reverse comp piece extending right of p is joined before t (--)
+
+    Parameters
+    ----------
+    alt : str
+        VCF-formatted BND ALT
+
+    Returns
+    -------
+    strands : str
+        ++,+-,-+,--
+    """
+    if alt.endswith('['):
+        return '+-'
+    elif alt.endswith(']'):
+        return '++'
+    elif alt.startswith(']'):
+        return '-+'
+    elif alt.startswith('['):
+        return '--'
