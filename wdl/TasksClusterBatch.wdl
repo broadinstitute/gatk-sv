@@ -28,12 +28,15 @@ task SVCluster {
 
         Float? depth_sample_overlap
         Float? depth_interval_overlap
+        Float? depth_size_similarity
         Int? depth_breakend_window
         Float? mixed_sample_overlap
         Float? mixed_interval_overlap
+        Float? mixed_size_similarity
         Int? mixed_breakend_window
         Float? pesr_sample_overlap
         Float? pesr_interval_overlap
+        Float? pesr_size_similarity
         Int? pesr_breakend_window
 
         File reference_fasta
@@ -98,24 +101,27 @@ task SVCluster {
             --arguments_file arguments.txt \
             --output ~{output_prefix}.vcf.gz \
             --ploidy-table ~{ploidy_table} \
-            --variant-prefix ~{variant_prefix} \
             --reference ~{reference_fasta} \
             ~{"-L " + contig} \
             ~{true="--fast-mode" false="" fast_mode} \
             ~{true="--enable-cnv" false="" enable_cnv} \
             ~{true="--omit-members" false="" omit_members} \
             ~{true="--default-no-call" false="" default_no_call} \
+            ~{"--variant-prefix " + variant_prefix} \
             ~{"--algorithm " + algorithm} \
             ~{"--defrag-padding-fraction " + defrag_padding_fraction} \
             ~{"--defrag-sample-overlap " + defrag_sample_overlap} \
             ~{"--depth-sample-overlap " + depth_sample_overlap} \
             ~{"--depth-interval-overlap " + depth_interval_overlap} \
+            ~{"--depth-size-similarity " + depth_size_similarity} \
             ~{"--depth-breakend-window " + depth_breakend_window} \
             ~{"--mixed-sample-overlap " + mixed_sample_overlap} \
             ~{"--mixed-interval-overlap " + mixed_interval_overlap} \
+            ~{"--mixed-size-similarity " + mixed_size_similarity} \
             ~{"--mixed-breakend-window " + mixed_breakend_window} \
             ~{"--pesr-sample-overlap " + pesr_sample_overlap} \
             ~{"--pesr-interval-overlap " + pesr_interval_overlap} \
+            ~{"--pesr-size-similarity " + pesr_size_similarity} \
             ~{"--pesr-breakend-window " + pesr_breakend_window} \
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
@@ -333,6 +339,7 @@ task CreatePloidyTableFromPed {
         File ped_file
         File? script
         File contig_list
+        Boolean retain_female_chr_y = false
         String? chr_x
         String? chr_y
         String output_prefix
@@ -350,20 +357,26 @@ task CreatePloidyTableFromPed {
                                }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
+    String output_file = if retain_female_chr_y then "~{output_prefix}.FEMALE_chrY_1.tsv" else "~{output_prefix}.tsv"
+
     output {
-        File out = "~{output_prefix}.tsv"
+        File out = "~{output_file}"
     }
     command <<<
         set -euo pipefail
         python ~{default="/opt/sv-pipeline/scripts/ploidy_table_from_ped.py" script} \
             --ped ~{ped_file} \
-            --out ~{output_prefix}.tsv.tmp \
+            --out tmp.tsv \
             --contigs ~{contig_list} \
             ~{"--chr-x " + chr_x} \
             ~{"--chr-y " + chr_y}
 
         # TODO : For now we retain female Y genotypes for metric generation
-        sed -e 's/\t0/\t1/g' ~{output_prefix}.tsv.tmp > ~{output_prefix}.tsv
+        if ~{retain_female_chr_y}; then
+            sed -e 's/\t0/\t1/g' tmp.tsv > ~{output_file}
+        else
+            mv tmp.tsv ~{output_file}
+        fi
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

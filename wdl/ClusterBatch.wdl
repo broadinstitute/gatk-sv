@@ -97,6 +97,7 @@ workflow ClusterBatch {
       ped_file=ped_file,
       script=ploidy_table_script,
       contig_list=contig_list,
+      retain_female_chr_y=true,
       chr_x=chr_x,
       chr_y=chr_y,
       output_prefix="~{batch}.ploidy",

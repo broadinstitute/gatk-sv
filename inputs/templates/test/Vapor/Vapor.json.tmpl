@@ -1,15 +1,15 @@
 {
-    "VaporBatch.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
-    "VaporBatch.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }},
-    "VaporBatch.vapor_docker": {{ dockers.vapor_docker | tojson }},
-    "VaporBatch.contigs": {{ reference_resources.primary_contigs_list | tojson }},
-    "VaporBatch.ref_fasta" : {{ reference_resources.reference_fasta | tojson }},
-    "VaporBatch.ref_fai" : {{ reference_resources.reference_index | tojson }},
-    "VaporBatch.ref_dict": {{ reference_resources.reference_dict | tojson }},
+    "Vapor.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
+    "Vapor.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }},
+    "Vapor.vapor_docker": {{ dockers.vapor_docker | tojson }},
+    "Vapor.contigs": {{ reference_resources.primary_contigs_list | tojson }},
+    "Vapor.ref_fasta" : {{ reference_resources.reference_fasta | tojson }},
+    "Vapor.ref_fai" : {{ reference_resources.reference_index | tojson }},
+    "Vapor.ref_dict": {{ reference_resources.reference_dict | tojson }},
 
-    "VaporBatch.prefix": {{ test_batch.example_pacbio_sample_id | tojson }},
-    "VaporBatch.sample_id": {{ test_batch.example_pacbio_sample_id | tojson }},
-    "VaporBatch.bam_or_cram_file": {{ test_batch.example_pacbio_cram | tojson }},
-    "VaporBatch.bam_or_cram_index": {{ test_batch.example_pacbio_cram_index | tojson }},
-    "VaporBatch.bed_file": {{ test_batch.clean_bed | tojson }}
+    "Vapor.prefix": {{ test_batch.example_pacbio_sample_id | tojson }},
+    "Vapor.sample_id": {{ test_batch.example_pacbio_sample_id | tojson }},
+    "Vapor.bam_or_cram_file": {{ test_batch.example_pacbio_cram | tojson }},
+    "Vapor.bam_or_cram_index": {{ test_batch.example_pacbio_cram_index | tojson }},
+    "Vapor.bed_file": {{ test_batch.clean_bed | tojson }}
 }

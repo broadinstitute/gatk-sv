@@ -170,7 +170,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -182,6 +181,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_clean
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -340,7 +340,7 @@ workflow MakeCohortVcf {
       complex_resolve_vcfs=ResolveComplexVariants.complex_resolve_vcfs,
       complex_resolve_vcf_indexes=ResolveComplexVariants.complex_resolve_vcf_indexes,
       depth_vcfs=depth_vcfs,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       bincov_files=bincov_files,
       depth_gt_rd_sep_files=depth_gt_rd_sep_files,
       median_coverage_files=median_coverage_files,
@@ -375,7 +375,7 @@ workflow MakeCohortVcf {
       complex_genotype_vcfs=GenotypeComplexVariants.complex_genotype_vcfs,
       complex_resolve_bothside_pass_lists=ResolveComplexVariants.complex_resolve_bothside_pass_lists,
       complex_resolve_background_fail_lists=ResolveComplexVariants.complex_resolve_background_fail_lists,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
       chr_x=chr_x,
@@ -441,7 +441,7 @@ workflow MakeCohortVcf {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+      runtime_attr_format=runtime_attr_format_clean
   }
 
   call VcfQc.MainVcfQc {

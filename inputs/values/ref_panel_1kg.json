@@ -1168,6 +1168,7 @@
     ],
     "clean_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/MakeCohortVcf/8a209488-c928-449d-92cd-0a5131e92b7c/call-CleanVcf/CleanVcf/277f3f25-bb99-4fe4-a48b-567fd3f344f9/call-ConcatCleanedVcfs/ref_panel_1kg.cleaned.vcf.gz",
     "clean_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/MakeCohortVcf/8a209488-c928-449d-92cd-0a5131e92b7c/call-CleanVcf/CleanVcf/277f3f25-bb99-4fe4-a48b-567fd3f344f9/call-ConcatCleanedVcfs/ref_panel_1kg.cleaned.vcf.gz.tbi",
+    "clean_vcf_gatk_formatter_args": "",
     "cluster_background_fail_lists": [
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-make-cohort-vcf-templates/CombineBatches/cluster-background-fail-lists/ref_panel_1kg.chr1.sr_background_fail.updated2.txt",
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-make-cohort-vcf-templates/CombineBatches/cluster-background-fail-lists/ref_panel_1kg.chr2.sr_background_fail.updated2.txt",
@@ -1605,6 +1606,8 @@
     "filtered_pesr_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GATKSVPipelinePhase1/GATKSVPipelinePhase1/acce2c71-7458-4205-ae13-624f6efc9956/call-FilterBatch/FilterBatch/184defa3-e61c-4757-9962-f685f6d0d204/call-FilterBatchSamples/FilterBatchSamples/b308c32e-d171-4d8d-aeaf-b561c55b06b4/call-MergePesrVcfs/cacheCopy/ref_panel_1kg.filtered_pesr_merged.vcf.gz",
     "final_sample_list": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GATKSVPipelinePhase1/GATKSVPipelinePhase1/acce2c71-7458-4205-ae13-624f6efc9956/call-FilterBatch/FilterBatch/184defa3-e61c-4757-9962-f685f6d0d204/call-FilterBatchSamples/FilterBatchSamples/b308c32e-d171-4d8d-aeaf-b561c55b06b4/call-FilterSampleList/cacheCopy/ref_panel_1kg.outliers_excluded.samples.list",
     "final_sample_outlier_list": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GATKSVPipelinePhase1/GATKSVPipelinePhase1/acce2c71-7458-4205-ae13-624f6efc9956/call-FilterBatch/FilterBatch/184defa3-e61c-4757-9962-f685f6d0d204/call-FilterBatchSamples/FilterBatchSamples/b308c32e-d171-4d8d-aeaf-b561c55b06b4/call-CatOutliers/cacheCopy/ref_panel_1kg.outliers.samples.list",
+    "gatk_formatted_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.gatk_formatted.vcf.gz",
+    "gatk_formatted_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.gatk_formatted.vcf.gz.tbi",
     "gcnv_model_tars": [
         "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/gcnv/model_files/ref_panel_1kg_v2-gcnv-model-shard-0.tar.gz",
         "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/gcnv/model_files/ref_panel_1kg_v2-gcnv-model-shard-1.tar.gz",
@@ -1899,7 +1902,8 @@
     "genotype_pesr_pesr_sepcutoff": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart1/GenotypePESRPart1/40ec6d76-dd1c-432d-bfab-bc4426d0b1ec/call-TrainRDGenotyping/TrainRDGenotyping/e5540a96-9072-4719-bcfb-afccdfec15c6/call-UpdateCutoff/cacheCopy/ref_panel_1kg.pesr.pesr_sepcutoff.txt",
     "genotyped_depth_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypeDepthPart2/GenotypeDepthPart2/0aafd752-e606-4196-86ac-41c1c3ce1eb2/call-ConcatGenotypedVcfs/cacheCopy/ref_panel_1kg.depth.vcf.gz",
     "genotyped_pesr_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-ConcatGenotypedVcfs/cacheCopy/ref_panel_1kg.pesr.vcf.gz",
-    "joined_raw_calls_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/JoinRawCalls/a613865b-f7ec-4edb-8a2e-21508335249e/ref_panel_1kg.join_raw_calls.vcf.gz",
+    "joined_raw_calls_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz",
+    "joined_raw_calls_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz.tbi",
     "manta_vcfs": [
         "gs://broad-dsde-methods-markw/tws-no-cram-conversion/GatherSampleEvidenceBatch/HG00096.manta.vcf.gz",
         "gs://broad-dsde-methods-markw/tws-no-cram-conversion/GatherSampleEvidenceBatch/HG00129.manta.vcf.gz",

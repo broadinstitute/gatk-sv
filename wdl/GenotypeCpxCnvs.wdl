@@ -20,7 +20,7 @@ workflow GenotypeCpxCnvs {
     Int n_per_split_large
     Int n_rd_test_bins
     String prefix
-    File merged_ped_file
+    File ped_file
     String contig
     File ref_dict
 
@@ -96,7 +96,7 @@ workflow GenotypeCpxCnvs {
       intervals=GetCpxCnvIntervals.cpx_cnv_bed,
       genotypes=MergeMeltedGts.outfile,
       prefix=contig_prefix,
-      ped_file=merged_ped_file,
+      ped_file=ped_file,
       contig=contig,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_parse_genotypes

@@ -8,7 +8,7 @@ workflow GenotypeComplexVariants {
   input {
     String cohort_name
     Array[String] batches
-    File merged_ped_file
+    File ped_file
     Array[File] depth_vcfs
 
     Boolean merge_vcfs = false
@@ -65,7 +65,7 @@ workflow GenotypeComplexVariants {
     }
     call util.SubsetPedFile {
       input:
-        ped_file = merged_ped_file,
+        ped_file = ped_file,
         sample_list = GetSampleIdsFromVcf.out_file,
         subset_name = batches[i],
         sv_base_mini_docker = sv_base_mini_docker,
@@ -87,7 +87,7 @@ workflow GenotypeComplexVariants {
         batches=batches,
         coverage_files=bincov_files,
         rd_depth_sep_cutoff_files=depth_gt_rd_sep_files,
-        merged_ped_file=merged_ped_file,
+        ped_file=ped_file,
         median_coverage_files=median_coverage_files,
         n_per_split_small=2500,
         n_per_split_large=250,

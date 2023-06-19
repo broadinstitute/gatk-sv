@@ -5,6 +5,18 @@ import pysam
 import sys
 from typing import Optional, List, Text, Set
 
+_gt_sum_map = dict()
+
+
+def _cache_gt_sum(gt):
+    if gt is None:
+        return 0
+    s = _gt_sum_map.get(gt, None)
+    if s is None:
+        s = sum([1 for a in gt if a is not None and a > 0])
+        _gt_sum_map[gt] = s
+    return s
+
 
 def create_header(header_in: pysam.VariantHeader,
                   source: Text,
@@ -91,25 +103,19 @@ def convert(record: pysam.VariantRecord,
             new_record.info[key] = record.info[key]
     # fix END, CHR2, SVLEN, STRANDS
     if svtype == 'INS':
-        new_record.info['CHR2'] = contig
-        if 'SVLEN' not in record.info:
-            new_record.info['SVLEN'] = -1
+        new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
         new_record.info['STRANDS'] = '+-'
-    elif svtype == 'BND':
+    elif svtype == 'BND' or svtype == 'CTX':
         new_record.stop = record.info['END2']
         new_record.info['SVLEN'] = -1
+    elif svtype == 'CPX':
+        new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
     elif svtype == 'DEL':
-        new_record.info['CHR2'] = contig
-        new_record.info['SVLEN'] = record.stop - record.start
         new_record.info['STRANDS'] = '+-'
     elif svtype == 'DUP':
-        new_record.info['CHR2'] = contig
-        new_record.info['SVLEN'] = record.stop - record.start
         new_record.info['STRANDS'] = '-+'
     elif svtype == 'INV':
-        new_record.info['CHR2'] = contig
-        new_record.info['SVLEN'] = record.stop - record.start
-        new_record.info['STRANDS'] = record.info['STRANDS']
+        new_record.info['STRANDS'] = record.info.get('STRANDS', None)
 
     for sample in record.samples:
         new_genotype = new_record.samples[sample]
@@ -119,17 +125,10 @@ def convert(record: pysam.VariantRecord,
             if key not in remove_formats:
                 new_genotype[key] = genotype[key]
         # fix GT, always assuming diploid
-        if svtype == 'DUP':
-            if genotype['ECN'] < genotype['CN']:
-                new_genotype['GT'] = (0, 1)
-            else:
-                new_genotype['GT'] = (0, 0)
+        if _cache_gt_sum(genotype.get('GT', None)) > 0:
+            new_genotype['GT'] = (0, 1)
         else:
-            called_gt = [g for g in genotype['GT'] if g is not None] if 'GT' in genotype else []
-            if sum(called_gt) > 0:
-                new_genotype['GT'] = (0, 1)
-            else:
-                new_genotype['GT'] = (0, 0)
+            new_genotype['GT'] = (0, 0)
     return new_record
 
 
@@ -148,7 +147,7 @@ def __parse_arg_list(arg: Text) -> List[Text]:
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Convert a GATK-style SV VCF to SVTK-style",
+        description="Convert a GATK-style SV VCF from ClusterBatch for consumption by GenerateBatchMetrics.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--vcf", type=str, required=True,

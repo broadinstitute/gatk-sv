@@ -128,8 +128,6 @@ task PreparePESRVcfs {
     File ploidy_table
     Int min_size
     File? script
-    String? remove_infos
-    String? remove_formats
     String output_prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -162,17 +160,16 @@ task PreparePESRVcfs {
         --vcf $VCF \
         --out tmp.vcf.gz \
         --ploidy-table ~{ploidy_table} \
-        ~{"--remove-infos " + remove_infos} \
-        ~{"--remove-formats " + remove_formats}
+        --fix-end
 
       # Interval, contig, and size filtering
       bcftools query -f '%CHROM\t%POS\t%POS\t%ID\t%SVTYPE\n%CHROM\t%END\t%END\t%ID\t%SVTYPE\n%CHR2\t%END2\t%END2\t%ID\t%SVTYPE\n' tmp.vcf.gz \
-        | awk '$1!="."' \
+        | awk '$1!="." && $2!="."' \
         | sort -k1,1V -k2,2n -k3,3n \
         > ends.bed
       bedtools intersect -sorted -u -wa -g genome.file -wa -a ends.bed -b ~{exclude_intervals} | cut -f4 | sort | uniq \
         > excluded_vids.list
-      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN>=~{min_size})' tmp.vcf.gz \
+      bcftools view -i 'ID!=@excluded_vids.list && (INFO/SVLEN="." || INFO/SVLEN=-1 || INFO/SVLEN>=~{min_size})' tmp.vcf.gz \
         -Oz -o out/$SAMPLE_NUM.$NAME.vcf.gz
       tabix out/$SAMPLE_NUM.$NAME.vcf.gz
       i=$((i+1))
