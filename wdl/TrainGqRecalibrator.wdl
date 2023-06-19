@@ -48,7 +48,7 @@ task TrainGqRecalibratorTask {
         File? gq_recalibrator_model_file # can be passed to do extra rounds of training on existing model
         Array[String] train_args = []
         String gatk_docker
-        Int? num_entries
+        Float? num_entries
         Float mem_scale_vcf_size = 25.2
         Float mem_scale_num_entries = "3.7e-7"
         Float mem_gb_overhead = 1.5

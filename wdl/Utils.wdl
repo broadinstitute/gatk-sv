@@ -539,7 +539,7 @@ task GetVcfSize {
     output {
         Int num_records = read_int(num_records_file)
         Int num_samples = read_int(num_samples_file)
-        Int num_entries = num_records * num_samples
+        Float num_entries = read_float(num_records_file) * num_samples
     }
 }
 
