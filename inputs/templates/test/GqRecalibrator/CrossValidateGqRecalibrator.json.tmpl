@@ -1,88 +1,55 @@
 {
-  "CrossValidateGqRecalibrator.train_vcf": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz",
-  "CrossValidateGqRecalibrator.train_vcf_index": "gs://talkowski-sv-gnomad-output/HGDP/cleanvcf/hgdp_and_hgsv.cleaned.vcf.gz.tbi",
-  "CrossValidateGqRecalibrator.standardize_vcf": true,
-  "CrossValidateGqRecalibrator.annotations_vcf": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz",
-  "CrossValidateGqRecalibrator.annotations_vcf_index": "gs://broad-sv-dev-data/hgdp/hgdp_37m_v2.concordance.vcf.gz.tbi",
-  "CrossValidateGqRecalibrator.annotations_to_transfer": [
-    "INFO/STATUS", "INFO/NON_REF_GENOTYPE_CONCORDANCE", "INFO/VAR_PPV", "INFO/VAR_SENSITIVITY", "INFO/TRUTH_AF",
-    "FORMAT/CONC_ST"
-  ],
-  "CrossValidateGqRecalibrator.train_vcf_label": "HGDP and HGSV",
-  "CrossValidateGqRecalibrator.ped_file": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/HGDP_1KGP.ped",
-  "CrossValidateGqRecalibrator.truth_vcfs": [
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz",
-    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz"
-  ],
-  "CrossValidateGqRecalibrator.truth_vcf_indices": [
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00514.sv_calls.fixed.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/HG00733.SVs.fixed.src_method.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/NA19240.SVs.fixed.src_method.vcf.gz.tbi",
-    "gs://broad-dsde-methods-tbrookin/pacbio/PB_SVs.vcf.gz.tbi"
-  ],
-  "CrossValidateGqRecalibrator.vapor_sample_ids": [
-  ],
-  "CrossValidateGqRecalibrator.vapor_files": [
-  ],
-  "CrossValidateGqRecalibrator.genome_tracks": [
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
-    "gs://broad-dsde-methods-tbrookin/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
-  ],
-  "CrossValidateGqRecalibrator.standardize_vcf_args": [
-    "--gq-scale 0.1"
-  ],
-  "CrossValidateGqRecalibrator.train_args": [
-    "--target-precision 0.95",
-    "--max-inheritance-af 0.1",
-    "--large-af-weight-penalty 0.05",
-    "--max-depth 12",
-    "--subsample 0.8",
-    "--colsample-by-tree 0.8",
-    "--min-child-weight 1000",
-    "--truth-weight 0.75",
-    "--train-homref true",
-    "--keep-homvar false",
-    "--keep-multiallelic true",
-    "--validation-proportion 0.2"
-  ],
-  "CrossValidateGqRecalibrator.get_truth_overlap_args": [
-    "--expand-point-svs-bp 1000",
-    "--point-sv-scale-factor 1.0",
-    "--expand-non-point-svs-bp 250",
-    "--non-point-sv-scale-factor 0.5",
-    "--min-overlap-cutoff-precision 0.8",
-    "--inheritance-af-rareness 0.05",
-    "--use-copy-number false"
+  "CrossValidateGqRecalibrator.train_vcf_label": {{ test_batch.name | tojson }},
+  "CrossValidateGqRecalibrator.train_vcf": {{ test_batch.pacbio_sample_concordance_vcf | tojson }},
+  "CrossValidateGqRecalibrator.train_vcf_index": {{ test_batch.pacbio_sample_concordance_vcf_index | tojson }},
+  "CrossValidateGqRecalibrator.truth_json": {{ test_batch.recalibrate_gq_truth_json | tojson }},
+  "CrossValidateGqRecalibrator.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+
+  "CrossValidateGqRecalibrator.benchmark_args": ["--size-ranges small:50:500,medium:500:5000,large:5000:inf"],
+  "CrossValidateGqRecalibrator.new_pipeline_score_property": "sl",
+  "CrossValidateGqRecalibrator.num_splits": 5,
+  "CrossValidateGqRecalibrator.old_pipeline_passing_score": "1",
+  "CrossValidateGqRecalibrator.old_pipeline_score_property": "gq",
+
+  "CrossValidateGqRecalibrator.BenchmarkGqFilter.make_figures": [
+    "precision-recall",
+    "inheritance",
+    "variants-per-sample",
+    "violation-curve",
+    "scores-histogram"
   ],
   "CrossValidateGqRecalibrator.recalibrate_gq_args": [
     "--keep-homvar false",
-    "--keep-multiallelic true"
+    "--keep-homref true",
+    "--keep-multiallelic true",
+    "--skip-genotype-filtering true",
+    "--min-samples-to-estimate-allele-frequency -1"
   ],
-  "CrossValidateGqRecalibrator.comparison_scores": [
-    {
-      "label": "Xuefang",
-      "vcf": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz",
-      "vcf_index": "gs://broad-dsde-methods-tbrookin/results/gq-filtering/inputs/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2.vcf.gz.tbi",
-      "property": "gq",
-      "passing_score": 0,
-      "pickled_scores_file": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-BenchmarkGqFilter/BenchmarkGqFilter/081ac44f-a3be-463d-a16c-3ce16284e123/call-PickleComparisonScores/shard-2/PickleVcfProperties/3301cc94-021b-44c1-9fa0-88cb7925a5ee/call-ReadAndPickleProperties/glob-8d2286e38ed1e2c18af7c9da51f6acb8/hgdp_and_hgsv.cleaned.boost_and_minGQ.sorted.manual_filter_step2_gq.pickle.bz2"
-    },
-    {
-      "label": "previous x-validated",
-      "vcf": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz",
-      "vcf_index": "gs://broad-methods-cromwell-exec-bucket-instance-8/CrossValidateGqRecalibrator/da7734e5-f1af-453c-a844-97ed007b797c/call-MergeRecalibratedTestVcfs/hgdp_and_hgsv.cleaned_cross_validated.vcf.gz.tbi",
-      "property": "sl",
-      "passing_score": 1,
-      "pickled_scores_file": null
-    }
+  "CrossValidateGqRecalibrator.train_args": [
+    "--learning-rate 0.002",
+    "--target-precision 0.8",
+    "--max-inheritance-af 0.1",
+    "--large-af-weight-penalty 0.05",
+    "--max-depth 11",
+    "--subsample 0.8",
+    "--colsample-by-tree 0.8",
+    "--min-child-weight 200",
+    "--gamma 0.5",
+    "--truth-weight 0.90",
+    "--keep-homvar false",
+    "--keep-homref false",
+    "--keep-multiallelic true",
+    "--validation-proportion 0.2",
+    "--early-stopping-loss Training",
+    "--error-on-no-trios false",
+    "--override-min-gq true",
+    "--max-training-rounds 200",
+    "--early-stopping-rounds 40"
   ],
+
   "CrossValidateGqRecalibrator.sv_utils_docker": {{ dockers.sv_utils_docker | tojson }},
+  "CrossValidateGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "CrossValidateGqRecalibrator.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
   "CrossValidateGqRecalibrator.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
-  "CrossValidateGqRecalibrator.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }}
+  "CrossValidateGqRecalibrator.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
 }
