@@ -33,7 +33,7 @@ def _parse_bnd_ends(vcf_path: Text) -> Dict[Text, int]:
             columns = line.split('\t', 8)
             vid = columns[2]
             info = columns[7]
-            if 'SVTYPE=BND' not in info:
+            if 'SVTYPE=BND' not in info and 'SVTYPE=CTX' not in info:
                 continue
             info_tokens = info.split(';')
             end_field_list = [x for x in info_tokens if x.startswith("END=")]
