@@ -49,18 +49,28 @@ class SRTest(PESRTest):
                     resultA = self._test_coord(
                         posB, record.info['STRANDS'][0], record.chrom,
                         called, background, posB - self.ins_window, posB + self.ins_window)
-        elif record.chrom == record.info['CHR2'] and posA >= posB:
-            # Invalid coordinates, need to re-optimize around the better coordinate
-            if log_pval_A >= log_pval_B:
-                # posA is better, so use posA as anchor and check for best posB in valid window
-                resultB = self._test_coord(
-                    record.stop, record.info['STRANDS'][1], record.info['CHR2'],
-                    called, background, posA, posA + self.window)
-            else:
-                # vice versa
-                resultA = self._test_coord(
-                    record.pos, record.info['STRANDS'][0], record.chrom,
-                    called, background, posB - self.window, posB)
+        elif record.chrom == record.info['CHR2']:
+            # Check some corner cases for intrachromosomal variants
+            if record.info['STRANDS'][0] == record.info['STRANDS'][1]:
+                # If strands are the same, disallow case where posA = posB, which can happen for small variants
+                # Note that the case posA > posB is allowed and corrected for in the SR coordinate rewriting step later
+                if posA == posB and self.window > 0:
+                    resultB = self._test_coord(
+                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, record.stop - self.window, record.stop + self.window,
+                        invalid_pos_list=[posA])
+            elif posA >= posB:
+                # Invalid coordinates, need to re-optimize around the better coordinate
+                if log_pval_A >= log_pval_B:
+                    # posA is better, so use posA as anchor and check for best posB in valid window
+                    resultB = self._test_coord(
+                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, posA, posA + self.window)
+                else:
+                    # vice versa
+                    resultA = self._test_coord(
+                        record.pos, record.info['STRANDS'][0], record.chrom,
+                        called, background, posB - self.window, posB)
 
         resultA['coord'] = 'posA'
         resultB['coord'] = 'posB'
@@ -145,12 +155,14 @@ class SRTest(PESRTest):
 
         return total
 
-    def _test_coord(self, coord, strand, chrom, samples, background, left_boundary, right_boundary):
+    def _test_coord(self, coord, strand, chrom, samples, background, left_boundary, right_boundary,
+                    invalid_pos_list=[]):
         """Test enrichment at all positions within window"""
 
         # Run SR test at each position
         results = []
-        for pos in range(left_boundary, right_boundary + 1):
+        positions = [p for p in range(left_boundary, right_boundary + 1) if p not in invalid_pos_list]
+        for pos in positions:
             result = self.test(chrom, pos, strand, samples, background)
             result = result.to_frame().transpose()
             result['pos'] = pos

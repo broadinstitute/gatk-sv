@@ -3,7 +3,7 @@
 # SR_genotype.sh
 #
 
-set -euxo pipefail
+set -euo pipefail
 
 ##Genotype##
 function assign_genotype_quality () {
