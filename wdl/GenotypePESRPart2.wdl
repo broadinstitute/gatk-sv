@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksGenotypeBatch.wdl" as tasksgenotypebatch
+import "TasksMakeCohortVcf.wdl" as tasksmakecohortvcf
 
 workflow GenotypePESRPart2 {
   input {
@@ -25,6 +26,10 @@ workflow GenotypePESRPart2 {
     File? discfile_index
     File splitfile
     File? splitfile_index
+
+    # SR genotyping parameters
+    Int? sr_median_hom_ins
+    Float? sr_hom_cutoff_multiplier
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -102,7 +107,9 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSRUnder5kb.sr_counts,
         SR_sum = CountSRUnder5kb.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        svtype = "CNV_LT_5KBP",
+        hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+        sv_pipeline_rdtest_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -195,7 +202,9 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSROver5kb.sr_counts,
         SR_sum = CountSROver5kb.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        svtype = "CNV_GT_5KBP",
+        hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+        sv_pipeline_rdtest_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -288,7 +297,9 @@ workflow GenotypePESRPart2 {
         SR_counts = CountSRBca.sr_counts,
         SR_sum = CountSRBca.sr_sum,
         SR_metrics = SR_metrics,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        svtype = "BCA",
+        hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+        sv_pipeline_rdtest_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_genotype_sr
     }
 
@@ -314,42 +325,113 @@ workflow GenotypePESRPart2 {
     }
   }
 
-  call TripleStreamCat as TripleStreamCatFail {
+  scatter (ins_bed in SplitVariants.ins_beds) {
+    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfIns {
+      input:
+        vcf = cohort_vcf,
+        bed = ins_bed,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_make_subset_vcf
+    }
+
+    call tasksgenotypebatch.CountPE as CountPEIns {
+      input:
+        vcf = MakeSubsetVcfIns.subset_vcf,
+        discfile = discfile,
+        discfile_index = discfile_index,
+        medianfile = medianfile,
+        samples = samples,
+        ref_dict = ref_dict,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_count_pe
+    }
+
+    call GenotypePEPart2 as GenotypePEPart2Ins {
+      input:
+        PE_counts = CountPEIns.pe_counts,
+        PE_metrics = PE_metrics,
+        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        runtime_attr_override = runtime_attr_genotype_pe
+    }
+
+    call tasksgenotypebatch.CountSR as CountSRIns {
+      input:
+        vcf = MakeSubsetVcfIns.subset_vcf,
+        splitfile = splitfile,
+        splitfile_index = splitfile_index,
+        medianfile = medianfile,
+        samples = samples,
+        ref_dict = ref_dict,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_count_sr
+    }
+
+    call GenotypeSRPart2 as GenotypeSRPart2Ins {
+      input:
+        vcf = MakeSubsetVcfIns.subset_vcf,
+        SR_counts = CountSRIns.sr_counts,
+        SR_sum = CountSRIns.sr_sum,
+        SR_metrics = SR_metrics,
+        svtype = "INS",
+        hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+        median_hom_ins = sr_median_hom_ins,
+        sv_pipeline_rdtest_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_genotype_sr
+    }
+
+    call IntegratePesrGQ as IntegratePesrGQIns {
+      input:
+        vcf = MakeSubsetVcfIns.subset_vcf,
+        PE_genotypes = GenotypePEPart2Ins.genotypes,
+        PE_vargq = GenotypePEPart2Ins.varGQ,
+        SR_genotypes = GenotypeSRPart2Ins.genotypes,
+        SR_vargq = GenotypeSRPart2Ins.varGQ,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_integrate_pesr_gq
+    }
+
+    call tasksgenotypebatch.AddGenotypes as AddGenotypesIns {
+      input:
+        vcf = MakeSubsetVcfIns.subset_vcf,
+        genotypes = IntegratePesrGQIns.genotypes,
+        varGQ = IntegratePesrGQIns.varGQ,
+        prefix = basename(ins_bed, ".bed"),
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_add_genotypes
+    }
+  }
+
+  call CatFiles as CatFilesFail {
     input:
-      files_a = GenotypeSRPart2Under5kb.background_fail,
-      files_b = GenotypeSRPart2Over5kb.background_fail,
-      files_c = GenotypeSRPart2Bca.background_fail,
-      outfile = "${batch}.genotype_SR_part2_background_fail.txt",
+      files = flatten([GenotypeSRPart2Under5kb.background_fail, GenotypeSRPart2Over5kb.background_fail, GenotypeSRPart2Bca.background_fail, GenotypeSRPart2Ins.background_fail]),
+      outfile = "~{batch}.genotype_SR_part2_background_fail.txt",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_triple_stream_cat
   }
 
-  call TripleStreamCat as TripleStreamCatPass {
+  call CatFiles as CatFilesPass {
     input:
-      files_a = GenotypeSRPart2Under5kb.bothside_pass,
-      files_b = GenotypeSRPart2Over5kb.bothside_pass,
-      files_c = GenotypeSRPart2Bca.bothside_pass,
-      outfile = "${batch}.genotype_SR_part2_bothside_pass.txt",
+      files = flatten([GenotypeSRPart2Under5kb.bothside_pass, GenotypeSRPart2Over5kb.bothside_pass, GenotypeSRPart2Bca.bothside_pass, GenotypeSRPart2Ins.bothside_pass]),
+      outfile = "~{batch}.genotype_SR_part2_bothside_pass.txt",
       linux_docker = linux_docker,
       runtime_attr_override = runtime_attr_triple_stream_cat
   }
 
-  call tasksgenotypebatch.ConcatGenotypedVcfs as ConcatGenotypedVcfs {
+  call tasksmakecohortvcf.ConcatVcfs {
     input:
-      lt5kb_vcfs = AddGenotypesUnder5kb.genotyped_vcf,
-      gt5kb_vcfs = AddGenotypesOver5kb.genotyped_vcf,
-      bca_vcfs = AddGenotypesBca.genotyped_vcf,
-      batch = batch,
-      evidence_type = "pesr",
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_concat_vcfs
+      vcfs=flatten([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf, AddGenotypesBca.genotyped_vcf, AddGenotypesIns.genotyped_vcf]),
+      vcfs_idx=flatten([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index, AddGenotypesBca.genotyped_vcf_index, AddGenotypesIns.genotyped_vcf_index]),
+      allow_overlaps=true,
+      outfile_prefix="~{batch}.genotyped_pesr",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_vcfs
   }
 
   output {
-    File bothside_pass = TripleStreamCatPass.merged_file
-    File background_fail = TripleStreamCatFail.merged_file
-    File genotyped_vcf = ConcatGenotypedVcfs.genotyped_vcf
-    File genotyped_vcf_index = ConcatGenotypedVcfs.genotyped_vcf_index
+    File bothside_pass = CatFilesPass.merged_file
+    File background_fail = CatFilesFail.merged_file
+    File genotyped_vcf = ConcatVcfs.concat_vcf
+    File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
@@ -449,11 +531,9 @@ task IntegratePesrGQ {
   }
 }
 
-task TripleStreamCat {
+task CatFiles {
   input {
-    Array[File] files_a
-    Array[File] files_b
-    Array[File] files_c
+    Array[File] files
     String outfile
     String linux_docker
     RuntimeAttr? runtime_attr_override
@@ -475,7 +555,7 @@ task TripleStreamCat {
   command <<<
 
     set -euo pipefail
-    cat ~{sep=" " files_a} ~{sep=" " files_b} ~{sep=" " files_c} \
+    cat ~{sep=" " files} \
       | sort -Vk1,1 \
       | uniq > ~{outfile}
   
@@ -537,6 +617,10 @@ task GenotypeSRPart2 {
     File SR_counts
     File SR_sum
     File SR_metrics
+    File? script
+    Float hom_cutoff_multiplier = 1.6
+    Int median_hom_ins = 105
+    String svtype
     String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -559,11 +643,14 @@ task GenotypeSRPart2 {
   }
   command <<<
 
-    /opt/sv-pipeline/04_variant_resolution/scripts/SR_genotype.opt_part2.sh \
+    bash ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/SR_genotype.opt_part2.sh" script} \
       ~{vcf} \
       ~{SR_counts} \
       ~{SR_sum} \
-      ~{SR_metrics}
+      ~{SR_metrics} \
+      ~{svtype} \
+      ~{hom_cutoff_multiplier} \
+      ~{median_hom_ins}
   
   >>>
   runtime {

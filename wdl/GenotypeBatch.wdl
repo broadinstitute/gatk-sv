@@ -47,6 +47,10 @@ workflow GenotypeBatch {
     File? baseline_genotyped_depth_vcf  # baseline files are optional for metrics workflow
     File? baseline_genotyped_pesr_vcf
 
+    # SR genotyping parameters
+    Int? sr_median_hom_ins
+    Float? sr_hom_cutoff_multiplier
+
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_rdtest_docker
@@ -187,6 +191,8 @@ workflow GenotypeBatch {
       splitfile = splitfile,
       splitfile_index = splitfile_index,
       ref_dict = ref_dict,
+      sr_hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+      sr_median_hom_ins = sr_median_hom_ins,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,

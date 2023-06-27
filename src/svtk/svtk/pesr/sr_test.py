@@ -9,59 +9,71 @@
 import numpy as np
 import scipy.stats as ss
 import pandas as pd
+import sys
 from .pesr_test import PESRTest, PESRTestRunner
 
 
 class SRTest(PESRTest):
-    def __init__(self, countfile, common=False, window=50, medians=None):
+    def __init__(self, countfile, common=False, window=50, ins_window=50, medians=None):
         self.countfile = countfile
         self.window = window
+        self.ins_window = ins_window
         self.common = common
 
         super().__init__(medians, common)
 
-    def test_record_rec(self, record, called, background):
-        # Test SR support at all coordinates within window of start/end
-        results = []
-        for coord in 'posA posB'.split():
-            result = self._test_coord(record, coord, called, background)
-            result['coord'] = coord
-            results.append(result)
-        results = pd.concat(results, ignore_index=True)
-
-        # Add test for sum of posA and posB
-        total = self._test_total(results)
-        results = pd.concat([results, total], ignore_index=True)
-
-        # Clean up columns
-        results['name'] = record.id
-        results['bg_frac'] = results.called / \
-            (results.background + results.called)
-        results['bg_frac'] = results.bg_frac.fillna(0)
-        cols = 'name coord pos log_pval called background bg_frac'.split()
-        return results[cols]
-
     def test_record(self, record, called, background):
         # Test SR support at all coordinates within window of start/end
         resultA = self._test_coord(
-            record, 'posA', record.chrom, called, background)
-        resultA['coord'] = 'posA'
+            record.pos, record.info['STRANDS'][0], record.chrom,
+            called, background, record.pos - self.window, record.pos + self.window)
 
         resultB = self._test_coord(
-            record, 'posB', record.info['CHR2'], called, background)
+            record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+            called, background, record.stop - self.window, record.stop + self.window)
+
+        posA = int(resultA.pos)
+        posB = int(resultB.pos)
+        log_pval_A = float(resultA.log_pval)
+        log_pval_B = float(resultB.log_pval)
+        if record.info['SVTYPE'] == 'INS':
+            if posA > posB + self.ins_window or posA < posB - self.ins_window:
+                # Invalid coordinates, need to re-optimize around the better coordinate within the insertion window size
+                if log_pval_A >= log_pval_B:
+                    # posA is better, so use posA as anchor and check for best posB in valid window
+                    resultB = self._test_coord(
+                        posA, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, posA - self.ins_window, posA + self.ins_window)
+                else:
+                    # vice versa
+                    resultA = self._test_coord(
+                        posB, record.info['STRANDS'][0], record.chrom,
+                        called, background, posB - self.ins_window, posB + self.ins_window)
+        elif record.chrom == record.info['CHR2']:
+            # Check some corner cases for intrachromosomal variants
+            if record.info['STRANDS'][0] == record.info['STRANDS'][1]:
+                # If strands are the same, disallow case where posA = posB, which can happen for small variants
+                # Note that the case posA > posB is allowed and corrected for in the SR coordinate rewriting step later
+                if posA == posB and self.window > 0:
+                    resultB = self._test_coord(
+                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, record.stop - self.window, record.stop + self.window,
+                        invalid_pos_list=[posA])
+            elif posA >= posB:
+                # Invalid coordinates, need to re-optimize around the better coordinate
+                if log_pval_A >= log_pval_B:
+                    # posA is better, so use posA as anchor and check for best posB in valid window
+                    resultB = self._test_coord(
+                        record.stop, record.info['STRANDS'][1], record.info['CHR2'],
+                        called, background, posA, posA + self.window)
+                else:
+                    # vice versa
+                    resultA = self._test_coord(
+                        record.pos, record.info['STRANDS'][0], record.chrom,
+                        called, background, posB - self.window, posB)
+
+        resultA['coord'] = 'posA'
         resultB['coord'] = 'posB'
-
-        if (record.chrom == record.info['CHR2']) and (int(resultA.pos) >= int(resultB.pos)):
-            rec = 1
-            while True:
-                result = self._test_coord_V2(
-                    record, 'posB', record.chrom, called, background, rec)
-                if int(result.pos) > int(resultA.pos.iloc[0]):
-                    result['coord'] = 'posB'
-                    resultB = result
-                    break
-                rec = rec + 1
-
         results = pd.concat([resultA, resultB], ignore_index=True)
         # Add test for sum of posA and posB
         total = self._test_total(results)
@@ -75,35 +87,6 @@ class SRTest(PESRTest):
         cols = 'name coord pos log_pval called background bg_frac'.split()
 
         return results[cols]
-
-    def _test_coord_V2(self, record, coord, chrom, samples, background, optimal=0):
-        """Test enrichment at all positions within window"""
-        if coord == 'posA':
-            coord, strand = record.pos, record.info['STRANDS'][0]
-        else:
-            coord, strand = record.stop, record.info['STRANDS'][1]
-
-        # Run SR test at each position
-        results = []
-        for pos in range(coord - self.window, coord + self.window + 1):
-            result = self.test(chrom, pos, strand, samples, background)
-            result = result.to_frame().transpose()
-            result['pos'] = pos
-            result['dist'] = np.abs(pos - coord)
-            results.append(result)
-
-        results = pd.concat(results, ignore_index=True)
-
-        # Choose most significant position, using distance to predicted
-        # breakpoint as tiebreaker
-        results = results.sort_values(['log_pval', 'dist'], ascending=False)
-        if optimal < len(results):
-            best = results.iloc[optimal].to_frame().transpose()
-        else:
-            best = results.iloc[-1].to_frame().transpose()
-            best['log_pval'] = 0
-            best['pos'] = record.stop + self.window + 1
-        return best
 
     def test(self, chrom, pos, strand, called, background):
         """
@@ -162,7 +145,7 @@ class SRTest(PESRTest):
     def _test_total(self, results):
         """Test enrichment of posA+posB"""
         total = results['called background'.split()].sum()
-        pval = ss.poisson.cdf(total.background, total.called)
+        pval = max(ss.poisson.cdf(total.background, total.called), sys.float_info.min)
         total['log_pval'] = np.abs(np.log10(pval))
 
         # format and add dummy metadata
@@ -172,20 +155,19 @@ class SRTest(PESRTest):
 
         return total
 
-    def _test_coord(self, record, coord, chrom, samples, background):
+    def _test_coord(self, coord, strand, chrom, samples, background, left_boundary, right_boundary,
+                    invalid_pos_list=[]):
         """Test enrichment at all positions within window"""
-        if coord == 'posA':
-            coord, strand = record.pos, record.info['STRANDS'][0]
-        else:
-            coord, strand = record.stop, record.info['STRANDS'][1]
 
         # Run SR test at each position
         results = []
-        for pos in range(coord - self.window, coord + self.window + 1):
+        positions = [p for p in range(left_boundary, right_boundary + 1) if p not in invalid_pos_list]
+        for pos in positions:
             result = self.test(chrom, pos, strand, samples, background)
             result = result.to_frame().transpose()
             result['pos'] = pos
-            result['dist'] = np.abs(pos - coord)
+            # make negative so it sorts correctly
+            result['dist'] = -np.abs(pos - coord)
             results.append(result)
 
         results = pd.concat(results, ignore_index=True)
@@ -199,7 +181,7 @@ class SRTest(PESRTest):
 
 
 class SRTestRunner(PESRTestRunner):
-    def __init__(self, vcf, countfile, fout, n_background=160, common=False, window=100,
+    def __init__(self, vcf, countfile, fout, n_background=160, common=False, window=100, ins_window=50,
                  whitelist=None, blacklist=None, medians=None, log=False):
         """
         vcf : pysam.VariantFile
@@ -207,10 +189,11 @@ class SRTestRunner(PESRTestRunner):
         fout : writable file
         n_background : int
         window : int
+        ins_window : int
         whitelist : list of str
         blacklist : list of str
         """
-        self.srtest = SRTest(countfile, common, window, medians=medians)
+        self.srtest = SRTest(countfile, common=common, window=window, ins_window=ins_window, medians=medians)
         self.fout = fout
 
         super().__init__(vcf, common, n_background, whitelist, blacklist, log)
