@@ -33,6 +33,7 @@
   "reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "reference_index" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
   "reference_version" : "38",
+  "hg38_header_sq" : "gs://fc-secure-7b4e631c-ed86-4a0d-8023-5123cdac0556/hg38_SQ_header/hg38_header_sq.sam",
   "rmsk" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "segdups" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
   "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",

@@ -32,6 +32,7 @@ workflow GatherSampleEvidence {
     File primary_contigs_list
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
+    File? hg38_header_sq  # required if the crams for samples are custom reference subset of hg38
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     String? reference_version   # Either "38" or "19"
 
@@ -129,6 +130,7 @@ workflow GatherSampleEvidence {
         cram_index = LocalizeReads.output_index,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
+        hg38_header_sq = hg38_header_sq,
         contiglist = select_first([primary_contigs_fai]),
         samtools_cloud_docker = samtools_cloud_docker,
         runtime_attr_split_cram = runtime_attr_split_cram,
@@ -302,6 +304,7 @@ task LocalizeReads {
   input {
     File reads_path
     File reads_index
+    File? hg38_header_sq
     RuntimeAttr? runtime_attr_override
   }
 
@@ -326,10 +329,18 @@ task LocalizeReads {
   }
 
   Int disk_size = ceil(50 + size(reads_path, "GB"))
-
   command {
     ln -s ~{reads_path}
     ln -s ~{reads_index}
+    ln -s ~{hg38_header_sq}
+    # get header from reads_path and add it to hg38_header_sq.sam
+    samtools view -H ~{reads_path} | grep -v @SQ > header_without_sq.sam
+    # add header_without_sq.sam to hg38_header_sq.sam
+    cat  header_without_sq.sam ~{hg38_header_sq} >  newly_constructed_header.sam
+    # add header to reads_path
+    samtools reheader newly_constructed_header.sam ~{reads_path}  > ~{reads_path}
+    # index reads_path
+    samtools index ~{reads_path}
   }
   output {
     File output_file = basename(reads_path)

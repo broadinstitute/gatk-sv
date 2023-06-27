@@ -20,6 +20,7 @@ workflow GatherSampleEvidenceBatch {
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
+    File? hg38_header_sq  # required if the crams for samples are custom reference subset of hg38
     String? reference_version   # Either "38" or "19"
 
     # Coverage collection inputs
