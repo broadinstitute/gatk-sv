@@ -209,14 +209,14 @@ jobs:
           python ./scripts/docker/build_docker.py \
             --base-git-commit ${{ needs.build_args_job.outputs.base_sha }} \
             --current-git-commit ${{ needs.build_args_job.outputs.head_sha }} \
-            --docker-repo us.gcr.io/${{ secrets.GCP_PROJECT_ID }}/gatk-sv \
+            --docker-repo ${{ secrets.AZ_CR }} us.gcr.io/${{ secrets.GCP_PROJECT_ID }}/gatk-sv \
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_AZURE $DOCKERS_GCP \
             --output-json $DOCKERS_AZURE $DOCKERS_GCP \
             --disable-git-protect
           
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
-          echo "::set-output name=CHANGED::$CHANGED"
+          echo "CHANGED=$CHANGED" >> $GITHUB_OUTPUT
 
       - name: Commit Changes to dockers_*.json
         if: steps.build_and_publish.outputs.CHANGED
