@@ -64,9 +64,6 @@ task TrainGqRecalibratorTask {
     String model_file_name = if defined(gq_recalibrator_model_file)
         then basename(select_first([gq_recalibrator_model_file]))
         else "gq_recalibrator.model"
-    String pedigree_arg = if defined(ped_file)
-        then "--pedigree " + ped_file
-        else ""
 
     runtime {
         docker: gatk_docker
@@ -95,7 +92,7 @@ task TrainGqRecalibratorTask {
         gatk --java-options "-Xmx${mem_kb_java_actual}K" XGBoostMinGqVariantFilter \
           --mode "Train" \
           --variant ./$(basename ~{train_vcf}) \
-          ~{pedigree_arg} \
+          ~{"--pedigree " + ped_file} \
           --truth-file ~{truth_file} \
           --genome-track ~{sep=" --genome-track " genome_tracks} \
           --model-file ~{model_file_name} \
