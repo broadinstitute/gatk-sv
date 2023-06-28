@@ -10,7 +10,7 @@ import ThemedImage from '@theme/ThemedImage';
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 
-of building these images, please refer to [this section](/docs/docker/deploy/index).
+of building these images, please refer to [this section](/docs/advanced/docker/deploy/index).
 :::
 
 

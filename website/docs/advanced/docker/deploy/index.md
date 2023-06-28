@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 This section offers a comprehensive explanation of the process of 
 building, testing, and publishing Docker images. For details 
 regarding the images and their hierarchy, please refer to
-[this page](/docs/docker/images).
+[this page](/docs/advanced/docker/images).
 :::
 
 

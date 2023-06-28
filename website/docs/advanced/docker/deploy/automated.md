@@ -88,7 +88,7 @@ This job is responsible for determining the arguments to be used by the
   the workflow focuses on building and publishing only the 
   Docker images that are affected by the changes introduced 
   in a pull request (PR).
-  You may refer to [this page](/docs/docker/deploy/incremental) 
+  You may refer to [this page](/docs/advanced/docker/deploy/incremental) 
   on details regarding the incremental build strategy.
   This job determines the commit SHAs of `HEAD` and `BASE`
   commits.
