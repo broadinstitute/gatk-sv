@@ -1336,9 +1336,9 @@ def select_confident_vapor_variants(
         vapor_p_non_ref = get_vapor_p_non_ref(vapor_data)
     elif strategy == 'READS':
         vapor_p_non_ref = get_vapor_p_non_ref_threshold(vapor_data,
-                                                            read_strategy_good_support_threshold,
-                                                            read_strategy_bad_support_threshold,
-                                                            read_strategy_bad_cov_threshold)
+                                                        read_strategy_good_support_threshold,
+                                                        read_strategy_bad_support_threshold,
+                                                        read_strategy_bad_cov_threshold)
     else:
         raise ValueError("Unsupported strategy: {}".format(strategy))
     return SampleConfidentVariants(
