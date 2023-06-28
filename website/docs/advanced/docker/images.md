@@ -35,6 +35,14 @@ The figure below illustrates the relationships between the GATK-SV Docker images
   }}
 />
 
+The image depicts the hierarchical relationship among GATK-SV 
+Docker images. Arrows indicate the flow from a base image 
+to a derived image. The base image, located at the arrow's 
+starting point, shares its content which is then expanded 
+upon and modified in the derived image. In simple terms, 
+the derived image inherits the same tools and configuration 
+as the base image, while incorporating additional settings and tools.
+
 
 The list of the Docker images and their latest builds 
 are available in [`dockers.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json)
