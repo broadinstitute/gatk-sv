@@ -17,11 +17,6 @@ def drop_nonref_gts(vcf, fout):
     NULL_GT = [(0, 0), (None, None), (0, ), (None, ), (None, 2)]
     samples = [s for s in vcf.header.samples]
 
-    # for record in vcf.fetch():
-    #     nonref = svu.get_called_samples(record)
-    #     if len(nonref) > 0:
-    #         fout.write(record)
-
     for record in vcf.fetch():
         for s in samples:
             if is_biallelic(record):
