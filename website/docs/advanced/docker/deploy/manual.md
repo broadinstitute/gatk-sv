@@ -11,6 +11,4 @@ This ensures that the images are successfully built and function as intended.
 Additionally, if you wish to host the images in your own container registry, 
 you will need to follow these steps. 
 To simplify the build process, we have developed a Python script 
-that automates the image building, and publishing to your container registry. 
-This section provides a detailed guide on using this script.
-
+that automates the image building, and publishing to your container registry.
