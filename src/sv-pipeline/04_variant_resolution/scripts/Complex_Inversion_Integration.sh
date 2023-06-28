@@ -34,7 +34,7 @@ zcat $inv_resolved_vcf \
  >add.vcf.lines.txt || true
 
 ##get unresolved variants id from full vcf to strip since they are resolved in inversion resolved vcf### 
-##inversions that cluster were other variants (rare) are kept as unresolved though they will also be part of a resolved variant in add.vcf.lines.txt## 
+##inversions that cluster were other variants (rare) are kept as unresolved, though they will also be part of a resolved variant in add.vcf.lines.txt## 
 awk '{if ($NF!="MEMBERS") print $NF}' inv.resolve.bed \
   |tr ',' '\n'\
   |fgrep -wf - all.unresolved.inv.bed \
