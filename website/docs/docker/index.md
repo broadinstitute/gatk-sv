@@ -45,7 +45,7 @@ between Dockerfiles, Docker images, Docker containers, and Cloud VMs.
 
 The GATK-SV Docker setup is organized as follows:
 
- - **Dockerfile**: There are 21 Dockerfiles available in the GitHub repository. 
+ - **Dockerfile**: 
    These files define the instructions for building the necessary tools and 
    configurations required for the GATK-SV pipeline.
 
