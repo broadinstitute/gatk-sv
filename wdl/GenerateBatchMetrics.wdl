@@ -73,12 +73,7 @@ workflow GenerateBatchMetrics {
     RuntimeAttr? runtime_attr_annotate_overlap
   }
 
-<<<<<<< HEAD
-  Array[String] algorithms = ["depth", "melt", "scramble", "wham", "manta"]
-  Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
-=======
   String prefix = "~{batch}.batch_metrics"
->>>>>>> 676dc062 (Start adding gatk AggregatePESREvidence to GenerateBatchMetrics)
 
   call util.GetSampleIdsFromVcf {
     input:
