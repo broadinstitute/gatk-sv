@@ -50,9 +50,6 @@ def process_rdtest(rdtest):
 
 def process_metadata(vcf):
 
-    def _get_dup_called_samples(variant):
-        return [sample for sample in variant.samples if variant.samples[sample]['CN'] > variant.samples[sample]['ECN']]
-
     n_samples = len(vcf.header.samples)
     called_counts = dict()
     called_samples = dict()
@@ -76,10 +73,7 @@ def process_metadata(vcf):
         end = variant.stop
         name = variant.id
         svtype = variant.info['SVTYPE']
-        if svtype == 'DUP':
-            called = _get_dup_called_samples(variant)
-        else:
-            called = svu.get_called_samples(variant)
+        called = svu.get_called_samples(variant)
         if svtype == 'BND':
             svlen = -1
         elif svtype == 'INS':
