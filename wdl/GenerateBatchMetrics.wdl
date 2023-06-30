@@ -114,7 +114,6 @@ workflow GenerateBatchMetrics {
       runtime_attr_override=runtime_attr_concat_vcfs
   }
 
-
   call taskscohort.ScatterVcf {
     input:
       vcf=ConcatInputVcfs.concat_vcf,
