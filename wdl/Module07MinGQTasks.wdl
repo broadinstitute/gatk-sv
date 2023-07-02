@@ -506,7 +506,8 @@ task CollectTrioSVdat {
             ~{sep=" " gather_trio_geno_options} \
             --no-header \
             $famID.vcf.gz stdout "$pro" "$fa" "$mo" \
-          | awk -v famID="$famID" -v OFS="\t" '{ print famID, $0 }'
+          | awk -v famID="$famID" -v OFS="\t" '{ print famID, $0 }' \
+          | awk -v FS="\t" -v OFS="\t" '{ if ($6=="") $6="PASS"; print }'
 
         done < ~{famfile}
       done < ~{write_lines(vcf_shard_idxs)}
