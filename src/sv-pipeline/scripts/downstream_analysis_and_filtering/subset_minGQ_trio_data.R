@@ -173,7 +173,10 @@ max.variants <- as.numeric(opts$max.variants)
 metric <- as.character(opts$optimize.metric)
 
 ###Read input data
-dat <- read.table(INFILE,header=T, comment.char="", check.names=F)
+dat <- read.table(INFILE,header=T, comment.char="", check.names=F, sep="\t")
+if(any(is.na(dat$FILTER))){
+  dat$FILTER[which(is.na(dat$FILTER))] <- "PASS"
+}
 colnames(dat)[1] <- "famID"
 
 ###Filter input data

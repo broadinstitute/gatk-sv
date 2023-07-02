@@ -122,6 +122,8 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ',
             freq = 'NA'
         svtype = record.info['SVTYPE']
         filt = ','.join([f for f in record.filter])
+        if filt == '':
+            filt = 'PASS'
         pro_ev = record.samples[trio_samples[0]]['EV']
         if isinstance(pro_ev, tuple):
             pro_ev = ','.join(list(pro_ev))
