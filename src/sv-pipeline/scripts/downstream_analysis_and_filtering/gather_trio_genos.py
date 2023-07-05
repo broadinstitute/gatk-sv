@@ -3,7 +3,7 @@
 #
 
 """
-Extract trio allele counts & GQs for all variants in a vcf
+Extract trio allele counts & GQs (or another FORMAT field) for all variants in a vcf
 """
 
 import argparse
@@ -30,7 +30,9 @@ def read_ac_adj(infile, pro, fa, mo):
     return ac_adj
 
 
-def gather_info(vcf, fout, pro, fa, mo, ac_adj=None, no_header=False):
+def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ', 
+                fill_incomplete = False, default_value_homref = 999, 
+                default_value_other = 999, no_header = False):
     GTs_to_skip = './. None/None 0/None None/0'.split()
     sex_chroms = 'X Y chrX chrY'.split()
 
@@ -88,26 +90,28 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj=None, no_header=False):
 
         # Overwrite ACs, if optioned
         if record.id in vids_to_correct:
-            # oldACs = ACs
             newACs = ac_adj[record.id]
             for i in [0, 1, 2]:
                 ACs[i] = str(max([int(ACs[i]), int(newACs[i])]))
-            # oldACs_str = '(' + ', '.join(oldACs) + ')'
-            # newACs_str = '(' + ', '.join(ACs) + ')'
-            # print('Overwriting ACs for {0} from {1} to {2}\n'.format(record.id,
-            #                                                          oldACs_str,
-            #                                                          newACs_str))
 
         # Get genotype qualities for trio
-        GQs = [record.samples[ID]['GQ'] for ID in trio_samples]
+        GQs = [record.samples[ID][metric] for ID in trio_samples]
 
-        # Skip sites that are missing integer GQs in any member of the trio
-        # This shouldn't occur in theory, but somtimes does. Cause unclear.
-        if len([g for g in GQs if g is None]) > 0:
-            continue
-        # Otherwise, convert GQs to string for writing to file
-        else:
-            GQs = [str(g) for g in GQs]
+        # Fill missing quality metrics in any member of the trio with a default value
+        missing_GQs = [i for i, g in enumerate(GQs) if g is None]
+        if len(missing_GQs) > 0:
+            if not fill_incomplete:
+                continue
+            else:
+                for i in missing_GQs:
+                    if GTs[i] == '0/0':
+                        GQs[i] = default_value_homref
+                    else:
+                        GQs[i] = default_value_other
+
+        if isinstance(GQs[0], float):
+            GQs = [round(g, 4) for g in GQs]
+        GQs = [str(g) for g in GQs]
 
         # Get minimal variant info
         vid = record.id
@@ -118,6 +122,8 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj=None, no_header=False):
             freq = 'NA'
         svtype = record.info['SVTYPE']
         filt = ','.join([f for f in record.filter])
+        if filt == '':
+            filt = 'PASS'
         pro_ev = record.samples[trio_samples[0]]['EV']
         if isinstance(pro_ev, tuple):
             pro_ev = ','.join(list(pro_ev))
@@ -154,6 +160,20 @@ def main():
     parser.add_argument('mo', help='Mother sample ID.')
     parser.add_argument('--ac-adj', help='tsv with variant IDs and ' +
                         'pro/fa/mo AC to be manually overwritten.')
+    parser.add_argument('--metric', default='GQ', type=str, help='Quality metric ' +
+                        'to extract from FORMAT for each GT.')
+    parser.add_argument('--fill-incomplete', default=False, action='store_true',
+                        help='Fill GT quality metrics with --default-metric-value ' +
+                        'for samples missing quality metrics. Default: skip ' +
+                        'sites with incomplete quality metrics.')
+    parser.add_argument('--default-value-homref', default=999, type=float, help='Default ' +
+                        'value to fill missing homozygous reference GT quality ' +
+                        'metrics. Only used if --fill-incomplete is provided. '
+                        'Default: 999.')
+    parser.add_argument('--default-value-other', default=999, type=float, help='Default ' +
+                        'value to fill missing GT quality metrics for all GTs ' +
+                        'other than homozygous reference. Only used if ' +
+                        '--fill-incomplete is provided. Default: 999.')
     parser.add_argument('--no-header', help='Do not write header line.',
                         action='store_true', default=False)
 
@@ -174,7 +194,9 @@ def main():
     else:
         ac_adj = None
 
-    gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.no_header)
+    gather_info(vcf, fout, args.pro, args.fa, args.mo, ac_adj, args.metric, 
+                args.fill_incomplete, args.default_value_homref, 
+                args.default_value_other, args.no_header)
 
     fout.close()
 
