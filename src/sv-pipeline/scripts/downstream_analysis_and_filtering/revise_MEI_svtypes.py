@@ -45,6 +45,9 @@ def main():
             else:
                 new_svtype = 'MEI'
             record.info['SVTYPE'] = new_svtype
+        # Add SVLEN if missing
+        if 'SVLEN' not in record.info.keys():
+            record.info['SVLEN'] = 0
         outvcf.write(record)
 
     # Close output VCF file handle

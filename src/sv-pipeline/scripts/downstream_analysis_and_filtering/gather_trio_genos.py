@@ -115,7 +115,7 @@ def gather_info(vcf, fout, pro, fa, mo, ac_adj = None, metric = 'GQ',
 
         #Get minimal variant info
         vid = record.id
-        size = str(record.info['SVLEN'])
+        size = str(record.info.get('SVLEN', 0))
         if 'AF' in record.info.keys():
             freq = str(record.info['AF'][0])
         else:
