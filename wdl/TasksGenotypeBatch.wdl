@@ -564,9 +564,9 @@ task AddBatchSamples {
   command <<<
 
     set -euo pipefail
-    /opt/sv-pipeline/04_variant_resolution/scripts/add_batch_samples.py ~{batch_vcf} ~{cohort_vcf} ~{prefix}.pre.vcf
-    bgzip ~{prefix}.pre.vcf
-    bcftools annotate -x INFO/MEMBERS --no-version -O z -o ~{prefix}.vcf.gz ~{prefix}.pre.vcf.gz
+    bcftools annotate -x INFO/MEMBERS --no-version -O z -o ~{prefix}.pre.vcf.gz ~{batch_vcf}
+    /opt/sv-pipeline/04_variant_resolution/scripts/add_batch_samples.py ~{prefix}.pre.vcf.gz ~{cohort_vcf} ~{prefix}.vcf
+    bgzip ~{prefix}.vcf
   
   >>>
   runtime {
