@@ -65,6 +65,7 @@ workflow ShardedAnnotateVcf {
   call MiniTasks.ScatterVcf {
     input:
       vcf = vcf,
+      vcf_index = vcf_idx,
       prefix = prefix,
       records_per_shard = sv_per_shard,
       contig = contig,
