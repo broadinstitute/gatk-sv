@@ -20,9 +20,6 @@ workflow AnnotateVcf {
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
 
-    Int max_shards_per_chrom_step1
-    Int min_records_per_shard_step1
-
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list              # List of samples to be retained from the output vcf
     File? ped_file                # Used for M/F AF calculations
@@ -47,10 +44,7 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_shard_vcf
     RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
     RuntimeAttr? runtime_attr_compute_AFs
-    RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_modify_vcf
-    RuntimeAttr? runtime_attr_combine_vcfs
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_split_ref_bed
     RuntimeAttr? runtime_attr_split_query_vcf
     RuntimeAttr? runtime_attr_bedtools_closest
@@ -77,8 +71,6 @@ workflow AnnotateVcf {
         svannotate_additional_args = svannotate_additional_args,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
 
-        max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
-        min_records_per_shard_step1 = min_records_per_shard_step1,
         sample_pop_assignments = sample_pop_assignments,
         sample_keep_list = sample_keep_list,
         ped_file = ped_file,
@@ -101,10 +93,7 @@ workflow AnnotateVcf {
         runtime_attr_svannotate = runtime_attr_svannotate,
         runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
         runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
         runtime_attr_modify_vcf = runtime_attr_modify_vcf,
-        runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
-        runtime_attr_split_vcf  = runtime_attr_split_vcf,
         runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
         runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
         runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,

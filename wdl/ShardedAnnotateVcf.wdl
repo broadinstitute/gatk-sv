@@ -5,7 +5,7 @@ import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
 import "AnnotateFunctionalConsequences.wdl" as func
 import "PruneAndAddVafs.wdl" as pav
-import "AnnotateExternalAF.wdl" as eaf
+import "AnnotateExternalAFPerShard.wdl" as eaf
 
 workflow ShardedAnnotateVcf {
 
@@ -20,9 +20,6 @@ workflow ShardedAnnotateVcf {
     Int? promoter_window
     Int? max_breakend_as_cnv_length
     String? svannotate_additional_args
-
-    Int max_shards_per_chrom_step1
-    Int min_records_per_shard_step1
 
     File? sample_pop_assignments  # Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? sample_keep_list
@@ -46,10 +43,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_svannotate
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
-    RuntimeAttr? runtime_attr_combine_vcfs
     RuntimeAttr? runtime_attr_modify_vcf
-    RuntimeAttr? runtime_attr_combine_vcfs
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_split_ref_bed
     RuntimeAttr? runtime_attr_split_query_vcf
     RuntimeAttr? runtime_attr_bedtools_closest
@@ -60,6 +54,16 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_preconcat_sharded_cluster
     RuntimeAttr? runtime_attr_hail_merge_sharded_cluster
     RuntimeAttr? runtime_attr_fix_header_sharded_cluster
+  }
+
+  if (defined(ref_bed)) {
+    call eaf.SplitRefBed {
+      input:
+        bed = select_first([ref_bed]),
+        contig = contig,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_split_ref_bed
+    }
   }
 
   call MiniTasks.ScatterVcf {
@@ -107,23 +111,21 @@ workflow ShardedAnnotateVcf {
     }
 
     if (defined(ref_bed)) {
-      call eaf.AnnotateExternalAF as AnnotateExternalAF {
+      call eaf.AnnotateExternalAFPerShard {
         input:
           vcf = PruneAndAddVafs.output_vcf,
           vcf_idx = PruneAndAddVafs.output_vcf_idx,
-          ref_bed = select_first([ref_bed]),
+          split_ref_bed_del = select_first([SplitRefBed.del]),
+          split_ref_bed_dup = select_first([SplitRefBed.dup]),
+          split_ref_bed_ins = select_first([SplitRefBed.ins]),
+          split_ref_bed_inv = select_first([SplitRefBed.inv]),
+          split_ref_bed_bnd = select_first([SplitRefBed.bnd]),
           population = select_first([population]),
           ref_prefix = select_first([ref_prefix]),
           prefix = "~{prefix}.~{contig}.~{i}",
-          contigs = [contig],
-          max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
-          min_records_per_shard_step1 = min_records_per_shard_step1,
           sv_base_mini_docker = sv_base_mini_docker,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_modify_vcf = runtime_attr_modify_vcf,
-          runtime_attr_split_vcf = runtime_attr_split_vcf,
-          runtime_attr_combine_vcfs = runtime_attr_combine_vcfs,
-          runtime_attr_split_ref_bed = runtime_attr_split_ref_bed,
           runtime_attr_split_query_vcf = runtime_attr_split_query_vcf,
           runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
           runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
@@ -132,8 +134,8 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAF.annotated_vcf), PruneAndAddVafs.output_vcf])
-    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAF.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
+    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), PruneAndAddVafs.output_vcf])
+    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
   }
 }
 

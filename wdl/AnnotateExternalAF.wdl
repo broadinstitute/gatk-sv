@@ -4,7 +4,7 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "AnnotateExternalAFperContig.wdl" as AnnotateExternalAFperContig
+import "AnnotateExternalAFperShard.wdl" as AnnotateExternalAFperShard
 
 workflow AnnotateExternalAF {
     input {
@@ -32,7 +32,7 @@ workflow AnnotateExternalAF {
         RuntimeAttr? runtime_attr_select_matched_svs
 
     }
-    call SplitBed as split_ref_bed {
+    call SplitRefBed as split_ref_bed {
         input:
             bed = ref_bed,
             sv_base_mini_docker = sv_base_mini_docker,
@@ -45,10 +45,8 @@ workflow AnnotateExternalAF {
             runtime_attr_override = runtime_attr_split_query_vcf
     }
 
-    Array[String] svtype_list = ["DEL","DUP","INS","INV_CPX","BND_CTX"]
-
     scatter ( contig in contigs ) {
-        call AnnotateExternalAFperContig.AnnotateExternalAFperContig as AnnotateExternalAFperContig{
+        call AnnotateExternalAFperShard.AnnotateExternalAFperShard {
             input:
                 vcf = vcf,
                 vcf_idx = vcf_idx,
@@ -94,7 +92,7 @@ workflow AnnotateExternalAF {
 
 }
 
-task SplitBed {
+task SplitRefBed {
     input {
         File bed
         String sv_base_mini_docker
