@@ -429,6 +429,8 @@ task CollectTrioSVdat {
 
 
   command <<<
+    set -eu -o pipefail
+    
     # Make list of all samples in famfile
     awk -v OFS="\n" '{ print $2, $3, $4 }' ~{famfile} > samples.list
 
