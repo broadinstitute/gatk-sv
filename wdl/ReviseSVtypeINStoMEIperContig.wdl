@@ -16,8 +16,8 @@ workflow ReviseSVtypeINStoMEIperContig {
     Boolean concat_shards = true
 
     String sv_base_mini_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_updates_docker
+    String sv_pipeline_docker_for_mei_revise
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
     RuntimeAttr? runtime_attr_ReviseSVtypeMEI
@@ -41,7 +41,7 @@ workflow ReviseSVtypeINStoMEIperContig {
         input:
           vcf = vcf_shard.left,
           vcf_idx = vcf_shard.right,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          sv_pipeline_base_docker = sv_pipeline_docker_for_mei_revise,
           prefix = basename(vcf_shard.left, ".vcf.gz") + ".SVtypeRevised",
           runtime_attr_override = runtime_attr_ReviseSVtypeMEI
       }

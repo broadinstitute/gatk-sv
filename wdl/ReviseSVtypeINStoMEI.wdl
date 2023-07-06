@@ -17,7 +17,7 @@ workflow ReviseSVtypeINStoMEI {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker_for_mei_revise
     String sv_pipeline_updates_docker
 
     RuntimeAttr? runtime_override_split_vcf_to_clean
@@ -38,7 +38,7 @@ workflow ReviseSVtypeINStoMEI {
         concat_shards = concat_shards,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_updates_docker = sv_pipeline_updates_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker_for_mei_revise = sv_pipeline_docker_for_mei_revise,
         runtime_override_split_vcf_to_clean = runtime_override_split_vcf_to_clean,
         runtime_attr_ReviseSVtypeMEI = runtime_attr_ReviseSVtypeMEI,
         runtime_override_combine_step_1_vcfs = runtime_override_combine_step_1_vcfs

@@ -27,6 +27,7 @@ workflow Module07FilterGTsPart1 {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_base_docker
+    String sv_pipeline_docker_for_mei_revise
     String sv_pipeline_updates_docker
 
     # overrides for local tasks
@@ -49,7 +50,7 @@ workflow Module07FilterGTsPart1 {
         vcf_idx = vcf_idx,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker_for_mei_revise = sv_pipeline_docker_for_mei_revise,
         sv_pipeline_updates_docker = sv_pipeline_updates_docker,
         prefix = prefix,
         contiglist = contiglist,
@@ -174,7 +175,7 @@ workflow Module07FilterGTsPart1 {
         famfile = fam,
         filter_metric = filter_metric,
         gather_trio_geno_options = gather_trio_geno_options,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_base_docker = sv_pipeline_docker_for_mei_revise,
         runtime_attr_override = runtime_attr_collect_trio_svdat_pcrminus
     }
   }
@@ -205,7 +206,7 @@ workflow Module07FilterGTsPart1 {
           famfile = fam,
           filter_metric = filter_metric,
           gather_trio_geno_options = gather_trio_geno_options,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          sv_pipeline_base_docker = sv_pipeline_docker_for_mei_revise,
           runtime_attr_override = runtime_attr_collect_trio_svdat_pcrplus
       }
     }
