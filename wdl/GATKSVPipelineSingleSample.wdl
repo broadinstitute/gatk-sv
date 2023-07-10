@@ -1399,7 +1399,6 @@ workflow GATKSVPipelineSingleSample {
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
         use_hail = false,
-        sharded_by_contig = false,
         sv_per_shard = annotation_sv_per_shard,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
