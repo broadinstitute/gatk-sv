@@ -11,7 +11,7 @@ workflow ShardedAnnotateVcf {
 
   input {
     File vcf
-    File vcf_idx
+    File? vcf_idx
     String prefix
     String contig
 

@@ -990,6 +990,7 @@ task ScatterVcf {
 
   command <<<
     set -euo pipefail
+    ~{if !defined(vcf_index) then "tabix ~{vcf}" else ""}
     # in case the file is empty create an empty shard
     bcftools view -h ~{vcf} | bgzip -c > "~{prefix}.0.vcf.gz"
     bcftools +scatter ~{vcf} -o . -O z -p "~{prefix}". --threads ~{threads} -n ~{records_per_shard} ~{"-r " + contig}

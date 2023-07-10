@@ -9,10 +9,9 @@ workflow AnnotateVcf {
 
   input {
     Array[File] vcf_list  # Must be either single full VCF (array of length 1) or array of VCFs sharded by contig. Outputs will match
-    Array[File] vcf_idx_list
+    Array[File]? vcf_idx_list
     File contig_list
     Array[String] prefix_list
-    Boolean sharded_by_contig  # True if providing a vcf_list sharded by contig. False if providing a single full VCF
 
     File protein_coding_gtf
     File? noncoding_bed
@@ -39,6 +38,8 @@ workflow AnnotateVcf {
     String sv_base_mini_docker
     String gatk_docker
 
+    File? NONE_FILE_
+
     RuntimeAttr? runtime_attr_svannotate
     RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_shard_vcf
@@ -56,13 +57,14 @@ workflow AnnotateVcf {
   }
 
   Array[String] contigs = read_lines(contig_list)
+  Boolean sharded_by_contig = (length(vcf_list) == length(contigs))
 
   scatter (i in range(length(contigs))) {
     Int array_index = if (sharded_by_contig) then i else 0
     call sharded_annotate_vcf.ShardedAnnotateVcf {
       input:
         vcf = vcf_list[array_index],
-        vcf_idx = vcf_idx_list[array_index],
+        vcf_idx = if defined(vcf_idx_list) then select_first([vcf_idx_list])[array_index] else NONE_FILE_,
         contig = contigs[i],
         prefix = prefix_list[array_index],
         protein_coding_gtf = protein_coding_gtf,
