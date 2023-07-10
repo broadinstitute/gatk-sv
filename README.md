@@ -40,7 +40,6 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
   * [Cromwell](https://github.com/broadinstitute/cromwell) (v36 or higher). A dedicated server is highly recommended.
   * or [Terra](https://terra.bio/) (note preconfigured GATK-SV workflows are not yet available for this platform)
 * Recommended: [MELT](https://melt.igs.umaryland.edu/). Due to licensing restrictions, we cannot provide a public docker image or reference panel VCFs for this algorithm.
-* Recommended: [gatk-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152). Detects germline CNVs from variations in read depth.
 * Recommended: [cromshell](https://github.com/broadinstitute/cromshell) for interacting with a dedicated Cromwell server.
 * Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
 
