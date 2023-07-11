@@ -508,7 +508,8 @@ task FormatVcfForGatk {
       --out ~{output_prefix}.vcf.gz \
       --ploidy-table ~{ploidy_table} \
       ~{"--remove-infos " + remove_infos} \
-      ~{"--remove-formats " + remove_formats}
+      ~{"--remove-formats " + remove_formats} \
+      --fix-end
     tabix ~{output_prefix}.vcf.gz
   >>>
   runtime {
