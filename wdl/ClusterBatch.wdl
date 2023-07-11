@@ -5,7 +5,7 @@ import "DepthClustering.wdl" as depth
 import "ClusterBatchMetrics.wdl" as metrics
 import "TasksClusterBatch.wdl" as tasks
 import "Utils.wdl" as util
-
+import "PlotSVCountsPerSample.wdl" as sv_counts
 workflow ClusterBatch {
   input {
     String batch
@@ -64,6 +64,9 @@ workflow ClusterBatch {
     String sv_pipeline_docker
 
     Float? java_mem_fraction
+
+    # PlotSVCountsPerSample metrics
+    Int N_IQR_cutoff_plotting = 6
 
     RuntimeAttr? runtime_attr_ids_from_vcf_list
     RuntimeAttr? runtime_attr_create_ploidy
@@ -282,6 +285,14 @@ workflow ClusterBatch {
     }
   }
 
+  call sv_counts.PlotSVCountsPerSample {
+    input:
+      prefix = batch,
+      vcfs = [ClusterDepth.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf],
+      N_IQR_cutoff = N_IQR_cutoff_plotting,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   output {
     File clustered_depth_vcf = ClusterDepth.clustered_vcf
     File clustered_depth_vcf_index = ClusterDepth.clustered_vcf_index
@@ -293,7 +304,13 @@ workflow ClusterBatch {
     File? clustered_melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
     File? clustered_scramble_vcf = ClusterPESR_scramble.clustered_vcf
     File? clustered_scramble_vcf_index = ClusterPESR_scramble.clustered_vcf_index
-
+    Array[File] clustered_sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File] clustered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    File clustered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
+    File clustered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
+    Int clustered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }
+
+
 }

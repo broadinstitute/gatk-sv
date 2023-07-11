@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "PlotSVCountsPerSample.wdl" as sv_counts
 
 workflow FilterBatchSites {
   input {
@@ -12,8 +13,10 @@ workflow FilterBatchSites {
     File? depth_vcf
     File evidence_metrics
     File evidence_metrics_common
-
     String sv_pipeline_docker
+
+    # PlotSVCountsPerSample metrics
+    Int N_IQR_cutoff_plotting = 6
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
@@ -58,6 +61,14 @@ workflow FilterBatchSites {
     }
   }
 
+  call sv_counts.PlotSVCountsPerSample {
+    input:
+      prefix = batch,
+      vcfs=[FilterAnnotateVcf.annotated_vcf[0], FilterAnnotateVcf.annotated_vcf[1], FilterAnnotateVcf.annotated_vcf[2], FilterAnnotateVcf.annotated_vcf[3], FilterAnnotateVcf.annotated_vcf[4]],
+      N_IQR_cutoff = N_IQR_cutoff_plotting,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   output {
     File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[0]
     File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[1]
@@ -67,7 +78,13 @@ workflow FilterBatchSites {
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
+    Array[File] sites_filtered_sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File] sites_filtered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    File sites_filtered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
+    File sites_filtered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
+    Int sites_filtered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
   }
+
 }
 
 task AdjudicateSV {
