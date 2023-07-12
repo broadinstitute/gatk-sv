@@ -4,9 +4,6 @@ description: Docker Image Dependencies
 sidebar_position: 1
 ---
 
-import useBaseUrl from '@docusaurus/useBaseUrl';
-import ThemedImage from '@theme/ThemedImage';
-
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 
@@ -27,13 +24,21 @@ usage and lower workflow execution costs.
 The figure below illustrates the relationships between the GATK-SV Docker images.
 
 
-<ThemedImage
-  alt="Interconnection Between GATK-SV Docker Images"
-  sources={{
-    light: useBaseUrl('/img/docker_hierarchy.png'),
-    dark: useBaseUrl('/img/docker_hierarchy.png'),
-  }}
-/>
+```mermaid
+flowchart TD
+    ubuntu22[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
+    svbasemini & samtoolsenv & svbaseenv --> svpipelineenv[sv-pipeline-virtual-env]
+    samtoolsenv --> samtoolscloud[samtools-cloud] & svutilsenv[sv-utils-env]
+    svbasemini --> samtoolscloud
+    svutilsenv --> svutils[sv-utils]
+    samtoolscloud --> svutils & svbase[sv-base]
+    svpipelineenv & svbase --> svpipeline[sv-pipeline]
+    svbaseenv --> cnmopsenv[cnmpos-virtual-env]
+    svbase & cnmopsenv --> cnmpos[cnmops]
+
+    ubuntu18[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    ubuntu2210[Ubuntu 22.10] --> str[STR]
+```
 
 The image depicts the hierarchical relationship among GATK-SV 
 Docker images. Arrows indicate the flow from a base image 
