@@ -58,42 +58,33 @@ the pipeline is organized into multiple smaller images, each focusing on a speci
 This approach offers several benefits.
 
 
-By splitting the tools into separate Docker images, we achieve a modular 
-and focused structure. Each image contains the tools required for a specific 
-task within the GATK-SV pipeline. This enables users and developers to easily
-work with individual images, as they can identify the specific tools needed 
-for their particular analysis.
+- **Modular and focused structure:** 
+Each image includes task-specific tools, simplifying the use and maintenance of 
+GATK-SV Docker images for users and developers, respectively.
 
 
-Moreover, using smaller, task-specific Docker images offers the advantage 
-of reduced sizes, which is particularly beneficial in cloud environments. 
-These smaller images require less storage space when stored in container 
-registries like Google Cloud Container Registry (GCR) or Azure Container Registry (ACR). 
-Additionally, when creating virtual machines for workflow task execution, 
-the transfer of these smaller images is more efficient.
+- **Reduced Docker image size:**
+Using task-specific Docker images reduces sizes, requiring less storage space 
+in container registries such as Azure Container Registry (ACR) or 
+Google Cloud Container Registry (GCR). It also enables faster image transfer 
+when creating virtual machines for task execution.
 
 
-Separate Docker images enhance maintenance and extensibility 
-in the GATK-SV pipeline. Maintainers can easily modify or update 
-specific tools or configurations within a single image without 
-impacting others. This granularity improves maintainability 
-and enables seamless expansion of the pipeline by adding or 
-replacing tools as required.
+- **Enhanced maintenance and extensibility:**
+Maintainers can easily modify specific tools or configurations within 
+a single image without affecting others, improving maintainability and 
+facilitating seamless expansion by adding or replacing tools as required.
 
 
-Additionally, the Docker image hierarchy offers advantages in terms of 
-consistency and efficiency. One image can be built upon another, 
-leveraging existing setups and tools. This promotes code reuse and 
-reduces duplication, resulting in consistent configurations across 
-different stages of the pipeline. It also simplifies the management 
-of common dependencies, as changes or updates can be applied at the 
-appropriate level, cascading down to the dependent images.
+- **Consistency and efficiency:**
+Building images on top of existing setups and tools promotes code 
+reuse and reduces duplication, ensuring consistent configurations 
+across pipeline stages. It simplifies dependency management by 
+allowing changes or updates at the appropriate level, cascading 
+down to dependent images.
 
 
-In summary, by splitting the tools into smaller, task-specific images, 
-the pipeline becomes more modular and manageable. 
-This approach optimizes storage, execution, maintenance, 
-and extensibility in cloud environments. 
-Leveraging Docker's image hierarchy further enhances consistency, 
-code reuse, and dependency management, ensuring efficient and 
-scalable execution of the pipeline.
+In summary, splitting tools into smaller, task-specific 
+Docker images optimizes storage, execution, maintenance, and extensibility. 
+It enhances consistency, code reuse, and dependency management, 
+ensuring efficient and scalable pipeline execution.
