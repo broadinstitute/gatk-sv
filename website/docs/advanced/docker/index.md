@@ -4,9 +4,6 @@ description: Docker Concepts and Execution Overview
 sidebar_position: 0
 ---
 
-import useBaseUrl from '@docusaurus/useBaseUrl';
-import ThemedImage from '@theme/ThemedImage';
-
 To make the analysis process scalable, reproducible, and cost-efficient,
 GATK-SV is designed as a cloud-native pipeline, 
 meaning it runs on virtual machines (VMs) hosted in the cloud.
@@ -34,13 +31,32 @@ The following figure is a high-level illustration depicting the relationship
 between Dockerfiles, Docker images, Docker containers, and Cloud VMs.
 
 
-<ThemedImage
-  alt="Docker Infrastructure Diagram"
-  sources={{
-    light: useBaseUrl('/img/docker_infra_diagram.png'),
-    dark: useBaseUrl('/img/docker_infra_diagram.png'),
-  }}
-/>
+```mermaid
+
+flowchart LR
+    dockerfile[Dockerfile] -- Build --> acr_image[Docker Image] & gcp_image[Docker Image]
+    
+    subgraph Microsoft Azure
+        subgraph ACR
+        acr_image
+        end
+    
+        subgraph Azure VM
+        acr_image -- Run  --> az_container[Container]
+        end
+    end
+    
+    subgraph Google Cloud Platform
+        subgraph GCR
+        gcp_image
+        end
+    
+        subgraph GCP VM
+        gcp_image -- Run --> gcp_container[Container]
+        end
+    end
+    
+```
 
 
 The GATK-SV Docker setup is organized as follows:
