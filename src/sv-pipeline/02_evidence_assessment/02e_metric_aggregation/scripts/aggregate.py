@@ -64,8 +64,6 @@ def process_metadata(vcf):
     stats_int = ['BAF_KS_Q', 'SR1Q', 'SR1CS', 'SR2Q', 'SR2CS', 'SRQ', 'SRCS', 'SR1POS', 'SR2POS', 'PEQ', 'PECS',
                  'PESRQ', 'PESRCS']
     stats_float = ['BAF_HET_RATIO', 'BAF_KS_STAT']
-    rmsk_field = 'NUM_END_OVERLAPS_RMSK'
-    segdup_field = 'OVERLAP_FRAC_SEGDUP'
     metadata = deque()
     for variant in vcf:
         chrom = variant.chrom
@@ -97,8 +95,8 @@ def process_metadata(vcf):
         called_samples[svtype][name] = set(called)
 
         # Repeatmasker / segdup track overlap
-        rmsk = variant.info[rmsk_field] > 0
-        segdup = variant.info[segdup_field]
+        rmsk = variant.info['OVERLAP_FRAC_RMSK'] > 0
+        segdup = variant.info['OVERLAP_FRAC_SEGDUP']
 
         dat = [chrom, start, end, name, svtype, svlen, vf, rmsk, segdup]
         dat.extend([int(variant.info[stat]) if stat in variant.info.keys() and variant.info[stat] is not None else None for stat in stats_int])
