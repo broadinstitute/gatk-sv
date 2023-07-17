@@ -94,6 +94,14 @@ def convert(record: pysam.VariantRecord,
     """
     svtype = record.info['SVTYPE']
     alleles = record.alleles
+    # Reset alleles
+    if len(alleles) != 2:
+        raise ValueError(f"Encountered non-biallelic site {record.id} with alleles {alleles}")
+    if svtype == 'BND':
+        # Ensure we aren't using breakend notation here, since it isn't supported in some modules
+        alleles = ('N', '<BND>')
+    else:
+        alleles = ('N', alleles[1])
     contig = record.contig
     new_record = vcf_out.new_record(contig=contig, start=record.start, stop=record.stop, alleles=alleles)
     new_record.id = record.id
@@ -101,7 +109,11 @@ def convert(record: pysam.VariantRecord,
     for key in record.info:
         if key not in remove_infos:
             new_record.info[key] = record.info[key]
-    # fix END, CHR2, SVLEN, STRANDS
+    # svtk generally expects all records to have CHR2 assigned
+    chr2 = record.info.get('CHR2', None)
+    if chr2 is None:
+        new_record.info['CHR2'] = contig
+    # fix END, SVLEN, STRANDS
     if svtype == 'INS':
         new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
         new_record.info['STRANDS'] = '+-'
