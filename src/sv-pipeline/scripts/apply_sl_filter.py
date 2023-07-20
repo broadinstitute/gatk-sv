@@ -57,11 +57,6 @@ def _gt_to_filter_status(gt, fails_filter):
     return s
 
 
-def _split_on_condition(seq, condition):
-    l1, l2 = tee((condition(item), item) for item in seq)
-    return (i for p, i in l1 if p), (i for p, i in l2 if not p)
-
-
 def _filter_gt(gt, allele):
     s = _gt_to_filter_gt_map.get(gt, None)
     if s is None:
@@ -215,7 +210,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              f"exceeding this threshold")
 
     parser.add_argument('--keep-gq', action='store_true',
-                        help='Do not replace GQ. Default: SL to set GQ = '
+                        help='Do not replace GQ. Default: Recalculate GQ = '
                              'math.floor(-10 * math.log10(1 / (math.pow(gq_scale_factor, SL) + 1))),'
                              'where SL=-SL is applied when hom-ref')
     parser.add_argument("--gq-scale-factor", type=float, default=(0.52 / 0.48),

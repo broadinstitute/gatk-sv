@@ -1026,7 +1026,8 @@ def get_trios_overlap_info(
 
 
 def get_vapor_p_non_ref_old(vapor_variants: pandas.DataFrame) -> pandas.DataFrame:
-    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF
+     based on GQ """
     p_gt_bad = 10 ** -vapor_variants[Keys.gq]
     return pandas.DataFrame(
         numpy.where(
@@ -1041,7 +1042,8 @@ def get_vapor_p_non_ref(
         vapor_variants: pandas.DataFrame,
         p_misaligned: float = Default.p_misaligned_long_read
 ) -> pandas.DataFrame:
-    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF
+     using a negative binomial model of supporting reads """
     vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
         lambda scores: [float(score) for score in scores.split(',')] if scores else []
     )
@@ -1067,7 +1069,8 @@ def get_vapor_p_non_ref_threshold(
         bad_alt_reads_threshold: int = Default.vapor_bad_alt_reads_threshold,
         bad_cov_threshold: int = Default.vapor_bad_cov_threshold
 ) -> pandas.DataFrame:
-    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF """
+    """ Given table of vapor data, return a one-column table of probabilities that each vapor variant is non-REF
+     based on thresholds of the number of total and alt-supporting reads """
     vapor_read_scores = vapor_variants[Keys.vapor_read_scores].apply(
         lambda scores: [float(score) for score in scores.split(',')] if scores else []
     )
