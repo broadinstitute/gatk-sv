@@ -5,7 +5,6 @@ import sys
 import pysam
 import math
 from typing import List, Text, Dict, Optional
-from itertools import tee
 
 _gt_no_call_map = dict()
 _gt_hom_var_map = dict()
