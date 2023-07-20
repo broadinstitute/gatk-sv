@@ -36,17 +36,12 @@
   "pacbio_sample_concordance_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/training/hgdp.concordance.subset.vcf.gz.tbi",
   "recalibrate_gq_truth_json": "gs://gatk-sv-hgdp/mw-sv-concordance-update/training/hgdp.gq_training_labels.json",
 
-  "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
-  "hgdp_recalibrated_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.hgdp_gq_recalibrated.vcf.gz",
-  "hgdp_recalibrated_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.hgdp_gq_recalibrated.vcf.gz.tbi",
-  "hgdp_sl_filtered_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.hgdp_gq_recalibrated.filtered.vcf.gz",
-  "hgdp_sl_filtered_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.hgdp_gq_recalibrated.filtered.vcf.gz.tbi",
-
-  "aou_recalibrate_gq_model_file": "gs://broad-dsde-methods-markw/gq-filter/aou.gq_recalibrator.v2.model",
   "aou_recalibrated_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.aou_gq_recalibrated.vcf.gz",
   "aou_recalibrated_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.aou_gq_recalibrated.vcf.gz.tbi",
-  "aou_sl_filtered_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.aou_gq_recalibrated.filtered.vcf.gz",
-  "aou_sl_filtered_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.aou_gq_recalibrated.filtered.vcf.gz.tbi",
+
+  "genotype_filtered_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/hgdp/hgdp.filter_genotypes.vcf.gz",
+  "genotype_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/hgdp/hgdp.filter_genotypes.vcf.gz.tbi",
+  "genotype_filtered_qc_tarball": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/hgdp/hgdp.filter_genotypes_SV_VCF_QC_output.tar.gz",
 
   "example_pacbio_sample_id": "HG00512",
   "example_pacbio_cram": "gs://fc-7891e5cf-0a7a-4c2f-8a18-0d05b27c53ab/GRCh38/CompressLongreadsBam/HG00512/HG00512.cram",
