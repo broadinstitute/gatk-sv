@@ -70,20 +70,20 @@ class Default:
     layer_expansion_factor = gq_recalibrator_net.Default.layer_expansion_factor
     bias = gq_recalibrator_net.Default.bias
     optim_type = torch.optim.AdamW
-    learning_rate = 5.0e-6
+    learning_rate = 3.0e-5
     weight_decay = 0.0
     optim_kwargs = MappingProxyType({"lr": learning_rate, "weight_decay": weight_decay})
     hidden_nonlinearity = gq_recalibrator_net.Default.hidden_nonlinearity
     output_nonlinearity = gq_recalibrator_net.Default.output_nonlinearity
-    max_gradient_value = 1.0e-1
-    max_gradient_norm = 1.0e-1
-    correlation_loss_weight = 0.2
+    max_gradient_value = 1.0
+    max_gradient_norm = 1.0
+    correlation_loss_weight = 0.05
     max_look_ahead_batches = vcf_training_data_loader.Default.max_look_ahead_batches
     num_processes = vcf_training_data_loader.Default.max_look_ahead_batches + 1
     keep_multiallelic = True
     keep_homref = False
     keep_homvar = False
-    likely_good_gq = 20.0
+    likely_good_gq = 30.0
     likely_bad_gq = 3.0
 
 
@@ -107,13 +107,14 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--input-model", "-i", type=Path,
                         help="path to input file with partially trained model. If not specified or"
                              " a file doesn't exist at the path, training will start from scratch")
-    parser.add_argument("--keep-multiallelic", type=bool, default=Default.keep_multiallelic,
+    parser.add_argument("--keep-multiallelic", type=common.argparse_bool,
+                        default=Default.keep_multiallelic,
                         help="If True, do not train on multiallelic variants; if False, do so")
-    parser.add_argument("--keep-homref", type=bool, default=Default.keep_homref,
+    parser.add_argument("--keep-homref", type=common.argparse_bool, default=Default.keep_homref,
                         help="If True, treat all HOMREF genotypes as good/correct for training, as"
                              f"though they were specified in the truth json; if False, train on "
                              f"HOMREF genotypes as usual.")
-    parser.add_argument("--keep-homvar", type=bool, default=Default.keep_homvar,
+    parser.add_argument("--keep-homvar", type=common.argparse_bool, default=Default.keep_homvar,
                         help="If True, treat all HOMVAR genotypes as good/correct for training, as"
                              f"though they were specified in the truth json; if False, train on "
                              f"HOMVAR genotypes as usual.")
@@ -660,7 +661,7 @@ def loss_function(
         predicted_probabilities=predicted_probabilities, variant_weights=variant_weights
     )
     gq_correlation = get_correlation_coefficient(
-        original_gq_values=original_gq_values, predicted_values=predicted_probabilities,
+        original_gq_values=original_gq_values, predicted_probabilities=predicted_probabilities,
         variant_weights=variant_weights, likely_good_gq=likely_good_gq, likely_bad_gq=likely_bad_gq
     )
     loss = truth_agreement_loss + correlation_loss_scale * (1.0 - gq_correlation)
@@ -720,9 +721,10 @@ def get_truth_agreement_loss(
     bad_genotype_loss = genotype_is_bad * predicted_probabilities
     # variant loss is the mean loss from good genotypes + the mean loss from bad genotypes
     # divide by 2 to keep in range [0, 1]
+    eps = 1.0e-6  # avoid division by zero
     variant_loss = (
-        good_genotype_loss.sum(dim=1) / genotype_is_good.sum()
-        + bad_genotype_loss.sum(dim=1) / genotype_is_bad.sum()
+        (eps + good_genotype_loss.sum(dim=1)) / (eps + genotype_is_good.sum(dim=1))
+        + (eps + bad_genotype_loss.sum(dim=1)) / (eps + genotype_is_bad.sum(dim=1))
     ) / 2.0
     # compute overall loss as mean of weighted variant_loss
     return (variant_loss * variant_weights).mean()
@@ -730,7 +732,7 @@ def get_truth_agreement_loss(
 
 def get_correlation_coefficient(
         original_gq_values: torch.Tensor,
-        predicted_values: torch.Tensor,
+        predicted_probabilities: torch.Tensor,
         variant_weights: torch.Tensor,
         likely_good_gq: float = 30,
         likely_bad_gq: float = 2,
@@ -739,26 +741,27 @@ def get_correlation_coefficient(
     # np.corrcoef in torch from @mdo
     # https://forum.numer.ai/t/custom-loss-functions-for-xgboost-using-pytorch/960
     # adjust predicted probabilities: set p=0.5 to 0, p=1 to 1, p=0 to -1
-    predicted_values = 2.0 * (predicted_values - 0.5)
     # noinspection PyUnresolvedReferences
-    #variant_correlation = (predicted_values * original_gq_values).mean(dim=1)
-    variant_correlation_sum = torch.where(
-        original_gq_values >= likely_good_gq,
-        predicted_values,
-        torch.where(
-            original_gq_values <= likely_bad_gq,
-            -predicted_values,
-            torch.zeros_like(predicted_values),
-        )
-    ).sum(dim=1)
-    mean_denominator = torch.logical_or(
-        original_gq_values >= likely_good_gq,
-        original_gq_values <= likely_bad_gq,
-    ).sum(dim=1)
-    variant_correlation = variant_correlation_sum / torch.maximum(
-        mean_denominator,
-        torch.ones_like(mean_denominator),
+    #variant_correlation = (predicted_probabilities * original_gq_values).mean(dim=1)
+    is_likely_good = (original_gq_values >= likely_good_gq)
+    good_gq_correlation = torch.where(
+        is_likely_good,
+        predicted_probabilities,
+        0
     )
+    is_likely_bad = (original_gq_values <= likely_bad_gq)
+    bad_gq_correlation = torch.where(
+        is_likely_bad,
+        1.0 - predicted_probabilities,
+        0
+    )
+
+    # get overall correlation in range [0, 1], with equal weight to good and bad GQs
+    eps = 1.0e-6  # avoid division by zero
+    variant_correlation = (
+        (eps + good_gq_correlation.sum(dim=1)) / (eps + is_likely_good.sum(dim=1)) +
+        (eps + bad_gq_correlation.sum(dim=1)) / (eps + is_likely_bad.sum(dim=1))
+    ) / 2.0
 
     return (variant_correlation * variant_weights).mean()
 

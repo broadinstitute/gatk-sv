@@ -3,8 +3,8 @@ import torch
 
 
 class Default:
-    num_hidden_layers = 2
-    layer_expansion_factor = 2.0
+    num_hidden_layers = 4
+    layer_expansion_factor = 1.5
     bias = True
     leaky_slope = 0.1
     hidden_nonlinearity = torch.nn.LeakyReLU(negative_slope=leaky_slope) if leaky_slope >= 0 else \

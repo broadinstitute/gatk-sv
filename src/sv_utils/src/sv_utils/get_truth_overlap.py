@@ -326,7 +326,6 @@ class PrecisionRecallCurve:
         precision = good_value_counts.cumsum() / threshold_counts.cumsum()
         if is_high_cutoff:
             # flip arrays so they are in ascending order again
-            print(threshold_counts.index[::-1])
             return PrecisionRecallCurve.from_arrays(
                 thresholds=threshold_counts.index[::-1], precision=precision.values[::-1], recall=recall.values[::-1],
                 num_good=n_good, num_bad=n_bad, is_sorted=True, f_beta=f_beta,

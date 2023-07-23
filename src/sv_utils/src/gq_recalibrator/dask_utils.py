@@ -353,7 +353,6 @@ def reconcile_dtypes(delayed_partitions: list[pandas.DataFrame]) -> list[pandas.
             for col in _p.columns
             if pandas.api.types.is_integer_dtype(_p[col].dtype)
         }
-        print(_s)
         return _s
 
     def _reduce_stats(_s1: StatsDict, _s2: StatsDict) -> StatsDict:

@@ -86,11 +86,12 @@ def __parse_arguments(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--output-parquet", "-o", type=Path, required=True,
                         help="path to output parquet files with GQs/SLs. If the path ends with"
                              ".tar, it will be tarred, otherwise, a folder with parquet files")
-    parser.add_argument("--keep-multiallelic", type=bool, default=Default.keep_multiallelic,
+    parser.add_argument("--keep-multiallelic", type=common.argparse_bool,
+                        default=Default.keep_multiallelic,
                         help="If True, do not recalibrate multiallelic variants; if False, do so")
-    parser.add_argument("--keep-homref", type=bool, default=Default.keep_homref,
+    parser.add_argument("--keep-homref", type=common.argparse_bool, default=Default.keep_homref,
                         help="If True, do not recalibrate HOMREF genotypes; if False, do so")
-    parser.add_argument("--keep-homvar", type=bool, default=Default.keep_homvar,
+    parser.add_argument("--keep-homvar", type=common.argparse_bool, default=Default.keep_homvar,
                         help="If True, do not recalibrate HOMVAR genotypes; if False, do so")
     parser.add_argument("--variants-per-batch", type=int, default=Default.variants_per_batch,
                         help="number of variants used in each filter batch")
