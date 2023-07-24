@@ -668,39 +668,6 @@ def loss_function(
     return loss, truth_agreement_loss.item(), gq_correlation.item()
 
 
-def get_truth_agreement_loss0(
-        genotype_is_good: torch.Tensor,
-        genotype_is_bad: torch.Tensor,
-        predicted_probabilities: torch.Tensor,
-        variant_weights: torch.Tensor
-) -> torch.Tensor:
-    """
-    Differentiable strength of agreement between probabilities and truth
-    Args:
-        genotype_is_good:
-        genotype_is_bad:
-        predicted_probabilities:
-        variant_weights:
-
-    Returns:
-    """
-    # logically the formula is:
-    # genotype_loss = genotype_is_good * (1.0 - predicted_probabilities)
-    #               + genotype_is_bad * predicted_probabilities
-    # compute this mathematically-equivalent way to get fewer operations and better float accuracy:
-    genotype_loss = (
-        predicted_probabilities * (genotype_is_bad - genotype_is_good)
-        + genotype_is_good
-    )
-    # compute variant_loss in range [0, 1] by summing genotype_losses over each variant and
-    # dividing by maximum score
-    variant_loss = genotype_loss.sum(dim=1) / (
-            genotype_is_good.sum(dim=1) + genotype_is_bad.sum(dim=1)
-    )
-    # compute overall loss as mean of weighted variant_loss
-    return (variant_loss * variant_weights).mean()
-
-
 def get_truth_agreement_loss(
         genotype_is_good: torch.Tensor,
         genotype_is_bad: torch.Tensor,
