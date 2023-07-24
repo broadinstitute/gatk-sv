@@ -31,6 +31,6 @@
   "samtools-cloud-virtual-env": "us.gcr.io/broad-dsde-methods/vjalili/samtools-cloud-virtual-env:5994670",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
   "sv-utils-env": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils-env:4f99731",
-  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:a8415f2",
+  "sv_utils_docker": "us.gcr.io/broad-dsde-methods/tbrookin/sv-utils:1356d00",
   "gatk_recalibrator_docker": "us.gcr.io/broad-dsde-methods/tbrookin/gatk:7e52e9a65"
 }
