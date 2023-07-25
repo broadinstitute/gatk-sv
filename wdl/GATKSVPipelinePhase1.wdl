@@ -101,6 +101,9 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? wham_vcfs         # Wham VCF
     Int min_svsize                 # Minimum SV length to include
 
+    # PlotSVCountsPerSample metrics
+    Int? N_IQR_cutoff_plotting
+
     # QC options
     Boolean run_matrix_qc
 
@@ -358,6 +361,7 @@ workflow GATKSVPipelinePhase1 {
       pesr_interval_overlap=pesr_interval_overlap,
       pesr_breakend_window=pesr_breakend_window,
       pesr_clustering_algorithm=pesr_clustering_algorithm,
+      N_IQR_cutoff_plotting = N_IQR_cutoff_plotting,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
@@ -500,6 +504,11 @@ workflow GATKSVPipelinePhase1 {
     File? melt_vcf_index = ClusterBatch.clustered_melt_vcf_index
     File? scramble_vcf = ClusterBatch.clustered_scramble_vcf
     File? scramble_vcf_index = ClusterBatch.clustered_scramble_vcf_index
+    Array[File?] clustered_sv_counts = ClusterBatch.clustered_sv_counts
+    Array[File?] clustered_sv_count_plots = ClusterBatch.clustered_sv_count_plots
+    File? clustered_outlier_samples_preview = ClusterBatch.clustered_outlier_samples_preview
+    File? clustered_outlier_samples_with_reason = ClusterBatch.clustered_outlier_samples_with_reason
+    Int? clustered_num_outlier_samples = ClusterBatch.clustered_num_outlier_samples
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 

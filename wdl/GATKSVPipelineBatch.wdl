@@ -109,6 +109,9 @@ workflow GATKSVPipelineBatch {
     RuntimeAttr? runtime_attr_cat_metrics
     RuntimeAttr? runtime_attr_plot_metrics
 
+    # PlotSVCountsPerSample metrics from ClusterBatch in GATKSVPipelinePhase1
+    Int? N_IQR_cutoff_plotting
+
     # Do not use
     Array[File]? NONE_ARRAY_
     String? NONE_STRING_
@@ -204,6 +207,7 @@ workflow GATKSVPipelineBatch {
       counts=counts_files_,
       bincov_matrix=EvidenceQC.bincov_matrix,
       bincov_matrix_index=EvidenceQC.bincov_matrix_index,
+      N_IQR_cutoff_plotting = N_IQR_cutoff_plotting,
       PE_files=pe_files_,
       SR_files=sr_files_,
       SD_files=sd_files_,
@@ -211,6 +215,7 @@ workflow GATKSVPipelineBatch {
       melt_vcfs=melt_vcfs_,
       scramble_vcfs=scramble_vcfs_,
       wham_vcfs=wham_vcfs_,
+
       cnmops_chrom_file=autosome_file,
       cnmops_allo_file=allosome_file,
       allosome_contigs=allosome_file,
@@ -420,6 +425,11 @@ workflow GATKSVPipelineBatch {
     File? merged_melt_vcf_index = GATKSVPipelinePhase1.melt_vcf_index
     File? merged_wham_vcf = GATKSVPipelinePhase1.wham_vcf
     File? merged_wham_vcf_index = GATKSVPipelinePhase1.wham_vcf_index
+    Array[File?] clustered_sv_counts = GATKSVPipelinePhase1.clustered_sv_counts
+    Array[File?] clustered_sv_count_plots = GATKSVPipelinePhase1.clustered_sv_count_plots
+    File? clustered_outlier_samples_preview = GATKSVPipelinePhase1.clustered_outlier_samples_preview
+    File? clustered_outlier_samples_with_reason = GATKSVPipelinePhase1.clustered_outlier_samples_with_reason
+    Int? clustered_num_outlier_samples = GATKSVPipelinePhase1.clustered_num_outlier_samples
 
     File evidence_metrics = GATKSVPipelinePhase1.evidence_metrics
     File evidence_metrics_common = GATKSVPipelinePhase1.evidence_metrics_common
@@ -432,7 +442,11 @@ workflow GATKSVPipelineBatch {
     File? sites_filtered_wham_vcf = GATKSVPipelinePhase1.sites_filtered_wham_vcf
     File? sites_filtered_melt_vcf = GATKSVPipelinePhase1.sites_filtered_melt_vcf
     File? sites_filtered_depth_vcf = GATKSVPipelinePhase1.sites_filtered_depth_vcf
-
+    Array[File?] clustered_sv_counts = GATKSVPipelinePhase1.clustered_sv_counts
+    Array[File?] clustered_sv_count_plots = GATKSVPipelinePhase1.clustered_sv_count_plots
+    File? clustered_outlier_samples_preview = GATKSVPipelinePhase1.clustered_outlier_samples_preview
+    File? clustered_outlier_samples_with_reason = GATKSVPipelinePhase1.clustered_outlier_samples_with_reason
+    Int? clustered_num_outlier_samples = GATKSVPipelinePhase1.clustered_num_outlier_samples
     File cutoffs = GATKSVPipelinePhase1.cutoffs
     File genotyped_pesr_vcf = GenotypeBatch.genotyped_pesr_vcf
     File genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf

@@ -17,11 +17,15 @@ workflow FilterBatchSites {
 
     # PlotSVCountsPerSample metrics
     Int N_IQR_cutoff_plotting = 6
+
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
-    
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
+
   }
 
   Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]
@@ -66,7 +70,10 @@ workflow FilterBatchSites {
       prefix = batch,
       vcfs=[FilterAnnotateVcf.annotated_vcf[0], FilterAnnotateVcf.annotated_vcf[1], FilterAnnotateVcf.annotated_vcf[2], FilterAnnotateVcf.annotated_vcf[3], FilterAnnotateVcf.annotated_vcf[4]],
       N_IQR_cutoff = N_IQR_cutoff_plotting,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
   }
 
   output {
@@ -83,6 +90,9 @@ workflow FilterBatchSites {
     File sites_filtered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
     File sites_filtered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
     Int sites_filtered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
+    RuntimeAttr? runtime_attr_count_svs = PlotSVCountsPerSample.runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts = PlotSVCountsPerSample.runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview = PlotSVCountsPerSample.runtime_attr_cat_outliers_preview
   }
 
 }
@@ -96,7 +106,7 @@ task AdjudicateSV {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -118,7 +128,7 @@ task AdjudicateSV {
     mv *_trainable.txt ~{batch}.RF_intermediate_files/
     mv *_testable.txt ~{batch}.RF_intermediate_files/
     tar -czvf ~{batch}.RF_intermediate_files.tar.gz ~{batch}.RF_intermediate_files
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -142,7 +152,7 @@ task RewriteScores {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -162,7 +172,7 @@ task RewriteScores {
       -m ~{metrics} \
       -s ~{scores}  \
       -o ~{batch}.updated_scores
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -187,7 +197,7 @@ task FilterAnnotateVcf {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -197,7 +207,7 @@ task FilterAnnotateVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File annotated_vcf = "${prefix}.with_evidence.vcf.gz"
+    File annotated_vcf = "${prefix}.with_evidence.vcf.gz",
   }
   command <<<
 
@@ -217,7 +227,7 @@ task FilterAnnotateVcf {
 
     /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
     bgzip ~{prefix}.with_evidence.vcf
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -230,4 +240,3 @@ task FilterAnnotateVcf {
   }
 
 }
-

@@ -6,6 +6,7 @@ import "ClusterBatchMetrics.wdl" as metrics
 import "TasksClusterBatch.wdl" as tasks
 import "Utils.wdl" as util
 import "PlotSVCountsPerSample.wdl" as sv_counts
+
 workflow ClusterBatch {
   input {
     String batch
@@ -48,6 +49,9 @@ workflow ClusterBatch {
     Int pesr_breakend_window
     String? pesr_clustering_algorithm
 
+    # PlotSVCountsPerSample
+    Int? N_IQR_cutoff_plotting
+
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
@@ -65,9 +69,6 @@ workflow ClusterBatch {
 
     Float? java_mem_fraction
 
-    # PlotSVCountsPerSample metrics
-    Int N_IQR_cutoff_plotting = 6
-
     RuntimeAttr? runtime_attr_ids_from_vcf_list
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs
@@ -84,6 +85,9 @@ workflow ClusterBatch {
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_depth
     RuntimeAttr? runtime_override_concat_vcfs_depth
     RuntimeAttr? runtime_attr_exclude_intervals_pesr
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
   }
 
   call util.GetSampleIdsFromVcfTar {
@@ -285,12 +289,17 @@ workflow ClusterBatch {
     }
   }
 
-  call sv_counts.PlotSVCountsPerSample {
+  if (defined(N_IQR_cutoff_plotting)){
+    call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
       vcfs = [ClusterDepth.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf],
       N_IQR_cutoff = N_IQR_cutoff_plotting,
-      sv_pipeline_docker = sv_pipeline_docker
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
+    }
   }
 
   output {
@@ -304,11 +313,11 @@ workflow ClusterBatch {
     File? clustered_melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
     File? clustered_scramble_vcf = ClusterPESR_scramble.clustered_vcf
     File? clustered_scramble_vcf_index = ClusterPESR_scramble.clustered_vcf_index
-    Array[File] clustered_sv_counts = PlotSVCountsPerSample.sv_counts
-    Array[File] clustered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
-    File clustered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
-    File clustered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
-    Int clustered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
+    Array[File?] clustered_sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File?] clustered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    File? clustered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
+    File? clustered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
+    Int? clustered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
     File? metrics_file_clusterbatch = ClusterBatchMetrics.metrics_file
   }
 
