@@ -11,6 +11,7 @@ ARG HTSLIB_VER=1.15.1
 ARG BCFTOOLS_VER=1.15.1
 ARG SAMTOOLS_VER=1.15.1
 ARG EH_VER=5.0.0
+ARG REVIEWER_VER=0.2.7
 
 RUN apt-get update && apt-get install --no-install-recommends -qqy \
     curl \
@@ -46,12 +47,20 @@ RUN pip install -q numpy==1.23.4
 RUN pip install -q Cython==0.29.32
 RUN pip install -q pandas==1.5.0
 
+# Install ExpansionHunter
 RUN cd /opt/ && mkdir eh && cd eh/ && \
     wget -O eh.tar.gz https://github.com/Illumina/ExpansionHunter/releases/download/v$EH_VER/ExpansionHunter-v$EH_VER-linux_x86_64.tar.gz && \
     mkdir eh && tar -xf eh.tar.gz -C eh --strip-components=1 && \
     mv eh/bin/ExpansionHunter . && \
     rm eh.tar.gz && rm -r eh && cd ..
 ENV PATH="/opt/eh/:$PATH"
+
+# Install REViewer
+RUN cd /opt/ && mkdir reviewer && cd reviewer && \
+    wget -O reviewer.gz https://github.com/Illumina/REViewer/releases/download/v$REVIEWER_VER/REViewer-v$REVIEWER_VER-linux_x86_64.gz && \
+    gunzip reviewer.gz && \
+    chmod +x reviewer
+ENV PATH="/opt/reviewer/:$PATH"
 
 # Install htslib, bcftools, & samtools.
 RUN wget -O htslib.tar.bz2 https://github.com/samtools/htslib/releases/download/$HTSLIB_VER/htslib-$HTSLIB_VER.tar.bz2 && \

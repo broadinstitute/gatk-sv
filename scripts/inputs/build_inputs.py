@@ -42,7 +42,7 @@ import logging
 #
 # Will cause the "test_batch_small" input value set to be aliased to the "test_batch" resource bundle.
 #
-# If a template refers to missing property from a resource bundle, it will be skipped, with a warning message listing which
+# If a template refers to missing property from a resource bundle, it will be skipped, with an info message listing which
 # properties are missing. This feature can be used purposefully to generate different sets of input files from the same sets
 # of templates depending on which properties are present in the input value files. For example, the build_default_inputs.sh
 # script generates inputs three times from the test_input_templates directory, with the test_batch bundle aliased to the
@@ -50,9 +50,12 @@ import logging
 # the run based on test_batch_small does not currently produce results for module03 and beyond because those files depend
 # resources not defined for the small batch (but defined for the large batch).
 #
+# Any template files with a filename that begins with the string 'workspace' will be transposed before the final inputs are written.
+# This functionality allows us to simplify the editing, viewing of diffs,
+# and tracking of changes in Git of workspace TSV files that Terra expects in a two-row format.
+#
 # Jinja2 filters can be applied. For example, to ensure that string values are quoted in json files, use the tojson
 # filter: {{ dockers.sv_pipeline_docker | tojson }}
-
 # this class drops logs undefined value references in the "undefined_names" list
 undefined_names = []
 
@@ -93,7 +96,7 @@ def main():
     parser.add_argument('-a', '--aliases', type=json.loads,
                         default={}, help="Aliases for input value bundles")
     parser.add_argument('--log-info', action='store_true',
-                        help="Show INFO-level logging messages")
+                        help="Show INFO-level logging messages. Use for troubleshooting.")
     args = parser.parse_args()
 
     # Set logger
@@ -144,6 +147,29 @@ def main():
                      os.path.basename(template_path), target_directory)
 
 
+def transpose_tsv(input_str):
+    # Split input string into lines and remove trailing whitespace
+    lines = [line.rstrip('\n') for line in input_str.split('\n')]
+
+    # Group the lines by their column number
+    groups = {}
+    for line in lines:
+        if line:
+            columns = line.split('\t')
+            for i, column in enumerate(columns):
+                if i not in groups:
+                    groups[i] = []
+                groups[i].append(column)
+
+    # Transpose the groups and write the result to a new string
+    transposed_groups = []
+    for i in sorted(groups.keys()):
+        transposed_groups.append('\t'.join(groups[i]))
+    transposed_str = '\n'.join(transposed_groups) + '\n'
+
+    return transposed_str
+
+
 def process_directory(input_dict, template_dir, target_directory):
     template_dir_split = template_dir.split(os.sep)
     template_root = template_dir_split[len(template_dir_split) - 1]
@@ -181,9 +207,13 @@ def process_file(input_dict, template_subdir, template_file, target_subdir):
     env.policies['json.dumps_function'] = to_json_custom
     logging.info(template_file_path + " -> " + target_file_path)
     processed_content = env.get_template(template_file).render(input_dict)
+    # Check if the template_file starts with "workspace"
+    if template_file.startswith("workspace"):
+        # Transpose the TSV data in processed_content
+        processed_content = transpose_tsv(processed_content)
     if len(undefined_names) > 0:
-        logging.warning("skipping file " + template_file_path +
-                        " due to missing values " + str(undefined_names))
+        logging.info("skipping file " + template_file_path +
+                     " due to missing values " + str(undefined_names))
     else:
         os.makedirs(target_subdir, exist_ok=True)
         target_file = open(target_file_path, "w")

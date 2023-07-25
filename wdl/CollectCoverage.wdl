@@ -5,8 +5,8 @@ import "Structs.wdl"
 task CollectCounts {
   input {
     File intervals
-    File bam
-    File bam_idx
+    File cram_or_bam
+    File cram_or_bam_idx
     String sample_id
     File ref_fasta
     File ref_fasta_fai
@@ -24,10 +24,10 @@ task CollectCounts {
   }
 
   parameter_meta {
-    bam: {
+    cram_or_bam: {
       localization_optional: true
     }
-    bam_idx: {
+    cram_or_bam_idx: {
       localization_optional: true
     }
   }
@@ -50,8 +50,8 @@ task CollectCounts {
 
     gatk --java-options "-Xmx~{command_mem_mb}m" CollectReadCounts \
       -L ~{intervals} \
-      --input ~{bam} \
-      --read-index ~{bam_idx} \
+      --input ~{cram_or_bam} \
+      --read-index ~{cram_or_bam_idx} \
       --reference ~{ref_fasta} \
       --format TSV \
       --interval-merging-rule OVERLAPPING_ONLY \
@@ -65,9 +65,9 @@ task CollectCounts {
   runtime {
     docker: gatk_docker
     memory: machine_mem_gb + " GiB"
-    disks: "local-disk " + select_first([disk_space_gb, 50]) + if use_ssd then " SSD" else " HDD"
+    disks: "local-disk " + select_first([disk_space_gb, 10]) + if use_ssd then " SSD" else " HDD"
     cpu: select_first([cpu, 1])
-    preemptible: select_first([preemptible_attempts, 5])
+    preemptible: select_first([preemptible_attempts, 3])
     maxRetries: 1
   }
 

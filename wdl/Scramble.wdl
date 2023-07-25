@@ -27,11 +27,6 @@ workflow Scramble {
     detect_deletions: "Run deletion detection as well as mobile element insertion."
   }
   
-  meta {
-    author: "Ted Sharpe, et al"
-    email: "tsharpe@broadinstitute.org"
-  }
-
   call RunScramble {
     input:
       bam_or_cram_file = bam_or_cram_file,

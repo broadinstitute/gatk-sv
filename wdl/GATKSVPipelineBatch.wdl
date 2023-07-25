@@ -23,7 +23,6 @@ workflow GATKSVPipelineBatch {
     # Required unless caller and evidence outputs are provided (below)
     Array[File]? bam_or_cram_files
     Array[File]? bam_or_cram_indexes
-    Boolean requester_pays_crams = false
 
     # Optionally provide calls and evidence (override caller flags below)
     Array[File]? counts_files_input
@@ -123,7 +122,6 @@ workflow GATKSVPipelineBatch {
       input:
         bam_or_cram_files=select_first([bam_or_cram_files]),
         bam_or_cram_indexes=bam_or_cram_indexes,
-        requester_pays_crams=requester_pays_crams,
         collect_coverage=collect_coverage_,
         collect_pesr=collect_pesr_,
         sample_ids=samples,
@@ -236,7 +234,6 @@ workflow GATKSVPipelineBatch {
       discfile_index=GATKSVPipelinePhase1.merged_PE_index,
       splitfile=GATKSVPipelinePhase1.merged_SR,
       splitfile_index=GATKSVPipelinePhase1.merged_SR_index,
-      ped_file=ped_file,
       ref_dict=reference_dict,
       run_module_metrics = run_genotypebatch_metrics,
       primary_contigs_list = primary_contigs_list,
@@ -255,7 +252,6 @@ workflow GATKSVPipelineBatch {
       medianfiles=[GATKSVPipelinePhase1.median_cov],
       coveragefiles=[GATKSVPipelinePhase1.merged_bincov],
       coveragefile_idxs=[GATKSVPipelinePhase1.merged_bincov_index],
-      ped_file=ped_file,
       RD_depth_sepcutoffs=[select_first([GenotypeBatch.trained_genotype_depth_depth_sepcutoff])],
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
@@ -429,6 +425,24 @@ workflow GATKSVPipelineBatch {
     File SR_metrics = select_first([GenotypeBatch.trained_SR_metrics])
     File raw_sr_bothside_pass_file = GenotypeBatch.sr_bothside_pass
     File raw_sr_background_fail_file = GenotypeBatch.sr_background_fail
+
+    # CombineBatches
+    Array[File] combined_vcfs = MakeCohortVcf.combined_vcfs
+    Array[File] combined_vcf_indexes = MakeCohortVcf.combined_vcf_indexes
+    Array[File] cluster_bothside_pass_lists = MakeCohortVcf.cluster_bothside_pass_lists
+    Array[File] cluster_background_fail_lists = MakeCohortVcf.cluster_background_fail_lists
+
+    # ResolveComplexVariants
+    Array[File] complex_resolve_vcfs = MakeCohortVcf.complex_resolve_vcfs
+    Array[File] complex_resolve_vcf_indexes = MakeCohortVcf.complex_resolve_vcf_indexes
+    Array[File] complex_resolve_bothside_pass_lists = MakeCohortVcf.complex_resolve_bothside_pass_lists
+    Array[File] complex_resolve_background_fail_lists = MakeCohortVcf.complex_resolve_background_fail_lists
+    Array[File] breakpoint_overlap_dropped_record_vcfs = MakeCohortVcf.breakpoint_overlap_dropped_record_vcfs
+    Array[File] breakpoint_overlap_dropped_record_vcf_indexes = MakeCohortVcf.breakpoint_overlap_dropped_record_vcf_indexes
+
+    # GenotypeComplexVariants
+    Array[File] complex_genotype_vcfs = MakeCohortVcf.complex_genotype_vcfs
+    Array[File] complex_genotype_vcf_indexes = MakeCohortVcf.complex_genotype_vcfs
   }
 }
 

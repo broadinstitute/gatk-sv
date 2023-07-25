@@ -165,7 +165,6 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_preconcat_clean_final
     RuntimeAttr? runtime_override_hail_merge_clean_final
     RuntimeAttr? runtime_override_fix_header_clean_final
-    RuntimeAttr? runtime_override_fix_bad_ends
 
     RuntimeAttr? runtime_override_clean_vcf_1a
     RuntimeAttr? runtime_override_clean_vcf_2
@@ -177,6 +176,7 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_attr_format_clean
 
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
     RuntimeAttr? runtime_attr_override_sort_bed_1b
@@ -333,7 +333,7 @@ workflow MakeCohortVcf {
       complex_resolve_vcfs=ResolveComplexVariants.complex_resolve_vcfs,
       complex_resolve_vcf_indexes=ResolveComplexVariants.complex_resolve_vcf_indexes,
       depth_vcfs=depth_vcfs,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       bincov_files=bincov_files,
       depth_gt_rd_sep_files=depth_gt_rd_sep_files,
       median_coverage_files=median_coverage_files,
@@ -365,7 +365,7 @@ workflow MakeCohortVcf {
       complex_genotype_vcfs=GenotypeComplexVariants.complex_genotype_vcfs,
       complex_resolve_bothside_pass_lists=ResolveComplexVariants.complex_resolve_bothside_pass_lists,
       complex_resolve_background_fail_lists=ResolveComplexVariants.complex_resolve_background_fail_lists,
-      merged_ped_file=ped_file,
+      ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
       chr_x=chr_x,
@@ -428,7 +428,7 @@ workflow MakeCohortVcf {
       runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
       runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
       runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
-      runtime_override_fix_bad_ends=runtime_override_fix_bad_ends
+      runtime_attr_format=runtime_attr_format_clean
   }
 
   call VcfQc.MainVcfQc {
@@ -483,6 +483,24 @@ workflow MakeCohortVcf {
     File? complex_resolve_vcf_index = ResolveComplexVariants.complex_resolve_merged_vcf_index
     File? complex_genotype_vcf = GenotypeComplexVariants.complex_genotype_merged_vcf
     File? complex_genotype_vcf_index = GenotypeComplexVariants.complex_genotype_merged_vcf_index
+
+    # CombineBatches
+    Array[File] combined_vcfs = CombineBatches.combined_vcfs
+    Array[File] combined_vcf_indexes = CombineBatches.combined_vcf_indexes
+    Array[File] cluster_bothside_pass_lists = CombineBatches.cluster_bothside_pass_lists
+    Array[File] cluster_background_fail_lists = CombineBatches.cluster_background_fail_lists
+
+    # ResolveComplexVariants
+    Array[File] complex_resolve_vcfs = ResolveComplexVariants.complex_resolve_vcfs
+    Array[File] complex_resolve_vcf_indexes = ResolveComplexVariants.complex_resolve_vcf_indexes
+    Array[File] complex_resolve_bothside_pass_lists = ResolveComplexVariants.complex_resolve_bothside_pass_lists
+    Array[File] complex_resolve_background_fail_lists = ResolveComplexVariants.complex_resolve_background_fail_lists
+    Array[File] breakpoint_overlap_dropped_record_vcfs = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcfs
+    Array[File] breakpoint_overlap_dropped_record_vcf_indexes = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcf_indexes
+
+    # GenotypeComplexVariants
+    Array[File] complex_genotype_vcfs = GenotypeComplexVariants.complex_genotype_vcfs
+    Array[File] complex_genotype_vcf_indexes = GenotypeComplexVariants.complex_genotype_vcfs
 
     File? metrics_file_makecohortvcf = CleanVcf.metrics_file_makecohortvcf
   }

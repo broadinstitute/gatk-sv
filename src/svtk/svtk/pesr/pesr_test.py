@@ -65,7 +65,7 @@ class PESRTest:
         if self.common != "False":
             if len(samples) > len(background):
                 result.background = 0.0
-        pval = ss.poisson.cdf(result.background, result.called)
+        pval = max(ss.poisson.cdf(result.background, result.called), sys.float_info.min)
         result['log_pval'] = np.abs(np.log10(pval))
 
         return result

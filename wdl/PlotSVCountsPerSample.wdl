@@ -50,6 +50,8 @@ workflow PlotSVCountsPerSample {
     Array[File] sv_counts = select_all(CountSVsPerSamplePerType.sv_counts)
     Array[File] sv_count_plots = select_all(PlotSVCountsWithCutoff.svcount_distrib_plots)
     File outlier_samples_preview = CatOutliersPreview.outliers_preview_file
+    File outlier_samples_with_reason = CatOutliersPreview.outliers_preview_with_reason_file
+    Int num_outlier_samples = CatOutliersPreview.num_outliers
   }
 }
 
@@ -157,7 +159,9 @@ task CatOutliersPreview {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File outliers_preview_file = "${prefix}.outliers_preview.samples.txt"
+    File outliers_preview_with_reason_file = "${prefix}.outliers_preview_with_reason.samples.tsv"
+    File outliers_preview_file = "~{prefix}.outliers_preview.samples.txt"
+    Int num_outliers = read_int("num_outliers.txt")
   }
   command <<<
 
@@ -174,10 +178,13 @@ task CatOutliersPreview {
             outliers_dict[sample].add(reason)
           else:
             outliers_dict[sample] = {reason}
-    with open("~{prefix}.outliers_preview.samples.txt", 'w') as OUT:
-      OUT.write("#sample\treason\n")
+    with open("~{prefix}.outliers_preview_with_reason.samples.tsv", 'w') as with_reason, \
+        open("~{prefix}.outliers_preview.samples.txt", 'w') as OUT, open("num_outliers.txt", 'w') as num:
+      with_reason.write("#sample\treason\n")
       for sample in sorted(list(outliers_dict.keys())):
-        OUT.write(sample + "\t" + ",".join(outliers_dict[sample]) + "\n")
+        with_reason.write(sample + "\t" + ",".join(outliers_dict[sample]) + "\n")
+        OUT.write(sample + "\n")
+      num.write(str(len(outliers_dict)))
     CODE
   
   >>>

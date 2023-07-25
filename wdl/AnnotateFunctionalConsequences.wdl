@@ -83,7 +83,7 @@ task SVAnnotate {
       --protein-coding-gtf ~{protein_coding_gtf} \
       ~{"--non-coding-bed " + noncoding_bed} \
       ~{"--promoter-window-length " + promoter_window} \
-      ~{"--max-breakend-as-cnv-length" + max_breakend_as_cnv_length} \
+      ~{"--max-breakend-as-cnv-length " + max_breakend_as_cnv_length} \
       ~{additional_args}
 
   >>>

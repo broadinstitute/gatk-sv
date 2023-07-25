@@ -349,7 +349,7 @@ task DetermineGermlineContigPloidyCohortMode {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-    Int command_mem_mb = ceil(mem_gb * 1000 - 500)
+    Int command_mem_mb = ceil(mem_gb * 1000 * 0.6)
     Int cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
 
     # If optional output_dir not specified, use "out"
@@ -469,7 +469,7 @@ task GermlineCNVCallerCohortMode {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-    Int command_mem_mb = ceil(mem_gb * 1000 - 500)
+    Int command_mem_mb = ceil(mem_gb * 1000 * 0.6)
     Int cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
 
     # If optional output_dir not specified, use "out"

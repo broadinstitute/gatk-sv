@@ -2,7 +2,6 @@ version 1.0
 
 import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
-import "CramToBam.wdl" as ctb
 import "GermlineCNVCohort.wdl" as gcnv_cohort
 import "Utils.wdl" as util
 

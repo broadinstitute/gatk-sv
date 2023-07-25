@@ -63,7 +63,7 @@ COUNTER=0
 for wdl in "${WDLS[@]}"
 do
   name=$(basename $wdl .wdl)
-  JSONS=(`find inputs/build/ref_panel_1kg/test -name "${name}.*json"` `find inputs/build/NA12878/test -name "${name}.*json"`)
+  JSONS=(`find inputs/build/ref_panel_1kg/test -name "${name}.*json"` `find inputs/build/hgdp/test -name "${name}.*json"` `find inputs/build/NA12878/test -name "${name}.*json"`)
   for json in "${JSONS[@]}"
   do
     cmd="java -jar ${WOMTOOL_JAR} validate ${wdl} -i ${json}"

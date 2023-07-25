@@ -1,0 +1,14 @@
+{
+    "VaporBatch.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
+    "VaporBatch.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }},
+    "VaporBatch.vapor_docker": {{ dockers.vapor_docker | tojson }},
+    "VaporBatch.contigs": {{ reference_resources.primary_contigs_list | tojson }},
+    "VaporBatch.ref_fasta" : {{ reference_resources.reference_fasta | tojson }},
+    "VaporBatch.ref_fai" : {{ reference_resources.reference_index | tojson }},
+    "VaporBatch.ref_dict": {{ reference_resources.reference_dict | tojson }},
+
+    "VaporBatch.samples": {{ test_batch.pacbio_samples | tojson }},
+    "VaporBatch.bam_or_cram_files": {{ test_batch.pacbio_crams | tojson }},
+    "VaporBatch.bam_or_cram_indexes": {{ test_batch.pacbio_cram_indexes | tojson }},
+    "VaporBatch.bed_file": {{ test_batch.clean_bed | tojson }}
+}

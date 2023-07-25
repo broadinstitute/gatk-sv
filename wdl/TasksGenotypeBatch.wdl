@@ -25,6 +25,7 @@ task SplitVariants {
     Array[File] lt5kb_beds = glob("lt5kb.*")
     Array[File] gt5kb_beds = glob("gt5kb.*")
     Array[File] bca_beds = glob("bca.*")
+    Array[File] ins_beds = glob("ins.*")
   }
   command <<<
 
@@ -37,8 +38,11 @@ task SplitVariants {
       | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
     if [ ~{generate_bca} == "true" ]; then
       svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP") {print $1, $2, $3, $4, $6, $5}' \
+        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP" && $5!="INS") {print $1, $2, $3, $4, $6, $5}' \
         | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
+      svtk vcf2bed ~{vcf} stdout \
+        | awk -v OFS="\t" '($5=="INS") {print $1, $2, $3, $4, $6, $5}' \
+        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - ins.
     fi
 
   >>>
@@ -123,7 +127,8 @@ task AddGenotypes {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File genotyped_vcf = "${prefix}.genotyped.vcf.gz"
+    File genotyped_vcf = "~{prefix}.genotyped.vcf.gz"
+    File genotyped_vcf_index = "~{prefix}.genotyped.vcf.gz.tbi"
   }
   command <<<
 
@@ -139,8 +144,11 @@ task AddGenotypes {
       clean.vcf.gz \
       clean.genotypes.txt.gz \
       clean.vargq.txt.gz \
-      ~{prefix}.genotyped.vcf;
-    vcf-sort -c ~{prefix}.genotyped.vcf | bgzip > ~{prefix}.genotyped.vcf.gz
+      ~{prefix}.genotyped.vcf
+
+    mkdir tmp
+    bcftools sort -T tmp/ ~{prefix}.genotyped.vcf -Oz -o ~{prefix}.genotyped.vcf.gz
+    tabix ~{prefix}.genotyped.vcf.gz
 
   >>>
   runtime {
@@ -201,6 +209,7 @@ task ConcatGenotypedVcfs {
     Array[File] lt5kb_vcfs
     Array[File] gt5kb_vcfs
     Array[File] bca_vcfs
+    Array[File] ins_vcfs
     String batch
     String evidence_type    # depth or pesr
     String sv_base_mini_docker
@@ -291,7 +300,7 @@ task RDTestGenotype {
     File coveragefile
     File? coveragefile_index
     File medianfile
-    File famfile
+    File? famfile
     File ref_dict
     Array[String] samples
     File gt_cutoffs
@@ -353,7 +362,7 @@ task RDTestGenotype {
       -b ~{bed} \
       -c local.RD.txt.gz \
       -m ~{medianfile} \
-      -f ~{famfile} \
+      ~{"-f " + famfile} \
       -n ~{prefix} \
       -w ~{write_lines(samples)} \
       -i ~{n_bins} \

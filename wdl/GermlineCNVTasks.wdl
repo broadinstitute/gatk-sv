@@ -445,7 +445,7 @@ task PostprocessGermlineCNVCalls {
 
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
-      mem_gb: 10,
+      mem_gb: 12,
       disk_gb: disk_gb,
       boot_disk_gb: 10,
       preemptible_tries: 3,
@@ -454,7 +454,7 @@ task PostprocessGermlineCNVCalls {
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-    Int command_mem_mb = ceil(mem_gb * 1000 - 500)
+    Int command_mem_mb = ceil(mem_gb * 1000 * 0.6)
 
     String genotyped_intervals_vcf_filename = "genotyped-intervals-~{entity_id}.vcf.gz"
     String genotyped_segments_vcf_filename = "genotyped-segments-~{entity_id}.vcf.gz"

@@ -20,7 +20,6 @@ workflow GenotypeBatch {
     File coveragefile        # batch coverage file
     File? coveragefile_index # batch coverage index file
     File medianfile          # post-exclusion batch median file
-    File ped_file            # cohort ped file
     File? rf_cutoffs         # Random forest cutoffs; required unless skipping training
     File? seed_cutoffs       # Required unless skipping training
     Int n_RD_genotype_bins   # number of RdTest bins
@@ -46,6 +45,10 @@ workflow GenotypeBatch {
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_genotyped_depth_vcf  # baseline files are optional for metrics workflow
     File? baseline_genotyped_pesr_vcf
+
+    # SR genotyping parameters
+    Int? sr_median_hom_ins
+    Float? sr_hom_cutoff_multiplier
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -122,14 +125,6 @@ workflow GenotypeBatch {
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
 
-  call util.SubsetPedFile {
-    input:
-      ped_file = ped_file,
-      sample_list = GetSampleIdsFromVcf.out_file,
-      subset_name = batch,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_subset_ped
-  }
 
   if (!single_sample_mode) {
     call gp1.GenotypePESRPart1 as GenotypePESRPart1 {
@@ -149,7 +144,6 @@ workflow GenotypeBatch {
         coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
         n_per_PE_split = n_per_split,
-        famfile = SubsetPedFile.ped_subset_file,
         splitfile = splitfile,
         splitfile_index = splitfile_index,
         n_per_RD_split = n_per_split,
@@ -191,10 +185,11 @@ workflow GenotypeBatch {
       coveragefile_index = coveragefile_index,
       SR_metrics = select_first([SR_metrics, GenotypePESRPart1.SR_metrics]),
       n_per_split = n_per_split,
-      famfile = SubsetPedFile.ped_subset_file,
       splitfile = splitfile,
       splitfile_index = splitfile_index,
       ref_dict = ref_dict,
+      sr_hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
+      sr_median_hom_ins = sr_median_hom_ins,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       linux_docker = linux_docker,
@@ -226,7 +221,6 @@ workflow GenotypeBatch {
         coveragefile = coveragefile,
         coveragefile_index = coveragefile_index,
         reference_build = select_first([reference_build]),
-        famfile = SubsetPedFile.ped_subset_file,
         n_per_RD_split = n_per_split,
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -253,7 +247,6 @@ workflow GenotypeBatch {
       coveragefile = coveragefile,
       coveragefile_index = coveragefile_index,
       n_per_split = n_per_split,
-      famfile = SubsetPedFile.ped_subset_file,
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,

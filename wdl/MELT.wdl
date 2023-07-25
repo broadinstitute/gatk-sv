@@ -1,5 +1,3 @@
-## Author: Ryan L. Collins <rlcollins@g.harvard.edu>
-## 
 ## This WDL pipeline runs MELT for mobile element insertion/deletion discovery
 ## Note: runs patched v2.0.5, obtained directly from the MELT authors
 ##
@@ -13,7 +11,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "CramToBam.wdl" as ctb
 import "CollectCoverage.wdl" as cov
 
 workflow MELT {
@@ -22,8 +19,9 @@ workflow MELT {
     File? bam_or_cram_index
     File counts_file
     String sample_id
-    String reference_fasta
+    File reference_fasta
     String? reference_index
+    File reference_dict
     String? reference_version
     File melt_standard_vcf_header
 
@@ -47,7 +45,7 @@ workflow MELT {
     RuntimeAttr? runtime_attr_cram_to_bam
     RuntimeAttr? runtime_attr_melt
   }
-  
+
   parameter_meta {
       bam_or_cram_file: ".bam or .cram file to search for SVs. bams are preferable, crams will be converted to bams."
       bam_or_cram_index: "[optional] associated index file. If omitted, the WDL will look for an index file by appending .bai/.crai to the .bam/.cram file"
@@ -63,10 +61,10 @@ workflow MELT {
       pf_reads_improper_pairs: "[optional] Value of PF_READS_IMPROPER_PAIRS obtained from CollectAlignmentSummaryMetrics, used for optimal estimate of VM memory and disk needs. If omitted, estimates based on coverage and insert size are used."
       pct_exc_total: "[optional] Value of PCT_EXC_TOTAL obtained from CollectWgsMetrics, used for optimal estimate of VM memory and disk needs. If omitted, estimates based on coverage and insert size are used."
     }
-    meta {
-      author: "Ted Brookings"
-      email: "tbrookin@broadinstitute.org"
-    }
+
+  Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
+  File bam_or_cram_index_file = select_first([bam_or_cram_index, if is_bam then bam_or_cram_file + ".bai" else bam_or_cram_file + ".crai"])
+  File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
 
   Boolean have_multiple_metrics = defined(insert_size) && defined(read_length)
      && defined(pct_chimeras) && defined(total_reads) && defined(pf_reads_improper_pairs)
@@ -74,9 +72,9 @@ workflow MELT {
     call GetMultipleMetrics {
       input:
         bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
+        bam_or_cram_index = bam_or_cram_index_file,
         reference_fasta = reference_fasta,
-        reference_index = reference_index,
+        reference_index = reference_index_file,
         intervals = multiple_metrics_intervals,
         gatk_docker = gatk_docker,
         runtime_attr_override = runtime_attr_metrics
@@ -108,10 +106,10 @@ workflow MELT {
     call GetWgsMetrics {
       input:
         bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
+        bam_or_cram_index = bam_or_cram_index_file,
         read_length = select_first([read_length, calculated_read_length]),
         reference_fasta = reference_fasta,
-        reference_index = reference_index,
+        reference_index = reference_index_file,
         intervals = wgs_metrics_intervals,
         genomes_in_the_cloud_docker = genomes_in_the_cloud_docker,
         runtime_attr_override = runtime_attr_coverage
@@ -126,47 +124,23 @@ workflow MELT {
     Float calculated_coverage = wgs_metrics_map["MEAN_COVERAGE"]
   }
 
-  Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
-  if (!is_bam) {
-    call ctb.CramToBam as CramToBam {
-      input:
-        cram_file = bam_or_cram_file,
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        samtools_cloud_docker = samtools_cloud_docker,
-        runtime_attr_override = runtime_attr_cram_to_bam
-    }
-  }
-
-  File raw_bam_file = select_first([CramToBam.bam_file, bam_or_cram_file])
-  File raw_bam_index = select_first([CramToBam.bam_index, bam_or_cram_index, bam_or_cram_file + ".bai"])
-
-
-  call FilterHighCoverageIntervals {
-    input:
-      sample = sample_id,
-      bam_file = raw_bam_file,
-      bam_index = raw_bam_index,
-      counts_file = counts_file,
-      gatk_docker = gatk_docker
-  }
-
   Float melt_coverage = select_first([coverage, calculated_coverage])
   Int melt_read_length = select_first([read_length, calculated_read_length])
   Float melt_insert_size = select_first([insert_size, calculated_insert_size])
   Float melt_pct_chimeras = select_first([pct_chimeras, calculated_pct_chimeras])
   Float melt_total_reads = select_first([total_reads, calculated_total_reads])
   Int melt_pf_reads_improper_pairs = select_first([pf_reads_improper_pairs, calculated_pf_reads_improper_pairs])
-  Float melt_bam_size = size(raw_bam_file, "GiB")
 
   call RunMELT {
     input:
-      bam_file = FilterHighCoverageIntervals.out_bam_file,
-      bam_index = FilterHighCoverageIntervals.out_bam_index,
+      bam_or_cram_file = bam_or_cram_file,
+      bam_or_cram_index = bam_or_cram_index_file,
       sample_id = sample_id,
       reference_fasta = reference_fasta,
-      reference_index = reference_index,
+      reference_index = reference_index_file,
+      reference_dict = reference_dict,
       reference_version = reference_version,
+      counts_file = counts_file,
       melt_standard_vcf_header = melt_standard_vcf_header,
       coverage = melt_coverage,
       read_length = melt_read_length,
@@ -174,7 +148,6 @@ workflow MELT {
       pct_chimeras = melt_pct_chimeras,
       total_reads = melt_total_reads,
       pf_reads_improper_pairs = melt_pf_reads_improper_pairs,
-      raw_bam_size = melt_bam_size,
       melt_docker = melt_docker,
       runtime_attr_override = runtime_attr_melt
   }
@@ -185,116 +158,19 @@ workflow MELT {
     Float coverage_out = melt_coverage
     Int read_length_out = melt_read_length
     Float insert_size_out = melt_insert_size
-    File filtered_bam = FilterHighCoverageIntervals.out_bam_file
-    File filtered_bam_index = FilterHighCoverageIntervals.out_bam_index
   }
-}
-
-task FilterHighCoverageIntervals {
-  input {
-    String sample
-    File bam_file
-    File? bam_index
-    File counts_file
-    Int? count_threshold
-    Int? padding
-    String gatk_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    bam_file: {
-      localization_optional: true
-    }
-  }
-
-  String bam_out_name = "~{sample}.hi_cov_filter"
-
-  Int num_cpu = if defined(runtime_attr_override)
-    then select_first([select_first([runtime_attr_override]).cpu_cores, 1])
-    else 1
-  Float mem_size_gb = num_cpu * 4.0
-  Int java_mem_mb = round(mem_size_gb * 0.8 * 1000)
-  Float bam_size = size(bam_file, "GiB")
-  Float counts_file_size = size(counts_file, "GiB")
-  Float disk_overhead = 20.0
-  # occasionally the output bam is very large. Put in 2x safety factor since disk is cheap
-  Float bam_size_safety_factor = 2.0
-  Int vm_disk_size = ceil(bam_size_safety_factor * bam_size + counts_file_size + disk_overhead)
-
-  Int interval_padding = select_first([padding, 100])
-  Int threshold = select_first([count_threshold, 1000])
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: num_cpu,
-    mem_gb: mem_size_gb,
-    disk_gb: vm_disk_size,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out_bam_file = bam_out_name + ".bam"
-    File out_bam_index = bam_out_name + ".bai"
-  }
-  command <<<
-
-    set -euo pipefail
-
-    zgrep -v -E "^@|^CONTIG" ~{counts_file} | awk -F "\t" -v OFS="\t" '{if ($4 > ~{threshold}) {print $1,$2,$3}}' > highCountIntervals.bed
-
-    gatk --java-options -Xmx~{java_mem_mb}m PrintReads \
-      -XL highCountIntervals.bed \
-      --interval-exclusion-padding ~{interval_padding} \
-      -I ~{bam_file} \
-      -O "~{bam_out_name}.bam"
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: gatk_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-
 }
 
 task GetMultipleMetrics {
   input {
     File bam_or_cram_file
-    File? bam_or_cram_index
+    File bam_or_cram_index
     File reference_fasta
-    File? reference_index
+    File reference_index
     File? intervals
     String gatk_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
-  File bam_or_cram_index_file = select_first(
-    [
-      bam_or_cram_index,
-      if is_bam then bam_or_cram_file + ".bai" else bam_or_cram_file + ".crai"
-    ]
-  )
-  File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
-
-  Int num_cpu = if defined(runtime_attr_override)
-    then select_first([select_first([runtime_attr_override]).cpu_cores, 1])
-    else 1
-
-  Float mem_use_gb = num_cpu * 6.0
-  Float java_mem_pad_gb = num_cpu * 1.0
-  Float mem_size_gb = mem_use_gb + java_mem_pad_gb
-  Float bam_or_cram_size = size(bam_or_cram_file, "GiB")
-  Float disk_overhead = 20.0
-  Float ref_size = size(reference_fasta, "GiB")
-  Int vm_disk_size = ceil(bam_or_cram_size + ref_size + disk_overhead)
 
   String metrics_base = "multiple_metrics"
   String alignment_summary_filename = metrics_base + ".alignment_summary_metrics"
@@ -302,18 +178,29 @@ task GetMultipleMetrics {
   String gc_bias_filename = metrics_base + ".gc_bias.summary_metrics"
   String metrics_table_filename=metrics_base + "_table.tsv"
 
+  Float bam_or_cram_size = size(bam_or_cram_file, "GiB")
+  Float disk_overhead = 20.0
+  Float ref_size = size(reference_fasta, "GiB")
+  Int vm_disk_size = ceil(bam_or_cram_size + ref_size + disk_overhead)
+
   RuntimeAttr default_attr = object {
-    cpu_cores: num_cpu, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: 1,
+    mem_gb: 7.0,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
   }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  Int cpu_cores = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+  Float mem_use_gb = select_first([runtime_attr.mem_gb, cpu_cores * 6.0])
+  Float java_mem_pad_gb = cpu_cores * 1.0
+  Float mem_size_gb = mem_use_gb + java_mem_pad_gb
+
   runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    cpu: cpu_cores
+    memory: mem_use_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: gatk_docker
@@ -325,12 +212,12 @@ task GetMultipleMetrics {
   command <<<
 
     set -Eeuo pipefail
-    
+
     gatk --java-options -Xmx~{java_mem_mb}m CollectMultipleMetrics \
       -I "~{bam_or_cram_file}" \
       -O "~{metrics_base}" \
       -R "~{reference_fasta}" \
-      ~{if defined(intervals) then "--INTERVALS ~{intervals}" else ""} \
+      ~{"--INTERVALS " + intervals} \
       --ASSUME_SORTED true \
       --PROGRAM null \
       --PROGRAM CollectAlignmentSummaryMetrics \
@@ -410,20 +297,15 @@ task GetMultipleMetrics {
 task GetWgsMetrics {
   input {
     File bam_or_cram_file
-    File? bam_or_cram_index
+    File bam_or_cram_index
     Int read_length
     File reference_fasta
-    File? reference_index
+    File reference_index
     File? intervals
-    Boolean? use_fast_algorithm
+    Boolean use_fast_algorithm = true
     String genomes_in_the_cloud_docker
     RuntimeAttr? runtime_attr_override
   }
-
-  Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
-  File bam_or_cram_index_file = select_first([bam_or_cram_index, if is_bam then bam_or_cram_file + ".bai" else bam_or_cram_file + ".crai"])
-  File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
-  Boolean fast_algorithm = select_first([use_fast_algorithm, true])
 
   String metrics_file_name = "wgs_metrics.txt"
 
@@ -436,8 +318,8 @@ task GetWgsMetrics {
   Int vm_disk_size = ceil(bam_or_cram_size + ref_size + disk_overhead)
 
   RuntimeAttr default_attr = object {
-    cpu_cores: num_cpu, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: num_cpu,
+    mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: 0,
@@ -457,7 +339,7 @@ task GetWgsMetrics {
   command <<<
 
     set -Eeuo pipefail
-    
+
     # calculate coverage
     java -Xms~{java_mem_mb}m -jar /usr/gitc/picard.jar \
       CollectWgsMetrics \
@@ -468,7 +350,7 @@ task GetWgsMetrics {
       INCLUDE_BQ_HISTOGRAM=true \
       ~{if defined(intervals) then "INTERVALS=~{intervals}" else ""} \
       OUTPUT="raw_~{metrics_file_name}" \
-      USE_FAST_ALGORITHM=~{fast_algorithm}
+      USE_FAST_ALGORITHM=~{use_fast_algorithm}
 
     function transpose_table() {
       cat \
@@ -506,13 +388,15 @@ task GetWgsMetrics {
 
 task RunMELT {
   input {
-    File bam_file
-    File? bam_index
+    File bam_or_cram_file
+    File bam_or_cram_index
     String sample_id
     File reference_fasta
-    File? reference_index
+    File reference_index
+    File reference_dict
+    String reference_version = "38"
+    File counts_file
     File melt_standard_vcf_header
-    String? reference_version
 
     # picard metrics needed for MELT operation
     Float coverage
@@ -523,15 +407,24 @@ task RunMELT {
     Float pct_chimeras
     Float total_reads
     Int pf_reads_improper_pairs
-    Float raw_bam_size
+
+    # needed for filtering out high coverage intervals
+    Int interval_padding = 100
+    Int threshold = 1000
 
     String melt_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  File bam_index_file = select_first([bam_index, bam_file + ".bai"])
-  File reference_index_file = select_first([reference_index, reference_fasta + ".fai"])
-  String ref_version = select_first([reference_version, "38"])
+  parameter_meta {
+    bam_or_cram_file: {
+      localization_optional: true
+    }
+    bam_or_cram_index: {
+      localization_optional: true
+    }
+  }
+
 
   # Estimate the chances of successfully running preemptively. Data collected by spec-ops suggests a failure rate of
   # roughly 0.1% per hour, with some wiggles and a rapid increase at around 500 minutes.
@@ -555,35 +448,34 @@ task RunMELT {
     else 3
 
 
-  # Esure there's sufficient memory. Estimate using extra metrics
-  # if available, otherwise use coverage and insert size.
+  # Ensure there's sufficient memory. Estimate using extra metrics
   Float mem_per_pct_chimeras = 50.69
   Float mem_per_improper_pairs = "1.451e-8"
   Float mem_offset = 6.833
   Float mem_size_gb =
     mem_offset + mem_per_pct_chimeras * pct_chimeras + mem_per_improper_pairs * pf_reads_improper_pairs
   Float java_mem_fraction = 0.85
-
+  Int java_mem_mb = round(mem_size_gb * java_mem_fraction * 1000)
 
   # Ensure there's sufficient disk space. Estimate using extra metrics
-  # if available, otherwise use coverage and insert size.
   Float disk_per_improper_pairs = "3.901e-7"
   Float disk_per_bam_size = 0.3088
+  Float disk_per_cram_size = 3.5 * disk_per_bam_size
+  Boolean is_bam = basename(bam_or_cram_file, ".bam") + ".bam" == basename(bam_or_cram_file)
+  Float input_size = size(bam_or_cram_file, "GiB")
+  Float disk_per_input_size = if is_bam then disk_per_bam_size else disk_per_cram_size
   Float disk__offset = 32.57
-  Float disk_overhead = 
-    disk__offset + disk_per_improper_pairs * pf_reads_improper_pairs + disk_per_bam_size * raw_bam_size
+  Float disk_overhead =
+    disk__offset + disk_per_improper_pairs * pf_reads_improper_pairs + disk_per_input_size * input_size
 
-  Float bam_size = size(bam_file, "GiB")
-  Float bam_index_size = size(bam_index_file, "GiB")
+  Float filtered_bam_size = input_size * (if is_bam then 1.0 else 3.5)
   Float ref_size = size(reference_fasta, "GiB")
-  Float ref_index_size = size(reference_index_file, "GiB")
-  Float header_size = size(melt_standard_vcf_header, "GiB")
-  Int vm_disk_size = ceil(bam_size + bam_index_size + ref_size + ref_index_size + header_size + disk_overhead)
+  Int vm_disk_size = ceil(filtered_bam_size + ref_size + disk_overhead)
 
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: mem_size_gb, 
+    cpu_cores: 1,
+    mem_gb: mem_size_gb,
     disk_gb: vm_disk_size,
     boot_disk_gb: 10,
     preemptible_tries: preemptible_tries,
@@ -599,9 +491,22 @@ task RunMELT {
 
     set -Eeuo pipefail
 
-    # MELT expects the BAM index to have extension ".bam.bai"
-    mv ~{bam_file} ~{sample_id}.bam
-    mv ~{bam_index_file} ~{sample_id}.bam.bai
+    zgrep -v -E "^@|^CONTIG|^#" ~{counts_file} | \
+      awk 'BEGIN{FS=OFS="\t"}{if ($4 > ~{threshold}) {print $1,$2,$3}}' > highCountIntervals.bed
+
+    # create a bam file from the input bam or cram, filtering out high coverage intervals
+    # and ambiguous bases
+    java -Xmx~{java_mem_mb}m -jar /opt/gatk.jar PrintReads \
+          -XL highCountIntervals.bed \
+          --interval-exclusion-padding ~{interval_padding} \
+          -I ~{bam_or_cram_file} \
+          -R ~{reference_fasta} \
+          -O /dev/stdout | \
+      samtools view -h - | \
+      awk 'BEGIN{FS=OFS="\t"}{gsub(/[BDHVRYKMSW]/,"N",$10);print}' | \
+      samtools view -b1 - > ~{sample_id}.bam
+
+    samtools index ~{sample_id}.bam
 
     # these locations should be stable
     MELT_DIR="/MELT"
@@ -611,67 +516,28 @@ task RunMELT {
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
     MELT_SCRIPT=$(ls "$MELT_DIR/run_MELT"*.sh)
 
-    function getJavaMem() {
-        # get JVM memory in GiB by getting total memory from /proc/meminfo
-        # and multiplying by java_mem_fraction
-        cat /proc/meminfo \
-            | awk -v MEM_FIELD="$1" '{
-                f[substr($1, 1, length($1)-1)] = $2
-            } END {
-                printf "%.2fG", f[MEM_FIELD] * ~{java_mem_fraction} / 1048576
-            }'     
-    }
-    JVM_MAX_MEM=$(getJavaMem MemTotal)
-    echo "JVM memory: $JVM_MAX_MEM"
-
     # call MELT
     "$MELT_SCRIPT" \
-      "~{sample_id}.bam" \
+      ~{sample_id}.bam \
       "~{reference_fasta}" \
       ~{coverage} \
       ~{read_length} \
       ~{insert_size} \
       "$MELT_ROOT" \
       "$CROMWELL_ROOT" \
-      ~{ref_version}
-    
-    # combine different mobile element VCFs into a single sample VCF
-    # then sort into position order and compress with bgzip
-    cat SVA.final_comp.vcf | grep "^#" > "~{sample_id}.header.txt"
-    cat SVA.final_comp.vcf | grep -v "^#" > "~{sample_id}.sva.vcf"
-    cat LINE1.final_comp.vcf | grep -v "^#"> "~{sample_id}.line1.vcf"
-    cat ALU.final_comp.vcf | grep -v "^#"> "~{sample_id}.alu.vcf"
-    cat ~{sample_id}.header.txt ~{sample_id}.sva.vcf \
-      ~{sample_id}.line1.vcf ~{sample_id}.alu.vcf \
-      | vcf-sort -c | bgzip -c > ~{sample_id}.melt.vcf.gz
-    
-    # fix three known problems with MELT output vcf:
-    # 1) header sometimes doesn't have all chromosomes, and misses
-    #    some INF annotations;
-    # 2) sample name in the last column of header is problematic;
-    # 3) some INFO values contain space " "
-    fix_melt() {
-      vcf_file=$1
-      vcf_text=$(bgzip -cd $vcf_file)
-      # replace basename of bam file in header with sample id
-      grep '^#CHR' <<<"$vcf_text" | sed 's|~{basename(bam_file, ".bam")}|~{sample_id}|g' > temp_fix_header.txt
-      # remove space from INFO values
-      grep -v '^#' <<<"$vcf_text" | sed 's/No Difference/No_Difference/g' >> temp_fix_header.txt
-      FILEDATE=$(grep -F 'fileDate=' <<<"$vcf_text")
-      cat "~{melt_standard_vcf_header}" temp_fix_header.txt \
-        | sed "2i$FILEDATE" | bgzip -c > "$vcf_file"
-    }
-    # apply the fix
-    fix_melt ~{sample_id}.melt.vcf.gz
+      ~{reference_version}
 
-    # rename sample id
-    mv ~{sample_id}.melt.vcf.gz temp.vcf.gz
-    bcftools reheader -s <(echo "~{sample_id}") temp.vcf.gz > ~{sample_id}.melt.vcf.gz
-    rm temp.vcf.gz
-    
-    # index vcf
-    tabix -p vcf "~{sample_id}.melt.vcf.gz"
-    
+    cat "~{melt_standard_vcf_header}" \
+        <(echo -e "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t~{sample_id}") \
+        <(grep -v "^#" SVA.final_comp.vcf) \
+        <(grep -v "^#" LINE1.final_comp.vcf) \
+        <(grep -v "^#" ALU.final_comp.vcf) \
+      | sed -e "2i##fileDate=$(date +'%Y%m%d')" -e "s/No Difference/No_Difference/" \
+      | bcftools sort -Oz - > "~{sample_id}.melt.vcf.gz"
+    bcftools index -t "~{sample_id}.melt.vcf.gz"
+
+    df -h
+    ls -l
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

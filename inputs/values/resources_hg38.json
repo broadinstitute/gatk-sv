@@ -26,7 +26,8 @@
   "preprocessed_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
   "primary_contigs_fai" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
   "primary_contigs_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
-  "protein_coding_gtf" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/MANE.GRCh38.v0.95.select_ensembl_genomic.gtf",
+  "contigs_header": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_contigs_header.vcf",
+  "protein_coding_gtf" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/MANE.GRCh38.v1.2.ensembl_genomic.gtf",
   "reference_build" : "hg38",
   "reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
@@ -38,6 +39,16 @@
   "single_sample_qc_definitions": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv",
   "wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
+
+  "aou_recalibrate_gq_model_file": "gs://gatk-sv-resources-secure/resources/recalibrator/gatk-sv-recalibrator.aou_phase_1.v1.model",
+  "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
+  "recalibrate_gq_genome_tracks": [
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
+  ],
 
   "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
   "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins_perSample.tar.gz"],

@@ -14,7 +14,6 @@ workflow RegenotypeCNVs {
     Array[File] coveragefiles
     Array[File] coveragefile_idxs
     Array[File] medianfiles
-    File ped_file  # cohort ped file
     Array[File] RD_depth_sepcutoffs
     Int n_per_split
     Int n_RdTest_bins
@@ -165,14 +164,6 @@ workflow RegenotypeCNVs {
 
   if (MergeList.num_regeno > 0) {
     scatter (i in range(length(batches))) {
-      call util.SubsetPedFile {
-        input:
-          ped_file = ped_file,
-          sample_list = GetSampleIdsFromVcf.out_file[i],
-          subset_name = batches[i],
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_override = runtime_attr_subset_ped
-      }
       call g2.Regenotype as Genotype_2 {
         input:
           depth_vcf=depth_vcfs[i],
@@ -182,7 +173,6 @@ workflow RegenotypeCNVs {
           coveragefile=coveragefiles[i],
           coveragefile_idx=coveragefile_idxs[i],
           medianfile=medianfiles[i],
-          famfile=SubsetPedFile.ped_subset_file,
           RD_depth_sepcutoff=RD_depth_sepcutoffs[i],
           n_per_split=n_per_split,
           n_RdTest_bins=n_RdTest_bins,

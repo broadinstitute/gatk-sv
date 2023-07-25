@@ -79,7 +79,7 @@ RUN export NEW_PACKAGES=$(diff_of_lists.sh "$RUN_DEPS" $APT_REQUIRED_PACKAGES) &
 
 # install R packages
 ARG R_PACKAGES="assertthat beeswarm BH BSDA caret cli crayon DAAG data.table devtools digest dplyr e1071 fansi fpc \
-                generics gert glue HardyWeinberg hash latticeExtra magrittr MASS Matrix metap mnormt nlme nloptr nnet \
+                generics gert glue HardyWeinberg hash latticeExtra magrittr Matrix metap mnormt nlme nloptr nnet \
                 numDeriv perm pillar pkgconfig plogr plyr purrr pwr R6 RColorBrewer Rcpp reshape reshape2 rlang ROCR \
                 rpart stringi stringr survival tibble tidyr tidyselect utf8 vioplot withr zoo"
 ARG BIOCONDUCTOR_PKGS="SNPRelate multtest"
@@ -88,6 +88,7 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
     apt-get -qqy update --fix-missing && \
     apt-get -qqy install --no-install-recommends $BUILD_DEPS $(fix_spaces.sh $APT_REQUIRED_PACKAGES) && \
     install_bioconductor_packages.R $BIOCONDUCTOR_PKGS && \
+    install_deprecated_R_package.sh "https://cran.r-project.org/src/contrib/Archive/MASS/MASS_7.3-58.tar.gz" && \
     install_R_packages.R $R_PACKAGES && \
     apt-get -qqy remove --purge $APT_TRANSIENT_PACKAGES && \
     apt-get -qqy autoremove --purge && \
