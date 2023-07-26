@@ -56,11 +56,6 @@ if ! [ -s ${PESR} ]; then
   usage
   exit 0
 fi
-if [ $( file ${PESR} | fgrep "gzip" | wc -l ) -lt 1 ]; then
-  echo -e "\nERROR: input PESR VCF must be bgzipped\n"
-  usage
-  exit 0
-fi
 if [ -z ${RD} ]; then
   echo -e "\nERROR: input RD VCF not specified\n"
   usage
@@ -68,11 +63,6 @@ if [ -z ${RD} ]; then
 fi
 if ! [ -s ${RD} ]; then
   echo -e "\nERROR: input RD VCF either empty or not found\n"
-  usage
-  exit 0
-fi
-if [ $( file ${RD} | fgrep "gzip" | wc -l ) -lt 1 ]; then
-  echo -e "\nERROR: input RD VCF must be bgzipped\n"
   usage
   exit 0
 fi
