@@ -1333,24 +1333,6 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call SingleSampleFiltering.ResetFilter as ResetHighSRBackgroundFilter {
-    input:
-      single_sample_vcf=FilterVcfWithReferencePanelCalls.out,
-      single_sample_vcf_idx=FilterVcfWithReferencePanelCalls.out_idx,
-      filter_to_reset="HIGH_SR_BACKGROUND",
-      info_header_line='##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Sites with high split read background">',
-      sv_base_mini_docker=sv_base_mini_docker
-  }
-
-  call SingleSampleFiltering.ResetFilter as ResetBothsidesSupportFilter {
-      input:
-        single_sample_vcf=ResetHighSRBackgroundFilter.out,
-        single_sample_vcf_idx=ResetHighSRBackgroundFilter.out_idx,
-        filter_to_reset="BOTHSIDES_SUPPORT",
-        info_header_line='##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Sites with split read support at both breakpoints">',
-        sv_base_mini_docker=sv_base_mini_docker
-  }
-
   call SingleSampleMetrics.SingleSampleMetrics as SampleFilterMetrics {
     input:
       name = batch,
@@ -1363,15 +1345,6 @@ workflow GATKSVPipelineSingleSample {
       sv_pipeline_base_docker = sv_pipeline_base_docker
   }
 
-  call SingleSampleFiltering.ResetFilter as ResetPESRTGTOverdispersionFilter {
-    input:
-      single_sample_vcf=ResetBothsidesSupportFilter.out,
-      single_sample_vcf_idx=ResetBothsidesSupportFilter.out_idx,
-      filter_to_reset="PESR_GT_OVERDISPERSION",
-      info_header_line='##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="Sites with a high count of samples with PESR genotype estimates greater than two">',
-      sv_base_mini_docker=sv_base_mini_docker
-  }
-
   call utils.RunQC as SampleFilterQC {
     input:
       name=batch,
@@ -1382,7 +1355,7 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
-      vcf=ResetPESRTGTOverdispersionFilter.out,
+      vcf=FilterVcfWithReferencePanelCalls.out,
       sample_filtering_qc_file=SampleFilterQC.out,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
   }

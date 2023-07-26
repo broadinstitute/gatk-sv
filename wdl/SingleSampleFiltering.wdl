@@ -408,64 +408,6 @@ task FilterVcfWithReferencePanelCalls {
   }
 }
 
-task ResetFilter {
-  input {
-    File single_sample_vcf
-    File single_sample_vcf_idx
-    String filter_to_reset
-    String info_header_line
-
-    String sv_base_mini_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  String filebase = basename(single_sample_vcf, ".vcf.gz")
-  String outfile = "~{filebase}.reset_~{filter_to_reset}_filter.vcf.gz"
-
-  output {
-    File out = "~{outfile}"
-    File out_idx = "~{outfile}.tbi"
-  }
-  command <<<
-
-  set -euo pipefail
-
-  echo '~{info_header_line}' > header.txt
-
-  bcftools filter -i 'FILTER ~ "~{filter_to_reset}"' ~{single_sample_vcf} | bgzip -c > sites.vcf.gz
-  tabix sites.vcf.gz
-
-  bcftools annotate \
-    -k \
-    -a sites.vcf.gz \
-    -m ~{filter_to_reset} \
-    -h header.txt \
-    -x FILTER/~{filter_to_reset} \
-    ~{single_sample_vcf} | bgzip -c > ~{outfile}
-
-  tabix ~{outfile}
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
 task UpdateBreakendRepresentation {
   input {
     File vcf

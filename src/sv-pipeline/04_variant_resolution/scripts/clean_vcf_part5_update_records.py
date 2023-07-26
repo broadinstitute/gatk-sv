@@ -23,7 +23,6 @@ def main():
     args = parser.parse_args()
 
     # load the revised lines and index by ID
-    revised_lines_by_id = {}
     with pysam.VariantFile(args.revise_vcf_lines, threads=args.threads_per_file) as revise_vcf:
         header2 = revise_vcf.header
         revised_lines_by_id = {record.id: record for record in revise_vcf}
@@ -56,7 +55,8 @@ def main():
     NEW_HEADER_LINES = ['##ALT=<ID=CNV,Description="Copy Number Polymorphism">',
                         '##FORMAT=<ID=CNQ,Number=1,Type=Integer,Description="Read-depth genotype quality">',
                         '##FORMAT=<ID=CN,Number=1,Type=Integer,Description="Predicted copy state">',
-                        '##FILTER=<ID=PESR_GT_OVERDISPERSION,Description="High PESR dispersion count">',
+                        '##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,'
+                        'Description="High PESR dispersion count">',
                         '##FILTER=<ID=MULTIALLELIC,Description="Multiallelic site">']
 
     with pysam.VariantFile(args.normal_revise_vcf) as normal_vcf:
@@ -144,7 +144,7 @@ def main():
                             sample_obj['GT'] = (1, 1)  # RD_CN > 3 DUP
 
                 if record.id in multi_geno_ids:
-                    record.filter.add('PESR_GT_OVERDISPERSION')
+                    record.info['PESR_GT_OVERDISPERSION'] = True
 
                 if multi_del or multi_dup:
                     record.filter.add('MULTIALLELIC')

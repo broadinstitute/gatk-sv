@@ -303,7 +303,7 @@ workflow CleanVcfChromosome {
     input:
       vcf=FinalCleanup.final_cleaned_shard,
       ploidy_table=ploidy_table,
-      args="--fix-end --scale-down-gq",
+      args="--scale-down-gq",
       output_prefix="~{prefix}.final_format",
       script=svtk_to_gatk_script,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -741,11 +741,7 @@ task FinalCleanup {
       --chrom ~{contig} \
       --prefix ~{prefix} \
       ~{vcf} stdout \
-      | fgrep -v "##INFO=<ID=HIGH_SR_BACKGROUND" \
-      | /opt/sv-pipeline/04_variant_resolution/scripts/sanitize_filter_field.py stdin stdout \
-      | fgrep -v "##INFO=<ID=MEMBERS,Number=.,Type=String," \
-      | bgzip -c \
-      > ~{prefix}.vcf.gz
+      | bcftools annotate --no-version -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 

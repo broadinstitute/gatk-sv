@@ -7,8 +7,8 @@ Standardize Lumpy records.
 """
 
 
-from .standardize import VCFStandardizer, parse_bnd_pos
-from svtk.utils import is_smaller_chrom
+from .standardize import VCFStandardizer
+from svtk.utils import is_smaller_chrom, parse_bnd_pos
 
 
 @VCFStandardizer.register('smoove')

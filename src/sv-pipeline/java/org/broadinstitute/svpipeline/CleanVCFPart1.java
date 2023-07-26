@@ -32,9 +32,8 @@ public class CleanVCFPart1 {
     private static final ByteSequence VARGQ_KEY = new ByteSequence("varGQ");
     private static final ByteSequence MULTIALLELIC_KEY = new ByteSequence("MULTIALLELIC");
     private static final ByteSequence UNRESOLVED_KEY = new ByteSequence("UNRESOLVED");
-    private static final ByteSequence HIGH_SR_BACKGROUND = new ByteSequence("HIGH_SR_BACKGROUND");
-    private static final ByteSequence PASS_VALUE = new ByteSequence("PASS");
-    private static final ByteSequence BOTHSIDES_VALUE = new ByteSequence("BOTHSIDES_SUPPORT");
+    private static final ByteSequence HIGH_SR_BACKGROUND_KEY = new ByteSequence("HIGH_SR_BACKGROUND");
+    private static final ByteSequence BOTHSIDES_SUPPORT_KEY = new ByteSequence("BOTHSIDES_SUPPORT");
     private static final ByteSequence DEL_VALUE = new ByteSequence("DEL");
     private static final ByteSequence DUP_VALUE = new ByteSequence("DUP");
     private static final ByteSequence RDCN_VALUE = new ByteSequence("RD_CN");
@@ -73,12 +72,12 @@ public class CleanVCFPart1 {
                         osSamples.write('\n');
                     }
                     sexForSample = readPedFile(args[1], cols.getValue());
-                    os.write(("##FILTER=<ID=HIGH_SR_BACKGROUND,Description=\"High number of "
+                    os.write(("##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description=\"High number of "
                             + "SR splits in background samples indicating messy region\">\n")
                                 .getBytes(StandardCharsets.UTF_8));
                     os.write("##FILTER=<ID=UNRESOLVED,Description=\"Variant is unresolved\">\n"
                                 .getBytes(StandardCharsets.UTF_8));
-                    os.write(("##FILTER=<ID=BOTHSIDES_SUPPORT,Description=\"Variant has " +
+                    os.write(("##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description=\"Variant has " +
                             "read-level support for both sides of breakpoint\">\n")
                                 .getBytes(StandardCharsets.UTF_8));
                 } else if ( metadata instanceof KeyAttributesMetadata ) {
@@ -145,17 +144,12 @@ public class CleanVCFPart1 {
 
                 // mark noisy events
                 if ( noisyEvents.contains(record.getID()) ) {
-                    record.getFilter().add(HIGH_SR_BACKGROUND);
+                    record.getInfo().put(HIGH_SR_BACKGROUND_KEY, null);
                 }
 
                 // mark bothsides support
                 if ( bothsidesSupportEvents.contains(record.getID()) ) {
-                    final CompoundField filters = record.getFilter();
-                    if ( filters.size() == 1 && filters.get(0).equals(PASS_VALUE) ) {
-                        record.setFilter(BOTHSIDES_VALUE);
-                    } else {
-                        filters.add(BOTHSIDES_VALUE);
-                    }
+                    record.getInfo().put(BOTHSIDES_SUPPORT_KEY, null);
                 }
 
                 // fix genotypes on allosomes
