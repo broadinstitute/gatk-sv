@@ -38,8 +38,7 @@ workflow AnnotateVcf {
     String gatk_docker
 
     RuntimeAttr? runtime_attr_svannotate
-    RuntimeAttr? runtime_attr_concat_vcfs
-    RuntimeAttr? runtime_attr_shard_vcf
+    RuntimeAttr? runtime_attr_scatter_vcf
     RuntimeAttr? runtime_attr_subset_vcf_by_samples_list
     RuntimeAttr? runtime_attr_compute_AFs
     RuntimeAttr? runtime_attr_modify_vcf
@@ -47,10 +46,10 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_split_query_vcf
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
-    RuntimeAttr? runtime_attr_concat_sharded_cluster
-    RuntimeAttr? runtime_attr_preconcat_sharded_cluster
-    RuntimeAttr? runtime_attr_hail_merge_sharded_cluster
-    RuntimeAttr? runtime_attr_fix_header_sharded_cluster
+    RuntimeAttr? runtime_attr_concat
+    RuntimeAttr? runtime_attr_preconcat
+    RuntimeAttr? runtime_attr_hail_merge
+    RuntimeAttr? runtime_attr_fix_header
   }
 
   Array[String] contigs = read_lines(contig_list)
@@ -88,17 +87,14 @@ workflow AnnotateVcf {
         sv_pipeline_hail_docker = sv_pipeline_hail_docker,
 
         runtime_attr_svannotate = runtime_attr_svannotate,
+        runtime_attr_scatter_vcf = runtime_attr_scatter_vcf,
         runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
         runtime_attr_compute_AFs  = runtime_attr_compute_AFs,
         runtime_attr_modify_vcf = runtime_attr_modify_vcf,
         runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
         runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
         runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
-        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
-        runtime_attr_concat_sharded_cluster = runtime_attr_concat_sharded_cluster,
-        runtime_attr_preconcat_sharded_cluster  = runtime_attr_preconcat_sharded_cluster,
-        runtime_attr_hail_merge_sharded_cluster = runtime_attr_hail_merge_sharded_cluster,
-        runtime_attr_fix_header_sharded_cluster = runtime_attr_fix_header_sharded_cluster
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
     }
   }
 
@@ -115,9 +111,9 @@ workflow AnnotateVcf {
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
-        runtime_override_preconcat=runtime_attr_preconcat_sharded_cluster,
-        runtime_override_hail_merge=runtime_attr_hail_merge_sharded_cluster,
-        runtime_override_fix_header=runtime_attr_fix_header_sharded_cluster
+        runtime_override_preconcat=runtime_attr_preconcat,
+        runtime_override_hail_merge=runtime_attr_hail_merge,
+        runtime_override_fix_header=runtime_attr_fix_header
     }
   }
 
@@ -129,7 +125,7 @@ workflow AnnotateVcf {
         allow_overlaps=true,
         outfile_prefix="~{prefix}.annotated",
         sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat_sharded_cluster
+        runtime_attr_override=runtime_attr_concat
     }
   }
 

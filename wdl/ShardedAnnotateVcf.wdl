@@ -51,11 +51,6 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
-    RuntimeAttr? runtime_attr_fix_ends_rescale_GQ
-    RuntimeAttr? runtime_attr_concat_sharded_cluster
-    RuntimeAttr? runtime_attr_preconcat_sharded_cluster
-    RuntimeAttr? runtime_attr_hail_merge_sharded_cluster
-    RuntimeAttr? runtime_attr_fix_header_sharded_cluster
   }
 
   if (defined(ref_bed)) {
@@ -109,7 +104,7 @@ workflow ShardedAnnotateVcf {
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
-        runtime_attr_compute_AFs = runtime_attr_compute_AFs,
+        runtime_attr_compute_AFs = runtime_attr_compute_AFs
     }
 
     if (defined(ref_bed)) {
