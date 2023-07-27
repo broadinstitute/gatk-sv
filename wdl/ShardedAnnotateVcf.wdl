@@ -7,11 +7,13 @@ import "AnnotateFunctionalConsequences.wdl" as func
 import "PruneAndAddVafs.wdl" as pav
 import "AnnotateExternalAFPerShard.wdl" as eaf
 
+# Perform annotation per contig
+
 workflow ShardedAnnotateVcf {
 
   input {
     File vcf
-    File? vcf_idx
+    File vcf_idx
     String prefix
     String contig
 
