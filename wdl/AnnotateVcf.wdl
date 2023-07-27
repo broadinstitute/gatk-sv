@@ -98,7 +98,7 @@ workflow AnnotateVcf {
     }
   }
 
-  # Concat VCF shards
+  # Concat VCF shards with or without hail
   # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per contig
   Array[File] vcfs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf)
   Array[File] vcf_idxs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf_idx)

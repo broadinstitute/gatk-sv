@@ -4,7 +4,6 @@ import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
 import "AnnotateFunctionalConsequences.wdl" as func
-import "PruneAndAddVafs.wdl" as pav
 import "AnnotateExternalAFPerShard.wdl" as eaf
 
 # Perform annotation per contig
@@ -75,11 +74,23 @@ workflow ShardedAnnotateVcf {
   }
 
   scatter (i in range(length(ScatterVcf.shards))) {
+    String shard_prefix = "~{prefix}.~{contig}.~{i}"
+
+    if (defined(sample_keep_list)) {
+      call util.SubsetVcfBySamplesList {
+        input:
+          vcf = ScatterVcf.shards[i],
+          list_of_samples = select_first([sample_keep_list]),
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_subset_vcf_by_samples_list
+      }
+    }
 
     call func.AnnotateFunctionalConsequences {
       input:
-        vcf = ScatterVcf.shards[i],
-        prefix = "~{prefix}.~{contig}.~{i}",
+        vcf = select_first([SubsetVcfBySamplesList.vcf_subset, ScatterVcf.shards[i]]),
+        vcf_index = SubsetVcfBySamplesList.vcf_subset_index,
+        prefix = shard_prefix,
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
         promoter_window = promoter_window,
@@ -89,29 +100,24 @@ workflow ShardedAnnotateVcf {
         runtime_attr_svannotate = runtime_attr_svannotate
     }
 
-    call pav.PruneAndAddVafs as PruneAndAddVafs {
+    # Compute AC, AN, and AF per population & sex combination
+    call ComputeAFs {
       input:
         vcf = AnnotateFunctionalConsequences.annotated_vcf,
-        vcf_idx = AnnotateFunctionalConsequences.annotated_vcf_index,
-        prefix = "~{prefix}.~{contig}.~{i}",
-        contig = contig,
+        prefix = shard_prefix,
+        sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
         par_bed = par_bed,
-        sample_keep_list = sample_keep_list,
         allosomes_list = allosomes_list,
-        sample_pop_assignments = sample_pop_assignments,
-
-        sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_subset_vcf_by_samples_list = runtime_attr_subset_vcf_by_samples_list,
-        runtime_attr_compute_AFs = runtime_attr_compute_AFs
+        runtime_attr_override = runtime_attr_compute_AFs
     }
 
     if (defined(ref_bed)) {
       call eaf.AnnotateExternalAFPerShard {
         input:
-          vcf = PruneAndAddVafs.output_vcf,
-          vcf_idx = PruneAndAddVafs.output_vcf_idx,
+          vcf = ComputeAFs.af_vcf,
+          vcf_idx = ComputeAFs.af_vcf_idx,
           split_ref_bed_del = select_first([SplitRefBed.del]),
           split_ref_bed_dup = select_first([SplitRefBed.dup]),
           split_ref_bed_ins = select_first([SplitRefBed.ins]),
@@ -131,8 +137,57 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), PruneAndAddVafs.output_vcf])
-    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), PruneAndAddVafs.output_vcf_idx])
+    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), ComputeAFs.af_vcf])
+    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), ComputeAFs.af_vcf_idx])
   }
 }
 
+task ComputeAFs {
+  input {
+    File vcf
+    String prefix
+    File? sample_pop_assignments
+    File? ped_file
+    File? par_bed
+    File? allosomes_list
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.5,
+    disk_gb: ceil(20 + size(vcf, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
+      ~{"-p " + sample_pop_assignments} \
+      ~{"-f " + ped_file} \
+      ~{"-par " + par_bed} \
+      ~{"--allosomes-list " + allosomes_list} \
+    | bgzip -c \
+    > "~{prefix}.wAFs.vcf.gz"
+
+    tabix -p vcf "~{prefix}.wAFs.vcf.gz"
+  >>>
+
+  output {
+    File af_vcf = "~{prefix}.wAFs.vcf.gz"
+    File af_vcf_idx = "~{prefix}.wAFs.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
