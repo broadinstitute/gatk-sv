@@ -213,7 +213,8 @@ jobs:
             --image-tag ${{ needs.build_args_job.outputs.image_tag }} \
             --input-json $DOCKERS_AZURE $DOCKERS_GCP \
             --output-json $DOCKERS_AZURE $DOCKERS_GCP \
-            --disable-git-protect
+            --disable-git-protect \
+            --prune-after-each-image
           
           CHANGED=$(git diff --quiet $DOCKERS_GCP || echo True)
           echo "CHANGED=$CHANGED" >> $GITHUB_OUTPUT
