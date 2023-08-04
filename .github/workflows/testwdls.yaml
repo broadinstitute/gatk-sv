@@ -57,4 +57,4 @@ jobs:
 
       - name: Test with WOMtool
         run: |
-          scripts/test/validate.sh -d . -j womtool.jar
+          scripts/test/validate.sh -t -d . -j womtool.jar
