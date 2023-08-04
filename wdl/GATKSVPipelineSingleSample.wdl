@@ -561,8 +561,6 @@ workflow GATKSVPipelineSingleSample {
     Int? promoter_window
     Int? max_breakend_as_cnv_length
     Int annotation_sv_per_shard
-    Int annotation_max_shards_per_chrom_step1
-    Int annotation_min_records_per_shard_step1
 
     File? external_af_ref_bed             # bed file with population AFs for annotation
     String? external_af_ref_bed_prefix    # name of external AF bed file call set
@@ -1363,7 +1361,6 @@ workflow GATKSVPipelineSingleSample {
   call annotate.AnnotateVcf {
        input:
         vcf = FilterSample.out,
-        vcf_idx = FilterSample.out_idx,
         prefix = batch,
         contig_list = primary_contigs_list,
         protein_coding_gtf = protein_coding_gtf,
@@ -1373,9 +1370,8 @@ workflow GATKSVPipelineSingleSample {
         ref_bed = external_af_ref_bed,
         ref_prefix = external_af_ref_bed_prefix,
         population = external_af_population,
+        use_hail = false,
         sv_per_shard = annotation_sv_per_shard,
-        max_shards_per_chrom_step1 = annotation_max_shards_per_chrom_step1,
-        min_records_per_shard_step1 = annotation_min_records_per_shard_step1,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         gatk_docker = gatk_docker,
@@ -1384,18 +1380,18 @@ workflow GATKSVPipelineSingleSample {
 
   call SingleSampleFiltering.VcfToBed as VcfToBed {
     input:
-      vcf = AnnotateVcf.output_vcf,
+      vcf = AnnotateVcf.annotated_vcf,
       prefix = batch,
       sv_pipeline_docker = sv_pipeline_docker
   }
 
   call SingleSampleFiltering.UpdateBreakendRepresentation {
     input:
-      vcf=AnnotateVcf.output_vcf,
-      vcf_idx=AnnotateVcf.output_vcf_idx,
+      vcf=AnnotateVcf.annotated_vcf,
+      vcf_idx=AnnotateVcf.annotated_vcf_index,
       ref_fasta=reference_fasta,
       ref_fasta_idx=reference_index,
-      prefix=basename(AnnotateVcf.output_vcf, ".vcf.gz") + ".final_cleanup",
+      prefix=basename(AnnotateVcf.annotated_vcf, ".vcf.gz") + ".final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker
   }
 
@@ -1435,8 +1431,8 @@ workflow GATKSVPipelineSingleSample {
     # These files contain events reported in the internal VCF representation
     # They are less VCF-spec compliant but may be useful if components of the pipeline need to be re-run
     # on the output.
-    File pre_cleanup_vcf = AnnotateVcf.output_vcf
-    File pre_cleanup_vcf_idx = AnnotateVcf.output_vcf_idx
+    File pre_cleanup_vcf = AnnotateVcf.annotated_vcf
+    File pre_cleanup_vcf_idx = AnnotateVcf.annotated_vcf_index
 
     File ploidy_matrix = select_first([GatherBatchEvidence.batch_ploidy_matrix])
     File ploidy_plots = select_first([GatherBatchEvidence.batch_ploidy_plots])

@@ -81,15 +81,15 @@ task HailMergeTask {
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " SSD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
+    cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_hail_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
@@ -155,15 +155,15 @@ task FixHeader {
                                   max_retries: 1,
                                   boot_disk_gb: 10
                                 }
-  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
   runtime {
-    memory: select_first([runtime_override.mem_gb, runtime_default.mem_gb]) + " GB"
-    disks: "local-disk " + select_first([runtime_override.disk_gb, runtime_default.disk_gb]) + " SSD"
-    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    memory: select_first([runtime_attr.mem_gb, runtime_default.mem_gb]) + " GB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, runtime_default.disk_gb]) + " SSD"
+    cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
-    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<

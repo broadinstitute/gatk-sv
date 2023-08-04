@@ -5,16 +5,11 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-workflow AnnotateExternalAFperContig {
+workflow AnnotateExternalAFPerShard {
     input {
         File vcf
         File vcf_idx
-        File ref_bed
-        File split_query_vcf_del
-        File split_query_vcf_dup
-        File split_query_vcf_ins
-        File split_query_vcf_inv
-        File split_query_vcf_bnd
+        String prefix
         File split_ref_bed_del
         File split_ref_bed_dup
         File split_ref_bed_ins
@@ -22,69 +17,66 @@ workflow AnnotateExternalAFperContig {
         File split_ref_bed_bnd
 
         Array[String] population
-        String contig
         String ref_prefix
-
-        Int max_shards_per_chrom_step1
-        Int min_records_per_shard_step1
 
         String sv_base_mini_docker
         String sv_pipeline_docker
 
         # overrides for local tasks
         RuntimeAttr? runtime_attr_modify_vcf
-        RuntimeAttr? runtime_override_split_vcf
-        RuntimeAttr? runtime_override_combine_vcfs
+        RuntimeAttr? runtime_attr_split_query_vcf
         RuntimeAttr? runtime_attr_bedtools_closest
         RuntimeAttr? runtime_attr_select_matched_svs
     }
 
+    call SplitQueryVcf {
+        input:
+            vcf = vcf,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_split_query_vcf
+    }
+
     call BedtoolsClosest as compare_del {
         input:
-            bed_a = split_query_vcf_del,
+            bed_a = SplitQueryVcf.del,
             bed_b = split_ref_bed_del,
             svtype = "del",
-            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_bedtools_closest
     }
 
     call BedtoolsClosest as compare_dup {
         input:
-            bed_a = split_query_vcf_dup,
+            bed_a = SplitQueryVcf.dup,
             bed_b = split_ref_bed_dup,
             svtype = "dup",
-            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_bedtools_closest
     }
 
     call BedtoolsClosest as compare_ins {
         input:
-            bed_a = split_query_vcf_ins,
+            bed_a = SplitQueryVcf.ins,
             bed_b = split_ref_bed_ins,
             svtype = "ins",
-            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_bedtools_closest
     }
 
     call BedtoolsClosest as compare_inv {
         input:
-            bed_a = split_query_vcf_inv,
+            bed_a = SplitQueryVcf.inv,
             bed_b = split_ref_bed_inv,
             svtype = "inv",
-            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_bedtools_closest
     }
 
     call BedtoolsClosest as compare_bnd {
         input:
-            bed_a = split_query_vcf_bnd,
+            bed_a = SplitQueryVcf.bnd,
             bed_b = split_ref_bed_bnd,
             svtype = "bnd",
-            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_bedtools_closest
     }
@@ -133,55 +125,32 @@ workflow AnnotateExternalAFperContig {
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_select_matched_svs
     }
-
-    call MiniTasks.SplitVcf as SplitVcf {
-      input:
-        vcf = vcf,
-        vcf_idx = vcf_idx,
-        contig=contig,
-        prefix="~{contig}.shard_",
-        n_shards=max_shards_per_chrom_step1,
-        min_vars_per_shard=min_records_per_shard_step1,
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_split_vcf
-    }
-
-
-    scatter (vcf_shard in SplitVcf.vcf_shards) {
-        call ModifyVcf {
-            input:
-                labeled_del = calcu_del.output_comp,
-                labeled_dup = calcu_dup.output_comp,
-                labeled_ins = calcu_ins.output_comp,
-                labeled_inv = calcu_inv.output_comp,
-                labeled_bnd = calcu_bnd.output_comp,
-                vcf = vcf_shard,
-                ref_prefix = ref_prefix,
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_modify_vcf       
-        }
-    }
-
-    call MiniTasks.ConcatVcfs as CombineVcfStep1 {
-      input:
-        vcfs = ModifyVcf.annotated_vcf,
-        vcfs_idx = ModifyVcf.annotated_vcf_tbi,
-        naive = true,
-        outfile_prefix = "~{contig}.annotated.vcf",
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_override_combine_vcfs
+ 
+    call ModifyVcf {
+        input:
+            labeled_del = calcu_del.output_comp,
+            labeled_dup = calcu_dup.output_comp,
+            labeled_ins = calcu_ins.output_comp,
+            labeled_inv = calcu_inv.output_comp,
+            labeled_bnd = calcu_bnd.output_comp,
+            vcf = vcf,
+            prefix = prefix,
+            ref_prefix = ref_prefix,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_modify_vcf       
     }
 
     output {
-        File annotated_vcf = CombineVcfStep1.concat_vcf
-        File annotated_vcf_tbi = CombineVcfStep1.concat_vcf_idx
+        File annotated_vcf = ModifyVcf.annotated_vcf
+        File annotated_vcf_tbi = ModifyVcf.annotated_vcf_tbi
     }
 
 }
 
-task SplitBed {
+task SplitRefBed {
     input {
         File bed
+        String contig
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -195,39 +164,41 @@ task SplitBed {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_base_mini_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
     String prefix = basename(bed, ".bed.gz")
     
     command <<<
+        set -eu
         zcat ~{bed} | head -1 > header
-        cat header <(zcat ~{bed} | awk '{if ($6=="DEL") print}') > ~{prefix}.DEL.bed
-        cat header <(zcat ~{bed} | awk '{if ($6=="DUP") print}') > ~{prefix}.DUP.bed
-        cat header <(zcat ~{bed} | awk '{if ($6=="INS" || $6=="INS:ME" || $6=="INS:ME:ALU" || $6=="INS:ME:LINE1" || $6=="INS:ME:SVA" || $6=="ALU" || $6=="LINE1" || $6=="SVA" || $6=="HERVK" ) print}') > ~{prefix}.INS.bed
-        cat header <(zcat ~{bed} | awk '{if ($6=="INV" || $6=="CPX") print}' ) > ~{prefix}.INV_CPX.bed
-        cat header <(zcat ~{bed} | awk '{if ($6=="BND" || $6=="CTX") print}' ) > ~{prefix}.BND_CTX.bed
+        set -o pipefail
+        cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="DEL") print}') > ~{prefix}.~{contig}.DEL.bed
+        cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="DUP") print}') > ~{prefix}.~{contig}.DUP.bed
+        cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="INS" || $6=="INS:ME" || $6=="INS:ME:ALU" || $6=="INS:ME:LINE1" || $6=="INS:ME:SVA" || $6=="ALU" || $6=="LINE1" || $6=="SVA" || $6=="HERVK" ) print}') > ~{prefix}.~{contig}.INS.bed
+        cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="INV" || $6=="CPX") print}' ) > ~{prefix}.~{contig}.INV_CPX.bed
+        cat header <(zcat ~{bed} | awk '{if ($1=="~{contig}" && $6=="BND" || $6=="CTX") print}' ) > ~{prefix}.~{contig}.BND_CTX.bed
     >>>
 
     output {
-        File del = "~{prefix}.DEL.bed"
-        File dup = "~{prefix}.DUP.bed"
-        File ins = "~{prefix}.INS.bed"
-        File inv = "~{prefix}.INV_CPX.bed"
-        File bnd = "~{prefix}.BND_CTX.bed"
+        File del = "~{prefix}.~{contig}.DEL.bed"
+        File dup = "~{prefix}.~{contig}.DUP.bed"
+        File ins = "~{prefix}.~{contig}.INS.bed"
+        File inv = "~{prefix}.~{contig}.INV_CPX.bed"
+        File bnd = "~{prefix}.~{contig}.BND_CTX.bed"
     }    
 }
 
-task SplitVcf {
+task SplitQueryVcf {
     input {
         File vcf
         String sv_pipeline_docker
@@ -243,24 +214,27 @@ task SplitVcf {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
     String prefix = basename(vcf, ".vcf.gz")
     
     command <<<
+        set -euo pipefail
         svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} tmp.bed
         cut -f1-4,7-8 tmp.bed > ~{prefix}.bed
+        set +o pipefail
         head -1 ~{prefix}.bed > header
+        set -o pipefail
         cat header <(awk '{if ($5=="DEL") print}' ~{prefix}.bed )> ~{prefix}.DEL.bed
         cat header <(awk '{if ($5=="DUP") print}' ~{prefix}.bed )> ~{prefix}.DUP.bed
         cat header <(awk '{if ($5=="INS" || $5=="INS:ME" || $5=="INS:ME:ALU" || $5=="INS:ME:LINE1" || $5=="INS:ME:SVA" || $5=="ALU" || $5=="LINE1" || $5=="SVA" || $5=="HERVK" ) print}' ~{prefix}.bed )> ~{prefix}.INS.bed
@@ -283,7 +257,6 @@ task BedtoolsClosest {
         File bed_a
         File bed_b
         String svtype
-        String contig
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -297,25 +270,23 @@ task BedtoolsClosest {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
     
     command <<<
-        awk '{if ($1=="~{contig}") print}' ~{bed_a} > filea.bed
-        awk '{if ($1=="~{contig}") print}' ~{bed_b} > fileb.bed
-
+        set -eu
         paste <(head -1 ~{bed_a}) <(head -1 ~{bed_b}) | sed -e "s/#//g" > ~{svtype}.bed
-
-        bedtools closest -wo -a <(sort -k1,1 -k2,2n filea.bed) -b <(sort -k1,1 -k2,2n fileb.bed) >> ~{svtype}.bed
+        set -o pipefail
+        bedtools closest -wo -a <(sort -k1,1 -k2,2n ~{bed_a}) -b <(sort -k1,1 -k2,2n ~{bed_b}) >> ~{svtype}.bed
     >>>
 
     output {
@@ -341,22 +312,23 @@ task SelectMatchedSVs {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
     String prefix = basename(input_bed, ".bed")
     File pop_list = write_lines(population)
 
     command <<<
+        set -euo pipefail
         Rscript /opt/sv-pipeline/05_annotation/scripts/R1.bedtools_closest_CNV.R \
             -i ~{input_bed} \
             -o ~{prefix}.comparison \
@@ -386,16 +358,16 @@ task SelectMatchedINSs {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
     String prefix = basename(input_bed, ".bed")
@@ -421,6 +393,7 @@ task ModifyVcf {
         File labeled_inv
         File labeled_bnd
         File vcf
+        String prefix
         String ref_prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -435,19 +408,18 @@ task ModifyVcf {
         boot_disk_gb: 10
     }
 
-    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, runtime_default])
     
     runtime {
-        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
-        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        memory: "~{select_first([runtime_attr.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_attr.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_attr.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_attr.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, runtime_default.max_retries])
         docker: sv_pipeline_docker
-        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
-    String prefix = basename(vcf,'.vcf.gz')
     command <<<
         cat ~{labeled_del} > labeled.bed
         cat ~{labeled_dup} >> labeled.bed
