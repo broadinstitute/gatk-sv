@@ -13,7 +13,7 @@ def assert_series_equal(s1: pandas.Series, s2: pandas.Series, context: str, chec
         assert_indices_equal(s1.index, s2.index, context=context)
 
     assert numpy.array_equal(s1.isnull().values, s2.isnull().values), f"{context}: null values not equal"
-    assert numpy.array_equal(s1.loc[~s1.isnull().values], s2.loc[~s2.isnull().values]), \
+    assert numpy.array_equal(s1.loc[~s1.isnull().values], s2.loc[~s2.isnull().values]),\
         f"{context}: non-null values not equal"
 
 

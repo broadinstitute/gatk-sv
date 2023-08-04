@@ -16,7 +16,7 @@ from sv_utils import common, plotting, genomics_io, pedigree_tools, get_truth_ov
 from sv_utils.get_truth_overlap \
     import SampleConfidentVariants, ConfidentVariants, PrecisionRecallCurve, SvTypeCutoffSelector
 
-from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar, \
+from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar,\
     Sequence, Container
 
 
