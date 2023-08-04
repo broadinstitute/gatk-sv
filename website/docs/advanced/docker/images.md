@@ -4,6 +4,9 @@ description: Docker Image Dependencies
 sidebar_position: 1
 ---
 
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 
@@ -37,6 +40,7 @@ flowchart TD
     svbase & cnmopsenv --> cnmpos[cnmops]
 
     ubuntu18[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    samtoolscloud --> wham
     ubuntu2210[Ubuntu 22.10] --> str[STR]
 ```
 
@@ -53,6 +57,26 @@ The list of the Docker images and their latest builds
 are available in [`dockers.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json)
 and [`dockers_azure.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers_azure.json)
 for images hosted on Google Container Registry (GCR) and Azure Container Registry (ACR), respectively.
+
+The table below lists the GATK-SV Docker images and their dependencies. 
+
+| Image                        | Code Dependencies                                                                                                                                                                       | Docker Dependencies                                                                                 |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `manta`                      | <ul><li>`dockerfiles/manta/*`</li></ul>                                                                                                                                                 |                                                                                                     |
+| `melt`                       | <ul><li>`dockerfiles/melt/*`</li></ul>                                                                                                                                                  | <ul><li>`sv-base`</li></ul>                                                                         |
+ | `wham`                       | <ul><li>`dockerfiles/wham/*`</li></ul>                                                                                                                                                  | <ul><li>`samtools-cloud`</li></ul>                                                                  |
+ | `str`                        | <ul><li>`dockerfiles/str/*`</li></ul>                                                                                                                                                   |                                                                                                     |
+ | `sv-base-mini`               | <ul><li>`dockerfiles/sv-base-mini/*`</li></ul>                                                                                                                                          |                                                                                                     |
+ | `samtools-cloud-virtual-env` | <ul><li>`dockerfiles/samtools-cloud-virtual-env/*`</li></ul>                                                                                                                            |                                                                                                     |
+ | `samtools-cloud`             | <ul><li>`dockerfiles/samtools-cloud/*`</li></ul>                                                                                                                                        | <ul><li>`sv-base-mini`</li><li>`samtools-cloud-virtual-env`</li></ul>                               |
+ | `sv-base-virtual-env`        | <ul><li>`dockerfiles/sv-base-virtual-env/*`</li></ul>                                                                                                                                   |                                                                                                     |
+ | `sv-base`                    | <ul><li>`dockerfiles/sv-base/*`</li></ul>                                                                                                                                               | <ul><li>`samtools-cloud`</li><li>`sv-base-virtual-env`</li></ul>                                    |
+ | `cnmops-virtual-env`         | <ul><li>`dockerfiles/cnmops-virtual-env/*`</li></ul>                                                                                                                                    | <ul><li>`sv-base-virtual-env`</li></ul>                                                             |
+ | `cnmops`                     | <ul><li>`dockerfiles/cnmops/*`</li></ul>                                                                                                                                                | <ul><li>`sv-base`</li><li>`cnmops-virtual-env`</li></ul>                                            |
+ | `sv-pipeline-virtual-env`    | <ul><li>`dockerfiles/sv-pipeline-virtual-env/*`</li></ul>                                                                                                                               | <ul><li>`sv-base-mini`</li><li>`sv-base-virtual-env`</li><li>`samtools-cloud-virtual-env`</li></ul> |
+ | `sv-pipeline`                | <ul><li>`dockerfiles/sv-pipeline/*`</li><li> `src/RdTest/*`</li><li>`src/sv-pipeline/*`</li><li>`src/svqc/*`</li><li>`src/svtest/*`</li><li> `src/svtk/*`</li><li>`src/WGD/*`</li></ul> | <ul><li>`sv-base`</li><li>`sv-pipeline-virtual-env`</li></ul>                                       |
+ | `sv-utils-env`               | <ul><li>`dockerfiles/sv-utils-env/*`</li></ul>                                                                                                                                          | <ul><li>`samtools-cloud-virtual-env`</li></ul>                                                      |
+ | `sv-utils`                   | <ul><li>`dockerfiles/sv-utils/*`</li><li>`src/sv_utils/src/*`</li><li> `src/sv_utils/setup.py`</li></ul>                                                                                | <ul><li>`samtools-cloud`</li><li>`sv-utils-env`</li></ul>                                           |
 
 
 ## Advantages of Dividing Images by Functionality
