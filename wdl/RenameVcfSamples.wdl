@@ -10,7 +10,7 @@ workflow RenameVcfSamples {
     Array[String]? new_sample_ids
     File? sample_id_rename_map  # TSV with old sample ID in first column, new sample ID in second column. Either provide this file or both of the string arrays
     String prefix
-    Boolean? check_rename_all_samples
+    Boolean? check_rename_all_samples  # if True, check that all sample IDs in header are in renaming map / current sample IDs list
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
