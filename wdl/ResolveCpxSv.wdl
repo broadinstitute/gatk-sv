@@ -10,6 +10,7 @@ workflow ResolveComplexSv {
   input {
     File vcf
     String prefix
+    String variant_prefix
     String contig
     Int max_shard_size
     File cytobands
@@ -110,7 +111,8 @@ workflow ResolveComplexSv {
       call SvtkResolve {
         input:
           vcf=PullVcfShard.out,
-          prefix="~{prefix}.svtk_resolve.shard_~{i}",
+          file_prefix="~{prefix}.svtk_resolve.shard_~{i}",
+          variant_prefix="~{variant_prefix}_shard_~{i}_",
           chrom=contig,
           cytobands=cytobands,
           cytobands_idx=cytobands_idx,
@@ -398,7 +400,8 @@ task ResolvePrep {
 task SvtkResolve {
   input {
     File vcf
-    String prefix
+    String variant_prefix
+    String file_prefix
     String chrom
     File cytobands
     File cytobands_idx
@@ -412,8 +415,8 @@ task SvtkResolve {
     RuntimeAttr? runtime_attr_override
   }
   
-  String resolved_vcf = "~{prefix}.resolved.unmerged.vcf"
-  String unresolved_vcf = "~{prefix}.unresolved.vcf"
+  String resolved_vcf = "~{file_prefix}.resolved.unmerged.vcf"
+  String unresolved_vcf = "~{file_prefix}.unresolved.vcf"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
@@ -444,11 +447,13 @@ task SvtkResolve {
     set -eu -o pipefail
 
     #Run svtk resolve on variants after all-ref exclusion
+    mkdir tmp
     svtk resolve \
       ~{vcf} \
       ~{resolved_vcf} \
-      -p AllBatches_CPX_~{chrom} \
+      -p ~{variant_prefix} \
       -u ~{unresolved_vcf} \
+      -t ./tmp/ \
       --discfile ~{merged_discfile} \
       --mei-bed ~{mei_bed} \
       --cytobands ~{cytobands} \

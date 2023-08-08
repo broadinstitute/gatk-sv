@@ -9,8 +9,6 @@ Resolve complex SV from inversion/translocation breakpoints and CNV intervals.
 import argparse
 import sys
 import subprocess
-import numpy as np
-import string
 from collections import deque
 from operator import attrgetter
 import itertools
@@ -34,6 +32,17 @@ CPX_INFO = [
     '##INFO=<ID=UNRESOLVED,Number=0,Type=Flag,Description="Variant is unresolved.">',
     '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">'
 ]
+
+
+class RecordNamer:
+    def __init__(self, prefix='CPX_', num_digits=6):
+        self.prefix = prefix
+        self.num_digits = num_digits
+        self.count = 0
+
+    def get_next_id(self, record):
+        self.count += 1
+        return f"{self.prefix}_{record.contig}_{str(self.count - 1).zfill(self.num_digits)}"
 
 
 def _merge_records(vcf, cpx_records, cpx_record_ids):
@@ -81,18 +90,6 @@ def _merge_records(vcf, cpx_records, cpx_record_ids):
         curr_cpx = _next_cpx()
 
 
-def remove_CPX_from_INV(resolve_CPX, resolve_INV):
-    """
-    Return list of inversion calls not overlapped by list of complex calls
-    """
-    cpx_interval = [(i.chrom, i.pos, i.stop) for i in resolve_CPX]
-    out = [
-        inv for inv in resolve_INV
-        if not any(cpx[0] == inv.chrom and cpx[1] <= i.stop and i.pos <= cpx[2] for cpx in cpx_interval)
-    ]
-    return out
-
-
 def multisort(xs, specs):
     for key, reverse in reversed(specs):
         xs.sort(key=attrgetter(key), reverse=reverse)
@@ -137,17 +134,8 @@ def clusters_cleanup(clusters):
     return deque(cluster_single_cleanup(cluster) for cluster in clusters)
 
 
-def get_random_string(random_string_len):
-    """
-    Produce string of random upper-case characters and digits, of requested length
-    """
-    return ''.join(np.random.choice(list(string.ascii_uppercase + string.digits))
-                   for _ in range(random_string_len))
-
-
-def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_',
-                       min_rescan_support=4, pe_blacklist=None, quiet=False,
-                       SR_only_cutoff=1000, random_resolved_id_length=10):
+def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, resolved_record_namer, unresolved_record_namer,
+                       min_rescan_support=4, pe_blacklist=None, quiet=False, SR_only_cutoff=1000):
     """
     Resolve complex SV from CNV intervals and BCA breakpoints.
     Yields all resolved events, simple or complex, in sorted order.
@@ -157,8 +145,10 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_
     cytobands : pysam.TabixFile
     disc_pairs : pysam.TabixFile
     mei_bed : pybedtools.BedTool
-    variant_prefix : str
-        Prefix to assign to resolved variants
+    resolved_record_namer: RecordNamer
+        RecordNamer object for resolved variants
+    unresolved_record_namer: RecordNamer
+        RecordNamer object for unresolved variants
     min_rescan_support : int
         Number of pairs required to count a sample as
         supported during PE rescan
@@ -182,14 +172,8 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_
               'identified ' + str(len(clusters)) + ' candidate complex clusters ' +
               'during first pass', flush=True)
 
-    # resolved_idx = unresolved_idx = 1
-
-    if not variant_prefix.endswith('_'):
-        variant_prefix += '_'
-
     cpx_records = deque()
     cpx_record_ids = set()
-    np.random.seed(1)  # arbitrary fixed seed for reproducibility
 
     for cluster in clusters:
         # Print status for each cluster
@@ -212,22 +196,15 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_
             for record in cluster:
                 cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff)
                 cpx_record_ids = cpx_record_ids.union(cpx.record_ids)
-
-                # Assign random string as resolved ID to handle sharding
-                cpx.vcf_record.id = variant_prefix + \
-                    get_random_string(random_resolved_id_length)
+                cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records.append(cpx.vcf_record)
-                # resolved_idx += 1
             outcome = 'treated as separate unrelated insertions'
         else:
             cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff)
             cpx_record_ids = cpx_record_ids.union(cpx.record_ids)
             if cpx.svtype == 'UNR':
-                # Assign random string as unresolved ID to handle sharding
-                unresolved_vid = 'UNRESOLVED_' + \
-                    get_random_string(random_resolved_id_length)
                 for record in cpx.records:
-                    record.info['EVENT'] = unresolved_vid
+                    record.info['EVENT'] = unresolved_record_namer.get_next_id(cpx.vcf_record)
                     record.info['UNRESOLVED'] = True
                     cpx_records.append(record)
                 # unresolved_idx += 1
@@ -252,8 +229,7 @@ def resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, variant_prefix='CPX_
                           'The following records were merged into the INS record: ' + \
                           ', '.join(cnv_ids_to_append)
             else:
-                cpx.vcf_record.id = variant_prefix + \
-                    get_random_string(random_resolved_id_length)
+                cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records.append(cpx.vcf_record)
                 if 'CPX_TYPE' in cpx.vcf_record.info.keys():
                     outcome = 'resolved as ' + \
@@ -310,14 +286,12 @@ def cluster_cleanup(clusters_v2):
 
 
 def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
-                          mei_bed, variant_prefix='CPX_', min_rescan_support=4,
-                          pe_blacklist=None, quiet=False, SR_only_cutoff=1000,
-                          random_resolved_id_length=10):
+                          mei_bed, resolved_record_namer, unresolved_record_namer,
+                          min_rescan_support=4, pe_blacklist=None, quiet=False,
+                          SR_only_cutoff=1000):
     linked_INV = cluster_INV(resolve_INV)
     clusters_v2 = link_cpx_V2(linked_INV, cpx_dist=2000)
     clusters_v2 = cluster_cleanup(clusters_v2)
-
-    np.random.seed(0)  # arbitrary fixed seed for reproducibility
 
     # Print number of candidate clusters identified
     if not quiet:
@@ -349,10 +323,7 @@ def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
             for record in cluster:
                 cpx = ComplexSV([record], cytobands, mei_bed, SR_only_cutoff)
                 cpx_record_ids_v2.update(cpx.record_ids)
-
-                # Assign random string as resolved ID to handle sharding
-                cpx.vcf_record.id = variant_prefix + '_' + \
-                    get_random_string(random_resolved_id_length)
+                cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records_v2.append(cpx.vcf_record)
                 # resolved_idx += 1
             outcome = 'treated as separate unrelated insertions'
@@ -360,18 +331,14 @@ def resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs,
             cpx = ComplexSV(cluster, cytobands, mei_bed, SR_only_cutoff)
             cpx_record_ids_v2.update(cpx.record_ids)
             if cpx.svtype == 'UNR':
-                # Assign random string as unresolved ID to handle sharding
-                unresolved_vid = 'UNRESOLVED_' + \
-                    get_random_string(random_resolved_id_length)
                 for record in cpx.records:
-                    record.info['EVENT'] = unresolved_vid
+                    record.info['EVENT'] = unresolved_record_namer.get_next_id(cpx.vcf_record)
                     record.info['UNRESOLVED'] = True
                     cpx_records_v2.append(record)
                 # unresolved_idx += 1
                 outcome = 'is unresolved'
             else:
-                cpx.vcf_record.id = variant_prefix + '_' + \
-                    get_random_string(random_resolved_id_length)
+                cpx.vcf_record.id = resolved_record_namer.get_next_id(cpx.vcf_record)
                 cpx_records_v2.append(cpx.vcf_record)
                 if 'CPX_TYPE' in cpx.vcf_record.info.keys():
                     outcome = 'resolved as ' + \
@@ -417,11 +384,6 @@ def main(argv):
     parser.add_argument('--cytobands', help='Cytoband file. Required to '
                         'correctly classify interchromosomal events.',
                         required=True)
-    #  parser.add_argument('--bincov', help='Bincov file.', required=True)
-    #  parser.add_argument('--medianfile', help='Medianfile', required=True)
-    #  parser.add_argument('--famfile', help='Fam file', required=True)
-    #  parser.add_argument('--cutoffs', help='Random forest cutoffs',
-    #  required=True)
     parser.add_argument('--min-rescan-pe-support', type=int, default=4,
                         help='Minumum discordant pairs required during '
                         'single-ender rescan.')
@@ -433,6 +395,10 @@ def main(argv):
                         help='Unresolved complex breakpoints and CNV.')
     parser.add_argument('-p', '--prefix', default='CPX_',
                         help='Variant prefix [CPX_]')
+    parser.add_argument('-d', '--variant-id-digits', type=int, default=6,
+                        help='Number of digits in variant IDs.')
+    parser.add_argument('-t', '--temp-dir', type=str, default=None,
+                        help='Temporary directory path for vcf sorting. [Default uses TMPDIR environment variable]')
     parser.add_argument('-q', '--quiet', default=False,
                         help='Disable progress logging to stderr.')
 
@@ -451,7 +417,10 @@ def main(argv):
     for line in CPX_INFO:
         vcf.header.add_line(line)
 
-    resolved_pipe = subprocess.Popen(['vcf-sort', '-c'],
+    sort_command = ['bcftools', 'sort']
+    if args.temp_dir:
+        sort_command.extend(['--temp-dir', args.temp_dir])
+    resolved_pipe = subprocess.Popen(sort_command,
                                      stdin=subprocess.PIPE,
                                      stdout=args.resolved)
 
@@ -465,9 +434,6 @@ def main(argv):
         blacklist = pysam.TabixFile(args.pe_blacklist)
     else:
         blacklist = None
-    #  cutoffs = pd.read_table(args.cutoffs)
-    #  rdtest = svu.RdTest(args.bincov, args.medianfile, args.famfile,
-        #  list(vcf.header.samples), cutoffs)
 
     if args.discfile is not None:
         disc_pairs = pysam.TabixFile(args.discfile)
@@ -481,10 +447,11 @@ def main(argv):
     resolved_records = []
     unresolved_records = []
     resolve_INV = []
-    # cpx_dist = 20000
+    resolved_record_namer = RecordNamer(prefix=args.prefix + '_CPX', num_digits=args.variant_id_digits)
+    unresolved_record_namer = RecordNamer(prefix=args.prefix + '_UNRES', num_digits=args.variant_id_digits)
 
-    for record in resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, args.prefix,
-                                     args.min_rescan_pe_support, blacklist, args.quiet):
+    for record in resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, resolved_record_namer,
+                                     unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet):
         # Move members to existing variant IDs unless variant is complex
         if record.info['SVTYPE'] != 'CPX' and args.prefix not in record.id:
             # Don't alter MEMBERS if the prefix of record.id is already in MEMBERS
@@ -500,7 +467,6 @@ def main(argv):
         else:
             resolved_records.append(record)
 
-    # out_rec = resolve_complex_sv(vcf, cytobands, disc_pairs, mei_bed, args.prefix, args.min_rescan_pe_support, blacklist)
     # Print status
     if not args.quiet:
         now = datetime.datetime.now()
@@ -510,9 +476,8 @@ def main(argv):
 
     # RLC: As of Sept 19, 2018, only considering inversion single-enders in second-pass
     # due to too many errors in second-pass linking and variant reporting
-    cpx_records_v2 = resolve_complex_sv_v2(resolve_INV,
-                                           cytobands, disc_pairs, mei_bed, args.prefix,
-                                           args.min_rescan_pe_support, blacklist, args.quiet)
+    cpx_records_v2 = resolve_complex_sv_v2(resolve_INV, cytobands, disc_pairs, mei_bed, resolved_record_namer,
+                                           unresolved_record_namer, args.min_rescan_pe_support, blacklist, args.quiet)
 
     for record in cpx_records_v2:
         # Move members to existing variant IDs unless variant is complex
