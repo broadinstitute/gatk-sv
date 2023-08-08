@@ -53,17 +53,13 @@ def write_vcf(header: pysam.VariantHeader,
         if r.id not in all_unresolved_vids_set or r.id not in inv_resolved_members_set:
             # Resolved in ALL vcf, or unresolved in both VCFs
             sys.stdout.write(str(r))
-        else:
-            sys.stderr.write(f"all excluded: {r.id}\n")
     for r in inv_vcf:
         if r.id in inv_resolved_vids_set:
             # Resolved variant in the INV vcf
             members = get_members(r)
-            sys.stderr.write(f"inv considered: {r.id}\n")
             if all((m in all_unresolved_members_set) for m in members):
                 # Resolved in the INV vcf and every member unresolved in the ALL vcf
                 sys.stdout.write(str(r))
-                sys.stderr.write(f"\tinv included: {r.id}\n")
 
 
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
