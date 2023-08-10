@@ -67,7 +67,17 @@ task RenameVcfSamplesTask {
   command <<<
     set -euo pipefail
     if ~{check_rename_all_samples}; then
-      python /opt/sv-pipeline/scripts/vcf_replacement_samples.py --vcf ~{vcf} --dict ~{sample_id_rename_map} > reheader.list
+      bcftools query -l ~{vcf} | sort > samples.list
+      python <<CODE
+with open("~{sample_id_rename_map}", 'r') as rename, open("samples.list", 'r') as header:
+  all_to_rename = set()
+  for line in rename:
+    all_to_rename.add(line.strip("\n").split("\t")[0])  # create set of sample IDs to rename
+  for line in header:
+    sample = line.strip("\n")
+    if sample not in all_to_rename:
+      raise ValueError(f"Sample {sample} is in the VCF header but not in the renaming map")
+CODE
     fi
     bcftools reheader --samples ~{sample_id_rename_map} -o ~{prefix}.vcf.gz ~{vcf}
     tabix ~{prefix}.vcf.gz
