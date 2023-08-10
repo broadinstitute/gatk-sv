@@ -90,9 +90,6 @@ workflow FilterBatchSites {
     File sites_filtered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
     File sites_filtered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
     Int sites_filtered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
-    RuntimeAttr? runtime_attr_count_svs = PlotSVCountsPerSample.runtime_attr_count_svs
-    RuntimeAttr? runtime_attr_plot_svcounts = PlotSVCountsPerSample.runtime_attr_plot_svcounts
-    RuntimeAttr? runtime_attr_cat_outliers_preview = PlotSVCountsPerSample.runtime_attr_cat_outliers_preview
   }
 
 }
