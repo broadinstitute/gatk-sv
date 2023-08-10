@@ -294,7 +294,7 @@ workflow ClusterBatch {
     input:
       prefix = batch,
       vcfs = [ClusterDepth.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf],
-      N_IQR_cutoff = N_IQR_cutoff_plotting,
+      N_IQR_cutoff = select_first([N_IQR_cutoff_plotting]),
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
       runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
@@ -313,8 +313,8 @@ workflow ClusterBatch {
     File? clustered_melt_vcf_index = ClusterPESR_melt.clustered_vcf_index
     File? clustered_scramble_vcf = ClusterPESR_scramble.clustered_vcf
     File? clustered_scramble_vcf_index = ClusterPESR_scramble.clustered_vcf_index
-    Array[File?] clustered_sv_counts = PlotSVCountsPerSample.sv_counts
-    Array[File?] clustered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    Array[File]? clustered_sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File]? clustered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
     File? clustered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
     File? clustered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
     Int? clustered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples

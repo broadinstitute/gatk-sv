@@ -207,7 +207,7 @@ task FilterAnnotateVcf {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File annotated_vcf = "${prefix}.with_evidence.vcf.gz",
+    File annotated_vcf = "${prefix}.with_evidence.vcf.gz"
   }
   command <<<
 
