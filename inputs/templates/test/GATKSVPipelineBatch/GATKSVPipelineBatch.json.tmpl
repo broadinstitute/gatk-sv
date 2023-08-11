@@ -94,7 +94,7 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_exclude_overlap_fraction": "0.5",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_interval_overlap": "0.8",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.depth_clustering_algorithm": "SINGLE_LINKAGE",
-  "GATKSVPipelineBatch.GATKSVPipelinePhase1.N_IQR_cutoff_plotting": "6",
+  "GATKSVPipelineBatch.N_IQR_cutoff_plotting": "6",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.BAF_split_size": "10000",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.RD_split_size": "10000",
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.PE_split_size": "10000",
@@ -104,7 +104,7 @@
   "GATKSVPipelineBatch.GATKSVPipelinePhase1.segdups": {{ reference_resources.segdups | tojson }},
 
   "GATKSVPipelineBatch.outlier_cutoff_table" : {{ test_batch.outlier_cutoff_table | tojson }},
-  "GATKSVPipelineBatch.outlier_cutoff_nIQR": "999999",
+  "GATKSVPipelineBatch.GATKSVPipelinePhase1.outlier_cutoff_nIQR": "999999",
   "GATKSVPipelineBatch.GenotypeBatch.n_RD_genotype_bins": "100000",
   "GATKSVPipelineBatch.GenotypeBatch.n_per_split": "5000",
   "GATKSVPipelineBatch.GenotypeBatch.pesr_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
