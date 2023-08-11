@@ -442,11 +442,6 @@ workflow GATKSVPipelineBatch {
     File? sites_filtered_wham_vcf = GATKSVPipelinePhase1.sites_filtered_wham_vcf
     File? sites_filtered_melt_vcf = GATKSVPipelinePhase1.sites_filtered_melt_vcf
     File? sites_filtered_depth_vcf = GATKSVPipelinePhase1.sites_filtered_depth_vcf
-    Array[File?] clustered_sv_counts = GATKSVPipelinePhase1.clustered_sv_counts
-    Array[File?] clustered_sv_count_plots = GATKSVPipelinePhase1.clustered_sv_count_plots
-    File? clustered_outlier_samples_preview = GATKSVPipelinePhase1.clustered_outlier_samples_preview
-    File? clustered_outlier_samples_with_reason = GATKSVPipelinePhase1.clustered_outlier_samples_with_reason
-    Int? clustered_num_outlier_samples = GATKSVPipelinePhase1.clustered_num_outlier_samples
     File cutoffs = GATKSVPipelinePhase1.cutoffs
     File genotyped_pesr_vcf = GenotypeBatch.genotyped_pesr_vcf
     File genotyped_depth_vcf = GenotypeBatch.genotyped_depth_vcf
