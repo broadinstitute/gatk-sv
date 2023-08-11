@@ -425,8 +425,8 @@ workflow GATKSVPipelineBatch {
     File? merged_melt_vcf_index = GATKSVPipelinePhase1.melt_vcf_index
     File? merged_wham_vcf = GATKSVPipelinePhase1.wham_vcf
     File? merged_wham_vcf_index = GATKSVPipelinePhase1.wham_vcf_index
-    Array[File?] clustered_sv_counts = GATKSVPipelinePhase1.clustered_sv_counts
-    Array[File?] clustered_sv_count_plots = GATKSVPipelinePhase1.clustered_sv_count_plots
+    Array[File] ?clustered_sv_counts = GATKSVPipelinePhase1.clustered_sv_counts
+    Array[File]? clustered_sv_count_plots = GATKSVPipelinePhase1.clustered_sv_count_plots
     File? clustered_outlier_samples_preview = GATKSVPipelinePhase1.clustered_outlier_samples_preview
     File? clustered_outlier_samples_with_reason = GATKSVPipelinePhase1.clustered_outlier_samples_with_reason
     Int? clustered_num_outlier_samples = GATKSVPipelinePhase1.clustered_num_outlier_samples
