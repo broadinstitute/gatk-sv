@@ -504,8 +504,8 @@ workflow GATKSVPipelinePhase1 {
     File? melt_vcf_index = ClusterBatch.clustered_melt_vcf_index
     File? scramble_vcf = ClusterBatch.clustered_scramble_vcf
     File? scramble_vcf_index = ClusterBatch.clustered_scramble_vcf_index
-    Array[File?] clustered_sv_counts = ClusterBatch.clustered_sv_counts
-    Array[File?] clustered_sv_count_plots = ClusterBatch.clustered_sv_count_plots
+    Array[File]? clustered_sv_counts = ClusterBatch.clustered_sv_counts
+    Array[File]? clustered_sv_count_plots = ClusterBatch.clustered_sv_count_plots
     File? clustered_outlier_samples_preview = ClusterBatch.clustered_outlier_samples_preview
     File? clustered_outlier_samples_with_reason = ClusterBatch.clustered_outlier_samples_with_reason
     Int? clustered_num_outlier_samples = ClusterBatch.clustered_num_outlier_samples
