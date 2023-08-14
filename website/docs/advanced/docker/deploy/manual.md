@@ -66,6 +66,29 @@ from a private container registry or intending to publish the resulting
 images to a registry, ensure that you are logged in with credentials 
 that grant you access to the registry.
 
+<Tabs
+ groupId="cr"
+ defaultValue="gcr"
+ values={[
+  { label: 'ACR', value: 'acr', },
+  { label: 'GCR', value: 'gcr', }
+ ]
+}>
+ <TabItem value="acr">
+
+ You may follow 
+ [this documentation](https://learn.microsoft.com/en-us/azure/container-registry/container-registry-authentication?tabs=azure-cli)
+ on setting up Docker authentication to an Azure container registry. 
+ </TabItem>
+ <TabItem value="gcr">
+
+ You may follow
+ [this documentation](https://cloud.google.com/artifact-registry/docs/docker/authentication)
+ on setting up Docker authentication to a Google container registry. 
+
+ </TabItem>
+</Tabs>
+
 ### Checkout codebase {#checkout}
 
 Make sure you are on the `git` branch with the code you want to add 
