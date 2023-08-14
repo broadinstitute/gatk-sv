@@ -101,9 +101,6 @@ workflow GATKSVPipelinePhase1 {
     Array[File]? wham_vcfs         # Wham VCF
     Int min_svsize                 # Minimum SV length to include
 
-    # PlotSVCountsPerSample metrics
-    Int? N_IQR_cutoff_plotting
-
     # QC options
     Boolean run_matrix_qc
 
@@ -163,6 +160,8 @@ workflow GATKSVPipelinePhase1 {
     Int pesr_breakend_window
     String? pesr_clustering_algorithm
 
+    Int? N_IQR_cutoff_plotting
+
     File? baseline_depth_vcf_cluster_batch
     File? baseline_manta_vcf_cluster_batch
     File? baseline_wham_vcf_cluster_batch
@@ -186,6 +185,9 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch
     RuntimeAttr? runtime_override_concat_vcfs_depth_cluster_batch
     RuntimeAttr? runtime_attr_exclude_intervals_pesr_cluster_batch
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
 
     ############################################################
     ## GenerateBatchMetrics
@@ -388,7 +390,10 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_svcluster_depth=runtime_attr_svcluster_depth_cluster_batch,
       runtime_attr_gatk_to_svtk_vcf_depth=runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch,
       runtime_override_concat_vcfs_depth=runtime_override_concat_vcfs_depth_cluster_batch,
-      runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch
+      runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
   }
 
   call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
