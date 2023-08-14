@@ -28,9 +28,9 @@ This section provides guidelines on building and publishing the images using thi
 
 
 :::warning Linux Machine Required
-Currently, GATK-SV Docker images can only be built on the `linux/amd64` platform, 
-which is a machine running Linux OS on x86-64 architecture.
-Images build on Apple M1 (`linux/arm64`) are not currently supported.
+
+Only Linux machines (dedicated or virtual) are supported for building GATK-SV Docker images. 
+Images created on non-Linux machines may not work with Terra or Cromwell execution environment.
 The instructions provided on this page assume you are using a Linux Ubuntu machine.
 :::
 
@@ -39,11 +39,11 @@ The instructions provided on this page assume you are using a Linux Ubuntu machi
 ## Setup
 
 ### Runtime environment {#runtime}
-Although building GATK-SV Docker images on non-Linux machines is possible, 
-it may result in unsuccessful builds or images incompatible with the workflow 
-execution runtime, especially on MacBooks with M1 chips. To ensure reproducibility, 
-we strongly recommend building images on a Linux machine. You can use a local Linux 
-machine or obtain a virtual machine from a cloud platform. 
+
+Currently, GATK-SV Docker images can only be built on the `linux/amd64` platform, 
+which is a machine running Linux OS on x86-64 architecture.
+Images build on Apple M1 (`linux/arm64`) are not currently supported.
+You can use a local Linux machine or obtain a virtual machine from a cloud platform. 
 
 You may follow the steps in the 
 [GCP](https://cloud.google.com/compute/docs/instances/create-start-instance#publicimage)
