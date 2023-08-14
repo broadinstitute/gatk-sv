@@ -134,6 +134,24 @@ The arguments used are explained in the following.
 
 You may follow either of the following practices to determine which images to rebuild.
 
+- **Automatic:**
+  The script can automatically determine which Docker images need a rebuild 
+  based on a list of changed files and cross-referencing them with the 
+  table on [this page](/docs/advanced/docker/images.md). 
+  Specifically, it takes two git commit SHAs as input, uses `git diff` 
+  to extract the list of changed files, and then cross-referencing them 
+  with [this table](/docs/advanced/docker/images.md) to identify the Docker 
+  images requiring rebuilding. Details can be found on [this page](/docs/advanced/docker/deploy/incremental.md).
+  To use this feature, commit the changes first, identify `BASE_SHA` and `HEAD_SHA` using `git log` or GitHub 
+  (details on [this page](/docs/advanced/docker/deploy/incremental.md)), 
+  and then call the script as follows.
+
+  ```shell
+  python scripts/docker/build_docker.py \
+      --base-git-commit BASE_SHA \
+      --current-git-commit HEAD_SHA
+  ```
+
 - **Manual: ** 
   You may refer to the table on [this page](/docs/advanced/docker/images.md)
   to determine which Docker images to rebuild based on the changed files.
@@ -154,24 +172,6 @@ You may follow either of the following practices to determine which images to re
   ```shell
   python scripts/docker/build_docker.py \
       --targets sv-pipeline str
-  ```
-     
-- **Automatic:**
-  The script can automatically determine which Docker images need a rebuild 
-  based on a list of changed files and cross-referencing them with the 
-  table on [this page](/docs/advanced/docker/images.md). 
-  Specifically, it takes two git commit SHAs as input, uses `git diff` 
-  to extract the list of changed files, and then cross-referencing them 
-  with [this table](/docs/advanced/docker/images.md) to identify the Docker 
-  images requiring rebuilding. Details can be found on [this page](/docs/advanced/docker/deploy/incremental.md).
-  To use this feature, commit the changes first, identify `BASE_SHA` and `HEAD_SHA` using `git log` or GitHub 
-  (details on [this page](/docs/advanced/docker/deploy/incremental.md)), 
-  and then call the script as follows.
-
-  ```shell
-  python scripts/docker/build_docker.py \
-      --base-git-commit BASE_SHA \
-      --current-git-commit HEAD_SHA
   ```
      
 Please note that `--targets` and `--base-git-commit --current-git-commit` 
