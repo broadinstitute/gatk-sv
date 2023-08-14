@@ -58,6 +58,8 @@ are available in [`dockers.json`](https://github.com/broadinstitute/gatk-sv/blob
 and [`dockers_azure.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers_azure.json)
 for images hosted on Google Container Registry (GCR) and Azure Container Registry (ACR), respectively.
 
+## Docker Images List {#list}
+
 The table below lists the GATK-SV Docker images and their dependencies. 
 
 | Image                        | Code Dependencies                                                                                                                                                                       | Docker Dependencies                                                                                 |
@@ -94,8 +96,7 @@ GATK-SV Docker images for users and developers, respectively.
 
 - **Reduced Docker image size:**
 Using task-specific Docker images reduces sizes, requiring less storage space 
-in container registries such as Azure Container Registry (ACR) or 
-Google Cloud Container Registry (GCR). It also enables faster image transfer 
+in container registries. It also enables faster image transfer 
 when creating virtual machines for task execution.
 
 

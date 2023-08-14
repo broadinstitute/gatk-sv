@@ -137,10 +137,10 @@ You may follow either of the following practices to determine which images to re
 - **Automatic:**
   The script can automatically determine which Docker images need a rebuild 
   based on a list of changed files and cross-referencing them with the 
-  table on [this page](/docs/advanced/docker/images.md). 
+  table in [this section](/docs/advanced/docker/images#list). 
   Specifically, it takes two git commit SHAs as input, uses `git diff` 
   to extract the list of changed files, and then cross-referencing them 
-  with [this table](/docs/advanced/docker/images.md) to identify the Docker 
+  with [this table](/docs/advanced/docker/images#list) to identify the Docker 
   images requiring rebuilding. Details can be found on [this page](/docs/advanced/docker/deploy/incremental.md).
   To use this feature, commit the changes first, identify `BASE_SHA` and `HEAD_SHA` using `git log` or GitHub 
   (details on [this page](/docs/advanced/docker/deploy/incremental.md)), 
@@ -153,7 +153,7 @@ You may follow either of the following practices to determine which images to re
   ```
 
 - **Manual: ** 
-  You may refer to the table on [this page](/docs/advanced/docker/images.md)
+  You may refer to the table in [this section](/docs/advanced/docker/images#list)
   to determine which Docker images to rebuild based on the changed files.
   For instance, if you modified any of the files under the
   [`gatk-sv/src/svtk/`](https://github.com/broadinstitute/gatk-sv/tree/main/src/svtk)
