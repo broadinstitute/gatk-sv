@@ -183,7 +183,6 @@ Combining or avoiding both options is not currently supported.
 Following the steps above, the script builds the specified Docker images 
 _and all the images derived from them_, ensuring proper propagation of changes through the pipeline. 
 If you want to build only the specified images, you would need to add the `--skip-dependent-images` flag.
-
 :::
 
 
@@ -294,6 +293,8 @@ the format is generally as follows.
 
  </TabItem>
 </Tabs>
+
+Please note that we are currently using GCR, but it has been migrated to Google Artifact Registry.
 
 
 
