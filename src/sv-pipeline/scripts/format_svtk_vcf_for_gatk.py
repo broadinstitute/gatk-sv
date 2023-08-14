@@ -137,19 +137,11 @@ def convert(record: pysam.VariantRecord,
     is_ddup = svtype == 'CPX' and 'dDUP' in record.info.get('CPX_TYPE', '')
     if svtype == 'BND' or svtype == 'INS' or svtype == 'CTX' or is_ddup:
         record.stop = record.start + 1
-        if is_ddup:
-            # e.g. SOURCE=DUP_chrX:49151588-49151850
-            source = record.info.get('SOURCE', None)
-            if source is not None:
-                tokens = source.split(':')
-                chr2 = tokens[0].split('_')[-1]
-                end2 = int(tokens[-1].split('-')[0])
-                record.info['CHR2'] = chr2
-                record.info['END2'] = end2
-            else:
-                # Sometimes SOURCE is not set (may be from CPX review workflow)
-                record.info['CHR2'] = record.chrom
-                record.info['END2'] = record.stop
+    if svtype == 'CPX':
+        if 'CHR2' in record.info:
+            record.info.pop('CHR2')
+        if 'END2' in record.info:
+            record.info.pop('END2')
     # Delete empty INFO fields (GATK does not like "." for non-String types)
     keys = record.info.keys()
     for k in keys:

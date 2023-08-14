@@ -1,6 +1,6 @@
 # This docker file exists because we need samtools to be able to access GCS buckets
 # so we base off the sv-base-mini image, which has samtools installed, 
-# and only install GCloud SDK here for authentication purpose
+# and only install GCloud SDK here for authentication purposes.
 
 # Start with the barebones image that has samtools (a version that must support NIO) installed
 ARG MINIBASE_IMAGE=sv-base-mini:latest
@@ -24,8 +24,8 @@ ARG CLOUD_SDK_VERSION
 
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
     | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
-    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
-    tee /usr/share/keyrings/cloud.google.gpg && \
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | apt-key --keyring /usr/share/keyrings/cloud.google.gpg  add - && \
     apt-get update -y && \
     apt-get install google-cloud-sdk=$CLOUD_SDK_VERSION -y && \
     gcloud config set core/disable_usage_reporting true && \

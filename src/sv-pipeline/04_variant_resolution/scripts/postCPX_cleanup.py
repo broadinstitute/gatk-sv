@@ -9,7 +9,7 @@ Perform preliminary aesthetic cleanup to a VCF after svtk resolve
 import argparse
 import sys
 import pysam
-import svtk.standardize as standardize
+from svtk.utils import parse_bnd_pos
 
 INS_ALT_INFO = [
     '##ALT=<ID=INS:ME,Description="Mobile element insertion of unspecified ME class">',
@@ -83,12 +83,13 @@ def cleanup(vcf, fout):
         # Clean up BNDs
         elif svtype == 'BND':
 
+            # copy bnd data to CHR2, END2
             if "[" in record.alts[0] or "]" in record.alts[0]:
-                chr2, end2 = standardize.parse_bnd_pos(record.alts[0])
-
-                # copy bnd data to CHR2, END2
+                chr2, end2 = parse_bnd_pos(record.alts[0])
                 record.info['CHR2'] = chr2
                 record.info['END2'] = end2
+            else:
+                record.info['END2'] = record.stop
 
             # Correct alt syntax
             record.alts = ('<BND>', )

@@ -90,12 +90,8 @@ fi
 cd ${QCTMP}
 mkdir ${QCTMP}/perSample
 mkdir ${QCTMP}/perFamily
-#Unzip VCF, if gzipped
-if [ $( file ${VCF} | fgrep " gzip " | wc -l ) -gt 0 ]; then
-  zcat ${VCF} > ${QCTMP}/input.vcf
-else
-  cp ${VCF} ${QCTMP}/input.vcf
-fi
+#Unzip VCF
+zcat ${VCF} > ${QCTMP}/input.vcf
 #Gather SV types to process
 cut -f1 ${SVTYPES} | sort | uniq > ${QCTMP}/svtypes.txt
 

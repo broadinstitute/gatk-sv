@@ -87,6 +87,7 @@ workflow ResolveComplexVariants {
       input:
         vcf=SubsetInversions.filtered_vcf,
         prefix="~{cohort_name}.~{contig}.inv_only",
+        variant_prefix="~{cohort_name}_inv_",
         contig=contig,
         max_shard_size=max_shard_size,
         cytobands=cytobands,
@@ -132,6 +133,7 @@ workflow ResolveComplexVariants {
       input:
         vcf=BreakpointOverlap.out,
         prefix="~{cohort_name}.~{contig}.all",
+        variant_prefix="~{cohort_name}_all_",
         contig=contig,
         max_shard_size=max_shard_size,
         cytobands=cytobands,
@@ -164,7 +166,9 @@ workflow ResolveComplexVariants {
     call IntegrateResolvedVcfs {
       input:
         inv_res_vcf=ResolveCpxInv.resolved_vcf_merged,
+        inv_res_vcf_index=ResolveCpxInv.resolved_vcf_merged_idx,
         all_res_vcf=ResolveCpxAll.resolved_vcf_merged,
+        all_res_vcf_index=ResolveCpxAll.resolved_vcf_merged_idx,
         prefix="~{cohort_name}.~{contig}.resolved",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_integrate_resolved_vcfs
@@ -232,7 +236,9 @@ workflow ResolveComplexVariants {
 task IntegrateResolvedVcfs {
   input {
     File inv_res_vcf
+    File inv_res_vcf_index
     File all_res_vcf
+    File all_res_vcf_index
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -241,7 +247,7 @@ task IntegrateResolvedVcfs {
   Float input_size = size([inv_res_vcf, all_res_vcf], "GiB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10 + input_size * 20),
+                                  disk_gb: ceil(10 + input_size * 2),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -260,43 +266,11 @@ task IntegrateResolvedVcfs {
 
   command <<<
     set -euxo pipefail
-
-    ##make bed of the inversion resolved vcf##
-    zcat ~{inv_res_vcf} \
-      |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
-      |svtk vcf2bed stdin inv.resolve.bed --no-samples -i MEMBERS
-
-    ##make beds of the fully resolved vcf##
-    zcat ~{all_res_vcf} \
-      |awk '{if ($8~"UNRESOLVED" || $1~"#") print}' \
-      |svtk vcf2bed stdin all.unresolved.inv.bed --no-samples -i MEMBERS
-
-    zcat ~{all_res_vcf} \
-      |awk '{if ($8!~"UNRESOLVED" || $1~"#") print}' \
-      |svtk vcf2bed stdin all.resolved.inv.bed --no-samples -i MEMBERS
-
-    ##get unresolved variants from full vcf that are resolved in inversion resolved vcf###
-    zcat ~{inv_res_vcf} \
-      |awk '{if ($8!~"UNRESOLVED" && $1!~"#") print}' \
-      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if (!($3 in inFileA)) print }' \
-        <(awk '{if ($NF!="MEMBERS") print $NF}' all.resolved.inv.bed | tr ',' '\n') - \
-      >add.vcf.lines.txt
-
-    ##get unresolved variants id from full vcf to strip since they are resolved in inversion resolved vcf###
-    ##inversions that cluster were other variants (rare) are kept as unresolved though they will also be part of a resolved variant in add.vcf.lines.txt##
-    awk '{if ($NF!="MEMBERS") print $NF}' inv.resolve.bed \
-      |tr ',' '\n'\
-      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$4]; next} {if ($4 in inFileA) print }' all.resolved.inv.bed - \
-      |awk '{if ($NF!~",")print $4}' \
-      >remove.unresolved.vcf.ids.txt
-
-    mkdir temp
-    zcat ~{all_res_vcf} \
-      |awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if (!($3 in inFileA)) print }' remove.unresolved.vcf.ids.txt - \
-      |cat - add.vcf.lines.txt \
-      |bcftools sort - -O z -T temp \
-      > ~{prefix}.vcf.gz
-
+    mkdir tmp
+    python /opt/sv-pipeline/04_variant_resolution/scripts/integrate_resolved_vcfs.py \
+      --all-vcf ~{all_res_vcf} \
+      --inv-only-vcf ~{inv_res_vcf} \
+      | bcftools sort --temp-dir ./tmp -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 

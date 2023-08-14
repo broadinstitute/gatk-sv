@@ -17,7 +17,7 @@ INFO fields, with specified constraints:
 import os
 import tempfile
 import pysam
-from svtk.utils import make_bnd_alt, NULL_GT
+from svtk.utils import make_bnd_alt, NULL_GT, parse_bnd_pos
 
 
 def any_called(record):
@@ -289,59 +289,3 @@ class VCFStandardizer:
             std_rec.stop = stop
 
         return std_rec
-
-
-def parse_bnd_pos(alt):
-    """
-    Parses standard VCF BND ALT (e.g. N]1:1000]) into chrom, pos
-
-    Parameters
-    ----------
-    alt : str
-        VCF-formatted BND ALT
-
-    Returns
-    -------
-    chrom : str
-    pos : int
-    """
-    alt = alt.strip('ATCGNRYSWKMBDHV')
-    # Strip brackets separately, otherwise GL contigs will be altered
-    alt = alt.strip('[]')
-
-    # HLA contigs include colons, so be careful when parsing
-    data = alt.split(':')
-    chr2 = ':'.join(data[:-1]).replace("CHR", "chr")
-    end = int(data[-1])
-
-    return chr2, end
-
-
-def parse_bnd_strands(alt):
-    """
-    Parses standard VCF BND ALT (e.g. N]1:1000]) for strandedness
-
-    Note about parsing strands from BND ALT:
-    t[p[ piece extending to the right of p is joined after t (+-)
-    t]p] reverse comp piece extending left of p is joined after t (++)
-    ]p]t piece extending to the left of p is joined before t (-+)
-    [p[t reverse comp piece extending right of p is joined before t (--)
-
-    Parameters
-    ----------
-    alt : str
-        VCF-formatted BND ALT
-
-    Returns
-    -------
-    strands : str
-        ++,+-,-+,--
-    """
-    if alt.endswith('['):
-        return '+-'
-    elif alt.endswith(']'):
-        return '++'
-    elif alt.startswith(']'):
-        return '-+'
-    elif alt.startswith('['):
-        return '--'

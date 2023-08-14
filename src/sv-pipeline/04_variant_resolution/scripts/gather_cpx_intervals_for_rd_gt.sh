@@ -64,11 +64,6 @@ if ! [ -s ${INVCF} ]; then
   usage
   exit 0
 fi
-if [ $( file ${INVCF} | fgrep "gzip" | wc -l ) -lt 1 ]; then
-  echo -e "\nERROR: input VCF must be bgzipped\n"
-  usage
-  exit 0
-fi
 if [ -z ${OUT} ]; then
   echo -e "\nERROR: path to output BED not specified\n"
   usage

@@ -4,7 +4,7 @@ import datetime
 import argparse
 import json
 import warnings
-
+import textwrap
 import numpy
 import scipy
 import scipy.stats
@@ -16,7 +16,7 @@ from sv_utils import common, plotting, genomics_io, pedigree_tools, get_truth_ov
 from sv_utils.get_truth_overlap \
     import SampleConfidentVariants, ConfidentVariants, PrecisionRecallCurve, SvTypeCutoffSelector
 
-from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar,\
+from typing import List, Dict, Text, Iterable, Optional, Mapping, Union, Tuple, Set, Collection, Iterator, TypeVar, \
     Sequence, Container
 
 
@@ -94,6 +94,7 @@ class Default:
     min_num_called_gt_hardy_weinberg = 5
     histogram_width = 0.9
     make_figures = _all_make_figures
+    sv_selector_size_ranges = get_truth_overlap.Default.sv_selector_size_ranges
 
 
 def log(text: str):
@@ -1100,13 +1101,16 @@ def _draw_extra_legend_axis(
     ax.grid(False)
     ax.set_xticks([])
     ax.set_yticks([])
+    bbox = ax.get_tightbbox(renderer=fig.canvas.get_renderer())
+    approximate_ax_width_chars = bbox.width / legend_font_size
+    wrap_width = approximate_ax_width_chars
     for __ in range(advance_color_cycle):
         # unlabeled lines to advance color cycle
         ax.plot([numpy.nan, numpy.nan], [numpy.nan, numpy.nan])
     for line_label in line_labels:
-        ax.plot([numpy.nan, numpy.nan], [numpy.nan, numpy.nan], label=line_label)
+        ax.plot([numpy.nan, numpy.nan], [numpy.nan, numpy.nan], label='\n'.join(textwrap.wrap(line_label, wrap_width)))
     for marker, marker_label in markers:
-        ax.plot(numpy.nan, numpy.nan, marker, label=marker_label)
+        ax.plot(numpy.nan, numpy.nan, marker, label='\n'.join(textwrap.wrap(marker_label, wrap_width)))
     ax.legend(fontsize=legend_font_size)
 
 
@@ -2162,7 +2166,7 @@ def _compute_hardy_weinberg_plotted_boundary(
     proportion_het_low = alt_allele_frequency_grid * (1.0 - alt_allele_frequency_grid)
     previous = None
     tol = 0.1 * numpy.diff(proportion_het_grid).mean()  # set tol to about 10% of a grid width
-    while previous is None or numpy.abs(proportion_het_low - previous).max() >= tol:
+    while previous is None or numpy.abs(proportion_het_low - previous).max(initial=0) >= tol:
         # to aid convergence, only take a half step each iteration:
         # noinspection PyUnresolvedReferences
         num_expected_het, het_delta = _hardy_weinberg_chi_squared_to_num_hets_boundary(
@@ -2391,14 +2395,15 @@ def load_quality_data(
         overlap_results_file: str,
         pedigree_files: Optional[Collection[str]],
         optimal_overlap_cutoffs_file: str,
-        scores_data_json: Optional[str] = None
+        scores_data_json: Optional[str] = None,
+        size_ranges: Mapping[str, Tuple[float, float]] = Default.sv_selector_size_ranges
 ) -> (TruthData, Dict[str, SvTypeCutoffSelector], List[ScoresDataSet]):
     truth_data = TruthData(overlap_results_file=overlap_results_file, pedigree_files=pedigree_files)
     scores_data_sets = ScoresDataSet.from_json(
         scores_data_json, truth_data=truth_data
     )
     all_sv_types = set.union(*(data_set.all_sv_types for data_set in scores_data_sets))
-    sv_selectors = get_truth_overlap.get_sv_selectors(all_sv_types=all_sv_types) \
+    sv_selectors = get_truth_overlap.get_sv_selectors(all_sv_types=all_sv_types, size_ranges=size_ranges) \
         if optimal_overlap_cutoffs_file is None \
         else {
             sv_category: cutoff.selector
@@ -2448,12 +2453,28 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser.add_argument("--make-figures", choices=_all_make_figures, default=Default.make_figures, type=str,
                         action=SplitArgs, help="Comma-separated list of which figures to make.")
+    parser.add_argument("--size-ranges", type=str, default=_size_ranges_to_arg(Default.sv_selector_size_ranges),
+                        help="comma-separated list of size ranges to break down summary of SVs. Each size range is of "
+                             "form description:low_size:high_size")
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
 
     if not parsed_arguments.figure_save_file.lower().endswith(".pdf"):
         raise ValueError("--figure-save-file must be a .pdf file")
     return parsed_arguments
+
+
+def _parse_size_ranges(size_ranges_arg: str) -> dict[str, tuple[float, float]]:
+    def _parse_arg(_arg: str) -> Iterator[tuple[str, tuple[float, float]]]:
+        for _word in _arg.split(','):
+            _split_word = _word.split(':', 1)
+            yield _split_word[0], tuple(float(_x) for _x in _split_word[1].split(':', 1))
+
+    return {description: size_range for description, size_range in _parse_arg(size_ranges_arg)}
+
+
+def _size_ranges_to_arg(size_ranges: dict[str, tuple[float, float]]) -> str:
+    return ','.join(f"{key}:{val[0]}-{val[1]}" for key, val in size_ranges.items())
 
 
 def main(argv: Optional[List[Text]] = None) -> (pyplot.Figure, pyplot.Figure):
@@ -2463,6 +2484,7 @@ def main(argv: Optional[List[Text]] = None) -> (pyplot.Figure, pyplot.Figure):
         pedigree_files=arguments.ped_file,
         optimal_overlap_cutoffs_file=arguments.optimal_overlap_cutoffs_file,
         scores_data_json=arguments.scores_data_json,
+        size_ranges=_parse_size_ranges(arguments.size_ranges)
     )
 
     with PdfPages(arguments.figure_save_file) as pdf_writer:
