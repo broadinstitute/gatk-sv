@@ -184,38 +184,6 @@ Following the steps above, the script builds the specified Docker images
 _and all the images derived from them_, ensuring proper propagation of changes through the pipeline. 
 If you want to build only the specified images, you would need to add the `--skip-dependent-images` flag.
 
-<details>
-<summary>Build a specific or all the affected Docker images?</summary>
-
-<div>
- <ul>
-  <li><b>Build a single image</b> in order to develop and test scripts and Docker images.
-   When developing a script encapsulated in a GATK-SV Docker image 
-   (e.g., scripts under the <a href="https://github.com/broadinstitute/gatk-sv/tree/main/src">src</a> directory), 
-   it's essential to re-build the image and test the script in the image before 
-   integrating it into the pipeline. Similarly, when testing a specific task 
-   within a workflow, it's easier to reproduce the task in the Docker image 
-   where the task is executed. Additionally, if you update the scripts, tools, 
-   or configuration within a Dockerfile, rebuilding the respective image is 
-   necessary for testing purposes. In all these three cases, building a 
-   specific Docker image enables better testing and debugging in isolation.
-  </li>
-  <li><b>Build all the affected images</b>
-   in order to ensure the updated scripts and Dockerfiles are properly 
-   propagated through the nested hierarchy of GATK-SV Docker images.
-   Once you have successfully developed the specific Docker image and its 
-   encapsulated scripts, you will need to ensure that the changes are 
-   propagated throughout all the GATK-SV Docker images. 
-   This is necessary due to the nested hierarchy
-   of GATK-SV Docker images, where derived images should be rebuilt 
-   whenever any of their base images are updated. This process 
-   involves rebuilding all impacted images affected by the 
-   changes you made, ensuring the derived images are updated correctly, 
-   and integrating them into the pipeline.
-  </li>
- </ul>
-</div>
-</details>
 :::
 
 
