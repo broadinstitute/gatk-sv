@@ -4,8 +4,8 @@ description: Docker Image Dependencies
 sidebar_position: 1
 ---
 
-import useBaseUrl from '@docusaurus/useBaseUrl';
-import ThemedImage from '@theme/ThemedImage';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
 
 :::info
 This page provides a detailed explanation of Docker 
@@ -27,13 +27,22 @@ usage and lower workflow execution costs.
 The figure below illustrates the relationships between the GATK-SV Docker images.
 
 
-<ThemedImage
-  alt="Interconnection Between GATK-SV Docker Images"
-  sources={{
-    light: useBaseUrl('/img/docker_hierarchy.png'),
-    dark: useBaseUrl('/img/docker_hierarchy.png'),
-  }}
-/>
+```mermaid
+flowchart TD
+    ubuntu22[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
+    svbasemini & samtoolsenv & svbaseenv --> svpipelineenv[sv-pipeline-virtual-env]
+    samtoolsenv --> samtoolscloud[samtools-cloud] & svutilsenv[sv-utils-env]
+    svbasemini --> samtoolscloud
+    svutilsenv --> svutils[sv-utils]
+    samtoolscloud --> svutils & svbase[sv-base]
+    svpipelineenv & svbase --> svpipeline[sv-pipeline]
+    svbaseenv --> cnmopsenv[cnmpos-virtual-env]
+    svbase & cnmopsenv --> cnmpos[cnmops]
+
+    ubuntu18[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    samtoolscloud --> wham
+    ubuntu2210[Ubuntu 22.10] --> str[STR]
+```
 
 The image depicts the hierarchical relationship among GATK-SV 
 Docker images. Arrows indicate the flow from a base image 
@@ -49,6 +58,28 @@ are available in [`dockers.json`](https://github.com/broadinstitute/gatk-sv/blob
 and [`dockers_azure.json`](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers_azure.json)
 for images hosted on Google Container Registry (GCR) and Azure Container Registry (ACR), respectively.
 
+## Docker Images List {#list}
+
+The table below lists the GATK-SV Docker images and their dependencies. 
+
+| Image                        | Code Dependencies                                                                                                                                                                       | Docker Dependencies                                                                                 |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `manta`                      | <ul><li>`dockerfiles/manta/*`</li></ul>                                                                                                                                                 |                                                                                                     |
+| `melt`                       | <ul><li>`dockerfiles/melt/*`</li></ul>                                                                                                                                                  | <ul><li>`sv-base`</li></ul>                                                                         |
+ | `wham`                       | <ul><li>`dockerfiles/wham/*`</li></ul>                                                                                                                                                  | <ul><li>`samtools-cloud`</li></ul>                                                                  |
+ | `str`                        | <ul><li>`dockerfiles/str/*`</li></ul>                                                                                                                                                   |                                                                                                     |
+ | `sv-base-mini`               | <ul><li>`dockerfiles/sv-base-mini/*`</li></ul>                                                                                                                                          |                                                                                                     |
+ | `samtools-cloud-virtual-env` | <ul><li>`dockerfiles/samtools-cloud-virtual-env/*`</li></ul>                                                                                                                            |                                                                                                     |
+ | `samtools-cloud`             | <ul><li>`dockerfiles/samtools-cloud/*`</li></ul>                                                                                                                                        | <ul><li>`sv-base-mini`</li><li>`samtools-cloud-virtual-env`</li></ul>                               |
+ | `sv-base-virtual-env`        | <ul><li>`dockerfiles/sv-base-virtual-env/*`</li></ul>                                                                                                                                   |                                                                                                     |
+ | `sv-base`                    | <ul><li>`dockerfiles/sv-base/*`</li></ul>                                                                                                                                               | <ul><li>`samtools-cloud`</li><li>`sv-base-virtual-env`</li></ul>                                    |
+ | `cnmops-virtual-env`         | <ul><li>`dockerfiles/cnmops-virtual-env/*`</li></ul>                                                                                                                                    | <ul><li>`sv-base-virtual-env`</li></ul>                                                             |
+ | `cnmops`                     | <ul><li>`dockerfiles/cnmops/*`</li></ul>                                                                                                                                                | <ul><li>`sv-base`</li><li>`cnmops-virtual-env`</li></ul>                                            |
+ | `sv-pipeline-virtual-env`    | <ul><li>`dockerfiles/sv-pipeline-virtual-env/*`</li></ul>                                                                                                                               | <ul><li>`sv-base-mini`</li><li>`sv-base-virtual-env`</li><li>`samtools-cloud-virtual-env`</li></ul> |
+ | `sv-pipeline`                | <ul><li>`dockerfiles/sv-pipeline/*`</li><li> `src/RdTest/*`</li><li>`src/sv-pipeline/*`</li><li>`src/svqc/*`</li><li>`src/svtest/*`</li><li> `src/svtk/*`</li><li>`src/WGD/*`</li></ul> | <ul><li>`sv-base`</li><li>`sv-pipeline-virtual-env`</li></ul>                                       |
+ | `sv-utils-env`               | <ul><li>`dockerfiles/sv-utils-env/*`</li></ul>                                                                                                                                          | <ul><li>`samtools-cloud-virtual-env`</li></ul>                                                      |
+ | `sv-utils`                   | <ul><li>`dockerfiles/sv-utils/*`</li><li>`src/sv_utils/src/*`</li><li> `src/sv_utils/setup.py`</li></ul>                                                                                | <ul><li>`samtools-cloud`</li><li>`sv-utils-env`</li></ul>                                           |
+
 
 ## Advantages of Dividing Images by Functionality
 
@@ -58,42 +89,32 @@ the pipeline is organized into multiple smaller images, each focusing on a speci
 This approach offers several benefits.
 
 
-By splitting the tools into separate Docker images, we achieve a modular 
-and focused structure. Each image contains the tools required for a specific 
-task within the GATK-SV pipeline. This enables users and developers to easily
-work with individual images, as they can identify the specific tools needed 
-for their particular analysis.
+- **Modular and focused structure:** 
+Each image includes task-specific tools, simplifying the use and maintenance of 
+GATK-SV Docker images for users and developers, respectively.
 
 
-Moreover, using smaller, task-specific Docker images offers the advantage 
-of reduced sizes, which is particularly beneficial in cloud environments. 
-These smaller images require less storage space when stored in container 
-registries like Google Cloud Container Registry (GCR) or Azure Container Registry (ACR). 
-Additionally, when creating virtual machines for workflow task execution, 
-the transfer of these smaller images is more efficient.
+- **Reduced Docker image size:**
+Using task-specific Docker images reduces sizes, requiring less storage space 
+in container registries. It also enables faster image transfer 
+when creating virtual machines for task execution.
 
 
-Separate Docker images enhance maintenance and extensibility 
-in the GATK-SV pipeline. Maintainers can easily modify or update 
-specific tools or configurations within a single image without 
-impacting others. This granularity improves maintainability 
-and enables seamless expansion of the pipeline by adding or 
-replacing tools as required.
+- **Enhanced maintenance and extensibility:**
+Maintainers can easily modify specific tools or configurations within 
+a single image without affecting others, improving maintainability and 
+facilitating seamless expansion by adding or replacing tools as required.
 
 
-Additionally, the Docker image hierarchy offers advantages in terms of 
-consistency and efficiency. One image can be built upon another, 
-leveraging existing setups and tools. This promotes code reuse and 
-reduces duplication, resulting in consistent configurations across 
-different stages of the pipeline. It also simplifies the management 
-of common dependencies, as changes or updates can be applied at the 
-appropriate level, cascading down to the dependent images.
+- **Consistency and efficiency:**
+Building images on top of existing setups and tools promotes code 
+reuse and reduces duplication, ensuring consistent configurations 
+across pipeline stages. It simplifies dependency management by 
+allowing changes or updates at the appropriate level, cascading 
+down to dependent images.
 
 
-In summary, by splitting the tools into smaller, task-specific images, 
-the pipeline becomes more modular and manageable. 
-This approach optimizes storage, execution, maintenance, 
-and extensibility in cloud environments. 
-Leveraging Docker's image hierarchy further enhances consistency, 
-code reuse, and dependency management, ensuring efficient and 
-scalable execution of the pipeline.
+In summary, splitting tools into smaller, task-specific 
+Docker images optimizes storage, execution, maintenance, and extensibility. 
+It enhances consistency, code reuse, and dependency management, 
+ensuring efficient and scalable pipeline execution.

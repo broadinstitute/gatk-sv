@@ -98,10 +98,6 @@ const config = {
                 label: 'Github',
                 href: 'https://github.com/broadinstitute/gatk-sv/discussions',
               },
-              {
-                label: 'Twitter',
-                href: 'https://twitter.com/broadinstitute',
-              },
             ],
           },
           {
@@ -126,7 +122,17 @@ const config = {
         theme: lightCodeTheme,
         darkTheme: darkCodeTheme,
       },
+      docs: {
+        sidebar: {
+          hideable: true,
+        }
+      }
     }),
+
+  themes: ['@docusaurus/theme-mermaid'],
+  markdown: {
+    mermaid: true,
+  }
 };
 
 module.exports = config;

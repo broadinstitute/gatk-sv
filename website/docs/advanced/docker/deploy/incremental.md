@@ -51,10 +51,30 @@ the commit SHAs are determined automatically.
 
 In CI/CD, the commit SHAs are determined as the following example.
 
-```
-      X---Y---Z     feature branch
-     /         \
-A---B---C---D---E   main branch
+```mermaid
+%%{init: { 
+            'logLevel': 'debug',
+            'gitGraph': {'rotateCommitLabel': false}, 
+            'themeVariables': { 'commitLabelFontSize': '22px' } 
+         } 
+   }%%
+gitGraph
+   commit id: "A"
+   commit id: "B"
+   branch feature
+   checkout feature
+   commit id: "X"
+   checkout main
+   commit id: "C"
+   checkout feature
+   commit id: "Y"
+   checkout main
+   commit id: "D"
+   checkout feature
+   commit id: "Z"
+   checkout main
+   merge feature id: "E"
+   commit id: "F"
 ```
 
 In this example, `BASE_SHA=B`, `HEAD_SHA=Z`, and `E` is the merge commit.
@@ -62,16 +82,19 @@ In this example, `BASE_SHA=B`, `HEAD_SHA=Z`, and `E` is the merge commit.
 
 ## Identifying Images Requiring Rebuilding from Changed Files
 
-The build_docker script identifies the list of docker images 
+The `build_docker` script identifies the list of docker images 
 that need to be rebuilt based on two factors. 
-Firstly, directly impacted images are determined by examining the 
+
+1. Directly impacted images are determined by checking the 
 list of files each image depends on. If any of these files have 
-been changed, the corresponding image requires rebuilding. 
-Secondly, indirectly impacted images are determined based on 
-the hierarchical dependency between images. If an image is 
-built upon another image, and the base image is being rebuilt, 
-then the dependent image also needs to be rebuilt. This two-step 
-process ensures that all the affected images are correctly 
+changed, the corresponding image needs rebuilding. 
+
+2. Indirectly impacted images are identified based on 
+the hierarchical dependency between images. 
+If a base image is rebuilt, any dependent images built upon 
+it also require rebuilding. 
+ 
+This two-step process ensures that all the affected images are correctly 
 identified for rebuilding.
 
 
