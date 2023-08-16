@@ -63,6 +63,9 @@ workflow GATKSVPipelineBatch {
     File contig_ploidy_model_tar
     Array[File] gcnv_model_tars
 
+    # PlotSVCountsPerSample metrics from ClusterBatch in GATKSVPipelinePhase1
+    Int? N_IQR_cutoff_plotting
+    
     File? outlier_cutoff_table
     File qc_definitions
 
@@ -108,9 +111,6 @@ workflow GATKSVPipelineBatch {
     # Batch metrics
     RuntimeAttr? runtime_attr_cat_metrics
     RuntimeAttr? runtime_attr_plot_metrics
-
-    # PlotSVCountsPerSample metrics from ClusterBatch in GATKSVPipelinePhase1
-    Int? N_IQR_cutoff_plotting
 
     # Do not use
     Array[File]? NONE_ARRAY_
