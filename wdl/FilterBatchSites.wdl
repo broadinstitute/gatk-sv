@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "PlotSVCountsPerSample.wdl" as sv_counts
 
 workflow FilterBatchSites {
   input {
@@ -12,13 +13,19 @@ workflow FilterBatchSites {
     File? depth_vcf
     File evidence_metrics
     File evidence_metrics_common
-
     String sv_pipeline_docker
+
+    # PlotSVCountsPerSample metrics
+    Int N_IQR_cutoff_plotting = 6
+
     RuntimeAttr? runtime_attr_adjudicate
     RuntimeAttr? runtime_attr_rewrite_scores
     RuntimeAttr? runtime_attr_filter_annotate_vcf
     RuntimeAttr? runtime_attr_merge_pesr_vcfs
-    
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
+
   }
 
   Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]
@@ -58,6 +65,17 @@ workflow FilterBatchSites {
     }
   }
 
+  call sv_counts.PlotSVCountsPerSample {
+    input:
+      prefix = batch,
+      vcfs=[FilterAnnotateVcf.annotated_vcf[0], FilterAnnotateVcf.annotated_vcf[1], FilterAnnotateVcf.annotated_vcf[2], FilterAnnotateVcf.annotated_vcf[3], FilterAnnotateVcf.annotated_vcf[4]],
+      N_IQR_cutoff = N_IQR_cutoff_plotting,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
+  }
+
   output {
     File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[0]
     File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[1]
@@ -67,7 +85,13 @@ workflow FilterBatchSites {
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files
+    Array[File] sites_filtered_sv_counts = PlotSVCountsPerSample.sv_counts
+    Array[File] sites_filtered_sv_count_plots = PlotSVCountsPerSample.sv_count_plots
+    File sites_filtered_outlier_samples_preview = PlotSVCountsPerSample.outlier_samples_preview
+    File sites_filtered_outlier_samples_with_reason = PlotSVCountsPerSample.outlier_samples_with_reason
+    Int sites_filtered_num_outlier_samples = PlotSVCountsPerSample.num_outlier_samples
   }
+
 }
 
 task AdjudicateSV {
@@ -79,7 +103,7 @@ task AdjudicateSV {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -101,7 +125,7 @@ task AdjudicateSV {
     mv *_trainable.txt ~{batch}.RF_intermediate_files/
     mv *_testable.txt ~{batch}.RF_intermediate_files/
     tar -czvf ~{batch}.RF_intermediate_files.tar.gz ~{batch}.RF_intermediate_files
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -125,7 +149,7 @@ task RewriteScores {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -145,7 +169,7 @@ task RewriteScores {
       -m ~{metrics} \
       -s ~{scores}  \
       -o ~{batch}.updated_scores
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -170,7 +194,7 @@ task FilterAnnotateVcf {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
+    cpu_cores: 1,
     mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
@@ -200,7 +224,7 @@ task FilterAnnotateVcf {
 
     /opt/sv-pipeline/03_variant_filtering/scripts/annotate_RF_evidence.py filtered.corrected_coords.vcf.gz ~{scores} ~{prefix}.with_evidence.vcf
     bgzip ~{prefix}.with_evidence.vcf
-  
+
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -213,4 +237,3 @@ task FilterAnnotateVcf {
   }
 
 }
-

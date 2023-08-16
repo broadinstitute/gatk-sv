@@ -160,6 +160,8 @@ workflow GATKSVPipelinePhase1 {
     Int pesr_breakend_window
     String? pesr_clustering_algorithm
 
+    Int? N_IQR_cutoff_plotting
+
     File? baseline_depth_vcf_cluster_batch
     File? baseline_manta_vcf_cluster_batch
     File? baseline_wham_vcf_cluster_batch
@@ -183,6 +185,9 @@ workflow GATKSVPipelinePhase1 {
     RuntimeAttr? runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch
     RuntimeAttr? runtime_override_concat_vcfs_depth_cluster_batch
     RuntimeAttr? runtime_attr_exclude_intervals_pesr_cluster_batch
+    RuntimeAttr? runtime_attr_count_svs
+    RuntimeAttr? runtime_attr_plot_svcounts
+    RuntimeAttr? runtime_attr_cat_outliers_preview
 
     ############################################################
     ## GenerateBatchMetrics
@@ -358,6 +363,7 @@ workflow GATKSVPipelinePhase1 {
       pesr_interval_overlap=pesr_interval_overlap,
       pesr_breakend_window=pesr_breakend_window,
       pesr_clustering_algorithm=pesr_clustering_algorithm,
+      N_IQR_cutoff_plotting = N_IQR_cutoff_plotting,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
       sv_pipeline_base_docker=sv_pipeline_base_docker,
@@ -384,7 +390,10 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_svcluster_depth=runtime_attr_svcluster_depth_cluster_batch,
       runtime_attr_gatk_to_svtk_vcf_depth=runtime_attr_gatk_to_svtk_vcf_depth_cluster_batch,
       runtime_override_concat_vcfs_depth=runtime_override_concat_vcfs_depth_cluster_batch,
-      runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch
+      runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr_cluster_batch,
+      runtime_attr_count_svs = runtime_attr_count_svs,
+      runtime_attr_plot_svcounts = runtime_attr_plot_svcounts,
+      runtime_attr_cat_outliers_preview = runtime_attr_cat_outliers_preview
   }
 
   call batchmetrics.GenerateBatchMetrics as GenerateBatchMetrics {
@@ -500,6 +509,11 @@ workflow GATKSVPipelinePhase1 {
     File? melt_vcf_index = ClusterBatch.clustered_melt_vcf_index
     File? scramble_vcf = ClusterBatch.clustered_scramble_vcf
     File? scramble_vcf_index = ClusterBatch.clustered_scramble_vcf_index
+    Array[File]? clustered_sv_counts = ClusterBatch.clustered_sv_counts
+    Array[File]? clustered_sv_count_plots = ClusterBatch.clustered_sv_count_plots
+    File? clustered_outlier_samples_preview = ClusterBatch.clustered_outlier_samples_preview
+    File? clustered_outlier_samples_with_reason = ClusterBatch.clustered_outlier_samples_with_reason
+    Int? clustered_num_outlier_samples = ClusterBatch.clustered_num_outlier_samples
 
     File? metrics_file_clusterbatch = ClusterBatch.metrics_file_clusterbatch
 
