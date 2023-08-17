@@ -114,7 +114,7 @@ def validate_ped(ped_file, samples):
         raise ValueError(f"Invalid PED file. PED file is missing sample(s): {','.join(missing)}.")
 
     if not (seen_sex_2 and seen_sex_1):
-        raise ValueError(f"Invalid PED file. PED file must use integer values for sex: " +
+        raise ValueError("Invalid PED file. PED file must use integer values for sex: " +
                          "1=Male, 2=Female, 0=Unknown/Other. PED file must contain at least " +
                          "one sample with sex=1 and one with sex=2.")
 
