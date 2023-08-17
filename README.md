@@ -62,7 +62,15 @@ We still encourage members of the community to adapt GATK-SV for non-GCP backend
 
 ### Data:
 * Illumina short-read whole-genome CRAMs or BAMs, aligned to hg38 with [bwa-mem](https://github.com/lh3/bwa). BAMs must also be indexed.
-* Family structure definitions file in [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Sex aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
+* Family structure definitions file in [PED format](#ped-format).
+
+#### <a name="ped-format">PED file format</a>
+The PED file format is described [here](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Note that GATK-SV imposes additional requirements:
+* The file must be tab-delimited.
+* The sex column must only contain integer values: 1=Male, 2=Female, 0=Other/Unknown. Sex chromosome aneuploidies (detected in [EvidenceQC](#evidence-qc)) should be entered as sex = 0.
+* All family, individual, and parental IDs must conform to the [sample ID requirements](#sampleids).
+* Missing parental IDs should be entered as 0.
+To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -p pedigree.ped -s samples.list`.
 
 #### <a name="sample-exclusion">Sample Exclusion</a>
 We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers prior to running [GatherSampleEvidence](#gather-sample-evidence). A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination. Artifactual improperly paired reads could cause incorrect SV calls, and these samples have been observed to have longer runtimes and higher compute costs for [GatherSampleEvidence](#gather-sample-evidence).

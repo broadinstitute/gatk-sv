@@ -11,8 +11,15 @@ GATK-SV requires the following input data:
   BAMs must also be indexed.
 
 - Family structure definitions file in 
-  [PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).  
-  **Note**: Sex aneuploidies (detected in EvidenceQC) should be entered as sex = 0.
+  PED format (see description below).
+
+### PED file format
+The PED file format is described [here](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Note that GATK-SV imposes additional requirements:
+* The file must be tab-delimited.
+* The sex column must only contain integer values: 1=Male, 2=Female, 0=Other/Unknown. Sex chromosome aneuploidies (detected in [EvidenceQC](/docs/modules/eqc)) should be entered as sex = 0.
+* All family, individual, and parental IDs must conform to the sample ID requirements.
+* Missing parental IDs should be entered as 0.
+To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -p pedigree.ped -s samples.list`.
 
 ### Sample Exclusion
 We recommend filtering out samples with a high percentage 
