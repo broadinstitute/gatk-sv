@@ -422,9 +422,12 @@ task ValidatePedFile {
 
     set -euo pipefail
     python opt/sv-pipeline/scripts/validate_ped.py -p ~{ped_file} -s {sample_list}
-    # no outputs - task will either succeed or fail with details in log file
 
   >>>
+
+  output {
+    File output_ped = ped_file
+  }
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

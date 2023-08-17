@@ -225,7 +225,7 @@ workflow GatherBatchEvidence {
 
   call util.SubsetPedFile {
     input:
-      ped_file = ped_file,
+      ped_file = ValidatePedFile.output_ped,
       sample_list = write_lines(samples_batch),
       subset_name = batch,
       sv_base_mini_docker = sv_base_mini_docker,
