@@ -4,6 +4,16 @@ import argparse
 import re
 
 
+"""
+Summary: Validates a PED file for use with GATK-SV. Performs some sample ID validations as well.
+
+Usage: python validate_ped.py -p pedigree.ped -s samples.list
+
+Outputs: The script will write to stderr "PED file passes validation!" if successful, and
+    otherwise it will print an error message describing the PED file format violation.
+"""
+
+
 FIELD_NUMBER_ID = 1
 FIELD_NUMBER_SEX = 4
 ILLEGAL_ID_SUBSTRINGS = ["chr", "name", "DEL", "DUP", "CPX", "CHROM"]
@@ -108,7 +118,7 @@ def validate_ped(ped_file, samples):
                          "one sample with sex=1 and one with sex=2.")
 
     # passed validation tests
-    print("PED file passes validation.")
+    sys.stderr.write("PED file passes validation!")
 
 
 def main():
