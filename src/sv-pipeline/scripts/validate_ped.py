@@ -9,8 +9,8 @@ Summary: Validates a PED file for use with GATK-SV. Performs some sample ID vali
 
 Usage: python validate_ped.py -p pedigree.ped -s samples.list
 
-Outputs: The script will write to stderr "PED file passes validation!" if successful, and
-    otherwise it will print an error message describing the PED file format violation.
+Outputs: The script will write to stdout "PED file passes validation!" if successful, and
+    otherwise it will print an error message to stderr describing the PED file format violation.
 """
 
 
