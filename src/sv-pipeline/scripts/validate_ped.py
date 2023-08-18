@@ -2,7 +2,6 @@
 
 import argparse
 import re
-import sys
 
 
 """
@@ -119,7 +118,7 @@ def validate_ped(ped_file, samples):
                          "one sample with sex=1 and one with sex=2.")
 
     # passed validation tests
-    sys.stderr.write("PED file passes validation!\n")
+    print("PED file passes validation!")
 
 
 def main():
