@@ -19,6 +19,7 @@ The PED file format is described [here](https://gatk.broadinstitute.org/hc/en-us
 * The sex column must only contain integer values: 1=Male, 2=Female, 0=Other/Unknown. Sex chromosome aneuploidies (detected in [EvidenceQC](/docs/modules/eqc)) should be entered as sex = 0.
 * All family, individual, and parental IDs must conform to the [sample ID requirements](/docs/gs/inputs#sampleids).
 * Missing parental IDs should be entered as 0.
+* Header lines are allowed if they begin with a # character.
 To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -p pedigree.ped -s samples.list`.
 
 ### Sample Exclusion

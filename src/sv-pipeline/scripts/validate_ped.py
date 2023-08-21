@@ -57,6 +57,9 @@ def get_samples(samples_file):
             validate_id(sample, samples, "sample", "sample list")
             samples.add(sample)
 
+    if len(samples) < 1:
+        raise ValueError("Empty samples list provided")
+
     return samples
 
 
@@ -66,7 +69,7 @@ def validate_ped(ped_file, samples):
     samples_found = set()
     with open(ped_file, 'r') as ped:
         for line in ped:
-            # specification allows commented lines, which should be removed by SubsetPedFile task
+            # specification allows commented lines, which should be removed by SubsetPedFile and CleanVcfPart1
             if line.startswith("#"):
                 continue
 
@@ -74,7 +77,7 @@ def validate_ped(ped_file, samples):
             fields = line.strip().split("\t")
             if len(fields) < 6:
                 raise ValueError("Invalid PED file. PED file must be tab-delimited and have 6 columns: " +
-                                 "family ID, sample ID, paternal ID, maternal ID, sex, and phenotype.")
+                                 "family_ID, sample_ID, paternal_ID, maternal_ID, sex, phenotype.")
 
             # validate IDs
             # don't check for duplicates here:
