@@ -97,10 +97,10 @@ def validate_ped(ped_file, samples):
             elif sex == "2":
                 seen_sex_2 = True
 
-            # require integer sex
-            elif not sex.isdigit():
+            # require sex = 0, 1, or 2
+            elif sex != "0":
                 raise ValueError(f"Sample {sample_id} has an invalid value for sex: {sex}. " +
-                                 "PED file must use integer values for sex: 1=Male, 2=Female, 0=Unknown/Other.")
+                                 "PED file must use the following values for sex: 1=Male, 2=Female, 0=Unknown/Other.")
 
             # check all samples in samples list are present in PED file exactly once
             # no duplicate sample IDs
@@ -116,7 +116,7 @@ def validate_ped(ped_file, samples):
         raise ValueError(f"Invalid PED file. PED file is missing sample(s): {','.join(missing)}.")
 
     if not (seen_sex_2 and seen_sex_1):
-        raise ValueError("Invalid PED file. PED file must use integer values for sex: " +
+        raise ValueError("Invalid PED file. PED file must use the following values for sex: " +
                          "1=Male, 2=Female, 0=Unknown/Other. PED file must contain at least " +
                          "one sample with sex=1 and one with sex=2.")
 

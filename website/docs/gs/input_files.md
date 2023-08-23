@@ -16,7 +16,7 @@ GATK-SV requires the following input data:
 ### PED file format {#ped-format}
 The PED file format is described [here](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format). Note that GATK-SV imposes additional requirements:
 * The file must be tab-delimited.
-* The sex column must only contain integer values: 1=Male, 2=Female, 0=Other/Unknown. Sex chromosome aneuploidies (detected in [EvidenceQC](/docs/modules/eqc)) should be entered as sex = 0.
+* The sex column must only contain 0, 1, or 2: 1=Male, 2=Female, 0=Other/Unknown. Sex chromosome aneuploidies (detected in [EvidenceQC](/docs/modules/eqc)) should be entered as sex = 0.
 * All family, individual, and parental IDs must conform to the [sample ID requirements](/docs/gs/inputs#sampleids).
 * Missing parental IDs should be entered as 0.
 * Header lines are allowed if they begin with a # character.
