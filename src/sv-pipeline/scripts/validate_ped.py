@@ -17,6 +17,7 @@ Outputs: The script will write to stdout "PED file passes validation!" if succes
 FIELD_NUMBER_ID = 1
 FIELD_NUMBER_SEX = 4
 ILLEGAL_ID_SUBSTRINGS = ["chr", "name", "DEL", "DUP", "CPX", "CHROM"]
+ID_TYPE_SAMPLE, ID_TYPE_FAMILY, ID_TYPE_PARENT = "sample", "family", "parent"
 
 
 def validate_id(identifier, id_set, id_type, source_file):
@@ -30,7 +31,9 @@ def validate_id(identifier, id_set, id_type, source_file):
                          "IDs should only contain alphanumeric and underscore characters.")
 
     # check for all-numeric IDs
-    if id_type != "family" and identifier.isdigit():
+    # except: allow maternal and paternal ID to be 0
+    # except: allow all-numeric family IDs (as in current ref panel PED file)
+    if id_type != ID_TYPE_FAMILY and not (id_type == ID_TYPE_PARENT and identifier == "0") and identifier.isdigit():
         raise ValueError(f"Invalid {id_type} ID in {source_file}: {identifier}. " +
                          "IDs should not contain only numeric characters.")
 
@@ -54,7 +57,7 @@ def get_samples(samples_file):
     with open(samples_file, 'r') as samp:
         for line in samp:
             sample = line.strip()
-            validate_id(sample, samples, "sample", "sample list")
+            validate_id(sample, samples, ID_TYPE_SAMPLE, "sample list")
             samples.add(sample)
 
     if len(samples) < 1:
@@ -82,9 +85,8 @@ def validate_ped(ped_file, samples):
             # validate IDs
             # don't check for duplicates here:
             # family and parent IDs may appear multiple times, and sample IDs checked elsewhere
-            for identifier, id_type in zip(fields[:FIELD_NUMBER_SEX], ["family", "sample", "parent", "parent"]):
-                if id_type == "parent" and identifier == "0":
-                    continue  # allow maternal and paternal ID to be 0 (otherwise all-numeric IDs not allowed)
+            for identifier, id_type in zip(fields[:FIELD_NUMBER_SEX],
+                                           [ID_TYPE_FAMILY, ID_TYPE_SAMPLE, ID_TYPE_PARENT, ID_TYPE_PARENT]):
                 validate_id(identifier, None, id_type, "PED file")
 
             # check for at least one appearance each of 1 and 2 in sex column
