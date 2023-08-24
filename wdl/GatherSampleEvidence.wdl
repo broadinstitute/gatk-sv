@@ -4,6 +4,7 @@ import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
 import "CollectSVEvidence.wdl" as coev
 import "CramToBam.ReviseBase.wdl" as rb
+import "DeepMei.wdl" as deepmei
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
 import "Scramble.wdl" as scramble
@@ -77,6 +78,7 @@ workflow GatherSampleEvidence {
     String sv_pipeline_docker
     String sv_base_mini_docker
     String samtools_cloud_docker
+    String? deepmei_docker
     String? manta_docker
     String? melt_docker
     String? scramble_docker
@@ -96,6 +98,7 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
     RuntimeAttr? runtime_attr_scramble
+    RuntimeAttr? runtime_attr_deepmei
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
 
@@ -105,6 +108,7 @@ workflow GatherSampleEvidence {
     File? NONE_FILE_
   }
 
+  Boolean run_deepmei = defined(deepmei_docker)
   Boolean run_manta = defined(manta_docker)
   Boolean run_melt = defined(melt_docker)
   Boolean run_scramble = defined(scramble_docker)
@@ -233,6 +237,17 @@ workflow GatherSampleEvidence {
     }
   }
 
+  if (run_deepmei) {
+    call deepmei.DeepMei {
+      input:
+        bam_or_cram_file = reads_file_,
+        bam_or_cram_index = reads_index_,
+        sample_id = sample_id,
+        deepmei_docker = select_first([deepmei_docker]),
+        runtime_attr_override = runtime_attr_deepmei
+    }
+  }
+
   if (run_wham) {
     call wham.Whamg {
       input:
@@ -283,6 +298,9 @@ workflow GatherSampleEvidence {
 
     File? scramble_vcf = Scramble.vcf
     File? scramble_index = Scramble.index
+
+    File? deepmei_vcf = DeepMei.deepmei_vcf
+    File? deepmei_vcf_index = DeepMei.deepmei_vcf_index
 
     File? pesr_disc = CollectSVEvidence.disc_out
     File? pesr_disc_index = CollectSVEvidence.disc_out_index
