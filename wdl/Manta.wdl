@@ -83,13 +83,11 @@ task RunManta {
   Int num_jobs = round(num_cpu_use * jobs_per_cpu_use)
 
   # ensure there's sufficient memory.
-  # NOTE: according to issue #38, manta internally assumes roughly 2GB
-  # of RAM per job, although in practice it uses considerably less.
-  # 1.5GB is a safe amount
-  Float mem_size_gb = num_jobs * select_first([mem_gb_per_job, 1.5])
+  Float mem_size_gb = num_jobs * select_first([mem_gb_per_job, 0.4])
   # ALSO: manta will scale down number of jobs if less than 2GB per
   # job are reported, even if that memory is not needed. The memory
   # reported must be an integer
+  # Note: unsure if this applies to v1.6.0
   Int mem_reported_to_manta = 2 * num_jobs
   
   # ensure there's sufficient disk space
