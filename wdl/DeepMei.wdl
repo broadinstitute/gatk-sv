@@ -66,7 +66,7 @@ task RunDeepMei {
     OUTDIR=${PWD}/output/
     mkdir ${OUTDIR}
 
-    bash DeepMEI/DeepMEI_model/model_test_batch.sh \
+    bash /root/DeepMEI/DeepMEI_model/model_test_batch.sh \
       -i ~{bam_or_cram_file} \
       -r ~{reference_id} \
       -w ${PWD}/output/
