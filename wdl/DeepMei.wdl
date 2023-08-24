@@ -66,10 +66,11 @@ task RunDeepMei {
     OUTDIR=${PWD}/output/
     mkdir ${OUTDIR}
 
-    bash /root/DeepMEI/DeepMEI_model/model_test_batch.sh \
+    cd /root
+    bash DeepMEI/DeepMEI_model/model_test_batch.sh \
       -i ~{bam_or_cram_file} \
       -r ~{reference_id} \
-      -w ${PWD}/output/
+      -w ${OUTDIR}
 
     mv ${OUTDIR}/DeepMEI_output/${CRAM_NAME}/${CRAM_NAME}.vcf ~{sample_id}.deepmei.vcf
     bgzip ~{sample_id}.deep_mei.vcf
