@@ -45,7 +45,7 @@ task RunDeepMei {
   Int vm_disk_size = ceil(bam_or_cram_size + disk_overhead)
 
   RuntimeAttr default_attr = object {
-                               cpu_cores: 32,
+                               cpu_cores: 8,
                                mem_gb: 15.0,
                                disk_gb: vm_disk_size,
                                boot_disk_gb: 10,
