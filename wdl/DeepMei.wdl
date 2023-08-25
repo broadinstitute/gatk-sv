@@ -72,7 +72,7 @@ task RunDeepMei {
       -r ~{reference_id} \
       -w ${OUTDIR}
 
-    mv ${OUTDIR}/DeepMEI_output/${CRAM_NAME}/${CRAM_NAME}.vcf ~{sample_id}.deepmei.vcf
+    mv ${OUTDIR}/DeepMEI_output/${CRAM_NAME}/${CRAM_NAME}.vcf ~{sample_id}.deep_mei.vcf
     bgzip ~{sample_id}.deep_mei.vcf
     tabix ~{sample_id}.deep_mei.vcf.gz
   >>>
