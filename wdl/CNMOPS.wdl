@@ -120,19 +120,11 @@ workflow CNMOPS {
       runtime_attr_override = runtime_attr_sample3
   }
 
-  call GetPed {
-    input:
-      ped = ped_file,
-      samples = samples,
-      linux_docker = linux_docker,
-      runtime_attr_override = runtime_attr_ped
-  }
-
   call CleanCNMops {
     input:
       chrom_file=chrom_file,
       allo_file=allo_file,
-      samplelist = GetPed.batchped,
+      samplelist = ped_file,
       exclude = exclude_list,
       batch = batch,
       NR1 = NormalR1.Gff,
@@ -153,41 +145,6 @@ workflow CNMOPS {
     File Dup = CleanCNMops.Dup
     File Del_idx = CleanCNMops.Del_idx
     File Dup_idx = CleanCNMops.Dup_idx
-  }
-}
-
-task GetPed {
-  input {
-    File ped
-    Array[String] samples
-    String linux_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File batchped = "batch.ped"
-  }
-  command <<<
-    egrep '~{sep="|" samples}' ~{ped} > batch.ped
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: linux_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
