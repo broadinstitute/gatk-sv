@@ -46,7 +46,7 @@ task RunDeepMei {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 8,
-                               mem_gb: 15.0,
+                               mem_gb: 32.0,
                                disk_gb: vm_disk_size,
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
