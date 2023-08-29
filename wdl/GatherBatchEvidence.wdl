@@ -161,6 +161,7 @@ workflow GatherBatchEvidence {
     RuntimeAttr? ploidy_score_runtime_attr
     RuntimeAttr? ploidy_build_runtime_attr
     RuntimeAttr? runtime_attr_subset_ped
+    RuntimeAttr? runtime_attr_validate_ped
     RuntimeAttr? add_sample_to_ped_runtime_attr
     RuntimeAttr? condense_counts_runtime_attr
     RuntimeAttr? preprocess_calls_runtime_attr
@@ -214,9 +215,17 @@ workflow GatherBatchEvidence {
   }
 
   Array[String] samples_batch = select_first([ref_panel_samples, samples])
-  call util.SubsetPedFile {
+  call util.ValidatePedFile {
     input:
       ped_file = ped_file,
+      sample_list = write_lines(samples_batch),
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_validate_ped
+  }
+
+  call util.SubsetPedFile {
+    input:
+      ped_file = ValidatePedFile.output_ped,
       sample_list = write_lines(samples_batch),
       subset_name = batch,
       sv_base_mini_docker = sv_base_mini_docker,
