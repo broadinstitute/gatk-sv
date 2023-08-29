@@ -78,7 +78,7 @@ def validate_ped(ped_file, samples):
 
             # we require tab-delimited PED files although the specification does not
             fields = line.strip().split("\t")
-            if len(fields) < 6:
+            if len(fields) != 6:
                 raise ValueError("Invalid PED file. PED file must be tab-delimited and have 6 columns: " +
                                  "family_ID, sample_ID, paternal_ID, maternal_ID, sex, phenotype.")
 
