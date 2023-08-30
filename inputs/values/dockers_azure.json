@@ -7,7 +7,7 @@
   "genomes_in_the_cloud_docker": "vahid.azurecr.io/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "vahid.azurecr.io/google/ubuntu1804",
   "manta_docker": "vahid.azurecr.io/vjalili/manta:5994670",
-  "melt_docker": "vahid.azurecr.io/melt:vj-4ff9de9f",
+  "melt_docker": "vahid.azurecr.io/melt:3159ce1",
   "scramble_docker": "vahid.azurecr.io/tsharpe/scramble:1.0.2",
   "samtools_cloud_docker": "vahid.azurecr.io/gatk-sv/samtools-cloud:2023-07-28-v0.28.1-beta-e70dfbd7",
   "sv_base_docker": "vahid.azurecr.io/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7",
