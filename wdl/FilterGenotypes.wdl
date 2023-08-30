@@ -52,7 +52,7 @@ workflow FilterGenotypes {
     call tasks_cohort.ScatterVcf as ScatterForOptimization {
       input:
         vcf=RecalibrateGq.filtered_vcf,
-        records_per_shard=filter_vcf_records_per_shard,
+        records_per_shard=optimize_vcf_records_per_shard,
         prefix="~{output_prefix_}.filter_genotypes_scatter",
         sv_pipeline_docker=sv_pipeline_docker
     }
