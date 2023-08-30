@@ -8,7 +8,7 @@
   "linux_docker": "marketplace.gcr.io/google/ubuntu1804",
   "manta_docker": "us.gcr.io/broad-dsde-methods/vjalili/manta:5994670",
   "melt_docker": "us.gcr.io/talkowski-sv-gnomad/melt:3159ce1",
-  "scramble_docker": "us.gcr.io/broad-dsde-methods/tsharpe/scramble:1.0.2",
+  "scramble_docker": "us.gcr.io/broad-dsde-methods/markw/scramble:mw-scramble-99af4c50",
   "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2023-07-28-v0.28.1-beta-e70dfbd7",
   "sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7",
   "sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/vjalili/sv-base-mini:5994670",

@@ -60,6 +60,9 @@ workflow GatherSampleEvidence {
     Float? total_reads
     Int? pf_reads_improper_pairs
 
+    # Scramble inputs
+    Int? scramble_part2_threads
+
     # Wham inputs
     File wham_include_list_bed_file
 
@@ -95,7 +98,8 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
-    RuntimeAttr? runtime_attr_scramble
+    RuntimeAttr? runtime_attr_scramble_part1
+    RuntimeAttr? runtime_attr_scramble_part2
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
 
@@ -227,9 +231,12 @@ workflow GatherSampleEvidence {
         bam_or_cram_index = reads_index_,
         sample_name = sample_id,
         reference_fasta = reference_fasta,
-        detect_deletions = false,
+        reference_index = reference_index,
+        regions_list = primary_contigs_list,
+        part2_threads = scramble_part2_threads,
         scramble_docker = select_first([scramble_docker]),
-        runtime_attr_scramble = runtime_attr_scramble
+        runtime_attr_scramble_part1 = runtime_attr_scramble_part1,
+        runtime_attr_scramble_part2 = runtime_attr_scramble_part2
     }
   }
 
