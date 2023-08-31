@@ -13,6 +13,8 @@ workflow FilterGenotypes {
     File ploidy_table
 
     File gq_recalibrator_model_file
+    Array[String] recalibrate_gq_args = []
+    Array[File] genome_tracks = []
     Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
     Float fmax_beta = 0.5  # Recommended range [0.3, 0.5] (use lower values for higher specificity)
 
@@ -25,10 +27,16 @@ workflow FilterGenotypes {
 
     # For MainVcfQc
     File primary_contigs_fai
+    File? ped_file
+    Array[Array[String]]? site_level_comparison_datasets    # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to directory with one BED per population]
+    Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
+    File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
     Boolean run_qc = true
     String qc_bcftools_preprocessing_options = "-e 'FILTER~\"UNRESOLVED\" || FILTER~\"HIGH_NCR\"'"
     Int qc_sv_per_shard = 2500
     Int qc_samples_per_shard = 600
+    RuntimeAttr? runtime_override_plot_qc_per_family
+    RuntimeAttr? runtime_override_per_sample_benchmark_plot
 
     String linux_docker
     String gatk_docker
@@ -44,6 +52,8 @@ workflow FilterGenotypes {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       gq_recalibrator_model_file=gq_recalibrator_model_file,
+      recalibrate_gq_args=recalibrate_gq_args,
+      genome_tracks=genome_tracks,
       gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker
@@ -114,9 +124,15 @@ workflow FilterGenotypes {
       input:
         vcfs=[ConcatVcfs.concat_vcf],
         prefix="~{output_prefix_}.filter_genotypes",
+        ped_file=ped_file,
         bcftools_preprocessing_options=qc_bcftools_preprocessing_options,
         primary_contigs_fai=primary_contigs_fai,
+        site_level_comparison_datasets=site_level_comparison_datasets,
+        sample_level_comparison_datasets=sample_level_comparison_datasets,
+        sample_renaming_tsv=sample_renaming_tsv,
         sv_per_shard=qc_sv_per_shard,
+        runtime_override_per_sample_benchmark_plot=runtime_override_per_sample_benchmark_plot,
+        runtime_override_plot_qc_per_family=runtime_override_plot_qc_per_family,
         samples_per_shard=qc_samples_per_shard,
         sv_pipeline_qc_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
