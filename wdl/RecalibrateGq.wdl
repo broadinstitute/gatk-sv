@@ -9,7 +9,7 @@ workflow RecalibrateGq {
         File vcf
         File vcf_index
         Int? recalibrate_records_per_shard
-        Array[File] genome_tracks
+        Array[File] genome_tracks = []
         File gq_recalibrator_model_file
         Array[String] recalibrate_gq_args = []
         String gatk_docker
