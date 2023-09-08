@@ -140,7 +140,7 @@ workflow GatherSampleEvidence {
   File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
   File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
 
-  if (collect_coverage || run_melt || run_module_metrics) {
+  if (collect_coverage || run_melt) {
     call cov.CollectCounts {
       input:
         intervals = preprocessed_intervals,
@@ -174,7 +174,7 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (collect_pesr || run_module_metrics) {
+  if (collect_pesr) {
     call coev.CollectSVEvidence {
       input:
         bam_or_cram_file = reads_file_,
