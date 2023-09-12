@@ -741,7 +741,7 @@ task FinalCleanup {
       --chrom ~{contig} \
       --prefix ~{prefix} \
       ~{vcf} stdout \
-      | bcftools annotate --no-version -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
+      | bcftools annotate --no-version -e 'SVTYPE=="CNV" && SVLEN<5000' -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
     tabix ~{prefix}.vcf.gz
   >>>
 
