@@ -159,7 +159,7 @@ workflow EvidenceQC {
           ploidy_plots = select_first([Ploidy.ploidy_plots]),
           bincov_median = MedianCov.medianCov,
           WGD_scores = WGD.WGD_scores,
-          melt_insert_size = melt_insert_size,
+          melt_insert_size = select_first([melt_insert_size, []]),
 
           manta_qc_low = RawVcfQC_Manta.low,
           manta_qc_high = RawVcfQC_Manta.high,
@@ -206,7 +206,7 @@ task MakeQcTable {
     File ploidy_plots
     File bincov_median
     File WGD_scores
-    Array[Float]? melt_insert_size
+    Array[Float] melt_insert_size
     Array[String] samples
 
 
@@ -231,10 +231,9 @@ task MakeQcTable {
   command <<<
     set -euo pipefail
 
-    if ~{defined(melt_insert_size)} ; then
+    if ~{length(melt_insert_size) > 0} ; then
       echo -e "sample_ID\tmean_insert_size" > mean_insert_size.tsv
-      mv ~{if (defined(melt_insert_size)) then write_tsv(transpose([samples, select_first([melt_insert_size])])) else ""} mean_insert_size.tsv.tmp
-      cat mean_insert_size.tsv.tmp >> mean_insert_size.tsv
+      paste ~{write_lines(samples)} ~{write_lines(melt_insert_size)} >> mean_insert_size.tsv
     fi
 
     tar -xvf ~{ploidy_plots}
@@ -250,7 +249,7 @@ task MakeQcTable {
       ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
-      ~{if (defined(melt_insert_size)) then "--melt-insert-size mean_insert_size.tsv" else ""}\
+      ~{if (length(melt_insert_size) > 0) then "--melt-insert-size mean_insert_size.tsv" else ""} \
       ~{"--output-prefix " + output_prefix}
   >>>
 #
