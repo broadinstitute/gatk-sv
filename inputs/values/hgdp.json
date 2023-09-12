@@ -1,6 +1,6 @@
 {
   "name": "hgdp",
-  "ped_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/HGDP_1KGP.ped",
+  "ped_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGDP_1KGP.ped",
   "ploidy_table": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.ploidy_table.tsv",
 
   "del_bed": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.DEL.bed.gz",
