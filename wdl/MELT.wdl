@@ -510,7 +510,7 @@ task RunMELT {
 
     # these locations should be stable
     MELT_DIR="/MELT"
-    CROMWELL_ROOT="/cromwell_root"
+    CROMWELL_ROOT="$PWD"
 
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
