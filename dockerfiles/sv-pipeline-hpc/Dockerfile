@@ -111,8 +111,6 @@ ARG GATK_JAR="/opt/gatk.jar"
 
 ARG GATK_BUILD_DEP="git git-lfs openjdk-17-jdk"
 ARG GATK_RUN_DEP="openjdk-17-jre-headless libgomp1"
-ARG GATK_COMMIT
-ARG GATK_JAR
 ARG DEBIAN_FRONTEND=noninteractive
 # install build deps
 RUN apt-get -qqy update --fix-missing && \
