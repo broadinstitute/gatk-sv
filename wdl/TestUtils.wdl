@@ -41,6 +41,7 @@ task CatMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: linux_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -81,6 +82,7 @@ task StandardizeVCF {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -131,6 +133,7 @@ task VCFMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -171,6 +174,7 @@ task BAFMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -211,6 +215,7 @@ task SRMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -251,6 +256,7 @@ task PEMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -288,6 +294,7 @@ task CountsMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -328,6 +335,7 @@ task BincovMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -372,6 +380,7 @@ task MedcovMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -421,6 +430,7 @@ task MergedDepthMetricsWithBaseline {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -459,6 +469,7 @@ task MergedDepthMetricsWithoutBaseline {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -500,6 +511,7 @@ task MetricsFileMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -544,6 +556,7 @@ task CutoffAndOutlierMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -579,6 +592,7 @@ task GenotypingCutoffMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -616,6 +630,7 @@ task IdListMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: linux_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
 
@@ -658,5 +673,6 @@ task PlotMetrics {
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
     docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    noAddress: true
   }
 }
