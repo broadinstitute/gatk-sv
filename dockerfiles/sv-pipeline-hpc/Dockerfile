@@ -66,10 +66,8 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get -qqy update --fix-missing && \
     apt-get -qqy dist-upgrade && \
     apt-get -qqy install --no-install-recommends \
-                 bcftools \
                  ca-certificates \
                  python2.7 \
-                 tabix \
                  wget \
                  zlib1g-dev && \
     cd /opt && \
