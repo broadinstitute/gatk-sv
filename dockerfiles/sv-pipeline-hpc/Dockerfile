@@ -92,7 +92,7 @@ RUN apt-get -qqy update --fix-missing && \
            /var/lib/apt/lists/* \
            /usr/share/man/?? \
            /usr/share/man/??_* && \
-    samtools --help \
+    samtools --help
 
 
 ###############
