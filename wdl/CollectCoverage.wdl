@@ -69,6 +69,7 @@ task CollectCounts {
     cpu: select_first([cpu, 1])
     preemptible: select_first([preemptible_attempts, 3])
     maxRetries: 1
+    noAddress: true
   }
 
   output {
@@ -122,6 +123,7 @@ task CondenseReadCounts {
     docker: condense_counts_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 
   output {
@@ -163,6 +165,7 @@ task CountsToIntervals {
     docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    noAddress: true
   }
 
   output {
