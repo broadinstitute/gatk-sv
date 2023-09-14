@@ -117,10 +117,10 @@ RUN apt-get -qqy update --fix-missing && \
 # clone requested GATK_COMMIT
 RUN cd /opt && GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute/gatk.git && \
     cd gatk && \
-    git checkout ${GATK_COMMIT}
-# build GATK_JAR
-RUN ./gradlew localJar && \
+    git checkout ${GATK_COMMIT} && \
+   ./gradlew localJar && \
     mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR}
+
 
 ###############
 # Picard
