@@ -119,6 +119,31 @@ RUN cd /opt && GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/broadinstitute
     cd gatk && \
     git checkout ${GATK_COMMIT}
 # build GATK_JAR
-RUN cd gatk && \
-    ./gradlew localJar && \
+RUN ./gradlew localJar && \
     mv $(readlink -f build/libs/gatk.jar) ${GATK_JAR}
+
+###############
+# Picard
+###############
+
+ARG build_command=shadowJar
+ARG jar_name=picard.jar
+
+# Install ant, git for building
+RUN apt-get update && \
+    apt-get --no-install-recommends install -y \
+        r-base \
+        ant && \
+    apt-get clean autoclean && \
+    apt-get autoremove -y
+
+# Build the distribution jar, clean up everything else
+RUN cd /opt && git clone https://github.com/broadinstitute/picard.git && \
+    cd picard && ./gradlew ${build_command} && \
+    mv build/libs/${jar_name} /opt/picard.jar && \
+    ./gradlew clean && \
+    rm -rf src && \
+    rm -rf gradle && \
+    rm -rf .git && \
+    rm gradlew && \
+    rm build.gradle
