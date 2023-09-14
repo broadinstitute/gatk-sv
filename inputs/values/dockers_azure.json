@@ -6,7 +6,7 @@
   "gatk_docker_pesr_override": "vahid.azurecr.io/tsharpe/gatk:4.2.6.1-57-g9e03432",
   "genomes_in_the_cloud_docker": "vahid.azurecr.io/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "vahid.azurecr.io/google/ubuntu1804",
-  "manta_docker": "vahid.azurecr.io/manta:v1.6.0",
+  "manta_docker": "vahid.azurecr.io/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d",
   "melt_docker": "vahid.azurecr.io/melt:3159ce1",
   "scramble_docker": "vahid.azurecr.io/tsharpe/scramble:1.0.2",
   "samtools_cloud_docker": "vahid.azurecr.io/gatk-sv/samtools-cloud:2023-07-28-v0.28.1-beta-e70dfbd7",
