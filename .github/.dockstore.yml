@@ -1,0 +1,73 @@
+version: 1.2
+workflows:
+  - subclass: WDL
+    name: 01-GatherSampleEvidence
+    primaryDescriptorPath: /wdl/GatherSampleEvidence.wdl
+
+  - subclass: WDL
+    name: 02-EvidenceQC
+    primaryDescriptorPath: /wdl/EvidenceQC.wdl
+
+  - subclass: WDL
+    name: 03-TrainGCNV
+    primaryDescriptorPath: /wdl/TrainGCNV.wdl
+
+  - subclass: WDL
+    name: 04-GatherBatchEvidence
+    primaryDescriptorPath: /wdl/GatherBatchEvidence.wdl
+
+  - subclass: WDL
+    name: 05-ClusterBatch
+    primaryDescriptorPath: /wdl/ClusterBatch.wdl
+
+  - subclass: WDL
+    name: 06-GenerateBatchMetrics
+    primaryDescriptorPath: /wdl/GenerateBatchMetrics.wdl
+
+  - subclass: WDL
+    name: 07-FilterBatchSites
+    primaryDescriptorPath: /wdl/FilterBatchSites.wdl
+
+  - subclass: WDL
+    name: 08-PlotSVCountsPerSample
+    primaryDescriptorPath: /wdl/PlotSVCountsPerSample.wdl
+
+  - subclass: WDL
+    name: 09-FilterBatchSamples
+    primaryDescriptorPath: /wdl/FilterBatchSamples.wdl
+
+  - subclass: WDL
+    name: 10-MergeBatchSites
+    primaryDescriptorPath: /wdl/MergeBatchSites.wdl
+
+  - subclass: WDL
+    name: 11-GenotypeBatch
+    primaryDescriptorPath: /wdl/GenotypeBatch.wdl
+
+  - subclass: WDL
+    name: 12-RegenotypeCNVs
+    primaryDescriptorPath: /wdl/RegenotypeCNVs.wdl
+
+  - subclass: WDL
+    name: 13-CombineBatches
+    primaryDescriptorPath: /wdl/CombineBatches.wdl
+
+  - subclass: WDL
+    name: 14-ResolveComplexVariants
+    primaryDescriptorPath: /wdl/ResolveComplexVariants.wdl
+
+  - subclass: WDL
+    name: 15-GenotypeComplexVariants
+    primaryDescriptorPath: /wdl/GenotypeComplexVariants.wdl
+
+  - subclass: WDL
+    name: 16-CleanVcf
+    primaryDescriptorPath: /wdl/CleanVcf.wdl
+
+  - subclass: WDL
+    name: 17-MainVcfQc
+    primaryDescriptorPath: /wdl/MainVcfQc.wdl
+
+  - subclass: WDL
+    name: 18-AnnotateVcf
+    primaryDescriptorPath: /wdl/AnnotateVcf.wdl
