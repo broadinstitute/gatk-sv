@@ -510,7 +510,24 @@ task RunMELT {
 
     # these locations should be stable
     MELT_DIR="/MELT"
-    CROMWELL_ROOT="$PWD"
+
+    # `cromwell_root` and `cromwell-executions` are the **default**
+    # root directory for cromwell deployments on GCP and Azure respectively.
+    # The last option, i.e., $PWD, is the fall back option if the
+    # default root directory of the cromwell instance was changed,
+    # however, it is not a reliable option as it fails on GCP.
+    # It does not seem Cromwell sets a runtime environment variable
+    # exposing the configured value of the root directory,
+    # which could have provided a portable solution for this.
+    # The following solution works with the Cromwell deployments
+    # we are currently using on GCP and Azure.
+    if [ -d "/cromwell_root" ]; then
+      CROMWELL_ROOT="/cromwell_root"
+    elif [ -d "/cromwell-executions" ]; then
+      CROMWELL_ROOT="/cromwell-executions"
+    else
+      CROMWELL_ROOT="$PWD"
+    fi
 
     # these locations may vary based on MELT version number, so find them:
     MELT_ROOT=$(find "$MELT_DIR" -name "MELT.jar" | xargs -n1 dirname)
