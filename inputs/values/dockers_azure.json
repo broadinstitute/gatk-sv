@@ -8,7 +8,7 @@
   "linux_docker": "vahid.azurecr.io/google/ubuntu1804",
   "manta_docker": "vahid.azurecr.io/gatk-sv/manta:2023-09-14-v0.28.3-beta-3f22f94d",
   "melt_docker": "vahid.azurecr.io/melt:3159ce1",
-  "scramble_docker": "vahid.azurecr.io/tsharpe/scramble:1.0.2",
+  "scramble_docker": "vahid.azurecr.io/scramble:mw-scramble-99af4c50",
   "samtools_cloud_docker": "vahid.azurecr.io/gatk-sv/samtools-cloud:2023-07-28-v0.28.1-beta-e70dfbd7",
   "sv_base_docker": "vahid.azurecr.io/gatk-sv/sv-base:2023-07-28-v0.28.1-beta-e70dfbd7",
   "sv_base_mini_docker": "vahid.azurecr.io/vjalili/sv-base-mini:5994670",

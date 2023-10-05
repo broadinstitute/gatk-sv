@@ -14,9 +14,12 @@ workflow Scramble {
     File bam_or_cram_index
     String sample_name
     File reference_fasta
-    Boolean detect_deletions
+    File reference_index
+    File regions_list
     String scramble_docker
-    RuntimeAttr? runtime_attr_scramble
+    Int? part2_threads
+    RuntimeAttr? runtime_attr_scramble_part1
+    RuntimeAttr? runtime_attr_scramble_part2
   }
     
   parameter_meta {
@@ -27,41 +30,96 @@ workflow Scramble {
     detect_deletions: "Run deletion detection as well as mobile element insertion."
   }
   
-  call RunScramble {
+  call ScramblePart1 {
     input:
       bam_or_cram_file = bam_or_cram_file,
       bam_or_cram_index = bam_or_cram_index,
       sample_name = sample_name,
+      regions_list = regions_list,
       reference_fasta = reference_fasta,
-      detect_deletions = detect_deletions,
+      reference_index = reference_index,
       scramble_docker = scramble_docker,
-      runtime_attr_override = runtime_attr_scramble
+      runtime_attr_override = runtime_attr_scramble_part1
+  }
+
+  call ScramblePart2 {
+    input:
+      clusters_file = ScramblePart1.clusters_file,
+      sample_name = sample_name,
+      reference_fasta = reference_fasta,
+      threads = part2_threads,
+      scramble_docker = scramble_docker,
+      runtime_attr_override = runtime_attr_scramble_part2
   }
 
   output {
-    File vcf = RunScramble.vcf
-    File index = RunScramble.index
+    File vcf = ScramblePart2.vcf
+    File index = ScramblePart2.index
   }
 }
 
-task RunScramble {
+task ScramblePart1 {
   input {
     File bam_or_cram_file
     File bam_or_cram_index
     String sample_name
+    File regions_list
     File reference_fasta
-    Boolean detect_deletions
+    File reference_index
     String scramble_docker
     RuntimeAttr? runtime_attr_override
-    File? NOT_A_FILE
   }
 
-  Int mem_size_gb = if detect_deletions then 16 else 3
-  Int disk_size_gb = ceil(size(bam_or_cram_file,"GiB") + size(bam_or_cram_index,"GiB") + size(reference_fasta,"GiB") + 10)
+  Int disk_size_gb = ceil(size(bam_or_cram_file,"GiB") + size(reference_fasta,"GiB")*1.5 + 50)
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: mem_size_gb,
+                               cpu_cores: 1,
+                               mem_gb: 2.0,
+                               disk_gb: disk_size_gb,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File clusters_file = "~{sample_name}.scramble_clusters.tsv.gz"
+  }
+  command <<<
+    set -euo pipefail
+
+    # Identify clusters of split reads
+    while read region; do
+      time /app/scramble-gatk-sv/cluster_identifier/src/build/cluster_identifier -l -r "${region}" -t ~{reference_fasta} ~{bam_or_cram_file} \
+        | gzip >> ~{sample_name}.scramble_clusters.tsv.gz
+    done < ~{regions_list}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: scramble_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ScramblePart2 {
+  input {
+    File clusters_file
+    String sample_name
+    File reference_fasta
+    String scramble_docker
+    Int threads = 7  # Number of threads
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int disk_size_gb = ceil(10*size(clusters_file,"GiB") + size(reference_fasta,"GiB") + 10)
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 8,
+    mem_gb: 12.0,
     disk_gb: disk_size_gb,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -78,19 +136,18 @@ task RunScramble {
 
     xDir=$PWD
     clusterFile=$xDir/clusters
-    scrambleDir="/app"
+    scrambleDir="/app/scramble-gatk-sv"
     meiRef=$scrambleDir/cluster_analysis/resources/MEI_consensus_seqs.fa
 
     # create a blast db from the reference
     cat ~{reference_fasta} | makeblastdb -in - -parse_seqids -title ref -dbtype nucl -out ref
 
-    # Identify clusters of split reads
-    $scrambleDir/cluster_identifier/src/build/cluster_identifier ~{bam_or_cram_file} > $clusterFile
+    gunzip -c ~{clusters_file} > $clusterFile
 
     # Produce ${clusterFile}_MEIs.txt
     Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clusterFile \
             --cluster-file $clusterFile --install-dir $scrambleDir/cluster_analysis/bin \
-            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis
+            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis --cores ~{threads}
 
     # create a header for the output vcf
     echo \
@@ -138,31 +195,6 @@ task RunScramble {
 
     # transform the MEI descriptions into VCF lines
     awk -f awkScript.awk ${clusterFile}_MEIs.txt >> tmp.vcf
-
-    # work on deletions, if requested
-    if [ ~{detect_deletions} == "true" ]
-    then
-      # split the file of clusters to keep memory bounded
-      # The awk script removes lines where field 4 (the left consensus) contains nothing but 'n's
-      #   because the deletion hunter in Scramble barfs on these.
-      awk '{left=$4; gsub(/n/,"",left); if ( length(left) > 0 ) print}' $clusterFile | split -a3 -l1500 - xyzzy
-
-      # produce a xyzzy???_PredictedDeletions.txt file for each split
-      for fil in xyzzy???
-      do Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $xDir/$fil \
-           --cluster-file $xDir/$fil --install-dir $scrambleDir/cluster_analysis/bin \
-           --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-dels
-      done
-
-      # transform the *_PredictedDeletions.txt files into VCF lines, and add them to the body
-      awk \
-      'BEGIN{ FS=OFS="\t" }
-      { if(FNR<2)next
-        Q= $11=="NA" ? ($15=="NA"?".":$15) : ($15=="NA"?$11:($11+$15)/2)
-        print $1,$2+1,".","N","<DEL>",Q=="."?".":int(Q),"PASS",\
-              "END=" $3+1 ";SVTYPE=DEL;SVLEN=" $5 ";STRANDS=+-;CHR2=" $1 ";ALGORITHMS=scramble",\
-              "GT","0/1" }' xyzzy???_PredictedDeletions.txt >> tmp.vcf
-    fi
 
     # sort and index the output VCF
     bcftools sort -Oz <tmp.vcf >"~{sample_name}.scramble.vcf.gz"
