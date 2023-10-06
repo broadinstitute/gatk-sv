@@ -43,98 +43,102 @@ workflow GenotypeDepthPart2 {
       runtime_attr_override = runtime_attr_split_variants
   }
 
-  scatter (gt5kb_bed in SplitVariants.gt5kb_beds) {
+  if (length(SplitVariants.gt5kb_beds) > 0) {
+    scatter (gt5kb_bed in SplitVariants.gt5kb_beds) {
 
-    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfOver5kb {
-      input:
-        vcf = cohort_vcf,
-        bed = gt5kb_bed,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_make_subset_vcf
-    }
+      call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfOver5kb {
+        input:
+          vcf = cohort_vcf,
+          bed = gt5kb_bed,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_make_subset_vcf
+      }
 
-    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeOver5kb {
-      input:
-        bin_exclude=bin_exclude,
-        bin_exclude_idx=bin_exclude_idx,
-        bed = gt5kb_bed,
-        coveragefile = coveragefile,
-        coveragefile_index = coveragefile_index,
-        medianfile = medianfile,
-        samples = samples,
-        gt_cutoffs = RD_depth_sepcutoff,
-        n_bins = n_RdTest_bins,
-        prefix = basename(gt5kb_bed),
-        generate_melted_genotypes = true,
-        ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-        runtime_attr_override = runtime_attr_rdtest_genotype
-    }
+      call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeOver5kb {
+        input:
+          bin_exclude=bin_exclude,
+          bin_exclude_idx=bin_exclude_idx,
+          bed = gt5kb_bed,
+          coveragefile = coveragefile,
+          coveragefile_index = coveragefile_index,
+          medianfile = medianfile,
+          samples = samples,
+          gt_cutoffs = RD_depth_sepcutoff,
+          n_bins = n_RdTest_bins,
+          prefix = basename(gt5kb_bed),
+          generate_melted_genotypes = true,
+          ref_dict = ref_dict,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          runtime_attr_override = runtime_attr_rdtest_genotype
+      }
 
-    call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqOver5kb {
-      input:
-        vcf = MakeSubsetVcfOver5kb.subset_vcf,
-        RD_melted_genotypes = RDTestGenotypeOver5kb.melted_genotypes,
-        RD_vargq = RDTestGenotypeOver5kb.varGQ,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_integrate_depth_gq
-    }
+      call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqOver5kb {
+        input:
+          vcf = MakeSubsetVcfOver5kb.subset_vcf,
+          RD_melted_genotypes = RDTestGenotypeOver5kb.melted_genotypes,
+          RD_vargq = RDTestGenotypeOver5kb.varGQ,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_integrate_depth_gq
+      }
 
-    call tasksgenotypebatch.AddGenotypes as AddGenotypesOver5kb {
-      input:
-        vcf = MakeSubsetVcfOver5kb.subset_vcf,
-        genotypes = IntegrateDepthGqOver5kb.genotypes,
-        varGQ = IntegrateDepthGqOver5kb.varGQ,
-        prefix = basename(gt5kb_bed, ".bed"),
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_add_genotypes
+      call tasksgenotypebatch.AddGenotypes as AddGenotypesOver5kb {
+        input:
+          vcf = MakeSubsetVcfOver5kb.subset_vcf,
+          genotypes = IntegrateDepthGqOver5kb.genotypes,
+          varGQ = IntegrateDepthGqOver5kb.varGQ,
+          prefix = basename(gt5kb_bed, ".bed"),
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_add_genotypes
+      }
     }
   }
 
-  scatter (lt5kb_bed in SplitVariants.lt5kb_beds) {
+  if (length(SplitVariants.lt5kb_beds) > 0) {
+    scatter (lt5kb_bed in SplitVariants.lt5kb_beds) {
 
-    call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeUnder5kb {
-      input:
-        bin_exclude=bin_exclude,
-        bin_exclude_idx=bin_exclude_idx,
-        bed = lt5kb_bed,
-        coveragefile = coveragefile,
-        coveragefile_index = coveragefile_index,
-        medianfile = medianfile,
-        samples = samples,
-        gt_cutoffs = RD_pesr_sepcutoff,
-        n_bins = n_RdTest_bins,
-        prefix = basename(lt5kb_bed, ".bed"),
-        generate_melted_genotypes = true,
-        ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
-        runtime_attr_override = runtime_attr_rdtest_genotype
-    }
+      call tasksgenotypebatch.RDTestGenotype as RDTestGenotypeUnder5kb {
+        input:
+          bin_exclude=bin_exclude,
+          bin_exclude_idx=bin_exclude_idx,
+          bed = lt5kb_bed,
+          coveragefile = coveragefile,
+          coveragefile_index = coveragefile_index,
+          medianfile = medianfile,
+          samples = samples,
+          gt_cutoffs = RD_pesr_sepcutoff,
+          n_bins = n_RdTest_bins,
+          prefix = basename(lt5kb_bed, ".bed"),
+          generate_melted_genotypes = true,
+          ref_dict = ref_dict,
+          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          runtime_attr_override = runtime_attr_rdtest_genotype
+      }
 
-    call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
-      input:
-        vcf = cohort_vcf,
-        bed = lt5kb_bed,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_override = runtime_attr_make_subset_vcf
-    }
+      call tasksgenotypebatch.MakeSubsetVcf as MakeSubsetVcfUnder5kb {
+        input:
+          vcf = cohort_vcf,
+          bed = lt5kb_bed,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_make_subset_vcf
+      }
 
-    call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqUnder5kb {
-      input:
-        vcf = MakeSubsetVcfUnder5kb.subset_vcf,
-        RD_melted_genotypes = RDTestGenotypeUnder5kb.melted_genotypes,
-        RD_vargq = RDTestGenotypeUnder5kb.varGQ,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_integrate_depth_gq
-    }
-    call tasksgenotypebatch.AddGenotypes as AddGenotypesUnder5kb {
-      input:
-        vcf = MakeSubsetVcfUnder5kb.subset_vcf,
-        genotypes = IntegrateDepthGqUnder5kb.genotypes,
-        varGQ = IntegrateDepthGqUnder5kb.varGQ,
-        prefix = basename(lt5kb_bed, ".bed"),
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_add_genotypes
+      call tasksgenotypebatch.IntegrateDepthGq as IntegrateDepthGqUnder5kb {
+        input:
+          vcf = MakeSubsetVcfUnder5kb.subset_vcf,
+          RD_melted_genotypes = RDTestGenotypeUnder5kb.melted_genotypes,
+          RD_vargq = RDTestGenotypeUnder5kb.varGQ,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_integrate_depth_gq
+      }
+      call tasksgenotypebatch.AddGenotypes as AddGenotypesUnder5kb {
+        input:
+          vcf = MakeSubsetVcfUnder5kb.subset_vcf,
+          genotypes = IntegrateDepthGqUnder5kb.genotypes,
+          varGQ = IntegrateDepthGqUnder5kb.varGQ,
+          prefix = basename(lt5kb_bed, ".bed"),
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr_add_genotypes
+      }
     }
   }
 
@@ -148,8 +152,8 @@ workflow GenotypeDepthPart2 {
 
   call tasksmakecohortvcf.ConcatVcfs {
     input:
-      vcfs=flatten([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf]),
-      vcfs_idx=flatten([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index]),
+      vcfs=flatten(select_all([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf])),
+      vcfs_idx=flatten(select_all([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index])),
       allow_overlaps=true,
       outfile_prefix="~{batch}.genotyped_depth",
       sv_base_mini_docker=sv_base_mini_docker,
