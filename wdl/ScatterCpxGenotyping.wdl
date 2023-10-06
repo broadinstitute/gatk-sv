@@ -57,9 +57,10 @@ workflow ScatterCpxGenotyping {
   String contig_prefix = prefix + "." + contig
 
   # Shard VCF into even slices
-  call MiniTasks.ScatterVcf as SplitVcfToGenotype {
+  call PartitionVcf as SplitVcfToGenotype {
     input:
       vcf=vcf,
+      vcf_index="~{vcf}.tbi",
       prefix=contig_prefix,
       records_per_shard=records_per_shard,
       sv_pipeline_docker=sv_pipeline_updates_docker,
@@ -131,3 +132,69 @@ workflow ScatterCpxGenotyping {
     File cpx_depth_gt_resolved_vcf_idx = select_first([ConcatCpxCnvVcfs.concat_vcf_idx, ConcatCpxCnvVcfsHail.merged_vcf_index])
   }
  }
+
+
+ task PartitionVcf {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    Int records_per_shard
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + input_size * 5.0),
+                                  cpu_cores: 2,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+    # in case the file is empty create an empty shard
+    bcftools view -h ~{vcf} | bgzip -c > "~{prefix}.shard_000000.vcf.gz"
+    n_recs=$(bcftools index -n ~{vcf})
+    python3 <<CODE
+    import pysam
+    import math
+
+    OUTPUT_PREFIX = "part.chr1"
+
+    RECS_PER_SHARD = int(~{records_per_shard})
+    N_RECS = int($n_recs)
+    N_SHARDS = math.ceil(N_RECS/RECS_PER_SHARD)
+
+    input_vcf = pysam.VariantFile("~{vcf}")
+    shard_filenames = [f"~{prefix}.shard_{i:06d}.vcf.gz" for i in range(N_SHARDS)]
+    shards = [pysam.VariantFile(fname, 'w', header=input_vcf.header) for fname in shard_filenames]
+
+    line_counter = 0
+    for record in input_vcf:
+      i = line_counter % N_SHARDS
+      shards[i].write(record)
+      line_counter += 1
+
+    for shard in shards:
+      shard.close()
+
+    CODE
+  >>>
+  output {
+    Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
+  }
+}
