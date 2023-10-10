@@ -117,7 +117,7 @@ def get_called_samples(record, include_null=False):
 
     if record.info.get('SVTYPE', None) == 'CNV':
         for sample in record.samples.keys():
-            if record.samples[sample]['CN'] != 2:
+            if record.samples[sample]['RD_CN'] != 2:
                 samples.append(sample)
 
     return sorted(samples)
