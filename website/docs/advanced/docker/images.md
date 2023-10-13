@@ -29,7 +29,7 @@ The figure below illustrates the relationships between the GATK-SV Docker images
 
 ```mermaid
 flowchart TD
-    ubuntu22[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
+    ubuntu2204[Ubuntu 22.04] --> svbasemini[sv-base-mini] & samtoolsenv[samtools-cloud-virtual-env] & svbaseenv[sv-base-virtual-env]
     svbasemini & samtoolsenv & svbaseenv --> svpipelineenv[sv-pipeline-virtual-env]
     samtoolsenv --> samtoolscloud[samtools-cloud] & svutilsenv[sv-utils-env]
     svbasemini --> samtoolscloud
@@ -39,9 +39,10 @@ flowchart TD
     svbaseenv --> cnmopsenv[cnmpos-virtual-env]
     svbase & cnmopsenv --> cnmpos[cnmops]
 
-    ubuntu18[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    ubuntu1804[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
     samtoolscloud --> wham
     ubuntu2210[Ubuntu 22.10] --> str[STR]
+    ubuntu2204 --> scramble[Scramble]
 ```
 
 The image depicts the hierarchical relationship among GATK-SV 
@@ -66,6 +67,7 @@ The table below lists the GATK-SV Docker images and their dependencies.
 |------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | `manta`                      | <ul><li>`dockerfiles/manta/*`</li></ul>                                                                                                                                                 |                                                                                                     |
 | `melt`                       | <ul><li>`dockerfiles/melt/*`</li></ul>                                                                                                                                                  | <ul><li>`sv-base`</li></ul>                                                                         |
+| `scramble`                   | <ul><li>`dockerfiles/scramble/*`</li></ul>                                                                                                                                              |                                                                                                     |
  | `wham`                       | <ul><li>`dockerfiles/wham/*`</li></ul>                                                                                                                                                  | <ul><li>`samtools-cloud`</li></ul>                                                                  |
  | `str`                        | <ul><li>`dockerfiles/str/*`</li></ul>                                                                                                                                                   |                                                                                                     |
  | `sv-base-mini`               | <ul><li>`dockerfiles/sv-base-mini/*`</li></ul>                                                                                                                                          |                                                                                                     |
