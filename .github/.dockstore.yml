@@ -1,73 +1,163 @@
 version: 1.2
 workflows:
   - subclass: WDL
-    name: 01-GatherSampleEvidence
+    name: GatherSampleEvidence
     primaryDescriptorPath: /wdl/GatherSampleEvidence.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 02-EvidenceQC
+    name: EvidenceQC
     primaryDescriptorPath: /wdl/EvidenceQC.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 03-TrainGCNV
+    name: TrainGCNV
     primaryDescriptorPath: /wdl/TrainGCNV.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 04-GatherBatchEvidence
+    name: GatherBatchEvidence
     primaryDescriptorPath: /wdl/GatherBatchEvidence.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 05-ClusterBatch
+    name: ClusterBatch
     primaryDescriptorPath: /wdl/ClusterBatch.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 06-GenerateBatchMetrics
+    name: GenerateBatchMetrics
     primaryDescriptorPath: /wdl/GenerateBatchMetrics.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 07-FilterBatchSites
+    name: FilterBatchSites
     primaryDescriptorPath: /wdl/FilterBatchSites.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 08-PlotSVCountsPerSample
+    name: PlotSVCountsPerSample
     primaryDescriptorPath: /wdl/PlotSVCountsPerSample.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 09-FilterBatchSamples
+    name: FilterBatchSamples
     primaryDescriptorPath: /wdl/FilterBatchSamples.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 10-MergeBatchSites
+    name: MergeBatchSites
     primaryDescriptorPath: /wdl/MergeBatchSites.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 11-GenotypeBatch
+    name: GenotypeBatch
     primaryDescriptorPath: /wdl/GenotypeBatch.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 12-RegenotypeCNVs
+    name: RegenotypeCNVs
     primaryDescriptorPath: /wdl/RegenotypeCNVs.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 13-CombineBatches
+    name: CombineBatches
     primaryDescriptorPath: /wdl/CombineBatches.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 14-ResolveComplexVariants
+    name: ResolveComplexVariants
     primaryDescriptorPath: /wdl/ResolveComplexVariants.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 15-GenotypeComplexVariants
+    name: GenotypeComplexVariants
     primaryDescriptorPath: /wdl/GenotypeComplexVariants.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 16-CleanVcf
+    name: CleanVcf
     primaryDescriptorPath: /wdl/CleanVcf.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 17-MainVcfQc
+    name: MainVcfQc
     primaryDescriptorPath: /wdl/MainVcfQc.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
 
   - subclass: WDL
-    name: 18-AnnotateVcf
+    name: AnnotateVcf
     primaryDescriptorPath: /wdl/AnnotateVcf.wdl
+    filters:
+      branches: 
+        - main
+      tags:
+        - /.*/
