@@ -39,10 +39,10 @@ flowchart TD
     svbaseenv --> cnmopsenv[cnmpos-virtual-env]
     svbase & cnmopsenv --> cnmpos[cnmops]
 
-    ubuntu1804[Ubuntu 18.04] --> manta[Manta] & melt[MELT] & wham[Wham]
+    ubuntu1804[Ubuntu 18.04] --> melt[MELT] & wham[Wham]
     samtoolscloud --> wham
     ubuntu2210[Ubuntu 22.10] --> str[STR]
-    ubuntu2204 --> scramble[Scramble]
+    ubuntu2204 --> scramble[Scramble] & manta[Manta]
 ```
 
 The image depicts the hierarchical relationship among GATK-SV 
