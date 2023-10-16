@@ -110,14 +110,14 @@ class CleanedVariantIntervalRecord:
 
 class VcfRecord:
 
-    def __init__(self, variant_record):
+    def __init__(self, variant_record, end_dict):
         self.vid = variant_record.id
 
         # Sink is just the normal coordinates but 0-based / open
         # TODO despite implementing the same strategy as svtk vcf2bed, small differences in some CPX intervals
         #  may occur because pysam forces stop to be max(pos, end)
         self.sink_chrom = variant_record.chrom
-        start, end = sorted([variant_record.pos, variant_record.stop])
+        start, end = sorted([variant_record.pos, end_dict.get(self.vid, variant_record.stop)])
         self.sink_start = max(0, start - 1)
         if variant_record.info.get("UNRESOLVED_TYPE", "").startswith("INVERSION_SINGLE_ENDER"):
             self.sink_end = variant_record.info.get("END2", variant_record.stop)
@@ -365,10 +365,45 @@ def clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tre
                                                        matching_record.diff_case_control_dup_frac, cnv_assessment)
 
 
+def parse_ends(vcf_path: Text) -> Dict[Text, int]:
+    """
+    Since pysam automatically changes invalid END fields (i.e. when less than the start position), they must
+    be parsed manually.
+
+    Parameters
+    ----------
+    vcf_path: Text
+        input vcf path
+
+    Returns
+    -------
+    header: Dict[Text, int]
+        map from variant ID to END position
+    """
+    end_dict = dict()
+    with gzip.open(vcf_path, 'rt') as f:
+        for line in f:
+            if line.startswith('#'):
+                continue
+            columns = line.split('\t', 8)
+            vid = columns[2]
+            info = columns[7]
+            info_tokens = info.split(';')
+            end_field_list = [x for x in info_tokens if x.startswith("END=")]
+            if len(end_field_list) > 0:
+                end = int(end_field_list[0].replace("END=", ""))
+            else:
+                # Special case where END and POS happen to be equal
+                end = int(columns[1])
+            end_dict[vid] = end
+    return end_dict
+
+
 def read_vcf(vcf_path, cleaned_genotype_counts):
+    end_dict = parse_ends(vcf_path)
     vids = set([r.vid for r in cleaned_genotype_counts])
     with VariantFile(vcf_path) as f:
-        return {r.id: VcfRecord(r) for r in f if r.id in vids}
+        return {r.id: VcfRecord(r, end_dict) for r in f if r.id in vids}
 
 
 def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
@@ -424,10 +459,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             new_sv_type=new_sv_type,
             new_cpx_type=new_cpx_type,
             new_cpx_intervals=None,
-            new_svlen=r.sink_size(),
+            new_svlen=None,
             new_source=None,
-            new_start=r.sink_start,
-            new_end=r.sink_end
+            new_start=None,
+            new_end=None
         )
 
     # Solve translocational insertions
@@ -447,10 +482,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
         source_overlaps = [m for m in records_list
                            if has_reciprocal_overlap(r.source_chrom, r.source_start, r.source_end,
@@ -488,8 +523,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_cpx_intervals=f"DUP_{r.source_string()},DEL_{interval_string(sink_chrom, sink_start, sink_end)}",
                 new_svlen=r.source_end - r.source_start + sink_end - sink_start,
                 new_source=f"DUP_{r.source_string()}",
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
         elif source_is_dup and not sink_is_del:
             # If source is duplicated and sink is not deleted, reclassify as CPX, dDUP
@@ -500,10 +535,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type="CPX",
                 new_cpx_type="dDUP",
                 new_cpx_intervals=f"DUP_{r.source_string()}",
-                new_svlen=r.source_size(),
+                new_svlen=None,
                 new_source=f"DUP_{r.source_string()}",
-                new_start=r.sink_start + 1,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
         elif (not source_is_dup) and sink_is_del:
             # If source is not duplicated but sink is deleted, reclassify as CPX, INS_iDEL
@@ -516,8 +551,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_cpx_intervals=f"DEL_{interval_string(sink_chrom, sink_start, sink_end)}",
                 new_svlen=r.source_end - r.source_start + sink_end - sink_start,
                 new_source=f"INS_{r.source_string()}",
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
         else:
             # Otherwise, leave as canonical insertion
@@ -528,10 +563,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
 
     def _is_ctx_ins(t):
@@ -587,8 +622,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                           f"DEL_{r.sink_string()}",
                         new_svlen=inv_size,
                         new_source=None,
-                        new_start=min(dup_start, inv_start, r.sink_start),
-                        new_end=max(dup_end, inv_end, r.sink_end)
+                        new_start=min(dup_start, dup_end, inv_start, inv_end, r.sink_start, r.sink_end),
+                        new_end=max(dup_start, dup_end, inv_start, inv_end, r.sink_start, r.sink_end)
                     )
                 else:
                     # If sink is not clearly deleted (or too small), classify as dupINV (no del)
@@ -602,8 +637,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                           f"INV_{interval_string(inv_chrom, inv_start, inv_end)}",
                         new_svlen=inv_size,
                         new_source=None,
-                        new_start=min(dup_start, inv_start),
-                        new_end=max(dup_end, inv_end)
+                        new_start=min(dup_start, dup_end, inv_start, inv_end),
+                        new_end=max(dup_start, dup_end, inv_start, inv_end)
                     )
             elif sink_is_del:
                 # If sink is deleted, classify as dDUP_iDEL
@@ -618,8 +653,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                       f"DEL_{r.sink_string()}",
                     new_svlen=dup_size + r.sink_size(),
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
-                    new_start=r.sink_start,
-                    new_end=r.sink_end
+                    new_start=None,
+                    new_end=None
                 )
             else:
                 # If sink is not clearly deleted (or too small), classify as dDUP (no iDEL)
@@ -633,8 +668,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                       f"INV_{interval_string(dup_chrom, dup_start, dup_end)}",
                     new_svlen=dup_size,
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
-                    new_start=r.sink_start,
-                    new_end=r.sink_end
+                    new_start=None,
+                    new_end=None
                 )
         else:
             # If dup explicitly fails depth genotyping, mark as unresolved
@@ -645,10 +680,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
 
     # DUP3/INS5 or INVdup / delINVdup
@@ -697,8 +732,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                           f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
                         new_svlen=inv_size,
                         new_source=None,
-                        new_start=min(dup_start, inv_start, r.sink_start),
-                        new_end=max(dup_end, inv_end, r.sink_end)
+                        new_start=min(dup_start, dup_end, inv_start, inv_end, r.sink_start, r.sink_end),
+                        new_end=max(dup_start, dup_end, inv_start, inv_end, r.sink_start, r.sink_end)
                     )
                 else:
                     # If sink is not clearly deleted (or too small), classify as dupINV (no del)
@@ -712,8 +747,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                           f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
                         new_svlen=inv_size,
                         new_source=None,
-                        new_start=min(dup_start, inv_start),
-                        new_end=max(dup_end, inv_end)
+                        new_start=min(dup_start, dup_end, inv_start, inv_end),
+                        new_end=max(dup_start, dup_end, inv_start, inv_end)
                     )
             elif sink_is_del:
                 # If sink is deleted, classify as dDUP_iDEL
@@ -728,8 +763,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                                       f"DEL_{r.sink_string()}",
                     new_svlen=dup_size + r.sink_size(),
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
-                    new_start=r.sink_start,
-                    new_end=r.sink_end
+                    new_start=None,
+                    new_end=None
                 )
             else:
                 # If sink is not clearly deleted (or too small), classify as dDUP (no iDEL)
@@ -744,8 +779,8 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
 
                     new_svlen=dup_size,
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
-                    new_start=r.sink_start,
-                    new_end=r.sink_end
+                    new_start=None,
+                    new_end=None
                 )
         else:
             # If dup explicitly fails depth genotyping, mark as unresolved
@@ -756,10 +791,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
 
     # Default to test for INS-iDEL
@@ -796,10 +831,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                         new_sv_type="CPX",
                         new_cpx_type="INS_iDEL",
                         new_cpx_intervals=f"DEL_{r.sink_string()}",
-                        new_svlen=r.sink_size() + r.source_size(),
+                        new_svlen=None + r.source_size(),
                         new_source=f"INS_{r.source_string()}",
-                        new_start=r.sink_start,
-                        new_end=r.sink_end
+                        new_start=None,
+                        new_end=None
                     )
                 elif sink_is_not_del and sink_record.size() >= MIN_SIZE:
                     # If sink is explicitly *not* deleted and is >= MINSIZE, reclassify as UNRESOLVED
@@ -810,10 +845,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                         new_sv_type=default_sv_type,
                         new_cpx_type=default_cpx_type,
                         new_cpx_intervals=None,
-                        new_svlen=r.sink_size(),
+                        new_svlen=None,
                         new_source=None,
-                        new_start=r.sink_start,
-                        new_end=r.sink_end
+                        new_start=None,
+                        new_end=None
                     )
                 else:
                     # Otherwise, leave as canonical insertion
@@ -824,10 +859,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                         new_sv_type=default_sv_type,
                         new_cpx_type=default_cpx_type,
                         new_cpx_intervals=None,
-                        new_svlen=r.sink_size(),
+                        new_svlen=None,
                         new_source=None,
-                        new_start=r.sink_start,
-                        new_end=r.sink_end
+                        new_start=None,
+                        new_end=None
                     )
             else:
                 # No sinks found
@@ -838,10 +873,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                     new_sv_type=default_sv_type,
                     new_cpx_type=default_cpx_type,
                     new_cpx_intervals=None,
-                    new_svlen=r.sink_size(),
+                    new_svlen=None,
                     new_source=None,
-                    new_start=r.sink_start,
-                    new_end=r.sink_end
+                    new_start=None,
+                    new_end=None
                 )
 
     # Salvage inverted duplications from inversion single enders
@@ -856,10 +891,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
         # Get span of inversion
         dup_chrom = r.sink_chrom
@@ -895,10 +930,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 new_sv_type=default_sv_type,
                 new_cpx_type=default_cpx_type,
                 new_cpx_intervals=None,
-                new_svlen=r.sink_size(),
+                new_svlen=None,
                 new_source=None,
-                new_start=r.sink_start,
-                new_end=r.sink_end
+                new_start=None,
+                new_end=None
             )
 
     # Default case for other variant types
@@ -910,10 +945,10 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             new_sv_type=default_sv_type,
             new_cpx_type=default_cpx_type,
             new_cpx_intervals=None,
-            new_svlen=r.sink_size(),
+            new_svlen=None,
             new_source=None,
-            new_start=r.sink_start,
-            new_end=r.sink_end
+            new_start=None,
+            new_end=None
         )
 
     # SV and CPX class each is most common one
@@ -1072,8 +1107,11 @@ def write_reclassification_table(path, assessment):
         for r in assessment:
             new_cpx_intervals = r.new_cpx_intervals if r.new_cpx_intervals else "."
             new_source = r.new_source if r.new_source else "."
+            new_svlen = r.new_svlen if r.new_svlen is not None else "."
+            new_start = r.new_start if r.new_start is not None else "."
+            new_end = r.new_end if r.new_end is not None else "."
             f.write(f"{r.vid}\t{r.modification}\t{r.reason}\t{r.new_sv_type}\t{r.new_cpx_type}\t{new_cpx_intervals}\t"
-                    f"{r.new_svlen}\t{new_source}\t{r.new_start}\t{r.new_end}\n")
+                    f"{new_svlen}\t{new_source}\t{new_start}\t{new_end}\n")
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
