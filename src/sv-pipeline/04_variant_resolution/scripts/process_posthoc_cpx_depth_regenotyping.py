@@ -286,7 +286,7 @@ def genotype_counts_per_variant(intervals_path: Text,
 
             # Expected copy number to determine whether each genotype copy number is del/dup/wt
             control_cn = [var.genotype_copy_numbers[s] for s in control_samples for var in matching_variants
-                          if s in var.genotype_copy_numbers]
+                          if var.genotype_copy_numbers.get(s, None) is not None]
             if len(control_cn) == 0:
                 # If no valid carriers, assume default
                 median_control_cn = default_median_cn
@@ -1022,7 +1022,7 @@ def parse_genotypes(path: Text) -> Dict:
     genotype_list_dict = dict()
     with gzip.open(path, 'rt') as f:
         for line in f:
-            if line.startswith('#'):
+            if line.startswith('#') or line == "\n":
                 continue
             tokens = line.strip().split('\t')
             chrom = tokens[0]
@@ -1030,7 +1030,7 @@ def parse_genotypes(path: Text) -> Dict:
             end = int(tokens[2])
             vid = tokens[3]
             sample = tokens[4]
-            copy_number = int(tokens[5])
+            copy_number = None if tokens[5] == "." else int(tokens[5])
             if vid not in genotype_list_dict:
                 genotype_list_dict[vid] = list()
             matching_variant_info = None
