@@ -215,7 +215,7 @@ task ParseGenotypes {
       --temp-dir temp \
       --output-type z \
       --output-file ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz \
-      ~{vcf}
+      out.vcf.gz
     tabix ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
   >>>
 
