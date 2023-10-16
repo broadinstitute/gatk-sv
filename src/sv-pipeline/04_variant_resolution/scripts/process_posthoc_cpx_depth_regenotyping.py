@@ -550,6 +550,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         dup_size = dup_end - dup_start
         # Test dup interval for evidence of duplication
         # TODO unsure if the check should be == "DUP"
+
         dup_confirmed = any(m.cnv_assessment != "WT"
                             and has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end, 0.95)
                             for m in records_list)
@@ -613,7 +614,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                     new_sv_type="CPX",
                     new_cpx_type="dDUP_iDEL",
                     new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                      f"INV_{interval_string(inv_chrom, inv_start, inv_end)},"
+                                      f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
                                       f"DEL_{r.sink_string()}",
                     new_svlen=dup_size + r.sink_size(),
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
@@ -723,7 +724,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                     new_sv_type="CPX",
                     new_cpx_type="dDUP_iDEL",
                     new_cpx_intervals=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)},"
-                                      f"INV_{interval_string(inv_chrom, inv_start, inv_end)},"
+                                      f"INV_{interval_string(dup_chrom, dup_start, dup_end)},"
                                       f"DEL_{r.sink_string()}",
                     new_svlen=dup_size + r.sink_size(),
                     new_source=f"DUP_{interval_string(dup_chrom, dup_start, dup_end)}",
@@ -958,6 +959,7 @@ def write_vcf(input_vcf_path, output_path, final_assessment_list):
                 record.info["SVLEN"] = assessment.new_svlen
             if assessment.new_sv_type:
                 record.info["SVTYPE"] = assessment.new_sv_type
+                record.alts = ("<" + assessment.new_sv_type + ">",)
             if assessment.new_cpx_type:
                 record.info["CPX_TYPE"] = assessment.new_cpx_type
             if assessment.new_source:
