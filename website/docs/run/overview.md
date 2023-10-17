@@ -28,6 +28,9 @@ There are two factors to consider when deciding how to run GATK-SV.
     | Multi-batch (cohort) | >200 samples       |                           ||
 
 
+
+
+
 ## GATK-SV on Terra
 
 Please refer to the following documentation on running the GATK-SV pipeline within the Terra platform. 

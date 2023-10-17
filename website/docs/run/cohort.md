@@ -1,6 +1,6 @@
 ---
 title: Cohort
-description: Overview
+description: Run the pipeline on a cohort
 sidebar_position: 4
 slug: cohort
 ---

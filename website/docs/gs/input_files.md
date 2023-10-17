@@ -1,7 +1,7 @@
 ---
 title: Input Data
 description: Supported input and reference data.
-sidebar_position: 3
+sidebar_position: 5
 slug: ./inputs
 ---
 
