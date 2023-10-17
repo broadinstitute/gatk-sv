@@ -282,6 +282,9 @@ task RunCallers {
 
     ###### RunMELT
 
+    # Set to Java 8
+    update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
     # MELT expects the BAM index to have extension ".bam.bai"
     mv filtered.bam ~{sample_id}.bam
     mv filtered.bai ~{sample_id}.bam.bai
@@ -343,6 +346,9 @@ task RunCallers {
     tabix -p vcf "~{sample_id}.melt.vcf.gz"
 
     rm ~{sample_id}.bam
+
+    # Set back to Java 17
+    /usr/lib/jvm/java-17-openjdk-amd64/bin/java
 
     ###################################################
     ###### MANTA

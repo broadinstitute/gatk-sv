@@ -147,3 +147,10 @@ RUN cd /opt && git clone https://github.com/broadinstitute/picard.git && \
     rm -rf .git && \
     rm gradlew && \
     rm build.gradle
+
+
+# Reinstall Java 8 which seems to somehow go missing (for MELT)
+RUN apt-get -qqy update --fix-missing && \
+    apt-get -qqy dist-upgrade && \
+    apt-get -qqy install --no-install-recommends \
+                 openjdk-8-jre-headless \
