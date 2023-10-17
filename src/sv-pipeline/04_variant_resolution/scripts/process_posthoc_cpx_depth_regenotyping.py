@@ -982,7 +982,7 @@ def write_vcf(input_vcf_path, output_path, final_assessment_list):
         if mod == "SKIP" or mod == "KEEP":
             return
         elif mod == "UNRESOLVED":
-            record.filter.add("UNRESOLVED")
+            # Note the filter status is now added during CleanVcf instead
             record.info["UNRESOLVED"] = True
             record.info["UNRESOLVED_TYPE"] = "POSTHOC_RD_GT_REJECTION"
         elif mod == "RECLASSIFY":
@@ -1036,8 +1036,6 @@ def write_vcf(input_vcf_path, output_path, final_assessment_list):
         header.add_line("##CPX_TYPE_dDUP=\"Dispersed duplication.\"")
         header.add_line("##CPX_TYPE_dDUP_iDEL=\"Dispersed duplication with deletion at insertion site.\"")
         header.add_line("##CPX_TYPE_INS_iDEL=\"Insertion with deletion at insertion site.\"")
-        # Not added in original script but required for pysam
-        header.add_line("##FILTER=<ID=UNRESOLVED,Description=\"Variant is unresolved\">")
         with VariantFile(output_path, 'w', header=header) as fout:
             for r in fin:
                 if r.id in final_assessment_dict:
