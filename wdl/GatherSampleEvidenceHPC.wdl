@@ -348,7 +348,7 @@ task RunCallers {
     rm ~{sample_id}.bam
 
     # Set back to Java 17
-    /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+    update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java
 
     ###################################################
     ###### MANTA
