@@ -1,8 +1,11 @@
 ---
-title: Batching
-description: Batching
-slug: batching
+title: Cohort
+description: Overview
+sidebar_position: 4
+slug: cohort
 ---
+
+## Batching
 
 For larger cohorts, samples should be split up into batches of about 100-500 
 samples with similar characteristics. We recommend batching based on overall 

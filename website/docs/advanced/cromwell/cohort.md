@@ -1,8 +1,9 @@
 ---
-sidebar_position: 2
+title: Cohort
+description: Overview
+sidebar_position: 3
+slug: cohort
 ---
-
-# Cohort mode
 
 A minimum cohort size of 100 is required, and a roughly equal 
 number of males and females is recommended. For modest cohorts 

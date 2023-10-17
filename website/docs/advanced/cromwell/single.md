@@ -1,8 +1,9 @@
 ---
+title: Single-sample
+description: Generate a callset for a single-sample on Cromwell
 sidebar_position: 1
+slug: single
 ---
-
-# Single-sample execution mode
 
 `GATKSVPipelineSingleSample.wdl` runs the pipeline on a single sample using 
 a fixed reference panel. An example run with reference panel containing 156 
