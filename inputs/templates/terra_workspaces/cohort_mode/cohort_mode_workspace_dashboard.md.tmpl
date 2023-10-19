@@ -198,8 +198,10 @@ Read the full MergeBatchSites documentation [here](https://github.com/broadinsti
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
-At this point, if you are working with only one batch, delete all workflows for Modules 11-18 that are '[...]' versions to ensure that you run only the SingleBatch verions.
-If you are working with more than one batch, delete all workflows for Modules 11-18 that are '[...]_SingleBatch' versions to ensure that the appropriate workflows are run.
+#### Single-batch vs. Multi-batch processing
+* If you only have one batch (`sample_set`), you will be using the workflows with the suffix `_SingleBatch` from `11-GenotypeBatch_SingleBatch` to `18-AnnotateVcf_SingleBatch`. We recommend deleting the workflow versions without the `_SingleBatch` suffix from `11-GenotypeBatch` to `18-AnnotateVcf` now to avoid confusion.
+* If you have multiple batches (`sample_set`s), you will be using the cohort-mode versions of the workflows from `11-GenotypeBatch` onwards, which do not have the suffix `_SingleBatch`. We recommend deleting the workflow versions with the `_SingleBatch` suffix now to avoid confusion.
+
 #### 11-GenotypeBatch
 
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
