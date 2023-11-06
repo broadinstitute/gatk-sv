@@ -33,6 +33,7 @@ workflow GatherSampleEvidence {
     File reference_fasta
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
+    File reference_bwa_image  # GATK BWA index image (.img)
     String? reference_version   # Either "38" or "19"
 
     # Coverage collection inputs
@@ -126,11 +127,36 @@ workflow GatherSampleEvidence {
       runtime_attr_override = runtime_attr_localize_reads
   }
 
+  # check if the reads were aligned with dragen 3.7.8 for soft-clipping correction
+  call CheckAligner {
+    input:
+      reads_path = LocalizeReads.output_file,
+      reads_index = LocalizeReads.output_index,
+      sample_id = sample_id,
+      gatk_docker = gatk_docker,
+      runtime_attr_override = runtime_attr_localize_reads
+  }
+
+  if (CheckAligner.is_dragen_3_7_8 > 0) {
+    call RealignSoftClippedReads {
+      input:
+        reads_path = LocalizeReads.output_file,
+        reads_index = LocalizeReads.output_index,
+        sample_id = sample_id,
+        reference_fasta = reference_fasta,
+        reference_index = reference_index,
+        reference_dict = reference_dict,
+        reference_bwa_image = reference_bwa_image,
+        gatk_docker = gatk_docker,
+        runtime_attr_override = runtime_attr_localize_reads
+    }
+  }
+
   if (revise_base) {
     call rb.CramToBamReviseBase {
       input:
-        cram_file = LocalizeReads.output_file,
-        cram_index = LocalizeReads.output_index,
+        cram_file = select_first([RealignSoftClippedReads.out, LocalizeReads.output_file]),
+        cram_index = select_first([RealignSoftClippedReads.out_index, LocalizeReads.output_index]),
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         contiglist = select_first([primary_contigs_fai]),
@@ -141,8 +167,8 @@ workflow GatherSampleEvidence {
     }
   }
 
-  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
+  File reads_file_ = select_first([CramToBamReviseBase.bam_file, RealignSoftClippedReads.out, LocalizeReads.output_file])
+  File reads_index_ = select_first([CramToBamReviseBase.bam_index, RealignSoftClippedReads.out_index, LocalizeReads.output_index])
 
   if (collect_coverage || run_melt) {
     call cov.CollectCounts {
@@ -343,3 +369,139 @@ task LocalizeReads {
     File output_index = basename(reads_index)
   }
 }
+
+
+task CheckAligner {
+  input {
+    File reads_path
+    File reads_index
+    String sample_id
+
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    reads_file: {
+                 localization_optional: true
+               }
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1.0,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File header = "~{sample_id}.header.sam"
+    Int is_dragen_3_7_8 = read_int("is_dragen_3_7_8.txt")
+  }
+  command <<<
+    set -euo pipefail
+
+    gatk PrintReadsHeader \
+      -I ~{reads_path} \
+      --read-index ~{reads_index} \
+      -O ~{sample_id}.header.sam
+
+    grep -F '@PG' ~{sample_id}.header.sam \
+      | grep -F 'DRAGEN SW build' \
+      | grep -F 'VN: 05.021.604.3.7.8' \
+      | wc -l \
+      > is_dragen_3_7_8.txt
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task RealignSoftClippedReads {
+  input {
+    File reads_path
+    File reads_index
+    String sample_id
+    File reference_fasta
+    File reference_index
+    File reference_dict
+    File reference_bwa_image
+    String? additional_tool_args
+    String? additional_spark_args
+
+    Float? java_mem_fraction
+    String gatk_docker
+    Boolean use_ssd = false
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    reads_path: {
+                 localization_optional: true
+               }
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 4,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + size(reads_path, "GB") * 4),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Int n_cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+  String disk_type = if use_ssd then "SSD" else "HDD"
+
+  output {
+    File out = "~{sample_id}.cram"
+    File out_index = "~{sample_id}.cram.crai"
+  }
+  command <<<
+    set -euo pipefail
+
+    function getJavaMem() {
+      # get JVM memory in MiB by getting total memory from /proc/meminfo
+      # and multiplying by java_mem_fraction
+      cat /proc/meminfo \
+        | awk -v MEM_FIELD="$1" '{
+            f[substr($1, 1, length($1)-1)] = $2
+          } END {
+            printf "%dM", f[MEM_FIELD] * ~{default="0.85" java_mem_fraction} / 1024
+          }'
+    }
+    JVM_MAX_MEM=$(getJavaMem MemTotal)
+    echo "JVM memory: $JVM_MAX_MEM"
+
+    gatk --java-options "-Xmx${JVM_MAX_MEM}" RealignSoftClippedReads \
+      -I ~{reads_path} \
+      -O ~{sample_id}.realign_soft_clipped_reads.cram \
+      -R ~{reference_fasta} \
+      -R ~{reference_bwa_image}
+      ~{additional_tool_args} \
+      -- \
+      --spark-runner LOCAL \
+      --spark-master local[~{n_cpu}] \
+      ~{additional_spark_args}
+
+  >>>
+  runtime {
+    cpu: n_cpu
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " " + disk_type
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+

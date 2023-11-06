@@ -37,6 +37,7 @@
   "reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
   "reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
   "reference_index" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+  "reference_bwa_image" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/Homo_sapiens_assembly38.fasta.img",
   "reference_version" : "38",
   "rmsk" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
   "rmsk_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz.tbi",
