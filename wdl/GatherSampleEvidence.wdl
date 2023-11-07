@@ -383,7 +383,7 @@ task CheckAligner {
   }
 
   parameter_meta {
-    reads_file: {
+    reads_path: {
                  localization_optional: true
                }
   }
