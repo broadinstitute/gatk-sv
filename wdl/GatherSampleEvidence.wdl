@@ -127,7 +127,7 @@ workflow GatherSampleEvidence {
       runtime_attr_override = runtime_attr_localize_reads
   }
 
-  # check if the reads were aligned with dragen 3.7.8 for soft-clipping correction
+  # check if the reads were aligned with dragen 3.7.8
   call CheckAligner {
     input:
       reads_path = LocalizeReads.output_file,
@@ -138,6 +138,7 @@ workflow GatherSampleEvidence {
   }
 
   if (CheckAligner.is_dragen_3_7_8 > 0) {
+    # addresses bug in dragmap where some reads are incorrectly soft-clipped
     call RealignSoftClippedReads {
       input:
         reads_path = LocalizeReads.output_file,
