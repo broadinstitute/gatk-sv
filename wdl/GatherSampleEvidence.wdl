@@ -132,6 +132,9 @@ workflow GatherSampleEvidence {
     input:
       reads_path = LocalizeReads.output_file,
       reads_index = LocalizeReads.output_index,
+      reference_fasta = if is_bam_ then NONE_FILE_ else reference_fasta,
+      reference_index = if is_bam_ then NONE_FILE_ else reference_index,
+      reference_dict = if is_bam_ then NONE_FILE_ else reference_dict,
       sample_id = sample_id,
       gatk_docker = gatk_docker,
       runtime_attr_override = runtime_attr_localize_reads
@@ -376,6 +379,9 @@ task CheckAligner {
   input {
     File reads_path
     File reads_index
+    File? reference_fasta
+    File? reference_index
+    File? reference_dict
     String sample_id
 
     String gatk_docker
@@ -408,11 +414,10 @@ task CheckAligner {
     gatk PrintReadsHeader \
       -I ~{reads_path} \
       --read-index ~{reads_index} \
-      -O ~{sample_id}.header.sam
+      -O ~{sample_id}.header.sam \
+      ~{"-R " + reference_fasta}
 
-    grep -F '@PG' ~{sample_id}.header.sam \
-      | grep -F 'DRAGEN SW build' \
-      | grep -F 'VN: 05.021.604.3.7.8' \
+    awk '$0~"@PG" && $0~"ID: DRAGEN SW build" && $0~"VN: 05.021.604.3.7.8"' ~{sample_id}.header.sam \
       | wc -l \
       > is_dragen_3_7_8.txt
   >>>
