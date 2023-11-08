@@ -492,7 +492,7 @@ task RealignSoftClippedReads {
       -I ~{reads_path} \
       -O ~{sample_id}.realign_soft_clipped_reads.cram \
       -R ~{reference_fasta} \
-      -R ~{reference_bwa_image}
+      -bwa-mem-index-image ~{reference_bwa_image} \
       ~{additional_tool_args} \
       -- \
       --spark-runner LOCAL \
