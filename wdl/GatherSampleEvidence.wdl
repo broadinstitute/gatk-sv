@@ -436,6 +436,7 @@ task RealignSoftClippedReads {
   input {
     File reads_path
     File reads_index
+    Boolean is_bam
     String sample_id
     File reference_fasta
     File reference_index
@@ -456,10 +457,12 @@ task RealignSoftClippedReads {
                }
   }
 
+  Int reads_disk_multipler = if is_bam then 4 else 13
+
   RuntimeAttr default_attr = object {
-                               cpu_cores: 4,
-                               mem_gb: 16,
-                               disk_gb: ceil(10 + size(reads_path, "GB") * 4),
+                               cpu_cores:16,
+                               mem_gb: 14.4,
+                               disk_gb: ceil(10 + size(reads_path, "GB") * reads_disk_multipler + size(reference_bwa_image, "GB") * 2 + size(reference_fasta, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -469,8 +472,8 @@ task RealignSoftClippedReads {
   String disk_type = if use_ssd then "SSD" else "HDD"
 
   output {
-    File out = "~{sample_id}.cram"
-    File out_index = "~{sample_id}.cram.crai"
+    File out = "~{sample_id}.realign_soft_clipped_reads.cram"
+    File out_index = "~{sample_id}.realign_soft_clipped_reads.cram.crai"
   }
   command <<<
     set -euo pipefail
@@ -488,16 +491,34 @@ task RealignSoftClippedReads {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    if ~{is_bam}; then
+      ln -s ~{reads_path} reads.bam
+      ln -s ~{reads_index} reads.bam.bai
+    else
+      # Multi-threaded convert to bam
+      time samtools view -h -@~{n_cpu} \
+        -T ~{reference_fasta} \
+        -O bam \
+        -o reads.bam \
+        ~{reads_path}
+      samtools index -o reads.bam.bai reads.bam
+    fi
+
+    # Do realignment
     gatk --java-options "-Xmx${JVM_MAX_MEM}" RealignSoftClippedReads \
-      -I ~{reads_path} \
-      -O ~{sample_id}.realign_soft_clipped_reads.cram \
-      -R ~{reference_fasta} \
-      -bwa-mem-index-image ~{reference_bwa_image} \
-      ~{additional_tool_args} \
-      -- \
-      --spark-runner LOCAL \
-      --spark-master local[~{n_cpu}] \
-      ~{additional_spark_args}
+      -I reads.bam \
+      -O output.bam \
+      --bwa-mem-index-image ~{reference_bwa_image} \
+      --bwa-threads ~{n_cpu} \
+      ~{additional_tool_args}
+
+    # Multi-threaded convert to cram
+    time samtools view -h -@~{n_cpu} \
+      -T ~{reference_fasta} \
+      -O cram \
+      -o ~{sample_id}.realign_soft_clipped_reads.cram \
+      output.bam
+    samtools index -o ~{sample_id}.realign_soft_clipped_reads.cram.crai ~{sample_id}.realign_soft_clipped_reads.cram
 
   >>>
   runtime {
