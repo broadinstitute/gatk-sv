@@ -146,6 +146,7 @@ workflow GatherSampleEvidence {
       input:
         reads_path = LocalizeReads.output_file,
         reads_index = LocalizeReads.output_index,
+        is_bam = is_bam_,
         sample_id = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
@@ -451,12 +452,6 @@ task RealignSoftClippedReads {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    reads_path: {
-                 localization_optional: true
-               }
-  }
-
   Int reads_disk_multipler = if is_bam then 4 else 13
 
   RuntimeAttr default_attr = object {
@@ -472,8 +467,8 @@ task RealignSoftClippedReads {
   String disk_type = if use_ssd then "SSD" else "HDD"
 
   output {
-    File out = "~{sample_id}.realign_soft_clipped_reads.cram"
-    File out_index = "~{sample_id}.realign_soft_clipped_reads.cram.crai"
+    File out = "~{sample_id}.realign_soft_clipped_reads.bam"
+    File out_index = "~{sample_id}.realign_soft_clipped_reads.bam.bai"
   }
   command <<<
     set -euo pipefail
@@ -507,18 +502,18 @@ task RealignSoftClippedReads {
     # Do realignment
     gatk --java-options "-Xmx${JVM_MAX_MEM}" RealignSoftClippedReads \
       -I reads.bam \
-      -O output.bam \
+      -O ~{sample_id}.realign_soft_clipped_reads.bam \
       --bwa-mem-index-image ~{reference_bwa_image} \
       --bwa-threads ~{n_cpu} \
       ~{additional_tool_args}
 
     # Multi-threaded convert to cram
-    time samtools view -h -@~{n_cpu} \
-      -T ~{reference_fasta} \
-      -O cram \
-      -o ~{sample_id}.realign_soft_clipped_reads.cram \
-      output.bam
-    samtools index -o ~{sample_id}.realign_soft_clipped_reads.cram.crai ~{sample_id}.realign_soft_clipped_reads.cram
+    #time samtools view -h -@~{n_cpu} \
+    #  -T ~{reference_fasta} \
+    #  -O cram \
+    #  -o ~{sample_id}.realign_soft_clipped_reads.cram \
+    #  output.bam
+    #samtools index -o ~{sample_id}.realign_soft_clipped_reads.cram.crai ~{sample_id}.realign_soft_clipped_reads.cram
 
   >>>
   runtime {
