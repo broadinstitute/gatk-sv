@@ -162,7 +162,6 @@ task RdTestPlot {
 import random
 import math
 
-print("$RECORD") # DEBUG
 chrom, start, end, name, samples, svtype = "$RECORD".strip().split('\t')
 with open("cnvs.bed", 'w') as out:
     # segment large CNVs into multiple records
@@ -183,7 +182,6 @@ with open("cnvs.bed", 'w') as out:
 batches_record = set()
 with open("~{samples_in_batches}", 'r') as samples_batches:
     samples = set(samples.split(","))
-    print(samples)  # DEBUG
     for line in samples_batches:
         batch, sample = line.strip().split("\t")
         if sample in samples:
@@ -191,7 +189,6 @@ with open("~{samples_in_batches}", 'r') as samples_batches:
     # randomly choose 10 batches if there are more
     if len(batches_record) > 10:
         batches_record = random.sample(batches_record, 10)
-    print(batches_record)  # DEBUG
 
 with open("~{samples_in_batches}", 'r') as samples_batches, open("samples.txt", 'w') as samples_file:
     # get sample IDs for record and write to file: all samples in batches containing record
@@ -205,9 +202,7 @@ with open("median_files.txt", 'w') as med, open("rd_files.txt", 'w') as rdf, ope
     open("~{median_files}", 'r') as med_list, open("~{rd_files}", 'r') as rdf_list, open("~{rd_file_indexes}", 'r') as rdi_list, \
     open("~{batches}", 'r') as batches_list:
     for batch, med_file, rd_file, rd_index in zip(batches_list, med_list, rdf_list, rdi_list):
-        print(f"{batch} {med_file} {rd_file} {rd_index}")  # DEBUG
         if batch.strip() in batches_record:
-            print("found batch")  # DEBUG
             med.write(med_file)
             rdf.write(rd_file)
             rdi.write(rd_index)
@@ -217,7 +212,6 @@ CODE
       # delete any local dirs if they exist from the previous record
       if [ -d "med_files" ]; then rm -r med_files; fi
       mkdir med_files
-      cat median_files.txt # DEBUG
       cat median_files.txt | gsutil -m cp -I med_files/
       paste med_files/* > median_file.txt
 
@@ -238,9 +232,6 @@ CODE
         i=$((i+1))
       done<rd_files.txt
 
-      cat cnvs.bed # DEBUG
-      wc -l samples.txt # DEBUG
-      cat samples.txt # DEBUG
       # run RdTest on segmented CNVs with appropriate sample/batch/data inputs
       Rscript /opt/RdTest/RdTestV2.R \
         -b cnvs.bed \
