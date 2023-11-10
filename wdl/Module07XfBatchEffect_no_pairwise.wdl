@@ -22,7 +22,7 @@ workflow XfBatchEffect {
     Int variants_per_shard
     Int? onevsall_cutoff=2
     String prefix
-    File af_pcrmins_premingq
+    File? af_pcrmins_premingq
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
@@ -85,12 +85,14 @@ workflow XfBatchEffect {
 
   # Compare frequencies before and after minGQ, and generate list of variants
   # that are significantly different between the steps
-  call CompareFreqsPrePostMinGQPcrminus {
-    input:
-      af_pcrmins_premingq=af_pcrmins_premingq,
-      AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+  if (defined(af_pcrmins_premingq)) {
+    call CompareFreqsPrePostMinGQPcrminus {
+      input:
+        af_pcrmins_premingq=select_first([af_pcrmins_premingq]),
+        AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   # Generate matrix of correlation coefficients for all batches, by population & SVTYPE
@@ -470,6 +472,47 @@ task MakeCorrelationMatrices {
   }
 }
 
+
+# Generate list of all pairs of batches to be compared
+task MakeBatchPairsList {
+  input{
+    File batches_list
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 4,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  command <<<
+    set -euo pipefail
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/make_batch_pairs_list.R \
+    ~{batches_list} \
+    "~{prefix}.nonredundant_batch_pairs.txt"
+  >>>
+
+  output {
+    File batch_pairs_list = "~{prefix}.nonredundant_batch_pairs.txt"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
 # Merge lists of batch effect checks and count total number of times each variant failed
 task MergeVariantFailureLists {
   input{
@@ -568,7 +611,7 @@ task ApplyBatchEffectLabels {
     File vcf_idx
     String contig
     File reclassification_table
-    File mingq_prePost_pcrminus_fails
+    File? mingq_prePost_pcrminus_fails
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -586,7 +629,7 @@ task ApplyBatchEffectLabels {
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-    --unstable-af-pcrminus ~{mingq_prePost_pcrminus_fails} \
+    ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
     stdin \
     ~{reclassification_table} \
     stdout \
