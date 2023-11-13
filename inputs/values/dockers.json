@@ -2,7 +2,7 @@
   "name": "dockers",
   "cnmops_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/cnmops:2023-07-28-v0.28.1-beta-e70dfbd7",
   "condense_counts_docker": "us.gcr.io/broad-dsde-methods/tsharpe/gatk:4.2.6.1-57-g9e03432",
-  "gatk_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-realign-soft-clipped-e91cbc1",
+  "gatk_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-realign-sr-nonspark-0acfd9f1",
   "gatk_docker_pesr_override": "us.gcr.io/broad-dsde-methods/tsharpe/gatk:4.2.6.1-57-g9e03432",
   "genomes_in_the_cloud_docker": "us.gcr.io/broad-gotc-prod/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "marketplace.gcr.io/google/ubuntu1804",
