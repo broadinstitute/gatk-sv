@@ -59,10 +59,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--bed", help="Path to input bed file")
-    parser.add_argument("--n_per_split", help="number of variants per file")
+    parser.add_argument("--n", help="number of variants per file")
     parser.add_argument("--bca", default="FALSE", help="")
     args = parser.parse_args()
-    process_bed_file(args.bed, args.n_per_split, args.bca)
+    process_bed_file(args.bed, args.n, args.bca)
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
