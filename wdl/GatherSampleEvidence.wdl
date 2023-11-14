@@ -468,7 +468,7 @@ task RealignSoftClippedReads {
 
   output {
     File out = "~{sample_id}.realign_soft_clipped_reads.bam"
-    File out_index = "~{sample_id}.realign_soft_clipped_reads.bam.bai"
+    File out_index = "~{sample_id}.realign_soft_clipped_reads.bai"
   }
   command <<<
     set -euo pipefail
