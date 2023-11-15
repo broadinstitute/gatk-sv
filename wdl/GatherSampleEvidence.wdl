@@ -455,7 +455,7 @@ task RealignSoftClippedReads {
   Int reads_disk_multipler = if is_bam then 4 else 13
 
   RuntimeAttr default_attr = object {
-                               cpu_cores:16,
+                               cpu_cores: 16,
                                mem_gb: 14.4,
                                disk_gb: ceil(10 + size(reads_path, "GB") * reads_disk_multipler + size(reference_bwa_image, "GB") * 2 + size(reference_fasta, "GB")),
                                boot_disk_gb: 10,
