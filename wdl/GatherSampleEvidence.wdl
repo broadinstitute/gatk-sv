@@ -508,6 +508,7 @@ task RealignSoftClippedReads {
       -O ~{sample_id}.realign_soft_clipped_reads.bam \
       --bwa-mem-index-image ~{reference_bwa_image} \
       --bwa-threads ~{n_cpu} \
+      --keep-duplicate-flag \
       ~{additional_tool_args}
 
     # Multi-threaded convert to cram
