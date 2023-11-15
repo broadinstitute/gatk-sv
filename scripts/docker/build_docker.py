@@ -176,6 +176,9 @@ class ProjectBuilder:
             docker_dependencies={
                 "sv-base": "SVBASE_IMAGE"}
         ),
+        "scramble": ImageDependencies(
+            git_dependencies=("dockerfiles/scramble/*")
+        ),
         "wham": ImageDependencies(
             git_dependencies="dockerfiles/wham/*",
             docker_dependencies={

@@ -26,8 +26,6 @@ workflow JoinRawCalls {
 
     File ped_file
 
-    String? preprocess_args
-
     File contig_list
     File reference_fasta
     File reference_fasta_fai

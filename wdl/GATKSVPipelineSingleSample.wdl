@@ -134,7 +134,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_attr_melt_coverage
     RuntimeAttr? runtime_attr_melt_metrics
     RuntimeAttr? runtime_attr_melt
-    RuntimeAttr? runtime_attr_scramble
+    RuntimeAttr? runtime_attr_scramble_part1
+    RuntimeAttr? runtime_attr_scramble_part2
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
 
@@ -651,7 +652,8 @@ workflow GATKSVPipelineSingleSample {
         runtime_attr_melt_coverage=runtime_attr_melt_coverage,
         runtime_attr_melt_metrics=runtime_attr_melt_metrics,
         runtime_attr_melt=runtime_attr_melt,
-        runtime_attr_scramble=runtime_attr_scramble,
+        runtime_attr_scramble_part1=runtime_attr_scramble_part1,
+        runtime_attr_scramble_part2=runtime_attr_scramble_part2,
         runtime_attr_pesr=runtime_attr_pesr,
         runtime_attr_wham=runtime_attr_wham
     }
