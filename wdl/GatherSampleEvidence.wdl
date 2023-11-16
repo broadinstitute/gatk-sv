@@ -486,24 +486,22 @@ task RealignSoftClippedReads {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
-    #if ~{is_bam}; then
-      #ln -s ~{reads_path} reads.bam
-      #ln -s ~{reads_index} reads.bam.bai
-    #else
+    if ~{is_bam}; then
+      ln -s ~{reads_path} reads.bam
+      ln -s ~{reads_index} reads.bam.bai
+    else
       # Multi-threaded convert to bam
-      #time samtools view -h -@~{n_cpu} \
-      #  -T ~{reference_fasta} \
-      #  -O bam \
-      #  -o reads.bam \
-      #  ~{reads_path}
-      #samtools index -o reads.bam.bai reads.bam
-    #fi
+      time samtools view -h -@~{n_cpu} \
+        -T ~{reference_fasta} \
+        -O BAM \
+        -o reads.bam \
+        ~{reads_path}
+      time samtools index reads.bam
+    fi
 
     # Do realignment
-    # TODO delete -L and -R when bam conversion ready
     gatk --java-options "-Xmx${JVM_MAX_MEM}" RealignSoftClippedReads \
-      -R ~{reference_fasta} \
-      -I ~{reads_path} \
+      -I reads.bam \
       -O ~{sample_id}.realign_soft_clipped_reads.bam \
       --bwa-mem-index-image ~{reference_bwa_image} \
       --bwa-threads ~{n_cpu} \
