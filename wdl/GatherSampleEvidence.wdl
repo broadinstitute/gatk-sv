@@ -502,7 +502,6 @@ task RealignSoftClippedReads {
     # Do realignment
     # TODO delete -L and -R when bam conversion ready
     gatk --java-options "-Xmx${JVM_MAX_MEM}" RealignSoftClippedReads \
-      -L chr2 \
       -R ~{reference_fasta} \
       -I ~{reads_path} \
       -O ~{sample_id}.realign_soft_clipped_reads.bam \
