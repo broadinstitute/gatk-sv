@@ -23,7 +23,7 @@ workflow XfBatchEffect {
     Int? pairwise_cutoff=2
     Int? onevsall_cutoff=2
     String prefix
-    File af_pcrmins_premingq
+    File? af_pcrmins_premingq
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
@@ -86,12 +86,14 @@ workflow XfBatchEffect {
 
   # Compare frequencies before and after minGQ, and generate list of variants
   # that are significantly different between the steps
-  call CompareFreqsPrePostMinGQPcrminus {
-    input:
-      af_pcrmins_premingq=af_pcrmins_premingq,
-      AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+  if (defined(af_pcrmins_premingq)) {
+    call CompareFreqsPrePostMinGQPcrminus {
+      input:
+        af_pcrmins_premingq=select_first([af_pcrmins_premingq]),
+        AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   # Generate matrix of correlation coefficients for all batches, by population & SVTYPE
@@ -645,7 +647,7 @@ task ApplyBatchEffectLabels {
     File vcf_idx
     String contig
     File reclassification_table
-    File mingq_prePost_pcrminus_fails
+    File? mingq_prePost_pcrminus_fails
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -663,7 +665,7 @@ task ApplyBatchEffectLabels {
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-        --unstable-af-pcrminus ~{mingq_prePost_pcrminus_fails} \
+        ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
         stdin \
         ~{reclassification_table} \
         stdout \
