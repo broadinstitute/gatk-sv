@@ -33,7 +33,7 @@ task SplitVariants {
     python /opt/sv-pipeline/scripts/SplitVariants.py \
     --bed bed_file.bed \
     ~{"--n " + n_per_split} \
-    ~{"--bca " + generate_bca}
+    ~{if generate_bca then "--bca" else ""}
 
   >>>
   runtime {
