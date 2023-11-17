@@ -443,12 +443,12 @@ task RealignSoftClippedReads {
     File reference_index
     File reference_dict
     File reference_bwa_image
+    File? region_exclude_list
     String? additional_tool_args
-    String? additional_spark_args
 
     Float? java_mem_fraction
     String gatk_docker
-    Boolean use_ssd = false
+    Boolean use_ssd = true
     RuntimeAttr? runtime_attr_override
   }
 
@@ -506,6 +506,7 @@ task RealignSoftClippedReads {
       --bwa-mem-index-image ~{reference_bwa_image} \
       --bwa-threads ~{n_cpu} \
       --keep-duplicate-flag \
+      ~{"-XL " + region_exclude_list} \
       ~{additional_tool_args}
 
     # Multi-threaded convert to cram
