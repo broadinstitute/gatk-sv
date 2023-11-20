@@ -54,13 +54,10 @@ import.fails <- function(minus.in,prefix){
 }
 
 #Categorize failing sites
-categorize.failures <- function(dat,pairwise.cutoff,onevsall.cutoff){
-  dat$max_plus_frac <- apply(data.frame(dat$frac_plus_fails_pairwise,
-                                        dat$frac_plus_fails_onevsall),
+analyze.failures <- function(dat,onevsall.cutoff){
+  dat$max_plus_frac <- apply(data.frame(dat$frac_plus_fails_onevsall),
                              1,max,na.rm=T)
-  pairwise.fail.idx <- which(dat$fails_pairwise>=pairwise.cutoff & dat$fails_onevsall<onevsall.cutoff)
-  onevsall.fail.idx <- which(dat$fails_pairwise<pairwise.cutoff & dat$fails_onevsall>=onevsall.cutoff)
-  both.fail.idx <- which(dat$fails_pairwise>=pairwise.cutoff & dat$fails_onevsall>=onevsall.cutoff)
+  onevsall.fail.idx <- which(dat$fails_onevsall>=onevsall.cutoff)
   plus.gt.minus <- which(dat$PCRPLUS_AF>=dat$PCRMINUS_AF)
   minus.gt.plus <- which(dat$PCRPLUS_AF<dat$PCRMINUS_AF)
   
@@ -68,33 +65,9 @@ categorize.failures <- function(dat,pairwise.cutoff,onevsall.cutoff){
   plus.enriched <- c()
   plus.depleted <- c()
   batch.variable <- c()
-  for(i in pairwise.fail.idx){
-    row <- dat[i,]
-    if(as.numeric(row$frac_plus_fails_pairwise)>=0.11){
-      if(as.numeric(row$PCRPLUS_AF)>=as.numeric(row$PCRMINUS_AF)){
-        plus.enriched <- c(plus.enriched,i)
-      }else{
-        plus.depleted <- c(plus.depleted,i)
-      }
-    }else{
-      batch.variable <- c(batch.variable,i)
-    }
-  }
   for(i in onevsall.fail.idx){
     row <- dat[i,]
     if(as.numeric(row$frac_plus_fails_onevsall)>=0.11){
-      if(as.numeric(row$PCRPLUS_AF)>=as.numeric(row$PCRMINUS_AF)){
-        plus.enriched <- c(plus.enriched,i)
-      }else{
-        plus.depleted <- c(plus.depleted,i)
-      }
-    }else{
-      batch.variable <- c(batch.variable,i)
-    }
-  }
-  for(i in both.fail.idx){
-    row <- dat[i,]
-    if(as.numeric(row$max_plus_frac)>=0.11){
       if(as.numeric(row$PCRPLUS_AF)>=as.numeric(row$PCRMINUS_AF)){
         plus.enriched <- c(plus.enriched,i)
       }else{
@@ -118,13 +91,13 @@ categorize.failures <- function(dat,pairwise.cutoff,onevsall.cutoff){
 ###Read command-line arguments
 args <- commandArgs(trailingOnly=T)
 freq.table.in <- as.character(args[1])
-pairwise.in <- as.character(args[2])
+#pairwise.in <- as.character(args[2])
 #pairwise.minus.in <- as.character(args[3])
-onevsall.in <- as.character(args[3])
+onevsall.in <- as.character(args[2])
 #onevsall.minus.in <- as.character(args[5])
-OUTFILE <- as.character(args[4])
-pairwise.cutoff <- as.integer(args[5])
-onevsall.cutoff <- as.integer(args[6])
+OUTFILE <- as.character(args[3])
+#pairwise.cutoff <- as.integer(args[5])
+onevsall.cutoff <- as.integer(args[4])
 
 # #Dev parameters:
 # freq.table.in <- "~/scratch/gnomAD_v2_SV_MASTER.merged_AF_table.txt.gz"
@@ -139,14 +112,12 @@ onevsall.cutoff <- as.integer(args[6])
 freq.dat <- import.freqs(freq.table.in)
 
 
-pairwise.fails <- import.fails(pairwise.in, prefix="pairwise")
-pairwise.fails <- pairwise.fails[which(pairwise.fails$fails_pairwise>=pairwise.cutoff), ]
 onevsall.fails <- import.fails(onevsall.in, prefix="onevsall")
 onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.cutoff), ]
 
 
 ###Combine data
-merged <- merge(pairwise.fails,onevsall.fails,all=T,sort=F,by="VID")
+merged <- merge(onevsall.fails,all=T,sort=F,by="VID")
 if(nrow(merged) > 0){
   merged[,-1] <- apply(merged[,-1],2,function(vals){
     vals[which(is.na(vals))] <- 0
@@ -157,8 +128,7 @@ merged <- merge(merged,freq.dat,by="VID",sort=F,all=F)
 
 
 ##Categorize batch effect failure sites
-out.table <- categorize.failures(dat=merged,
-                                 pairwise.cutoff=pairwise.cutoff,
+out.table <- analyze.failures(dat=merged,
                                  onevsall.cutoff=onevsall.cutoff)
 write.table(out.table,OUTFILE,col.names=F,row.names=F,sep="\t",quote=F)
 
