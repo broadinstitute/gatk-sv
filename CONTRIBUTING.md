@@ -1,7 +1,7 @@
-💖:tada: Thanks for taking the time to contribute to GATK-SV! :tada:💖
+Thank you for your interest in contributing to GATK-SV!
 
 When it comes to open-source, every contribution makes the 
-software better for everyone and is warmly appreciated by the 
+software better for everyone and is appreciated by the 
 community. To express our gratitude for your contribution, 
 we would like to provide you with easy-to-follow steps to get started.
 
