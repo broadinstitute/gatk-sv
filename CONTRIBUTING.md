@@ -74,7 +74,7 @@ Once you have forked [broadinstitute/gatk-sv](https://github.com/broadinstitute/
 you need to download your fork to your computer so you can implement any changes. 
 This process is commonly known as _cloning_ a GitHub repository. You may follow 
 [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) 
-on cloning your fork of GATK-SV, or in a nutshell, you may run the following commands.
+on cloning your fork of GATK-SV, or you may run the following commands.
 
 Clone your fork
 ```shell
