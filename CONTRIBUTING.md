@@ -102,7 +102,7 @@ You may create a branch using [Github](https://docs.github.com/en/pull-requests/
 or [git](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging). 
 In a nutshell, you may create a branch with the following steps.
 
-Ensure you are on the `master` branch.  
+Ensure you are on the `main` branch.  
 ```shell
 $ git checkout master
 ```
