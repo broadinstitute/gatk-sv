@@ -104,7 +104,7 @@ In a nutshell, you may create a branch with the following steps.
 
 Ensure you are on the `main` branch.  
 ```shell
-$ git checkout master
+$ git checkout main
 ```
 
 Create a branch
