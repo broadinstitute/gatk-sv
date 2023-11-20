@@ -94,7 +94,7 @@ In a loose sense, a [_branch_](https://docs.github.com/en/pull-requests/collabor
 is an isolated copy of the code in your forked repository, where the changes 
 you implement in one branch does not affect the code on the other branches. 
 It is a common practice to create one branch per each feature you would like 
-to implement, and do not implement features on the `master` branch of the repository. 
+to implement, and do not implement features on the `main` branch of the repository. 
 It is mainly because you can use the `master` branch to synchronize your fork with 
 the upstream and get a fresh copy of the up-to-date codebase to start your feature development. 
 
