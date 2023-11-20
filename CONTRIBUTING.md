@@ -114,7 +114,7 @@ $ git checkout -b YOUR-BRANCH-NAME
 Synchronize your branch with `broadinstitute/gatk-sv`. 
 ```shell
 $ git fetch upstream
-$ git merge upstream/master
+$ git merge upstream/main
 ```
 
 Push your branch to GitHub
