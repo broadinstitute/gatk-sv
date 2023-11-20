@@ -95,7 +95,7 @@ is an isolated copy of the code in your forked repository, where the changes
 you implement in one branch does not affect the code on the other branches. 
 It is a common practice to create one branch per each feature you would like 
 to implement, and do not implement features on the `main` branch of the repository. 
-It is mainly because you can use the `master` branch to synchronize your fork with 
+It is mainly because you can use the `main` branch to synchronize your fork with 
 the upstream and get a fresh copy of the up-to-date codebase to start your feature development. 
 
 You may create a branch using [Github](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) 
