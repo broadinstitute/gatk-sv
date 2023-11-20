@@ -100,7 +100,7 @@ the upstream and get a fresh copy of the up-to-date codebase to start your featu
 
 You may create a branch using [Github](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) 
 or [git](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging). 
-In a nutshell, you may create a branch as the following.
+In a nutshell, you may create a branch with the following steps.
 
 Ensure you are on the `master` branch.  
 ```shell
