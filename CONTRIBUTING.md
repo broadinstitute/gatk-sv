@@ -56,7 +56,6 @@ Provide specific details on how the observed and expected behaviors differ.
 
 ## Your First Code Contribution
 
-Thank you for considering code contributions to GATK-SV. 
 All code contributions to the GATK-SV repository are made through 
 [pull requests (PR)](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests), 
 and you may take the following steps to prepare and submit your PRs.
