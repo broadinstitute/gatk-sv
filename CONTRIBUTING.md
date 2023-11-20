@@ -147,13 +147,7 @@ that we highly recommend. In GATK-SV, we
 pull requests, which squashes all the commits into a single commit and 
 merge on the `main` branch.
 
-You may commit changes to git using its command line interface (CLI) from a 
-terminal or use the graphical user interface (GUI) of the IDE you are using. 
-You may use the following command if you are using a terminal 
-(details [here](https://www.atlassian.com/git/tutorials/saving-changes/git-commit), 
-or follow the guidelines on making commits in 
-[PyCharm](https://www.jetbrains.com/help/pycharm/commit-and-push-changes.html#commit) 
-and [Visual Studio](https://learn.microsoft.com/en-us/visualstudio/version-control/git-make-commit?view=vs-2022)).
+You may commit changes to git from within your IDE or from the terminal with the `git commit` command:
 
 ```shell
 $ git commit -m "commit message"
