@@ -22,18 +22,6 @@ By participating, you are expected to uphold this code.
 
 # What Should I Know Before I Get Started?
 
-GATK-SV is a _pipeline_ written in 
-[Workflow Description Language](https://openwdl.org/) (WDL) 
-that orchestrates joint genotyping structural variations using 
-open-source tools and custom scripts. The tools and scripts are distributed 
-in Docker containers, and the pipeline is executed using a 
-[Cromwell](https://cromwell.readthedocs.io/en/stable/) 
-server running on commercial cloud platforms. 
-You may interface with a Cromwell server using 
-[Cromshell](https://github.com/broadinstitute/cromshell) or 
-[Terra platform](https://terra.bio). We currently publish 
-Docker images on Google Container Registry (GCR) and Azure 
-Container Registry (work-in-progress).
 
 To study your data using the GATK-SV pipeline, please 
 refer to the [documentation](README.md) for details.
