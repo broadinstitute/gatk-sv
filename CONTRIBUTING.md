@@ -145,7 +145,7 @@ rule on splitting your commits, there are
 that we highly recommend. In GATK-SV, we 
 [`squash and merge`](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/about-pull-request-merges#squash-and-merge-your-commits) 
 pull requests, which squashes all the commits into a single commit and 
-merge on the `master` branch.
+merge on the `main` branch.
 
 You may commit changes to git using its command line interface (CLI) from a 
 terminal or use the graphical user interface (GUI) of the IDE you are using. 
