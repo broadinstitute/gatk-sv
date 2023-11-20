@@ -169,7 +169,7 @@ When creating a pull request, please provide concise and descriptive
 information on the expected behavior, thoroughly test your changes and 
 provide minimally reproducible steps to test your code. After your pull 
 request is reviewed and approved, your commits can be squash-committed 
-to the `master` branch of GATK-SV.
+to the `main` branch of GATK-SV.
 
 
 # License
