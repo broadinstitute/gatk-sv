@@ -4,10 +4,14 @@ import pandas as pd
 import csv
 import os
 import argparse
+
+
 def process_bed_file(input_bed, N, bca=True):
     condition_prefixes = {
-        'gt5kb': {'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) >= 5000)},
-        'lt5kb': {'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) < 5000)},
+        'gt5kb': {
+            'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) >= 5000)},
+        'lt5kb': {
+            'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) < 5000)},
         'bca': {'condition': lambda line: bca and (line[4] != 'DEL' and line[4] != 'DUP' and line[4] != 'INS')},
         'ins': {'condition': lambda line: bca and line[4] == 'INS'}
     }
@@ -46,6 +50,7 @@ def process_bed_file(input_bed, N, bca=True):
 
             print(f"File {output_file} written.")
 
+
 def increment_suffix(suffix):
     alphabet = 'abcdefghijklmnopqrstuvwxyz'
     if suffix == 'z' * 6:
@@ -55,6 +60,7 @@ def increment_suffix(suffix):
         next_char = alphabet[(index + 1) % 26]
         return next_char + suffix[1:]
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -63,6 +69,7 @@ def main():
     parser.add_argument("--bca", default="FALSE", help="")
     args = parser.parse_args()
     process_bed_file(args.bed, args.n, args.bca)
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
