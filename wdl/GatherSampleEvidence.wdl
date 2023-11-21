@@ -124,12 +124,15 @@ workflow GatherSampleEvidence {
   File bam_or_cram_index_ = select_first([bam_or_cram_index, bam_or_cram_file + index_ext_])
 
   # move the reads nearby -- handles requester_pays and makes cross-region transfers just once
-  call LocalizeReads {
+  if (run_localize_reads) {
+    call LocalizeReads {
     input:
       reads_path = bam_or_cram_file,
       reads_index = bam_or_cram_index_,
       runtime_attr_override = runtime_attr_localize_reads
+    }
   }
+
 
   if (revise_base) {
     call rb.CramToBamReviseBase {
@@ -307,15 +310,6 @@ workflow GatherSampleEvidence {
     File? wham_index = Whamg.index
 
     Array[File]? sample_metrics_files = GatherSampleEvidenceMetrics.sample_metrics_files
-  }
-
-  if (run_localize_reads){
-    call LocalizeReads{
-      input:
-        reads_path = bam_or_cram_file,
-        reads_index = bam_or_cram_index,
-        runtime_attr_override = runtime_attr_localize_reads
-    }
   }
 }
 

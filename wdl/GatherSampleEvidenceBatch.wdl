@@ -64,6 +64,12 @@ workflow GatherSampleEvidenceBatch {
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
 
+
+    # Localize reads parameters
+    # set to true on default, skips localize_reads if set to false
+    Boolean run_localize_reads = true
+
+
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -136,6 +142,7 @@ workflow GatherSampleEvidenceBatch {
         baseline_melt_vcf = baseline_melt_vcf,
         baseline_scramble_vcf = baseline_scramble_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
+        run_localize_reads = run_localize_reads,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         samtools_cloud_docker = samtools_cloud_docker,
