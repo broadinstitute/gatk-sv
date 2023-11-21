@@ -76,6 +76,11 @@ workflow GatherSampleEvidence {
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
 
+
+    # Localize reads parameters
+    # set to true on default, skips localize_reads if set to false
+    Boolean run_localize_reads = true
+
     # Docker
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -303,7 +308,17 @@ workflow GatherSampleEvidence {
 
     Array[File]? sample_metrics_files = GatherSampleEvidenceMetrics.sample_metrics_files
   }
+
+  if (run_localize_reads){
+    call LocalizeReads{
+      input:
+        reads_path = bam_or_cram_file,
+        reads_index = bam_or_cram_index,
+        runtime_attr_override = runtime_attr_localize_reads
+    }
+  }
 }
+
 
 task LocalizeReads {
   input {
