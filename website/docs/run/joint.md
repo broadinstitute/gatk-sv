@@ -1,9 +1,13 @@
 ---
-title: Cohort
+title: Joint-calling
 description: Run the pipeline on a cohort
 sidebar_position: 4
-slug: cohort
+slug: joint
 ---
+
+:::info
+This documentation page is incomplete, and we are actively working on improving it with comprehensive information.
+:::
 
 ## Batching
 
