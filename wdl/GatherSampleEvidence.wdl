@@ -335,8 +335,10 @@ task LocalizeReads {
   Int disk_size = ceil(50 + size(reads_path, "GB"))
 
   command {
-    ln -s ~{reads_path}
-    ln -s ~{reads_index}
+    set -exuo pipefail
+
+    mv ~{reads_path} $(basename ~{reads_path})
+    mv ~{reads_index} $(basename ~{reads_index})
   }
   output {
     File output_file = basename(reads_path)
