@@ -134,14 +134,11 @@ workflow GatherSampleEvidence {
   }
 
 
-  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
-
   if (revise_base) {
     call rb.CramToBamReviseBase {
       input:
-        cram_file = reads_file_,
-        cram_index = reads_index_,
+        cram_file = select_first([LocalizeReads.output_file, bam_or_cram_file]),
+        cram_index = select_first([LocalizeReads.output_index, bam_or_cram_index]),
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         contiglist = select_first([primary_contigs_fai]),
@@ -152,6 +149,8 @@ workflow GatherSampleEvidence {
     }
   }
 
+  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
+  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
 
   if (collect_coverage || run_melt) {
     call cov.CollectCounts {
