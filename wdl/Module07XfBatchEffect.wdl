@@ -576,13 +576,14 @@ task ApplyBatchEffectLabels {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 4,
-                               disk_gb: 50,
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
+    cpu_cores: 1, 
+    mem_gb: 4,
+    disk_gb: 50,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
