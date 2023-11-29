@@ -588,12 +588,12 @@ task ApplyBatchEffectLabels {
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-    ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
-    stdin \
-    ~{reclassification_table} \
-    stdout \
-    | bgzip -c \
-    > "~{prefix}.batch_effects_labeled.vcf.gz"
+        ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
+        stdin \
+        ~{reclassification_table} \
+        stdout \
+        | bgzip -c \
+        > "~{prefix}.batch_effects_labeled.vcf.gz"
     tabix -p vcf -f "~{prefix}.batch_effects_labeled.vcf.gz"
   >>>
 
