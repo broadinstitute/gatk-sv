@@ -117,19 +117,23 @@ onevsall.fails <- onevsall.fails[which(onevsall.fails$fails_onevsall>=onevsall.c
 
 
 ###Combine data
-merged <- merge(onevsall.fails,all=T,sort=F,by="VID")
-if(nrow(merged) > 0){
-  merged[,-1] <- apply(merged[,-1],2,function(vals){
+#merged <- merge(onevsall.fails,all=T,sort=F,by="VID")
+merged <- onevsall.fails
+# If merged data frame is not empty, replace NA values with 0
+if (nrow(merged) > 0) {
+  merged[,-1] <- apply(merged[,-1], 2, function(vals) {
     vals[which(is.na(vals))] <- 0
     return(vals)
   })
 }
-merged <- merge(merged,freq.dat,by="VID",sort=F,all=F)
 
+# Merge with frequency data
+merged <- merge(merged, freq.dat, by = "VID", sort = F, all = F)
 
-##Categorize batch effect failure sites
-out.table <- analyze.failures(dat=merged,
-                                 onevsall.cutoff=onevsall.cutoff)
-write.table(out.table,OUTFILE,col.names=F,row.names=F,sep="\t",quote=F)
+## Categorize batch effect failure sites
+# Assuming the categorize.failures function only requires onevsall.cutoff 
+# and is compatible with the new merged data structure
+out.table <- categorize.failures(dat = merged, onevsall.cutoff = onevsall.cutoff)
 
-  
+# Write the output table
+write.table(out.table, OUTFILE, col.names = F, row.names = F, sep = "\t", quote = F)
