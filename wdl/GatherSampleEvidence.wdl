@@ -23,6 +23,7 @@ workflow GatherSampleEvidence {
     # Evidence collection flags
     Boolean collect_coverage = true
     Boolean collect_pesr = true
+    Boolean move_bam_or_cram_files = false
 
     # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
     # Only use if encountering errors (expensive!)
@@ -123,6 +124,7 @@ workflow GatherSampleEvidence {
     input:
       reads_path = bam_or_cram_file,
       reads_index = bam_or_cram_index_,
+      move_files = move_bam_or_cram_files,
       runtime_attr_override = runtime_attr_localize_reads
   }
 
@@ -309,10 +311,11 @@ task LocalizeReads {
   input {
     File reads_path
     File reads_index
+    Boolean move_files = false
     RuntimeAttr? runtime_attr_override
   }
 
-  Float input_size = size(reads_path, "GB")
+  Float input_size = if move_files then size(reads_path, "GB") * 2 else size(reads_path, "GB")
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
                                   disk_gb: ceil(50.0 + input_size),
@@ -337,8 +340,22 @@ task LocalizeReads {
   command {
     set -exuo pipefail
 
-    mv ~{reads_path} $(basename ~{reads_path})
-    mv ~{reads_index} $(basename ~{reads_index})
+    # When this pipeline is run on an HPC, moving files could lead to
+    # moving the files from their original source, compared to moving
+    # them from one directory of the VM to another when run on Cloud.
+    # Therefore, to avoid moving files unexpectadely, we provide both
+    # options for moving and copying, and set the copy as default.
+    # Note that, when copying the files, the task can be slower depending
+    # on the file size and IO performance and will need additional disk
+    # space, hence it will be more expensive to run.
+
+    if ~{move_files}; then
+      mv ~{reads_path} $(basename ~{reads_path})
+      mv ~{reads_index} $(basename ~{reads_index})
+    else
+      cp ~{reads_path} $(basename ~{reads_path})
+      cp ~{reads_index} $(basename ~{reads_index})
+    fi
   }
   output {
     File output_file = basename(reads_path)
