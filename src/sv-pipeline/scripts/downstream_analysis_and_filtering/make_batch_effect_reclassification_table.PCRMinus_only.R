@@ -54,7 +54,7 @@ import.fails <- function(minus.in,prefix){
 }
 
 #Categorize failing sites
-analyze.failures <- function(dat,onevsall.cutoff){
+categorize.failures <- function(dat,onevsall.cutoff){
   dat$max_plus_frac <- apply(data.frame(dat$frac_plus_fails_onevsall),
                              1,max,na.rm=T)
   onevsall.fail.idx <- which(dat$fails_onevsall>=onevsall.cutoff)
