@@ -15,6 +15,10 @@ workflow GatherSampleEvidenceBatch {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
+    # Localize reads parameters
+    # set to true on default, skips localize_reads if set to false
+    Boolean run_localize_reads = true
+
     # Common parameters
     File primary_contigs_list
     File reference_fasta
@@ -63,12 +67,6 @@ workflow GatherSampleEvidenceBatch {
     File? baseline_wham_vcf
     File? baseline_melt_vcf
     File? baseline_scramble_vcf
-
-
-    # Localize reads parameters
-    # set to true on default, skips localize_reads if set to false
-    Boolean run_localize_reads = true
-
 
     # Docker
     String sv_pipeline_docker
