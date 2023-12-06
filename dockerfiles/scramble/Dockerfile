@@ -54,7 +54,7 @@ RUN mkdir -p /opt && cd /opt && \
 ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
 # install scramble
-ARG SCRAMBLE_COMMIT="f320d604ac030e4a7fa96b0663bcae02994c7d94"
+ARG SCRAMBLE_COMMIT="66d2bad7cbd027ed358dfbe76dde0a6bc2c8eebd"
 RUN mkdir /app && cd /app \
     && git clone https://github.com/mwalker174/scramble-gatk-sv.git \
     && cd scramble-gatk-sv \
