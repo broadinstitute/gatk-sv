@@ -121,6 +121,14 @@ workflow GATKSVPipelineSingleSample {
     # Wham inputs
     File wham_include_list_bed_file
 
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
+
     # Run GatherSampleEvidence metrics - default is off for single sample pipeline
     Boolean? run_sampleevidence_metrics = false
 
@@ -613,6 +621,12 @@ workflow GATKSVPipelineSingleSample {
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
         primary_contigs_list=primary_contigs_list,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
