@@ -290,6 +290,8 @@ workflow GatherSampleEvidence {
 
     File? scramble_vcf = Scramble.vcf
     File? scramble_index = Scramble.index
+    File? scramble_clusters = Scramble.clusters
+    File? scramble_table = Scramble.table
 
     File? pesr_disc = CollectSVEvidence.disc_out
     File? pesr_disc_index = CollectSVEvidence.disc_out_index

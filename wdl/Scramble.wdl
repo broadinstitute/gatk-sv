@@ -53,8 +53,10 @@ workflow Scramble {
   }
 
   output {
+    File clusters = ScramblePart1.clusters_file
     File vcf = ScramblePart2.vcf
     File index = ScramblePart2.index
+    File table = ScramblePart2.table
   }
 }
 
@@ -131,6 +133,7 @@ task ScramblePart2 {
   output {
     File vcf = "~{sample_name}.scramble.vcf.gz"
     File index = "~{sample_name}.scramble.vcf.gz.tbi"
+    File table = "~{sample_name}.scramble.tsv.gz"
   }
   command <<<
     set -euo pipefail
@@ -201,6 +204,10 @@ task ScramblePart2 {
     # sort and index the output VCF
     bcftools sort -Oz <tmp.vcf >"~{sample_name}.scramble.vcf.gz"
     bcftools index -ft "~{sample_name}.scramble.vcf.gz"
+
+    # Save raw outputs
+    cp $clusterFile ~{sample_name}.scramble.tsv
+    gzip ~{sample_name}.scramble.tsv
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
