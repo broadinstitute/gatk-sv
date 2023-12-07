@@ -111,6 +111,7 @@ task ScramblePart2 {
     String sample_name
     File reference_fasta
     String scramble_docker
+    Int percent_align_cutoff = 70
     Int threads = 7  # Number of threads
     RuntimeAttr? runtime_attr_override
   }
@@ -147,7 +148,8 @@ task ScramblePart2 {
     # Produce ${clusterFile}_MEIs.txt
     Rscript --vanilla $scrambleDir/cluster_analysis/bin/SCRAMble.R --out-name $clusterFile \
             --cluster-file $clusterFile --install-dir $scrambleDir/cluster_analysis/bin \
-            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis --cores ~{threads}
+            --mei-refs $meiRef --ref $xDir/ref --no-vcf --eval-meis --cores ~{threads} \
+            --pct-align ~{percent_align_cutoff}
 
     # create a header for the output vcf
     echo \
