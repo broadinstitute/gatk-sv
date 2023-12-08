@@ -24,8 +24,13 @@ workflow GatherSampleEvidence {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
-    # Google Cloud Platform and Azure users can safely enable and get a slight cost improvement.
-    # Users running shared filesystems should NOT enable.
+    # Google Cloud Platform (GCP) and Azure users can safely enable and get a slight cost improvement.
+    # Users running on shared file systems should NOT enable this feature.
+    # Enabling this option when running the workflow on GCP or Azure will result in moving the **localized**
+    # files from one path to another on the VM, without impacting the files in their source persistent location.
+    # It will lead to using a slightly smaller disk size and running faster, thereby providing a slight cost improvement.
+    # However, when run on shared file systems (e.g., HPC), it will, by default, create a copy of the
+    # input files, and all subsequent operations will run on the deep copy of the input file.
     Boolean move_bam_or_cram_files = false
 
     # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
