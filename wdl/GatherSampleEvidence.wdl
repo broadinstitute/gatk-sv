@@ -343,7 +343,7 @@ task LocalizeReads {
     # When this pipeline is run on an HPC, moving files could lead to
     # moving the files from their original source, compared to moving
     # them from one directory of the VM to another when run on Cloud.
-    # Therefore, to avoid moving files unexpectadely, we provide both
+    # Therefore, to avoid moving files unexpectedly, we provide both
     # options for moving and copying, and set the copy as default.
     # Note that, when copying the files, the task can be slower depending
     # on the file size and IO performance and will need additional disk
