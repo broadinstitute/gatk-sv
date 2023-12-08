@@ -23,6 +23,9 @@ workflow GatherSampleEvidence {
     # Evidence collection flags
     Boolean collect_coverage = true
     Boolean collect_pesr = true
+
+    # Google Cloud Platform and Azure users can safely enable and get a slight cost improvement.
+    # Users running shared filesystems should NOT enable.
     Boolean move_bam_or_cram_files = false
 
     # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
