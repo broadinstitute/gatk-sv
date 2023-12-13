@@ -215,7 +215,7 @@ CODE
       # delete any local dirs if they exist from the previous record
       if [ -d "med_files" ]; then rm -r med_files; fi
       mkdir med_files
-      cat median_files.txt | gcloud alpha storage cp --do-not-decompress --no-clobber -I med_files/
+      cat median_files.txt | gsutil -m cp -I med_files/
       paste med_files/* > median_file.txt
 
       # localize and tabix region of interest from relevant batch RD files
@@ -223,8 +223,8 @@ CODE
       i=0
       if [ -d "rd_files" ]; then rm -r rd_files; fi
       mkdir rd_files
-      cat rd_files.txt | gcloud alpha storage cp --do-not-decompress --no-clobber -I rd_files/
-      cat rd_indexes.txt | gcloud alpha storage cp --do-not-decompress --no-clobber -I rd_files/
+      cat rd_files.txt | gsutil -m cp -I rd_files/
+      cat rd_indexes.txt | gsutil -m cp -I rd_files/
       if [ -d "rd_subsets" ]; then rm -r rd_subsets; fi
       mkdir rd_subsets
       while read FILE; do
