@@ -19,7 +19,9 @@ workflow VisualizeCnvs {
     Int records_per_shard
     String flags
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_rdtest
+    RuntimeAttr? runtime_attr_rdtest_scatter
+    RuntimeAttr? runtime_attr_rdtest_plot
+    RuntimeAttr? runtime_attr_tar_rdplots
   }
 
   scatter (file in rd_files) {
@@ -33,7 +35,7 @@ workflow VisualizeCnvs {
       min_size=min_size,
       lines_per_shard=records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rdtest
+      runtime_attr_override = runtime_attr_rdtest_scatter
   }
 
   scatter (shard in RdTestScatter.shards) {
@@ -50,7 +52,7 @@ workflow VisualizeCnvs {
         flags=flags,
         max_size=max_size,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_rdtest
+        runtime_attr_override = runtime_attr_rdtest_plot
     }
   }
 
@@ -59,7 +61,7 @@ workflow VisualizeCnvs {
       raw_plots=flatten(RdTestPlot.plots),
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rdtest
+      runtime_attr_override = runtime_attr_tar_rdplots
   }
 
   output {
