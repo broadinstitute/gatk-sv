@@ -37,6 +37,10 @@ workflow GatherSampleEvidence {
     # Only use if encountering errors (expensive!)
     Boolean revise_base = false
 
+    # Localize reads parameters
+    # set to true on default, skips localize_reads if set to false
+    Boolean run_localize_reads = true
+
     # Common parameters
     File primary_contigs_list
     File reference_fasta
@@ -128,19 +132,22 @@ workflow GatherSampleEvidence {
   File bam_or_cram_index_ = select_first([bam_or_cram_index, bam_or_cram_file + index_ext_])
 
   # move the reads nearby -- handles requester_pays and makes cross-region transfers just once
-  call LocalizeReads {
+  if (run_localize_reads) {
+    call LocalizeReads {
     input:
       reads_path = bam_or_cram_file,
       reads_index = bam_or_cram_index_,
       move_files = move_bam_or_cram_files,
       runtime_attr_override = runtime_attr_localize_reads
+    }
   }
+
 
   if (revise_base) {
     call rb.CramToBamReviseBase {
       input:
-        cram_file = LocalizeReads.output_file,
-        cram_index = LocalizeReads.output_index,
+        cram_file = select_first([LocalizeReads.output_file, bam_or_cram_file]),
+        cram_index = select_first([LocalizeReads.output_index, bam_or_cram_index]),
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         contiglist = select_first([primary_contigs_fai]),
@@ -151,8 +158,8 @@ workflow GatherSampleEvidence {
     }
   }
 
-  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index])
+  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file, bam_or_cram_file])
+  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index, bam_or_cram_index])
 
   if (collect_coverage || run_melt) {
     call cov.CollectCounts {
@@ -314,6 +321,7 @@ workflow GatherSampleEvidence {
     Array[File]? sample_metrics_files = GatherSampleEvidenceMetrics.sample_metrics_files
   }
 }
+
 
 task LocalizeReads {
   input {
