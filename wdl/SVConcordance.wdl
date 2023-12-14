@@ -81,7 +81,7 @@ task SVConcordanceTask {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 16,
-                               disk_gb: ceil(10 + size(eval_vcf, "GB") * 2 + size(truth_vcf, "GB")),
+                               disk_gb: ceil(10 + size(eval_vcf, "GB") * 4 + size(truth_vcf, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -113,8 +113,13 @@ task SVConcordanceTask {
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
-      -O ~{output_prefix}.vcf.gz \
+      -O unsorted.vcf.gz \
+      --do-not-sort \
       ~{additional_args}
+
+    mkdir tmp
+    bcftools sort --max-mem ${JVM_MAX_MEM}M -T tmp -Oz -o ~{output_prefix}.vcf.gz unsorted.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
