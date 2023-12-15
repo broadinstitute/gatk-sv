@@ -18,10 +18,8 @@ workflow SVConcordance {
 
     Float? java_mem_fraction
 
-    RuntimeAttr? runtime_attr_format_eval
-    RuntimeAttr? runtime_attr_format_truth
     RuntimeAttr? runtime_attr_sv_concordance
-    RuntimeAttr? runtime_attr_postprocess
+    RuntimeAttr? runtime_attr_sort_vcf
     RuntimeAttr? runtime_override_concat_shards
   }
 
@@ -30,19 +28,27 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}",
+        output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
         contig=contig,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
     }
+
+    call tasks_cohort.SortVcf {
+      input:
+        vcf=SVConcordanceTask.out_unsorted,
+        outfile_prefix="~{output_prefix}.concordance.~{contig}.sorted",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_sort_vcf
+    }
   }
 
   call tasks_cohort.ConcatVcfs {
     input:
-      vcfs=SVConcordanceTask.out,
-      vcfs_idx=SVConcordanceTask.out_index,
+      vcfs=SortVcf.out,
+      vcfs_idx=SortVcf.out_index,
       naive=true,
       outfile_prefix="~{output_prefix}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -89,8 +95,7 @@ task SVConcordanceTask {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out = "~{output_prefix}.vcf.gz"
-    File out_index = "~{output_prefix}.vcf.gz.tbi"
+    File out_unsorted = "~{output_prefix}.vcf.gz"
   }
   command <<<
     set -euo pipefail
@@ -108,18 +113,15 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
-      -O unsorted.vcf.gz \
+      -O ~{output_prefix}.vcf.gz \
       --do-not-sort \
       ~{additional_args}
-
-    mkdir tmp
-    bcftools sort --max-mem ${JVM_MAX_MEM}M -T tmp -Oz -o ~{output_prefix}.vcf.gz unsorted.vcf.gz
-    tabix ~{output_prefix}.vcf.gz
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
