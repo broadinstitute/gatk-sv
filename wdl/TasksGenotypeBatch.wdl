@@ -30,7 +30,7 @@ task SplitVariants {
   command <<<
     set -euo pipefail
     svtk vcf2bed ~{vcf} bed_file.bed
-    python /opt/sv-pipeline/scripts/SplitVariants.py \
+    python /opt/sv-pipeline/04_variant_resolution/scripts/split_variants.py \
     --bed bed_file.bed \
     ~{"--n " + n_per_split} \
     ~{if generate_bca then "--bca" else ""}

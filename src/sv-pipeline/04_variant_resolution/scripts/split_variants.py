@@ -1,15 +1,18 @@
 #!/bin/python
 import argparse
+import logging
 
-
-def process_bed_file(input_bed, N, bca=True):
+def process_bed_file(input_bed, n_per_split, bca=True):
+    SVTYPE_FIELD=4
+    END_POS=2
+    START_POS=1
     condition_prefixes = {
         'gt5kb': {
-            'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) >= 5000)},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_POS]) - int(line[START_POS]) >= 5000)},
         'lt5kb': {
-            'condition': lambda line: (line[4] == 'DEL' or line[4] == 'DUP') and (int(line[2]) - int(line[1]) < 5000)},
-        'bca': {'condition': lambda line: bca and (line[4] != 'DEL' and line[4] != 'DUP' and line[4] != 'INS')},
-        'ins': {'condition': lambda line: bca and line[4] == 'INS'}
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_POS]) - int(line[START_POS]) < 5000)},
+        'bca': {'condition': lambda line: bca and (line[SVTYPE_FIELD] != 'DEL' and line[SVTYPE_FIELD] != 'DUP' and line[SVTYPE_FIELD] != 'INS')},
+        'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
     }
 
     current_lines = {prefix: [] for prefix in condition_prefixes.keys()}
@@ -25,7 +28,7 @@ def process_bed_file(input_bed, N, bca=True):
                     current_lines[prefix].append('\t'.join(line))
                     current_counts[prefix] += 1
 
-                    if current_counts[prefix] == N:
+                    if current_counts[prefix] == n_per_split:
                         output_suffix = current_suffixes[prefix].rjust(6, 'a')
                         output_file = f"{prefix}.{output_suffix}.bed"
                         with open(output_file, 'w') as outfile:
@@ -44,7 +47,7 @@ def process_bed_file(input_bed, N, bca=True):
             with open(output_file, 'w') as outfile:
                 outfile.write('\n'.join(lines))
 
-            print(f"File {output_file} written.")
+            logging.info(f"File '{output_file}' written.")
 
 
 def increment_suffix(suffix):
@@ -60,13 +63,11 @@ def increment_suffix(suffix):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--bed", help="Path to input bed file")
-    parser.add_argument("--n", help="number of variants per file")
-    parser.add_argument("--bca", default="FALSE", help="")
+        "--bed", help="Path to input bed file", required=True)
+    parser.add_argument("--n", help="number of variants per file",required=True)
+    parser.add_argument("--bca", default=False, help="If there are ", action='store_true')
     args = parser.parse_args()
     process_bed_file(args.bed, args.n, args.bca)
 
-
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     main()
