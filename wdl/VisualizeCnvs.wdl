@@ -7,6 +7,7 @@ import "Structs.wdl"
 workflow VisualizeCnvs {
   input {
     # Note vcf will be faster
+    # Note vcf will include CNV intervals of CPX > min_size (bed will not)
     File vcf_or_bed  # bed columns: chrom,start,end,name,svtype,samples
     String prefix
     Array[File] median_files
@@ -97,6 +98,22 @@ task RdTestScatter {
       # Swap columns 5/6 for RdTest
       awk -F '\t' -v OFS="\t" '{ if ($0!~"#") {print $1,$2,$3,$4,$6,$5} }' raw.bed > cnvs.bed
       rm raw.bed
+      bcftools view -i 'SVTYPE=="CPX" && SVLEN>=~{min_size}' ~{vcf_or_bed} \
+        | svtk vcf2bed -i CPX_INTERVALS stdin raw_cpx.bed
+      python <<CODE
+with open("raw_cpx.bed", 'r') as inp, open("cnvs.bed", 'a') as out:
+  for line in inp:
+    chrom, start, end, name, svtype, samples, intervals = line.strip().split('\t')
+    counter = 0
+    for segment in intervals.split(','):
+      # regex version: ^([A-Z]{3})_(chr[\dXY]+):([\d]+)-([\d]+)
+      segment_type, segment_interval = segment.split('_')
+      if segment_type in ["DUP", "DEL"]:
+        segment_chrom, segment_coords = segment_interval.split(":")
+        segment_pos, segment_end = segment_coords.split("-")
+        out.write(f"{segment_chrom}\t{segment_pos}\t{segment_end}\t{name}_{segment_type}{str(counter)}\t{segment_type}\t{samples}\n")
+        counter += 1
+CODE
     elif [[ ~{vcf_or_bed} == *.bed || ~{vcf_or_bed} == *.bed.gz ]]; then
       if [[ ~{vcf_or_bed} == *.gz ]]; then
         DECOMPRESSED_BED="raw.bed"
