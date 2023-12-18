@@ -2,10 +2,12 @@
 import argparse
 import logging
 
+
 def process_bed_file(input_bed, n_per_split, bca=True):
     SVTYPE_FIELD=4
     END_POS=2
     START_POS=1
+
     condition_prefixes = {
         'gt5kb': {
             'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_POS]) - int(line[START_POS]) >= 5000)},
