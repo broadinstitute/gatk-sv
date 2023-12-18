@@ -111,7 +111,7 @@ with open("raw_cpx.bed", 'r') as inp, open("cnvs.bed", 'a') as out:
       if segment_type in ["DUP", "DEL"]:
         segment_chrom, segment_coords = segment_interval.split(":")
         segment_pos, segment_end = segment_coords.split("-")
-        out.write(f"{segment_chrom}\t{segment_pos}\t{segment_end}\t{name}_{segment_type}{str(counter)}\t{segment_type}\t{samples}\n")
+        out.write(f"{segment_chrom}\t{segment_pos}\t{segment_end}\t{name}_{segment_type}{str(counter)}\t{samples}\t{segment_type}\n")
         counter += 1
 CODE
     elif [[ ~{vcf_or_bed} == *.bed || ~{vcf_or_bed} == *.bed.gz ]]; then
