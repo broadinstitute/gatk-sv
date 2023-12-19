@@ -12,11 +12,9 @@ def process_bed_file(input_bed, n_per_split, bca=True):
     # Dictionary to store the conditions to be checked with matching prefixes
     condition_prefixes = {
         'gt5kb': {
-            'condition': lambda curr_1: (curr_1[svtype_field] == 'DEL' or curr_1[svtype_field] == 'DUP') and (
-                    int(curr_1[end_pos]) - int(curr_1[start_pos]) >= 5000)},
+            'condition': lambda curr_1: (curr_1[svtype_field] == 'DEL' or curr_1[svtype_field] == 'DUP') and (int(curr_1[end_pos]) - int(curr_1[start_pos]) >= 5000)},
         'lt5kb': {
-            'condition': lambda curr_2: (curr_2[svtype_field] == 'DEL' or curr_2[svtype_field] == 'DUP') and (
-                    int(curr_2[end_pos]) - int(curr_2[start_pos]) < 5000)},
+            'condition': lambda curr_2: (curr_2[svtype_field] == 'DEL' or curr_2[svtype_field] == 'DUP') and (int(curr_2[end_pos]) - int(curr_2[start_pos]) < 5000)},
         'bca': {'condition': lambda curr_3: bca and (
                 curr_3[svtype_field] != 'DEL' and curr_3[svtype_field] != 'DUP' and curr_3[svtype_field] != 'INS')},
         'ins': {'condition': lambda curr_4: bca and curr_4[svtype_field] == 'INS'}
