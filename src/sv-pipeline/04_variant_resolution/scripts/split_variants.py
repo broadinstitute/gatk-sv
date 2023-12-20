@@ -5,19 +5,19 @@ import logging
 
 # Function to process the bed file by checking for conditions
 def process_bed_file(input_bed, n_per_split, bca=True):
-    svtype_field = 4
-    end_pos = 2
-    start_pos = 1
+    SVTYPE_FIELD = 4
+    END_FIELD = 2
+    START_FIELD = 1
 
     # Dictionary to store the conditions to be checked with matching prefixes
     condition_prefixes = {
         'gt5kb': {
-            'condition': lambda curr_1: (curr_1[svtype_field] == 'DEL' or curr_1[svtype_field] == 'DUP') and (int(curr_1[end_pos]) - int(curr_1[start_pos]) >= 5000)},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
         'lt5kb': {
-            'condition': lambda curr_2: (curr_2[svtype_field] == 'DEL' or curr_2[svtype_field] == 'DUP') and (int(curr_2[end_pos]) - int(curr_2[start_pos]) < 5000)},
-        'bca': {'condition': lambda curr_3: bca and (
-                curr_3[svtype_field] != 'DEL' and curr_3[svtype_field] != 'DUP' and curr_3[svtype_field] != 'INS')},
-        'ins': {'condition': lambda curr_4: bca and curr_4[svtype_field] == 'INS'}
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+        'bca': {'condition': lambda line: bca and (
+                line[SVTYPE_FIELD] != 'DEL' and line[SVTYPE_FIELD] != 'DUP' and line[SVTYPE_FIELD] != 'INS')},
+        'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
     }
 
     current_lines = {prefix: [] for prefix in condition_prefixes.keys()}
@@ -68,8 +68,7 @@ def increment_suffix(suffix):
     if suffix == 'z' * 6:
         raise ValueError('All possible files generated.')
     else:
-        # if there are available suffixes, increment with appropriate number
-        # of padded zeroes
+        # if there are available suffixes, increment to next available suffix
         index = alphabet.index(suffix[0])
         next_char = alphabet[(index + 1) % 26]
         return next_char + suffix[1:]
@@ -80,8 +79,16 @@ def main():
     parser.add_argument(
         "--bed", help="Path to input bed file", required=True)
     parser.add_argument("--n", help="number of variants per file", required=True)
-    parser.add_argument("--bca", default=False, help="If there are ", action='store_true')
+    parser.add_argument("--bca", default=False, help="If there are bcas to address set to True", action='store_true')
+    parser.add_argument("--log-level", required=False, default="INFO",help="Specify level of logging information")
     args = parser.parse_args()
+
+    # Set logging level from --log-level input
+    log_level = args.log_level
+    numeric_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % log_level)
+    logging.basicConfig(level=numeric_level, format='%(levelname)s: %(message)s')
     process_bed_file(args.bed, args.n, args.bca)
 
 
