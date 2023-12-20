@@ -68,7 +68,7 @@ def increment_suffix(suffix):
     if suffix == 'z' * 6:
         raise ValueError('All possible files generated.')
     else:
-        # if there are available suffixes, increment to next available suffix
+        # if there are available suffixes increment to next available suffix
         index = alphabet.index(suffix[0])
         next_char = alphabet[(index + 1) % 26]
         return next_char + suffix[1:]
