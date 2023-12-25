@@ -185,35 +185,6 @@ workflow GatherBatchEvidence {
   Array[File] all_SR_files = flatten(select_all([SR_files, ref_panel_SR_files]))
   Array[File] all_SD_files = flatten(select_all([SD_files, ref_panel_SD_files]))
 
-  if(defined(ref_panel_bincov_matrix)
-     || !(defined(bincov_matrix) && defined(bincov_matrix_index))) {
-    call mbm.MakeBincovMatrix as MakeBincovMatrix {
-      input:
-        samples = samples,
-        count_files = counts,
-        bincov_matrix = ref_panel_bincov_matrix,
-        bincov_matrix_samples = ref_panel_samples,
-        batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_base_docker = sv_base_docker,
-        runtime_attr_override = evidence_merging_bincov_runtime_attr
-    }
-  }
-  File merged_bincov_ = select_first([MakeBincovMatrix.merged_bincov, bincov_matrix])
-  File merged_bincov_idx_ = select_first([MakeBincovMatrix.merged_bincov_idx, bincov_matrix_index])
-
-  if (run_ploidy) {
-    call pe.Ploidy as Ploidy {
-      input:
-        bincov_matrix = merged_bincov_,
-        batch = batch,
-        sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_qc_docker = sv_pipeline_qc_docker,
-        runtime_attr_score = ploidy_score_runtime_attr,
-        runtime_attr_build = ploidy_build_runtime_attr
-    }
-  }
-
   Array[String] samples_batch = select_first([ref_panel_samples, samples])
   call util.ValidatePedFile {
     input:
@@ -243,148 +214,6 @@ workflow GatherBatchEvidence {
     }
   }
 
-  call bem.BatchEvidenceMerging as BatchEvidenceMerging {
-    input:
-      samples = all_samples,
-      BAF_files = BAF_files,
-      PE_files = all_PE_files,
-      SR_files = all_SR_files,
-      SD_files = all_SD_files,
-      sd_locs_vcf = sd_locs_vcf,
-      reference_dict = ref_dict,
-      primary_contigs_fai = primary_contigs_fai,
-      subset_primary_contigs = subset_primary_contigs,
-      rename_samples = rename_samples,
-      batch = batch,
-      gatk_docker = gatk_docker,
-      runtime_attr_override = runtime_attr_bem
-  }
-
-  call cnmops.CNMOPS as CNMOPS {
-    input:
-      r1 = "3",
-      r2 = "10",
-      batch = batch,
-      samples = all_samples,
-      bincov_matrix = merged_bincov_,
-      bincov_matrix_index = merged_bincov_idx_,
-      chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
-      exclude_list = cnmops_exclude_list,
-      allo_file = cnmops_allo_file,
-      ref_dict = ref_dict,
-      prefix = "header",
-      stitch_and_clean_large_events = false,
-      linux_docker = linux_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
-      cnmops_docker = cnmops_docker,
-      runtime_attr_sample10 = cnmops_sample10_runtime_attr,
-      runtime_attr_sample3 = cnmops_sample3_runtime_attr,
-      runtime_attr_ped = cnmops_ped_runtime_attr,
-      runtime_attr_clean = cnmops_clean_runtime_attr
-  }
-
-  call cnmops.CNMOPS as CNMOPSLarge {
-    input:
-      r1 = "1000",
-      r2 = "100",
-      batch = batch,
-      samples = all_samples,
-      bincov_matrix = merged_bincov_,
-      bincov_matrix_index = merged_bincov_idx_,
-      chrom_file = cnmops_chrom_file,
-      ped_file = select_first([AddCaseSampleToPed.combined_ped_file, SubsetPedFile.ped_subset_file]),
-      exclude_list = cnmops_exclude_list,
-      allo_file = cnmops_allo_file,
-      ref_dict = ref_dict,
-      prefix = "large",
-      min_size=cnmops_large_min_size,
-      stitch_and_clean_large_events = true,
-      linux_docker = linux_docker,
-      sv_pipeline_docker = sv_pipeline_docker,
-      cnmops_docker = cnmops_docker,
-      runtime_attr_sample10 = cnmops_sample10_runtime_attr,
-      runtime_attr_sample3 = cnmops_sample3_runtime_attr,
-      runtime_attr_ped = cnmops_ped_runtime_attr,
-      runtime_attr_clean = cnmops_clean_runtime_attr
-  }
-
-  scatter (i in range(length(samples))) {
-    call cov.CondenseReadCounts as CondenseReadCounts {
-      input:
-        counts = counts[i],
-        sample = samples[i],
-        min_interval_size = min_interval_size,
-        max_interval_size = max_interval_size,
-        condense_counts_docker = condense_counts_docker,
-        runtime_attr_override=condense_counts_runtime_attr
-    }
-  }
-
-  call gcnv.CNVGermlineCaseWorkflow as gCNVCase {
-    input:
-      counts = CondenseReadCounts.out,
-      count_entity_ids = samples,
-      contig_ploidy_model_tar = contig_ploidy_model_tar,
-      gcnv_model_tars = gcnv_model_tars,
-      gatk_docker = select_first([gcnv_gatk_docker, gatk_docker]),
-      linux_docker = linux_docker,
-      sv_base_mini_docker = sv_base_mini_docker,
-      gatk4_jar_override = gatk4_jar_override,
-      gcnv_p_alt = gcnv_p_alt,
-      gcnv_cnv_coherence_length = gcnv_cnv_coherence_length,
-      gcnv_max_copy_number = gcnv_max_copy_number,
-      gcnv_mapping_error_rate = gcnv_mapping_error_rate,
-      gcnv_sample_psi_scale = gcnv_sample_psi_scale,
-      gcnv_depth_correction_tau = gcnv_depth_correction_tau,
-      gcnv_copy_number_posterior_expectation_mode = gcnv_copy_number_posterior_expectation_mode,
-      gcnv_active_class_padding_hybrid_mode = gcnv_active_class_padding_hybrid_mode,
-      gcnv_learning_rate = gcnv_learning_rate,
-      gcnv_adamax_beta_1 = gcnv_adamax_beta_1,
-      gcnv_adamax_beta_2 = gcnv_adamax_beta_2,
-      gcnv_log_emission_samples_per_round = gcnv_log_emission_samples_per_round,
-      gcnv_log_emission_sampling_median_rel_error = gcnv_log_emission_sampling_median_rel_error,
-      gcnv_log_emission_sampling_rounds = gcnv_log_emission_sampling_rounds,
-      gcnv_max_advi_iter_first_epoch = gcnv_max_advi_iter_first_epoch,
-      gcnv_max_advi_iter_subsequent_epochs = gcnv_max_advi_iter_subsequent_epochs,
-      gcnv_min_training_epochs = gcnv_min_training_epochs,
-      gcnv_max_training_epochs = gcnv_max_training_epochs,
-      gcnv_initial_temperature = gcnv_initial_temperature,
-      gcnv_num_thermal_advi_iters = gcnv_num_thermal_advi_iters,
-      gcnv_convergence_snr_averaging_window = gcnv_convergence_snr_averaging_window,
-      gcnv_convergence_snr_trigger_threshold = gcnv_convergence_snr_trigger_threshold,
-      gcnv_convergence_snr_countdown_window = gcnv_convergence_snr_countdown_window,
-      gcnv_max_calling_iters = gcnv_max_calling_iters,
-      gcnv_caller_update_convergence_threshold = gcnv_caller_update_convergence_threshold,
-      gcnv_caller_internal_admixing_rate = gcnv_caller_internal_admixing_rate,
-      gcnv_caller_external_admixing_rate = gcnv_caller_external_admixing_rate,
-      gcnv_disable_annealing = gcnv_disable_annealing,
-      ref_copy_number_autosomal_contigs = ref_copy_number_autosomal_contigs,
-      allosomal_contigs = allosomal_contigs,
-      runtime_attr_ploidy = runtime_attr_ploidy,
-      runtime_attr_case = runtime_attr_case,
-      runtime_attr_postprocess = runtime_attr_postprocess,
-      runtime_attr_explode = runtime_attr_explode
-  }
-
-  call dpn.MergeDepth as MergeDepth {
-    input:
-      samples = samples,
-      genotyped_segments_vcfs = gCNVCase.genotyped_segments_vcf,
-      contig_ploidy_calls = gCNVCase.sample_contig_ploidy_calls_tars,
-      gcnv_qs_cutoff = gcnv_qs_cutoff,
-      defragment_max_dist = defragment_max_dist,
-      std_cnmops_del = CNMOPS.Del,
-      std_cnmops_dup = CNMOPS.Dup,
-      large_cnmops_del = CNMOPSLarge.Del,
-      large_cnmops_dup = CNMOPSLarge.Dup,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_merge_sample = depth_merge_sample_runtime_attr,
-      runtime_attr_merge_set = depth_merge_set_runtime_attr
-  }
-
   Float median_cov_mem_gb = select_first([median_cov_mem_gb_per_sample, 0.5]) * length(all_samples) + 7.5
   call mc.MedianCov as MedianCov {
     input:
@@ -393,54 +222,6 @@ workflow GatherBatchEvidence {
       sv_pipeline_qc_docker = sv_pipeline_qc_docker,
       runtime_attr = median_cov_runtime_attr,
       mem_gb_override = median_cov_mem_gb
-  }
-
-  call pp.PreprocessPESR as PreprocessPESR {
-    input:
-      samples = samples,
-      manta_vcfs = manta_vcfs,
-      melt_vcfs = melt_vcfs,
-      scramble_vcfs = scramble_vcfs,
-      wham_vcfs = wham_vcfs,
-      contigs = primary_contigs_fai,
-      min_svsize = min_svsize,
-      batch = batch,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr = preprocess_calls_runtime_attr
-  }
-  if (defined(manta_vcfs)) {
-      call tiny.TinyResolve as TinyResolve {
-        input:
-          samples = samples,
-          manta_vcf_tar = select_first([PreprocessPESR.std_manta_vcf_tar]),
-          cytoband=cytoband,
-          discfile=PE_files,
-          mei_bed=mei_bed,
-          sv_pipeline_docker = sv_pipeline_docker,
-          linux_docker = linux_docker,
-          runtime_attr_resolve = runtime_attr_tiny_resolve,
-          runtime_attr_untar = runtime_attr_tiny_untar
-      }
-  }
-  if (run_matrix_qc) {
-    call mqc.MatrixQC as MatrixQC {
-      input:
-        distance = matrix_qc_distance,
-        genome_file = genome_file,
-        batch = batch,
-        PE_file = BatchEvidenceMerging.merged_PE,
-        PE_idx = BatchEvidenceMerging.merged_PE_index,
-        BAF_file = BatchEvidenceMerging.merged_BAF,
-        BAF_idx = BatchEvidenceMerging.merged_BAF_index,
-        RD_file = merged_bincov_,
-        RD_idx = merged_bincov_idx_,
-        SR_file = BatchEvidenceMerging.merged_SR,
-        SR_idx = BatchEvidenceMerging.merged_SR_index,
-        ref_dict = ref_dict,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_pesrbaf = matrix_qc_pesrbaf_runtime_attr,
-        runtime_attr_rd = matrix_qc_rd_runtime_attr
-    }
   }
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else false
@@ -466,49 +247,7 @@ workflow GatherBatchEvidence {
   }
 
   output {
-    File merged_BAF = BatchEvidenceMerging.merged_BAF
-    File merged_BAF_index = BatchEvidenceMerging.merged_BAF_index
-    File merged_SR = BatchEvidenceMerging.merged_SR
-    File merged_SR_index = BatchEvidenceMerging.merged_SR_index
-    File merged_PE = BatchEvidenceMerging.merged_PE
-    File merged_PE_index = BatchEvidenceMerging.merged_PE_index
-    File merged_bincov = merged_bincov_
-    File merged_bincov_index = merged_bincov_idx_
-
-    File? batch_ploidy_matrix = Ploidy.ploidy_matrix
-    File? batch_ploidy_plots = Ploidy.ploidy_plots
-
-    File? combined_ped_file = AddCaseSampleToPed.combined_ped_file
-
-    File merged_dels = MergeDepth.del
-    File merged_dups = MergeDepth.dup
-
-    File cnmops_del = CNMOPS.Del
-    File cnmops_del_index = CNMOPS.Del_idx
-    File cnmops_dup = CNMOPS.Dup
-    File cnmops_dup_index = CNMOPS.Dup_idx
-
-    File cnmops_large_del = CNMOPSLarge.Del
-    File cnmops_large_del_index = CNMOPSLarge.Del_idx
-    File cnmops_large_dup = CNMOPSLarge.Dup
-    File cnmops_large_dup_index = CNMOPSLarge.Dup_idx
-
     File median_cov = MedianCov.medianCov
-
-    File? std_manta_vcf_tar = PreprocessPESR.std_manta_vcf_tar
-    File? std_melt_vcf_tar = PreprocessPESR.std_melt_vcf_tar
-    File? std_scramble_vcf_tar = PreprocessPESR.std_scramble_vcf_tar
-    File? std_wham_vcf_tar = PreprocessPESR.std_wham_vcf_tar
-
-    File? PE_stats = MatrixQC.PE_stats
-    File? RD_stats = MatrixQC.RD_stats
-    File? SR_stats = MatrixQC.SR_stats
-    File? BAF_stats = MatrixQC.BAF_stats
-    File? Matrix_QC_plot = MatrixQC.QC_plot
-    
-    Array[File]? manta_tloc = TinyResolve.tloc_manta_vcf
-
-    File? metrics_file_batchevidence = GatherBatchEvidenceMetrics.metrics_file
   }
 }
 
