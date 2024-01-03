@@ -22,6 +22,7 @@ workflow FilterGenotypes {
     File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args. TODO: UNIMPLEMENTED!
     String? sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
 
+    Int? recalibrate_records_per_shard
     Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
 
@@ -52,6 +53,7 @@ workflow FilterGenotypes {
       vcf = vcf,
       vcf_index = vcf + ".tbi",
       gq_recalibrator_model_file=gq_recalibrator_model_file,
+      recalibrate_records_per_shard=recalibrate_records_per_shard,
       recalibrate_gq_args=recalibrate_gq_args,
       genome_tracks=genome_tracks,
       gatk_docker=gatk_docker,
