@@ -143,7 +143,7 @@ workflow FilterGenotypes {
   output {
     File filtered_vcf = ConcatVcfs.concat_vcf
     File filtered_vcf_index = ConcatVcfs.concat_vcf_idx
-    File? main_vcf_qc_tarball = MainVcfQc.sv_vcf_qc_output
+    File? filter_genotypes_main_vcf_qc_tarball = MainVcfQc.sv_vcf_qc_output
 
     # For optional analysis
     File? vcf_optimization_table = MergeCompressedHeaderedTables.out
