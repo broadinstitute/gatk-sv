@@ -17,6 +17,10 @@ workflow RecalibrateGq {
         String sv_pipeline_docker
         Float recalibrate_gq_mem_gb_java = 9.0
         Float recalibrate_gq_mem_gb_overhead = 1.5
+
+        RuntimeAttr? runtime_attr_recalibrate_scatter
+        RuntimeAttr? runtime_attr_recalibrate_gq
+        RuntimeAttr? runtime_attr_recalibrate_concat
     }
 
     call tasks_cohort.ScatterVcf {

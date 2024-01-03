@@ -26,6 +26,19 @@ workflow FilterGenotypes {
     Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
 
+    RuntimeAttr? runtime_attr_recalibrate_scatter
+    RuntimeAttr? runtime_attr_recalibrate_gq
+    RuntimeAttr? runtime_attr_recalibrate_concat
+
+    RuntimeAttr? runtime_attr_scatter_for_optim
+    RuntimeAttr? runtime_attr_make_vcf_table
+    RuntimeAttr? runtime_attr_merge_tables
+    RuntimeAttr? runtime_attr_optim_cutoffs
+
+    RuntimeAttr? runtime_attr_scatter_for_filter
+    RuntimeAttr? runtime_attr_filter
+    RuntimeAttr? runtime_attr_filter_concat
+
     # For MainVcfQc
     File primary_contigs_fai
     File? ped_file
@@ -58,7 +71,10 @@ workflow FilterGenotypes {
       genome_tracks=genome_tracks,
       gatk_docker=gatk_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_recalibrate_scatter=runtime_attr_recalibrate_scatter,
+      runtime_attr_recalibrate_gq=runtime_attr_recalibrate_gq,
+      runtime_attr_recalibrate_concat=runtime_attr_recalibrate_concat
   }
 
   if (defined(truth_json)) {
@@ -67,7 +83,8 @@ workflow FilterGenotypes {
         vcf=RecalibrateGq.filtered_vcf,
         records_per_shard=optimize_vcf_records_per_shard,
         prefix="~{output_prefix_}.filter_genotypes_scatter",
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_scatter_for_optim
     }
     scatter ( i in range(length(ScatterForOptimization.shards)) ) {
       call MakeVcfTable {
@@ -75,21 +92,24 @@ workflow FilterGenotypes {
           vcf=ScatterForOptimization.shards[i],
           truth_json=select_first([truth_json]),
           output_prefix="~{output_prefix_}.vcf_table_shard_~{i}",
-          sv_pipeline_docker=sv_pipeline_docker
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_make_vcf_table
       }
     }
     call MergeCompressedHeaderedTables {
       input:
         tables=MakeVcfTable.out,
         output_prefix="~{output_prefix_}.vcf_table",
-        linux_docker=linux_docker
+        linux_docker=linux_docker,
+        runtime_attr_override=runtime_attr_merge_tables,
     }
     call OptimizeCutoffs {
       input:
         table=MergeCompressedHeaderedTables.out,
         fmax_beta=fmax_beta,
         output_prefix="~{output_prefix_}.sl_optimization",
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_optim_cutoffs
     }
   }
 
@@ -98,7 +118,8 @@ workflow FilterGenotypes {
       vcf=RecalibrateGq.filtered_vcf,
       records_per_shard=filter_vcf_records_per_shard,
       prefix="~{output_prefix_}.filter_genotypes_scatter",
-      sv_pipeline_docker=sv_pipeline_docker
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_scatter_for_filter
   }
 
   scatter ( i in range(length(ScatterForFilter.shards)) ) {
@@ -109,7 +130,8 @@ workflow FilterGenotypes {
         ploidy_table=ploidy_table,
         args=select_first([OptimizeCutoffs.filter_args, sl_filter_args]) + " --ncr-threshold ~{no_call_rate_cutoff}",
         output_prefix="~{output_prefix_}.filter_genotypes.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_filter
     }
   }
 
@@ -118,7 +140,8 @@ workflow FilterGenotypes {
       vcfs=FilterVcf.out,
       naive=true,
       outfile_prefix="~{output_prefix_}.filter_genotypes",
-      sv_base_mini_docker=sv_base_mini_docker
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_filter_concat
   }
 
   if (run_qc) {

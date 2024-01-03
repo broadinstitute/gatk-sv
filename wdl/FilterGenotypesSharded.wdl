@@ -22,6 +22,19 @@ workflow FilterGenotypesSharded {
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+
+    RuntimeAttr? runtime_attr_recalibrate_scatter
+    RuntimeAttr? runtime_attr_recalibrate_gq
+    RuntimeAttr? runtime_attr_recalibrate_concat
+
+    RuntimeAttr? runtime_attr_scatter_for_optim
+    RuntimeAttr? runtime_attr_make_vcf_table
+    RuntimeAttr? runtime_attr_merge_tables
+    RuntimeAttr? runtime_attr_optim_cutoffs
+
+    RuntimeAttr? runtime_attr_scatter_for_filter
+    RuntimeAttr? runtime_attr_filter
+    RuntimeAttr? runtime_attr_filter_concat
   }
 
   scatter (vcf in vcfs) {
@@ -33,7 +46,17 @@ workflow FilterGenotypesSharded {
         linux_docker = linux_docker,
         gatk_docker = gatk_docker,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_docker = sv_pipeline_docker
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_recalibrate_scatter=runtime_attr_recalibrate_scatter,
+        runtime_attr_recalibrate_gq=runtime_attr_recalibrate_gq,
+        runtime_attr_recalibrate_concat=runtime_attr_recalibrate_concat,
+        runtime_attr_scatter_for_optim=runtime_attr_scatter_for_optim,
+        runtime_attr_make_vcf_table=runtime_attr_make_vcf_table,
+        runtime_attr_merge_tables=runtime_attr_merge_tables,
+        runtime_attr_optim_cutoffs=runtime_attr_optim_cutoffs,
+        runtime_attr_scatter_for_filter=runtime_attr_scatter_for_filter,
+        runtime_attr_filter=runtime_attr_filter,
+        runtime_attr_filter_concat=runtime_attr_filter_concat
     }
   }
 
