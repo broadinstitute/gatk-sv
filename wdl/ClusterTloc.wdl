@@ -43,10 +43,10 @@ workflow ClusterTloc {
     RuntimeAttr? runtime_attr_exclude_intervals_pesr
   }
 
-  call util.TarFiles {
+  call util.TarFilesInBaseDir {
     input:
       files=manta_tloc_vcfs,
-      prefix="{batch}.clustered.manta_tloc",
+      prefix="~{batch}.clustered.manta_tloc",
       linux_docker=linux_docker,
       runtime_attr_override=runtime_attr_tar_files
   }
@@ -66,7 +66,7 @@ workflow ClusterTloc {
 
   call pesr.ClusterPESR {
     input:
-      vcf_tar=TarFiles.out,
+      vcf_tar=TarFilesInBaseDir.out,
       ploidy_table=CreatePloidyTableFromPed.out,
       batch=batch,
       caller="manta_tloc",
