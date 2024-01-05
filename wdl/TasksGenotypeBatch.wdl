@@ -28,22 +28,12 @@ task SplitVariants {
     Array[File] ins_beds = glob("ins.*")
   }
   command <<<
-
     set -euo pipefail
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2>=5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - gt5kb.
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2<5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
-    if [ ~{generate_bca} == "true" ]; then
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP" && $5!="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5=="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - ins.
-    fi
+    svtk vcf2bed ~{vcf} bed_file.bed
+    python /opt/sv-pipeline/04_variant_resolution/scripts/split_variants.py \
+      --bed bed_file.bed \
+      ~{"--n " + n_per_split} \
+      ~{if generate_bca then "--bca" else ""}
 
   >>>
   runtime {
