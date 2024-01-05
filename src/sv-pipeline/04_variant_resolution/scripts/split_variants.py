@@ -78,7 +78,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bed", help="Path to input bed file", required=True)
     parser.add_argument("--n", help="number of variants per file", required=True)
-    parser.add_argument("--bca", default=False, help="If there are bcas to address set to True", action='store_true')
+    parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs", action='store_true')
     parser.add_argument("--log-level", required=False, default="INFO", help="Specify level of logging information")
     args = parser.parse_args()
 
