@@ -11,8 +11,8 @@ workflow CleanVcf {
     String cohort_name
 
     Array[File] complex_genotype_vcfs
-    Array[File] complex_resolve_bothside_pass_lists
-    Array[File] complex_resolve_background_fail_lists
+    File complex_resolve_bothside_pass_list
+    File complex_resolve_background_fail_list
     File ped_file
 
     File contig_list
@@ -118,9 +118,9 @@ workflow CleanVcf {
       input:
         vcf=complex_genotype_vcfs[i],
         contig=contig,
-        background_list=complex_resolve_background_fail_lists[i],
+        background_list=complex_resolve_background_fail_list,
         ped_file=ped_file,
-        bothsides_pass_list=complex_resolve_bothside_pass_lists[i],
+        bothsides_pass_list=complex_resolve_bothside_pass_list,
         allosome_fai=allosome_fai,
         prefix="~{cohort_name}.~{contig}",
         max_shards_per_chrom_step1=max_shards_per_chrom_step1,

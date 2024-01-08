@@ -452,8 +452,8 @@ workflow GATKSVPipelineBatch {
     # ResolveComplexVariants
     Array[File] complex_resolve_vcfs = MakeCohortVcf.complex_resolve_vcfs
     Array[File] complex_resolve_vcf_indexes = MakeCohortVcf.complex_resolve_vcf_indexes
-    Array[File] complex_resolve_bothside_pass_lists = MakeCohortVcf.complex_resolve_bothside_pass_lists
-    Array[File] complex_resolve_background_fail_lists = MakeCohortVcf.complex_resolve_background_fail_lists
+    File complex_resolve_bothside_pass_list = MakeCohortVcf.complex_resolve_bothside_pass_list
+    File complex_resolve_background_fail_list = MakeCohortVcf.complex_resolve_background_fail_list
     Array[File] breakpoint_overlap_dropped_record_vcfs = MakeCohortVcf.breakpoint_overlap_dropped_record_vcfs
     Array[File] breakpoint_overlap_dropped_record_vcf_indexes = MakeCohortVcf.breakpoint_overlap_dropped_record_vcf_indexes
 
