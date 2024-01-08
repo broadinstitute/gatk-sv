@@ -19,7 +19,7 @@ from urllib.error import HTTPError
 
 # The directories where the WDLs
 # and their tests are located.
-WDLS_DIR_RELATIVE = "../wdl"
+WDLS_DIR_RELATIVE = "../../wdl"
 WDLS_DIR = "wdl"
 WDLS_TEST_DIR = "wdl_test"
 
