@@ -529,8 +529,8 @@ task PlotQcPerFamily {
   }
   Int random_seed_ = select_first([random_seed, 0])
   RuntimeAttr runtime_default = object {
-    mem_gb: 7.75,
-    disk_gb: 50,
+    mem_gb: 15,
+    disk_gb: 100,
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
