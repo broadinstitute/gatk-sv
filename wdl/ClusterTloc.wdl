@@ -7,7 +7,7 @@ workflow ClusterTloc {
   input {
     String prefix
 
-    Array[Array[File]] manta_tloc_vcfs  # >1 batches' worth of manta_tloc VCFs
+    Array[File] manta_tloc_vcfs  # >1 batches' worth of manta_tloc VCFs
 
     Float max_af
 
@@ -48,7 +48,7 @@ workflow ClusterTloc {
 
   call PreprocessAndTarTlocVcfs {
     input:
-      files=flatten(manta_tloc_vcfs),
+      files=manta_tloc_vcfs,
       prefix="~{prefix}.clustered.manta_tloc",
       linux_docker=linux_docker,
       runtime_attr_override=runtime_attr_tar_files
