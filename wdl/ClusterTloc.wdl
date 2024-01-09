@@ -98,6 +98,7 @@ workflow ClusterTloc {
       clustered_manta_tloc_vcf=ClusterPESR.clustered_vcf,
       clustered_manta_tloc_vcf_index=ClusterPESR.clustered_vcf_index,
       cytobands=cytobands,
+      cytobands_index=cytobands + ".tbi",
       max_af=max_af,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_select_rare_label_arms
@@ -163,6 +164,7 @@ task SelectRareAndLabelArms {
     File clustered_manta_tloc_vcf_index
     Float max_af
     File cytobands
+    File cytobands_index
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
