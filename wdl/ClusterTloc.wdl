@@ -134,7 +134,7 @@ task PreprocessAndTarTlocVcfs {
     mkdir to_tar
     while read file; do
       # extract CTX events from manta_tloc VCFs before clustering
-      bcftools view -i "INFO/SVTYPE=='CTX" $file -O z -o to_tar/"$(basename $file)"
+      bcftools view -i "INFO/SVTYPE=='CTX'" $file -O z -o to_tar/"$(basename $file)"
     done < ~{write_lines(files)}
     # tar individual sample vcfs for clustering
     tar czf ~{prefix}.tar.gz -C to_tar/ .
