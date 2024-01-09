@@ -62,13 +62,16 @@ class RecordData:
         self.called_samples = [sample_id_to_idx[s] for s in svu.get_called_samples(record)]
         self.freq = len(self.called_samples)
         self.length = record.info['SVLEN']
+        self.cnv_gt_5kbp = (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and self.length >= 5000
         self.gt_50bp = self.length >= 50
-        self.is_mei = 'melt' in record.info['ALGORITHMS'] or 'scramble' in record.info['ALGORITHMS']
+        self.is_melt = 'melt' in record.info['ALGORITHMS']
+        self.is_scramble = 'scramble' in record.info['ALGORITHMS']
 
     def __str__(self):
         return ",".join(str(x) for x in
-                        (self.is_bnd, self.level_of_support, self.is_mei, self.both_end_support,
-                         self.sr_fail, self.vargq, self.freq, self.gt_50bp, self.length, self.id))
+                        (self.is_bnd, self.level_of_support, self.is_melt, self.both_end_support,
+                         self.sr_fail, self.cnv_gt_5kbp, self.is_scramble, self.vargq, self.freq, self.gt_50bp,
+                         self.length, self.id))
 
 
 vcf = pysam.VariantFile(VCF_PATH)
@@ -78,7 +81,11 @@ sample_id_to_idx = {s: i for i, s in enumerate(vcf.header.samples)}
 sys.stderr.write("Gathering breakends...\n")
 bnds_to_ids = defaultdict(list)
 for record in vcf:
-    if (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and record.info['SVLEN'] >= 5000:
+    # Filter depth-only CNVs
+    # Note that in some cases CNVs are incorrectly missing an SR evidence annotation but usually have PE at least
+    if ('SR' not in record.info['EVIDENCE'] and 'PE' not in record.info['EVIDENCE']) \
+            and (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') \
+            and record.info['SVLEN'] >= 5000:
         continue
     strands = record.info['STRANDS']
     bnd1 = "{}_{}_{}".format(record.chrom, record.pos, strands[0])
@@ -130,9 +137,11 @@ del bnds_to_data
 sort_spec = [
     ('is_bnd', False),
     ('level_of_support', False),
-    ('is_mei', True),
+    ('is_melt', True),
     ('both_end_support', True),
     ('sr_fail', False),
+    ('cnv_gt_5kbp', True),
+    ('is_scramble', False),
     ('vargq', True),
     ('freq', True),
     ('gt_50bp', False),
