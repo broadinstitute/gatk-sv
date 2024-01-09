@@ -537,7 +537,7 @@ task RealignSoftClippedReads {
   }
 
   RuntimeAttr default_attr = object {
-                               cpu_cores: 8,
+                               cpu_cores: 4,
                                mem_gb: 8,
                                disk_gb: ceil(10 + size(reads_path, "GB") * 2 + size([reference_bwa_bwt, reference_bwa_pac, reference_bwa_sa], "GB")),
                                boot_disk_gb: 10,
