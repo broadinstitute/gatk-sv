@@ -23,14 +23,14 @@ workflow Scramble {
     RuntimeAttr? runtime_attr_scramble_part2
     RuntimeAttr? runtime_attr_scramble_make_vcf
   }
-    
+
   parameter_meta {
     bam_or_cram_file: "A .bam or .cram file to search for SVs. crams are preferable because they localise faster and use less disk."
     bam_or_cram_index: "Index for bam_or_cram_file."
     sample_name: "A sample name. Outputs will be sample_name+'.scramble.insertions.vcf.gz' and sample_name+'.scramble.deletions.vcf.gz'."
     reference_fasta: "A FASTA file with the reference used to align bam or cram file."
   }
-  
+
   call ScramblePart1 {
     input:
       bam_or_cram_file = bam_or_cram_file,
@@ -207,8 +207,23 @@ task MakeScrambleVcf {
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
-  command {
+  command <<<
     set -euo pipefail
+    # Sort by position
+
+    zcat ~{scramble_table} \
+      | awk -F '\t' -v OFS='\t' '{print "chrom","pos","end",$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16; exit 0;}' \
+      > header.txt
+
+    zcat ~{scramble_table} \
+      | sed 1d \
+      | tr ':' '\t' \
+      | awk -F'\t' -v OFS='\t' '{print $1,$2,$2+1,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17}' \
+      | sort -k1,1V -k2,2n \
+      | cat header.txt - \
+      | bgzip \
+      > scramble.bed.gz
+
     python /opt/sv-pipeline/scripts/make_scramble_vcf.py \
       --table ~{scramble_table} \
       --sample ~{sample_name} \
@@ -216,7 +231,7 @@ task MakeScrambleVcf {
       --out unsorted.vcf.gz
     bcftools sort unsorted.vcf.gz -Oz -o ~{sample_name}.scramble.vcf.gz
     tabix ~{sample_name}.scramble.vcf.gz
-  }
+  >>>
   output {
     File vcf = "~{sample_name}.scramble.vcf.gz"
     File vcf_index = "~{sample_name}.scramble.vcf.gz.tbi"

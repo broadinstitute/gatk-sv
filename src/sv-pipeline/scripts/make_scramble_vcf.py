@@ -14,7 +14,7 @@ import pandas as pd
 import pysam
 
 FLOAT_COLUMNS = ["Alignment_Score", "Alignment_Percent_Length", "Alignment_Percent_Identity"]
-INT_COLUMNS = ["pos", "Clipped_Reads_In_Cluster", "Start_In_MEI", "Stop_In_MEI", "polyA_Position",
+INT_COLUMNS = ["pos", "end", "Clipped_Reads_In_Cluster", "Start_In_MEI", "Stop_In_MEI", "polyA_Position",
                "polyA_SupportingReads", "TSD_length"]
 
 
@@ -110,21 +110,18 @@ def read_table(path, cluster_distance, alu_size, sva_size, l1_size):
                 columns = tokens
                 continue
             row = {columns[i]: tokens[i] for i in range(len(tokens))}
-            pos_tokens = row['Insertion'].split(':')
-            row['chrom'] = pos_tokens[0]
-            row['pos'] = pos_tokens[1]
             row['sides'] = 1
             _cast_numeric(row, FLOAT_COLUMNS, float)
             _cast_numeric(row, INT_COLUMNS, int)
             new_buffer = list()
             found_match = False
             for item in buffer:
-                if item['chrom'] != row['chrom'] \
+                if found_match:
+                    new_buffer.append(item)
+                elif item['chrom'] != row['chrom'] \
                         or abs(int(item['pos']) - int(row['pos'])) > cluster_distance:
                     item['svlen'] = _calculate_svlen_one_sided(item)
-                    data.append(item)
-                elif found_match:
-                    new_buffer.append(item)
+                    data.insert(0, item)
                 elif item['Clipped_Side'] != row['Clipped_Side'] \
                         and item['Insertion_Direction'] == row['Insertion_Direction']:
                     row['pos'] = item['pos']
@@ -132,11 +129,11 @@ def read_table(path, cluster_distance, alu_size, sva_size, l1_size):
                     data.append(row)
                     found_match = True
                 else:
-                    new_buffer.append(item)
+                    new_buffer.insert(0, item)
             if not found_match:
-                new_buffer.insert(row, 0)
+                new_buffer.insert(0, row)
             buffer = new_buffer
-        for item in new_buffer:
+        for item in buffer:
             item['svlen'] = _calculate_svlen_one_sided(item)
             data.append(item)
         return pd.DataFrame(data=data)
