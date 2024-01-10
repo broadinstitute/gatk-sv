@@ -2,7 +2,7 @@
 ## https://github.com/GeneDx/scramble
 ##
 ## Requirements/expectations :
-## - Human whole-genome pair-end sequencing data in mapped BAM format
+## - Human whole-genome pair-end sequencing data in mapped BAM or CRAM format
 
 version 1.0
 
