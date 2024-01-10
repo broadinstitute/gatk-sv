@@ -208,24 +208,24 @@ task MakeScrambleVcf {
   }
 
   command <<<
-    set -euo pipefail
+    set -euxo pipefail
     # Sort by position
 
+    # Covert table to bed format
     zcat ~{scramble_table} \
-      | awk -F '\t' -v OFS='\t' '{print "chrom","pos","end",$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16; exit 0;}' \
+      | awk -F '\t' -v OFS='\t' '{if (NR==1) {print "chrom","pos","end",$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16}}' \
       > header.txt
-
     zcat ~{scramble_table} \
       | sed 1d \
       | tr ':' '\t' \
       | awk -F'\t' -v OFS='\t' '{print $1,$2,$2+1,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17}' \
       | sort -k1,1V -k2,2n \
       | cat header.txt - \
-      | bgzip \
+      | gzip \
       > scramble.bed.gz
 
     python /opt/sv-pipeline/scripts/make_scramble_vcf.py \
-      --table ~{scramble_table} \
+      --table scramble.bed.gz \
       --sample ~{sample_name} \
       --reference ~{reference_fasta} \
       --out unsorted.vcf.gz
