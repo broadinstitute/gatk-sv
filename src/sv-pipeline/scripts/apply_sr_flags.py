@@ -23,8 +23,8 @@ def process(vcf, fout, bothsides_support_variants, high_sr_background_variants):
             logging.info(f"{len(vid_list)} {key} records were not found")
             if len(vid_list) > 100:
                 logging.info("Logging only the first 50 records")
-                unvisited = vid_list[:50]
-            sys.stderr.write("\n".join(unvisited) + "\n")
+                vid_list = vid_list[:50]
+            sys.stderr.write("\n".join(vid_list) + "\n")
         if len(vid_list) != n_not_found:
             logging.warning(f"Number of {key} CPX/INS variants not found {len(vid_list)} in the cleaned VCF does not "
                             f"match the number of unmatched variants with the flag already set ({n_not_found})")
