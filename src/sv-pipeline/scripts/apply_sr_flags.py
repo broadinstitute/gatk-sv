@@ -17,55 +17,84 @@ HIGH_SR_BACKGROUND_HEADER = f"##INFO=<ID={HIGH_SR_BACKGROUND_KEY},Number=0,Type=
 
 
 def process(vcf, fout, bothsides_support_variants, high_sr_background_variants):
+
+    def _log_unvisited(vid_list, n_not_found, key):
+        if len(vid_list) > 0:
+            logging.info(f"{len(vid_list)} {key} records were not found")
+            if len(vid_list) > 100:
+                logging.info("Logging only the first 50 records")
+                unvisited = vid_list[:50]
+            sys.stderr.write("\n".join(unvisited) + "\n")
+        if len(vid_list) != n_not_found:
+            logging.warning(f"Number of {key} CPX/INS variants not found {len(vid_list)} in the cleaned VCF does not "
+                            f"match the number of unmatched variants with the flag already set ({n_not_found})")
+        else:
+            logging.info(f"Number of {key} CPX/INS variants not found in the cleaned VCF exactly matches the number of "
+                         f"unmatched variants with the flag already set ({n_not_found})")
+
     visited = set()
     n_duplicates = 0
+    n_found_bothsides = 0
+    n_found_high_background = 0
+    n_not_found_with_bothsides = 0
+    n_not_found_with_high_background = 0
     for record in vcf:
         record_key = get_record_key(record)
         if record_key in visited:
-            if n_duplicates < 100:
+            if n_duplicates < 50:
                 logging.warning(f"Duplicate key {record_key}")
                 n_duplicates += 1
-                if n_duplicates == 100:
+                if n_duplicates == 50:
                     logging.warning("Suppressing further duplicate warnings")
         visited.add(record_key)
         if record_key in bothsides_support_variants:
             record.info[BOTHSIDES_SUPPORT_KEY] = 1
+            n_found_bothsides += 1
         elif BOTHSIDES_SUPPORT_KEY in record.info:
-            record.info.pop(BOTHSIDES_SUPPORT_KEY)
+            if record.info['SVTYPE'] in ['INS', 'CPX']:
+                n_not_found_with_bothsides += 1
         if record_key in high_sr_background_variants:
             record.info[HIGH_SR_BACKGROUND_KEY] = 1
+            n_found_high_background += 1
         elif HIGH_SR_BACKGROUND_KEY in record.info:
-            record.info.pop(HIGH_SR_BACKGROUND_KEY)
+            if record.info['SVTYPE'] in ['INS', 'CPX']:
+                n_not_found_with_high_background += 1
         fout.write(record)
-    unvisited = sorted(list(bothsides_support_variants.union(high_sr_background_variants) - visited))
-    if len(unvisited) > 0:
-        logging.warning(f"{len(unvisited)} records were not found")
-        if len(unvisited) > 100:
-            logging.warning("Logging only the first 100 records")
-            unvisited = unvisited[:100]
-        sys.stderr.write("\n".join(unvisited) + "\n")
+    unvisited_bothsides = sorted(list(bothsides_support_variants - visited))
+    unvisited_high_background = sorted(list(high_sr_background_variants - visited))
+    logging.info(f"{n_found_bothsides} INS/CPX records newly flagged {BOTHSIDES_SUPPORT_KEY}")
+    logging.info(f"{n_not_found_with_bothsides} INS/CPX records were not in the list but were already flagged "
+                 f"{BOTHSIDES_SUPPORT_KEY}")
+    logging.info(f"{n_found_high_background} INS/CPX records newly flagged {HIGH_SR_BACKGROUND_KEY}")
+    logging.info(f"{n_not_found_with_high_background} INS/CPX records were not in the list but were already flagged "
+                 f"{HIGH_SR_BACKGROUND_KEY}")
+    _log_unvisited(unvisited_bothsides, n_not_found_with_bothsides, BOTHSIDES_SUPPORT_KEY)
+    _log_unvisited(unvisited_high_background, n_not_found_with_high_background, HIGH_SR_BACKGROUND_KEY)
 
 
 def get_record_key(record):
-    return ":".join([str(x) for x in [record.chrom, record.pos, record.stop,
-                                      record.info['SVTYPE'], record.info['SVLEN']]])
+    return ":".join([str(x) for x in [record.chrom, record.pos,
+                                      '' if record.info['SVTYPE'] == 'INS' else record.stop,
+                                      record.info['SVTYPE'], record.info['SVLEN'],
+                                      record.info.get('CHR2', record.chrom), record.info.get('END2', ''),
+                                      record.info.get('CPX_TYPE', '')]])
 
 
 def process_cpx_vcf(vcf, bothsides_support_set, high_sr_background_set):
 
-    def _check_record(r, vid_set, variant_set, key):
+    def _check_record(r, vid_set, variant_set):
         if r.id in vid_set:
-            if 'SR' not in r.info['EVIDENCE']:
-                logging.warning(f"Encountered variant {r.id} with {key} but no SR evidence")
             variant_set.add(get_record_key(r))
 
     bothsides_support_variants = set()
     high_sr_background_variants = set()
     for record in vcf:
-        _check_record(record, bothsides_support_set, bothsides_support_variants, BOTHSIDES_SUPPORT_KEY)
-        _check_record(record, high_sr_background_set, high_sr_background_variants, HIGH_SR_BACKGROUND_KEY)
-    logging.info(f"Found {len(bothsides_support_variants)} {BOTHSIDES_SUPPORT_KEY} variants")
-    logging.info(f"Found {len(high_sr_background_variants)} {HIGH_SR_BACKGROUND_KEY} variants")
+        if record.info['SVTYPE'] not in ['INS', 'CPX']:
+            continue
+        _check_record(record, bothsides_support_set, bothsides_support_variants)
+        _check_record(record, high_sr_background_set, high_sr_background_variants)
+    logging.info(f"Found {len(bothsides_support_variants)} {BOTHSIDES_SUPPORT_KEY} INS/CPX variants")
+    logging.info(f"Found {len(high_sr_background_variants)} {HIGH_SR_BACKGROUND_KEY} INS/CPX variants")
     return bothsides_support_variants, high_sr_background_variants
 
 
@@ -76,7 +105,7 @@ def _parse_variant_id_file(path: Text) -> Set[Text]:
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Apply bothsides SR support and high SR background annotations",
+        description="Apply bothsides SR support and high SR background annotations to CPX/INS records",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--cleaned-vcf', type=str, help='CleanVcf vcf (defaults to stdin)')
