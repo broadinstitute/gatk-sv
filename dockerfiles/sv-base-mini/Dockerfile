@@ -2,7 +2,7 @@
 # some basic bioinformatics utilities.
 ARG UBUNTU_RELEASE="22.04"
 ARG HTSLIB_VERSION="1.15.1"
-ARG BEDTOOLS_VERSION="2.30.0"
+ARG BEDTOOLS_VERSION="2.31.0"
 ARG VCFTOOLS_VERSION="0.1.16"
 
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
