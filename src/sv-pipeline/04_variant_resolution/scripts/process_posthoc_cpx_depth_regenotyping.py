@@ -11,7 +11,6 @@ from typing import List, Text, Dict, Optional, Set
 from pysam import VariantFile
 from intervaltree import IntervalTree
 
-
 # Parameters
 MIN_SIZE = 1000
 MIN_DIFF = 0.4
@@ -126,7 +125,7 @@ class VcfRecord:
 
         # Source interval
         if "SOURCE" in variant_record.info:
-            source_tokens = variant_record.info["SOURCE"].replace("_", "\t").replace(":", "\t")\
+            source_tokens = variant_record.info["SOURCE"].replace("_", "\t").replace(":", "\t") \
                 .replace("-", "\t").split("\t")
             if len(source_tokens) != 4:
                 raise ValueError(f"Record {variant_record.vid} has SOURCE field with unexpected format: "
@@ -586,17 +585,15 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         # Test dup interval for evidence of duplication
         # TODO unsure if the check should be == "DUP"
 
-        dup_confirmed = any(m.cnv_assessment != "WT"
-                            and has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end, 0.95)
+        dup_confirmed = any(m.cnv_assessment != "WT" and
+                            has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end, 0.95)
                             for m in records_list)
         # As long as dup doesn't explicitly fail depth genotyping, proceed
         if dup_confirmed:
             # If sink length >= MINSIZEiDEL, test sink interval for evidence of deletion
-            sink_is_del = r.sink_size() >= MIN_SIZE_IDEL \
-                          and any(m.cnv_assessment == "DEL"
-                                  and has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end,
-                                                             m.chrom, m.start, m.end, 0.95)
-                                  for m in records_list)
+            sink_is_del = r.sink_size() >= MIN_SIZE_IDEL and any(
+                m.cnv_assessment == "DEL" and has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end, m.chrom,
+                                                                     m.start, m.end, 0.95) for m in records_list)
             # Get inversion interval. Corresponds to min dup/ins coord and max sink coord
             inv_chrom = r.sink_chrom
             inv_start = dup_start
@@ -695,17 +692,15 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         dup_size = dup_end - dup_start
         # Test dup interval for evidence of duplication
         # TODO should this check should be == "DUP" ?
-        dup_confirmed = any(m.cnv_assessment != "WT"
-                            and has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end, 0.95)
-                            for m in records_list)
+        dup_confirmed = any(
+            m.cnv_assessment != "WT" and has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end,
+                                                                0.95) for m in records_list)
         # As long as dup doesn't explicitly fail depth genotyping, proceed
         if dup_confirmed:
             # If sink length >= MINSIZEiDEL, test sink interval for evidence of deletion
-            sink_is_del = r.sink_size() >= MIN_SIZE_IDEL \
-                          and any(m.cnv_assessment == "DEL"
-                                  and has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end,
-                                                             m.chrom, m.start, m.end, 0.95)
-                                  for m in records_list)
+            sink_is_del = r.sink_size() >= MIN_SIZE_IDEL and any(
+                m.cnv_assessment == "DEL" and has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end, m.chrom,
+                                                                     m.start, m.end, 0.95) for m in records_list)
             # Get inversion interval. Corresponds to min sink coord and max dup/inv coord
             # Note this is different from the DUP5/INS3 case
             inv_chrom = r.sink_chrom
@@ -809,14 +804,17 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                 sink_record = sinks[0]
                 if sink_record.size() >= MIN_SIZE_IDEL:
                     # If insertion site size >= MINSIZEiDEL, check if insertion site is deleted
-                    sink_is_del = any(m.cnv_assessment == "DEL"
-                                      and not has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end,
-                                                                     m.chrom, m.start, m.end, 0.95)
-                                      for m in records_list)
-                    sink_is_not_del = any(m.cnv_assessment == "WT"
-                                          and not has_reciprocal_overlap(r.sink_chrom, r.sink_start, r.sink_end,
-                                                                         m.chrom, m.start, m.end, 0.95)
-                                          for m in records_list)
+                    sink_is_del = any(
+                        m.cnv_assessment == "DEL" and not has_reciprocal_overlap(
+                            r.sink_chrom, r.sink_start, r.sink_end,
+                            m.chrom, m.start, m.end, 0.95)
+                        for m in records_list
+                    )
+                    sink_is_not_del = any(
+                        m.cnv_assessment == "WT" and not has_reciprocal_overlap(
+                            r.sink_chrom, r.sink_start, r.sink_end, m.chrom, m.start, m.end, 0.95)
+                        for m in records_list
+                    )
                 else:
                     sink_is_del = False
                     sink_is_not_del = False
@@ -902,9 +900,11 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         dup_end = r.sink_end
         dup_size = dup_end - dup_start
         # Test dup interval for explicit confirmation of duplication
-        dup_confirmed = any(m.cnv_assessment == "DUP"
-                            and has_reciprocal_overlap(dup_chrom, dup_start, dup_end, m.chrom, m.start, m.end, 0.95)
-                            for m in records_list)
+        dup_confirmed = any(
+            m.cnv_assessment == "DUP" and has_reciprocal_overlap(dup_chrom, dup_start, dup_end,
+                                                                 m.chrom, m.start, m.end, 0.95)
+            for m in records_list
+        )
         if dup_confirmed:
             # If dup confirms, resolve as palindromic inverted duplication
             new_cpx_type = "piDUP_FR" if default_cpx_type == "INVERSION_SINGLE_ENDER_" else "piDUP_RF"
@@ -1110,6 +1110,7 @@ def write_reclassification_table(path, assessment):
             new_end = r.new_end if r.new_end is not None else "."
             f.write(f"{r.vid}\t{r.modification}\t{r.reason}\t{r.new_sv_type}\t{r.new_cpx_type}\t{new_cpx_intervals}\t"
                     f"{new_svlen}\t{new_source}\t{new_start}\t{new_end}\n")
+
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
