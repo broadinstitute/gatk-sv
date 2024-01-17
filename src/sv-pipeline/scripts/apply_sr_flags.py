@@ -75,7 +75,7 @@ def process(vcf, fout, bothsides_support_variants, high_sr_background_variants):
 def get_record_key(record):
     return ":".join([str(x) for x in [record.chrom, record.pos,
                                       '' if record.info['SVTYPE'] == 'INS' else record.stop,
-                                      record.info['SVTYPE'], record.info['SVLEN'],
+                                      record.info['SVTYPE'], record.info.get('SVLEN', ''),
                                       record.info.get('CHR2', record.chrom), record.info.get('END2', ''),
                                       record.info.get('CPX_TYPE', '')]])
 
