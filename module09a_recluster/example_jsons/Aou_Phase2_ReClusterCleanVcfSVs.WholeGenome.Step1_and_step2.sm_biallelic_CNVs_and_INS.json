@@ -2,9 +2,9 @@
     "ReClusterCleanVcfWholeGenome.runtime_attr_override_extract_svid": {"mem_gb":5, "disk_gb": 100},
     "ReClusterCleanVcfWholeGenome.runtime_override_extract_SV_sites": {"disk_gb": 90},
     "ReClusterCleanVcfWholeGenome.runtime_attr_override_svtk_vcfcluster": {"mem_gb": 40, "disk_gb": 80},
-    "ReClusterCleanVcfWholeGenome.Repeat_Masks" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.RM.sorted.merged.bed",
-    "ReClusterCleanVcfWholeGenome.Simple_Repeats" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SimpRep.sorted.merged.bed",
-    "ReClusterCleanVcfWholeGenome.Segmental_Duplicates" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SegDup.sorted.merged.bed",
+    "ReClusterCleanVcfWholeGenome.Repeat_Masks" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.RM.sorted.merged.bed",
+    "ReClusterCleanVcfWholeGenome.Simple_Repeats" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.SimpRep.sorted.merged.bed",
+    "ReClusterCleanVcfWholeGenome.Segmental_Duplicates" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.SegDup.sorted.merged.bed",
  
     "ReClusterCleanVcfWholeGenome.svtype_list" : ["INS","DEL","DUP"],
     "ReClusterCleanVcfWholeGenome.Genomic_Context_list_list" : [["SR"],["SR","RM","SD"],["SR","RM","SD"]],
