@@ -207,7 +207,7 @@ workflow CleanVcf {
 
   File cleaned_vcf_ = select_first([ConcatCleanedVcfs.concat_vcf, ConcatVcfsHail.merged_vcf])
 
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else false
   if (run_module_metrics_) {
     call metrics.MakeCohortVcfMetrics {
       input:
