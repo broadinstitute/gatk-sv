@@ -25,6 +25,6 @@
     "ReClusterCleanVcfWholeGenome.sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
     "ReClusterCleanVcfWholeGenome.sv_benchmark_docker" : "talkowski/sv_benchmark",
     "ReClusterCleanVcfWholeGenome.sv_pipeline_hail_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-pipeline:2022-11-04-v0.26.4-beta-610e1093",
-    "ReClusterCleanVcfWholeGenome.prefix" : "gnomad-sv-v3.recluster.10perc_sample_overlap",
-    "ReClusterCleanVcfWholeGenome.vid_prefix" : "gnomad-sv-v3.reclustered"
+    "ReClusterCleanVcfWholeGenome.prefix" : "AoU_phase2.recluster.10perc_sample_overlap",
+    "ReClusterCleanVcfWholeGenome.vid_prefix" : "AoU_phase2.reclustered"
 }
