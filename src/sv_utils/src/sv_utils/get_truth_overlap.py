@@ -57,7 +57,7 @@ class Default:
     )
     f_beta = 1.0
     min_overlap_cutoff_precision = 0.99
-    min_vapor_precision = 0.99
+    min_vapor_precision = 0.999
     inheritance_af_rareness = 0.05
     # when checking overlap, pseudo-size of variants with 0 / >0 reference length = scale_factor * SVLEN + expand_bp:
     expand_point_svs_bp = interval_overlaps.Default.expand_point_svs_bp
