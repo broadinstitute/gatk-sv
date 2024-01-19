@@ -181,6 +181,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_loose,
         pesr_size_similarity=pesr_size_similarity_loose,
         pesr_breakend_window=pesr_breakend_window_loose,
+        sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
@@ -197,6 +198,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_strict,
         pesr_size_similarity=pesr_size_similarity_strict,
         pesr_breakend_window=pesr_breakend_window_strict,
+        sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
