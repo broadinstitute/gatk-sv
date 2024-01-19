@@ -138,7 +138,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="MaNumber of covering vapor reads required for neg example")
     parser.add_argument("--output", "-O", type=str, default="-",
                         help="File to output results to. If omitted or set to '-', print to stdout")
-    parser.add_argument("--vapor-max-cnv-size", type=int, default="5000",
+    parser.add_argument("--vapor-max-cnv-size", type=int, default=5000,
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--irs-sample-batch-lists", type=str,
                         help="list of lists of samples used in each IRS test batch")
@@ -146,13 +146,13 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="list of contigs to restrict IRS variants to")
     parser.add_argument("--irs-test-report-list", type=str,
                         help="list of IRS results files")
-    parser.add_argument("--irs-good-pvalue-threshold", type=float, default=0.001,
+    parser.add_argument("--irs-good-pvalue-threshold", type=float, default=0.000001,
                         help="Maximum pvalue to choose a good record from the IRS report")
-    parser.add_argument("--irs-bad-pvalue-threshold", type=float, default=0.5,
+    parser.add_argument("--irs-bad-pvalue-threshold", type=float, default=0.2,
                         help="Minimum pvalue to choose a bad record from the IRS report")
-    parser.add_argument("--irs-min-probes", type=int, default=4,
+    parser.add_argument("--irs-min-probes", type=int, default=5,
                         help="IRS results file")
-    parser.add_argument("--irs-min-cnv-size", type=int, default="50000",
+    parser.add_argument("--irs-min-cnv-size", type=int, default=10000,
                         help="Minimum size CNV to trust IRS results for")
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
