@@ -197,7 +197,7 @@ task FilterSamplesAndVcfsLists {
     python <<CODE
 final_ids = set()
 with open("~{final_cohort_sample_ids}", 'r') as cohort:
-  for line in inp:
+  for line in cohort:
     final_ids.add(line.strip())
 with open("~{sample_ids}", 'r') as samples_in, open("~{vcfs}", 'r') as vcfs_in, open("~{batch}.sample_ids.filtered.txt", 'w') as samples_out, open("~{batch}.manta_tloc_vcfs.filtered.txt", 'w') as vcfs_out:
   for samp, vcf in zip(samples_in, vcfs_in):

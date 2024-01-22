@@ -17,6 +17,8 @@ workflow ManuallyReviewBalancedSVs {
     Float max_af
     Int min_size
 
+    File generate_pe_tabix_py_script # for development
+
     String sv_base_mini_docker
     String sv_pipeline_docker
 
@@ -74,6 +76,7 @@ workflow ManuallyReviewBalancedSVs {
         batch_pe_file = batch_pe_files[i],
         batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
         batch_samples = samples_in_batches[i],
+        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_subset_samples=runtime_attr_subset_samples,
@@ -90,6 +93,7 @@ workflow ManuallyReviewBalancedSVs {
         cohort_vcf_index = SelectCPX.svtype_vcf_index,
         batch_pe_file = batch_pe_files[i],
         batch_samples = samples_in_batches[i],
+        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_subset_samples=runtime_attr_subset_samples,
@@ -106,6 +110,7 @@ workflow ManuallyReviewBalancedSVs {
         cohort_vcf_index = SelectCPX.svtype_vcf_index,
         batch_pe_file = batch_pe_files[i],
         batch_samples = samples_in_batches[i],
+        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_subset_samples=runtime_attr_subset_samples,
