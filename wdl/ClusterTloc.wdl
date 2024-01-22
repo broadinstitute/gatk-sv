@@ -7,11 +7,14 @@ workflow ClusterTloc {
   input {
     String prefix
 
-    Array[File] manta_tloc_vcfs  # >1 batches' worth of manta_tloc VCFs
+    Array[File] manta_tloc_vcfs  # 1 batch's manta_tloc vcfs
 
     Float max_af
 
     File ped_file
+
+    Array[String] batch_sample_ids
+    File? final_cohort_sample_ids  # final cohort samples - if provided, will filter batch sample list
 
     # Reference
     File contig_list
@@ -35,6 +38,7 @@ workflow ClusterTloc {
 
     Float? java_mem_fraction
 
+    RuntimeAttr? runtime_attr_filter_lists
     RuntimeAttr? runtime_attr_tar_files
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs
@@ -45,9 +49,19 @@ workflow ClusterTloc {
     RuntimeAttr? runtime_attr_select_rare_label_arms
   }
 
+  call FilterSamplesAndVcfsLists {
+    input:
+      sample_ids=write_lines(batch_sample_ids),
+      final_cohort_sample_ids=select_first([final_cohort_sample_ids, write_lines(batch_sample_ids)]),
+      vcfs=write_lines(manta_tloc_vcfs),
+      batch=prefix,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_filter_lists
+  }
+
   call PreprocessAndTarTlocVcfs {
     input:
-      files=manta_tloc_vcfs,
+      files=select_first([read_lines(FilterSamplesAndVcfsLists.manta_tloc_vcfs_file), manta_tloc_vcfs]),
       prefix="~{prefix}.clustered.manta_tloc",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_tar_files
@@ -106,8 +120,9 @@ workflow ClusterTloc {
   }
 
   output {
-    File? tloc_vcf = SelectRareAndLabelArms.rare_witharms_vcf
-    File? tloc_vcf_index = SelectRareAndLabelArms.rare_witharms_vcf_index
+    File tloc_vcf = SelectRareAndLabelArms.rare_witharms_vcf
+    File tloc_vcf_index = SelectRareAndLabelArms.rare_witharms_vcf_index
+    File batch_sample_ids = FilterSamplesAndVcfsLists.sample_ids_file
   }
 }
 
@@ -143,6 +158,58 @@ task PreprocessAndTarTlocVcfs {
 
   output {
     File out = "~{prefix}.tar.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task FilterSamplesAndVcfsLists {
+  input {
+    File sample_ids
+    File vcfs
+    File final_cohort_sample_ids
+    String batch
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    # filter batch sample list and vcfs list based on final cohort sample list in case samples have been removed
+    python <<CODE
+final_ids = set()
+with open("~{final_cohort_sample_ids}", 'r') as cohort:
+  for line in inp:
+    final_ids.add(line.strip())
+with open("~{sample_ids}", 'r') as samples_in, open("~{vcfs}", 'r') as vcfs_in, open("~{batch}.sample_ids.filtered.txt", 'w') as samples_out, open("~{batch}.manta_tloc_vcfs.filtered.txt", 'w') as vcfs_out:
+  for samp, vcf in zip(samples_in, vcfs_in):
+    if samp.strip() in final_ids:
+      samples_out.write(samp)
+      vcfs_out.write(vcf)
+CODE
+  >>>
+
+  output {
+    File sample_ids_file = "~{batch}.sample_ids.filtered.txt"
+    File manta_tloc_vcfs_file = "~{batch}.manta_tloc_vcfs.filtered.txt"
   }
 
   runtime {
@@ -230,6 +297,7 @@ outvcf = pysam.VariantFile("~{prefix}.witharms.rare.clustered_manta_tloc.vcf.gz"
 for record in vcf:
   # Set END2
   record.info['END2'] = bnd_end_dict[record.id]
+  record.stop = record.pos + 1
   armA, armB = get_arms(record, cytobands)
   # get CTX arm information
   if armA == armB:
