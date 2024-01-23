@@ -166,8 +166,8 @@ task SelectSVType {
     RuntimeAttr? runtime_attr_override
   }
 
-  Boolean annotate_af = (defined(max_af) || (defined(annotate_af) && annotate_af))  # annotate AF if needed to filter or if annotate_af=true, otherwise don't
-  String af_annotate_cmd = if (annotate_af) then " | bcftools +fill-tags -- -t AC,AN,AF " else ""
+  Boolean annotate_af_ = (defined(max_af) || (defined(annotate_af) && annotate_af))  # annotate AF if needed to filter or if annotate_af=true, otherwise don't
+  String af_annotate_cmd = if (annotate_af_) then " | bcftools +fill-tags -- -t AC,AN,AF " else ""
   String af_filter_cmd = if defined(max_af) then " | bcftools view -i 'AF<~{max_af}' " else ""
   String size_filter_cmd = if defined(min_size) then " && INFO/SVLEN>=~{min_size}" else ""
 
