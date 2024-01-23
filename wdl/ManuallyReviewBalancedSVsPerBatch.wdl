@@ -123,13 +123,45 @@ task CombineTlocs {
     rm bp2.manta_tloc.bed
     rm bp2.ctx.bed
 
-    # dedup lists -> list of unique manta tloc ids with at least one breakpoint not within 100bp of a CTX
-    sort unique_manta_tloc.ids.txt | uniq > dedup.unique_manta_tloc.ids.txt
-
-    # extract unique manta tlocs from bed, merge with CTX, sort, bgzip
-    awk 'NR==FNR{a[$0]; next} {for(x in a) {if($4==x) {print $0}}}' dedup.unique_manta_tloc.ids.txt manta_tloc.bed > merged.bed
+    # extract unique manta tlocs from bed, shuffle order of columns to match CTX, merge with CTX
+    python <<CODE
+import gzip
+keep_cols = "#chrom start end name svtype samples CHR2 CPX_TYPE END END2 SOURCE STRANDS SVLEN SVTYPE UNRESOLVED_TYPE AN AC AF".split()
+keep_ids = set()
+with open("unique_manta_tloc.ids.txt", 'r') as ids:
+  for line in ids:
+    keep_ids.add(line.strip())
+with open("~{prefix}.CTX.combined.bed", 'w') as header:
+  header.write("\t".join(keep_cols) + "\n")
+with open("merged.bed", 'w') as out:
+  with open("manta_tloc.bed", 'r') as manta_tloc:
+    keep_colnums = []
+    name_colnum = 4
+    for line in manta_tloc:
+      fields = line.strip().split('\t')
+      if line.startswith("#"):
+        name_colnum = fields.index("name")
+        for col in keep_cols:
+          keep_colnums.append(fields.index(col))
+      else:
+        if fields[name_colnum] in keep_ids:
+          out.write("\t".join([fields[x] for x in keep_colnums]) + "\n")
+  with gzip.open("~{ctx_bed}", 'rt') as ctx:
+    keep_colnums = []
+    for line in ctx:
+      fields = line.strip().split('\t')
+      if line.startswith("#"):
+        for col in keep_cols:
+          keep_colnums.append(fields.index(col))
+      else:
+        out.write("\t".join([fields[x] for x in keep_colnums]) + "\n")
+CODE
     rm manta_tloc.bed
-    zcat ~{ctx_bed} >> merged.bed | sort -T tmp -k1,1 -k2,2n | bgzip -c > ~{prefix}.CTX.combined.bed.gz
+
+    # sort (keeping header) and bgzip
+    sort -Vk1,1 -k2,2n -k3,3n merged.bed >> ~{prefix}.CTX.combined.bed
+    rm merged.bed
+    bgzip ~{prefix}.CTX.combined.bed
 
   >>>
 

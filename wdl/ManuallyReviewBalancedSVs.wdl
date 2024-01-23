@@ -106,8 +106,8 @@ workflow ManuallyReviewBalancedSVs {
       input:
         batch = batches[i],
         svtype = "INV",
-        cohort_vcf = SelectCPX.svtype_vcf,
-        cohort_vcf_index = SelectCPX.svtype_vcf_index,
+        cohort_vcf = SelectINV.svtype_vcf,
+        cohort_vcf_index = SelectINV.svtype_vcf_index,
         batch_pe_file = batch_pe_files[i],
         batch_samples = samples_in_batches[i],
         generate_pe_tabix_py_script=generate_pe_tabix_py_script,
