@@ -126,7 +126,7 @@ task CombineTlocs {
     # extract unique manta tlocs from bed, shuffle order of columns to match CTX, merge with CTX
     python <<CODE
 import gzip
-keep_cols = "#chrom start end name svtype samples CHR2 CPX_TYPE END END2 SOURCE STRANDS SVLEN SVTYPE UNRESOLVED_TYPE AN AC AF".split()
+keep_cols = "#chrom start end name svtype samples CHR2 CPX_TYPE CPX_INTERVALS END END2 SOURCE STRANDS SVLEN SVTYPE UNRESOLVED_TYPE AN AC AF".split()
 keep_ids = set()
 with open("unique_manta_tloc.ids.txt", 'r') as ids:
   for line in ids:

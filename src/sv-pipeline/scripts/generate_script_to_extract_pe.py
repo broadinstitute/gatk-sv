@@ -277,7 +277,7 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_
   flank_back = 1000
   flank_front = 100
   with open(out_file,'w') as fo:
-    fo.write("\t".join(descriptor_fields) + "\n")
+    fo.write("echo \"" + "\t".join(descriptor_fields) + "\" >> " + PE_evidence + "\n")
     for info in cpx_SV:
       breakpints = info[0]
       common_2 = None
