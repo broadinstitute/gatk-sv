@@ -190,7 +190,6 @@ task SelectSVType {
         $vcf \
         ~{af_annotate_cmd} \
         ~{af_filter_cmd} \
-        --no-update \
         -O z \
         -o subset."$(basename $file)"
       echo subset."$(basename $file)" >> for_concat.txt
