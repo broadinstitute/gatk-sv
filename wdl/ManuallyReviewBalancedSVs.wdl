@@ -14,7 +14,6 @@ workflow ManuallyReviewBalancedSVs {
     Array[String] batches
     Array[File] samples_in_batches
 
-    Float max_af
     Int min_size
 
     File generate_pe_tabix_py_script # for development
@@ -42,7 +41,7 @@ workflow ManuallyReviewBalancedSVs {
     input:
       vcfs = cohort_vcfs,
       svtype = "CTX",
-      max_af = max_af,
+      annotate_af = true,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_select_ctx
@@ -51,6 +50,7 @@ workflow ManuallyReviewBalancedSVs {
     input:
       vcfs = cohort_vcfs,
       svtype = "CPX",
+      annotate_af = true,
       min_size=min_size,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -60,6 +60,7 @@ workflow ManuallyReviewBalancedSVs {
     input:
       vcfs = cohort_vcfs,
       svtype = "INV",
+      annotate_af = true,
       min_size=min_size,
       prefix=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -124,7 +125,7 @@ workflow ManuallyReviewBalancedSVs {
   call ConcatEvidences as ConcatCTXEvidences {
     input:
       prefix = "~{prefix}.CTX",
-      evidences = ManuallyReviewCTXPerBatch.batch_pe_review,
+      evidences = ManuallyReviewCTXPerBatch.batch_pe_evidence,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_ctx
   }
@@ -132,7 +133,7 @@ workflow ManuallyReviewBalancedSVs {
   call ConcatEvidences as ConcatCPXEvidences {
     input:
       prefix = "~{prefix}.CPX",
-      evidences = ManuallyReviewCPXPerBatch.batch_pe_review,
+      evidences = ManuallyReviewCPXPerBatch.batch_pe_evidence,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_cpx
   }
@@ -140,7 +141,7 @@ workflow ManuallyReviewBalancedSVs {
   call ConcatEvidences as ConcatINVEvidences {
     input:
       prefix = "~{prefix}.INV",
-      evidences = ManuallyReviewINVPerBatch.batch_pe_review,
+      evidences = ManuallyReviewINVPerBatch.batch_pe_evidence,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_inv
   }
@@ -158,13 +159,16 @@ task SelectSVType {
     String prefix
     Array[File] vcfs
     String svtype
+    Boolean? annotate_af
     Float? max_af
     Int? min_size
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  String af_filter_cmd = if defined(max_af) then " | bcftools +fill-tags -- -t AC,AN,AF | bcftools view -i 'AF<~{max_af}' " else ""
+  Boolean annotate_af = (defined(max_af) || (defined(annotate_af) && annotate_af))  # annotate AF if needed to filter or if annotate_af=true, otherwise don't
+  String af_annotate_cmd = if (annotate_af) then " | bcftools +fill-tags -- -t AC,AN,AF " else ""
+  String af_filter_cmd = if defined(max_af) then " | bcftools view -i 'AF<~{max_af}' " else ""
   String size_filter_cmd = if defined(min_size) then " && INFO/SVLEN>=~{min_size}" else ""
 
   RuntimeAttr default_attr = object {
@@ -184,6 +188,7 @@ task SelectSVType {
       bcftools view \
         -i "INFO/SVTYPE=='~{svtype}'~{size_filter_cmd}" \
         $vcf \
+        ~{af_annotate_cmd} \
         ~{af_filter_cmd} \
         --no-update \
         -O z \

@@ -79,7 +79,7 @@ workflow ManuallyReviewBalancedSVsPerBatch {
   }
 
   output {
-    File batch_pe_review = CollectPEMetrics.evidence
+    File batch_pe_evidence = CollectPEMetrics.evidence
   }
 }
 

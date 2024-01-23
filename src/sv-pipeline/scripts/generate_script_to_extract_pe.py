@@ -149,7 +149,7 @@ def extract_bp_list_V4(coordinates, segments):
             structures = ['ab','aba^']
     return [breakpints, structures]
 
-def cpx_SV_readin(input_bed, header_pos):
+def cpx_SV_readin(input_bed, header_pos, descriptor_fields):
   out = []
   with gzip.open(input_bed, 'rt') as fin:
     for line in fin:
@@ -196,12 +196,13 @@ def cpx_SV_readin(input_bed, header_pos):
           #   ref_alt = cpx_info[1]
           #   breakpints = cpx_info[0]
           if breakpints is not None and ref_alt is not None:
-            out.append([breakpints, ref_alt,pin[header_pos['name']]])
+            descriptor = "#" + "\t".join([pin[header_pos[x]] for x in descriptor_fields])
+            out.append([breakpints, ref_alt,pin[header_pos['name']], descriptor])
       else:
         continue
   return out
 
-def cpx_inter_chromo_SV_readin(input_bed, header_pos):
+def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
   out = []
   chr_list = ['chr'+str(i) for i in range(1,23)]+['chrX','chrY']
   with gzip.open(input_bed, 'rt') as fin:
@@ -268,85 +269,87 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos):
               else:
                 ref_alt = ['a_b', 'a_ba^']
           if bp is not None and ref_alt is not None:
-            out.append([bp, ref_alt, pin[header_pos['name']]])
+            descriptor = "#" + "\t".join([pin[header_pos[x]] for x in descriptor_fields])
+            out.append([bp, ref_alt, pin[header_pos['name']], descriptor])
   return out
 
-def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_file):
-  out = []
+def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_file, descriptor_fields):
   flank_back = 1000
   flank_front = 100
   with open(out_file,'w') as fo:
+    fo.write("\t".join(descriptor_fields) + "\n")
     for info in cpx_SV:
       breakpints = info[0]
       common_2 = None
       if info[1] == ["INV"]: #INV
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='b^': #delINV
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='b^': #delINVdel
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='c^bc': #delINVdup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='aba^': #dupINV
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='ac^b^a^c': #dupINVdup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='aba^': #dupINVdel
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='a^': #INVdel
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='b^ab': #INVdup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='aba': #dupINS
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='aba': #dupINSdel
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_front) , '&&', '$5<'+str(breakpints[4]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='aa': #dupdel
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_back)+'-'+str(breakpints[2]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_back) , '&&', '$5<'+str(breakpints[2]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='bab': #INSdup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_front)+'-'+str(breakpints[1]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'abc' and info[1][1]=='cbc': #delINSdup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_front) , '&&', '$5<'+str(breakpints[3]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[4]-flank_back) , '&&', '$5<'+str(breakpints[4]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1][0] == 'ab' and info[1][1]=='bb': #deldup
-        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[2]-flank_front) , '&&', '$5<'+str(breakpints[2]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0]+':'+str(breakpints[2]-flank_front)+'-'+str(breakpints[2]+flank_back), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['a_b','ba_b'] or info[1] == ['ab_c','cb_c']:   #ddup or ddup_iDEL, insertion from the smaller chromosome to the larger chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['a_b','a_ba'] or info[1] == ['a_bc','a_ba']:   #ddup or ddup_iDEL, insertion from the larger chromosome to the smaller chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_front)+'-'+str(breakpints[0][1]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_back)+'-'+str(breakpints[0][2]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_front)+'-'+str(breakpints[0][1]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_back)+'-'+str(breakpints[0][2]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['a_b', 'b^a_b'] or info[1] == ['ab_c', 'c^b_c']: #inverted insertion, insertion from the smaller chromosome to the larger chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['a_b', 'a_ba^'] or info[1] == ['a_bc','a_ba^']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_front)+'-'+str(breakpints[0][1]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_back)+'-'+str(breakpints[0][2]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_front)+'-'+str(breakpints[0][1]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_back)+'-'+str(breakpints[0][2]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['CTX_PQ/QP']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' ", '>>', PE_evidence]
       elif info[1] == ['CTX_PP/QQ']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
-        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
-        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
+        common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' ", '>>', PE_evidence]
+        common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' ", '>>', PE_evidence]
       else:
         print(info)
       samples = SVID_sample[info[2]]
       if not samples =='' and not samples=='NA':
         sample_list = samples.split(',')
         for num in range(len(sample_list)):
+          fo.write("echo \"" + info[3] + "\" >> " + PE_evidence + "\n")  # descriptor line
           common_1[4] = sample_list[num]
           write_1 = ' '.join(common_1)
           fo.write(write_1 + "\n")
@@ -354,7 +357,6 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_
             common_2[4] = sample_list[num]
             write_2 = ' '.join(common_2)
             fo.write(write_2 + "\n")
-  return out
 
 def main():
   """
@@ -379,10 +381,12 @@ def main():
   header_pos = header_pos_readin(input_bed)
   SVID_sample = SVID_sample_readin(input_bed, header_pos)
 
-  cpx_SV = cpx_SV_readin(input_bed, header_pos)
-  cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos)
+  descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS AC AN AF".split()
 
-  cpx_command = cpx_sample_batch_readin(cpx_SV+cpx_inter_chromo_SV, SVID_sample, batch_pe_file, PE_evidence, command_script)
+  cpx_SV = cpx_SV_readin(input_bed, header_pos, descriptor_fields)
+  cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields)
+
+  cpx_sample_batch_readin(cpx_SV+cpx_inter_chromo_SV, SVID_sample, batch_pe_file, PE_evidence, command_script, descriptor_fields)
 
 import os
 import sys
