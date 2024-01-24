@@ -230,7 +230,7 @@ task ConcatEvidences{
   command <<<
     set -euo pipefail
     # get only one header
-    awk 'NR==1'  ~{evidences[0]} | bgzip -c > ~{prefix}.PE_review.txt.gz
+    zcat ~{evidences[0]} | awk 'NR==1' | bgzip -c > ~{prefix}.PE_review.txt.gz
     while read FILE; do
       zcat $FILE | sed '1d'
     done < ~{write_lines(evidences)} \
