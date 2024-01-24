@@ -349,7 +349,7 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_
       if not samples =='' and not samples=='NA':
         sample_list = samples.split(',')
         for num in range(len(sample_list)):
-          fo.write("echo \"" + info[3] + "\t" + sample_list[num] "\" >> " + PE_evidence + "\n")  # descriptor line
+          fo.write("echo \"" + info[3] + "\t" + sample_list[num] + "\" >> " + PE_evidence + "\n")  # descriptor line
           common_1[4] = sample_list[num]
           write_1 = ' '.join(common_1)
           fo.write(write_1 + "\n")
