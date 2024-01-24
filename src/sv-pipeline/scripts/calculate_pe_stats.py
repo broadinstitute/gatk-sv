@@ -1,10 +1,13 @@
 #!/bin/env python
+import argparse
+import gzip
+
 
 def count_discontinuous(seq, reverse = False):
     # sort by position
     seq.sort(key=lambda a: a[0], reverse=reverse)
-    # count changes in direction (expect 1)
-    return len([i for i in range(1, len(seq)) if seq[i][0]!=seq[i-1][0]])
+    # count changes in direction (expect 2, one per column per direction)
+    return len([i for i in range(1, len(seq)) if seq[i][1]!=seq[i-1][1]])
 
 
 def count_discontinous_all(pe, pe_header):
@@ -27,13 +30,14 @@ def count_patterns(pe, pe_header):
 
 
 def calc_dist(chrom_seq, pos_seq):
+    # TODO: redo based on direction change
     max_jump = 0
     max_jump_idx = 0
     prev_chrom = None
     prev_pos = None
     curr_idx = 0
     for chrom, pos in zip(chrom_seq, pos_seq):
-        if curr_idx = 0:
+        if curr_idx == 0:
             prev_chrom = chrom
             prev_pos = pos
         else:
@@ -43,6 +47,8 @@ def calc_dist(chrom_seq, pos_seq):
             elif pos - prev_pos > max_jump:
                 max_jump = pos - prev_pos
                 max_jump_idx = curr_idx
+        prev_chrom = chrom
+        prev_pos = pos
         curr_idx += 1
     return pos_seq[max_jump_idx - 1] - pos_seq[0], pos_seq[-1] - pos_seq[max_jump_idx]
 
@@ -57,16 +63,19 @@ def evaluate(descriptor, pe, descriptor_header, pe_header):
     svid = descriptor[descriptor_header["name"]]
     sample = descriptor[descriptor_header["sample"]]
     if len(pe) == 0:
-        return [svid, sample] + [0]*10
+        # return [svid, sample] + ["0"]*10
+        return [svid, sample] + ["0"]*6
     fwd, rev = count_discontinous_all(pe, pe_header)
     pp, pm, mp, mm = count_patterns(pe, pe_header)
     dist1, dist2, dist3, dist4 = calc_dist_all(pe, pe_header)
-    return [svid, sample, pp, pm, mp, mm, fwd, rev, dist1, dist2, dist3, dist4]
+    return [svid, sample] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
+    #return [svid, sample] + [str(x) for x in [pp, pm, mp, mm, fwd, rev, dist1, dist2, dist3, dist4]]
 
 
-def process(pe_evidence, out_file)
-    with open(pe_evidence, 'r') as pe, open(out_file, 'w') as out:
-        out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev dist1 dist1 dist2 dist3 dist4".split()) + "\n")
+def process(pe_evidence, out_file):
+    with gzip.open(pe_evidence, 'rt') as pe, open(out_file, 'w') as out:
+        # out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev dist1 dist1 dist2 dist3 dist4".split()) + "\n")
+        out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev".split()) + "\n")
         first = True
         descriptor_header = None
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
@@ -76,6 +85,7 @@ def process(pe_evidence, out_file)
             fields = line.strip().lstrip("#").split("\t")
             if first:
                 descriptor_header = {x:i for i, x in enumerate(fields)}
+                first = False
             elif line.startswith("#"):
                 if curr_pe is not None:
                     curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header)
@@ -92,7 +102,7 @@ def process(pe_evidence, out_file)
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "pe-evidence", required=True, help="PE evidence file for manual review")
+    parser.add_argument("-p", "--pe-evidence", required=True, help="PE evidence file for manual review")
     parser.add_argument("-o", "--out-file", required=True, help="Name for output table")
     args = parser.parse_args()
 

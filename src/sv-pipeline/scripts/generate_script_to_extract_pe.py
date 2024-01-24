@@ -245,7 +245,7 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
               else:
                 ref_alt = ['a_b', 'a_ba']
           elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ']:
-            seg1 = pin[:3]
+            seg1 = pin[:3]  #TODO: only need two breakpoints for CTX
             seg2 = [pin[header_pos['CHR2']], pin[header_pos['END2']], pin[header_pos['END2']]]
             if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
               bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]

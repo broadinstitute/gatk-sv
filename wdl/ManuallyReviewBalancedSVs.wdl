@@ -17,6 +17,7 @@ workflow ManuallyReviewBalancedSVs {
     Int min_size
 
     File generate_pe_tabix_py_script # for development
+    File calculate_pe_stats_script # for development
 
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -32,6 +33,9 @@ workflow ManuallyReviewBalancedSVs {
     RuntimeAttr? runtime_attr_concat_ctx
     RuntimeAttr? runtime_attr_concat_cpx
     RuntimeAttr? runtime_attr_concat_inv
+    RuntimeAttr? runtime_attr_calculate_ctx_stats
+    RuntimeAttr? runtime_attr_calculate_cpx_stats
+    RuntimeAttr? runtime_attr_calculate_inv_stats
 
   }
 
@@ -143,10 +147,41 @@ workflow ManuallyReviewBalancedSVs {
       runtime_attr_override=runtime_attr_concat_inv
   }
 
+  call CalculatePEStats as CalculateCTXStats {
+    input:
+      prefix = "~{prefix}.CTX",
+      evidence = ConcatCTXEvidences.concat_evidence,
+      calculate_pe_stats_script = calculate_pe_stats_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_calculate_ctx_stats
+  }
+
+  call CalculatePEStats as CalculateCPXStats {
+    input:
+      prefix = "~{prefix}.CPX",
+      evidence = ConcatCPXEvidences.concat_evidence,
+      calculate_pe_stats_script = calculate_pe_stats_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_calculate_cpx_stats
+  }
+
+  call CalculatePEStats as CalculateINVStats {
+    input:
+      prefix = "~{prefix}.INV",
+      evidence = ConcatINVEvidences.concat_evidence,
+      calculate_pe_stats_script = calculate_pe_stats_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_calculate_inv_stats
+  }
+
   output {
     File ctx_evidence = ConcatCTXEvidences.concat_evidence
     File cpx_evidence = ConcatCPXEvidences.concat_evidence
     File inv_evidence = ConcatINVEvidences.concat_evidence
+
+    File ctx_stats = CalculateCTXStats.stats
+    File cpx_stats = CalculateCPXStats.stats
+    File inv_stats = CalculateINVStats.stats
   }
 }
 
@@ -219,7 +254,7 @@ task ConcatEvidences{
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 5,
-    disk_gb: 10,
+    disk_gb: ceil(10 + 2 * size(evidences, "GB")),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -254,3 +289,47 @@ task ConcatEvidences{
   }
 }
 
+
+task CalculatePEStats {
+  input {
+    String prefix
+    File evidence
+    File calculate_pe_stats_script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + 2 * size(evidence, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python ~{calculate_pe_stats_script} \
+      -p ~{evidence} \
+      -o ~{prefix}.stats.tsv
+
+    bgzip ~{prefix}.stats.tsv
+  >>>
+
+  output {
+    File stats = "~{prefix}.stats.tsv.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
