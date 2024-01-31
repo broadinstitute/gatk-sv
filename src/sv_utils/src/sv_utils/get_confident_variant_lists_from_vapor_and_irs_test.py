@@ -56,11 +56,13 @@ def get_irs_sample_confident_variants(vcf: str,
     matched_record_ids_bad = 0
     matched_samples_good = 0
     matched_samples_bad = 0
+    total_calls = 0
     with VariantFile(vcf) as vcf:
         for record in vcf:
             if record.id in valid_irs_variant_ids:
                 matched_record_ids += 1
                 called_samples = get_called_samples(record)
+                total_calls += len(called_samples)
                 for sample_list in samples_list_to_report_mapping:
                     if record.id in samples_list_to_report_mapping[sample_list][0]:
                         matched_record_ids_good += 1
@@ -94,11 +96,12 @@ def get_irs_sample_confident_variants(vcf: str,
                                         get_truth_overlap.SampleConfidentVariants(
                                             good_variant_ids=set(irs_confident_variants[sample].__dict__['good_variant_ids']),
                                             bad_variant_ids=new_bad_ids)
-    logging.info(f"Valid vcf record ids: {matched_record_ids}")
+    logging.info(f"Valid vcf IRS record ids: {matched_record_ids}")
+    logging.info(f"Total calls in valid IRS variants: {total_calls}")
     logging.info(f"Number times a good variant was matched in an IRS batch: {matched_record_ids_good}")
     logging.info(f"Number times a bad variant was matched in an IRS batch: {matched_record_ids_bad}")
-    logging.info(f"Matched good variant sample calls: {matched_samples_good}")
-    logging.info(f"Matched bad variant sample calls: {matched_samples_bad}")
+    logging.info(f"Matched good IRS variant sample calls: {matched_samples_good}")
+    logging.info(f"Matched bad IRS variant sample calls: {matched_samples_bad}")
     return irs_confident_variants
 
 
