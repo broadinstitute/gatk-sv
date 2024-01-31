@@ -271,6 +271,7 @@ task GetVariantListsFromVaporAndIRS {
     Int? irs_min_probes
 
     File? script
+    String? additional_args
 
     String sv_utils_docker
     RuntimeAttr? runtime_attr_override
@@ -323,7 +324,8 @@ task GetVariantListsFromVaporAndIRS {
       ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
       ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
       ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
-      -O ~{output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json
+      -O ~{output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json \
+      ~{additional_args}
   >>>
 
   RuntimeAttr default_attr = object {
