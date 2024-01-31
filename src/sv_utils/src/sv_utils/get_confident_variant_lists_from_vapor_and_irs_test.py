@@ -2,6 +2,7 @@
 
 import sys
 import argparse
+import logging
 
 import pandas as pd
 
@@ -154,6 +155,9 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="IRS results file")
     parser.add_argument("--irs-min-cnv-size", type=int, default=10000,
                         help="Minimum size CNV to trust IRS results for")
+    parser.add_argument("-l", "--log-level", required=False, default="INFO",
+                        help="Specify level of logging information, ie. info, warning, error (not case-sensitive). "
+                             "Default: INFO")
 
     parsed_arguments = parser.parse_args(argv[1:] if len(argv) > 1 else ["--help"])
     return parsed_arguments
@@ -161,6 +165,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
 def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVariants:
     arguments = __parse_arguments(sys.argv if argv is None else argv)
+
+    logging.basicConfig(format='[%(levelname)s:%(asctime)s] %(message)s', level=logging.INFO)
 
     valid_vapor_variant_ids = set()
     valid_irs_variant_ids = set()
@@ -191,6 +197,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         read_strategy_bad_support_threshold=arguments.vapor_read_support_neg_thresh,
         read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
     )
+    logging.info(f"Samples with confident Vapor variants: {len(vapor_confident_variants)}")
 
     if arguments.irs_sample_batch_lists is not None:
         sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
@@ -208,11 +215,15 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
 
         # for each variant in the IRS table that passes filters as good,
         # find all non ref samples and add variant ID to good list
+        logging.info(f"Sample sets: {len(samples_list_to_confident_irs_variant_ids_mapping)}")
+        logging.info(f"Valid IRS variant ids: {len(valid_irs_variant_ids)}")
         irs_sample_confident_variants = get_irs_sample_confident_variants(arguments.vcf,
                                                                           valid_irs_variant_ids,
                                                                           samples_list_to_confident_irs_variant_ids_mapping)
     else:
+        logging.info(f"No IRS batches were provided.")
         irs_sample_confident_variants = {}
+    logging.info(f"Samples with confident IRS variants: {len(irs_sample_confident_variants)}")
 
     all_confident_variants = {}
     for sample in set(irs_sample_confident_variants.keys()).union(vapor_confident_variants.keys()):
@@ -229,6 +240,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         all_confident_variants[sample] = get_truth_overlap.SampleConfidentVariants(good_variant_ids=all_good,
                                                                                    bad_variant_ids=all_bad)
 
+    logging.info(f"Total samples with valid variants: {len(all_confident_variants)}")
     get_truth_overlap.output_confident_variants(all_confident_variants, output_file=arguments.output)
     return all_confident_variants
 
