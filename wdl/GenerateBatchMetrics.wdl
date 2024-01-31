@@ -47,7 +47,6 @@ workflow GenerateBatchMetrics {
     String sv_pipeline_rdtest_docker
     String sv_base_mini_docker
     String sv_base_docker
-    String sv_pipeline_base_docker
     String linux_docker
 
     RuntimeAttr? runtime_attr_ids_from_vcf
@@ -255,7 +254,7 @@ workflow GenerateBatchMetrics {
       batch = batch,
       input_metrics = select_all(AggregateTests.metrics),
       common = false,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_aggregate_callers
   }
 
@@ -264,7 +263,7 @@ workflow GenerateBatchMetrics {
       batch = batch,
       input_metrics = select_all(AggregateTestsCommon.metrics),
       common = true,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_aggregate_callers
   }
 
@@ -277,7 +276,7 @@ workflow GenerateBatchMetrics {
         metrics_common = AggregateCallersCommon.metrics,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker
+        sv_pipeline_docker = sv_pipeline_docker
     }
   }
 
@@ -442,7 +441,7 @@ task AggregateCallers {
     String batch
     Array[File] input_metrics
     Boolean common
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -480,7 +479,7 @@ task AggregateCallers {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

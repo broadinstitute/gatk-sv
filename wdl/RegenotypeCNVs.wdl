@@ -8,7 +8,6 @@ workflow RegenotypeCNVs {
   input {
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_rdtest_docker
     Array[File] depth_vcfs
     File cohort_depth_vcf
@@ -203,7 +202,6 @@ workflow RegenotypeCNVs {
         min_var_per_sample_outlier_threshold = min_var_per_sample_outlier_threshold,
         regeno_sample_overlap = regeno_sample_overlap,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
         runtime_attr_merge_list_creassess = runtime_attr_merge_list_creassess,
         runtime_attr_vcf2bed = runtime_attr_vcf2bed
     }

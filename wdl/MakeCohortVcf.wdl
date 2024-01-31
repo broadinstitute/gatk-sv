@@ -69,7 +69,6 @@ workflow MakeCohortVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -398,7 +397,6 @@ workflow MakeCohortVcf {
       baseline_cleaned_vcf = baseline_cleaned_vcf,
       primary_contigs_list=primary_contigs_list,
       run_module_metrics=run_module_metrics,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,

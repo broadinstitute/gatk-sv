@@ -69,7 +69,6 @@ workflow GATKSVPipelineSingleSample {
     String sv_pipeline_hail_docker
     String sv_pipeline_updates_docker
     String sv_pipeline_rdtest_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -891,7 +890,6 @@ workflow GATKSVPipelineSingleSample {
       pesr_clustering_algorithm=pesr_clustering_algorithm,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
       baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
@@ -1158,7 +1156,6 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics = run_makecohortvcf_metrics,
 
       primary_contigs_list=primary_contigs_list,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
 
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -1342,7 +1339,7 @@ workflow GATKSVPipelineSingleSample {
       sample_counts = case_counts_file_,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call utils.RunQC as SampleFilterQC {
@@ -1350,14 +1347,14 @@ workflow GATKSVPipelineSingleSample {
       name=batch,
       metrics=SampleFilterMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_docker=sv_pipeline_docker
   }
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
       vcf=FilterVcfWithReferencePanelCalls.out,
       sample_filtering_qc_file=SampleFilterQC.out,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
   }
 
   call annotate.AnnotateVcf {
@@ -1413,7 +1410,7 @@ workflow GATKSVPipelineSingleSample {
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call utils.RunQC as SingleSampleQC {
@@ -1421,7 +1418,7 @@ workflow GATKSVPipelineSingleSample {
       name = batch,
       metrics = SingleSampleMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   output {
