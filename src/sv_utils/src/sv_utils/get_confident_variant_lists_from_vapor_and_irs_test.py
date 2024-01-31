@@ -51,14 +51,22 @@ def get_irs_sample_confident_variants(vcf: str,
                                       samples_list_to_report_mapping: Mapping[Set[str], Tuple[Set[str], Tuple[Set[str]]]]) \
         -> get_truth_overlap.ConfidentVariants:
     irs_confident_variants = {}
+    matched_record_ids = 0
+    matched_record_ids_good = 0
+    matched_record_ids_bad = 0
+    matched_samples_good = 0
+    matched_samples_bad = 0
     with VariantFile(vcf) as vcf:
         for record in vcf:
             if record.id in valid_irs_variant_ids:
+                matched_record_ids += 1
                 called_samples = get_called_samples(record)
                 for sample_list in samples_list_to_report_mapping:
                     if record.id in samples_list_to_report_mapping[sample_list][0]:
+                        matched_record_ids_good += 1
                         for sample in called_samples:
                             if sample in sample_list:
+                                matched_samples_good += 1
                                 if sample not in irs_confident_variants:
                                     irs_confident_variants[sample] = \
                                         get_truth_overlap.SampleConfidentVariants(good_variant_ids={record.id},
@@ -71,8 +79,10 @@ def get_irs_sample_confident_variants(vcf: str,
                                             good_variant_ids=new_good_ids,
                                             bad_variant_ids=set(irs_confident_variants[sample].__dict__['bad_variant_ids']))
                     if record.id in samples_list_to_report_mapping[sample_list][1]:
+                        matched_record_ids_bad += 1
                         for sample in called_samples:
                             if sample in sample_list:
+                                matched_samples_bad += 1
                                 if sample not in irs_confident_variants:
                                     irs_confident_variants[sample] = \
                                         get_truth_overlap.SampleConfidentVariants(good_variant_ids=set(),
@@ -84,6 +94,11 @@ def get_irs_sample_confident_variants(vcf: str,
                                         get_truth_overlap.SampleConfidentVariants(
                                             good_variant_ids=set(irs_confident_variants[sample].__dict__['good_variant_ids']),
                                             bad_variant_ids=new_bad_ids)
+    logging.info(f"Valid vcf record ids: {matched_record_ids}")
+    logging.info(f"Number times a good variant was matched in an IRS batch: {matched_record_ids_good}")
+    logging.info(f"Number times a bad variant was matched in an IRS batch: {matched_record_ids_bad}")
+    logging.info(f"Matched good variant sample calls: {matched_samples_good}")
+    logging.info(f"Matched bad variant sample calls: {matched_samples_bad}")
     return irs_confident_variants
 
 
