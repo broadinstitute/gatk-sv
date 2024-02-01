@@ -184,7 +184,7 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
 def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVariants:
     arguments = __parse_arguments(sys.argv if argv is None else argv)
 
-    logging.basicConfig(format='[%(levelname)s:%(asctime)s] %(message)s', level=logging.INFO)
+    logging.basicConfig(format='[%(levelname)s:%(asctime)s] %(message)s', level=getattr(logging, arguments.log_level))
 
     valid_vapor_variant_ids = set()
     valid_irs_variant_ids = set()
@@ -204,22 +204,9 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                     and (irs_contigs is None or record.contig in irs_contigs):
                 valid_irs_variant_ids.add(record.id)
 
-    vapor_files = get_truth_overlap.get_vapor_files(arguments.vapor_json)
-
-    vapor_confident_variants = get_confident_variants_vapor(
-        vapor_files=vapor_files,
-        precision=arguments.vapor_min_precision,
-        valid_variant_ids=valid_vapor_variant_ids,
-        strategy=arguments.vapor_strategy,
-        read_strategy_good_support_threshold=arguments.vapor_read_support_pos_thresh,
-        read_strategy_bad_support_threshold=arguments.vapor_read_support_neg_thresh,
-        read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
-    )
-    logging.info(f"Samples with confident Vapor variants: {len(vapor_confident_variants)}")
-
     if arguments.irs_sample_batch_lists is not None:
-        sample_list_file_to_report_file_mapping = zip(read_list_file(arguments.irs_sample_batch_lists),
-                                                      read_list_file(arguments.irs_test_report_list))
+        batch_list_paths = read_list_file(arguments.irs_sample_batch_lists)
+        irs_report_paths = read_list_file(arguments.irs_test_report_list)
 
         samples_list_to_confident_irs_variant_ids_mapping = {
             frozenset(read_list_file(sample_list)):
@@ -228,8 +215,13 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                           arguments.irs_bad_pvalue_threshold,
                                                           arguments.irs_min_probes,
                                                           valid_irs_variant_ids)
-            for sample_list, report_list in sample_list_file_to_report_file_mapping
+            for sample_list, report_list in zip(batch_list_paths, irs_report_paths)
         }
+        logging.debug("IRS dump:")
+        logging.debug(str(len(samples_list_to_confident_irs_variant_ids_mapping)))
+        logging.debug("IRS sources:")
+        for x, y in zip(batch_list_paths, irs_report_paths):
+            logging.debug(f"{x}\t{y}")
 
         # for each variant in the IRS table that passes filters as good,
         # find all non ref samples and add variant ID to good list
@@ -242,6 +234,19 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
         logging.info(f"No IRS batches were provided.")
         irs_sample_confident_variants = {}
     logging.info(f"Samples with confident IRS variants: {len(irs_sample_confident_variants)}")
+
+    vapor_files = get_truth_overlap.get_vapor_files(arguments.vapor_json)
+
+    vapor_confident_variants = get_confident_variants_vapor(
+        vapor_files=vapor_files,
+        precision=arguments.vapor_min_precision,
+        valid_variant_ids=valid_vapor_variant_ids,
+        strategy=arguments.vapor_strategy,
+        read_strategy_good_support_threshold=arguments.vapor_read_support_pos_thresh,
+        read_strategy_bad_support_threshold=arguments.vapor_read_support_neg_thresh,
+        read_strategy_bad_cov_threshold=arguments.vapor_read_support_neg_cov_thresh
+    )
+    logging.info(f"Samples with confident Vapor variants: {len(vapor_confident_variants)}")
 
     all_confident_variants = {}
     for sample in set(irs_sample_confident_variants.keys()).union(vapor_confident_variants.keys()):
