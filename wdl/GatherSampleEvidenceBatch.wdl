@@ -33,7 +33,7 @@ workflow GatherSampleEvidenceBatch {
 
     # Manta inputs
     File manta_region_bed
-    File? manta_region_bed_index
+    File manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
 
