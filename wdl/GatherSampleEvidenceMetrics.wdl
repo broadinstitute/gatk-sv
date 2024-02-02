@@ -21,7 +21,7 @@ workflow GatherSampleEvidenceMetrics {
     File contig_list
     File contig_index
     Int min_size = 50
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_manta_std
     RuntimeAttr? runtime_attr_manta_metrics
@@ -43,7 +43,7 @@ workflow GatherSampleEvidenceMetrics {
         caller = "manta",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_manta_std
     }
     if (defined(baseline_manta_vcf)) {
@@ -54,7 +54,7 @@ workflow GatherSampleEvidenceMetrics {
           caller = "manta",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_manta_std
       }
     }
@@ -66,7 +66,7 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "manta_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_manta_metrics
     }
   }
@@ -78,7 +78,7 @@ workflow GatherSampleEvidenceMetrics {
         caller = "melt",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_melt_std
     }
     if (defined(baseline_melt_vcf)) {
@@ -89,7 +89,7 @@ workflow GatherSampleEvidenceMetrics {
           caller = "melt",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_melt_std
       }
     }
@@ -101,7 +101,7 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "melt_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_melt_metrics
     }
   }
@@ -114,7 +114,7 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "scramble_" + sample,
         types = "INS",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_scramble_metrics
     }
   }
@@ -126,7 +126,7 @@ workflow GatherSampleEvidenceMetrics {
         caller = "wham",
         contig_index = contig_index,
         min_size = min_size,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_wham_std
     }
     if (defined(baseline_wham_vcf)) {
@@ -137,7 +137,7 @@ workflow GatherSampleEvidenceMetrics {
           caller = "wham",
           contig_index = contig_index,
           min_size = min_size,
-          sv_pipeline_base_docker = sv_pipeline_base_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_wham_std
       }
     }
@@ -149,7 +149,7 @@ workflow GatherSampleEvidenceMetrics {
         prefix = "wham_" + sample,
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_wham_metrics
     }
   }
@@ -158,7 +158,7 @@ workflow GatherSampleEvidenceMetrics {
       input:
         sr_file = select_first([pesr_split]),
         samples = [sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_sr_metrics
     }
   }
@@ -167,7 +167,7 @@ workflow GatherSampleEvidenceMetrics {
       input:
         pe_file = select_first([pesr_disc]),
         samples = [sample],
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_pe_metrics
     }
   }
@@ -176,7 +176,7 @@ workflow GatherSampleEvidenceMetrics {
       input:
         counts_file = select_first([coverage_counts]),
         sample_id = sample,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_counts_metrics
     }
   }

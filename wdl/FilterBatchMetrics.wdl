@@ -21,7 +21,7 @@ workflow FilterBatchMetrics {
 
     File contig_list
     String linux_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_subset_ped
@@ -41,7 +41,7 @@ workflow FilterBatchMetrics {
       prefix = "filtered_pesr",
       types = "DEL,DUP,INS,INV,BND",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_pesr_vcf_metrics
   }
 
@@ -53,7 +53,7 @@ workflow FilterBatchMetrics {
       prefix = "filtered_depth",
       types = "DEL,DUP",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_depth_vcf_metrics
   }
 
@@ -72,7 +72,7 @@ workflow FilterBatchMetrics {
       outlier_list = outlier_list,
       filtered_ped_file = SubsetPedFile.ped_subset_file,
       samples = samples,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_outlier_metrics
   }
 

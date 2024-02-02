@@ -35,7 +35,6 @@ workflow CleanVcf {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
     File? baseline_complex_resolve_vcf
@@ -222,7 +221,7 @@ workflow CleanVcf {
         baseline_cleaned_vcf = baseline_cleaned_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
     }
   }

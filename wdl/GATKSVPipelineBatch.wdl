@@ -92,7 +92,6 @@ workflow GATKSVPipelineBatch {
     String sv_pipeline_hail_docker
     String sv_pipeline_updates_docker
     String sv_pipeline_rdtest_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -142,7 +141,6 @@ workflow GATKSVPipelineBatch {
         run_module_metrics = run_sampleevidence_metrics,
         primary_contigs_fai = primary_contigs_fai,
         batch = name,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_base_mini_docker=sv_base_mini_docker,
@@ -227,7 +225,6 @@ workflow GATKSVPipelineBatch {
       primary_contigs_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
@@ -256,7 +253,6 @@ workflow GATKSVPipelineBatch {
       ref_dict=reference_dict,
       run_module_metrics = run_genotypebatch_metrics,
       primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
@@ -278,8 +274,7 @@ workflow GATKSVPipelineBatch {
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
   }
   
 
@@ -307,7 +302,6 @@ workflow GATKSVPipelineBatch {
       median_coverage_files=[GATKSVPipelinePhase1.median_cov],
       run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,
@@ -340,7 +334,7 @@ workflow GATKSVPipelineBatch {
         samples = samples,
         test_metrics = CatBatchMetrics.out,
         base_metrics = CatBaselineMetrics.out,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_plot_metrics
     }
   }
@@ -350,7 +344,7 @@ workflow GATKSVPipelineBatch {
       name = name,
       metrics = CatBatchMetrics.out,
       qc_definitions = qc_definitions,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   scatter (i in range(length(samples))) {
