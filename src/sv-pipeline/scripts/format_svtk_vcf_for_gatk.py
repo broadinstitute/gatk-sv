@@ -137,7 +137,7 @@ def convert(record: pysam.VariantRecord,
     is_ddup = svtype == 'CPX' and 'dDUP' in record.info.get('CPX_TYPE', '')
     if svtype == 'BND' or svtype == 'INS' or svtype == 'CTX' or is_ddup:
         record.stop = record.start + 1
-    if svtype == 'CPX':
+    if svtype == 'CPX' or svtype == 'INS':
         if 'CHR2' in record.info:
             record.info.pop('CHR2')
         if 'END2' in record.info:
