@@ -107,7 +107,6 @@ workflow GenotypeCpxCnvs {
     File cpx_depth_gt_resolved_vcf = ParseGenotypes.cpx_depth_gt_resolved_vcf
     File cpx_depth_gt_resolved_vcf_idx = ParseGenotypes.cpx_depth_gt_resolved_vcf_idx
     File reclassification_table = ParseGenotypes.reclassification_table
-    File interval_genotype_counts_table = ParseGenotypes.gt_counts_table
   }
 }
 
@@ -179,8 +178,8 @@ task ParseGenotypes {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   Float input_size = size([vcf, intervals, genotypes, ped_file], "GiB")
   RuntimeAttr runtime_default = object {
-    mem_gb: 2.0 + 5.0 * input_size,
-    disk_gb: ceil(5 + input_size * 60),
+    mem_gb: 3.75,
+    disk_gb: ceil(10 + input_size * 4),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -199,22 +198,30 @@ task ParseGenotypes {
 
   command <<<
     set -eu -o pipefail
-    
-    /opt/sv-pipeline/04_variant_resolution/scripts/process_posthoc_cpx_depth_regenotyping.sh \
-      -R ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt \
-      -G ~{prefix}.CPXregenotyping_raw_genotype_counts_table.~{contig}.txt \
-      ~{vcf} \
-      ~{intervals} \
-      ~{genotypes} \
-      ~{ped_file} \
-      ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
+    python /opt/sv-pipeline/04_variant_resolution/scripts/process_posthoc_cpx_depth_regenotyping.py \
+      --vcf ~{vcf} \
+      --intervals ~{intervals} \
+      --genotypes ~{genotypes} \
+      --ped ~{ped_file} \
+      --out out.vcf.gz \
+      --reclassification-table ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
+
+    # Compress for storage
+    gzip ~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt
+
+    # Re-sort and index since coordinates may have changed
+    mkdir temp
+    bcftools sort \
+      --temp-dir temp \
+      --output-type z \
+      --output-file ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz \
+      out.vcf.gz
     tabix ~{prefix}.postCPXregenotyping.~{contig}.vcf.gz
   >>>
 
   output {
     File cpx_depth_gt_resolved_vcf = "~{prefix}.postCPXregenotyping.~{contig}.vcf.gz"
     File cpx_depth_gt_resolved_vcf_idx = "~{prefix}.postCPXregenotyping.~{contig}.vcf.gz.tbi"
-    File reclassification_table = "~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt"
-    File gt_counts_table = "~{prefix}.CPXregenotyping_raw_genotype_counts_table.~{contig}.txt"
+    File reclassification_table = "~{prefix}.CPXregenotyping_reclassification_table.~{contig}.txt.gz"
   }
 }
