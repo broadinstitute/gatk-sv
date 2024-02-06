@@ -120,6 +120,6 @@ workflow JoinRawCalls {
   output {
     File joined_raw_calls_vcf = ConcatVcfs.concat_vcf
     File joined_raw_calls_vcf_index = ConcatVcfs.concat_vcf_idx
-    File joined_raw_calls_ploidy_table = SVCluster.ploidy_table
+    File joined_raw_calls_ploidy_table = CreatePloidyTableFromPed.out
   }
 }
