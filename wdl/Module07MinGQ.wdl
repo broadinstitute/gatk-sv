@@ -10,7 +10,6 @@ workflow Module07MinGQ {
   input {
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_updates_docker
     File vcf
     File vcf_idx
     String prefix
@@ -93,7 +92,6 @@ workflow Module07MinGQ {
         sv_per_shard=1000,
         prefix="~{prefix}.~{contig[0]}",
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         runtime_attr_scatter_vcf = runtime_attr_scatter_vcf_calcaf,
         runtime_attr_compute_shard_af = runtime_attr_compute_shard_af,
         runtime_attr_combine_sharded_vcfs = runtime_attr_combine_sharded_vcfs_calcaf
@@ -122,7 +120,6 @@ workflow Module07MinGQ {
         prefix="~{prefix}.~{contig[0]}",
         sample_pop_assignments=GetSampleLists.sample_PCR_labels,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         runtime_attr_scatter_vcf = runtime_attr_scatter_vcf_calcaf,
         runtime_attr_compute_shard_af = runtime_attr_compute_shard_af,
         runtime_attr_combine_sharded_vcfs = runtime_attr_combine_sharded_vcfs_calcaf

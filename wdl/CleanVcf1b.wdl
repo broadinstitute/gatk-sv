@@ -12,7 +12,6 @@ workflow CleanVcf1b {
 
         String sv_pipeline_docker
         String sv_base_mini_docker
-        String sv_pipeline_updates_docker
 
         RuntimeAttr? runtime_attr_override_subset_large_cnvs
         RuntimeAttr? runtime_attr_override_sort_bed
@@ -70,7 +69,7 @@ workflow CleanVcf1b {
             vcf=intermediate_vcf,
             records_per_shard=records_per_shard,
             prefix="~{prefix}.scatter_vcf",
-            sv_pipeline_docker=sv_pipeline_updates_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             runtime_attr_override=runtime_attr_override_scatter
     }
 
@@ -91,7 +90,7 @@ workflow CleanVcf1b {
             naive=true,
             sort_vcf_list=true,
             outfile_prefix="~{prefix}.concat_vcfs",
-            sv_base_mini_docker=sv_pipeline_updates_docker,
+            sv_base_mini_docker=sv_pipeline_docker,
             runtime_attr_override=runtime_override_concat_vcfs
     }
 

@@ -10,7 +10,6 @@ workflow prune_and_add_vafs {
     File vcf_idx
     String prefix
     String sv_pipeline_docker
-    String sv_pipeline_updates_docker
 
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? prune_list              #List of samples to be excluded from the output vcf
@@ -45,8 +44,7 @@ workflow prune_and_add_vafs {
         famfile=famfile,
         par_bed=par_bed,
         drop_empty_records=drop_empty_records,
-        sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker
+        sv_pipeline_docker=sv_pipeline_docker
     }
   }
 

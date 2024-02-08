@@ -11,7 +11,6 @@ workflow CalcAF {
     Int sv_per_shard
     String prefix
     String sv_pipeline_docker
-    String sv_pipeline_updates_docker
     File? sample_pop_assignments  #Two-column file with sample ID & pop assignment. "." for pop will ignore sample
     File? famfile                 #Used for M/F AF calculations
     File? par_bed                 #Used for marking hemizygous males on X & Y
@@ -29,7 +28,7 @@ workflow CalcAF {
     input:
       vcf=vcf,
       prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       records_per_shard=sv_per_shard,
       runtime_attr_override = runtime_attr_scatter_vcf
   }

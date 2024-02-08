@@ -31,7 +31,6 @@ workflow GenotypeComplexVariants {
 
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
     String sv_pipeline_rdtest_docker
@@ -99,7 +98,6 @@ workflow GenotypeComplexVariants {
         use_hail=use_hail,
         gcs_project=gcs_project,
         linux_docker=linux_docker,
-        sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         sv_pipeline_hail_docker=sv_pipeline_hail_docker,

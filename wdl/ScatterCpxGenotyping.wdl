@@ -31,7 +31,6 @@ workflow ScatterCpxGenotyping {
 
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
     String sv_pipeline_rdtest_docker
@@ -62,7 +61,7 @@ workflow ScatterCpxGenotyping {
       vcf=vcf,
       prefix=contig_prefix,
       records_per_shard=records_per_shard,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_vcf_to_genotype
   }
 

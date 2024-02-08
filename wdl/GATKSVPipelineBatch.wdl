@@ -90,7 +90,6 @@ workflow GATKSVPipelineBatch {
     String sv_base_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
     String linux_docker
@@ -305,7 +304,6 @@ workflow GATKSVPipelineBatch {
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker
