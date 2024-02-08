@@ -8,29 +8,31 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-If you are contributing to the GATK-SV codebase, specifically focusing on 
-enhancing tools, configuring dependencies in Dockerfiles, or modifying GATK-SV scripts 
-within the Docker images, it is important to build and test the Docker images locally. 
-This ensures that the images are successfully built and function as intended.
-
-The process of updating GATK-SV Docker images involves two steps: build and publish.
+If you contribute to the GATK-SV codebase, we recommend you build Docker images locally 
+to ensure they build successfully and function as intended. The process involves two steps:
 
 - **Build**: Create Docker images from Dockerfiles and store them on your computer.
 
 - **Publish**: Upload the built Docker images to container registries 
 (e.g., Google Container registry, or Azure container registry) 
 to make them available for use in Terra or Cromwell.
+_You may skip this step unless you would like to host the images you built on your own container registry._
 
-You may refer to [this page](/docs/advanced/docker/index.md) for detailed description of the process. 
-To streamline the process, we have developed a Python script 
-that automates the image building and publishing to your container registry.
-This section provides guidelines on building and publishing the images using this script. 
+To streamline the process, we have developed a 
+[script](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py)
+that automates both the build and publish steps. 
+This section provides guidelines on setting up the environment and running the 
+script with a minimal example. For a complete description of the script 
+and its various arguments, refer to its help page, as shown in the following.
 
+```shell
+python scripts/docker/build_docker.py --help
+```
 
-:::warning Linux Machine Required
+:::danger Linux Machine Required
 
 Only Linux machines (dedicated or virtual) are supported for building GATK-SV Docker images. 
-Images created on non-Linux machines may not work with Terra or Cromwell execution environment.
+Images created on non-Linux machines (e.g., Apple M1) may not work with Terra or Cromwell execution environment.
 The instructions provided on this page assume you are using a Linux Ubuntu machine.
 :::
 
@@ -40,11 +42,6 @@ The instructions provided on this page assume you are using a Linux Ubuntu machi
 
 ### Runtime environment {#runtime}
 
-Currently, GATK-SV Docker images can only be built on the `linux/amd64` platform, 
-which is a machine running Linux OS on x86-64 architecture.
-Images build on Apple M1 (`linux/arm64`) are not currently supported.
-You can use a local Linux machine or obtain a virtual machine from a cloud platform. 
-
 You may follow the steps in the 
 [GCP](https://cloud.google.com/compute/docs/instances/create-start-instance#publicimage)
 or [Azure](https://learn.microsoft.com/en-us/azure/virtual-machines/windows/quick-create-portal)
@@ -52,19 +49,14 @@ documentation to create a virtual machine (VM) on Google Cloud Platform (GCP) or
 Make sure the VM is built using an Ubuntu image, has at least 8 GB RAM, and some additional 
 disk space (e.g., 50 GB should be sufficient).
 
-Building and publishing GATK-SV Docker images is time-consuming and can take around 1 hour.
-Therefore, we recommend using a terminal multiplexer 
-(e.g., [tmux](https://github.com/tmux/tmux/wiki/Getting-Started); 
-[tmux cheat sheet](https://tmuxcheatsheet.com)) 
-when running on a VM to ensure the process continues even if you are disconnected from the VM.
 
 ### Docker {#docker}
 
 [Install](https://docs.docker.com/engine/install/) Docker desktop
-and login using `sudo docker login`. If utilizing GATK-SV Docker images 
-from a private container registry or intending to publish the resulting 
-images to a registry, ensure that you are logged in with credentials 
-that grant you access to the registry.
+and login using `sudo docker login`. 
+If you are pulling images from a private container registry,
+or intending to publish the resulting images to a registry, 
+make sure you login with credentials that grants you with sufficient authorization.
 
 <Tabs
  groupId="cr"
@@ -91,9 +83,6 @@ that grant you access to the registry.
 
 ### Checkout codebase {#checkout}
 
-Make sure you are on the `git` branch with the code you want to add 
-to the GATK-SV Docker images you are building.
-
 ```shell
 git fetch origin <branch_name>
 git checkout origin/<branch_name>
@@ -101,25 +90,7 @@ git checkout origin/<branch_name>
 
 ## Build and Publish Docker Images {#build}
 
-All the GATK-SV Dockerfiles are hosted under the directory 
-[`gatk-sv/dockerfiles/`](https://github.com/broadinstitute/gatk-sv/tree/main/dockerfiles). 
-While you can build the GATK-SV Docker images by following the standard 
-[Docker image build procedures](https://docs.docker.com/engine/reference/commandline/image_build/),
-that can be challenging due to the nested hierarchy of GATK-SV Docker images.
-To simplify the process, we have developed a utility script that streamlines the 
-Docker image build process 
-([`scripts/docker/build_docker.py`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py)).
-
-In the following, we will explain how to use the utility script for a simple use-case. 
-For more advanced and additional functionalities, please refer to the script's documentation,
-which you may access it as the following.
-
-```shell
-python scripts/docker/build_docker.py --help 
-```
-
-
-In its basic setup, you can use the following command to **build and publish** a GATK-SV Docker image.
+In its minimal setup, you may use the following command to **build and publish** GATK-SV Docker images.
 
 ```shell
 python scripts/docker/build_docker.py \
@@ -128,22 +99,16 @@ python scripts/docker/build_docker.py \
     --docker-repo <container registry>
 ```
 
-The arguments used are explained in the following. 
+The arguments are explained in the following.
+
 
 ### Determine which images need to be rebuilt {#targets}
 
 You may follow either of the following practices to determine which images to rebuild.
 
 - **Automatic:**
-  The script can automatically determine which Docker images need a rebuild 
-  based on a list of changed files and cross-referencing them with the 
-  table in [this section](/docs/advanced/docker/images#list). 
-  Specifically, it takes two git commit SHAs as input, uses `git diff` 
-  to extract the list of changed files, and then cross-referencing them 
-  with [this table](/docs/advanced/docker/images#list) to identify the Docker 
-  images requiring rebuilding. Details can be found on [this page](/docs/advanced/docker/deploy/incremental.md).
-  To use this feature, commit the changes first, identify `BASE_SHA` and `HEAD_SHA` using `git log` or GitHub 
-  (details on [this page](/docs/advanced/docker/deploy/incremental.md)), 
+  You may refer to [this page](./images#incremental) for details on this method.
+  Briefly, commit the changes first, identify `BASE_SHA` and `HEAD_SHA` using `git log` or GitHub
   and then call the script as follows.
 
   ```shell
@@ -152,8 +117,8 @@ You may follow either of the following practices to determine which images to re
       --current-git-commit HEAD_SHA
   ```
 
-- **Manual: ** 
-  You may refer to the table in [this section](/docs/advanced/docker/images#list)
+- **Manual:** 
+  You may refer to the table in [this section](./dependencies#list)
   to determine which Docker images to rebuild based on the changed files.
   For instance, if you modified any of the files under the
   [`gatk-sv/src/svtk/`](https://github.com/broadinstitute/gatk-sv/tree/main/src/svtk)
@@ -176,33 +141,25 @@ You may follow either of the following practices to determine which images to re
      
 Please note that `--targets` and `--base-git-commit --current-git-commit` 
 options are mutually exclusive. In other words, you can either manually specify 
-images to rebuild, or let the script determine them. 
+images to rebuild, or let the script determine them automatically using commit SHAs. 
 Combining or avoiding both options is not currently supported.
 
 :::info
 Following the steps above, the script builds the specified Docker images 
-_and all the images derived from them_, ensuring proper propagation of changes through the pipeline. 
-If you want to build only the specified images, you would need to add the `--skip-dependent-images` flag.
+_and all the images derived from them_. 
+You may add the `--skip-dependent-images` flag to build only the explicitly specified images.
 :::
 
 
 ### Image tag {#tag}
-
-[Docker image tags](https://docs.docker.com/engine/reference/commandline/tag/)
-are used to distinguish between different builds of the same image. 
-You can use any naming convention for your tags. 
-GATK-SV docker images use the following template for tags, 
-which you may want to adopt, in particular, if you plan to publish 
-your images on the GATK-SV container registries.
+ 
+You can use any naming convention for your [tags](https://docs.docker.com/engine/reference/commandline/tag/). 
+GATK-SV Docker images are tagged using the following template 
+(you may refer to [this section](./automated#args) for details).
 
 ```
 [Date]-[Release Tag]-[Head SHA 8]
 ```
-
-where `[Date]` is `YYYY-MM-DD` extracted from the time stamp of the last
-commit on the feature branch, `[Release Tag]` is extracted from the latest [pre-]release on GitHub, 
-and the `[Head SHA 8]` is the first eight letters of the SHA of the 
-last commit on the feature branch.
 
 For example:
 
@@ -210,16 +167,11 @@ For example:
 2023-07-28-v0.28.1-beta-e70dfbd7
 ```
 
-For automatically composing image tags, you may follow the practices 
-used in [GATK-SV CI/CD](https://github.com/broadinstitute/gatk-sv/blob/286a87f3bcfc0b8c811ff789776dd0b135f582e9/.github/workflows/sv_pipeline_docker.yml#L85-L109).
-
-
 
 ### Specify the container registry {#registry}
-The built images are stored on your computer. If you are only developing 
-or testing locally, there is no need to push them to a container registry. 
-In this case you can avoid providing `--docker-repo <registry>`.
 
+You may skip this section if you are only developing 
+or testing locally; in this case you can avoid providing `--docker-repo <registry>`.
 You need to push the images to a container registry if you want to:
 
 - Use the updated Docker images for WDL testing or development;
@@ -301,13 +253,13 @@ Please note that we are currently using GCR, but it has been migrated to Google 
 ## Post-build
 
 - GATK-SV docker images are mainly intended for use in WDLs. 
-  Therefore, it's a good practice to test the newly updated 
-  images in related WDLs. This ensures that the updated images function 
-  as expected within specific workflows.
+  Therefore, it's a good practice to run the related WDLs with 
+  updated images to assert if the images function as expected.
 
 - If you were using a Linux VM to build the Docker images, 
   ensure you either stop or delete the VM after building the images. 
-  Stopping the VM won't delete the disk, and you'll continue to 
-  incur disk usage charges. If you don't want to incur disk costs, 
-  you can delete the VM along with all its associated resources. 
-  Stopping is preferred over deleting if you intend to reuse the VM.
+  Stopping the VM won't delete the disk, and you may continue to 
+  incur disk usage charges. If you plan on re-using the VM,
+  stopping is prefered as it preserves the configuration; 
+  otherwise, you may delete the VM and all the associated resources 
+  (attached disks in particular).
