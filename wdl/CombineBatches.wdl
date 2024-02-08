@@ -34,7 +34,6 @@ workflow CombineBatches {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_update_sr_list
@@ -159,7 +158,6 @@ workflow CombineBatches {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_localize_vcfs = runtime_override_localize_vcfs,
         runtime_override_join_vcfs = runtime_override_join_vcfs,
@@ -207,7 +205,6 @@ workflow CombineBatches {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_localize_vcfs = runtime_override_localize_vcfs,
         runtime_override_join_vcfs = runtime_override_join_vcfs,
@@ -283,7 +280,6 @@ workflow CombineBatches {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_shard_clusters=runtime_override_shard_clusters_mpd,
         runtime_override_shard_vids=runtime_override_shard_vids_mpd,
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_mpd,
@@ -315,7 +311,6 @@ workflow CombineBatches {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_shard_clusters=runtime_override_shard_clusters_mpd,
         runtime_override_shard_vids=runtime_override_shard_vids_mpd,
         runtime_override_pull_vcf_shard=runtime_override_pull_vcf_shard_mpd,
@@ -343,7 +338,6 @@ workflow CombineBatches {
           gcs_project=gcs_project,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
           runtime_override_preconcat=runtime_override_preconcat_pesr_depth,
           runtime_override_hail_merge=runtime_override_hail_merge_pesr_depth,
           runtime_override_fix_header=runtime_override_fix_header_pesr_depth

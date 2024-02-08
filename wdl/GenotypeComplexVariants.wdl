@@ -33,7 +33,6 @@ workflow GenotypeComplexVariants {
     String sv_base_mini_docker
     String sv_pipeline_updates_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
     String sv_pipeline_rdtest_docker
 
     # overrides for mini tasks
@@ -102,7 +101,6 @@ workflow GenotypeComplexVariants {
         sv_pipeline_updates_docker=sv_pipeline_updates_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
