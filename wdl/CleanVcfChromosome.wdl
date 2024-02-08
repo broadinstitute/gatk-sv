@@ -38,7 +38,6 @@ workflow CleanVcfChromosome {
     String sv_base_mini_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -152,7 +151,6 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.clean_vcf_1b",
       records_per_shard=clean_vcf1b_records_per_shard,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override_subset_large_cnvs=runtime_attr_override_subset_large_cnvs_1b,
       runtime_attr_override_sort_bed=runtime_attr_override_sort_bed_1b,
@@ -240,7 +238,7 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.clean_vcf_5",
       records_per_shard=clean_vcf5_records_per_shard,
       threads_per_task=clean_vcf5_threads_per_task,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
       runtime_attr_override_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
@@ -253,7 +251,7 @@ workflow CleanVcfChromosome {
       vcf=CleanVcf5.polished,
       prefix="~{prefix}.drop_redundant_cnvs",
       contig=contig,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_drop_redundant_cnvs
   }
 
