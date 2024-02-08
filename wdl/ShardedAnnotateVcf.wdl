@@ -38,7 +38,6 @@ workflow ShardedAnnotateVcf {
     String? gcs_project
 
     String sv_pipeline_docker
-    String? sv_pipeline_hail_docker
     String sv_base_mini_docker
     String gatk_docker
 
