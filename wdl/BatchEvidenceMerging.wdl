@@ -63,11 +63,13 @@ workflow BatchEvidenceMerging {
     }
   }
   if (!defined(BAF_files)) {
+    File sd_locs_vcf_index = select_first([sd_locs_vcf]) + ".tbi"
+
     call SDtoBAF {
       input:
         SD_files = select_first([SD_files]),
         sd_locs_vcf = select_first([sd_locs_vcf]),
-        sd_locs_vcf_index = select_first([sd_locs_vcf]) + ".tbi",
+        sd_locs_vcf_index = sd_locs_vcf_index,
         batch = batch,
         samples = samples,
         rename_samples=rename_samples,
