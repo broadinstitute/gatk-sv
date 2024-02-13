@@ -218,7 +218,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
             for sample_list, report_list in zip(batch_list_paths, irs_report_paths)
         }
         logging.debug("IRS dump:")
-        logging.debug(str(len(samples_list_to_confident_irs_variant_ids_mapping)))
+        logging.debug(str(samples_list_to_confident_irs_variant_ids_mapping))
         logging.debug("IRS sources:")
         for x, y in zip(batch_list_paths, irs_report_paths):
             logging.debug(f"{x}\t{y}")
