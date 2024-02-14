@@ -27,7 +27,6 @@ workflow GATKSVPipelinePhase1 {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -420,7 +419,6 @@ workflow GATKSVPipelinePhase1 {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
       runtime_attr_sample_list=runtime_attr_sample_list,
       runtime_attr_petest=runtime_attr_petest,

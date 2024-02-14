@@ -22,7 +22,6 @@ workflow GenotypeDepthPart2 {
 
     String sv_pipeline_docker
     String sv_base_mini_docker
-    String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_split_variants
     RuntimeAttr? runtime_attr_rdtest_genotype
     RuntimeAttr? runtime_attr_make_subset_vcf
@@ -67,7 +66,7 @@ workflow GenotypeDepthPart2 {
         prefix = basename(gt5kb_bed),
         generate_melted_genotypes = true,
         ref_dict = ref_dict,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_rdtest_genotype
     }
 
@@ -108,7 +107,7 @@ workflow GenotypeDepthPart2 {
           prefix = basename(lt5kb_bed, ".bed"),
           generate_melted_genotypes = true,
           ref_dict = ref_dict,
-          sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
+          sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest_genotype
       }
 

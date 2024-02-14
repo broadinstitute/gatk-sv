@@ -44,7 +44,6 @@ workflow GenerateBatchMetrics {
     File? primary_contigs_list  # required if run_module_metrics = true
 
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String sv_base_mini_docker
     String sv_base_docker
     String linux_docker
@@ -131,7 +130,6 @@ workflow GenerateBatchMetrics {
             female_samples = GetSampleLists.female_samples,
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
             sv_pipeline_docker = sv_pipeline_docker,
-            sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
             linux_docker = linux_docker,
             runtime_attr_rdtest = runtime_attr_rdtest,
             runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,

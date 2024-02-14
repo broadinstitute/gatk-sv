@@ -29,7 +29,7 @@ workflow Module09VisualizeTrio{
         Array[File] mo_crai_list
 
         String sv_base_mini_docker
-        String sv_pipeline_rdtest_docker
+        String sv_pipeline_docker
         String igv_docker
 
         RuntimeAttr? runtime_attr_override
@@ -43,7 +43,7 @@ workflow Module09VisualizeTrio{
             pedfile = pedfile,
             batch_bincov=batch_bincov,
             bed = varfile,
-            sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+            sv_pipeline_docker=sv_pipeline_docker,
             sample_batches = sample_batches,
             flags = flags,
             runtime_attr_rdtest=runtime_attr_rdtest

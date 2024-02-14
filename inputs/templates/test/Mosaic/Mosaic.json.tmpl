@@ -2,7 +2,6 @@
   "MosaicManualCheck.rare_cutoff":2,
   "MosaicManualCheck.outlier": "gs://gatk-sv-resources/resources/outlier.txt",
   "MosaicManualCheck.fam_file": {{ test_batch.ped_file | tojson }},
-  "MosaicManualCheck.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "MosaicManualCheck.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
   "MosaicManualCheck.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "MosaicManualCheck.agg_metrics": [{{ test_batch.evidence_metrics | tojson }}],

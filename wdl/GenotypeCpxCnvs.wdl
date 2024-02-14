@@ -27,7 +27,6 @@ workflow GenotypeCpxCnvs {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_get_cpx_cnv_intervals
@@ -71,7 +70,7 @@ workflow GenotypeCpxCnvs {
         ref_dict=ref_dict,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_split_bed_by_size=runtime_override_split_bed_by_size,
         runtime_override_rd_genotype=runtime_override_rd_genotype,
