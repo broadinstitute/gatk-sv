@@ -34,7 +34,6 @@ workflow ScatterCpxGenotyping {
     String sv_pipeline_updates_docker
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
-    String sv_pipeline_rdtest_docker
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_split_vcf_to_genotype
@@ -88,7 +87,6 @@ workflow ScatterCpxGenotyping {
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
         runtime_override_ids_from_median=runtime_override_ids_from_median,
         runtime_override_get_cpx_cnv_intervals=runtime_override_get_cpx_cnv_intervals,
         runtime_override_parse_genotypes=runtime_override_parse_genotypes,

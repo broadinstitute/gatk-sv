@@ -52,7 +52,6 @@ workflow GenotypeBatch {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String linux_docker
 
     # Common
@@ -152,7 +151,6 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_split_vcf = runtime_attr_split_vcf,
         runtime_attr_merge_counts = runtime_attr_merge_counts,
         runtime_attr_make_batch_bed = runtime_attr_make_batch_bed,
@@ -194,7 +192,6 @@ workflow GenotypeBatch {
       sr_median_hom_ins = sr_median_hom_ins,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       linux_docker = linux_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
@@ -228,7 +225,6 @@ workflow GenotypeBatch {
         ref_dict = ref_dict,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         runtime_attr_training_bed = runtime_attr_training_bed,
         runtime_attr_genotype_train = runtime_attr_genotype_train,
         runtime_attr_generate_cutoff = runtime_attr_generate_cutoff,
@@ -254,7 +250,6 @@ workflow GenotypeBatch {
       ref_dict = ref_dict,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
-      sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
       runtime_attr_rdtest_genotype = runtime_attr_rdtest_genotype,
       runtime_attr_make_subset_vcf = runtime_attr_make_subset_vcf,
