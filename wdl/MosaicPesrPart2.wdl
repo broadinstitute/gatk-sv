@@ -14,7 +14,6 @@ workflow Mosaic{
     File fam_file
     File median_file
     String sv_pipeline_docker
-    String sv_pipeline_docker
   }
   call GetPotential{
     input:
