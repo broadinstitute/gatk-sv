@@ -84,14 +84,13 @@ def create_vcf_tsv(out_path, truth_json_path, vcf_path, min_size_medium,
             r_class = svtype
             if svtype in ['DEL', 'DUP']:
                 r_class += '_' + ('s' if svlen < min_size_medium else 'm' if svlen < min_size_large else 'l')
-            r_data = [
-                [r.chrom, r.pos, r.stop, r.id, r_class,
-                 1 if r.id in training_sites[s]['good_variant_ids'] else 0 if r.id in training_sites[s][
-                     'bad_variant_ids'] else -1] + [_reformat_field(r.info.get(k, None), k) for k in info_fields] for s
-                in samples if _is_non_ref_or_no_call(r.samples[s]['GT']) and (
-                    (not labeled_only) or r.id in training_sites[s]['good_variant_ids'] or r.id in
-                    training_sites[s]['bad_variant_ids'])
-            ]
+            r_data = [[r.chrom, r.pos, r.stop, r.id, r_class, 1 if r.id in training_sites[s]['good_variant_ids']
+                      else 0 if r.id in training_sites[s]['bad_variant_ids'] else -1]
+                      + [s if k == 'SAMPLE' else _reformat_field(r.samples[s].get(k, None), k) for k in format_fields]
+                      + [_reformat_field(r.info.get(k, None), k) for k in info_fields]
+                      for s in samples if _is_non_ref_or_no_call(r.samples[s]['GT']) and
+                      ((not labeled_only) or r.id in training_sites[s]['good_variant_ids']
+                       or r.id in training_sites[s]['bad_variant_ids'])]
             type_counter[r_class] += len(r_data)
             if i % 10000 == 0:
                 print(f"Processed {i} records; position {r.chrom}:{r.pos}")
