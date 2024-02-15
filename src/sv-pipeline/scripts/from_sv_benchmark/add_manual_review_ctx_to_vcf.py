@@ -7,7 +7,7 @@ Adds records representing manually reviewed large bi-allelic CNV and translocati
 Any events that match exactly on CHR1, POS, CHR2, END2, and CPX_TYPE (for translocations) and
 CHR, POS, END, and SVTYPE (for CNVs) will be merged into a single record with the correct sample genotypes set.
 The new record will have 'tloc' as a member of the ALGORITHMS INFO field.
-Genotypes for the new record are given GQ and PE_GQ values of 999.
+Genotypes for the new record are given GQ and PE_GQ values of 99.
 Updates CTX records already present in the vcf to store the location on CHR2 in the END2 info field and
 sets their END info field to be CHR1 position + 1
 """
@@ -164,8 +164,8 @@ def populate_ctx_gt(new_record, row, sample, sample_data):
     new_record.samples[sample]['CN'] = None
     new_record.samples[sample]['CNQ'] = None
     new_record.samples[sample]['EV'] = row['info_EVIDENCE']
-    new_record.samples[sample]['GQ'] = 999
-    new_record.samples[sample]['PE_GQ'] = 999
+    new_record.samples[sample]['GQ'] = 99
+    new_record.samples[sample]['PE_GQ'] = 99
     new_record.samples[sample]['PE_GT'] = sum(map(int, sample_data.split(':')[0].split('/')))
     new_record.samples[sample]['RD_CN'] = None
     new_record.samples[sample]['RD_GQ'] = None
@@ -188,13 +188,13 @@ def populate_ref_gt(new_record, row, sample):
 def populate_cnv_gt(new_record, row, sample, sample_data):
     new_record.samples[sample]['GT'] = tuple(map(int, sample_data.split(':')[0].split('/')))
     new_record.samples[sample]['CN'] = int(sample_data.split(':')[1])
-    new_record.samples[sample]['CNQ'] = 999
+    new_record.samples[sample]['CNQ'] = 99
     new_record.samples[sample]['EV'] = 'RD'
-    new_record.samples[sample]['GQ'] = 999
+    new_record.samples[sample]['GQ'] = 99
     new_record.samples[sample]['PE_GQ'] = None
     new_record.samples[sample]['PE_GT'] = None
     new_record.samples[sample]['RD_CN'] = int(sample_data.split(':')[1])
-    new_record.samples[sample]['RD_GQ'] = 999
+    new_record.samples[sample]['RD_GQ'] = 99
     new_record.samples[sample]['SR_GQ'] = None
     new_record.samples[sample]['SR_GT'] = None
 
