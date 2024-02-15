@@ -187,8 +187,10 @@ task ExtractCpxLgCnvByBatch {
 task GenerateCnvSegmentFromCpx{
     input{
         File bed
+        # sample depth calls is map of sample name to batch ID
         File sample_depth_calls
         String sv_pipeline_docker
+        Int min_depth_size = 5000
         RuntimeAttr? runtime_attr_override
     }
 
@@ -227,7 +229,7 @@ task GenerateCnvSegmentFromCpx{
             fin.close()
             return out
 
-        def readin_cpx_cnv(bed_input,sample_depth_hash):
+        def readin_cpx_cnv(bed_input,sample_depth_hash,min_depth_size):
             CPX_CNV = []
             f_bed = os.popen(r'''zcat %s'''%(bed_input))
             for line in f_bed:
@@ -236,6 +238,7 @@ task GenerateCnvSegmentFromCpx{
                     pos_CPX_TYPE = pin.index('CPX_TYPE')
                     pos_CPX_INTERVALS = pin.index('CPX_INTERVALS')
                     pos_SOURCE = pin.index('SOURCE')
+                    pos_SAMPLES = pin.index('samples')
                 else:
                     interval = []
                     if 'DEL_' in pin[pos_CPX_INTERVALS] or 'DUP_' in pin[pos_CPX_INTERVALS]:
@@ -244,8 +247,8 @@ task GenerateCnvSegmentFromCpx{
                         interval += [split_cpx_interval(i)+[pin[3]] for i in pin[pos_SOURCE].split(",") if "DEL_" in i or "DUP_" in i]
                     if len(interval)>0:
                         for i in interval:
-                            if i[2]-i[1]>4999:
-                                sample_names = pin[5].split(',')
+                            if i[2]-i[1]>=min_depth_size:
+                                sample_names = pin[pos_SAMPLES].split(',')
                                 if i[3]=="DEL":
                                     for j in sample_names:
                                         CPX_CNV.append(i+[j, sample_depth_hash[j][0]])
@@ -264,8 +267,9 @@ task GenerateCnvSegmentFromCpx{
         bed_input = "~{bed}"
         fileout = "~{prefix}.lg_CNV.bed"
         sample_depth = "~{sample_depth_calls}"
+        min_depth_size = ~{min_depth_size}
         sample_depth_hash = sample_depth_calls_readin(sample_depth)
-        CPX_CNV = readin_cpx_cnv(bed_input, sample_depth_hash)
+        CPX_CNV = readin_cpx_cnv(bed_input, sample_depth_hash, min_depth_size)
         write_cpx_cnv(CPX_CNV, fileout)
         CODE
 
