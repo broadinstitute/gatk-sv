@@ -23,7 +23,7 @@ import "CollectPEMetricsForCPX.wdl" as collect_pe_metrics_for_cpx
 import "CollectLgCnvSupportForCPX.wdl" as collect_lg_cnv_supp_for_cpx
 import "ReviseVcfWithManualResults.wdl" as revise_vcf_with_manual_results
 
-workflow ShardeManualReview{
+workflow ShardedManualReview{
     input{ 
         File SVID_to_Remove #large CNVs, mCNVs that failed manual review, or redundant large CNVs that overlaps with Seg Dup and mCNVs
         File SVID_to_Remove_DEL_bump #SVID list of DELs <5Kb that are enriched for outlier samples; the outlier samples are defined as samples that carry more than average (top 5%) DELs between 400bp and 1Kb, AC>1 and AF<1%
@@ -53,6 +53,7 @@ workflow ShardeManualReview{
         Boolean use_hail = false
         Boolean run_fix_ends = false
         Boolean clean_del_bump = false
+        Boolean run_remove_duplicates = false
         String? gcs_project
 
         String sv_benchmark_docker
@@ -102,19 +103,21 @@ workflow ShardeManualReview{
 
     scatter (i in range(length(ScatterVcf.shards))) {
 
-        call remove_duplicate_events.RemoveDuplicateEventsTaskV2 as RemoveDuplicateEvents{
-            input:
-                vcf = ScatterVcf.shards[i],
-                vcf_index = ScatterVcf.shards_idx[i],
-                prefix = "~{prefix}.~{i}",
-                sv_pipeline_docker = sv_pipeline_docker,
-                runtime_attr_override = runtime_attr_remove_duplicate_events_task
+        if (run_remove_duplicates){
+            call remove_duplicate_events.RemoveDuplicateEventsTask as RemoveDuplicateEvents{
+                input:
+                    vcf = ScatterVcf.shards[i],
+                    vcf_index = ScatterVcf.shards_idx[i],
+                    prefix = "~{prefix}.~{i}",
+                    sv_pipeline_docker = sv_pipeline_docker,
+                    runtime_attr_override = runtime_attr_remove_duplicate_events_task
+            }
         }
 
         call Vcf2Bed as Vcf2Bed{
             input:
-                vcf = RemoveDuplicateEvents.deduplicated_vcf,
-                vcf_idx = RemoveDuplicateEvents.deduplicated_vcf_index,
+                vcf = select_first([RemoveDuplicateEvents.deduplicated_vcf,ScatterVcf.shards[i]]),
+                vcf_idx = select_first([RemoveDuplicateEvents.deduplicated_vcf_index,ScatterVcf.shards_idx[i]]),
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_vcf2bed
         }
@@ -193,8 +196,8 @@ workflow ShardeManualReview{
         #### compare BNDs vs. MEIs to rescue mobile element deletions
         call SplitBndDel{
             input:
-                vcf = RemoveDuplicateEvents.deduplicated_vcf,
-                vcf_idx = RemoveDuplicateEvents.deduplicated_vcf_index,
+                vcf = select_first([RemoveDuplicateEvents.deduplicated_vcf,ScatterVcf.shards[i]]),
+                vcf_idx = select_first([RemoveDuplicateEvents.deduplicated_vcf_index,ScatterVcf.shards_idx[i]]),
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_extract_bnd_del
         }
@@ -218,8 +221,8 @@ workflow ShardeManualReview{
 
         call revise_vcf_with_manual_results.ReviseVcfWithManualResults as ReviseVcfWithManualResults_wo_raw{
             input:
-                vcf_file = RemoveDuplicateEvents.deduplicated_vcf,
-                vcf_index = RemoveDuplicateEvents.deduplicated_vcf_index,
+                vcf_file = select_first([RemoveDuplicateEvents.deduplicated_vcf,ScatterVcf.shards[i]]),
+                vcf_index = select_first([RemoveDuplicateEvents.deduplicated_vcf_index,ScatterVcf.shards_idx[i]]),
                 SVID_to_Remove = SVID_to_Remove,
                 MEI_DEL_Rescue = BNDvsMEI.mei_del_SVID,
                 CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
@@ -232,18 +235,8 @@ workflow ShardeManualReview{
                 sv_pipeline_hail_docker = sv_pipeline_hail_docker
         }        
 
-        if (run_fix_ends){
-            call MiniTasks.FixEndsRescaleGQ{
-                input:
-                    vcf = ReviseVcfWithManualResults_wo_raw.revised_vcf,
-                    prefix = "~{prefix}.~{i}",
-                    sv_pipeline_docker = sv_pipeline_docker,
-                    runtime_attr_override = runtime_attr_fix_bad_ends
-            }
-        }
-
-        File manual_revised_vcf = select_first([FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
-        File manual_revised_vcf_idx = select_first([FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
+        File manual_revised_vcf = ReviseVcfWithManualResults_wo_raw.revised_vcf
+        File manual_revised_vcf_idx = ReviseVcfWithManualResults_wo_raw.revised_vcf_idx
 
 
         if (clean_del_bump){
@@ -257,8 +250,8 @@ workflow ShardeManualReview{
             }
         }
 
-        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
-        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
+        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, ReviseVcfWithManualResults_wo_raw.revised_vcf])
+        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
     }
 
     if (length(sharded_annotated_vcf) == 0) {
@@ -420,18 +413,13 @@ task SplitCpxCtx{
         set -eu
         zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
 
-        set -euo pipefail
-        if [ $( zcat ~{bed} | grep CPX | wc -l ) -gt 0 ]; then
-            zcat ~{bed} | grep CPX | grep -v UNRESOLVE >> ~{prefix}.cpx_ctx.bed
-        fi
+        filterColumn=$(zcat ~{bed} | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
 
-        if [ $( zcat ~{bed} | grep CTX | wc -l ) -gt 0 ]; then
-            zcat ~{bed} | grep CTX >> ~{prefix}.cpx_ctx.bed
-        fi
+        zcat ~{bed} | awk 'NR > 1' | grep CPX | awk -v filter_column=${filterColumn} '$filter_column ~ /UNRESOLVED/' >> ~{prefix}.cpx_ctx.bed
 
-        if [ $( zcat ~{bed} | grep INS | grep INV | wc -l ) -gt 0 ]; then
-            zcat ~{bed} | grep INS | grep INV >> ~{prefix}.cpx_ctx.bed
-        fi
+        zcat ~{bed} | awk 'NR > 1' | grep CTX >> ~{prefix}.cpx_ctx.bed
+
+        zcat ~{bed} | awk 'NR > 1' | grep INS | grep INV >> ~{prefix}.cpx_ctx.bed
 
         bgzip ~{prefix}.cpx_ctx.bed
     >>>
