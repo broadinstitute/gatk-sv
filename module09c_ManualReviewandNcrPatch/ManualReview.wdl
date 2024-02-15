@@ -75,7 +75,7 @@ workflow ManualReview{
     }
 
     scatter (i in range(length(vcf_list))){
-        call sharded_manual_review.ShardeManualReview as ShardeManualReview{
+        call sharded_manual_review.ShardedManualReview as ShardedManualReview{
             input:
                 SVID_to_Remove = SVID_to_Remove,
                 SVID_to_Remove_DEL_bump = SVID_to_Remove_DEL_bump,
@@ -134,8 +134,8 @@ workflow ManualReview{
     }
 
     output{
-        Array[File] reviewed_vcfs = ShardeManualReview.revised_output_vcf
-        Array[File] reviewed_vcf_idxes = ShardeManualReview.revised_output_vcf_idx
+        Array[File] reviewed_vcfs = ShardedManualReview.revised_output_vcf
+        Array[File] reviewed_vcf_idxes = ShardedManualReview.revised_output_vcf_idx
     }
 
 
