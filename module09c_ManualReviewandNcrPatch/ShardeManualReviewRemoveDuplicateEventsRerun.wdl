@@ -95,7 +95,7 @@ workflow ShardeManualReviewRemoveDuplicateEventsRerun{
     }
 
 
-        call remove_duplicate_events.RemoveDuplicateEventsTaskV2 as RemoveDuplicateEvents{
+        call remove_duplicate_events.RemoveDuplicateEventsTask as RemoveDuplicateEvents{
             input:
                 vcf = ScatterVcf_shards,
                 vcf_index = ScatterVcf_shards_idx,
@@ -215,18 +215,9 @@ workflow ShardeManualReviewRemoveDuplicateEventsRerun{
                 sv_pipeline_hail_docker = sv_pipeline_hail_docker
         }        
 
-        if (run_fix_ends){
-            call MiniTasks.FixEndsRescaleGQ{
-                input:
-                    vcf = ReviseVcfWithManualResults_wo_raw.revised_vcf,
-                    prefix = "~{prefix}.~{ScatterVcf_shards_num}",
-                    sv_pipeline_docker = sv_pipeline_docker,
-                    runtime_attr_override = runtime_attr_fix_bad_ends
-            }
-        }
 
-        File manual_revised_vcf = select_first([FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
-        File manual_revised_vcf_idx = select_first([FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
+        File manual_revised_vcf = ReviseVcfWithManualResults_wo_raw.revised_vcf
+        File manual_revised_vcf_idx = ReviseVcfWithManualResults_wo_raw.revised_vcf_idx
 
 
         if (clean_del_bump){
@@ -242,8 +233,8 @@ workflow ShardeManualReviewRemoveDuplicateEventsRerun{
 
 
     output{
-        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, FixEndsRescaleGQ.out, ReviseVcfWithManualResults_wo_raw.revised_vcf])
-        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, FixEndsRescaleGQ.out_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
+        File sharded_annotated_vcf = select_first([CleanDelBump.cleaned_vcf, ReviseVcfWithManualResults_wo_raw.revised_vcf])
+        File sharded_annotated_vcf_idx = select_first([CleanDelBump.cleaned_vcf_idx, ReviseVcfWithManualResults_wo_raw.revised_vcf_idx])
     }
 }
 
