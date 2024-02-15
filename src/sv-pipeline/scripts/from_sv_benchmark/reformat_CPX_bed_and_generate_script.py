@@ -31,38 +31,59 @@ def SVID_sample_readin(input_bed,header_pos):
   fin.close()
   return out
 
-def extract_bp_list(segments, cpx_type):
-    breakpints = [segments[0].split('_')[1].split(':')[0]]+[int(bp) for bp in segments[0].split('_')[1].split(':')[1].split('-')]
+def parse_segment(segment):
+    svtype, interval = segment.split('_')
+    chrom, coords = interval.split(':')
+    coord1, coord2 = coords.split('-')
+    return svtype, chrom, int(coord1), int(coord2)
+
+# segments: CPX_INTERVALS split by ','
+def extract_bp_list_for_inv_cnv_events(segments, cpx_type):
+    s0_svtype, s0_chrom, s0_c1, s0_c2 = parse_segment(segments[0])
+    breakpoints = [s0_chrom]+[s0_c1, s0_c2]
     if not 'INVdup' in cpx_type:
       for seg in segments[1:]:
-        breakpints.append(int(seg.split('-')[1]))
+        seg_svtype, seg_chrom, seg_c1, seg_c2 = parse_segment(seg)
+        breakpoints.append(seg_c2)
     else:
       if cpx_type=='INVdup':
-        if [int(i) for i in segments[1].split(':')[1].split('-')][0] < breakpints[2]:
-          breakpints = breakpints[:2] + [[int(i) for i in segments[1].split(':')[1].split('-')][0], breakpints[2]]
-      elif cpx_type == 'dupINVdup' or cpx_type == 'delINVdup' :
-        breakpints += [int(bp) for bp in segments[2].split('_')[1].split(':')[1].split('-')]
-    return breakpints
+        s1_svtype, s1_chrom, s1_c1, s1_c2 = parse_segment(segments[0])
+        if s1_c1[0] < breakpoints[2]:
+          breakpoints = breakpoints[:2] + [s1_c1, breakpoints[2]]
+      elif cpx_type == 'dupINVdup' or cpx_type == 'delINVdup':
+        s2_svtype, s2_chrom, s2_c1, s2_c2 = parse_segment(segments[2])
+        breakpoints += [s2_c1, s2_c2]
+    return breakpoints
 
-def extract_bp_list_V2(coordinates, segments):
+def extract_bp_list_for_ddup_events(coordinates, segments, small_sv_size_threshold):
     #example of coordinates: ["chr1",1154129,1154133]
     #example of segments: DUP_chr1:229987763-230011157
     del_bp = [coordinates[0], int(coordinates[1]), int(coordinates[2])]
-    dup_seg = [i for i in segments if 'DUP_' in i][0].split('_')[1].split(':')
-    dup_bp = [int(i) for i in dup_seg[1].split('-')]
-    INV_flag = len([i for i in segments if "INV_" in i])
+    # CW: this looks like it only gets the coordinates from the first DUP segment?
+    #dup_seg = [i for i in segments if 'DUP_' in i][0].split('_')[1].split(':')
+    #dup_bp = [int(i) for i in dup_seg[1].split('-')]
+    #INV_flag = len([i for i in segments if "INV_" in i])
+    # rewrite as:
+    INV_flag = 0
+    for segment in segments:
+        if 'DUP_' in segment:
+            seg_svtype, seg_chrom, seg_c1, seg_c2 = parse_segment(segment)
+            dup_bp = [seg_c1, seg_c2]
+        if 'INV_' in segment:
+            INV_flag = INV_flag + 1
     #INV_flag == 0 : no INV involved in the insertion
     #INV_flag > 0: INV involved
+
     if INV_flag==0:
       if del_bp[2] < dup_bp[0]:
           breakpints = del_bp + dup_bp
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]>small_sv_size_threshold:
               structures = ['abc','cbc']
           else:
               structures = ['ab','bab']
       elif del_bp[1] > dup_bp[1]:
           breakpints   = [del_bp[0]]+dup_bp+del_bp[1:]
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]>small_sv_size_threshold:
               structures = ['abc','aba']
           else:
               structures = ['ab','aba']
@@ -75,13 +96,13 @@ def extract_bp_list_V2(coordinates, segments):
     elif INV_flag>0:
       if del_bp[2] < dup_bp[0]:
           breakpints = del_bp + dup_bp
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]>small_sv_size_threshold:
               structures = ['abc','c^bc']
           else:
               structures = ['ab','b^ab']
       elif del_bp[1] > dup_bp[1]:
           breakpints   = [del_bp[0]]+dup_bp+del_bp[1:]
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]>small_sv_size_threshold:
               structures = ['abc','aba^']
           else:
               structures = ['ab','aba^']
@@ -93,7 +114,7 @@ def extract_bp_list_V2(coordinates, segments):
           structures = ['ab','aa^']
     return [breakpints, structures]
 
-def extract_bp_list_V3(coordinates, segments):
+def extract_bp_list_for_ins_idel(coordinates, segments, small_sv_size_threshold):
     #example of coordinates: ["chr1",1154129,1154133]
     #example of segments: DUP_chr1:229987763-230011157
     del_bp = [coordinates[0], int(coordinates[1]), int(coordinates[2])]
@@ -105,13 +126,13 @@ def extract_bp_list_V3(coordinates, segments):
     if INV_flag==0:
       if del_bp[2] < dup_bp[0]:
           breakpints = del_bp + dup_bp
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]> small_sv_size_threshold:
               structures = ['abc','cbc']
           else:
               structures = ['ab','bab']
       elif del_bp[1] > dup_bp[1]:
           breakpints   = [del_bp[0]]+dup_bp+del_bp[1:]
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]> small_sv_size_threshold:
               structures = ['abc','aba']
           else:
               structures = ['ab','aba']
@@ -124,13 +145,13 @@ def extract_bp_list_V3(coordinates, segments):
     elif INV_flag>0:
       if del_bp[2] < dup_bp[0]:
           breakpints = del_bp + dup_bp
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]> small_sv_size_threshold:
               structures = ['abc','c^bc']
           else:
               structures = ['ab','b^ab']
       elif del_bp[1] > dup_bp[1]:
           breakpints   = [del_bp[0]]+dup_bp+del_bp[1:]
-          if del_bp[2]-del_bp[1]>250:
+          if del_bp[2]-del_bp[1]> small_sv_size_threshold:
               structures = ['abc','aba^']
           else:
               structures = ['ab','aba^']
@@ -142,35 +163,36 @@ def extract_bp_list_V3(coordinates, segments):
           structures = ['ab','aa^']
     return [breakpints, structures]
 
-def extract_bp_list_V4(coordinates, segments):
+def extract_bp_list_V4(coordinates, segments, small_sv_size_threshold):
     del_bp = [coordinates[0], int(coordinates[1]), int(coordinates[2])]
     dup_seg = [i for i in segments if 'INV_' in i][0].split('_')[1].split(':')
     dup_bp = [int(i) for i in dup_seg[1].split('-')]
     INV_flag = 1
     if del_bp[2] < dup_bp[0]:
-        breakpints = del_bp + dup_bp
-        if del_bp[2]-del_bp[1]>250:
+        breakpoints = del_bp + dup_bp
+        if del_bp[2]-del_bp[1]> small_sv_size_threshold:
             structures = ['abc','c^bc']
         else:
             structures = ['ab','b^ab']
     elif del_bp[1] > dup_bp[1]:
-        breakpints   = [del_bp[0]]+dup_bp+del_bp[1:]
-        if del_bp[2]-del_bp[1]>250:
+        breakpoints = [del_bp[0]]+dup_bp+del_bp[1:]
+        if del_bp[2]-del_bp[1]> small_sv_size_threshold:
             structures = ['abc','aba^']
         else:
             structures = ['ab','aba^']
-    return [breakpints, structures]
+    return [breakpoints, structures]
 
 def cpx_SV_readin(input_bed, header_pos):
   fin=os.popen(r'''zcat %s'''%(input_bed))
   out = []
+  small_sv_size_threshold = 250
   for line in fin:
     pin=line.strip().split('\t')
     if not pin[0][0]=="#":
       if pin[header_pos['CHR2']]==pin[0]:
         if pin[header_pos['CPX_TYPE']] in ['delINV', 'INVdel', 'dupINV','INVdup','delINVdel', 'delINVdup','dupINVdel','dupINVdup']:
           segments = pin[header_pos['CPX_INTERVALS']].split(',')
-          breakpints = extract_bp_list(segments,pin[header_pos['CPX_TYPE']])
+          breakpoints = extract_bp_list_for_inv_cnv_events(segments, pin[header_pos['CPX_TYPE']])
           if pin[header_pos['CPX_TYPE']] == 'delINV':
             ref_alt = ['ab','b^']
           if pin[header_pos['CPX_TYPE']] == 'INVdel':
@@ -189,20 +211,20 @@ def cpx_SV_readin(input_bed, header_pos):
             ref_alt = ['abc','ac^b^a^c']
         elif pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
           segments = pin[header_pos['CPX_INTERVALS']].split(',')
-          cpx_info = extract_bp_list_V2(pin[:3], segments)
+          cpx_info = extract_bp_list_for_ddup_events(pin[:3], segments, small_sv_size_threshold)
           ref_alt = cpx_info[1]
-          breakpints = cpx_info[0]
+          breakpoints = cpx_info[0]
         elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
           segments = pin[header_pos['SOURCE']].split(',')
-          cpx_info = extract_bp_list_V3(pin[:3], segments)
+          cpx_info = extract_bp_list_for_ins_idel(pin[:3], segments, small_sv_size_threshold)
           ref_alt = cpx_info[1]
-          breakpints = cpx_info[0]
+          breakpoints = cpx_info[0]
         else:
           segments = pin[header_pos['SOURCE']].split(',')
-          cpx_info = extract_bp_list_V4(pin[:3], segments)
+          cpx_info = extract_bp_list_V4(pin[:3], segments, small_sv_size_threshold)
           ref_alt = cpx_info[1]
-          breakpints = cpx_info[0]
-        out.append([breakpints, ref_alt,pin[3]])
+          breakpoints = cpx_info[0]
+        out.append([breakpoints, ref_alt,pin[3]])
     else:
       continue
   fin.close()
