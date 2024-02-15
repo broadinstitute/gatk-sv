@@ -47,7 +47,6 @@ workflow DeNovoSV {
         RuntimeAttr? runtime_attr_get_batched_files
         RuntimeAttr? runtime_attr_merge_gd
         RuntimeAttr? runtime_attr_batch_vcf
-        RuntimeAttr? runtime_override_shard_vcf
         RuntimeAttr? runtime_attr_merge
     }
 
