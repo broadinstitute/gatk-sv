@@ -426,7 +426,7 @@ task ReviseVcf{
                 elif GT in HET_GTs:
                     quals.append(record.samples[s]['GQ'])
                 else:
-                    quals.append(999)
+                    quals.append(99)
 
             if len(quals) > 0:
                 return int(median(quals))
@@ -451,20 +451,6 @@ task ReviseVcf{
             fin.close()
             return out
 
-        def SVID_duplicated_readin(duplicated_SVID_manual):
-            duplicated_SVID_list = []
-            duplicated_member_merge={}
-            duplicated_info = {}
-            fin=open(duplicated_SVID_manual)
-            for line in fin:
-                pin=line.strip().split()
-                duplicated_SVID_list+=pin[1:3]
-                duplicated_member_merge[pin[1]] = pin[0]
-                duplicated_member_merge[pin[2]] = pin[0]
-                duplicated_info[pin[0]] = pin[3:]
-            fin.close()
-            return([duplicated_member_merge, duplicated_info])
-
         def CPX_manual_readin(CPX_manual):
             out={}
             fin=open(CPX_manual)
@@ -487,39 +473,6 @@ task ReviseVcf{
                     out[pin[0]][pin[1]] = pin[2:]
             fin.close()
             return out
-
-        def select_filter(filters):
-            filter_uni = []
-            for i in filters.split(','):
-                if not i in filter_uni:
-                    filter_uni.append(i)
-            if len(filter_uni) == 1:
-                out = filter_uni[0]
-            elif 'PASS' in filter_uni:
-                out = 'PASS'
-            elif 'UNRESOLVED' in filter_uni:
-                out = 'UNRESOLVED'
-            elif 'HIGH_PCRMINUS_NOCALL_RATE' in filter_uni:
-                out = 'HIGH_PCRMINUS_NOCALL_RATE'
-            elif 'HIGH_PCRPLUS_NOCALL_RATE' in filter_uni:
-                out = 'HIGH_PCRPLUS_NOCALL_RATE'
-            elif 'PESR_GT_OVERDISPERSION' in filter_uni:
-                out = 'PESR_GT_OVERDISPERSION'
-            elif 'BOTHSIDES_SUPPORT' in filter_uni:
-                out = 'BOTHSIDES_SUPPORT'
-            else:
-                out = 'LowQual'
-            return out
-
-        def sample_merge(record1, record2):
-            filter = select_filter(','.join(record1.filter.keys() + record2.filter.keys()))
-            record1.filter.add(filter)
-            for i in record1.samples.keys():
-                if record1.samples[i]['GT'] != record2.samples[i]['GT']:
-                    if record1.samples[i]['GT']==(0, 0): 
-                        for j in record1.samples[i].keys():
-                            record1.samples[i][j] = record2.samples[i][j]
-            return record1
 
         def revise_vcf(vcf_input, vcf_output, ctx_output, hash_SVID_to_remove, hash_MEI_DEL_reset, hash_CPX_manual, hash_CTX_manual):
             fin=pysam.VariantFile(vcf_input)
@@ -682,93 +635,5 @@ task ReviseVcf{
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
-}
-
-task FixEndsRescaleGQ {
-  input {
-    File vcf
-    String prefix
-
-    Boolean? fix_ends
-    Boolean? rescale_gq
-
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: ceil(10 + size(vcf, "GB") * 2),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  String outfile = "~{prefix}.vcf.gz"
-  Boolean fix_ends_ = select_first([fix_ends, true])
-  Boolean rescale_gq_ = select_first([rescale_gq, true])
-
-  output {
-    File out = "~{outfile}"
-    File out_idx = "~{outfile}.tbi"
-  }
-  command <<<
-
-    set -euo pipefail
-
-    python <<CODE
-    import pysam
-    import argparse
-    from math import floor
-
-
-    GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
-
-
-    def fix_bad_end(record):
-      # pysam converts to 0-based half-open intervals by subtracting 1 from start, but END is unaltered
-      if record.info["SVTYPE"] == "BND"     
-        if record.stop < record.start + 2:
-          record.info["END2"] = record.stop  # just in case it is not already set. not needed for INS or CPX
-        record.stop = record.start + 1
-      if record.info["SVTYPE"] == "CTX":  
-        record.stop = record.start + 1
-      if record.info["SVTYPE"] in ['INS','CPX']:
-        if record.stop < record.start + 2:
-          record.stop = record.start + 1
-        if "END2" in record.info.keys():
-          del record.info["END2"]
-
-
-    def rescale_gq(record):
-      for sample in record.samples:
-        for gq_field in GQ_FIELDS:
-          if gq_field in record.samples[sample] and record.samples[sample][gq_field] is not None:
-            record.samples[sample][gq_field] = floor(record.samples[sample][gq_field] / 10)
-
-
-    with pysam.VariantFile("~{vcf}", 'r') as f_in, pysam.VariantFile("~{outfile}", 'w', header=f_in.header) as f_out:
-      for record in f_in:
-        if "~{fix_ends_}" == "true":
-          fix_bad_end(record)
-        if "~{rescale_gq_}" == "true":
-          rescale_gq(record)
-        f_out.write(record)
-
-    CODE
-    tabix ~{outfile}
-
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
 }
 
