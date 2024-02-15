@@ -149,60 +149,6 @@ task SplitFilePerContig{
     }
 }
 
-task ReviseVcf{
-    input{
-        File vcf_file
-        File vcf_index
-        File SVID_to_Remove
-        File MEI_DEL_Rescue
-        File CPX_manual
-        File CTX_manual
-        File duplicated_SVID_manual
-        String sv_benchmark_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1, 
-        mem_gb: 7.5, 
-        disk_gb: ceil(5.0 +  size(vcf_file, "GB")*3),
-        boot_disk_gb: 30,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-
-    String prefix  = basename(vcf_file, ".vcf.gz")
-    command<<<
-        set -euo pipefail
-
-        python /src/revise_vcf_with_manual_review_results.py \
-         ~{vcf_file} ~{prefix}.Manual_Revised.vcf.gz \
-          --cpx_vcf ~{prefix}.CPX_CTX.vcf.gz \
-          --SVID_to_remove  ~{SVID_to_Remove} \
-          --MEI_DEL_rescue  ~{MEI_DEL_Rescue} \
-          --CPX_manual  ~{CPX_manual} \
-          --CTX_manual  ~{CTX_manual} \
-          --duplicated_SVID_manual ~{duplicated_SVID_manual}
-    >>>
-
-    output{
-        File manual_revised_vcf = "~{prefix}.Manual_Revised.vcf.gz"
-        File cpx_ctx_vcf = "~{prefix}.CPX_CTX.vcf.gz"
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_benchmark_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
 
 task AddRawSVs{
     input{
