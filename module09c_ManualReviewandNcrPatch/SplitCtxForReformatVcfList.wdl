@@ -118,7 +118,7 @@ workflow SplitCtxForReformatVcfList{
             runtime_attr_override = runtime_attr_concat_sharded_cluster
     }
 
-    call remove_duplicate_events.RemoveDuplicateEventsTaskV2 as RemoveDuplicateEvents{
+    call remove_duplicate_events.RemoveDuplicateEventsTask as RemoveDuplicateEvents{
         input:
             vcf = ConcatVcfs_CTX.concat_vcf,
             vcf_index = ConcatVcfs_CTX.concat_vcf_idx,
