@@ -11,10 +11,12 @@ workflow Vapor {
     File bed_file
     String sample_id
 
+    File original_vapor_bed
+
     File ref_fasta
     File ref_fai
     File ref_dict
-    File contigs
+    String contig
 
     String vapor_docker
     String sv_base_mini_docker
@@ -28,37 +30,34 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_LocalizeCram
   }
 
-  scatter ( contig in read_lines(contigs) ) {
+  call tasks10.PreprocessBedForVapor {
+    input:
+      prefix = "~{prefix}.~{contig}.preprocess",
+      contig = contig,
+      sample_to_extract = sample_id,
+      bed_file = bed_file,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_split_vcf
+  }
 
-    call tasks10.PreprocessBedForVapor {
-      input:
-        prefix = "~{prefix}.~{contig}.preprocess",
-        contig = contig,
-        sample_to_extract = sample_id,
-        bed_file = bed_file,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_attr_split_vcf
-    }
-
-    call RunVaporWithCram {
-      input:
-        prefix = "~{prefix}.~{contig}",
-        contig = contig,
-        bam_or_cram_file = bam_or_cram_file,
-        bam_or_cram_index = bam_or_cram_index,
-        bed = PreprocessBedForVapor.contig_bed,
-        ref_fasta = ref_fasta,
-        ref_fai = ref_fai,
-        ref_dict = ref_dict,
-        vapor_docker = vapor_docker,
-        runtime_attr_override = runtime_attr_vapor
-    }
+  call RunVaporWithCram {
+    input:
+      prefix = "~{prefix}.~{contig}",
+      contig = contig,
+      bam_or_cram_file = bam_or_cram_file,
+      bam_or_cram_index = bam_or_cram_index,
+      bed = PreprocessBedForVapor.contig_bed,
+      ref_fasta = ref_fasta,
+      ref_fai = ref_fai,
+      ref_dict = ref_dict,
+      vapor_docker = vapor_docker,
+      runtime_attr_override = runtime_attr_vapor
   }
 
   call tasks10.ConcatVapor {
     input:
-      shard_bed_files=RunVaporWithCram.vapor,
-      shard_plots=RunVaporWithCram.vapor_plot,
+      original_vapor_bed = original_vapor_bed,
+      contig_vapor_bed = RunVaporWithCram.vapor,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_beds
@@ -66,7 +65,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File vapor_plots = ConcatVapor.merged_bed_plot
+    File vapor_plots = RunVaporWithCram.vapor_plot
   }
 }
 

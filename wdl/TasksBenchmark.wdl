@@ -5,8 +5,8 @@ import "Structs.wdl"
 # Merge shards after Vapor
 task ConcatVapor {
   input {
-    Array[File] shard_bed_files
-    Array[File] shard_plots
+    File contig_vapor_bed
+    File original_vapor_bed
     String prefix
     Boolean? index_output
     String sv_base_mini_docker
@@ -18,7 +18,7 @@ task ConcatVapor {
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
-  Float input_size = size(shard_bed_files, "GB")
+  Float input_size = size([original_vapor_bed, contig_vapor_bed], "GB")
   Float compression_factor = 5.0
   RuntimeAttr runtime_default = object {
                                   mem_gb: 2.0 + compression_factor * input_size,
@@ -42,20 +42,19 @@ task ConcatVapor {
   command <<<
     set -eu
 
-    zcat ~{shard_bed_files[0]} | head -n1 > header.txt
+    zcat ~{original_vapor_bed} | head -n1 > header.txt
     # note head -n1 stops reading early and sends SIGPIPE to zcat,
     # so setting pipefail here would result in early termination
 
     # no more early stopping
     set -o pipefail
 
-    while read SPLIT; do
-    zcat $SPLIT | tail -n+2
-      done < ~{write_lines(shard_bed_files)} \
-      | sort -Vk1,1 -k2,2n -k3,3n \
-      | cat header.txt - \
-      | bgzip -c \
-      > ~{output_file}
+    # remove header and concat
+    gunzip -c ~{original_vapor_bed} | sed '1d' > ~{prefix}.bed
+    gunzip -c ~{contig_vapor_bed} | sed '1d' >> ~{prefix}.bed
+
+    # sort, add back header, bgzip
+    cat ~{prefix}.bed | sort -Vk1,1 -k2,2n -k3,3n | cat header.txt - | bgzip -c > ~{output_file}
 
     if ~{call_tabix}; then
       tabix -f -p bed ~{output_file}
@@ -63,17 +62,10 @@ task ConcatVapor {
       touch ~{output_file}.tbi
     fi
 
-    mkdir ~{prefix}.plots
-    while read SPLIT; do
-      tar zxvf $SPLIT -C ~{prefix}.plots/
-    done < ~{write_lines(shard_plots)}
-
-    tar -czf ~{prefix}.plots.tar.gz ~{prefix}.plots/
   >>>
 
   output {
     File merged_bed_file = output_file
-    File merged_bed_plot = "~{prefix}.plots.tar.gz"
   }
 }
 
