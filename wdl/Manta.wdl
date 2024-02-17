@@ -136,6 +136,8 @@ task RunManta {
       --runDir . \
       --callRegions ~{region_bed}
 
+    sed -i 's/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 1/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 0/' configManta.py.ini
+
     # always tell manta there are 2 GiB per job, otherwise it will
     # scale back the requested number of jobs, even if they won't
     # need that much memory
