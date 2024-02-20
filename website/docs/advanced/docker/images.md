@@ -10,7 +10,9 @@ import TabItem from '@theme/TabItem';
 :::info
 This page provides a detailed explanation of Docker 
 images and their hierarchy. For information on the process 
-of building these images, please refer to [this section](/docs/advanced/docker/deploy).
+of building these images, please refer to the 
+[automated](/docs/advanced/docker/automated) or 
+[manual](/docs/advanced/docker/manual) builds sections.
 :::
 
 
