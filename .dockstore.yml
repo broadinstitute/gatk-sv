@@ -1,4 +1,3 @@
   - name: KN-gatk-sv
     subclass: WDL
     primaryDescriptorPath: /wdl/Manta.wdl
-    

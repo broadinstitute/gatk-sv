@@ -15,7 +15,7 @@ workflow Manta {
     File reference_fasta
     File? reference_index
     File region_bed
-    File region_bed_index
+    File? region_bed_index
     Float? jobs_per_cpu
     Int? mem_gb_per_job
     String manta_docker
@@ -63,7 +63,7 @@ task RunManta {
     File reference_fasta
     File? reference_index
     File region_bed
-    File region_bed_index
+    File? region_bed_index
     Float? jobs_per_cpu
     Int? mem_gb_per_job
     String manta_docker
