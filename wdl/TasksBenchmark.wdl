@@ -7,6 +7,7 @@ task ConcatVapor {
   input {
     File contig_vapor_bed
     File original_vapor_bed
+    String contig
     String prefix
     Boolean? index_output
     String sv_base_mini_docker
@@ -50,7 +51,7 @@ task ConcatVapor {
     set -o pipefail
 
     # remove header and concat
-    gunzip -c ~{original_vapor_bed} | sed '1d' > ~{prefix}.bed
+    gunzip -c ~{original_vapor_bed} | sed '1d' | awk '{ if ($1!="~{contig}") print }' > ~{prefix}.bed
     gunzip -c ~{contig_vapor_bed} | sed '1d' >> ~{prefix}.bed
 
     # sort, add back header, bgzip

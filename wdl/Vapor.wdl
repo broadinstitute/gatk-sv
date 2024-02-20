@@ -58,6 +58,7 @@ workflow Vapor {
     input:
       original_vapor_bed = original_vapor_bed,
       contig_vapor_bed = RunVaporWithCram.vapor,
+      contig=contig,
       prefix=prefix,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_beds
