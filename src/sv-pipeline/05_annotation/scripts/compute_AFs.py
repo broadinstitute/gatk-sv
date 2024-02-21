@@ -235,6 +235,7 @@ def calc_allele_freq(record, samples, prefix=None, hemi=False):
             nonnull_CNs, nonref_CN_count, nonref_CN_freq = [0] * 3
             CN_dist = (0, )
             CN_freqs = (0, )
+            CN_status = (0, )
         else:
             # Count number of samples per CN and total CNs observed
             CN_counts = dict(Counter(CNs))
