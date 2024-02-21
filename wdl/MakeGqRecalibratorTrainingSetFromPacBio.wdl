@@ -239,7 +239,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     File pacbio_sample_vcf = ConcatPacbioSampleVcfs.concat_vcf
     File pacbio_sample_vcf_index = ConcatPacbioSampleVcfs.concat_vcf_idx
 
-    File vapor_and_irs_output_json = GetVariantListsFromVaporAndIRS.output_json
+    File vapor_output_json = GetVariantListsFromVaporAndIRS.vapor_json
+    File irs_output_json = GetVariantListsFromVaporAndIRS.irs_json
     File vapor_and_irs_summary_report = VaporAndIRSSupportReport.summary
     File vapor_and_irs_detail_report = VaporAndIRSSupportReport.detail
     Array[File] loose_pacbio_concordance_vcf_tars = SVConcordanceLoose.pacbio_concordance_vcfs_tar
