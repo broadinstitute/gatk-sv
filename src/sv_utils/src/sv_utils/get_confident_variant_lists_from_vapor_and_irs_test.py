@@ -155,8 +155,10 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="MaNumber of supporting vapor reads required for neg example")
     parser.add_argument("--vapor-read-support-neg-cov-thresh", type=int, default=5,
                         help="MaNumber of covering vapor reads required for neg example")
-    parser.add_argument("--output", "-O", type=str, default="-",
-                        help="File to output results to. If omitted or set to '-', print to stdout")
+    parser.add_argument("--irs-output", type=str, default="-",
+                        help="File to output IRS results to. If omitted or set to '-', print to stdout")
+    parser.add_argument("--vapor-output", type=str, default="-",
+                        help="File to output Vapor results to. If omitted or set to '-', print to stdout")
     parser.add_argument("--vapor-max-cnv-size", type=int, default=5000,
                         help="Maximum size CNV to trust vapor results for")
     parser.add_argument("--irs-sample-batch-lists", type=str,
@@ -248,24 +250,11 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
     )
     logging.info(f"Samples with confident Vapor variants: {len(vapor_confident_variants)}")
 
-    all_confident_variants = {}
-    for sample in set(irs_sample_confident_variants.keys()).union(vapor_confident_variants.keys()):
-        sample_vapor_good = set(vapor_confident_variants[sample].__dict__['good_variant_ids']) \
-            if sample in vapor_confident_variants else set()
-        sample_vapor_bad = set(vapor_confident_variants[sample].__dict__['bad_variant_ids']) \
-            if sample in vapor_confident_variants else set()
-        sample_irs_good = set(irs_sample_confident_variants[sample].__dict__['good_variant_ids']) \
-            if sample in irs_sample_confident_variants else set()
-        sample_irs_bad = set(irs_sample_confident_variants[sample].__dict__['bad_variant_ids']) \
-            if sample in irs_sample_confident_variants else set()
-        all_good = sample_vapor_good.union(sample_irs_good)
-        all_bad = sample_vapor_bad.union(sample_irs_bad)
-        all_confident_variants[sample] = get_truth_overlap.SampleConfidentVariants(good_variant_ids=all_good,
-                                                                                   bad_variant_ids=all_bad)
-
-    logging.info(f"Total samples with valid variants: {len(all_confident_variants)}")
-    get_truth_overlap.output_confident_variants(all_confident_variants, output_file=arguments.output)
-    return all_confident_variants
+    logging.info("Writing IRS labels...")
+    get_truth_overlap.output_confident_variants(irs_sample_confident_variants, output_file=arguments.irs_output)
+    logging.info("Writing Vapor labels...")
+    get_truth_overlap.output_confident_variants(vapor_confident_variants, output_file=arguments.vapor_output)
+    return irs_sample_confident_variants, vapor_confident_variants
 
 
 if __name__ == "__main__":

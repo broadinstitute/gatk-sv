@@ -207,7 +207,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       input:
         sample_id=pacbio_sample_ids[i],
         main_vcf=PrepSampleVcf.out,
-        vapor_irs_json=GetVariantListsFromVaporAndIRS.output_json,
+        vapor_json=GetVariantListsFromVaporAndIRS.vapor_json,
         tool_names=tool_names,
         loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
         strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
@@ -218,8 +218,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
   call MergeJsons {
     input:
-      base_json=GetVariantListsFromVaporAndIRS.output_json,
-      jsons=RefineSampleLabels.out_json,
+      jsons=flatten([[GetVariantListsFromVaporAndIRS.vapor_json], RefineSampleLabels.out_json]),
       output_prefix="~{output_prefix_}.gq_training_labels",
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -280,7 +279,8 @@ task GetVariantListsFromVaporAndIRS {
   String vapor_json = "vapor_data.json"
 
   output {
-    File output_json = "${output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json"
+    File vapor_json = "~{output_prefix}.gq_recalibrator_labels.vapor.json"
+    File irs_json = "~{output_prefix}.gq_recalibrator_labels.irs.json"
   }
 
   command <<<
@@ -324,7 +324,8 @@ task GetVariantListsFromVaporAndIRS {
       ~{"--vapor-read-support-pos-thresh " + vapor_pos_read_threshold} \
       ~{"--vapor-read-support-neg-thresh " + vapor_neg_read_threshold} \
       ~{"--vapor-read-support-neg-cov-thresh " + vapor_neg_cov_read_threshold} \
-      -O ~{output_prefix}.gq_recalibrator_labels.from_vapor_and_irs.json \
+      --irs-output ~{output_prefix}.gq_recalibrator_labels.irs.json \
+      --vapor-output ~{output_prefix}.gq_recalibrator_labels.vapor.json \
       ~{additional_args}
   >>>
 
@@ -495,7 +496,7 @@ task RefineSampleLabels {
   input {
     String sample_id
     File main_vcf
-    File vapor_irs_json
+    File vapor_json
     Array[String] tool_names
     Array[File] loose_concordance_vcfs
     Array[File] strict_concordance_vcfs
@@ -527,7 +528,7 @@ task RefineSampleLabels {
       --loose-concordance-vcfs ~{sep=" " loose_concordance_vcfs} \
       --strict-concordance-vcfs ~{sep=" " strict_concordance_vcfs} \
       --main-vcf ~{main_vcf} \
-      --vapor-json ~{vapor_irs_json} \
+      --vapor-json ~{vapor_json} \
       --sample-id ~{sample_id} \
       --json-out ~{output_prefix}.json \
       --table-out ~{output_prefix}.tsv \
@@ -547,7 +548,6 @@ task RefineSampleLabels {
 
 task MergeJsons {
   input {
-    File base_json
     Array[File] jsons
     String output_prefix
     String sv_pipeline_docker
@@ -557,7 +557,7 @@ task MergeJsons {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 7.5,
-                               disk_gb: ceil(10 + size(jsons, "GB") * 2 + size(base_json, "GB") * 2),
+                               disk_gb: ceil(10 + size(jsons, "GB") * 2),
                                boot_disk_gb: 10,
                                preemptible_tries: 1,
                                max_retries: 1
@@ -576,12 +576,12 @@ task MergeJsons {
     data = {}
     for p in paths:
         with open(p) as f:
-            data.update(json.load(f))
-    with open('~{base_json}') as f:
-        # Add samples without pacbio data
-        for key, value in json.load(f).items():
-            if key not in data:
-                data[key] = value
+          for key1, value1 in json.load(f).items():
+              if key1 not in data:
+                  data[key1] = value1
+              else:
+                  for key2, value2 in value1.items():
+                    data[key1][key2] = data[key1][key2] + value2
     with open('~{output_prefix}.json', 'w') as f:
         f.write(json.dumps(data))
     CODE
