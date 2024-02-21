@@ -52,10 +52,12 @@ You may [skip to the next section](#checkout) if you are using a dedicated Linux
 }>
  <TabItem value="gcp">
     ```bash
-    export PROJECT_ID="GOOGLE-PROJECT-ID"
+    export PROJECT_ID="<GOOGLE PROJECT ID>"
+    export ZONE_ID="<ZONE ID>"
     
-    # Make sure no machine with the following name exist.
-    export INSTANCE_NAMES="gatk-sv-docker-build"
+    # Make sure no machine with the following name exist,
+    # and you follow VM naming conventions, e.g., all lower-case characters.
+    export INSTANCE_NAMES="<VM NAME>"
     ```
 
  </TabItem>
@@ -76,9 +78,13 @@ You may [skip to the next step](#connect-to-vm) if you have already created a VM
     ```bash
     gcloud compute instances create $INSTANCE_NAMES \
       --project=$PROJECT_ID \
+      --zone=$ZONE_ID \
       --machine-type=e2-standard-2 \
-      --image=projects/ubuntu-os-cloud/global/images/ubuntu-2310-mantic-amd64-v20240213
+      --create-disk=auto-delete=yes,boot=yes,device-name=$INSTANCE_NAMES,image=projects/ubuntu-os-cloud/global/images/ubuntu-2310-mantic-amd64-v20240213,mode=rw,size=50
     ```
+    Note that this command creates a VM with `50 GiB` disk size, 
+    to accommodate for the disk space requirements of GATK-SV Docker images.  
+
     You may follow the documentation on 
     [this page](https://cloud.google.com/compute/docs/instances/create-start-instance#publicimage)
     for more details on creating a virtual machine on GCP.
@@ -148,7 +154,9 @@ You may [skip to the next step](#checkout) if you have already installed and con
 2. Install Docker
 
     ```bash
-    sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    sudo apt-get -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin && \
+    sudo usermod -aG docker ${USER} && \
+    newgrp docker
     ```
 
     You may follow [Docker documentation](https://docs.docker.com/engine/install/ubuntu/) 
@@ -202,8 +210,7 @@ that you want to build the Docker images based-off.
 2. Checkout the branch containing your changes.
 
     ```shell
-    git fetch origin <BRANCH_NAME>
-    git checkout origin/<BRANCH_NAME>
+    git checkout <BRANCH_NAME>
     ```
 
 ## Build and Publish Docker Images {#build}
@@ -211,13 +218,17 @@ that you want to build the Docker images based-off.
 In its minimal setup, you may use the following command to **build and publish** GATK-SV Docker images.
 
 ```shell
-python scripts/docker/build_docker.py \
+python3 scripts/docker/build_docker.py \
     --targets <IMAGES> \
     --image-tag <TAG> \
     --docker-repo <CONTAINER_REGISTRY>
 ```
 
 The arguments are explained in the following.
+
+- [`--targets`](#targets);
+- [`--image-tag`](#tag);
+- [`--docker-repo`](#registry).
 
 ### `--targets` {#targets}
 
