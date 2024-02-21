@@ -37,7 +37,8 @@ even if the build process runs successfully.
 This section outlines steps to follow in order to 
 create and connect to a Linux virtual machine (VM)
 on a cloud service provider.
-You may skip this section if you are using a dedicated Linux machine (e.g., a laptop running Ubuntu).
+You may [skip to the next section](#checkout) if you are using a dedicated Linux machine 
+(e.g., a laptop running Ubuntu).
 
 
 #### 1. Set environment variables
