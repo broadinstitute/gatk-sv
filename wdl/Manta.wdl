@@ -114,6 +114,7 @@ task RunManta {
   output {
     File vcf = "${sample_id}.manta.vcf.gz"
     File index = "${sample_id}.manta.vcf.gz.tbi"
+
   }
   command <<<
 
@@ -136,7 +137,7 @@ task RunManta {
       --runDir . \
       --callRegions ~{region_bed}
 
-    sed -i 's/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 1/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 0/' /usr/local/bin/manta/bin/configManta.py.ini
+    sed -i 's/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 1/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 0/' /usr/local/bin/manta/bin/configManta.py.ini && echo "sed command successful" || echo "sed command failed"
 
 
     # always tell manta there are 2 GiB per job, otherwise it will
