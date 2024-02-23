@@ -34,7 +34,7 @@ def process_bed_file(input_bed, n_per_split, bca=True):
             # array and increments the counter for that array
             for prefix, conditions in condition_prefixes.items():
                 if conditions['condition'](line):
-                    line[4],line[5]=line[5],line[4]
+                    line[4], line[5] = line[5], line[4]
                     current_lines[prefix].append('\t'.join(line))
                     current_counts[prefix] += 1
 
@@ -60,6 +60,18 @@ def process_bed_file(input_bed, n_per_split, bca=True):
                 outfile.write('\n'.join(lines))
 
             logging.info(f"File '{output_file}' written.")
+
+# Function to generate the pattern for suffixes
+def increment_suffix(suffix):
+    # define the alphabet and ending
+    alphabet = 'abcdefghijklmnopqrstuvwxyz'
+    if suffix == 'z' * 6:
+        raise ValueError('All possible files generated.')
+    else:
+        # if there are available suffixes increment to next available suffix
+        index = alphabet.index(suffix[0])
+        next_char = alphabet[(index + 1) % 26]
+        return next_char + suffix[1:]
 
 
 def main():
