@@ -12,9 +12,11 @@ def process_bed_file(input_bed, n_per_split, bca=True):
     # Dictionary to store the conditions to be checked with matching prefixes
     condition_prefixes = {
         'gt5kb': {
-            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
+                        int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
         'lt5kb': {
-            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
+                        int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
         'bca': {'condition': lambda line: bca and (
                 line[SVTYPE_FIELD] != 'DEL' and line[SVTYPE_FIELD] != 'DUP' and line[SVTYPE_FIELD] != 'INS')},
         'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
@@ -61,6 +63,7 @@ def process_bed_file(input_bed, n_per_split, bca=True):
 
             logging.info(f"File '{output_file}' written.")
 
+
 # Function to generate the pattern for suffixes
 def increment_suffix(suffix):
     # define the alphabet and ending
@@ -78,7 +81,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bed", help="Path to input bed file", required=True)
     parser.add_argument("--n", help="number of variants per file", required=True)
-    parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs", action='store_true')
+    parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs",
+                        action='store_true')
     parser.add_argument("--log-level", required=False, default="INFO", help="Specify level of logging information")
     args = parser.parse_args()
 
