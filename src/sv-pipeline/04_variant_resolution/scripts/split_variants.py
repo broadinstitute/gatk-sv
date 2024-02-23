@@ -12,13 +12,10 @@ def process_bed_file(input_bed, n_per_split, bca=True):
     # Dictionary to store the conditions to be checked with matching prefixes
     condition_prefixes = {
         'gt5kb': {
-            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
-                        int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
         'lt5kb': {
-            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
-                        int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
-        'bca': {'condition': lambda line: bca and (
-                line[SVTYPE_FIELD] != 'DEL' and line[SVTYPE_FIELD] != 'DUP' and line[SVTYPE_FIELD] != 'INS')},
+            'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+        'bca': {'condition': lambda line: bca and (line[SVTYPE_FIELD] != 'DEL' and line[SVTYPE_FIELD] != 'DUP' and line[SVTYPE_FIELD] != 'INS')},
         'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
     }
 
