@@ -218,7 +218,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
   call MergeJsons {
     input:
-      jsons=flatten([[GetVariantListsFromVaporAndIRS.vapor_json], RefineSampleLabels.out_json]),
+      jsons=flatten([[GetVariantListsFromVaporAndIRS.irs_json], RefineSampleLabels.out_json]),
       output_prefix="~{output_prefix_}.gq_training_labels",
       sv_pipeline_docker=sv_pipeline_docker
   }
