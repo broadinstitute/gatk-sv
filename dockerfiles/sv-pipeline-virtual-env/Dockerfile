@@ -20,7 +20,7 @@ RUN apt-get -qqy update --fix-missing && \
 # install conda packages
 # NOTE: need to use scipy=1.7.3 instead of scipy=1.8.0 because it makes hail angry
 ARG CONDA_PKGS="cython=0.29.28 numpy=1.22.3 pandas=1.4.2 scipy=1.7.3 scikit-learn=1.0.2 intervaltree=3.1.0 \
-                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2"
+                matplotlib=3.5.1 natsort=8.1.0 google-cloud-dataproc=4.0.2 seaborn=0.12.2"
 RUN mamba install -qy --freeze-installed -n $CONDA_ENV_NAME -c conda-forge -c bioconda $CONDA_PKGS
 
 # copy in HTSLIB install so that pysam uses same version as is available in pipeline
@@ -99,19 +99,5 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
            /var/lib/apt/lists/* \
            /usr/share/man/?? \
            /usr/share/man/??_*
-
-# Install plink2 & KING (for relatedness inference)
-ARG KING_URL="https://www.kingrelatedness.com/executables/Linux-king215.tar.gz"
-RUN mkdir -p /opt/bin && \
-    cd /opt/bin && \
-    wget -q $KING_URL && \
-    tar -xzf Linux-king215.tar.gz && \
-    rm -f Linux-king215.tar.gz
-
-ARG PLINK2_URL="https://github.com/chrchang/plink-ng/releases/download/2019/plink2_linux_x86_64_20190107.zip"
-RUN cd /opt/bin && \
-    wget -q $PLINK2_URL && \
-    unzip plink2_linux_x86_64_20190107.zip && \
-    rm -f plink2_linux_x86_64_20190107.zip
 
 ENV PATH=/opt/bin:$PATH
