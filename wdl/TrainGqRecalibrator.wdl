@@ -12,6 +12,7 @@ workflow TrainGqRecalibrator {
         Array[String] train_args = []
         String gatk_docker
         String samtools_cloud_docker
+        Int? preemptible_tries
     }
 
     call Utils.GetVcfSize {
@@ -30,7 +31,8 @@ workflow TrainGqRecalibrator {
             gq_recalibrator_model_file=gq_recalibrator_model_file,
             train_args=train_args,
             gatk_docker=gatk_docker,
-            num_entries=GetVcfSize.num_entries
+            num_entries=GetVcfSize.num_entries,
+            preemptible_tries=preemptible_tries
     }
 
     output {
