@@ -52,6 +52,7 @@ task TrainGqRecalibratorTask {
         Float mem_scale_vcf_size = 25.2
         Float mem_scale_num_entries = "3.7e-7"
         Float mem_gb_overhead = 1.5
+        Int preemptible_tries = 3
     }
 
     Int disk_gb = round(1000 + size([train_vcf, train_vcf_index, ped_file, truth_file], "GiB") +
@@ -68,7 +69,7 @@ task TrainGqRecalibratorTask {
     runtime {
         docker: gatk_docker
         cpu: 1
-        preemptible: 3
+        preemptible: preemptible_tries
         max_retries: 1
         memory: mem_gb + " GiB"
         disks: "local-disk " + disk_gb + " HDD"
