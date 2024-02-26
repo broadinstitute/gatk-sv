@@ -26,7 +26,6 @@ workflow ShardedManualRevise {
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
     String sv_base_mini_docker
-    String sv_benchmark_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_attr_scatter_vcf
@@ -82,7 +81,7 @@ workflow ShardedManualRevise {
             MEI_DEL_Rescue = MEI_DEL_Rescue,
             CPX_manual = CPX_manual,
             CTX_manual = CTX_manual,
-            sv_benchmark_docker = sv_benchmark_docker,
+            sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_revise_vcf
     }
 
@@ -391,7 +390,7 @@ task ReviseVcf{
         File MEI_DEL_Rescue
         File CPX_manual
         File CTX_manual
-        String sv_benchmark_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -631,7 +630,7 @@ task ReviseVcf{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_benchmark_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }

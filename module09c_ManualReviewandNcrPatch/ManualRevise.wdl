@@ -25,7 +25,6 @@ workflow ManualRevise {
     String sv_pipeline_docker
     String sv_pipeline_hail_docker
     String sv_base_mini_docker
-    String sv_benchmark_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_attr_scatter_vcf

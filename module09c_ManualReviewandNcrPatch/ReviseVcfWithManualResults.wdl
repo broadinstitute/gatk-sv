@@ -33,7 +33,6 @@ workflow ReviseVcfWithManualResults{
         String prefix
         String contig
 
-        String sv_benchmark_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
         String sv_pipeline_hail_docker
@@ -67,7 +66,6 @@ workflow ReviseVcfWithManualResults{
             CPX_manual = CPX_manual_output,
             CTX_manual = CTX_manual,
             use_hail = false,
-            sv_benchmark_docker = sv_benchmark_docker,
             sv_pipeline_docker = sv_pipeline_docker,
             sv_base_mini_docker = sv_base_mini_docker,
             sv_pipeline_hail_docker = sv_pipeline_hail_docker,
@@ -83,7 +81,7 @@ workflow ReviseVcfWithManualResults{
                 batch_name = contig,
                 vcf_file = ManualRevise.cpx_ctx_vcf,
                 raw_SVs = raw_SVs,
-                sv_benchmark_docker = sv_benchmark_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_override_add_raw_SVs
         }
     }
@@ -156,7 +154,7 @@ task AddRawSVs{
         String batch_name
         File vcf_file
         File? raw_SVs
-        String sv_benchmark_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -174,7 +172,7 @@ task AddRawSVs{
     command<<<
         set -euo pipefail
         tabix -p vcf ~{vcf_file}
-        python /src/add_manual_review_ctx_to_vcf.py \
+        python /opt/sv-pipeline/scripts/manual_review/add_manual_review_ctx_to_vcf.py \
             --vcf ~{vcf_file} \
             --reviewed-events-file ~{raw_SVs} \
             --cohort-name ~{prefix} \
@@ -193,7 +191,7 @@ task AddRawSVs{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_benchmark_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }

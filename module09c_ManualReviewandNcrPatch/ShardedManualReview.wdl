@@ -56,7 +56,6 @@ workflow ShardedManualReview{
         Boolean run_remove_duplicates = false
         String? gcs_project
 
-        String sv_benchmark_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
         String sv_pipeline_hail_docker
@@ -153,7 +152,7 @@ workflow ShardedManualReview{
             input:
                 bed = SplitCpxCtx.cpx_ctx_bed,
                 sample_PE_metrics = sample_PE_metrics,
-                sv_benchmark_docker = sv_benchmark_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_generate_cpx_review_script
         }
 
@@ -229,7 +228,6 @@ workflow ShardedManualReview{
                 CTX_manual = CTX_manual,
                 prefix = "~{prefix}.~{i}",
                 contig = contig,
-                sv_benchmark_docker = sv_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
                 sv_pipeline_hail_docker = sv_pipeline_hail_docker
@@ -335,7 +333,7 @@ workflow ShardedManualReview{
                 batch_name = contig,
                 vcf_file = reviewed_vcf,
                 raw_SVs = split_raw_SVs,
-                sv_benchmark_docker = sv_benchmark_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_add_raw_SVs
         }
     }
@@ -443,7 +441,7 @@ task GenerateCpxReviewScript{
     input{
         File bed
         File sample_PE_metrics
-        String sv_benchmark_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -463,7 +461,7 @@ task GenerateCpxReviewScript{
     command<<<
         set -euo pipefail
     
-        python /src/reformat_CPX_bed_and_generate_script.py \
+        python /opt/sv-pipeline/scripts/manual_review/reformat_CPX_bed_and_generate_script.py \
         -i ~{bed} \
         -s ~{sample_PE_metrics} \
         -p CPX_CTX_disINS.PASS.PE_evidences \
@@ -482,7 +480,7 @@ task GenerateCpxReviewScript{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_benchmark_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -492,7 +490,7 @@ task GenerateCnvSegmentFromCpx{
     input{
         File bed
         File sample_depth_calls
-        String sv_benchmark_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -585,7 +583,7 @@ task GenerateCnvSegmentFromCpx{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_benchmark_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }

@@ -50,7 +50,6 @@ workflow ManualReview{
         Boolean run_fix_ends
         Boolean clean_del_bump
 
-        String sv_benchmark_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
         String sv_pipeline_hail_docker
@@ -107,7 +106,6 @@ workflow ManualReview{
                 run_fix_ends = run_fix_ends,
                 clean_del_bump = clean_del_bump,
 
-                sv_benchmark_docker = sv_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
 

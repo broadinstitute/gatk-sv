@@ -32,7 +32,6 @@ workflow ReviseVcf{
 
         String prefix
 
-        String sv_benchmark_docker
         String sv_base_mini_docker
         String sv_pipeline_docker
         String sv_pipeline_hail_docker
@@ -65,7 +64,6 @@ workflow ReviseVcf{
                 CTX_manual = CTX_manual,
                 duplicated_SVID_manual = duplicated_SVID_manual,
                 prefix = prefix,
-                sv_benchmark_docker = sv_benchmark_docker,
                 sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
                 sv_pipeline_hail_docker = sv_pipeline_hail_docker,
