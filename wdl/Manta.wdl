@@ -130,6 +130,9 @@ task RunManta {
     ln -s ~{bam_or_cram_index} sample~{bam_ext}~{index_ext}
 
 
+    sed -i 's/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 1/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 0/g' /usr/local/bin/manta/bin/configManta.py.ini && echo "sed command successful" || echo "sed command failed"
+
+
     # prepare the analysis job
     /usr/local/bin/manta/bin/configManta.py \
       --bam sample~{bam_ext} \
@@ -137,7 +140,7 @@ task RunManta {
       --runDir . \
       --callRegions ~{region_bed}
 
-    sed -i 's/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 1/enableRemoteReadRetrievalForInsertionsInGermlineCallingModes = 0/g' /usr/local/bin/manta/bin/configManta.py.ini && echo "sed command successful" || echo "sed command failed"
+
 
 
     # always tell manta there are 2 GiB per job, otherwise it will
