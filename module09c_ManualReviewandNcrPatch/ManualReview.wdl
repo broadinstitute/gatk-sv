@@ -134,6 +134,8 @@ workflow ManualReview{
     output{
         Array[File] reviewed_vcfs = ShardedManualReview.revised_output_vcf
         Array[File] reviewed_vcf_idxes = ShardedManualReview.revised_output_vcf_idx
+        Array[File] cpx_evidences = ShardedManualReview.cpx_evidences
+        Array[File] ctx_evidences = ShardedManualReview.ctx_evidences
     }
 
 
