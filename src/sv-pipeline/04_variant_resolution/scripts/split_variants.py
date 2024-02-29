@@ -2,14 +2,17 @@
 import argparse
 import logging
 
+
 def process_bed_file(input_bed, n_per_split, bca=True):
     SVTYPE_FIELD = 4
     END_FIELD = 2
     START_FIELD = 1
 
     condition_prefixes = {
-        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
-        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
+                    int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
+        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
+                    int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
         'bca': {'condition': lambda line: bca and line[SVTYPE_FIELD] not in ['DEL', 'DUP', 'INS']},
         'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
     }
@@ -45,6 +48,7 @@ def process_bed_file(input_bed, n_per_split, bca=True):
                 outfile.write('\n'.join(lines))
             logging.info(f"File '{output_file}' written.")
 
+
 def increment_suffix(suffix):
     alphabet = 'abcdefghijklmnopqrstuvwxyz'
     if suffix == 'z' * 6:
@@ -54,11 +58,13 @@ def increment_suffix(suffix):
         next_char = alphabet[(index + 1) % 26]
         return next_char + suffix[1:]
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bed", help="Path to input bed file", required=True)
     parser.add_argument("--n", help="number of variants per file", required=True, type=int)
-    parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs", action='store_true')
+    parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs",
+                        action='store_true')
     parser.add_argument("--log-level", required=False, default="INFO", help="Specify level of logging information")
     args = parser.parse_args()
 
@@ -68,6 +74,7 @@ def main():
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=numeric_level, format='%(levelname)s: %(message)s')
     process_bed_file(args.bed, args.n, args.bca)
+
 
 if __name__ == '__main__':
     main()
