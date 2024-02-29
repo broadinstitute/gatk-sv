@@ -408,16 +408,15 @@ task SplitCpxCtx{
     String prefix  = basename(bed, ".bed.gz")
 
     command<<<
-        set -eu
         zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
 
         filterColumn=$(zcat ~{bed} | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
 
-        zcat ~{bed} | awk 'NR > 1' | grep CPX | awk -v filter_column=${filterColumn} '$filter_column ~ /UNRESOLVED/' >> ~{prefix}.cpx_ctx.bed
+        zcat ~{bed} | awk 'NR > 1' | {grep CPX || true; } | awk -v filter_column=${filterColumn} '$filter_column ~ /UNRESOLVED/' >> ~{prefix}.cpx_ctx.bed
 
-        zcat ~{bed} | awk 'NR > 1' | grep CTX >> ~{prefix}.cpx_ctx.bed
+        zcat ~{bed} | awk 'NR > 1' | {grep CTX || true; } >> ~{prefix}.cpx_ctx.bed
 
-        zcat ~{bed} | awk 'NR > 1' | grep INS | grep INV >> ~{prefix}.cpx_ctx.bed
+        zcat ~{bed} | awk 'NR > 1' | {grep INS || true; } | {grep INV || true; } >> ~{prefix}.cpx_ctx.bed
 
         bgzip ~{prefix}.cpx_ctx.bed
     >>>
