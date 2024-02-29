@@ -612,7 +612,7 @@ task SplitBndDel{
     command<<<
         set -euo pipefail
 
-        python3 <<CODE
+        python <<CODE
 
         import os
         import pysam
