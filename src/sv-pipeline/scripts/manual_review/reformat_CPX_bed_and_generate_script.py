@@ -270,7 +270,7 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos):
               ref_alt = ['a_bc','a_ba']  
             else:
               ref_alt = ['a_b', 'a_ba']    
-        elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ']:
+        elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ'] or pin[header_pos['SVTYPE']] in ['CTX']:
           seg1 = pin[:3]
           seg2 = [pin[header_pos['CHR2']], pin[header_pos['END2']], pin[header_pos['END2']]]
           if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
