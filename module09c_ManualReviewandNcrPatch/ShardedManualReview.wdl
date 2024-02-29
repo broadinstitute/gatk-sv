@@ -416,7 +416,7 @@ task SplitCpxCtx{
 
         zcat ~{bed} | awk 'NR > 1' | { grep CTX || true; } >> ~{prefix}.cpx_ctx.bed
 
-        zcat ~{bed} | awk 'NR > 1' | { grep INS || true; } | {grep INV || true; } >> ~{prefix}.cpx_ctx.bed
+        zcat ~{bed} | awk 'NR > 1' | { grep INS || true; } | { grep INV || true; } >> ~{prefix}.cpx_ctx.bed
 
         bgzip ~{prefix}.cpx_ctx.bed
     >>>
