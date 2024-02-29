@@ -9,10 +9,8 @@ def process_bed_file(input_bed, n_per_split, bca=True):
     START_FIELD = 1
 
     condition_prefixes = {
-        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
-                    int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
-        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (
-                    int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
+        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
         'bca': {'condition': lambda line: bca and line[SVTYPE_FIELD] not in ['DEL', 'DUP', 'INS']},
         'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD] == 'INS'}
     }
