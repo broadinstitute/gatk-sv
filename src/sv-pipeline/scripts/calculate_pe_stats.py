@@ -62,20 +62,21 @@ def calc_dist_all(pe, pe_header):
 def evaluate(descriptor, pe, descriptor_header, pe_header):
     svid = descriptor[descriptor_header["name"]]
     sample = descriptor[descriptor_header["sample"]]
+    cpx_type = descriptor[descriptor_header["CPX_TYPE"]]
     if len(pe) == 0:
         # return [svid, sample] + ["0"]*10
         return [svid, sample] + ["0"]*6
     fwd, rev = count_discontinous_all(pe, pe_header)
     pp, pm, mp, mm = count_patterns(pe, pe_header)
     dist1, dist2, dist3, dist4 = calc_dist_all(pe, pe_header)
-    return [svid, sample] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
+    return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
     #return [svid, sample] + [str(x) for x in [pp, pm, mp, mm, fwd, rev, dist1, dist2, dist3, dist4]]
 
 
 def process(pe_evidence, out_file):
     with gzip.open(pe_evidence, 'rt') as pe, open(out_file, 'w') as out:
         # out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev dist1 dist1 dist2 dist3 dist4".split()) + "\n")
-        out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev".split()) + "\n")
+        out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_fwd discont_rev".split()) + "\n")
         first = True
         descriptor_header = None
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
