@@ -1,7 +1,7 @@
 ---
 title: Docker Images
 description: GATK-SV Docker Images
-sidebar_position: 3
+sidebar_position: 4
 slug: ./dockers
 ---
 
