@@ -12,8 +12,8 @@ workflow ApplyNCRAndRefArtifactFiltersPerContig {
     Int records_per_shard = 20000
 
     Float? no_call_rate_cutoff
-    Boolean filter_reference_artifacts
-    Boolean remove_zero_carrier_sites
+    Boolean filter_reference_artifacts = true
+    Boolean remove_zero_carrier_sites = true
 
     File? apply_filters_script
 

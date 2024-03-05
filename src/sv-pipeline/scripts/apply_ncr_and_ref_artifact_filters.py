@@ -6,7 +6,9 @@ import pysam
 import math
 from typing import List, Text, Dict, Optional
 
-
+_gt_no_call_map = dict()
+_gt_hom_var_map = dict()
+_gt_ref_map = dict()
 _HIGH_NCR_FILTER = "HIGH_NCR"
 _REFERENCE_ARTIFACT_FILTER = "REFERENCE_ARTIFACT"
 _REFERENCE_ARTIFACT_THRESHOLD = 0.99
@@ -78,7 +80,7 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
     return True
 
 
-def process(vcf, fout, ploidy_dict, thresholds, args):
+def process(vcf, fout, ploidy_dict, args):
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
@@ -128,10 +130,10 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--ncr-threshold", type=float,
                         help=f"If provided, adds {_HIGH_NCR_FILTER} filter to records with no-call rates equal to or "
                              f"exceeding this threshold")
-    parser.add_argument("--filter-reference-artifacts", type=bool, action='store_true', default=False,
+    parser.add_argument("--filter-reference-artifacts", action='store_true', default=False,
                         help=f"If provided, adds {_REFERENCE_ARTIFACT_FILTER} filter to records that are hom alt in "
                              f">{_REFERENCE_ARTIFACT_THRESHOLD*100}% of samples>")
-    parser.add_argument("--remove-zero-carrier-sites", type=bool, action='store_true', default=False,
+    parser.add_argument("--remove-zero-carrier-sites", action='store_true', default=False,
                         help=f"If provided, hard filters sites with zero carriers>")
     if len(argv) <= 1:
         parser.parse_args(["--help"])

@@ -6,6 +6,7 @@ workflow ApplyNCRAndRefArtifactFilters {
   input {
     Array[File] vcfs
     String label = "ncr_and_refartifact"
+    File ploidy_table
 
     File? apply_filters_script
 
@@ -19,6 +20,7 @@ workflow ApplyNCRAndRefArtifactFilters {
       input:
         vcf = vcf,
         prefix = "~{base}.~{label}",
+        ploidy_table = ploidy_table,
         apply_filters_script = apply_filters_script,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
