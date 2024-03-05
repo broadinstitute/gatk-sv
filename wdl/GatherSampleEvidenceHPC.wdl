@@ -380,11 +380,11 @@ task RunCallers {
 
     # inversion conversion, then compression and index
     python2 /usr/local/bin/manta/libexec/convertInversion.py \
-    /usr/local/bin/samtools \
-    ~{reference_fasta} \
-    results/variants/diploidSV.vcf.gz \
-    | bcftools reheader -s <(echo "~{sample_id}") \
-    > diploidSV.vcf
+    /opt/samtools/bin/samtools \
+      ~{reference_fasta} \
+      results/variants/diploidSV.vcf.gz \
+      | bcftools reheader -s <(echo "~{sample_id}") \
+      > diploidSV.vcf
 
     bgzip -c diploidSV.vcf > ~{sample_id}.manta.vcf.gz
     tabix -p vcf ~{sample_id}.manta.vcf.gz
