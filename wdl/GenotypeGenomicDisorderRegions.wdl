@@ -38,6 +38,7 @@ task RunRdTest {
     File rd_index
     File median_file
     File depth_sepcutoff
+    Int large_size_cutoff = 1000000
     String sv_pipeline_rdtest_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -60,7 +61,7 @@ task RunRdTest {
       -c ~{rd_file} \
       -m ~{median_file} \
       -n ~{batch_name} \
-      -s 100000000 -o rdtest_~{batch_name}
+      -s ~{large_size_cutoff} -o rdtest_~{batch_name}
     tar czvf rdtest_~{batch_name}.tar.gz rdtest_~{batch_name}/
   >>>
   output{
