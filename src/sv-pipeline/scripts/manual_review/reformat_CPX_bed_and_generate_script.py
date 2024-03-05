@@ -182,6 +182,25 @@ def extract_bp_list_V4(coordinates, segments, small_sv_size_threshold):
             structures = ['ab','aba^']
     return [breakpoints, structures]
 
+def is_interchromosomal(pin, header_pos):
+   chrom = pin[0]
+   if pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
+      seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'DUP_' in i][0].split('_')[1].split(':')
+      if seg2[0] != chrom:
+          return True
+   elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
+      seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
+      if seg2[0] != chrom:
+         return True
+   elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ'] or pin[header_pos['SVTYPE']] in ['CTX']:
+      return True
+   elif "INV_" in pin[header_pos['SOURCE']] and pin[header_pos['SVTYPE']]=="INS":
+      seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INV_' in i][0].split('_')[1].split(':')
+      seg2 = [seg2[0]]+seg2[1].split('-')
+      if seg2[0] != chrom:
+          return True
+   return False
+
 def cpx_SV_readin(input_bed, header_pos):
   fin=os.popen(r'''zcat %s'''%(input_bed))
   out = []
@@ -189,7 +208,7 @@ def cpx_SV_readin(input_bed, header_pos):
   for line in fin:
     pin=line.strip().split('\t')
     if not pin[0][0]=="#":
-      if pin[header_pos['CHR2']]==pin[0]:
+      if not is_interchromosomal(pin, header_pos):
         if pin[header_pos['CPX_TYPE']] in ['delINV', 'INVdel', 'dupINV','INVdup','delINVdel', 'delINVdup','dupINVdel','dupINVdup']:
           segments = pin[header_pos['CPX_INTERVALS']].split(',')
           breakpoints = extract_bp_list_for_inv_cnv_events(segments, pin[header_pos['CPX_TYPE']])
@@ -237,7 +256,7 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos):
   for line in fin:
     pin=line.strip().split('\t')
     if not pin[0][0]=="#":
-      if not pin[header_pos['CHR2']]==pin[0]:
+      if is_interchromosomal(pin, header_pos):
         if pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:          
           seg1 = pin[:3]
           seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'DUP_' in i][0].split('_')[1].split(':')
