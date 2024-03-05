@@ -208,7 +208,7 @@ task GenerateCpxReviewScript {
         -i ~{bed} \
         -b ~{batch_pe_file} \
         -p ~{prefix}.pe_review.txt \
-        -c collect_PE_evidence.~{prefix}.sh \
+        -c collect_PE_evidence.~{prefix}.sh
 
     >>>
 

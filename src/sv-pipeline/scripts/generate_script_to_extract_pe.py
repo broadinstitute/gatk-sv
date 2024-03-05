@@ -337,10 +337,10 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_
       elif info[1] == ['a_b', 'a_ba^'] or info[1] == ['a_bc','a_ba^']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
         common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_front)+'-'+str(breakpints[0][1]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' ", '>>', PE_evidence]
         common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_back)+'-'+str(breakpints[0][2]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' ", '>>', PE_evidence]
-      elif info[1] == ['CTX_PQ/QP']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
+      elif info[1] == ['CTX_PQ/QP']:  #CTX_PQ/QP
         common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_back) , '&&', '$5<'+str(breakpints[1][1]+flank_front), ") print}' ", '>>', PE_evidence]
         common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_front) , '&&', '$5<'+str(breakpints[1][2]+flank_back), ") print}' ", '>>', PE_evidence]
-      elif info[1] == ['CTX_PP/QQ']:  #inverted insertion, insertion from the larger chromosome to the smaller chromosome
+      elif info[1] == ['CTX_PP/QQ']:  #CTX_PP/QQ
         common_1 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][1]-flank_back)+'-'+str(breakpints[0][1]+flank_front), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][1]-flank_front) , '&&', '$5<'+str(breakpints[1][1]+flank_back), ") print}' ", '>>', PE_evidence]
         common_2 = ['tabix', batch_pe_file, breakpints[0][0]+':'+str(breakpints[0][2]-flank_front)+'-'+str(breakpints[0][2]+flank_back), '| grep', 'sample', '| awk', "'{if (", '$4=="' + breakpints[1][0] +'" &&', '$5>'+str(breakpints[1][2]-flank_back) , '&&', '$5<'+str(breakpints[1][2]+flank_front), ") print}' ", '>>', PE_evidence]
       else:
@@ -381,7 +381,7 @@ def main():
   header_pos = header_pos_readin(input_bed)
   SVID_sample = SVID_sample_readin(input_bed, header_pos)
 
-  descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS AC AN AF".split()
+  descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS SOURCE AC AN AF".split()
 
   cpx_SV = cpx_SV_readin(input_bed, header_pos, descriptor_fields)
   cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields)

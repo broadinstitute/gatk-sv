@@ -3,21 +3,22 @@ import argparse
 import gzip
 
 
-def count_discontinuous(seq, reverse = False):
-    # sort by position
-    seq.sort(key=lambda a: a[0], reverse=reverse)
-    # count changes in direction (expect 2, one per column per direction)
-    return len([i for i in range(1, len(seq)) if seq[i][1]!=seq[i-1][1]])
+def count_discontinuous(pe, sort_on = 0):
+    DIR1 = 2
+    DIR2 = 5
+    # sort by position then chromosome (first in pair if sort_on = 0, second in pair if sort_on = 3)
+    # column indexes: sort_on = contig, sort_on + 1 = position, sort_on + 2 = +/-
+    pe_sort = sorted(pe, key=lambda x: (x[sort_on + 1], x[sort_on]))
+    # count changes in direction (expect 2 for each sorting method, one per column)
+    dir1_discont = len([i for i in range(1, len(pe_sort)) if pe_sort[i][DIR1]!=pe_sort[i-1][DIR1]])
+    dir2_discont = len([i for i in range(1, len(pe_sort)) if pe_sort[i][DIR2]!=pe_sort[i-1][DIR2]])
+    return dir1_discont + dir2_discont
 
 
 def count_discontinous_all(pe, pe_header):
-    dir1 = [(x[pe_header["pos1"]], x[pe_header["dir1"]]) for x in pe]
-    fwd = count_discontinuous(dir1)
-    rev = count_discontinuous(dir1, reverse=True)
-    dir2 = [(x[pe_header["pos2"]], x[pe_header["dir2"]]) for x in pe]
-    fwd += count_discontinuous(dir2)
-    rev += count_discontinuous(dir2, reverse=True)
-    return fwd, rev
+    if len(pe) == 0:
+        return "NA", "NA"
+    return count_discontinuous(pe, 0), count_discontinuous(pe, 3)
 
 
 def count_patterns(pe, pe_header):
@@ -29,54 +30,63 @@ def count_patterns(pe, pe_header):
     return counts.values()
 
 
-def calc_dist(chrom_seq, pos_seq):
-    # TODO: redo based on direction change
-    max_jump = 0
-    max_jump_idx = 0
-    prev_chrom = None
-    prev_pos = None
-    curr_idx = 0
-    for chrom, pos in zip(chrom_seq, pos_seq):
-        if curr_idx == 0:
-            prev_chrom = chrom
-            prev_pos = pos
+def determine_expected_patterns(descriptor, descriptor_header):
+    if "INV" in descriptor[descriptor_header["SVTYPE"]] or \
+        "INV" in descriptor[descriptor_header["CPX_TYPE"]] or \
+        descriptor[descriptor_header["CPX_TYPE"]] == "CTX_PQ/QP":
+        # "INV" in descriptor[descriptor_header["SOURCE"]] or \
+        return ["++", "--"]
+    else:
+        return ["+-", "-+"]
+
+
+def calc_dist_all(pe, pe_header, expected_patterns):
+    pattern1_chrom1 = []
+    pattern1_chrom2 = []
+    pattern2_chrom1 = []
+    pattern2_chrom2 = []
+
+    # get positions of all pairs matching expected patterns
+    for pair in pe:
+        dir1 = pair[pe_header["dir1"]]
+        dir2 = pair[pe_header["dir2"]]
+        pattern = dir1 + dir2
+        if pattern == expected_patterns[0]:
+            pattern1_chrom1.append(int(pair[pe_header["pos1"]]))
+            pattern1_chrom2.append(int(pair[pe_header["pos2"]]))
+        elif pattern == expected_patterns[1]:
+            pattern2_chrom1.append(int(pair[pe_header["pos1"]]))
+            pattern2_chrom2.append(int(pair[pe_header["pos2"]]))
+
+    # sort and calculate distances
+    dists = []
+    for pos_list in [pattern1_chrom1, pattern1_chrom2, pattern2_chrom1, pattern2_chrom2]:
+        if len(pos_list) < 1:
+            dists.append("NA")
         else:
-            if chrom != prev_chrom:
-                max_jump = 248956422
-                max_jump_idx = curr_idx
-            elif pos - prev_pos > max_jump:
-                max_jump = pos - prev_pos
-                max_jump_idx = curr_idx
-        prev_chrom = chrom
-        prev_pos = pos
-        curr_idx += 1
-    return pos_seq[max_jump_idx - 1] - pos_seq[0], pos_seq[-1] - pos_seq[max_jump_idx]
-
-
-def calc_dist_all(pe, pe_header):
-    dist1, dist3 = calc_dist([x[pe_header["chrom1"]] for x in pe], [int(x[pe_header["pos1"]]) for x in pe])
-    dist2, dist4 = calc_dist([x[pe_header["chrom2"]] for x in pe], [int(x[pe_header["pos2"]]) for x in pe])
-    return dist1, dist2, dist3, dist4
+            pos_list.sort()
+            dists.append(pos_list[-1] - pos_list[0])
+    return dists
 
 
 def evaluate(descriptor, pe, descriptor_header, pe_header):
     svid = descriptor[descriptor_header["name"]]
     sample = descriptor[descriptor_header["sample"]]
     cpx_type = descriptor[descriptor_header["CPX_TYPE"]]
-    if len(pe) == 0:
-        # return [svid, sample] + ["0"]*10
-        return [svid, sample] + ["0"]*6
-    fwd, rev = count_discontinous_all(pe, pe_header)
+    # if len(pe) == 0:
+    #     return [svid, sample, cpx_type] + ["0"]*4 + ["NA"]*6
+        # return [svid, sample, cpx_type] + ["0"]*4 + ["NA"]*2
+    discont_sortonfirst, discont_sortonsecond = count_discontinous_all(pe, pe_header)
     pp, pm, mp, mm = count_patterns(pe, pe_header)
-    dist1, dist2, dist3, dist4 = calc_dist_all(pe, pe_header)
-    return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
-    #return [svid, sample] + [str(x) for x in [pp, pm, mp, mm, fwd, rev, dist1, dist2, dist3, dist4]]
+    dist1, dist2, dist3, dist4 = calc_dist_all(pe, pe_header, determine_expected_patterns(descriptor, descriptor_header))
+    # return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
+    return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, discont_sortonfirst, discont_sortonsecond, dist1, dist2, dist3, dist4]]
 
 
 def process(pe_evidence, out_file):
     with gzip.open(pe_evidence, 'rt') as pe, open(out_file, 'w') as out:
-        # out.write("\t".join("#SVID sample ++ +- -+ -- discont_fwd discont_rev dist1 dist1 dist2 dist3 dist4".split()) + "\n")
-        out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_fwd discont_rev".split()) + "\n")
+        out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond dist1 dist2 dist3 dist4".split()) + "\n")
+        # out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond".split()) + "\n")
         first = True
         descriptor_header = None
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
