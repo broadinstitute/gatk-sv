@@ -100,18 +100,4 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
            /usr/share/man/?? \
            /usr/share/man/??_*
 
-# Install plink2 & KING (for relatedness inference)
-ARG KING_URL="https://www.kingrelatedness.com/executables/Linux-king215.tar.gz"
-RUN mkdir -p /opt/bin && \
-    cd /opt/bin && \
-    wget -q $KING_URL && \
-    tar -xzf Linux-king215.tar.gz && \
-    rm -f Linux-king215.tar.gz
-
-ARG PLINK2_URL="https://github.com/chrchang/plink-ng/releases/download/2019/plink2_linux_x86_64_20190107.zip"
-RUN cd /opt/bin && \
-    wget -q $PLINK2_URL && \
-    unzip plink2_linux_x86_64_20190107.zip && \
-    rm -f plink2_linux_x86_64_20190107.zip
-
 ENV PATH=/opt/bin:$PATH
