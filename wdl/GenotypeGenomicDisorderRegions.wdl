@@ -44,7 +44,7 @@ task RunRdTest {
   }
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 15,
+                               mem_gb: 30,
                                disk_gb: ceil(40.0 + size(rd_file, "GiB") * 4),
                                boot_disk_gb: 30,
                                preemptible_tries: 1,
