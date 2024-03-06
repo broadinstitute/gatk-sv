@@ -178,7 +178,7 @@ workflow ShardedManualReview{
                 PE_supp = CollectPEMetricsForCPX.evi_stat,
                 depth_supp = CollectLgCnvSupportForCPX.lg_cnv_depth_supp,
                 prefix = "~{prefix}.~{i}",
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_calcu_cpx_evidences
         }
 
@@ -188,7 +188,7 @@ workflow ShardedManualReview{
                 PE_supp = CollectPEMetricsForCPX.evi_stat,
                 depth_supp = CollectLgCnvSupportForCPX.lg_cnv_depth_supp,
                 prefix = "~{prefix}.~{i}",
-                sv_base_mini_docker = sv_base_mini_docker,
+                sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_calcu_cpx_evidences
         }
 
@@ -809,7 +809,7 @@ task CalculateCpxEvidences{
         File PE_supp
         File depth_supp
         String prefix
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -951,7 +951,7 @@ task CalculateCpxEvidences{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -963,7 +963,7 @@ task CalculateCtxEvidences{
         File PE_supp
         File depth_supp
         String prefix
-        String sv_base_mini_docker
+        String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -1070,7 +1070,7 @@ task CalculateCtxEvidences{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_pipeline_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
