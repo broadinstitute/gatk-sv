@@ -20,7 +20,7 @@ workflow GenotypeGenomicDisorderRegions {
         rd_file = rd_files[i],
         rd_index = rd_files[i] + ".tbi",
         median_file = median_files[i],
-        depth_sepcutoff = median_files[i],
+        depth_sepcutoff = depth_sepcutoff_files[i],
         sv_pipeline_rdtest_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_generate_median_geno
     }
