@@ -16,7 +16,7 @@ workflow GenotypeGenomicDisorderRegions {
     call RunRdTest {
       input:
         batch_name = batch_names[i],
-        rdtest_bed = rd_files[i],
+        rdtest_bed = genomic_disorder_regions_bed,
         rd_file = rd_files[i],
         rd_index = rd_files[i] + ".tbi",
         median_file = median_files[i],
@@ -44,7 +44,7 @@ task RunRdTest {
   }
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 30,
+                               mem_gb: 15,
                                disk_gb: ceil(40.0 + size(rd_file, "GiB") * 4),
                                boot_disk_gb: 30,
                                preemptible_tries: 1,
