@@ -399,9 +399,12 @@ task ReviseVcf{
             header.filters.add('REDUNDANT_LG_CNV', None, None, "Multiple large CNVs called at the same locus likely indicates unreliable clustering and/or low-quality multiallelic locus")
             header.filters.add('FAIL_MANUAL_REVIEW', None, None, "Low-quality variant that did not pass manual review of supporting evidence")
             header.filters.add('OUTLIER_SAMPLE_ENRICHED',None, None, "Deletion is enriched for non-reference genotypes in outlier samples, likely indicating noisy or unreliable genotypes")
-            header.filters.remove_header('BOTHSIDES_SUPPORT')
-            header.filters.remove_header('HIGH_SR_BACKGROUND')
-            header.filters.remove_header('PESR_GT_OVERDISPERSION')
+            if 'BOTHSIDES_SUPPORT' in header.filters:
+                header.filters.remove_header('BOTHSIDES_SUPPORT')
+            if 'HIGH_SR_BACKGROUND' in header.filters:
+                header.filters.remove_header('HIGH_SR_BACKGROUND')
+            if 'PESR_GT_OVERDISPERSION' in header.filters:
+                header.filters.remove_header('PESR_GT_OVERDISPERSION')
             header.formats.add('MANUAL', '1', 'String', 'Reason for a failure from manual review')
             NEW_INFOS = ['##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="PESR genotyping data is overdispersed. Flags sites where genotypes are likely noisier.">',
                          '##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Suspicious accumulation of split reads in predicted non-carrier samples. Flags sites more prone to false discoveries and where breakpoint precision is reduced.">',
