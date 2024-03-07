@@ -73,7 +73,7 @@ task ApplyFilters {
     Float? no_call_rate_cutoff
     Boolean filter_reference_artifacts
     Boolean remove_zero_carrier_sites
-    String? apply_filters_script
+    File? apply_filters_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
