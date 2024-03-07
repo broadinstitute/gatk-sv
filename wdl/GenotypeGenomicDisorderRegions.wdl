@@ -53,11 +53,14 @@ task RunRdTest {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
+    # Inject one sample from the batch into the 5th column
+    SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
+    awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$6}' ~{rdtest_bed} > intervals.bed
     mkdir rdtest_~{batch_name}/
     Rscript /opt/RdTest/RdTest.R \
       -v TRUE -g TRUE -p TRUE \
       -r ~{depth_sepcutoff} \
-      -b ~{rdtest_bed} \
+      -b intervals.bed \
       -c ~{rd_file} \
       -m ~{median_file} \
       -n ~{batch_name} \
