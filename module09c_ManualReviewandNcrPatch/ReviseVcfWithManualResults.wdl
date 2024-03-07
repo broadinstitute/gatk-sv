@@ -60,6 +60,7 @@ workflow ReviseVcfWithManualResults{
     call manual_revise.ManualRevise as ManualRevise{
         input:
             vcf = vcf_file,
+            vcf_idx = vcf_index,
             prefix = prefix,
             SVID_to_Remove = SVID_to_Remove,
             MEI_DEL_Rescue = MEI_DEL_Rescue,

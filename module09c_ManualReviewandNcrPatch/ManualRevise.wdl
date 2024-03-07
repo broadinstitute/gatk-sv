@@ -10,6 +10,7 @@ import "HailMerge.wdl" as HailMerge
 workflow ManualRevise {
   input {
     File vcf
+    File vcf_idx
     String prefix
     File? exclude_list
     Float merging_shard_scale_factor = 30000000
@@ -54,7 +55,6 @@ workflow ManualRevise {
   }
 
 
-  File vcf_idx = vcf + ".tbi"
   if (defined(exclude_list)) {
     File exclude_list_idx = exclude_list + ".tbi"
   }
