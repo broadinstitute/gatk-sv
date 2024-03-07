@@ -28,13 +28,14 @@ workflow GatherSampleEvidenceHPC {
     Array[File] melt_vcf = RunCallers.melt_vcf
     Array[File] melt_index = RunCallers.melt_index
     Array[File] wgs_metrics_file = RunCallers.wgs_metrics_file
+    Array[File] multiple_metrics_file = RunCallers.multiple_metrics_file
 
-    File split_out = RunCallers.split_out
-    File split_out_index = RunCallers.split_out_index
-    File disc_out = RunCallers.disc_out
-    File disc_out_index = RunCallers.disc_out_index
-    File sd_out = RunCallers.sd_out
-    File sd_out_index = RunCallers.sd_out_index
+    Array[File] split_out = RunCallers.split_out
+    Array[File] split_out_index = RunCallers.split_out_index
+    Array[File] disc_out = RunCallers.disc_out
+    Array[File] disc_out_index = RunCallers.disc_out_index
+    Array[File] sd_out = RunCallers.sd_out
+    Array[File] sd_out_index = RunCallers.sd_out_index
 
     Array[File] wham_vcf = RunCallers.wham_vcf
     Array[File] wham_index = RunCallers.wham_index
@@ -494,11 +495,6 @@ task RunCallers {
     File melt_index = "~{sample_id}.melt.vcf.gz.tbi"
     File wgs_metrics_file = "~{metrics_file_name}"
     File multiple_metrics_file = "~{metrics_table_filename}"
-
-    File pesr_disc = "~{sample_id}.disc.txt.gz"
-    File pesr_disc_index = "~{sample_id}.disc.txt.gz.tbi"
-    File pesr_split = "~{sample_id}.split.txt.gz"
-    File pesr_split_index = "~{sample_id}.split.txt.gz.tbi"
 
     File wham_vcf = "~{sample_id}.wham.vcf.gz"
     File wham_index = "~{sample_id}.wham.vcf.gz.tbi"
