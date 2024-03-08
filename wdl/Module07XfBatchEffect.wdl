@@ -4,12 +4,13 @@
 
 version 1.0
 
-import "prune_add_af.wdl" as calcAF
+import "CalcAF.wdl" as calcAF
 import "batch_effect_helper.wdl" as helper
 import "TasksMakeCohortVcf.wdl" as MiniTasks
+import "Utils.wdl" as util
 
 workflow XfBatchEffect {
-  input{
+  input {
     File vcf
     File vcf_idx
     File sample_batch_assignments
@@ -17,18 +18,20 @@ workflow XfBatchEffect {
     File sample_pop_assignments
     File excludesamples_list #empty file if need be
     File famfile
-    File contiglist
     File? par_bed
-    Int variants_per_shard
     Int? onevsall_cutoff=2
     String prefix
     File? af_pcrmins_premingq
+
+    Int records_per_shard_compare
+    Int records_per_shard_calc_af
+    Int records_per_shard_label
     String sv_pipeline_docker
+    String sv_base_mini_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
   }
   Array[String] batches = read_lines(batches_list)
-  Array[Array[String]] contigs = read_tsv(contiglist)
 
   # Shard VCF per batch, compute pops-specific AFs, and convert to table of VID & AF stats
   scatter ( batch in batches ) {
@@ -42,25 +45,34 @@ workflow XfBatchEffect {
         probands_list=excludesamples_list,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    # Prune VCF to samples
-    call calcAF.prune_and_add_vafs as getAFs {
+
+    call util.SubsetVcfBySamplesList {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
-        prefix=batch,
+        vcf = vcf,
+        vcf_idx = vcf_idx,
+        outfile_name = "~{prefix}.~{batch}.subset.vcf.gz",
+        list_of_samples = GetBatchSamplesList.include_samples_list,
+        remove_private_sites = false,
+        sv_base_mini_docker = sv_base_mini_docker
+    }
+    # Prune VCF to samples
+    call calcAF.CalcAF {
+      input:
+        vcf=SubsetVcfBySamplesList.vcf_subset,
+        vcf_idx=SubsetVcfBySamplesList.vcf_subset_index,
+        prefix="~{prefix}.~{batch}",
         sample_pop_assignments=sample_pop_assignments,
-        prune_list=GetBatchSamplesList.exclude_samples_list,
         famfile=famfile,
-        sv_per_shard=25000,
-        contiglist=contiglist,
         drop_empty_records="FALSE",
+        sv_per_shard=records_per_shard_calc_af,
         par_bed=par_bed,
-        sv_pipeline_docker=sv_pipeline_docker
+        sv_pipeline_docker=sv_pipeline_docker,
+        sv_pipeline_updates_docker=sv_pipeline_docker
     }
     # Get minimal table of AF data per batch, split by ancestry
     call GetFreqTable {
       input:
-        vcf=getAFs.output_vcf,
+        vcf=CalcAF.vcf_wAFs,
         sample_pop_assignments=sample_pop_assignments,
         prefix=batch,
         sv_pipeline_docker=sv_pipeline_docker
@@ -95,18 +107,6 @@ workflow XfBatchEffect {
     }
   }
 
-  # Generate matrix of correlation coefficients for all batches, by population & SVTYPE
-  #scatter ( pop in populations ) {
-  #  call MakeCorrelationMatrices {
-  #    input:
-  #      freq_table=MergeFreqTables.merged_table,
-  #      pop=pop,
-  #      batches_list=batches_list,
-  #      prefix=prefix,
-  #      sv_pipeline_docker=sv_pipeline_docker
-  #  }
-  #}
-
   # Perform one-vs-all comparison of AFs per batch to find batch-specific sites
   scatter ( batch in batches ) {
     call helper.check_batch_effects as one_vs_all_comparison {
@@ -115,7 +115,7 @@ workflow XfBatchEffect {
         batch1=batch,
         batch2="ALL_OTHERS",
         prefix=prefix,
-        variants_per_shard=variants_per_shard,
+        variants_per_shard=records_per_shard_compare,
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
@@ -137,22 +137,28 @@ workflow XfBatchEffect {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  # Apply batch effect labels
-  scatter ( contig in contigs ) {
-    call ApplyBatchEffectLabels as apply_labels_perContig {
+  call MiniTasks.ScatterVcf {
+    input:
+      vcf=vcf,
+      prefix=prefix,
+      records_per_shard=records_per_shard_label,
+      sv_pipeline_docker=sv_pipeline_docker
+  }
+
+  scatter (i in range(length(ScatterVcf.shards))) {
+    call ApplyBatchEffectLabels {
       input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
-        contig=contig[0],
+        vcf=ScatterVcf.shards[i],
         reclassification_table=MakeReclassificationTable.reclassification_table,
         mingq_prePost_pcrminus_fails=CompareFreqsPrePostMinGQPcrminus.pcrminus_fails,
-        prefix="~{prefix}.~{contig[0]}",
+        prefix="~{prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
+
   call MiniTasks.ConcatVcfs as merge_labeled_vcfs {
     input:
-      vcfs=apply_labels_perContig.labeled_vcf,
+      vcfs=ApplyBatchEffectLabels.labeled_vcf,
       naive=true,
       outfile_prefix="~{prefix}.batch_effects_labeled_merged",
       sv_base_mini_docker=sv_pipeline_docker,
@@ -169,7 +175,7 @@ workflow XfBatchEffect {
 # Get list of samples to include & exclude per batch
 # Always exclude probands from all batches
 task GetBatchSamplesList {
-  input{
+  input {
     File vcf
     File vcf_idx
     String batch
@@ -191,17 +197,17 @@ task GetBatchSamplesList {
     set -euo pipefail
     # Get list of all samples present in VCF header
     tabix -H ~{vcf} | fgrep -v "##" | cut -f10- | sed 's/\t/\n/g' | sort -Vk1,1 \
-    > all_samples.list
+      > all_samples.list
     # Get list of samples in batch
     fgrep -w ~{batch} ~{sample_batch_assignments} | cut -f1 \
-    | fgrep -wf - all_samples.list \
-    | fgrep -wvf ~{probands_list} \
-    > "~{batch}.samples.list" || true
+      | fgrep -wf - all_samples.list \
+      | fgrep -wvf ~{probands_list} \
+      > "~{batch}.samples.list" || true
     # Get list of samples not in batch
     fgrep -wv ~{batch} ~{sample_batch_assignments} | cut -f1 \
-    | cat - ~{probands_list} | sort -Vk1,1 | uniq \
-    | fgrep -wf - all_samples.list \
-    > "~{batch}.exclude_samples.list" || true
+      | cat - ~{probands_list} | sort -Vk1,1 | uniq \
+      | fgrep -wf - all_samples.list \
+      > "~{batch}.exclude_samples.list" || true
   >>>
 
   output {
@@ -223,7 +229,7 @@ task GetBatchSamplesList {
 
 # Run vcf2bed and subset to just include VID, SVTYPE, SVLEN, _AC, and _AN
 task GetFreqTable {
-  input{
+  input {
     File vcf
     File sample_pop_assignments
     String prefix
@@ -243,41 +249,41 @@ task GetFreqTable {
     set -euo pipefail
     #Run vcf2bed
     svtk vcf2bed \
-    --info ALL \
-    --no-samples \
-    ~{vcf} "~{prefix}.vcf2bed.bed"
+      --info ALL \
+      --no-samples \
+      ~{vcf} "~{prefix}.vcf2bed.bed"
     ### Create table of freqs by ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
-    | sed 's/\t/\n/g' \
-    | awk -v OFS="\t" '{ print $1, NR }' \
-    | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
-    | fgrep -v "OTH" \
-    | cut -f2 \
-    | paste -s -d\, || true )
+      | sed 's/\t/\n/g' \
+      | awk -v OFS="\t" '{ print $1, NR }' \
+      | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
+      | fgrep -v "OTH" \
+      | cut -f2 \
+      | paste -s -d\, || true )
     cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
-    | sed 's/^name/\#VID/g' \
-    | gzip -c \
-    > "~{prefix}.frequencies.preclean.txt.gz"
+      | sed 's/^name/\#VID/g' \
+      | gzip -c \
+      > "~{prefix}.frequencies.preclean.txt.gz"
     #Clean frequencies (note that this script automatically gzips the output file taken as the last argument)
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
-    "~{prefix}.frequencies.preclean.txt.gz" \
-    "~{sample_pop_assignments}" \
-    "~{prefix}.frequencies.txt"
+      "~{prefix}.frequencies.preclean.txt.gz" \
+      "~{sample_pop_assignments}" \
+      "~{prefix}.frequencies.txt"
     ### Create table of freqs, irrespective of ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
-    | sed 's/\t/\n/g' \
-    | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
-    | paste -s -d\, || true )
+      | sed 's/\t/\n/g' \
+      | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
+      | paste -s -d\, || true )
     cut -f"$idxs" "~{prefix}.vcf2bed.bed" > minfreq.subset.bed
     svtype_idx=$( sed -n '1p' minfreq.subset.bed \
-    | sed 's/\t/\n/g' \
-    | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
+      | sed 's/\t/\n/g' \
+      | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
     awk -v OFS="\t" -v sidx="$svtype_idx" '{ if ($sidx=="CNV" || $sidx=="MCNV") print $1, $2, $3, $6, $7; else print $1, $2, $3, $4, $5 }' minfreq.subset.bed \
-    | sed 's/^name/\#VID/g' \
-    | gzip -c \
-    > "~{prefix}.frequencies.allPops.txt.gz"
+      | sed 's/^name/\#VID/g' \
+      | gzip -c \
+      > "~{prefix}.frequencies.allPops.txt.gz"
   >>>
 
   output {
@@ -299,7 +305,7 @@ task GetFreqTable {
 
 # Combine frequency data across batches
 task MergeFreqTables {
-  input{
+  input {
     Array[File] tables
     File batches_list
     String prefix
@@ -320,52 +326,52 @@ task MergeFreqTables {
 
     #Get list of batch IDs and batch table paths
     while read batch; do
-    echo "$batch"
-    find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
+      echo "$batch"
+      find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
     done < ~{batches_list} | paste - - \
-    > input.list
+      > input.list
 
     #Make sure all input files have the same number of lines
     while read batch file; do
-    zcat "$file" | wc -l
+      zcat "$file" | wc -l
     done < input.list > nlines.list
     nlines=$( sort nlines.list | uniq | wc -l )
     if [ "$nlines" -gt 1 ]; then
-    echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
-    exit 0
+      echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
+      exit 0
     fi
 
     #Prep files for paste joining
     echo "PREPPING FILES FOR MERGING"
     while read batch file; do
-    #Header
-    zcat "$file" | sed -n '1p' | cut -f1-3
-    #Body
-    zcat "$file" | sed '1d' \
-    | sort -Vk1,1 \
-    | cut -f1-3
-    done < <( sed -n '1p' input.list ) \
+      #Header
+      zcat "$file" | sed -n '1p' | cut -f1-3
+      #Body
+      zcat "$file" | sed '1d' \
+      | sort -Vk1,1 \
+      | cut -f1-3
+      done < <( sed -n '1p' input.list ) \
     > header.txt
     while read batch file; do
-    for wrapper in 1; do
-    #Header
-    zcat "$file" | sed -n '1p' \
-    | cut -f4- | sed 's/\t/\n/g' \
-    | awk -v batch="$batch" '{ print $1"."batch }' \
-    | paste -s
-    #Body
-    zcat "$file" | sed '1d' \
-    | sort -Vk1,1 \
-    | cut -f4-
-    done > "$batch.prepped.txt"
+      for wrapper in 1; do
+        #Header
+        zcat "$file" | sed -n '1p' \
+        | cut -f4- | sed 's/\t/\n/g' \
+        | awk -v batch="$batch" '{ print $1"."batch }' \
+        | paste -s
+        #Body
+        zcat "$file" | sed '1d' \
+        | sort -Vk1,1 \
+        | cut -f4-
+      done > "$batch.prepped.txt"
     done < input.list
 
     #Join files with simple paste
     paste \
-    header.txt \
-    $( awk -v ORS=" " '{ print $1".prepped.txt" }' input.list ) \
-    | gzip -c \
-    > "~{prefix}.merged_AF_table.txt.gz"
+      header.txt \
+      $( awk -v ORS=" " '{ print $1".prepped.txt" }' input.list ) \
+      | gzip -c \
+      > "~{prefix}.merged_AF_table.txt.gz"
   >>>
 
   output {
@@ -386,7 +392,7 @@ task MergeFreqTables {
 
 # Compare
 task CompareFreqsPrePostMinGQPcrminus {
-  input{
+  input {
     File af_pcrmins_premingq
     File AF_postMinGQ_table
     String prefix
@@ -405,10 +411,10 @@ task CompareFreqsPrePostMinGQPcrminus {
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/compare_freqs_pre_post_minGQ.PCRMinus_only.R \
-    ~{af_pcrmins_premingq} \
-    ~{AF_postMinGQ_table} \
-    ./ \
-    "~{prefix}."
+      ~{af_pcrmins_premingq} \
+      ~{AF_postMinGQ_table} \
+      ./ \
+      "~{prefix}."
   >>>
 
   output {
@@ -431,7 +437,7 @@ task CompareFreqsPrePostMinGQPcrminus {
 
 # Calculate & plot cross-batch correlation coefficient matrixes
 task MakeCorrelationMatrices {
-  input{
+  input {
     File freq_table
     String pop
     File batches_list
@@ -451,10 +457,10 @@ task MakeCorrelationMatrices {
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/correlate_batches_singlePop.R \
-    ~{batches_list} \
-    ~{freq_table} \
-    "~{pop}" \
-    "~{prefix}.~{pop}"
+      ~{batches_list} \
+      ~{freq_table} \
+      "~{pop}" \
+      "~{prefix}.~{pop}"
   >>>
   output {
     Array[File] corr_matrixes = glob("~{prefix}.~{pop}.*.R2_matrix.txt")
@@ -474,7 +480,7 @@ task MakeCorrelationMatrices {
 
 # Merge lists of batch effect checks and count total number of times each variant failed
 task MergeVariantFailureLists {
-  input{
+  input {
     Array[File] fail_variant_lists
     String prefix
     String sv_pipeline_docker
@@ -497,10 +503,10 @@ task MergeVariantFailureLists {
     #Get master list of PCR+ to PCR- failures   #removed from the PCR- only projects
     #Get master list of all possible failures
     cat ~{write_lines(fail_variant_lists)} \
-    | xargs -I {} cat {} \
-    | sort -Vk1,1 | uniq -c \
-    | awk -v OFS="\t" '{ print $2, $1 }' \
-    > "~{prefix}.all.failures.txt" || true
+      | xargs -I {} cat {} \
+      | sort -Vk1,1 | uniq -c \
+      | awk -v OFS="\t" '{ print $2, $1 }' \
+      > "~{prefix}.all.failures.txt" || true
   >>>
 
   output {
@@ -521,7 +527,7 @@ task MergeVariantFailureLists {
 
 # Consolidate all batch effect check results into a single table with reclassification per variant
 task MakeReclassificationTable {
-  input{
+  input {
     File freq_table
     File onevsall_fails
     String prefix
@@ -541,10 +547,10 @@ task MakeReclassificationTable {
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/make_batch_effect_reclassification_table.PCRMinus_only.R \
-    ~{freq_table} \
-    ~{onevsall_fails} \
-    "~{prefix}.batch_effect_reclassification_table.txt" \
-    ~{onevsall_cutoff}
+      ~{freq_table} \
+      ~{onevsall_fails} \
+      "~{prefix}.batch_effect_reclassification_table.txt" \
+      ~{onevsall_cutoff}
   >>>
 
   output {
@@ -565,10 +571,8 @@ task MakeReclassificationTable {
 
 # Apply batch effect labels to VCF
 task ApplyBatchEffectLabels {
-  input{
+  input {
     File vcf
-    File vcf_idx
-    String contig
     File reclassification_table
     File? mingq_prePost_pcrminus_fails
     String prefix
@@ -587,14 +591,13 @@ task ApplyBatchEffectLabels {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
-    tabix -h ~{vcf} ~{contig} \
-    | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-        ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
-        stdin \
-        ~{reclassification_table} \
-        stdout \
-        | bgzip -c \
-        > "~{prefix}.batch_effects_labeled.vcf.gz"
+    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
+      ~{vcf} \
+      ~{reclassification_table} \
+      ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
+      stdout \
+      | bgzip -c \
+      > "~{prefix}.batch_effects_labeled.vcf.gz"
     tabix -p vcf -f "~{prefix}.batch_effects_labeled.vcf.gz"
   >>>
 
