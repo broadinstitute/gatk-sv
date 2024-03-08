@@ -3,7 +3,6 @@
 import argparse
 import sys
 import pysam
-import math
 from typing import List, Text, Dict, Optional
 
 _gt_no_call_map = dict()
@@ -40,7 +39,7 @@ def _is_hom_var(gt):
 
 def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifacts, remove_zero_carrier_sites):
     if record.info['SVTYPE'] == 'CNV':
-        return True # skip checks and annotations for mCNVs due to lack of GT
+        return True  # skip checks and annotations for mCNVs due to lack of GT
 
     n_samples = 0
     n_no_call = 0
@@ -90,10 +89,10 @@ def process(vcf, fout, ploidy_dict, args):
         raise ValueError("This is a sites-only vcf")
     for record in vcf:
         keep = _apply_filters(record=record,
-                      ploidy_dict=ploidy_dict,
-                      ncr_threshold=args.ncr_threshold,
-                      filter_reference_artifacts=args.filter_reference_artifacts,
-                      remove_zero_carrier_sites=args.remove_zero_carrier_sites)
+                              ploidy_dict=ploidy_dict,
+                              ncr_threshold=args.ncr_threshold,
+                              filter_reference_artifacts=args.filter_reference_artifacts,
+                              remove_zero_carrier_sites=args.remove_zero_carrier_sites)
         if keep:
             fout.write(record)
 
@@ -162,7 +161,8 @@ def main(argv: Optional[List[Text]] = None):
     if args.ncr_threshold is not None:
         header.add_line(f"##FILTER=<ID={_HIGH_NCR_FILTER},Description=\"Unacceptably high rate of no-call GTs\">")
     if args.filter_reference_artifacts:
-        header.add_line(f"##FILTER=<ID={_REFERENCE_ARTIFACT_FILTER},Description=\"Likely reference artifact sites that are homozygous alternative in over 99% of the samples\">")
+        header.add_line(f"##FILTER=<ID={_REFERENCE_ARTIFACT_FILTER},""Description=\"Likely reference artifact sites"
+                        " that are homozygous alternative in over 99% of the samples\">")
     if args.out is None:
         fout = pysam.VariantFile(sys.stdout, 'w', header=header)
     else:
