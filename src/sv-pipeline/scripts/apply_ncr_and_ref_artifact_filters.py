@@ -137,7 +137,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help=f"If provided, adds {_REFERENCE_ARTIFACT_FILTER} filter to records that are hom alt in "
                              f">{_REFERENCE_ARTIFACT_THRESHOLD*100}% of samples>")
     parser.add_argument("--remove-zero-carrier-sites", action='store_true', default=False,
-                        help=f"If provided, hard filters sites with zero carriers>")
+                        help="If provided, hard filters sites with zero carriers>")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
