@@ -1,0 +1,28 @@
+{
+    "ReClusterCleanVcfWholeGenome.runtime_attr_override_extract_svid": {"mem_gb":5, "disk_gb": 100},
+    "ReClusterCleanVcfWholeGenome.runtime_override_extract_SV_sites": {"disk_gb": 90},
+    "ReClusterCleanVcfWholeGenome.runtime_attr_override_svtk_vcfcluster": {"mem_gb": 40, "disk_gb": 80},
+    "ReClusterCleanVcfWholeGenome.Repeat_Masks" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.RM.sorted.merged.bed",
+    "ReClusterCleanVcfWholeGenome.Simple_Repeats" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SimpRep.sorted.merged.bed",
+    "ReClusterCleanVcfWholeGenome.Segmental_Duplicates" : "gs://talkowski-sv-gnomad-output/zero/GenomicContext/hg38.SegDup.sorted.merged.bed",
+ 
+    "ReClusterCleanVcfWholeGenome.svtype_list" : ["INS","DEL","DUP"],
+    "ReClusterCleanVcfWholeGenome.Genomic_Context_list_list" : [["SR"],["SR","RM"],["SR","RM"]],
+    "ReClusterCleanVcfWholeGenome.size_list_list" : [ [[0,1000000000]],[[0,5000],[0,5000]], [[0,5000],[0,5000]]],
+
+    "ReClusterCleanVcfWholeGenome.vcf_list" :[  "gs://talkowski-sv-gnomad-output/v3_posthoc/outlier_exclusion/gnomAD_SV_v3.XZ_RF_cutoffs.unique_regions.chrY.outliers_removed.vcf.gz"],
+    "ReClusterCleanVcfWholeGenome.vcf_index_list" : ["gs://talkowski-sv-gnomad-output/v3_posthoc/outlier_exclusion/gnomAD_SV_v3.XZ_RF_cutoffs.unique_regions.chrY.outliers_removed.vcf.gz.tbi"],
+    "ReClusterCleanVcfWholeGenome.chromosome_name_list" :["chrY"],
+
+    "ReClusterCleanVcfWholeGenome.num_vids" : 2000,
+    "ReClusterCleanVcfWholeGenome.num_samples" : 140000,
+    "ReClusterCleanVcfWholeGenome.dist" : 100,
+    "ReClusterCleanVcfWholeGenome.svsize" : 0,
+    "ReClusterCleanVcfWholeGenome.frac" : 0.5,
+    "ReClusterCleanVcfWholeGenome.sample_overlap" : 0.1,
+    "ReClusterCleanVcfWholeGenome.sv_pipeline_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-pipeline:mw-svcluster-null-gt-f213381",
+    "ReClusterCleanVcfWholeGenome.sv_base_mini_docker" : "us.gcr.io/broad-dsde-methods/markw/sv-base-mini:mw-gnomad-0506-pr-087d4df",
+    "ReClusterCleanVcfWholeGenome.sv_benchmark_docker" : "talkowski/sv_benchmark",
+    "ReClusterCleanVcfWholeGenome.prefix" : "gnomad-sv-v3.recluster.10perc_sample_overlap",
+    "ReClusterCleanVcfWholeGenome.vid_prefix" : "gnomad-sv-v3.reclustered"
+}
