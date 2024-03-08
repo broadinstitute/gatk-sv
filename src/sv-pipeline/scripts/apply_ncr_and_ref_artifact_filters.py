@@ -69,9 +69,13 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
     record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
     if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
         record.filter.add(_HIGH_NCR_FILTER)
+        if 'PASS' in record.filter:
+            record.filter.pop('PASS')
 
     if filter_reference_artifacts and n_hom_var / n_samples > _REFERENCE_ARTIFACT_THRESHOLD:
         record.filter.add(_REFERENCE_ARTIFACT_FILTER)
+        if 'PASS' in record.filter:
+            record.filter.pop('PASS')
 
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
