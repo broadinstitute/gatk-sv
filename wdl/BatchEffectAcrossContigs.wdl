@@ -32,7 +32,7 @@ workflow BatchEffectAcrossContigs {
         famfile=famfile,
         par_bed=par_bed,
         onevsall_cutoff=onevsall_cutoff,
-        prefix="~{prefix}.{contigs[i]}",
+        prefix="~{prefix}.~{contigs[i]}",
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker
     }
