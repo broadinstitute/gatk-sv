@@ -1,8 +1,8 @@
 version 1.0
 
 import "Utils.wdl" as util
+import "ShardedCountSVs.wdl" as count
 import "PlotSVCountsPerSample.wdl" as plot
-import "CollectQcVcfWide.wdl" as collect
 
 workflow FilterOutlierSamplesFinal {
   input {
@@ -31,32 +31,25 @@ workflow FilterOutlierSamplesFinal {
 
   if (!defined(sv_counts_in)) {
     scatter ( i in range(length(autosomes)) ) {
-      if (defined(bcftools_preprocessing_options)) {
-        call collect.PreprocessVcf {
-          input:
-            vcf = vcfs[i],
-            prefix = "~{prefix}.~{autosomes[i][0]}.preprocessed",
-            sv_base_mini_docker = sv_base_mini_docker
-        }
-      }
-
-      call plot.CountSVsPerSamplePerType {
+      call count.ShardedCountSVs {
         input:
-          vcf = select_first([PreprocessVcf.outvcf, vcfs[i]]),
+          vcf = vcfs[i],
+          bcftools_preprocessing_options = bcftools_preprocessing_options,
           prefix = "~{prefix}.~{autosomes[i][0]}",
-          sv_pipeline_docker = sv_pipeline_docker
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_base_mini_docker = sv_base_mini_docker
       }
     }
 
-    call SumSVCountsAcrossContigs {
+    call count.SumSVCounts {
       input:
-        counts = CountSVsPerSamplePerType.sv_counts,
-        prefix = prefix,
+        counts = ShardedCountSVs.sv_counts,
+        prefix = "~{prefix}.all_autosomes",
         sv_pipeline_docker = sv_pipeline_docker
     }
   }
 
-  File sv_counts_ = select_first([sv_counts_in, SumSVCountsAcrossContigs.sv_counts_summed])
+  File sv_counts_ = select_first([sv_counts_in, SumSVCounts.sv_counts_summed])
 
   if (!defined(all_samples_to_remove) || (defined(plot_counts) && plot_counts) ) {
     call plot.PlotSVCountsWithCutoff {
@@ -112,67 +105,6 @@ workflow FilterOutlierSamplesFinal {
     File? updated_sample_list = GetOutliersListAndCount.updated_sample_list
     Int? new_sample_count = GetOutliersListAndCount.new_sample_count
     Array[File]? vcfs_samples_removed = SubsetVcfBySamplesList.vcf_subset
-  }
-}
-
-
-task SumSVCountsAcrossContigs {
-  input {
-    Array[File] counts
-    String prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 3.75,
-    disk_gb: 10 + ceil(size(counts, "GiB")),
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-    set -euo pipefail
-    python <<CODE
-import pandas as pd
-counts = dict()
-for file_path in ["~{sep='", "' counts}"]:
-  with open(file_path, 'r') as inp:
-    inp.readline()  # skip header
-    for line in inp:
-      sample, svtype, count = line.strip().split('\t')
-      if sample in counts:
-        if svtype in counts[sample]:
-          counts[sample][svtype] += int(count)
-        else:
-          counts[sample][svtype] = int(count)
-      else:
-        counts[sample] = dict()
-        counts[sample][svtype] = int(count)
-with open("~{prefix}.sv_counts.all_autosomes.tsv", 'w') as out:
-  out.write("sample\tsvtype\tcount\n")
-  for sample in counts:
-    for svtype in counts[sample]:
-      out.write(f"{sample}\t{svtype}\t{counts[sample][svtype]}\n")
-CODE
-
-  >>>
-
-  output {
-    File sv_counts_summed = "~{prefix}.sv_counts.all_autosomes.tsv"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 
