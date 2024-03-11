@@ -12,7 +12,7 @@ workflow FilterOutlierSamplesFinal {
 
     Int N_IQR_cutoff
     Boolean filter_vcf
-    Boolean? plot_counts
+    Boolean plot_counts
     String? bcftools_preprocessing_options  # for preprocessing prior to SV counting. will not affect output VCFs
 
     File? sv_counts_in  # SV counts file - if not provided, will create
@@ -51,7 +51,7 @@ workflow FilterOutlierSamplesFinal {
 
   File sv_counts_ = select_first([sv_counts_in, SumSVCounts.sv_counts_summed])
 
-  if (!defined(all_samples_to_remove) || (defined(plot_counts) && plot_counts) ) {
+  if (!defined(all_samples_to_remove) || plot_counts ) {
     call plot.PlotSVCountsWithCutoff {
       input:
         svcounts = sv_counts_,
