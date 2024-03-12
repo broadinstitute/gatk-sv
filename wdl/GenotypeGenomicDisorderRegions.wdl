@@ -4,12 +4,13 @@ import "Structs.wdl"
 
 workflow GenotypeGenomicDisorderRegions {
   input {
+    String output_prefix
     Array[String] batch_names
     Array[File] rd_files
     Array[File] median_files
     Array[File] depth_sepcutoff_files
 
-    Array[File] vcfs
+    File vcf
     File ped_file
     File genomic_disorder_regions_bed
     File par_bed
@@ -30,27 +31,26 @@ workflow GenotypeGenomicDisorderRegions {
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_generate_median_geno
     }
-    call ReviseGenomicDisorderRegions {
-      input:
-        batch_name = batch_names[i],
-        rdtest_tar = RunRdTest.out,
-        vcf = vcfs[i],
-        ped_file = ped_file,
-        genomic_disorder_regions_bed = genomic_disorder_regions_bed,
-        par_bed = par_bed,
-        sv_pipeline_docker = sv_pipeline_docker,
-        runtime_attr_override = runtime_revise_vcf
-    }
+  }
+  call ReviseGenomicDisorderRegions {
+    input:
+      prefix = "~{output_prefix}.revise_gdr",
+      rdtest_tars = RunRdTest.out,
+      vcf = vcf,
+      ped_file = ped_file,
+      genomic_disorder_regions_bed = genomic_disorder_regions_bed,
+      par_bed = par_bed,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_revise_vcf
   }
   output{
     Array[File] rdtest_out = RunRdTest.out
-
-    Array[File] revised_records_vcf = ReviseGenomicDisorderRegions.revised_records_vcf
-    Array[File] revised_records_index = ReviseGenomicDisorderRegions.revised_records_index
-    Array[File] original_records_vcf = ReviseGenomicDisorderRegions.original_records_vcf
-    Array[File] original_records_index = ReviseGenomicDisorderRegions.original_records_index
-    Array[File] subtracted_vcf = ReviseGenomicDisorderRegions.subtracted_vcf
-    Array[File] subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
+    File revised_records_vcf = ReviseGenomicDisorderRegions.revised_records_vcf
+    File revised_records_index = ReviseGenomicDisorderRegions.revised_records_index
+    File original_records_vcf = ReviseGenomicDisorderRegions.original_records_vcf
+    File original_records_index = ReviseGenomicDisorderRegions.original_records_index
+    File subtracted_vcf = ReviseGenomicDisorderRegions.subtracted_vcf
+    File subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
   }
 }
 
@@ -107,8 +107,8 @@ task RunRdTest {
 
 task ReviseGenomicDisorderRegions {
   input{
-    String batch_name
-    File rdtest_tar
+    String prefix
+    Array[File] rdtest_tars
     File vcf
     File ped_file
     File genomic_disorder_regions_bed
@@ -128,29 +128,31 @@ task ReviseGenomicDisorderRegions {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
-    tar xzf ~{rdtest_tar}
-    RDTEST_DIR=$(basename ~{rdtest_tar} .tar.gz)
-    OUTBASE="~{batch_name}.revise_gdr"
+    mkdir rdtest/
+    while read -r FILE; do
+      tar xzf $FILE -C rdtest/
+    done < ~{write_lines(rdtest_tars)}
+    ls rdtest/*/*.median_geno > median_geno_files.list
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
       --vcf ~{vcf} \
-      --median-geno $RDTEST_DIR/~{batch_name}.median_geno \
+      --median-geno-list median_geno_files.list\
       --ped-file ~{ped_file} \
       --region-bed ~{genomic_disorder_regions_bed} \
       --par-bed ~{par_bed} \
-      --out $OUTBASE
+      --out ~{prefix}
     mkdir tmp
-    bcftools sort -T tmp/ $OUTBASE.new_revised_records.unsorted.vcf.gz -Oz -o $OUTBASE.new_revised_records.vcf.gz
-    tabix $OUTBASE.new_revised_records.vcf.gz
-    tabix $OUTBASE.original_revised_records.vcf.gz
-    tabix $OUTBASE.subtracted.vcf.gz
+    bcftools sort -T tmp/ ~{prefix}.new_revised_records.unsorted.vcf.gz -Oz -o ~{prefix}.new_revised_records.vcf.gz
+    tabix ~{prefix}.new_revised_records.vcf.gz
+    tabix ~{prefix}.original_revised_records.vcf.gz
+    tabix ~{prefix}.subtracted.vcf.gz
   >>>
   output{
-    File revised_records_vcf = "~{batch_name}.revise_gdr.new_revised_records.vcf.gz"
-    File revised_records_index = "~{batch_name}.revise_gdr.new_revised_records.vcf.gz.tbi"
-    File original_records_vcf = "~{batch_name}.revise_gdr.original_revised_records.vcf.gz"
-    File original_records_index = "~{batch_name}.revise_gdr.original_revised_records.vcf.gz.tbi"
-    File subtracted_vcf = "~{batch_name}.revise_gdr.subtracted.vcf.gz"
-    File subtracted_index = "~{batch_name}.revise_gdr.subtracted.vcf.gz.tbi"
+    File revised_records_vcf = "~{prefix}..new_revised_records.vcf.gz"
+    File revised_records_index = "~{prefix}.new_revised_records.vcf.gz.tbi"
+    File original_records_vcf = "~{prefix}.original_revised_records.vcf.gz"
+    File original_records_index = "~{prefix}.original_revised_records.vcf.gz.tbi"
+    File subtracted_vcf = "~{prefix}.subtracted.vcf.gz"
+    File subtracted_index = "~{prefix}.subtracted.vcf.gz.tbi"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
