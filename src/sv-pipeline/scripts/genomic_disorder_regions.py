@@ -93,8 +93,8 @@ def overlap_size(interval_a, interval_b):
 
 class GDRMatch:
 
-    def __init__(self, name, chrom, pos, end, sample, overlapping_region_intervals, valid_region_intervals, supporting_intervals,
-                 region, n_region_subdivisions):
+    def __init__(self, name, chrom, pos, end, sample, overlapping_region_intervals, valid_region_intervals,
+                 supporting_intervals, region, n_region_subdivisions):
         self.name = name
         self.chrom = chrom
         self.pos = pos
@@ -123,7 +123,8 @@ def get_base_name_and_index(interval_id):
     return tokens[0], int(tokens[1])
 
 
-def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutoff, vcf_min_size, min_rdtest_support, min_region_overlap):
+def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutoff, vcf_min_size, min_rdtest_support,
+                                min_region_overlap):
 
     interval_subdivision_counts = dict()
     unique_subdivision_names = set()
@@ -251,7 +252,8 @@ def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
         raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
 
 
-def read_median_geno(path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y, min_par_overlap):
+def read_median_geno(path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
+                     min_par_overlap):
     with open(path) as f:
         header = f.readline().strip().split('\t')
         samples = header[4:]
@@ -304,15 +306,20 @@ def get_interval_indices_dict_by_region(intervals):
 def get_flanking_intervals_to_remove(sample_overlappers, invalidated_intervals, region):
     region_sample_overlappers = [overlapper for overlapper in sample_overlappers if overlapper.region == region]
     invalidated_interval_ids = set(interval.data for interval in invalidated_intervals)
-    sufficiently_overlapping_interval_ids = set(interval.data for ov in region_sample_overlappers for interval in ov.valid_region_intervals)
+    sufficiently_overlapping_interval_ids = set(interval.data for ov in region_sample_overlappers
+                                                for interval in ov.valid_region_intervals)
     region_overlapping_intervals = [interval for ov in region_sample_overlappers
                                     for interval in ov.overlapping_region_intervals]
     region_overlapping_intervals = sorted(region_overlapping_intervals, key=attrgetter('begin'))
     flanking_intervals_to_remove = list()
     for i in range(len(region_overlapping_intervals)):
-        if i > 0 and region_overlapping_intervals[i].data in invalidated_interval_ids and region_overlapping_intervals[i - 1].data not in sufficiently_overlapping_interval_ids:
+        if i > 0 and \
+                region_overlapping_intervals[i].data in invalidated_interval_ids and \
+                region_overlapping_intervals[i - 1].data not in sufficiently_overlapping_interval_ids:
             flanking_intervals_to_remove.append(region_overlapping_intervals[i - 1])
-        if i < len(region_overlapping_intervals) - 1 and region_overlapping_intervals[i].data in invalidated_interval_ids and region_overlapping_intervals[i + 1].data not in sufficiently_overlapping_interval_ids:
+        if i < len(region_overlapping_intervals) - 1 and \
+                region_overlapping_intervals[i].data in invalidated_interval_ids and \
+                region_overlapping_intervals[i + 1].data not in sufficiently_overlapping_interval_ids:
             flanking_intervals_to_remove.append(region_overlapping_intervals[i + 1])
     return flanking_intervals_to_remove
 
@@ -346,6 +353,49 @@ def subtract_vcf(fin, fsub, forig, vid_overlappers_dict, sample_sex_dict, chr_x,
         fsub.write(record)
 
 
+def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fraction):
+    tree = IntervalTree()
+    tree.addi(pos, stop)
+    # Remove overlapping intervals
+    supported_interval_ids = set(interval.data for ov in sample_overlappers for interval in ov.supporting_intervals)
+    # Remove intervals that failed genotyping. Also removes flanking GDR subdivisions that partially
+    # overlap the variant and are adjacent to a failed interval.
+    for region in regions:
+        invalidated_intervals = [interval for ov in sample_overlappers
+                                 for interval in ov.valid_region_intervals
+                                 if interval.data not in supported_interval_ids and ov.region == region]
+        flanking_intervals_to_remove = get_flanking_intervals_to_remove(sample_overlappers=sample_overlappers,
+                                                                        invalidated_intervals=invalidated_intervals,
+                                                                        region=region)
+        for ov in invalidated_intervals + flanking_intervals_to_remove:
+            tree.chop(ov.begin, ov.end)
+
+    # Clean up small leftover fragments
+    for interval in list(tree):
+        if (interval.end - interval.begin) / (stop - pos) < dangling_fraction:
+            tree.remove(interval)
+    return sorted(tree)
+
+
+def write_revised_record(frev, interval, index, vcf_record, vid, sample, original_gt, sample_sex_dict, chr_x, chr_y):
+    # Write out new revised records. Note that these are not sorted.
+        vcf_record.id = f"{vid}_GDR_{sample}_{index}"
+        vcf_record.pos = interval.begin
+        vcf_record.stop = interval.end
+        # Reset all other samples to hom-ref
+        for s, gt in vcf_record.samples.items():
+            gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
+            reset_format_if_exists(gt, "RD_CN", get_expected_cn(vcf_record.chrom, sample_sex_dict[s], chr_x, chr_y))
+            reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
+            for key, val in RESET_PESR_FORMATS_DICT.items():
+                reset_format_if_exists(gt, key, val)
+        # Restore carrier's original GT and RD genotype data
+        vcf_record.samples[sample]["GT"] = original_gt[sample][0]
+        vcf_record.samples[sample]["RD_CN"] = original_gt[sample][1]
+        vcf_record.samples[sample]["RD_GQ"] = original_gt[sample][2]
+        frev.write(vcf_record)
+
+
 def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y, dangling_fraction):
     for vcf_record in forig:
         vid = vcf_record.id
@@ -357,47 +407,18 @@ def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, c
             raise ValueError(f"Should have found variant {vid} in overlap record set (bug)")
         # Store original GT and RD genotype data, since we'll be modifying the vcf record in place
         overlapper_samples = set(overlapper.sample for overlapper in overlappers)
-        original_gt = {sample: (vcf_record.samples[sample]["GT"], vcf_record.samples[sample]["RD_CN"], vcf_record.samples[sample]["RD_GQ"]) for sample in overlapper_samples}
+        original_gt = {sample: (vcf_record.samples[sample]["GT"], vcf_record.samples[sample]["RD_CN"],
+                                vcf_record.samples[sample]["RD_GQ"]) for sample in overlapper_samples}
         # Iterate over samples, subtracting invalidated intervals and creating new records from the result
         for sample, sample_overlappers in groupby(overlappers, key=attrgetter("sample")):
             # copy iterable to permanent list
             sample_overlappers = list(sample_overlappers)
-            tree = IntervalTree()
-            tree.addi(pos, stop)
-            # Remove overlapping intervals
-            supported_interval_ids = set(interval.data for ov in sample_overlappers for interval in ov.supporting_intervals)
-            # Remove intervals that failed genotyping. Also removes flanking GDR subdivisions that partially
-            # overlap the variant and are adjacent to a failed interval.
-            for region in regions:
-                invalidated_intervals = [interval for ov in sample_overlappers
-                                         for interval in ov.valid_region_intervals
-                                         if interval.data not in supported_interval_ids and ov.region == region]
-                flanking_intervals_to_remove = get_flanking_intervals_to_remove(sample_overlappers=sample_overlappers, invalidated_intervals=invalidated_intervals, region=region)
-                for ov in invalidated_intervals + flanking_intervals_to_remove:
-                    tree.chop(ov.begin, ov.end)
-
-            # Clean up small leftover fragments
-            for interval in list(tree):
-                if (interval.end - interval.begin) / (stop - pos) < dangling_fraction:
-                    tree.remove(interval)
-            new_intervals = sorted(tree)
-            # Write out new revised records. Note that these are not sorted.
+            new_intervals = get_revised_intervals(sample_overlappers=sample_overlappers, regions=regions,
+                                                  pos=pos, stop=stop, dangling_fraction=dangling_fraction)
             for i, interval in enumerate(new_intervals):
-                vcf_record.id = f"{vid}_GDR_{sample}_{i}"
-                vcf_record.pos = interval.begin
-                vcf_record.stop = interval.end
-                # Reset all other samples to hom-ref
-                for s, gt in vcf_record.samples.items():
-                    gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
-                    reset_format_if_exists(gt, "RD_CN", get_expected_cn(vcf_record.chrom, sample_sex_dict[s], chr_x, chr_y))
-                    reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
-                    for key, val in RESET_PESR_FORMATS_DICT.items():
-                        reset_format_if_exists(gt, key, val)
-                # Restore carrier's original GT and RD genotype data
-                vcf_record.samples[sample]["GT"] = original_gt[sample][0]
-                vcf_record.samples[sample]["RD_CN"] = original_gt[sample][1]
-                vcf_record.samples[sample]["RD_GQ"] = original_gt[sample][2]
-                frev.write(vcf_record)
+                write_revised_record(frev=frev, interval=interval, index=i, vcf_record=vcf_record, vid=vid,
+                                     sample=sample, original_gt=original_gt, sample_sex_dict=sample_sex_dict,
+                                     chr_x=chr_x, chr_y=chr_y)
 
 
 def subtract_and_revise_vcf(input_vcf_path, subtracted_vcf_path, original_records_vcf_path,
