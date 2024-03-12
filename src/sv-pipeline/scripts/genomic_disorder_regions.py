@@ -252,7 +252,7 @@ def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
 def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
                      min_par_overlap):
     with open(list_path) as f:
-        file_paths = [line.strip() for line in list_path]
+        file_paths = [line.strip() for line in f]
     data = defaultdict(dict)
     vids = set()
     for path in file_paths:
@@ -493,7 +493,7 @@ def main(argv: Optional[List[Text]] = None):
     logging.info("Reading PAR bed file...")
     par_trees = create_trees_from_bed_records(args.par_bed)
     logging.info("Reading \"median_geno\" file...")
-    medians, median_vids = read_median_geno(list_path=args.median_geno, del_ids=gdr_del_ids, dup_ids=gdr_dup_ids,
+    medians, median_vids = read_median_geno(list_path=args.median_geno_list, del_ids=gdr_del_ids, dup_ids=gdr_dup_ids,
                                             del_cutoff=args.del_median, dup_cutoff=args.dup_median,
                                             sample_sex_dict=sample_sex_dict, par_trees=par_trees,
                                             chr_x=args.chr_x, chr_y=args.chr_y, min_par_overlap=args.min_par_overlap)
