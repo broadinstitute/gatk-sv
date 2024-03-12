@@ -194,8 +194,7 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                         if name not in vcf_overlappers[svtype][sample]:
                             vcf_overlappers[svtype][sample][name] = list()
                         vcf_overlappers[svtype][sample][name].append(
-                            GDRMatch(name=name, chrom=chrom, pos=pos, end=stop,
-                                     sample=sample,
+                            GDRMatch(name=name, chrom=chrom, pos=pos, end=stop, sample=sample,
                                      overlapping_region_intervals=overlapping_region_intervals,
                                      valid_region_intervals=valid_region_intersect,
                                      supporting_intervals=supported_intersect,
@@ -234,9 +233,7 @@ def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
 def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
     if sample_sex == SEX_MALE:
         # Expect CN 2 in pseudoautosomal regions
-        if chrom != chr_x and chrom == chr_y:
-            return 2
-        elif is_par:
+        if (chrom != chr_x and chrom == chr_y) or is_par:
             return 2
         else:
             # non-par x or y
@@ -252,41 +249,44 @@ def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
         raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
 
 
-def read_median_geno(path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
+def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
                      min_par_overlap):
-    with open(path) as f:
-        header = f.readline().strip().split('\t')
-        samples = header[4:]
-        data = defaultdict(dict)
-        vids = set()
-        for line in f:
-            record = line.strip().split('\t')
-            chrom = record[0]
-            pos = int(record[1])
-            stop = int(record[2])
-            vid = record[3]
-            vids.add(vid)
-            if vid in del_ids:
-                is_del = True
-            elif vid in dup_ids:
-                is_del = False
-            else:
-                continue
-            is_par = is_in_par_region(chrom=chrom, pos=pos, stop=stop, par_trees=par_trees, cutoff=min_par_overlap)
-            for i, median in enumerate(record[4:]):
-                median = float(median)
-                if is_del:
-                    cutoff = del_cutoff
+    with open(list_path) as f:
+        file_paths = [line.strip() for line in list_path]
+    data = defaultdict(dict)
+    vids = set()
+    for path in file_paths:
+        with open(path) as f:
+            header = f.readline().strip().split('\t')
+            samples = header[4:]
+            for line in f:
+                record = line.strip().split('\t')
+                chrom = record[0]
+                pos = int(record[1])
+                stop = int(record[2])
+                vid = record[3]
+                vids.add(vid)
+                if vid in del_ids:
+                    is_del = True
+                elif vid in dup_ids:
+                    is_del = False
                 else:
-                    cutoff = dup_cutoff
-                sample = samples[i]
-                expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
-                cutoff = cutoff - (2 - expected_cn)
-                if is_del and median > cutoff:
                     continue
-                elif (not is_del) and median < cutoff:
-                    continue
-                data[sample][vid] = median
+                is_par = is_in_par_region(chrom=chrom, pos=pos, stop=stop, par_trees=par_trees, cutoff=min_par_overlap)
+                for i, median in enumerate(record[4:]):
+                    median = float(median)
+                    if is_del:
+                        cutoff = del_cutoff
+                    else:
+                        cutoff = dup_cutoff
+                    sample = samples[i]
+                    expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
+                    cutoff = cutoff - (2 - expected_cn)
+                    if is_del and median > cutoff:
+                        continue
+                    elif (not is_del) and median < cutoff:
+                        continue
+                    data[sample][vid] = median
     return data, vids
 
 
@@ -377,23 +377,31 @@ def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fract
     return sorted(tree)
 
 
+def retain_values_if_present(data_dict, key, values_list):
+    return [ev for ev in data_dict.get(key, list()) if ev in values_list]
+
+
 def write_revised_record(frev, interval, index, vcf_record, vid, sample, original_gt, sample_sex_dict, chr_x, chr_y):
     # Write out new revised records. Note that these are not sorted.
-        vcf_record.id = f"{vid}_GDR_{sample}_{index}"
-        vcf_record.pos = interval.begin
-        vcf_record.stop = interval.end
-        # Reset all other samples to hom-ref
-        for s, gt in vcf_record.samples.items():
-            gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
-            reset_format_if_exists(gt, "RD_CN", get_expected_cn(vcf_record.chrom, sample_sex_dict[s], chr_x, chr_y))
-            reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
-            for key, val in RESET_PESR_FORMATS_DICT.items():
-                reset_format_if_exists(gt, key, val)
-        # Restore carrier's original GT and RD genotype data
-        vcf_record.samples[sample]["GT"] = original_gt[sample][0]
-        vcf_record.samples[sample]["RD_CN"] = original_gt[sample][1]
-        vcf_record.samples[sample]["RD_GQ"] = original_gt[sample][2]
-        frev.write(vcf_record)
+    vcf_record.id = f"{vid}_GDR_{sample}_{index}"
+    vcf_record.pos = interval.begin
+    vcf_record.stop = interval.end
+    vcf_record.info["EVIDENCE"] = retain_values_if_present(vcf_record.info, "EVIDENCE", ["RD", "BAF"])
+    # Reset all other samples to hom-ref
+    # TODO this is a bit wasteful since it's mostly repeated if there are many intervals/samples
+    for s, gt in vcf_record.samples.items():
+        gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
+        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
+        reset_format_if_exists(gt, "RD_CN", get_expected_cn(vcf_record.chrom, sample_sex_dict[s], chr_x, chr_y))
+        reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
+        for key, val in RESET_PESR_FORMATS_DICT.items():
+            reset_format_if_exists(gt, key, val)
+    # Restore carrier's original GT and RD genotype data
+    sample_gt = vcf_record.samples[sample]
+    sample_gt["GT"] = original_gt[sample][0]
+    sample_gt["RD_CN"] = original_gt[sample][1]
+    sample_gt["RD_GQ"] = original_gt[sample][2]
+    frev.write(vcf_record)
 
 
 def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y, dangling_fraction):
@@ -444,12 +452,13 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         description="Cleans up biallelic DEL/DUP variants in genomic disorder regions",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--vcf', type=str, help='Final vcf')
-    parser.add_argument('--region-bed', type=str, help='Preprocessed genomic disorder regions bed')
-    parser.add_argument('--par-bed', type=str, help='PAR region bed')
-    parser.add_argument('--median-geno', type=str, help='RDTest ".median_geno" file')
-    parser.add_argument('--ped-file', type=str, help='Ped file')
-    parser.add_argument('--out', type=str, help='Output base path')
+    parser.add_argument('--vcf', type=str, required=True, help='Final vcf')
+    parser.add_argument('--region-bed', type=str, required=True, help='Preprocessed genomic disorder regions bed')
+    parser.add_argument('--par-bed', type=str, required=True, help='PAR region bed')
+    parser.add_argument('--median-geno-list', type=str, required=True,
+                        help='List of paths to RDTest ".median_geno" files')
+    parser.add_argument('--ped-file', type=str, required=True, help='Ped file')
+    parser.add_argument('--out', type=str, required=True, help='Output base path')
     parser.add_argument('--overlap', type=float, default=0.9, help='Subdivision overlap fraction cutoff')
     parser.add_argument('--del-median', type=float, default=0.6, help='DEL RDTest median cutoff')
     parser.add_argument('--dup-median', type=float, default=1.4, help='DUP RDTest median cutoff')
@@ -484,7 +493,7 @@ def main(argv: Optional[List[Text]] = None):
     logging.info("Reading PAR bed file...")
     par_trees = create_trees_from_bed_records(args.par_bed)
     logging.info("Reading \"median_geno\" file...")
-    medians, median_vids = read_median_geno(args.median_geno, del_ids=gdr_del_ids, dup_ids=gdr_dup_ids,
+    medians, median_vids = read_median_geno(list_path=args.median_geno, del_ids=gdr_del_ids, dup_ids=gdr_dup_ids,
                                             del_cutoff=args.del_median, dup_cutoff=args.dup_median,
                                             sample_sex_dict=sample_sex_dict, par_trees=par_trees,
                                             chr_x=args.chr_x, chr_y=args.chr_y, min_par_overlap=args.min_par_overlap)
