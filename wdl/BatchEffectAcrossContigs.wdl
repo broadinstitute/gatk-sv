@@ -41,5 +41,6 @@ workflow BatchEffectAcrossContigs {
   output {
     Array[File] batch_effects_labeled_vcfs = XfBatchEffect.labeled_vcf
     Array[File] batch_effects_labeled_vcf_indexes = XfBatchEffect.labeled_vcf_idx
+    Array[File] batch_effect_reclassification_tables = XfBatchEffect.reclassification_table
   }
 }

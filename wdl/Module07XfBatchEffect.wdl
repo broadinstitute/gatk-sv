@@ -168,6 +168,7 @@ workflow XfBatchEffect {
   output {
     File labeled_vcf = merge_labeled_vcfs.concat_vcf
     File labeled_vcf_idx = merge_labeled_vcfs.concat_vcf_idx
+    File reclassification_table = MakeReclassificationTable.reclassification_table
   }
 }
 
