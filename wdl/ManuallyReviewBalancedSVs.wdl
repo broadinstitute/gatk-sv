@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "ManuallyReviewBalancedSVsPerBatch.wdl" as batch_rev
+import "TasksMakeCohortVcf.wdl" as tasks
 
 workflow ManuallyReviewBalancedSVs {
   input {
@@ -41,31 +42,60 @@ workflow ManuallyReviewBalancedSVs {
 
   # select svs cohort-wide and merge across contigs
   # then select samples in batch in separate step
-  call SelectSVType as SelectCTX {
-    input:
-      vcfs = cohort_vcfs,
-      svtype = "CTX",
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_select_ctx
+  scatter (i in range(length(cohort_vcfs))) {
+    call SelectSVType as SelectCTX {
+      input:
+        vcf = cohort_vcfs[i],
+        svtype = "CTX",
+        prefix="~{prefix}.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_select_ctx
+    }
+    call SelectSVType as SelectCPX {
+      input:
+        vcf = cohort_vcfs[i],
+        svtype = "CPX",
+        min_size=min_size,
+        prefix="~{prefix}.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_select_cpx
+    }
+    call SelectSVType as SelectINV {
+      input:
+        vcf = cohort_vcfs[i],
+        svtype = "INV",
+        min_size=min_size,
+        prefix="~{prefix}.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_select_inv
+    }
   }
-  call SelectSVType as SelectCPX {
+
+  call tasks.ConcatVcfs as ConcatCTX {
     input:
-      vcfs = cohort_vcfs,
-      svtype = "CPX",
-      min_size=min_size,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_select_cpx
+      vcfs = SelectCTX.svtype_vcf,
+      vcfs_idx = SelectCTX.svtype_vcf_index,
+      naive = true,
+      outfile_prefix = "~{prefix}.CTX",
+      sv_base_mini_docker = sv_base_mini_docker
   }
-  call SelectSVType as SelectINV {
+
+  call tasks.ConcatVcfs as ConcatCPX {
     input:
-      vcfs = cohort_vcfs,
-      svtype = "INV",
-      min_size=min_size,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override=runtime_attr_select_inv
+      vcfs = SelectCPX.svtype_vcf,
+      vcfs_idx = SelectCPX.svtype_vcf_index,
+      naive = true,
+      outfile_prefix = "~{prefix}.CPX",
+      sv_base_mini_docker = sv_base_mini_docker
+  }
+
+  call tasks.ConcatVcfs as ConcatINV {
+    input:
+      vcfs = SelectINV.svtype_vcf,
+      vcfs_idx = SelectINV.svtype_vcf_index,
+      naive = true,
+      outfile_prefix = "~{prefix}.INV",
+      sv_base_mini_docker = sv_base_mini_docker
   }
 
   scatter (i in range(length(batches))) {
@@ -73,8 +103,8 @@ workflow ManuallyReviewBalancedSVs {
       input:
         batch = batches[i],
         svtype = "CTX",
-        cohort_vcf = SelectCTX.svtype_vcf,
-        cohort_vcf_index = SelectCTX.svtype_vcf_index,
+        cohort_vcf = ConcatCTX.concat_vcf,
+        cohort_vcf_index = ConcatCTX.concat_vcf_idx,
         batch_pe_file = batch_pe_files[i],
         batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
         batch_samples = samples_in_batches[i],
@@ -91,8 +121,8 @@ workflow ManuallyReviewBalancedSVs {
       input:
         batch = batches[i],
         svtype = "CPX",
-        cohort_vcf = SelectCPX.svtype_vcf,
-        cohort_vcf_index = SelectCPX.svtype_vcf_index,
+        cohort_vcf = ConcatCPX.concat_vcf,
+        cohort_vcf_index = ConcatCPX.concat_vcf_idx,
         batch_pe_file = batch_pe_files[i],
         batch_samples = samples_in_batches[i],
         generate_pe_tabix_py_script=generate_pe_tabix_py_script,
@@ -108,8 +138,8 @@ workflow ManuallyReviewBalancedSVs {
       input:
         batch = batches[i],
         svtype = "INV",
-        cohort_vcf = SelectINV.svtype_vcf,
-        cohort_vcf_index = SelectINV.svtype_vcf_index,
+        cohort_vcf = ConcatINV.concat_vcf,
+        cohort_vcf_index = ConcatINV.concat_vcf_idx,
         batch_pe_file = batch_pe_files[i],
         batch_samples = samples_in_batches[i],
         generate_pe_tabix_py_script=generate_pe_tabix_py_script,
@@ -123,6 +153,7 @@ workflow ManuallyReviewBalancedSVs {
     }
   }
 
+  # concatenate per-batch evidence files
   call ConcatEvidences as ConcatCTXEvidences {
     input:
       prefix = "~{prefix}.CTX",
@@ -147,6 +178,7 @@ workflow ManuallyReviewBalancedSVs {
       runtime_attr_override=runtime_attr_concat_inv
   }
 
+  # compute stats about PE evidence
   call CalculatePEStats as CalculateCTXStats {
     input:
       prefix = "~{prefix}.CTX",
@@ -189,7 +221,7 @@ workflow ManuallyReviewBalancedSVs {
 task SelectSVType {
   input {
     String prefix
-    Array[File] vcfs
+    File vcf
     String svtype
     Int? min_size
     String sv_pipeline_docker
@@ -201,7 +233,7 @@ task SelectSVType {
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
                                mem_gb: 1.0,
-                               disk_gb: ceil(10 + 3 * size(vcfs, "GB")),
+                               disk_gb: ceil(10 + 2 * size(vcf, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -211,18 +243,14 @@ task SelectSVType {
   command <<<
     set -euo pipefail
 
-    while read vcf; do
-      bcftools view \
-        -i "INFO/SVTYPE=='~{svtype}'~{size_filter_cmd}" \
-        $vcf \
-        | bcftools +fill-tags \
-        -O z \
-        -o subset."$(basename $file)" \
-        -- -t AC,AN,AF
-      echo subset."$(basename $file)" >> for_concat.txt
-    done < ~{write_lines(vcfs)}
+    bcftools view \
+      -i "INFO/SVTYPE=='~{svtype}'~{size_filter_cmd}" \
+      ~{vcf} \
+      | bcftools +fill-tags \
+      -O z \
+      -o "~{prefix}.~{svtype}.vcf.gz" \
+      -- -t AC,AN,AF
 
-    bcftools concat --no-version --naive -O z -o ~{prefix}.~{svtype}.vcf.gz --file-list for_concat.txt
     tabix ~{prefix}.~{svtype}.vcf.gz
   >>>
 
