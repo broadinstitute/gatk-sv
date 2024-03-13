@@ -31,6 +31,7 @@ workflow ManuallyReviewBalancedSVs {
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_generate_script
     RuntimeAttr? runtime_attr_collect_pe
+    RuntimeAttr? runtime_attr_collect_pe_background
     RuntimeAttr? runtime_attr_concat_ctx
     RuntimeAttr? runtime_attr_concat_cpx
     RuntimeAttr? runtime_attr_concat_inv
@@ -107,6 +108,7 @@ workflow ManuallyReviewBalancedSVs {
         cohort_vcf_index = ConcatCTX.concat_vcf_idx,
         batch_pe_file = batch_pe_files[i],
         batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
+        collect_background_pe = true,
         batch_samples = samples_in_batches[i],
         generate_pe_tabix_py_script=generate_pe_tabix_py_script,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -115,7 +117,8 @@ workflow ManuallyReviewBalancedSVs {
         runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
         runtime_attr_vcf2bed=runtime_attr_vcf2bed,
         runtime_attr_generate_script=runtime_attr_generate_script,
-        runtime_attr_collect_pe=runtime_attr_collect_pe
+        runtime_attr_collect_pe=runtime_attr_collect_pe,
+        runtime_attr_collect_pe_background=runtime_attr_collect_pe_background
     }
     call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCPXPerBatch {
       input:
@@ -158,6 +161,14 @@ workflow ManuallyReviewBalancedSVs {
     input:
       prefix = "~{prefix}.CTX",
       evidences = ManuallyReviewCTXPerBatch.batch_pe_evidence,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat_ctx
+  }
+
+  call ConcatEvidences as ConcatCTXBackground {
+    input:
+      prefix = "~{prefix}.CTX.background",
+      evidences = select_first([ManuallyReviewCTXPerBatch.batch_pe_background]),
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_ctx
   }

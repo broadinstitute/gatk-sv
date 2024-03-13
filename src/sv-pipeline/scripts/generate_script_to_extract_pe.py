@@ -289,10 +289,10 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
             out.append([bp, ref_alt, pin[header_pos['name']], descriptor])
   return out
 
-def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_file, descriptor_fields):
+def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_file, descriptor_fields, batch_script):
   flank_back = 1000
   flank_front = 100
-  with open(out_file,'w') as fo:
+  with open(out_file,'w') as fo, open(batch_script, 'w') as fo_batch:
     fo.write("echo \"" + "\t".join(descriptor_fields) + "\tsample" + "\" >> " + PE_evidence + "\n")
     for info in cpx_SV:
       breakpints = info[0]
@@ -363,16 +363,25 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,batch_pe_file, PE_evidence, out_
         print(info)
       samples = SVID_sample[info[2]]
       if not samples =='' and not samples=='NA':
+        # batch background script collects all PE around breakpoints for all samples in batch
+        svid = info[3].split('\t')[3]
+        fo_batch.write(f"echo \"#{svid}\t{samples}\" >> {PE_evidence}\n")  # SVID and list of carrier samples
+        fo_batch.write(' '.join([x for x in common_1 if x not in ("| grep", "sample")]) + "\n")
+        if common_2 is not None:
+          fo_batch.write(' '.join([x for x in common_2 if x not in ("| grep", "sample")]) + "\n")
+
         sample_list = samples.split(',')
         for num in range(len(sample_list)):
           fo.write("echo \"" + info[3] + "\t" + sample_list[num] + "\" >> " + PE_evidence + "\n")  # descriptor line
           common_1[4] = sample_list[num]
           write_1 = ' '.join(common_1)
           fo.write(write_1 + "\n")
+
           if common_2 is not None:  # INV only has common_1
             common_2[4] = sample_list[num]
             write_2 = ' '.join(common_2)
             fo.write(write_2 + "\n")
+
 
 def main():
   """
@@ -387,6 +396,7 @@ def main():
   parser.add_argument('-b', '--batch-pe', required=True, help='batch PE matrix path')
   parser.add_argument('-p','--pe_evidence', required=True, help='name of file to store collected PE metrics')
   parser.add_argument('-c','--command_script', required=True, help='name of file that has scripts to collect PE evidences')
+  parser.add_argument('-s','--batch-script', required=True, help='output filename for script to collect batch background PE evidence')
   args = parser.parse_args()
 
   input_bed = args.input
@@ -398,11 +408,12 @@ def main():
   SVID_sample = SVID_sample_readin(input_bed, header_pos)
 
   descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS AC AN AF".split()
+  # descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS".split()  # for testing when lacking AF
 
   cpx_SV = cpx_SV_readin(input_bed, header_pos, descriptor_fields)
   cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields)
 
-  cpx_sample_batch_readin(cpx_SV+cpx_inter_chromo_SV, SVID_sample, batch_pe_file, PE_evidence, command_script, descriptor_fields)
+  cpx_sample_batch_readin(cpx_SV+cpx_inter_chromo_SV, SVID_sample, batch_pe_file, PE_evidence, command_script, descriptor_fields, args.batch_script)
 
 import os
 import sys

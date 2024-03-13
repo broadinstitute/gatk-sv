@@ -12,6 +12,7 @@ workflow ManuallyReviewBalancedSVsPerBatch {
 
     File? batch_manta_tloc_vcf
     File batch_pe_file
+    Boolean collect_background_pe = false
 
     String batch
     File batch_samples
@@ -26,6 +27,7 @@ workflow ManuallyReviewBalancedSVsPerBatch {
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_generate_script
     RuntimeAttr? runtime_attr_collect_pe
+    RuntimeAttr? runtime_attr_collect_pe_background
   }
 
   call util.SubsetVcfBySamplesList {
@@ -78,8 +80,21 @@ workflow ManuallyReviewBalancedSVsPerBatch {
       runtime_attr_override=runtime_attr_collect_pe
   }
 
+  if (collect_background_pe) {
+    call CollectPEMetrics as CollectPEBackground {
+      input:
+        prefix="~{batch}.~{svtype}",
+        PE_collect_script=GenerateCpxReviewScript.pe_background_collection_script,
+        batch_pe_file=batch_pe_file,
+        batch_pe_file_index=batch_pe_file + ".tbi",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_collect_pe_background
+    }
+  }
+
   output {
     File batch_pe_evidence = CollectPEMetrics.evidence
+    File? batch_pe_background = CollectPEBackground.evidence
   }
 }
 
@@ -208,12 +223,14 @@ task GenerateCpxReviewScript {
         -i ~{bed} \
         -b ~{batch_pe_file} \
         -p ~{prefix}.pe_review.txt \
-        -c collect_PE_evidence.~{prefix}.sh
+        -c collect_PE_evidence.~{prefix}.sh \
+        -s collect_background_batch_PE_evidence.~{prefix}.sh
 
     >>>
 
     output {
         File pe_evidence_collection_script = "collect_PE_evidence.~{prefix}.sh"
+        File pe_background_collection_script = "collect_background_batch_PE_evidence.~{prefix}.sh"
     }
 
     runtime {
