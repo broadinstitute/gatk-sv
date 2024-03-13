@@ -234,15 +234,15 @@ def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
 def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
     if sample_sex == SEX_MALE:
         # Expect CN 2 in pseudoautosomal regions
-        if (chrom != chr_x and chrom == chr_y) or is_par:
+        if (chrom != chr_x and chrom != chr_y) or is_par:
             return 2
         else:
             # non-par x or y
             return 1
     elif sample_sex == SEX_FEMALE:
-        if chrom == chr_x or chrom != chr_y:
+        if chrom != chr_y:
             return 2
-        elif chrom == chr_y:
+        else:
             return 0
     elif sample_sex == SEX_UNKNOWN:
         return 0
@@ -282,10 +282,17 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                         cutoff = dup_cutoff
                     sample = samples[i]
                     expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
-                    cutoff = cutoff - (2 - expected_cn)
-                    if is_del and median > cutoff:
+                    cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
+                    if vid.startswith("GD_X-SHOX_DEL_chrX_499823_793142") and sample == "A517720545":
+                        print(f"{sample}")
+                        print(f"{sample_sex_dict[sample]}")
+                        print(f"{expected_cn}")
+                        print(f"{cutoff}")
+                        print(f"{is_del}")
+                        print(f"{median}")
+                    if is_del and median >= cutoff:
                         continue
-                    elif (not is_del) and median < cutoff:
+                    elif (not is_del) and median <= cutoff:
                         continue
                     data[sample][vid] = median
     return data, vids
@@ -409,7 +416,12 @@ def write_revised_record(frev, interval, index, vcf_record, vid, sample, origina
     frev.write(vcf_record)
 
 
+def get_record_key(record):
+    return record.pos, record.chrom, record.stop, record.info.get("SVTYPE", "")
+
+
 def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y, dangling_fraction):
+    revised_variants = defaultdict()
     for vcf_record in forig:
         vid = vcf_record.id
         pos = vcf_record.pos
