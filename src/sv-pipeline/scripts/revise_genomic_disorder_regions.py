@@ -283,13 +283,6 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                     sample = samples[i]
                     expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
                     cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
-                    if vid.startswith("GD_X-SHOX_DEL_chrX_499823_793142") and sample == "A517720545":
-                        print(f"{sample}")
-                        print(f"{sample_sex_dict[sample]}")
-                        print(f"{expected_cn}")
-                        print(f"{cutoff}")
-                        print(f"{is_del}")
-                        print(f"{median}")
                     if is_del and median >= cutoff:
                         continue
                     elif (not is_del) and median <= cutoff:
