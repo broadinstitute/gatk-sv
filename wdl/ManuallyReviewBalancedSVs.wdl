@@ -33,8 +33,10 @@ workflow ManuallyReviewBalancedSVs {
     RuntimeAttr? runtime_attr_collect_pe
     RuntimeAttr? runtime_attr_collect_pe_background
     RuntimeAttr? runtime_attr_concat_ctx
+    RuntimeAttr? runtime_attr_concat_ctx_background
     RuntimeAttr? runtime_attr_concat_cpx
     RuntimeAttr? runtime_attr_concat_inv
+    RuntimeAttr? runtime_attr_calculate_ctx_background
     RuntimeAttr? runtime_attr_calculate_ctx_stats
     RuntimeAttr? runtime_attr_calculate_cpx_stats
     RuntimeAttr? runtime_attr_calculate_inv_stats
@@ -165,12 +167,13 @@ workflow ManuallyReviewBalancedSVs {
       runtime_attr_override=runtime_attr_concat_ctx
   }
 
-  call ConcatEvidences as ConcatCTXBackground {
+  # no overall file header so use different task
+  call tasks.ZcatCompressedFiles as ConcatCTXBackground {
     input:
-      prefix = "~{prefix}.CTX.background",
-      evidences = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
+      outfile_name = "~{prefix}.CTX.background_PE.tsv.gz",
+      shards = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
       sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_ctx
+      runtime_attr_override=runtime_attr_concat_ctx_background
   }
 
   call ConcatEvidences as ConcatCPXEvidences {
@@ -190,10 +193,19 @@ workflow ManuallyReviewBalancedSVs {
   }
 
   # compute stats about PE evidence
+  call CalculatePEBackground as CalculateCTXBackground {
+    input:
+      prefix = "~{prefix}.CTX",
+      background_pe = ConcatCTXBackground.outfile,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_calculate_ctx_background
+  }
+
   call CalculatePEStats as CalculateCTXStats {
     input:
       prefix = "~{prefix}.CTX",
       evidence = ConcatCTXEvidences.concat_evidence,
+      background = CalculateCTXBackground.stats,
       calculate_pe_stats_script = calculate_pe_stats_script,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_calculate_ctx_stats
@@ -333,6 +345,7 @@ task CalculatePEStats {
   input {
     String prefix
     File evidence
+    File? background
     File calculate_pe_stats_script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -353,6 +366,7 @@ task CalculatePEStats {
 
     python ~{calculate_pe_stats_script} \
       -p ~{evidence} \
+      ~{"-b " + background} \
       -o ~{prefix}.stats.tsv
 
     bgzip ~{prefix}.stats.tsv
@@ -360,6 +374,91 @@ task CalculatePEStats {
 
   output {
     File stats = "~{prefix}.stats.tsv.gz"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task CalculatePEBackground {
+  input {
+    String prefix
+    File background_pe
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + 2 * size(background_pe, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python << CODE
+import gzip
+import argparse
+
+
+def write_background(out_file, background):
+    with open(out_file, 'w') as out:
+        out.write("\t".join("#SVID background_min1 background_min4 background_min10".split()) + "\n")
+        for svid in background:
+            counts = background[svid].values()
+            min1 = len(counts)
+            min4 = len([x for x in counts if x > 3])
+            min10 = len([x for x in counts if x > 9])
+            out.write(f"{svid}\t{min1}\t{min4}\t{min10}\n")
+
+
+def increment_count(background, line, curr_svid, curr_samples, pe_header):
+    fields = line.strip().split("\t")
+    # ignore carriers when counting background PE
+    sample_id = fields[pe_header["sample"]]
+    if sample_id not in curr_samples:
+        if sample_id in background[curr_svid]:
+            background[curr_svid][sample_id] += 1
+        else:
+            background[curr_svid][sample_id] = 1
+
+
+def process(pe_background, out_file):
+    with gzip.open(pe_background, 'rt') as pe:
+        pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
+        curr_svid = None
+        curr_samples = None
+        background = dict()  # {svid: {non_carrier_sample: pe_count}}
+        for line in pe:
+            if line.startswith("#"):
+                curr_svid, samp_string = line.strip().lstrip("#").split("\t")
+                curr_samples = set(samp_string.split(","))
+                if curr_svid not in background:
+                    background[curr_svid] = dict()
+            else:
+                increment_count(background, line, curr_svid, curr_samples, pe_header)
+    write_background(out_file, background)
+
+process(~{background_pe}, ~{prefix}.background.stats.tsv)
+CODE
+
+    bgzip ~{prefix}.background.stats.tsv
+  >>>
+
+  output {
+    File stats = "~{prefix}.background.stats.tsv.gz"
   }
 
   runtime {

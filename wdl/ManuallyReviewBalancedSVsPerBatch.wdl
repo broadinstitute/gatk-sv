@@ -209,7 +209,7 @@ task GenerateCpxReviewScript {
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
         mem_gb: 5,
-        disk_gb: 10,
+        disk_gb: ceil(10 + 3 * size(bed, "GB")),
         boot_disk_gb: 30,
         preemptible_tries: 1,
         max_retries: 1

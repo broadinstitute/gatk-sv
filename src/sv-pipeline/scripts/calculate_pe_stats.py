@@ -69,7 +69,7 @@ def calc_dist_all(pe, pe_header, expected_patterns):
     return dists
 
 
-def evaluate(descriptor, pe, descriptor_header, pe_header):
+def evaluate(descriptor, pe, descriptor_header, pe_header, background):
     svid = descriptor[descriptor_header["name"]]
     sample = descriptor[descriptor_header["sample"]]
     cpx_type = descriptor[descriptor_header["CPX_TYPE"]]
@@ -79,14 +79,18 @@ def evaluate(descriptor, pe, descriptor_header, pe_header):
     discont_sortonfirst, discont_sortonsecond = count_discontinous_all(pe, pe_header)
     pp, pm, mp, mm = count_patterns(pe, pe_header)
     dist1, dist2, dist3, dist4 = calc_dist_all(pe, pe_header, determine_expected_patterns(descriptor, descriptor_header))
-    # return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, fwd, rev]]
-    return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, discont_sortonfirst, discont_sortonsecond, dist1, dist2, dist3, dist4]]
+    background_fields = []
+    if background is not None:
+        background_fields = background[svid]
+    return [svid, sample, cpx_type] + [str(x) for x in [pp, pm, mp, mm, discont_sortonfirst, discont_sortonsecond, dist1, dist2, dist3, dist4]] + background_fields
 
 
-def process(pe_evidence, out_file):
+def process(pe_evidence, out_file, background):
     with gzip.open(pe_evidence, 'rt') as pe, open(out_file, 'w') as out:
-        out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond dist1 dist2 dist3 dist4".split()) + "\n")
-        # out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond".split()) + "\n")
+        if background is not None:
+            out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond dist1 dist2 dist3 dist4 background_min1 background_min4 background_min10".split()) + "\n")
+        else:
+            out.write("\t".join("#SVID sample CPX_TYPE ++ +- -+ -- discont_sortonfirst discont_sortonsecond dist1 dist2 dist3 dist4".split()) + "\n")
         first = True
         descriptor_header = None
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
@@ -99,7 +103,7 @@ def process(pe_evidence, out_file):
                 first = False
             elif line.startswith("#"):
                 if curr_pe is not None:
-                    curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header)
+                    curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header, background)
                     out.write("\t".join(curr_out) + "\n")
                 curr_descriptor = fields
                 curr_pe = []
@@ -107,17 +111,32 @@ def process(pe_evidence, out_file):
                 curr_pe.append(fields)
         # handle last variant
         if len(curr_pe) > 0:
-            curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header)
+            curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header, background)
             out.write("\t".join(curr_out) + "\n")
+
+
+def load_background(background_file):
+    background = dict()  # {svid: [background_min1, background_min4, background_min10]}
+    with gzip.open(background_file, 'rt') as bg:
+        for line in bg:
+            fields = line.strip().lstrip("#").split("\t")
+            if not line.startswith("#"):
+                svid = fields[0]
+                background[svid] = fields[1:]
+    return background
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-p", "--pe-evidence", required=True, help="PE evidence file for manual review")
+    parser.add_argument("-b", "--background-pe", required=False, help="Background PE stats")
     parser.add_argument("-o", "--out-file", required=True, help="Name for output table")
     args = parser.parse_args()
 
-    process(args.pe_evidence, args.out_file)
+    background = None
+    if args.background_pe is not None:
+        background = load_background(args.background_pe)
+    process(args.pe_evidence, args.out_file, background)
 
 
 if __name__ == '__main__':
