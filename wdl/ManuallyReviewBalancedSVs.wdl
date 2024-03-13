@@ -168,7 +168,7 @@ workflow ManuallyReviewBalancedSVs {
   call ConcatEvidences as ConcatCTXBackground {
     input:
       prefix = "~{prefix}.CTX.background",
-      evidences = select_first([ManuallyReviewCTXPerBatch.batch_pe_background]),
+      evidences = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_ctx
   }
