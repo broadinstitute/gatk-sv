@@ -149,6 +149,22 @@ def extract_bp_list_V4(coordinates, segments):
             structures = ['ab','aba^']
     return [breakpints, structures]
 
+
+def is_interchromosomal(pin, header_pos):
+  chrom = pin[0]
+  if pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
+    seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'DUP_' in i][0].split('_')[1].split(':')
+    if seg2[0] != chrom:
+        return True
+  elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
+    seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
+    if seg2[0] != chrom:
+        return True
+  elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ'] or pin[header_pos['SVTYPE']] in ['CTX']:
+    return True
+  return False
+
+
 def cpx_SV_readin(input_bed, header_pos, descriptor_fields):
   out = []
   with gzip.open(input_bed, 'rt') as fin:
@@ -156,7 +172,7 @@ def cpx_SV_readin(input_bed, header_pos, descriptor_fields):
       pin=line.strip().split('\t')
       breakpints = None
       ref_alt = None
-      if (not pin[0][0]=="#") and pin[header_pos['SVTYPE']] in ['CTX', 'CPX', 'INV']:
+      if (not pin[0][0]=="#") and (not is_interchromosomal(pin, header_pos)):
         if pin[header_pos['CHR2']]==pin[0]:
           if pin[header_pos['SVTYPE']] == "INV":
             ref_alt = ["INV"]
@@ -186,7 +202,7 @@ def cpx_SV_readin(input_bed, header_pos, descriptor_fields):
             ref_alt = cpx_info[1]
             breakpints = cpx_info[0]
           elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
-            segments = pin[header_pos['SOURCE']].split(',')
+            segments = pin[header_pos['CPX_INTERVALS']].split(',')
             cpx_info = extract_bp_list_V3(pin[:3], segments)
             ref_alt = cpx_info[1]
             breakpints = cpx_info[0]
@@ -211,10 +227,10 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
       bp = None
       ref_alt = None
       if (not pin[0][0]=="#") and pin[header_pos['SVTYPE']] in ['CTX', 'CPX']:
-        if not pin[header_pos['CHR2']]==pin[0]:
+        if is_interchromosomal(pin, header_pos):
           if pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
             seg1 = pin[:3]
-            seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'DUP_' in i][0].split('_')[1].split(':')
+            seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'DUP_' in i][0].split('_')[1].split(':')
             seg2 = [seg2[0]]+seg2[1].split('-')
             if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
               bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]
@@ -230,7 +246,7 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
                 ref_alt = ['a_b', 'a_ba']
           elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
             seg1 = pin[:3]
-            seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
+            seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
             seg2 = [seg2[0]]+seg2[1].split('-')
             if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
               bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]
@@ -252,22 +268,22 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields):
             elif chr_list.index(seg1[0]) > chr_list.index(seg2[0]):
               bp = [[seg2[0]]+[int(i) for i in seg2[1:]], [seg1[0]]+[int(i) for i in seg1[1:]]]
             ref_alt = [pin[header_pos['CPX_TYPE']]]
-          elif "INV_" in pin[header_pos['SOURCE']] and pin[header_pos['SVTYPE']]=="INS":
-            seg1 = pin[:3]
-            seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INV_' in i][0].split('_')[1].split(':')
-            seg2 = [seg2[0]]+seg2[1].split('-')
-            if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
-              bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]
-              if int(seg1[2])-int(seg1[1])>250:
-                ref_alt = ['ab_c', 'c^b_c']
-              else:
-                ref_alt = ['a_b', 'b^a_b']
-            elif chr_list.index(seg1[0]) > chr_list.index(seg2[0]):
-              bp = [[seg2[0]]+[int(i) for i in seg2[1:]], [seg1[0]]+[int(i) for i in seg1[1:]]]
-              if int(seg1[2])-int(seg1[1])>250:
-                ref_alt = ['a_bc','a_ba^']
-              else:
-                ref_alt = ['a_b', 'a_ba^']
+          # elif "INV_" in pin[header_pos['CPX_INTERVALS']] and pin[header_pos['SVTYPE']]=="INS":
+          #   seg1 = pin[:3]
+          #   seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INV_' in i][0].split('_')[1].split(':')
+          #   seg2 = [seg2[0]]+seg2[1].split('-')
+          #   if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
+          #     bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]
+          #     if int(seg1[2])-int(seg1[1])>250:
+          #       ref_alt = ['ab_c', 'c^b_c']
+          #     else:
+          #       ref_alt = ['a_b', 'b^a_b']
+          #   elif chr_list.index(seg1[0]) > chr_list.index(seg2[0]):
+          #     bp = [[seg2[0]]+[int(i) for i in seg2[1:]], [seg1[0]]+[int(i) for i in seg1[1:]]]
+          #     if int(seg1[2])-int(seg1[1])>250:
+          #       ref_alt = ['a_bc','a_ba^']
+          #     else:
+          #       ref_alt = ['a_b', 'a_ba^']
           if bp is not None and ref_alt is not None:
             descriptor = "#" + "\t".join([pin[header_pos[x]] for x in descriptor_fields])
             out.append([bp, ref_alt, pin[header_pos['name']], descriptor])
@@ -381,7 +397,7 @@ def main():
   header_pos = header_pos_readin(input_bed)
   SVID_sample = SVID_sample_readin(input_bed, header_pos)
 
-  descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS SOURCE AC AN AF".split()
+  descriptor_fields = "#chrom start end name SVTYPE SVLEN CHR2 END2 CPX_TYPE CPX_INTERVALS AC AN AF".split()
 
   cpx_SV = cpx_SV_readin(input_bed, header_pos, descriptor_fields)
   cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos, descriptor_fields)
