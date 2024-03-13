@@ -311,17 +311,16 @@ def get_flanking_intervals_to_remove(sample_overlappers, invalidated_intervals, 
                                                 for interval in ov.valid_region_intervals)
     region_overlapping_intervals = [interval for ov in region_sample_overlappers
                                     for interval in ov.overlapping_region_intervals]
+    if len(region_overlapping_intervals) < 2:
+        return list()
     region_overlapping_intervals = sorted(region_overlapping_intervals, key=attrgetter('begin'))
     flanking_intervals_to_remove = list()
-    for i in range(len(region_overlapping_intervals)):
-        if i > 0 and \
-                region_overlapping_intervals[i].data in invalidated_interval_ids and \
-                region_overlapping_intervals[i - 1].data not in sufficiently_overlapping_interval_ids:
-            flanking_intervals_to_remove.append(region_overlapping_intervals[i - 1])
-        if i < len(region_overlapping_intervals) - 1 and \
-                region_overlapping_intervals[i].data in invalidated_interval_ids and \
-                region_overlapping_intervals[i + 1].data not in sufficiently_overlapping_interval_ids:
-            flanking_intervals_to_remove.append(region_overlapping_intervals[i + 1])
+    if region_overlapping_intervals[1].data in invalidated_interval_ids and \
+            region_overlapping_intervals[0].data not in sufficiently_overlapping_interval_ids:
+        flanking_intervals_to_remove.append(region_overlapping_intervals[0])
+    if region_overlapping_intervals[-2].data in invalidated_interval_ids and \
+            region_overlapping_intervals[-1].data not in sufficiently_overlapping_interval_ids:
+        flanking_intervals_to_remove.append(region_overlapping_intervals[-1])
     return flanking_intervals_to_remove
 
 
@@ -414,7 +413,6 @@ def get_record_key(record):
 
 
 def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y, dangling_fraction):
-    revised_variants = defaultdict()
     for vcf_record in forig:
         vid = vcf_record.id
         pos = vcf_record.pos
