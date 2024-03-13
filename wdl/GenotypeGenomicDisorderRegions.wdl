@@ -147,7 +147,7 @@ task ReviseGenomicDisorderRegions {
     tabix ~{prefix}.subtracted.vcf.gz
   >>>
   output{
-    File revised_records_vcf = "~{prefix}..new_revised_records.vcf.gz"
+    File revised_records_vcf = "~{prefix}.new_revised_records.vcf.gz"
     File revised_records_index = "~{prefix}.new_revised_records.vcf.gz.tbi"
     File original_records_vcf = "~{prefix}.original_revised_records.vcf.gz"
     File original_records_index = "~{prefix}.original_revised_records.vcf.gz.tbi"
