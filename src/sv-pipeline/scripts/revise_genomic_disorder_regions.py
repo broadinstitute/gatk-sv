@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import List, Text, Optional
 from itertools import groupby
 from operator import attrgetter
+from collections.abc import Iterable
 
 from intervaltree import IntervalTree
 import pysam
@@ -378,7 +379,11 @@ def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fract
 
 
 def retain_values_if_present(data_dict, key, values_list):
-    return [ev for ev in data_dict.get(key, list()) if ev in values_list]
+    value = data_dict.get(key, list())
+    if isinstance(value, Iterable):
+        return [ev for ev in data_dict.get(key, list()) if ev in values_list]
+    else:
+        return value
 
 
 def write_revised_record(frev, interval, index, vcf_record, vid, sample, original_gt, sample_sex_dict, chr_x, chr_y):
