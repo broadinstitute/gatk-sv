@@ -451,7 +451,7 @@ def process(pe_background, out_file):
                 increment_count(background, line, curr_svid, curr_samples, pe_header)
     write_background(out_file, background)
 
-process(~{background_pe}, ~{prefix}.background.stats.tsv)
+process("~{background_pe}", "~{prefix}.background.stats.tsv")
 CODE
 
     bgzip ~{prefix}.background.stats.tsv
