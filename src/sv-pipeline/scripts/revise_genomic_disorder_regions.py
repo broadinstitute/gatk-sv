@@ -125,7 +125,7 @@ def get_base_name_and_index(interval_id):
 
 
 def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutoff, vcf_min_size, min_rdtest_support,
-                                min_region_overlap):
+                                min_region_overlap, min_rejected_intervals_frac):
 
     interval_subdivision_counts = dict()
     unique_subdivision_names = set()
@@ -170,7 +170,7 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                 distinct_regions.add(base_name)
             for region in distinct_regions:
                 overlapping_region_intervals = [interval for interval in intersect
-                                    if get_base_name_and_index(interval.data)[0] == region]
+                                                if get_base_name_and_index(interval.data)[0] == region]
                 valid_region_intersect = [interval for interval in valid_intersect
                                           if get_base_name_and_index(interval.data)[0] == region]
                 num_region_subdivisions = interval_subdivision_counts[region]
@@ -185,22 +185,29 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                             raise ValueError(f"Interval {interval_name} not found in median_geno file")
                         if sample in medians and interval_name in medians[sample]:
                             supported_intersect.append(interval)
-                    frac_intervals_with_rdtest_support = len(supported_intersect) / len(valid_region_intersect)
+                    n_support = len(supported_intersect)
+                    n_valid_overlap = len(valid_region_intersect)
+                    frac_intervals_with_rdtest_support = n_support / n_valid_overlap
+                    frac_region_intervals_rejected = (n_valid_overlap - n_support) / num_region_subdivisions
+                    # Require sufficient fraction of region intervals to be rejected
+                    if frac_region_intervals_rejected < min_rejected_intervals_frac:
+                        continue
                     # Load FPs only
-                    if frac_intervals_with_rdtest_support < min_rdtest_support:
-                        if svtype not in vcf_overlappers:
-                            vcf_overlappers[svtype] = dict()
-                        if sample not in vcf_overlappers[svtype]:
-                            vcf_overlappers[svtype][sample] = dict()
-                        if name not in vcf_overlappers[svtype][sample]:
-                            vcf_overlappers[svtype][sample][name] = list()
-                        vcf_overlappers[svtype][sample][name].append(
-                            GDRMatch(name=name, chrom=chrom, pos=pos, end=stop, sample=sample,
-                                     overlapping_region_intervals=overlapping_region_intervals,
-                                     valid_region_intervals=valid_region_intersect,
-                                     supporting_intervals=supported_intersect,
-                                     region=region,
-                                     n_region_subdivisions=num_region_subdivisions)
+                    if frac_intervals_with_rdtest_support >= min_rdtest_support:
+                        continue
+                    if svtype not in vcf_overlappers:
+                        vcf_overlappers[svtype] = dict()
+                    if sample not in vcf_overlappers[svtype]:
+                        vcf_overlappers[svtype][sample] = dict()
+                    if name not in vcf_overlappers[svtype][sample]:
+                        vcf_overlappers[svtype][sample][name] = list()
+                    vcf_overlappers[svtype][sample][name].append(
+                        GDRMatch(name=name, chrom=chrom, pos=pos, end=stop, sample=sample,
+                                 overlapping_region_intervals=overlapping_region_intervals,
+                                 valid_region_intervals=valid_region_intersect,
+                                 supporting_intervals=supported_intersect,
+                                 region=region,
+                                 n_region_subdivisions=num_region_subdivisions)
                         )
     return vcf_overlappers
 
@@ -232,22 +239,26 @@ def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
 
 
 def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
-    if sample_sex == SEX_MALE:
-        # Expect CN 2 in pseudoautosomal regions
-        if (chrom != chr_x and chrom != chr_y) or is_par:
-            return 2
-        else:
-            # non-par x or y
-            return 1
+    if (chrom != chr_x and chrom != chr_y) or is_par:
+        return 2
+    elif sample_sex == SEX_MALE:
+        return 1
     elif sample_sex == SEX_FEMALE:
-        if chrom != chr_y:
-            return 2
-        else:
-            return 0
+        return 0
     elif sample_sex == SEX_UNKNOWN:
         return 0
     else:
         raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
+
+
+def get_median_bias_ratio(medians, chrom, samples_list, sample_sex_dict, chr_x, chr_y, is_par):
+    if chrom == chr_x and not is_par:
+        bias_medians = [medians[i] for i in range(len(medians)) if sample_sex_dict[samples_list[i] == SEX_FEMALE]]
+    elif chrom == chr_y:
+        bias_medians = [medians[i] for i in range(len(medians)) if sample_sex_dict[samples_list[i] == SEX_MALE]]
+    else:
+        bias_medians = medians
+    return medians[len(bias_medians) // 2]
 
 
 def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
@@ -259,7 +270,7 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
     for path in file_paths:
         with open(path) as f:
             header = f.readline().strip().split('\t')
-            samples = header[4:]
+            samples_list = header[4:]
             for line in f:
                 record = line.strip().split('\t')
                 chrom = record[0]
@@ -274,19 +285,25 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                 else:
                     continue
                 is_par = is_in_par_region(chrom=chrom, pos=pos, stop=stop, par_trees=par_trees, cutoff=min_par_overlap)
-                for i, median in enumerate(record[4:]):
-                    median = float(median)
+                medians = [float(m) for m in record[4:]]
+                median_bias_ratio = 1  # get_median_bias_ratio(medians, chrom, samples_list, sample_sex_dict, chr_x, chr_y, is_par)
+                for i, median in enumerate(medians):
                     if is_del:
                         cutoff = del_cutoff
                     else:
                         cutoff = dup_cutoff
-                    sample = samples[i]
+                    sample = samples_list[i]
                     expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
-                    cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
+                    cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0) * median_bias_ratio
                     if is_del and median >= cutoff:
                         continue
                     elif (not is_del) and median <= cutoff:
                         continue
+                    if "GD_2q11.1-q11.2_DUP_chr2_96739011_97671430" in vid and sample == "HG03111":
+                        print(f"vid: {vid}")
+                        print(f"sample: {sample}")
+                        print(f"cutoff: {cutoff}")
+                        print(f"median: {median}")
                     data[sample][vid] = median
     return data, vids
 
@@ -412,7 +429,8 @@ def get_record_key(record):
     return record.pos, record.chrom, record.stop, record.info.get("SVTYPE", "")
 
 
-def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y, dangling_fraction):
+def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y,
+                    dangling_fraction):
     for vcf_record in forig:
         vid = vcf_record.id
         pos = vcf_record.pos
@@ -438,7 +456,8 @@ def revise_variants(forig, frev, vid_overlappers_dict, sample_sex_dict, chr_x, c
 
 
 def subtract_and_revise_vcf(input_vcf_path, subtracted_vcf_path, original_records_vcf_path,
-                 new_revised_records_vcf_path, vcf_overlappers, sample_sex_dict, chr_x, chr_y, dangling_fraction):
+                            new_revised_records_vcf_path, vcf_overlappers, sample_sex_dict, chr_x, chr_y,
+                            dangling_fraction):
     vid_overlappers_dict = remap_overlapper_dict(vcf_overlappers)
     # Pull out invalidated records and reset their genotypes
     with pysam.VariantFile(input_vcf_path) as fin, \
@@ -473,9 +492,11 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--vcf-min-size', type=int, default=1000, help='Min size of vcf variants')
     parser.add_argument('--min-frac-supporting-genotypes', type=float, default=0.7,
                         help='Min fraction of sufficiently overlapping genotyped intervals that support the call')
-    parser.add_argument('--min-region-overlap', type=float, default=0.2,
+    parser.add_argument('--min-region-overlap', type=float, default=0.3,
                         help='Min fraction of sufficiently overlapping genotyped intervals in the GD region')
-    parser.add_argument('--min-dangling-frac', type=float, default=0.05,
+    parser.add_argument('--min-rejected-intervals-frac', type=float, default=0.5,
+                        help='Min fraction of region intervals that must be rejected to filter a call')
+    parser.add_argument('--min-dangling-frac', type=float, default=0.3,
                         help='Min interval fraction of variant size for removing leftover fragments')
     parser.add_argument('--min-par-overlap', type=float, default=0.5,
                         help='Min overlap fraction for an interval to be treated as PAR')
@@ -510,7 +531,8 @@ def main(argv: Optional[List[Text]] = None):
                                                   medians=medians, median_vids=median_vids, cutoff=args.overlap,
                                                   vcf_min_size=args.vcf_min_size,
                                                   min_rdtest_support=args.min_frac_supporting_genotypes,
-                                                  min_region_overlap=args.min_region_overlap)
+                                                  min_region_overlap=args.min_region_overlap,
+                                                  min_rejected_intervals_frac=args.min_rejected_intervals_frac)
     subtracted_vcf_path = f"{args.out}.subtracted.vcf.gz"
     original_records_vcf_path = f"{args.out}.original_revised_records.vcf.gz"
     new_revised_records_vcf_path = f"{args.out}.new_revised_records.unsorted.vcf.gz"
