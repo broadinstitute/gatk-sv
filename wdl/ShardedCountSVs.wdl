@@ -29,7 +29,7 @@ workflow ShardedCountSVs {
     if (defined(bcftools_preprocessing_options)) {
       call collect.PreprocessVcf {
         input:
-          vcf = vcf,
+          vcf = ScatterVcf.shards[i],
           bcftools_preprocessing_options=select_first([bcftools_preprocessing_options]),
           prefix = "~{prefix}.shard_~{i}.preprocessed",
           sv_base_mini_docker = sv_base_mini_docker
@@ -38,7 +38,7 @@ workflow ShardedCountSVs {
 
     call plot.CountSVsPerSamplePerType {
       input:
-        vcf = select_first([PreprocessVcf.outvcf, vcf]),
+        vcf = select_first([PreprocessVcf.outvcf, ScatterVcf.shards[i]]),
         prefix = "~{prefix}.shard_~{i}",
         sv_pipeline_docker = sv_pipeline_docker
     }
