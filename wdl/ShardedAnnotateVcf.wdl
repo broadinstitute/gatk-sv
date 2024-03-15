@@ -169,7 +169,7 @@ task ComputeAFs {
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
-      ~{"-par " + par_bed} \
+      ~{"--par " + par_bed} \
       ~{"--allosomes-list " + allosomes_list} \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"
