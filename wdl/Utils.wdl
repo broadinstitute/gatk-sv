@@ -195,7 +195,6 @@ task GetSampleIdsFromMedianCoverageFile {
 
   output {
     File out_file = sample_list
-    Array[String] out_array = read_lines(sample_list)
   }
 
   runtime {

@@ -7,7 +7,6 @@ workflow GenotypeGenomicDisorderRegions {
   input {
     String output_prefix
     Array[String] batch_names
-    Array[File] batch_sample_lists
     Array[File] rd_files
     Array[File] median_files
     Array[File] depth_sepcutoff_files
@@ -17,8 +16,11 @@ workflow GenotypeGenomicDisorderRegions {
     File genomic_disorder_regions_bed
     File par_bed
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_subset_by_samples
     RuntimeAttr? runtime_override_concat_batch
@@ -46,7 +48,6 @@ workflow GenotypeGenomicDisorderRegions {
       input:
         output_prefix = "~{output_prefix}.~{batch_names[i]}",
         batch_name = batch_names[i],
-        batch_sample_list = batch_sample_lists[i],
         rd_file = rd_files[i],
         median_file = median_files[i],
         depth_sepcutoff_file = depth_sepcutoff_files[i],
@@ -55,8 +56,10 @@ workflow GenotypeGenomicDisorderRegions {
         preprocessed_genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
+        linux_docker = linux_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
+        runtime_override_ids_from_median = runtime_override_ids_from_median,
         runtime_attr_subset_by_samples = runtime_attr_subset_by_samples,
         runtime_override_concat_batch = runtime_override_concat_batch,
         runtime_rdtest_full = runtime_rdtest_full,
@@ -86,6 +89,8 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] batch_subtracted_invalidated_gdr_records_index = GenotypeGenomicDisorderRegionsBatch.batch_subtracted_invalidated_gdr_records_index
     Array[File] batch_gdr_subtracted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_subtracted_vcf
     Array[File] batch_gdr_subtracted_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_subtracted_index
+
+    Array[File] batch_subsetted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_vcf
   }
 }
 

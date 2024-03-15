@@ -8,7 +8,6 @@ workflow GenotypeGenomicDisorderRegionsBatch {
   input {
     String output_prefix
     String batch_name
-    File batch_sample_list
     File rd_file
     File median_file
     File depth_sepcutoff_file
@@ -20,9 +19,11 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File genomic_disorder_regions_bed
     File par_bed
 
+    String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
 
+    RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_attr_subset_by_samples
     RuntimeAttr? runtime_override_concat_batch
     RuntimeAttr? runtime_rdtest_full
@@ -36,11 +37,19 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_rdtest_subtracted_invalid
   }
 
+  call util.GetSampleIdsFromMedianCoverageFile {
+    input:
+      median_file = median_file,
+      name = batch_name,
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_override_ids_from_median
+  }
+
   scatter (i in range(length(cohort_vcfs))) {
     call util.SubsetVcfBySamplesList {
       input:
         vcf = cohort_vcfs[i],
-        list_of_samples = batch_sample_list,
+        list_of_samples = GetSampleIdsFromMedianCoverageFile.out_file,
         outfile_name = "~{output_prefix}.shard_{i}",
         remove_samples = false,
         remove_private_sites = true,
@@ -172,6 +181,8 @@ workflow GenotypeGenomicDisorderRegionsBatch {
 
     File batch_gdr_subtracted_vcf = ReviseGenomicDisorderRegions.subtracted_vcf
     File batch_gdr_subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
+
+    File batch_subsetted_vcf = ConcatVcfs.concat_vcf
   }
 }
 
