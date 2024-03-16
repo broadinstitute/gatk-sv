@@ -101,7 +101,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       rdtest_tars = [RunRdTestSubdivision.out],
       vcf = ConcatVcfs.concat_vcf,
       ped_file = ped_file,
-      genomic_disorder_regions_bed = genomic_disorder_regions_bed,
+      genomic_disorder_regions_bed = preprocessed_genomic_disorder_regions_bed,
       par_bed = par_bed,
       script = revise_script,
       sv_pipeline_docker = sv_pipeline_docker,
