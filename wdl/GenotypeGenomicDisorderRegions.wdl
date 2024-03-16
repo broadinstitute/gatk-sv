@@ -16,6 +16,8 @@ workflow GenotypeGenomicDisorderRegions {
     File genomic_disorder_regions_bed
     File par_bed
 
+    File? revise_script
+
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -56,6 +58,7 @@ workflow GenotypeGenomicDisorderRegions {
         preprocessed_genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
+        revise_script = revise_script,
         linux_docker = linux_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
