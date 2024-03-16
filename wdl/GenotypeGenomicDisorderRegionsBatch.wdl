@@ -219,7 +219,7 @@ task RunRdTest {
     awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed
     mkdir ~{output_prefix}/
     Rscript /opt/RdTest/RdTest.R \
-      ~{if do_genotyping then "-g TRUE -v TRUE" else ""}
+      ~{if do_genotyping then "-g TRUE -v TRUE" else ""} \
       ~{if do_plot then "-p TRUE" else ""} \
       ~{"-r " + depth_sepcutoff} \
       -b intervals.bed \
@@ -274,7 +274,7 @@ task ReviseGenomicDisorderRegions {
     ls rdtest/*/*.median_geno > median_geno_files.list
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
       --vcf ~{vcf} \
-      --median-geno-list median_geno_files.list\
+      --median-geno-list median_geno_files.list \
       --ped-file ~{ped_file} \
       --region-bed ~{genomic_disorder_regions_bed} \
       --par-bed ~{par_bed} \
