@@ -17,7 +17,7 @@ workflow GenotypeGenomicDisorderRegions {
     File ped_file
     File genomic_disorder_regions_bed
     File par_bed
-    Float min_gdr_overlap_frac_plotting
+    Float? min_gdr_overlap_frac_plotting
 
     File? revise_script
 
