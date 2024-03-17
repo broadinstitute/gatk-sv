@@ -93,7 +93,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
   # Run RdTest and generate plots on GDRs overlapping one or more variants (plotted carriers highlighted)
   call RunRdTest as RunRdTestGDROverlappingVariants {
     input:
-      output_prefix = "rdtest_var2gdr_~{batch_name}",
+      output_prefix = "rdtest_gdr2var_~{batch_name}",
       rdtest_bed = GetGDROverlappingVariants.variants_bed,
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
