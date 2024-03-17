@@ -112,6 +112,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
       median_file = median_file,
+      inject_sample = true,
       do_plot = true,
       do_genotyping = false,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -126,6 +127,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       rd_index = rd_file + ".tbi",
       median_file = median_file,
       depth_sepcutoff = depth_sepcutoff_file,
+      inject_sample = true,
       do_plot = true,
       do_genotyping = true,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -235,6 +237,7 @@ task RunRdTest {
     File rd_index
     File median_file
     File? depth_sepcutoff  # Required if do_genotyping = true
+    Boolean inject_sample = false  # If missing a samples column, fill one using the first sample from the median_file
     Boolean do_plot
     Boolean do_genotyping
     Int large_size_cutoff = 1000000
@@ -243,8 +246,8 @@ task RunRdTest {
   }
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 7.5,
-                               disk_gb: ceil(40.0 + size(rd_file, "GiB") * 4 + size(rdtest_bed, "GiB")),
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50.0 + size(rd_file, "GiB") + size(rdtest_bed, "GiB") * 2),
                                boot_disk_gb: 10,
                                preemptible_tries: 3,
                                max_retries: 1
@@ -253,8 +256,12 @@ task RunRdTest {
   command <<<
     set -euxo pipefail
     # Inject one sample from the batch into the 5th column
-    SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
-    awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed
+    if [ ~{inject_sample} ]; do
+      SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
+      awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed
+    else
+      cp ~{rdtest_bed} intervals.bed
+    done
     mkdir ~{output_prefix}/
     Rscript /opt/RdTest/RdTest.R \
       ~{if do_genotyping then "-g TRUE -v TRUE" else ""} \
@@ -417,7 +424,6 @@ task GetGDROverlappingVariants {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 task VcfToBed {
   input {
