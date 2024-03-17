@@ -26,6 +26,7 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_subset_by_samples
     RuntimeAttr? runtime_override_concat_batch
+    RuntimeAttr? runtime_gdr_overlapping_variants
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
     RuntimeAttr? runtime_revise_vcf
@@ -65,6 +66,7 @@ workflow GenotypeGenomicDisorderRegions {
         runtime_override_ids_from_median = runtime_override_ids_from_median,
         runtime_attr_subset_by_samples = runtime_attr_subset_by_samples,
         runtime_override_concat_batch = runtime_override_concat_batch,
+        runtime_gdr_overlapping_variants = runtime_gdr_overlapping_variants,
         runtime_rdtest_full = runtime_rdtest_full,
         runtime_rdtest_subdiv = runtime_rdtest_subdiv,
         runtime_revise_vcf = runtime_revise_vcf,
@@ -77,6 +79,8 @@ workflow GenotypeGenomicDisorderRegions {
     }
   }
   output{
+    Array[File] batch_variants_overlapping_gdr_out = GenotypeGenomicDisorderRegionsBatch.batch_variants_overlapping_gdr_out
+    Array[File] batch_gdr_overlapping_variants_out = GenotypeGenomicDisorderRegionsBatch.batch_gdr_overlapping_variants_out
     Array[File] batch_rdtest_gdr_full_out = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_full_out
     Array[File] batch_rdtest_gdr_subdiv_out = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_subdiv_out
 

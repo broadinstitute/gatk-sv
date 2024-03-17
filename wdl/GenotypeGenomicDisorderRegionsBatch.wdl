@@ -28,6 +28,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_attr_subset_by_samples
     RuntimeAttr? runtime_override_concat_batch
+    RuntimeAttr? runtime_gdr_overlapping_variants
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
     RuntimeAttr? runtime_revise_vcf
@@ -68,7 +69,42 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_override_concat_batch
   }
-  # Run RdTest and generate plots over the full GD regions
+  call GetGDROverlappingVariants {
+    input:
+    vcf = ConcatVcfs.concat_vcf,
+    genomic_disorder_regions_bed = genomic_disorder_regions_bed,
+    prefix = "~{output_prefix}",
+    sv_base_mini_docker = sv_base_mini_docker,
+    runtime_attr_override = runtime_gdr_overlapping_variants
+  }
+  # Run RdTest and generate plots on variants overlapping one or more GDRs (plotted carriers highlighted)
+  call RunRdTest as RunRdTestVariantsOverlappingGDR {
+    input:
+      output_prefix = "rdtest_var2gdr_~{batch_name}",
+      rdtest_bed = GetGDROverlappingVariants.variants_bed,
+      rd_file = rd_file,
+      rd_index = rd_file + ".tbi",
+      median_file = median_file,
+      do_plot = true,
+      do_genotyping = false,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_rdtest_full
+  }
+  # Run RdTest and generate plots on GDRs overlapping one or more variants (plotted carriers highlighted)
+  call RunRdTest as RunRdTestGDROverlappingVariants {
+    input:
+      output_prefix = "rdtest_var2gdr_~{batch_name}",
+      rdtest_bed = GetGDROverlappingVariants.variants_bed,
+      rd_file = rd_file,
+      rd_index = rd_file + ".tbi",
+      median_file = median_file,
+      do_plot = true,
+      do_genotyping = false,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_rdtest_full
+  }
+
+  # Run RdTest and generate plots over the all GD regions (plotted carriers NOT highlighted)
   call RunRdTest as RunRdTestFullRegions {
     input:
       output_prefix = "rdtest_full_~{batch_name}",
@@ -81,7 +117,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_rdtest_full
   }
-  # Run RdTest and generate plots over subdivided GD regions
+  # Run RdTest and generate plots over subdivided GD regions (plotted carriers NOT highlighted)
   call RunRdTest as RunRdTestSubdivision {
     input:
       output_prefix = "rdtest_subdiv_~{batch_name}",
@@ -166,6 +202,8 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       runtime_attr_override = runtime_rdtest_subtracted_invalid
   }
   output{
+    File batch_variants_overlapping_gdr_out = RunRdTestVariantsOverlappingGDR.out
+    File batch_gdr_overlapping_variants_out = RunRdTestGDROverlappingVariants.out
     File batch_rdtest_gdr_full_out = RunRdTestFullRegions.out
     File batch_rdtest_gdr_subdiv_out = RunRdTestFullRegions.out
 
@@ -301,6 +339,85 @@ task ReviseGenomicDisorderRegions {
   }
 }
 
+task GetGDROverlappingVariants {
+  input {
+    File vcf
+    File genomic_disorder_regions_bed
+    String prefix
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50 + size(vcf, "GiB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File variants_bed = "~{prefix}.variants_with_gdr_overlaps.bed"
+    File gdr_bed = "~{prefix}.gdr_with_variant_overlaps.bed"
+  }
+  command <<<
+    set -euxo pipefail
+
+    # Min size should be half the smallest interval length
+    MIN_SIZE=$(awk -F'\t' '{print $3-$2}' ~{genomic_disorder_regions_bed} | sort -n | awk '{if (NR==1) {print int($1/2)}}')
+
+    # Get DEL/DUP bed records
+    bcftools view -i '(SVTYPE=="DEL" || SVTYPE=="DUP") && SVLEN>=$MIN_SIZE' ~{vcf} | svtk vcf2bed - intervals.bed
+    head -n1 intervals.bed > header.bed
+
+    # Separate DEL and DUP records
+    awk -F'\t' -v OFS='\t' '$5=="DEL"' intervals.bed > intervals.DEL.bed
+    awk -F'\t' -v OFS='\t' '$5=="DUP"' intervals.bed > intervals.DUP.bed
+    awk -F'\t' -v OFS='\t' '$5=="DEL"' ~{genomic_disorder_regions_bed} > gdr.DEL.bed
+    awk -F'\t' -v OFS='\t' '$5=="DUP"' ~{genomic_disorder_regions_bed} > gdr.DUP.bed
+
+    # Get variants overlapping at least 50% of a GDR
+    # Records are named <VARIANT_ID>__<GDR_ID>
+    # Note we swap columns 5 and 6 (SVTYPE and SAMPLES) for RdTest
+    bedtools intersect -wo -F 0.5 -a intervals.DEL.bed -b gdr.DEL.bed \
+      | awk -F'\t' -v OFS='\t' '{print $1,$2,$3,$4"__"$10,$6,$5}' \
+      > intervals.DEL.gdr_overlaps.bed
+    bedtools intersect -wo -F 0.5 -a intervals.DUP.bed -b gdr.DUP.bed \
+    | awk -F'\t' -v OFS='\t' '{print $1,$2,$3,$4"__"$10,$6,$5}' \
+    > intervals.DUP.gdr_overlaps.bed
+    cat intervals.DEL.gdr_overlaps.bed intervals.DUP.gdr_overlaps.bed \
+      | sort -k1,1V -k2,2n -k3,3n \
+      > intervals.gdr_overlaps.bed
+    cat header.bed intervals.gdr_overlaps.bed > ~{prefix}.variants_with_gdr_overlaps.bed
+
+    # Get GDRs overlapped at least 50% by a variant
+    # Records are named <GDR_ID>__<VARIANT_ID>
+    # Note we swap columns 5 and 6 (SVTYPE and SAMPLES) for RdTest
+    bedtools intersect -wo -F 0.5 -a intervals.DEL.bed -b gdr.DEL.bed \
+      | awk -F'\t' -v OFS='\t' '{print $7,$8,$9,$10"__"$4,$6,$5}' \
+      > gdr.DEL.variant_overlaps.bed
+    bedtools intersect -wo -F 0.5 -a intervals.DUP.bed -b gdr.DUP.bed \
+      | awk -F'\t' -v OFS='\t' '{print $7,$8,$9,$10"__"$4,$6,$5}' \
+      > gdr.DUP.variant_overlaps.bed
+    cat gdr.DEL.variant_overlaps.bed gdr.DUP.variant_overlaps.bed \
+      | sort -k1,1V -k2,2n -k3,3n \
+      > gdr.variant_overlaps.bed
+    cat header.bed gdr.variant_overlaps.bed > ~{prefix}.gdr_with_variant_overlaps.bed
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task VcfToBed {
   input {
@@ -327,7 +444,7 @@ task VcfToBed {
     set -euxo pipefail
     svtk vcf2bed ~{vcf} intervals.bed
     # Swap last two columns for RdTest
-    awk -F"\t" -v OFS="\t" '{print $1, $2, $3, $4, $6, $5} intervals.bed > ~{prefix}.bed
+    awk -F"\t" -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' intervals.bed > ~{prefix}.bed
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
