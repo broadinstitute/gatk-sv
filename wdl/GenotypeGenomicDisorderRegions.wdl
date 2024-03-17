@@ -2,6 +2,8 @@ version 1.0
 
 import "Structs.wdl"
 import "GenotypeGenomicDisorderRegionsBatch.wdl" as gdr_batch
+import "VcfClusterSingleChromsome.wdl" as vcf_cluster
+import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow GenotypeGenomicDisorderRegions {
   input {
@@ -15,6 +17,7 @@ workflow GenotypeGenomicDisorderRegions {
     File ped_file
     File genomic_disorder_regions_bed
     File par_bed
+    Float min_gdr_overlap_frac_plotting
 
     File? revise_script
 
@@ -29,13 +32,15 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_gdr_overlapping_variants
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
-    RuntimeAttr? runtime_revise_vcf
+    RuntimeAttr? runtime_revise_vcf_batch
     RuntimeAttr? runtime_vcf2bed_new_records
     RuntimeAttr? runtime_vcf2bed_original_invalid
     RuntimeAttr? runtime_vcf2bed_subracted_invalid
     RuntimeAttr? runtime_rdtest_new_records
     RuntimeAttr? runtime_rdtest_original_invalid
     RuntimeAttr? runtime_rdtest_subtracted_invalid
+    RuntimeAttr? runtime_revise_vcf_cohort
+    RuntimeAttr? runtime_override_concat_revised_vcfs
   }
 
   call PreprocessGenomicDisorderIntervals {
@@ -59,6 +64,7 @@ workflow GenotypeGenomicDisorderRegions {
         preprocessed_genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
+        min_gdr_overlap_frac_plotting = min_gdr_overlap_frac_plotting,
         revise_script = revise_script,
         linux_docker = linux_docker,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -69,7 +75,7 @@ workflow GenotypeGenomicDisorderRegions {
         runtime_gdr_overlapping_variants = runtime_gdr_overlapping_variants,
         runtime_rdtest_full = runtime_rdtest_full,
         runtime_rdtest_subdiv = runtime_rdtest_subdiv,
-        runtime_revise_vcf = runtime_revise_vcf,
+        runtime_revise_vcf_batch = runtime_revise_vcf_batch,
         runtime_vcf2bed_new_records = runtime_vcf2bed_new_records,
         runtime_vcf2bed_original_invalid = runtime_vcf2bed_original_invalid,
         runtime_vcf2bed_subracted_invalid = runtime_vcf2bed_subracted_invalid,
@@ -78,7 +84,51 @@ workflow GenotypeGenomicDisorderRegions {
         runtime_rdtest_subtracted_invalid = runtime_rdtest_subtracted_invalid
     }
   }
+
+  scatter (i in range(length(cohort_vcfs))) {
+    # Run the revision script on cohort vcfs
+    # - The batch-level runs serve to provide median coverage values and for manual review
+    # - It is assumed that the revision scripts operates identically on the cohort vcf as it does over all the batches,
+    #     i.e. that the result here is the summation of running the same script on each batch independently
+    # - This is not an ideal design, but is simpler and more efficient than attempting to join batch-level outputs
+    call gdr_batch.ReviseGenomicDisorderRegions {
+      input:
+        prefix = "~{output_prefix}.revise_gdr",
+        rdtest_tars = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_subdiv_out,
+        vcf = cohort_vcfs[i],
+        ped_file = ped_file,
+        genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
+        par_bed = par_bed,
+        script = revise_script,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_revise_vcf_cohort
+    }
+    call tasks_cohort.ConcatVcfs {
+      input:
+        vcfs = [ReviseGenomicDisorderRegions.subtracted_vcf, ReviseGenomicDisorderRegions.new_records_vcf],
+        vcfs_idx = [ReviseGenomicDisorderRegions.subtracted_index, ReviseGenomicDisorderRegions.new_records_index],
+        allow_overlaps = true,
+        outfile_prefix = "~{output_prefix}.concat_revise_gdr",
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_override_concat_revised_vcfs
+    }
+  }
   output{
+    # Cohort VCF outputs
+    Array[File] cohort_gdr_revised_vcf = ConcatVcfs.concat_vcf
+    Array[File] cohort_gdr_revised_vcf_index = ConcatVcfs.concat_vcf_idx
+
+    Array[File] cohort_new_gdr_records_vcf = ReviseGenomicDisorderRegions.new_records_vcf
+    Array[File] cohort_new_gdr_records_index = ReviseGenomicDisorderRegions.new_records_index
+    Array[File] cohort_original_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.original_invalidated_records_index
+    Array[File] cohort_original_invalidated_gdr_records_index = ReviseGenomicDisorderRegions.original_invalidated_records_index
+    Array[File] cohort_subtracted_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.subtracted_invalidated_records_vcf
+    Array[File] cohort_subtracted_invalidated_gdr_records_index = ReviseGenomicDisorderRegions.subtracted_invalidated_records_index
+    Array[File] cohort_gdr_subtracted_vcf = ReviseGenomicDisorderRegions.subtracted_vcf
+    Array[File] cohort_gdr_subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
+
+    # Batch RdTest outputs
+
     # Plots of input variants that overlap one or more GDRs, with carriers shown
     Array[File] batch_variants_overlapping_gdr_out = GenotypeGenomicDisorderRegionsBatch.batch_variants_overlapping_gdr_out
     # Plots of GDRs that overlap one or more input variants, with carriers shown
@@ -95,6 +145,8 @@ workflow GenotypeGenomicDisorderRegions {
     # Plots of revised input variants after subtracting filtered genotypes, with carriers shown
     Array[File] batch_rdtest_gdr_subtracted_invalid_out = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_subtracted_invalid_out
 
+    # Batch VCF outputs
+
     Array[File] batch_new_gdr_records_vcf = GenotypeGenomicDisorderRegionsBatch.batch_new_gdr_records_vcf
     Array[File] batch_new_gdr_records_index = GenotypeGenomicDisorderRegionsBatch.batch_new_gdr_records_index
     Array[File] batch_original_invalidated_gdr_records_vcf = GenotypeGenomicDisorderRegionsBatch.batch_original_invalidated_gdr_records_vcf
@@ -104,7 +156,8 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] batch_gdr_subtracted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_subtracted_vcf
     Array[File] batch_gdr_subtracted_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_subtracted_index
 
-    Array[File] batch_subsetted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_vcf
+    Array[File] batch_gdr_subsetted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_vcf
+    Array[File] batch_gdr_subsetted_index = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_index
   }
 }
 

@@ -18,6 +18,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File preprocessed_genomic_disorder_regions_bed
     File genomic_disorder_regions_bed
     File par_bed
+    Float? min_gdr_overlap_frac_plotting
 
     File? revise_script
 
@@ -31,7 +32,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_gdr_overlapping_variants
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
-    RuntimeAttr? runtime_revise_vcf
+    RuntimeAttr? runtime_revise_vcf_batch
     RuntimeAttr? runtime_vcf2bed_new_records
     RuntimeAttr? runtime_vcf2bed_original_invalid
     RuntimeAttr? runtime_vcf2bed_subracted_invalid
@@ -74,6 +75,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     vcf = ConcatVcfs.concat_vcf,
     genomic_disorder_regions_bed = genomic_disorder_regions_bed,
     prefix = "~{output_prefix}",
+    min_gdr_overlap_frac_plotting = min_gdr_overlap_frac_plotting,
     sv_pipeline_docker = sv_pipeline_docker,
     runtime_attr_override = runtime_gdr_overlapping_variants
   }
@@ -143,7 +145,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       par_bed = par_bed,
       script = revise_script,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_revise_vcf
+      runtime_attr_override = runtime_revise_vcf_batch
   }
   call VcfToBed as VcfToBedNewRecords {
     input:
@@ -226,6 +228,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File batch_gdr_subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
 
     File batch_subsetted_vcf = ConcatVcfs.concat_vcf
+    File batch_subsetted_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
@@ -255,12 +258,13 @@ task RunRdTest {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
-    # Inject one sample from the batch into the 5th column
     if [ ~{inject_sample} ]; do
+      # Inject one sample from the batch into the 5th column
       SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
       awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed
     else
-      cp ~{rdtest_bed} intervals.bed
+      # Remove sites with no carriers, which isn't currently supported by RdTest
+      awk -F'\t' -v OFS='\t' '$5!=""' ~{rdtest_bed} > intervals.bed
     done
     mkdir ~{output_prefix}/
     Rscript /opt/RdTest/RdTest.R \
@@ -350,6 +354,7 @@ task GetGDROverlappingVariants {
   input {
     File vcf
     File genomic_disorder_regions_bed
+    Float min_gdr_overlap_frac_plotting = 0.5
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -373,10 +378,12 @@ task GetGDROverlappingVariants {
     set -euxo pipefail
 
     # Min size should be half the smallest interval length
-    MIN_SIZE=$(awk -F'\t' '{print $3-$2}' ~{genomic_disorder_regions_bed} | sort -n | awk '{if (NR==1) {print int($1/2)}}')
+    MIN_SIZE=$(awk -F'\t' '{print $3-$2}' ~{genomic_disorder_regions_bed} | sort -n | awk -v f=~{min_gdr_overlap_frac_plotting} '{if (NR==1) {print int($1 * f)}}')
 
-    # Get DEL/DUP bed records
-    bcftools view -i '(SVTYPE=="DEL" || SVTYPE=="DUP") && SVLEN>=$MIN_SIZE' ~{vcf} | svtk vcf2bed - intervals.bed
+    # Get non-ref DEL/DUP bed records
+    # Note we need to use double-quotes around the filtering expression since we are referencing a shell variable
+    bcftools view -i "(SVTYPE==\"DEL\" || SVTYPE==\"DUP\") && SVLEN>=$MIN_SIZE && COUNT(GT=\"alt\")>0" ~{vcf} \
+      | svtk vcf2bed - intervals.bed
     head -n1 intervals.bed > header.bed
 
     # Separate DEL and DUP records
@@ -388,10 +395,10 @@ task GetGDROverlappingVariants {
     # Get variants overlapping at least 50% of a GDR
     # Records are named <VARIANT_ID>__<GDR_ID>
     # Note we swap columns 5 and 6 (SVTYPE and SAMPLES) for RdTest
-    bedtools intersect -wo -F 0.5 -a intervals.DEL.bed -b gdr.DEL.bed \
+    bedtools intersect -wo -F ~{min_gdr_overlap_frac_plotting} -a intervals.DEL.bed -b gdr.DEL.bed \
       | awk -F'\t' -v OFS='\t' '{print $1,$2,$3,$4"__"$10,$6,$5}' \
       > intervals.DEL.gdr_overlaps.bed
-    bedtools intersect -wo -F 0.5 -a intervals.DUP.bed -b gdr.DUP.bed \
+    bedtools intersect -wo -F ~{min_gdr_overlap_frac_plotting} -a intervals.DUP.bed -b gdr.DUP.bed \
     | awk -F'\t' -v OFS='\t' '{print $1,$2,$3,$4"__"$10,$6,$5}' \
     > intervals.DUP.gdr_overlaps.bed
     cat intervals.DEL.gdr_overlaps.bed intervals.DUP.gdr_overlaps.bed \
