@@ -74,7 +74,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     vcf = ConcatVcfs.concat_vcf,
     genomic_disorder_regions_bed = genomic_disorder_regions_bed,
     prefix = "~{output_prefix}",
-    sv_base_mini_docker = sv_base_mini_docker,
+    sv_pipeline_docker = sv_pipeline_docker,
     runtime_attr_override = runtime_gdr_overlapping_variants
   }
   # Run RdTest and generate plots on variants overlapping one or more GDRs (plotted carriers highlighted)
@@ -344,7 +344,7 @@ task GetGDROverlappingVariants {
     File vcf
     File genomic_disorder_regions_bed
     String prefix
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -412,7 +412,7 @@ task GetGDROverlappingVariants {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
