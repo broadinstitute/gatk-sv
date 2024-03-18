@@ -383,8 +383,7 @@ task GetGDROverlappingVariants {
     # Get non-ref DEL/DUP bed records
     # Note we need to use double-quotes around the filtering expression since we are referencing a shell variable
     bcftools view -i "(SVTYPE==\"DEL\" || SVTYPE==\"DUP\") && SVLEN>=$MIN_SIZE && COUNT(GT=\"alt\")>0" ~{vcf} \
-      | svtk vcf2bed - intervals.bed
-    awk -F'\t' -v OFS='\t' '{if (NR==1) {print $1,$2,$3,$4,$6,$5}}' intervals.bed > header.bed
+      | svtk vcf2bed --no-header - intervals.bed
 
     # Separate DEL and DUP records
     awk -F'\t' -v OFS='\t' '$5=="DEL"' intervals.bed > intervals.DEL.bed
@@ -403,8 +402,7 @@ task GetGDROverlappingVariants {
     > intervals.DUP.gdr_overlaps.bed
     cat intervals.DEL.gdr_overlaps.bed intervals.DUP.gdr_overlaps.bed \
       | sort -k1,1V -k2,2n -k3,3n \
-      > intervals.gdr_overlaps.bed
-    cat header.bed intervals.gdr_overlaps.bed > ~{prefix}.variants_with_gdr_overlaps.bed
+      > ~{prefix}.variants_with_gdr_overlaps.bed
 
     # Get GDRs overlapped at least 50% by a variant
     # Records are named <GDR_ID>__<VARIANT_ID>
@@ -417,8 +415,7 @@ task GetGDROverlappingVariants {
       > gdr.DUP.variant_overlaps.bed
     cat gdr.DEL.variant_overlaps.bed gdr.DUP.variant_overlaps.bed \
       | sort -k1,1V -k2,2n -k3,3n \
-      > gdr.variant_overlaps.bed
-    cat header.bed gdr.variant_overlaps.bed > ~{prefix}.gdr_with_variant_overlaps.bed
+      > ~{prefix}.gdr_with_variant_overlaps.bed
 
   >>>
   runtime {
