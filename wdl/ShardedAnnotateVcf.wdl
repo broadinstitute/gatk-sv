@@ -138,8 +138,8 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), ComputeAFs.af_vcf])
-    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), ComputeAFs.af_vcf_idx])
+    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
+    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
   }
 }
 
