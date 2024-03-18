@@ -384,7 +384,7 @@ task GetGDROverlappingVariants {
     # Note we need to use double-quotes around the filtering expression since we are referencing a shell variable
     bcftools view -i "(SVTYPE==\"DEL\" || SVTYPE==\"DUP\") && SVLEN>=$MIN_SIZE && COUNT(GT=\"alt\")>0" ~{vcf} \
       | svtk vcf2bed - intervals.bed
-    head -n1 intervals.bed > header.bed
+    awk -F'\t' -v OFS='\t' '{if (NR==1) {print $1,$2,$3,$4,$6,$5}}' intervals.bed > header.bed
 
     # Separate DEL and DUP records
     awk -F'\t' -v OFS='\t' '$5=="DEL"' intervals.bed > intervals.DEL.bed
