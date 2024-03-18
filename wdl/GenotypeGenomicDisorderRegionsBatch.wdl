@@ -258,14 +258,14 @@ task RunRdTest {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
-    if [ ~{inject_sample} ]; do
+    if [ ~{inject_sample} ]; then
       # Inject one sample from the batch into the 5th column
       SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
       awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed
     else
       # Remove sites with no carriers, which isn't currently supported by RdTest
       awk -F'\t' -v OFS='\t' '$5!=""' ~{rdtest_bed} > intervals.bed
-    done
+    fi
     mkdir ~{output_prefix}/
     Rscript /opt/RdTest/RdTest.R \
       ~{if do_genotyping then "-g TRUE -v TRUE" else ""} \
