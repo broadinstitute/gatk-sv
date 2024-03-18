@@ -12,7 +12,7 @@ workflow TabixRdMetrics {
     input {
         Array[File] bed_metrics
         Array[File] bed_metrics_idxes
-        Array[File] region_bed_list
+        File region_bed_list
         String sv_pipeline_base_docker
         RuntimeAttr? runtime_attr_extract_region_metrics
     }
@@ -23,7 +23,7 @@ workflow TabixRdMetrics {
             input:
                 bed_metric = bed_metrics[i],
                 bed_metric_idx = bed_metrics_idxes[i],
-                bed = region_bed_list[i],
+                bed = region_bed_list,
                 sv_pipeline_base_docker = sv_pipeline_base_docker,
                 runtime_attr_override = runtime_attr_extract_region_metrics
         }
