@@ -476,13 +476,13 @@ def revise_variants(forig, frev, vid_overlappers_dict, dangling_fraction):
                                  samples=intervals_dict[interval], original_gt_dict=original_gt_dict)
 
 
-def subtract_and_revise_vcf(input_vcf_path, subtracted_bed_path, original_invalidated_records_vcf_path,
+def subtract_and_revise_vcf(input_vcf_path, subtracted_tsv_path, original_invalidated_records_vcf_path,
                             subtracted_invalidated_records_vcf_path, new_revised_records_vcf_path,
                             vcf_overlappers, sample_sex_dict, chr_x, chr_y, dangling_fraction):
     vid_overlappers_dict = remap_overlapper_dict(vcf_overlappers)
     # Pull out invalidated records and reset their genotypes
     with pysam.VariantFile(input_vcf_path) as fin, \
-            gzip.open(subtracted_bed_path, mode="wt") as fsub, \
+            gzip.open(subtracted_tsv_path, mode="wt") as fsub, \
             pysam.VariantFile(original_invalidated_records_vcf_path, mode="w", header=fin.header) as forig, \
             pysam.VariantFile(subtracted_invalidated_records_vcf_path, mode="w", header=fin.header) as fsubinv:
         subtract_vcf(fin=fin, fsub=fsub, forig=forig, fsubinv=fsubinv, vid_overlappers_dict=vid_overlappers_dict,
@@ -624,14 +624,14 @@ def main(argv: Optional[List[Text]] = None):
                                                   min_rdtest_support=args.min_frac_supporting_genotypes,
                                                   min_region_overlap=args.min_region_overlap,
                                                   min_rejected_intervals_frac=args.min_rejected_intervals_frac)
-    subtracted_bed_path = f"{args.out}.subtracted.bed.gz"
+    subtracted_tsv_path = f"{args.out}.subtracted.tsv.gz"
     original_invalidated_records_vcf_path = f"{args.out}.original_invalidated_records.vcf.gz"
     subtracted_invalidated_records_vcf_path = f"{args.out}.subtracted_invalidated_records.vcf.gz"
     sorted_revised_records_vcf_path = f"{args.out}.new_records.vcf.gz"
     logging.info("Subtracting and revising variants...")
     with tempfile.NamedTemporaryFile(dir=args.temp, suffix=".vcf.gz") as temp_vcf:
         subtract_and_revise_vcf(input_vcf_path=args.vcf,
-                                subtracted_bed_path=subtracted_bed_path,
+                                subtracted_tsv_path=subtracted_tsv_path,
                                 original_invalidated_records_vcf_path=original_invalidated_records_vcf_path,
                                 subtracted_invalidated_records_vcf_path=subtracted_invalidated_records_vcf_path,
                                 new_revised_records_vcf_path=temp_vcf.name,

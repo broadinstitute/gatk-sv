@@ -43,27 +43,32 @@ def read_gzip_text_mode(path):
     return gzip.open(path, mode="rt")
 
 
-def read_bed(path):
-    bed_func = read_gzip_text_mode if path.endswith(".gz") else open
-    with bed_func(path) as f:
-        bed_data_sets = defaultdict(set)
+def read_tsv(path):
+    open_func = read_gzip_text_mode if path.endswith(".gz") else open
+    with open_func(path) as f:
+        data_sets = defaultdict(set)
         for line in f:
             tokens = line.strip().split("\t")
+            if len(tokens) != 2:
+                raise ValueError(f"Encountered record with more than 2 columns: {tokens}")
             vid = tokens[0]
             sample = tokens[1]
-            bed_data_sets[vid].add(sample)
-        return {key: list(val) for key, val in bed_data_sets.items()}
+            data_sets[vid].add(sample)
+        return {key: list(val) for key, val in data_sets.items()}
 
 
-def process_vcf(in_path, out_path, bed_data):
+def process_vcf(in_path, out_path, genotype_data):
     with pysam.VariantFile(in_path) as fin, pysam.VariantFile(out_path, mode="w", header=fin.header) as fout:
         current_chrom = None
         for record in fin:
             if record.chrom != current_chrom:
                 current_chrom = record.chrom
                 logging.info(f"  {record.chrom}")
-            if record.id in bed_data:
-                for sample in bed_data[record.id]:
+            if record.id in genotype_data:
+                svtype = record.info.get("SVTYPE", "None")
+                if svtype != "DEL" and svtype != "DUP":
+                    raise ValueError(f"Record {record.id} has SVTYPE {svtype} but must be DEL or DUP")
+                for sample in genotype_data[record.id]:
                     if sample not in record.samples:
                         raise ValueError(f"Sample {sample} not found in the vcf")
                     gt = record.samples[sample]
@@ -80,12 +85,12 @@ def process_vcf(in_path, out_path, bed_data):
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Resets genotypes to homozygous-reference",
+        description="Resets DEL/DUP genotypes to homozygous-reference",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--vcf', type=str, required=True, help='Input vcf')
-    parser.add_argument('--genotype-bed', type=str, required=True,
-                        help='Bed file of genotypes to reset, with variant and sample ID columns (.bed or .bed.gz)')
+    parser.add_argument('--genotype-tsv', type=str, required=True,
+                        help='Genotypes to reset, headerless, with variant and sample ID columns (.tsv or .tsv.gz)')
     parser.add_argument('--out', type=str, required=True, help='Output vcf')
     if len(argv) <= 1:
         parser.parse_args(["--help"])
@@ -101,10 +106,10 @@ def main(argv: Optional[List[Text]] = None):
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
     logging.info("Reading bed file...")
-    bed_data = read_bed(args.genotype_bed)
+    genotype_data = read_tsv(args.genotype_tsv)
 
     logging.info("Processing vcf...")
-    process_vcf(args.vcf, args.out, bed_data)
+    process_vcf(in_path=args.vcf, out_path=args.out, genotype_data=genotype_data)
     pysam.tabix_index(args.out, preset="vcf", force=True)
 
 

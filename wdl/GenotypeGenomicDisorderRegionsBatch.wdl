@@ -224,8 +224,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File batch_subtracted_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.subtracted_invalidated_records_vcf
     File batch_subtracted_invalidated_gdr_records_index = ReviseGenomicDisorderRegions.subtracted_invalidated_records_index
 
-    File batch_gdr_subtracted_vcf = ReviseGenomicDisorderRegions.subtracted_vcf
-    File batch_gdr_subtracted_index = ReviseGenomicDisorderRegions.subtracted_index
+    File batch_gdr_genotypes_tsv = ReviseGenomicDisorderRegions.subtracted_genotypes_tsv
 
     File batch_subsetted_vcf = ConcatVcfs.concat_vcf
     File batch_subsetted_index = ConcatVcfs.concat_vcf_idx
@@ -329,15 +328,14 @@ task ReviseGenomicDisorderRegions {
       --par-bed ~{par_bed} \
       --out ~{prefix}
   >>>
-  output{
+  output {
     File new_records_vcf = "~{prefix}.new_records.vcf.gz"
     File new_records_index = "~{prefix}.new_records.vcf.gz.tbi"
     File original_invalidated_records_vcf = "~{prefix}.original_invalidated_records.vcf.gz"
     File original_invalidated_records_index = "~{prefix}.original_invalidated_records.vcf.gz.tbi"
     File subtracted_invalidated_records_vcf = "~{prefix}.subtracted_invalidated_records.vcf.gz"
     File subtracted_invalidated_records_index = "~{prefix}.subtracted_invalidated_records.vcf.gz.tbi"
-    File subtracted_vcf = "~{prefix}.subtracted.vcf.gz"
-    File subtracted_index = "~{prefix}.subtracted.vcf.gz.tbi"
+    File subtracted_genotypes_tsv = "~{prefix}.subtracted.tsv.gz"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
