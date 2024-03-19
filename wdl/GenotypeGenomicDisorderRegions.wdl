@@ -5,6 +5,7 @@ import "GenotypeGenomicDisorderRegionsBatch.wdl" as gdr_batch
 import "VcfClusterSingleChromsome.wdl" as vcf_cluster
 import "TasksClusterBatch.wdl" as tasks_cluster
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
+import "Utils.wdl" as util
 
 workflow GenotypeGenomicDisorderRegions {
   input {
@@ -29,9 +30,6 @@ workflow GenotypeGenomicDisorderRegions {
     File reference_fasta_fai
     File reference_dict
 
-    # Required only if running a subset of batches. Must include all samples in the cohort.
-    File? vcf_header
-
     File? revise_script
 
     String linux_docker
@@ -55,6 +53,7 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_rdtest_subtracted_invalid
 
     RuntimeAttr? runtime_cat_subtracted_genotypes
+    RuntimeAttr? runtime_get_vcf_header
     RuntimeAttr? runtime_subtract_genotypes
     RuntimeAttr? runtime_attr_svcluster
     RuntimeAttr? runtime_revise_vcf_cohort
@@ -112,6 +111,14 @@ workflow GenotypeGenomicDisorderRegions {
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_cat_subtracted_genotypes
   }
+  # Use this make sure all samples are included in the clustering output
+  # Needed when running on a subset of batches
+  call util.GetVcfHeader {
+    input:
+      vcf = cohort_vcfs[0],
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_get_vcf_header
+  }
 
   Array[String] contigs = transpose(read_tsv(select_first([contig_list])))[0]
   scatter (i in range(length(cohort_vcfs))) {
@@ -125,7 +132,7 @@ workflow GenotypeGenomicDisorderRegions {
     }
     call tasks_cluster.SVCluster {
       input:
-        vcfs=select_all(flatten([[vcf_header], GenotypeGenomicDisorderRegionsBatch.batch_new_gdr_records_vcf])),
+        vcfs=flatten([[GetVcfHeader.out], GenotypeGenomicDisorderRegionsBatch.batch_new_gdr_records_vcf]),
         ploidy_table=ploidy_table,
         output_prefix="~{output_prefix}.~{contigs[i]}.clustered_new_records",
         contig=contigs[i],
