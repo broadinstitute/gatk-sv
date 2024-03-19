@@ -258,7 +258,7 @@ task RunRdTest {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
-    if [ ~{inject_sample} ]; then
+    if ~{inject_sample}; then
       # Inject one sample from the batch into the 5th column
       SAMPLE=$(awk -F'\t' '{ if (NR==1) {print $1} }' ~{median_file})
       awk -F'\t' -v OFS='\t' -v s="$SAMPLE" '{print $1,$2,$3,$4,s,$5}' ~{rdtest_bed} > intervals.bed

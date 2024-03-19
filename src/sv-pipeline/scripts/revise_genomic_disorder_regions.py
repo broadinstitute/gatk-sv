@@ -1,18 +1,18 @@
 #!/bin/python
 
 import argparse
-import sys
-import logging
+import gzip
 import heapq
+import logging
+import subprocess
+import sys
+import tempfile
+
 from collections import defaultdict
-from typing import List, Text, Optional
+from collections.abc import Iterable
 from itertools import groupby
 from operator import attrgetter
-import os
-from collections.abc import Iterable
-
-import subprocess
-import tempfile
+from typing import List, Text, Optional
 
 from intervaltree import IntervalTree
 import pysam
@@ -368,9 +368,9 @@ def subtract_vcf(fin, fsub, forig, fsubinv, vid_overlappers_dict, sample_sex_dic
                 # Note we do not take PAR into account here to match the rest of the pipeline
                 reset_format_if_exists(gt, "RD_CN", get_expected_cn(record.chrom, sample_sex_dict[s], chr_x, chr_y))
                 reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
+                fsub.write(f"{record.id}\t{s}\n")
             # Write revised record for review
             fsubinv.write(record)
-        fsub.write(record)
 
 
 def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fraction):
@@ -476,13 +476,13 @@ def revise_variants(forig, frev, vid_overlappers_dict, dangling_fraction):
                                  samples=intervals_dict[interval], original_gt_dict=original_gt_dict)
 
 
-def subtract_and_revise_vcf(input_vcf_path, subtracted_vcf_path, original_invalidated_records_vcf_path,
+def subtract_and_revise_vcf(input_vcf_path, subtracted_bed_path, original_invalidated_records_vcf_path,
                             subtracted_invalidated_records_vcf_path, new_revised_records_vcf_path,
                             vcf_overlappers, sample_sex_dict, chr_x, chr_y, dangling_fraction):
     vid_overlappers_dict = remap_overlapper_dict(vcf_overlappers)
     # Pull out invalidated records and reset their genotypes
     with pysam.VariantFile(input_vcf_path) as fin, \
-            pysam.VariantFile(subtracted_vcf_path, mode="w", header=fin.header) as fsub, \
+            gzip.open(subtracted_bed_path, mode="wt") as fsub, \
             pysam.VariantFile(original_invalidated_records_vcf_path, mode="w", header=fin.header) as forig, \
             pysam.VariantFile(subtracted_invalidated_records_vcf_path, mode="w", header=fin.header) as fsubinv:
         subtract_vcf(fin=fin, fsub=fsub, forig=forig, fsubinv=fsubinv, vid_overlappers_dict=vid_overlappers_dict,
@@ -624,21 +624,20 @@ def main(argv: Optional[List[Text]] = None):
                                                   min_rdtest_support=args.min_frac_supporting_genotypes,
                                                   min_region_overlap=args.min_region_overlap,
                                                   min_rejected_intervals_frac=args.min_rejected_intervals_frac)
-    subtracted_vcf_path = f"{args.out}.subtracted.vcf.gz"
+    subtracted_bed_path = f"{args.out}.subtracted.bed.gz"
     original_invalidated_records_vcf_path = f"{args.out}.original_invalidated_records.vcf.gz"
     subtracted_invalidated_records_vcf_path = f"{args.out}.subtracted_invalidated_records.vcf.gz"
     sorted_revised_records_vcf_path = f"{args.out}.new_records.vcf.gz"
     logging.info("Subtracting and revising variants...")
     with tempfile.NamedTemporaryFile(dir=args.temp, suffix=".vcf.gz") as temp_vcf:
         subtract_and_revise_vcf(input_vcf_path=args.vcf,
-                                subtracted_vcf_path=subtracted_vcf_path,
+                                subtracted_bed_path=subtracted_bed_path,
                                 original_invalidated_records_vcf_path=original_invalidated_records_vcf_path,
                                 subtracted_invalidated_records_vcf_path=subtracted_invalidated_records_vcf_path,
                                 new_revised_records_vcf_path=temp_vcf.name,
                                 vcf_overlappers=vcf_overlappers,
                                 sample_sex_dict=sample_sex_dict, chr_x=args.chr_x, chr_y=args.chr_y,
                                 dangling_fraction=args.min_dangling_frac)
-        pysam.tabix_index(subtracted_vcf_path, preset="vcf", force=True)
         pysam.tabix_index(original_invalidated_records_vcf_path, preset="vcf", force=True)
         pysam.tabix_index(subtracted_invalidated_records_vcf_path, preset="vcf", force=True)
         with tempfile.TemporaryDirectory(dir=args.temp) as temp_dir:
