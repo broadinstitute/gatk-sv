@@ -8,7 +8,7 @@ import "HailMerge.wdl" as HailMerge
 workflow AnnotateVcf {
 
   input {
-    File vcf  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
+    Array[File] vcfs  # GATK-SV VCF for annotation. Index .tbi must be located at the same path
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
@@ -47,19 +47,16 @@ workflow AnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_concat
-    RuntimeAttr? runtime_attr_preconcat
-    RuntimeAttr? runtime_attr_hail_merge
-    RuntimeAttr? runtime_attr_fix_header
   }
 
   Array[String] contigs = read_lines(contig_list)
 
-  scatter (contig in contigs) {
+  scatter (i in range(length(contigs))) {
     call sharded_annotate_vcf.ShardedAnnotateVcf {
       input:
-        vcf = vcf,
-        vcf_idx = vcf + ".tbi",
-        contig = contig,
+        vcf = vcfs[i],
+        vcf_idx = vcfs[i] + ".tbi",
+        contig = contigs[i],
         prefix = prefix,
         protein_coding_gtf = protein_coding_gtf,
         noncoding_bed = noncoding_bed,
@@ -94,43 +91,13 @@ workflow AnnotateVcf {
         runtime_attr_split_ref_bed  = runtime_attr_split_ref_bed,
         runtime_attr_split_query_vcf  = runtime_attr_split_query_vcf,
         runtime_attr_bedtools_closest = runtime_attr_bedtools_closest,
-        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs
-    }
-  }
-
-  # Concat VCF shards with or without hail
-  # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per contig
-  Array[File] vcfs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf)
-  Array[File] vcf_idxs_for_concatenation = flatten(ShardedAnnotateVcf.sharded_annotated_vcf_idx)
-  if (use_hail) {
-    call HailMerge.HailMerge {
-      input:
-        vcfs=vcfs_for_concatenation,
-        prefix="~{prefix}.annotated",
-        gcs_project=gcs_project,
-        sv_base_mini_docker=sv_base_mini_docker,
-        sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
-        runtime_override_preconcat=runtime_attr_preconcat,
-        runtime_override_hail_merge=runtime_attr_hail_merge,
-        runtime_override_fix_header=runtime_attr_fix_header
-    }
-  }
-
-  if (!use_hail) {
-    call MiniTasks.ConcatVcfs {
-      input:
-        vcfs=vcfs_for_concatenation,
-        vcfs_idx=vcf_idxs_for_concatenation,
-        allow_overlaps=true,
-        outfile_prefix="~{prefix}.annotated",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_concat
+        runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
+        runtime_attr_concat = runtime_attr_concat
     }
   }
 
   output {
-    File annotated_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
-    File annotated_vcf_index = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
+    Array[File] annotated_vcfs = ShardedAnnotateVcf.annotated_vcf
+    Array[File] annotated_vcf_indexes = ShardedAnnotateVcf.annotated_vcf_idx
   }
 }

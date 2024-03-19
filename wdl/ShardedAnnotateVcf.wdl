@@ -51,6 +51,7 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_concat
   }
 
   if (defined(ref_bed)) {
@@ -126,7 +127,7 @@ workflow ShardedAnnotateVcf {
           split_ref_bed_bnd = select_first([SplitRefBed.bnd]),
           population = select_first([population]),
           ref_prefix = select_first([ref_prefix]),
-          prefix = "~{prefix}.~{contig}.~{i}",
+          prefix = shard_prefix,
           sv_base_mini_docker = sv_base_mini_docker,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_modify_vcf = runtime_attr_modify_vcf,
@@ -137,9 +138,19 @@ workflow ShardedAnnotateVcf {
     }
   }
 
+  call MiniTasks.ConcatVcfs {
+    input:
+      vcfs= if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf,
+      vcfs_idx= if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx,
+      naive=true,
+      outfile_prefix="~{prefix}.~{contig}.annotated",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_attr_concat
+  }
+
   output {
-    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
-    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
+    File annotated_vcf = ConcatVcfs.concat_vcf
+    File annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
 
