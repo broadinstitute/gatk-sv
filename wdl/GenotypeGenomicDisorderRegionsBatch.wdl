@@ -452,7 +452,7 @@ task VcfToBed {
   }
   command <<<
     set -euxo pipefail
-    svtk vcf2bed ~{vcf} intervals.bed
+    svtk vcf2bed --no-header ~{vcf} intervals.bed
     # Swap last two columns for RdTest
     awk -F"\t" -v OFS="\t" '{print $1, $2, $3, $4, $6, $5}' intervals.bed > ~{prefix}.bed
   >>>
