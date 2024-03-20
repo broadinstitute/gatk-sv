@@ -822,3 +822,48 @@ task SubsetVcfBySamplesList {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+task ReorderVcfSamples {
+  input {
+    File vcf
+    File sample_ordered_vcf  # Vcf with samples in the desired order (can be just a header)
+    String output_prefix
+    Boolean generate_index = true
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String generate_index_command = if generate_index then "tabix ~{output_prefix}.vcf.gz" else "touch ~{output_prefix}.vcf.gz.tbi"
+
+  RuntimeAttr default_attr = object {
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10.0 + (size(vcf, "GiB") * 2) + size(sample_ordered_vcf, "GiB")),
+                               cpu_cores: 1,
+                               preemptible_tries: 3,
+                               max_retries: 1,
+                               boot_disk_gb: 10
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    bcftools query -l ~{sample_ordered_vcf} > samples.txt
+    bcftools view -S samples.txt ~{vcf} -Oz -o ~{output_prefix}.vcf.gz
+    ~{generate_index_command}
+  >>>
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}

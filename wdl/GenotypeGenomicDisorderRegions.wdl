@@ -30,7 +30,9 @@ workflow GenotypeGenomicDisorderRegions {
     File reference_fasta_fai
     File reference_dict
 
+    File? preprocess_intervals_script
     File? revise_script
+    File? reset_genotypes_script
 
     String linux_docker
     String gatk_docker
@@ -38,7 +40,6 @@ workflow GenotypeGenomicDisorderRegions {
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_override_ids_from_median
-    RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_attr_subset_by_samples
     RuntimeAttr? runtime_override_concat_batch
     RuntimeAttr? runtime_gdr_overlapping_variants
@@ -52,11 +53,13 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_rdtest_original_invalid
     RuntimeAttr? runtime_rdtest_subtracted_invalid
 
+    RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_cat_subtracted_genotypes
     RuntimeAttr? runtime_get_vcf_header
     RuntimeAttr? runtime_subtract_genotypes
     RuntimeAttr? runtime_attr_svcluster
-    RuntimeAttr? runtime_revise_vcf_cohort
+    RuntimeAttr? runtime_reorder_samples
+    RuntimeAttr? runtime_set_missing_formats
     RuntimeAttr? runtime_override_concat_revised_vcfs
     RuntimeAttr? runtime_override_concat_new_records
   }
@@ -65,6 +68,7 @@ workflow GenotypeGenomicDisorderRegions {
     input:
       prefix = "~{output_prefix}.preprocess_gdr",
       bed = genomic_disorder_regions_bed,
+      script = preprocess_intervals_script,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_preprocess
   }
@@ -126,7 +130,10 @@ workflow GenotypeGenomicDisorderRegions {
       input:
         prefix="~{output_prefix}.~{contigs[i]}.subtract_genotypes",
         vcf = cohort_vcfs[i],
+        vcf_index = cohort_vcfs[i] + ".tbi",
         genotype_tsv = CatUncompressedFiles.outfile,
+        contig = contigs[i],
+        script = reset_genotypes_script,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_subtract_genotypes
     }
@@ -150,13 +157,28 @@ workflow GenotypeGenomicDisorderRegions {
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_svcluster
     }
-
-    # TODO reset FORMAT fields for new records
-
+    call SetMissingGenotypingFormatFields {
+      input:
+        prefix="~{output_prefix}.~{contigs[i]}.set_missing_fields",
+        vcf = SVCluster.out,
+        vcf_index = SVCluster.out_index,
+        script = reset_genotypes_script,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_set_missing_formats
+    }
+    call util.ReorderVcfSamples {
+      input:
+        vcf = SetMissingGenotypingFormatFields.out,
+        sample_ordered_vcf = GetVcfHeader.out,
+        output_prefix = "~{output_prefix}.~{contigs[i]}.clustered_new_records.reorder_samples",
+        generate_index = true,
+        sv_base_mini_docker = sv_base_mini_docker,
+        runtime_attr_override = runtime_reorder_samples
+    }
     call tasks_cohort.ConcatVcfs as ConcatVcfsFinal {
       input:
-        vcfs = [SubtractGenotypes.out, SVCluster.out],
-        vcfs_idx = [SubtractGenotypes.out_index, SVCluster.out_index],
+        vcfs = [SubtractGenotypes.out, ReorderVcfSamples.out],
+        vcfs_idx = [SubtractGenotypes.out_index, ReorderVcfSamples.out_index],
         allow_overlaps = true,
         outfile_prefix = "~{output_prefix}.concat_revise_gdr",
         sv_base_mini_docker = sv_base_mini_docker,
@@ -165,8 +187,8 @@ workflow GenotypeGenomicDisorderRegions {
   }
   call tasks_cohort.ConcatVcfs as ConcatNewRecords {
     input:
-      vcfs = SVCluster.out,
-      vcfs_idx = SVCluster.out_index,
+      vcfs = ReorderVcfSamples.out,
+      vcfs_idx = ReorderVcfSamples.out_index,
       naive = true,
       outfile_prefix = "~{output_prefix}.concat_new_gdr_records",
       sv_base_mini_docker = sv_base_mini_docker,
@@ -259,7 +281,9 @@ task SubtractGenotypes {
   input{
     String prefix
     File vcf
+    File vcf_index
     File genotype_tsv
+    String contig
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -275,12 +299,64 @@ task SubtractGenotypes {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euxo pipefail
+    # Filter down to this contig
+    zcat ~{genotype_tsv} \
+      | awk -F'\t' -v OFS='\t' -v chrom=~{contig} '$1==chrom' \
+      | gzip > genotypes.tsv.gz
+    N_RECORDS=$(zcat genotypes.tsv.gz | wc -l)
+    # If there are no changes on this contig, just copy the input
+    if [ "$N_RECORDS" -eq "0" ]; then
+      cp ~{vcf} ~{prefix}.vcf.gz
+      cp ~{vcf_index} ~{prefix}.vcf.gz.tbi
+    else
+      python ~{default="/opt/src/sv-pipeline/scripts/reset_del_dup_genotypes.py" script} \
+        --vcf ~{vcf} \
+        --genotype-tsv ~{genotype_tsv} \
+        --out ~{prefix}.vcf.gz
+    fi
+  >>>
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
+  }
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task SetMissingGenotypingFormatFields {
+  input{
+    String prefix
+    File vcf
+    File vcf_index
+    File? script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(50.0 + size(vcf, "GiB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  command <<<
+    set -euxo pipefail
     python ~{default="/opt/src/sv-pipeline/scripts/reset_del_dup_genotypes.py" script} \
       --vcf ~{vcf} \
-      --genotype-tsv ~{genotype_tsv} \
+      --reset-rd-genotype \
       --out ~{prefix}.vcf.gz
   >>>
-  output{
+  output {
     File out = "~{prefix}.vcf.gz"
     File out_index = "~{prefix}.vcf.gz.tbi"
   }

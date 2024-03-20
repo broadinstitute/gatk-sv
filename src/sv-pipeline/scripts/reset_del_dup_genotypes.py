@@ -55,10 +55,10 @@ def read_tsv(path):
         data_sets = defaultdict(set)
         for line in f:
             tokens = line.strip().split("\t")
-            if len(tokens) != 2:
-                raise ValueError(f"Encountered record with more than 2 columns: {tokens}")
-            vid = tokens[0]
-            sample = tokens[1]
+            if len(tokens) != 3:
+                raise ValueError(f"Encountered record without 3 columns: {tokens}")
+            vid = tokens[1]
+            sample = tokens[2]
             data_sets[vid].add(sample)
         return {key: list(val) for key, val in data_sets.items()}
 
@@ -128,7 +128,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     )
     parser.add_argument('--vcf', type=str, required=True, help='Input vcf')
     parser.add_argument('--genotype-tsv', type=str, required=False,
-                        help='If provided, genotypes to reset. Headerless, with variant and sample ID columns '
+                        help='If provided, genotypes to reset. Headerless, with chrom, variant, and sample ID columns '
                              '(.tsv or .tsv.gz)')
     parser.add_argument('--reset-rd-genotype', action='store_true', help='Reset RD_CN/RD_GQ FORMAT fields if empty')
     parser.add_argument('--out', type=str, required=True, help='Output vcf')

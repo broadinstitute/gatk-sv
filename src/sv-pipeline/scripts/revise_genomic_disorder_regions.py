@@ -361,7 +361,7 @@ def subtract_vcf(fin, fsub, forig, fsubinv, vid_overlappers_dict, sample_sex_dic
             samples = [r.sample for r in gdr_records]
             # Reset genotypes to hom-ref for invalidated samples
             for s in samples:
-                fsub.write(f"{record.id}\t{s}\n")
+                fsub.write(f"{record.chrom}\t{record.id}\t{s}\n")
                 # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
                 reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
             # Write revised record for review
