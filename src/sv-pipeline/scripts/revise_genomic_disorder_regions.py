@@ -50,7 +50,10 @@ def _cache_gt_sum(gt):
 def _cache_gt_set_hom_ref(gt):
     s = _gt_set_hom_ref_map.get(gt, None)
     if s is None:
-        s = tuple(0 for _ in gt)
+        if all(a is None for a in gt):
+            s = tuple(None for _ in gt)
+        else:
+            s = tuple(0 for _ in gt)
         _gt_set_hom_ref_map[gt] = s
     return s
 
@@ -250,14 +253,35 @@ def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
 
 
 def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
-    if (chrom != chr_x and chrom != chr_y) or is_par:
+    if sample_sex == SEX_UNKNOWN:
+        return None
+    elif (chrom != chr_x and chrom != chr_y) or is_par:
         return 2
     elif sample_sex == SEX_MALE:
         return 1
     elif sample_sex == SEX_FEMALE:
+        if chrom == chr_x:
+            return 2
+        else:
+            # chrY
+            return 0
+    else:
+        raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
+
+
+def get_rd_cn(chrom, sample_sex, chr_x, chr_y):
+    if sample_sex == SEX_UNKNOWN:
         return None
-    elif sample_sex == SEX_UNKNOWN:
-        return None
+    elif chrom != chr_x and chrom != chr_y:
+        return 2
+    elif sample_sex == SEX_MALE:
+        return 1
+    elif sample_sex == SEX_FEMALE:
+        if chrom == chr_x:
+            return 2
+        else:
+            # chrY
+            return None
     else:
         raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
 
@@ -294,7 +318,7 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                         cutoff = dup_cutoff
                     sample = samples_list[i]
                     expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
-                    if expected_cn is None:
+                    if expected_cn is None or expected_cn == 0:
                         continue
                     cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
                     if is_del and median >= cutoff:
@@ -366,7 +390,7 @@ def subtract_vcf(fin, fsub, forig, fsubinv, vid_overlappers_dict, sample_sex_dic
                 gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
                 # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
                 # Note we do not take PAR into account here to match the rest of the pipeline
-                reset_format_if_exists(gt, "RD_CN", get_expected_cn(record.chrom, sample_sex_dict[s], chr_x, chr_y))
+                reset_format_if_exists(gt, "RD_CN", get_rd_cn(record.chrom, sample_sex_dict[s], chr_x, chr_y))
                 reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
                 fsub.write(f"{record.id}\t{s}\n")
             # Write revised record for review
@@ -492,61 +516,6 @@ def subtract_and_revise_vcf(input_vcf_path, subtracted_tsv_path, original_invali
             pysam.VariantFile(new_revised_records_vcf_path, mode="w", header=forig.header) as frev:
         revise_variants(forig=forig, frev=frev, vid_overlappers_dict=vid_overlappers_dict,
                         dangling_fraction=dangling_fraction)
-
-
-def get_record_key(record):
-    return record.pos, record.chrom, record.stop, record.info.get("SVTYPE", "")
-
-
-def get_non_ref_genotypes(record):
-    for sample, gt in record.samples.items():
-        if _cache_gt_sum(gt["GT"]) > 0:
-            yield sample, gt
-
-
-class RecordData:
-    def __init__(self, record):
-        self.record = record
-
-    def add_record(self, record):
-        for sample, gt in get_non_ref_genotypes(record):
-            self_gt = self.record.samples[sample]
-            for key in self_gt.keys():
-                if key != "GT":
-                    del self_gt[key]
-            for key, val in gt.items():
-                self.record.samples[sample][key] = val
-
-
-def deduplicate_vcf_records(vcf_in_path, vcf_out_path):
-    with pysam.VariantFile(vcf_in_path) as fin, pysam.VariantFile(vcf_out_path, mode="w", header=fin.header) as fout:
-        # VCFs are only sorted on CHROM and POS, so we must assume END and SVTYPE as not sorted
-        record_data_dict = dict()
-        pos_queue = list()
-        current_chrom = None
-        for record in fin:
-            record_key = get_record_key(record)
-            if record_key in record_data_dict:
-                record_data_dict[record_key].add_record(record)
-            else:
-                if record.chrom != current_chrom:
-                    for record_data in record_data_dict.values():
-                        fout.write(record_data.record)
-                    record_data_dict.clear()
-                    pos_queue.clear()
-                    current_chrom = record.chrom
-                removed_keys = set()
-                while len(pos_queue) > 0 and pos_queue[0][0] < record_key[0]:
-                    key = heapq.heappop(pos_queue)
-                    fout.write(record_data_dict[key].record)
-                    removed_keys.add(key)
-                for key in removed_keys:
-                    del record_data_dict[key]
-                record_data_dict[record_key] = RecordData(record)
-                heapq.heappush(pos_queue, record_key)
-        # Clean up remaining records
-        for record_data in record_data_dict.values():
-            fout.write(record_data.record)
 
 
 def sort_vcf(vcf_path, out_path, temp_dir):

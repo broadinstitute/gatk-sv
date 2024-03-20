@@ -107,7 +107,7 @@ workflow GenotypeGenomicDisorderRegions {
   call tasks_cohort.CatUncompressedFiles {
     input:
         shards = GenotypeGenomicDisorderRegionsBatch.batch_gdr_genotypes_tsv,
-        outfile_name = "~{output_prefix}.gdr_subtracted_genotypes",
+        outfile_name = "~{output_prefix}.gdr_subtracted_genotypes.tsv.gz",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_cat_subtracted_genotypes
   }
@@ -150,6 +150,9 @@ workflow GenotypeGenomicDisorderRegions {
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_svcluster
     }
+
+    # TODO reset FORMAT fields for new records
+
     call tasks_cohort.ConcatVcfs as ConcatVcfsFinal {
       input:
         vcfs = [SubtractGenotypes.out, SVCluster.out],

@@ -66,10 +66,12 @@ task GetVcfHeader {
   command <<<
     set -eu
     bcftools view --header-only ~{vcf} -Oz -o ~{output_filename}
+    tabix ~{output_filename}
   >>>
 
   output {
     File out = output_filename
+    File out_index = "~{output_filename}.tbi"
   }
 
   runtime {
