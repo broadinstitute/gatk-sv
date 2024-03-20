@@ -741,7 +741,7 @@ task SubsetVcfBySamplesList {
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
-    mem_gb: 8,
+    mem_gb: 3.75,
     disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
     preemptible_tries: 3,
@@ -774,7 +774,7 @@ task SubsetVcfBySamplesList {
 
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    memory: "8 GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_base_mini_docker
