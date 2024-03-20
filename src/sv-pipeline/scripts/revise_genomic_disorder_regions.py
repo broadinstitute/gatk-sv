@@ -2,7 +2,6 @@
 
 import argparse
 import gzip
-import heapq
 import logging
 import subprocess
 import sys
@@ -32,6 +31,7 @@ RESET_PESR_FORMATS_DICT = {
 }
 
 RESET_RD_GQ_VALUE = 99
+RESET_GQ_VALUE = 99
 
 _gt_sum_map = dict()
 _gt_set_hom_ref_map = dict()
@@ -50,10 +50,7 @@ def _cache_gt_sum(gt):
 def _cache_gt_set_hom_ref(gt):
     s = _gt_set_hom_ref_map.get(gt, None)
     if s is None:
-        if all(a is None for a in gt):
-            s = tuple(None for _ in gt)
-        else:
-            s = tuple(0 for _ in gt)
+        s = tuple(0 for _ in gt)
         _gt_set_hom_ref_map[gt] = s
     return s
 
@@ -269,23 +266,6 @@ def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
         raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
 
 
-def get_rd_cn(chrom, sample_sex, chr_x, chr_y):
-    if sample_sex == SEX_UNKNOWN:
-        return None
-    elif chrom != chr_x and chrom != chr_y:
-        return 2
-    elif sample_sex == SEX_MALE:
-        return 1
-    elif sample_sex == SEX_FEMALE:
-        if chrom == chr_x:
-            return 2
-        else:
-            # chrY
-            return None
-    else:
-        raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
-
-
 def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
                      min_par_overlap):
     with open(list_path) as f:
@@ -327,11 +307,6 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                         continue
                     data[sample][vid] = median
     return data, vids
-
-
-def reset_format_if_exists(gt, key, value):
-    if key in gt:
-        gt[key] = value
 
 
 def get_interval_indices_dict_by_region(intervals):
@@ -386,13 +361,9 @@ def subtract_vcf(fin, fsub, forig, fsubinv, vid_overlappers_dict, sample_sex_dic
             samples = [r.sample for r in gdr_records]
             # Reset genotypes to hom-ref for invalidated samples
             for s in samples:
-                gt = record.samples[s]
-                gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
-                # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
-                # Note we do not take PAR into account here to match the rest of the pipeline
-                reset_format_if_exists(gt, "RD_CN", get_rd_cn(record.chrom, sample_sex_dict[s], chr_x, chr_y))
-                reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
                 fsub.write(f"{record.id}\t{s}\n")
+                # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
+                reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
             # Write revised record for review
             fsubinv.write(record)
 
@@ -445,18 +416,42 @@ def write_revised_record(frev, interval, index, base_record, vid, samples, origi
     frev.write(new_record)
 
 
+def reset_format_if_exists(gt, key, value):
+    if key in gt:
+        gt[key] = value
+
+
+def get_ecn(gt):
+    ecn = gt.get("ECN", None)
+    if ecn is None:
+        raise ValueError("Missing ECN format field")
+    return ecn
+
+
+def reset_format_fields(gt, reset_genotype, reset_pesr):
+    # Note we do not take PAR into account here to match the rest of the pipeline
+    ecn = get_ecn(gt)
+    if ecn == 0:
+        # Should already be empty
+        return
+    gt["GQ"] = RESET_GQ_VALUE
+    gt["RD_CN"] = ecn
+    gt["RD_GQ"] = RESET_RD_GQ_VALUE
+    if reset_genotype:
+        gt_tuple = _cache_gt_set_hom_ref(gt["GT"])
+        gt["GT"] = gt_tuple
+    if reset_pesr:
+        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
+        for key, val in RESET_PESR_FORMATS_DICT.items():
+            reset_format_if_exists(gt, key, val)
+
+
 def reset_record(record):
     new_record = record.copy()
     new_record.info["EVIDENCE"] = retain_values_if_present(new_record.info, "EVIDENCE", ["RD", "BAF"])
     # Reset all other samples to hom-ref
     for s, gt in new_record.samples.items():
-        gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
-        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
-        copy_number = 0 if gt["GT"] is None else len(gt["GT"])
-        reset_format_if_exists(gt, "RD_CN", copy_number)
-        reset_format_if_exists(gt, "RD_GQ", RESET_RD_GQ_VALUE)
-        for key, val in RESET_PESR_FORMATS_DICT.items():
-            reset_format_if_exists(gt, key, val)
+        reset_format_fields(gt, reset_genotype=True, reset_pesr=True)
     return new_record
 
 
@@ -537,7 +532,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         description="Cleans up biallelic DEL/DUP variants in genomic disorder regions",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--vcf', type=str, required=True, help='Final vcf')
+    parser.add_argument('--vcf', type=str, required=True, help='Input vcf, GATK-formatted with ECN format fields')
     parser.add_argument('--region-bed', type=str, required=True, help='Preprocessed genomic disorder regions bed')
     parser.add_argument('--par-bed', type=str, required=True, help='PAR region bed')
     parser.add_argument('--median-geno-list', type=str, required=True,
