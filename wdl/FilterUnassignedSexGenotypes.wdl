@@ -9,8 +9,8 @@ workflow FilterUnassignedSexGenotypes {
     File vcf
     String output_prefix
     File ped_file
-    String chr_x
-    String chr_y
+    String? chr_x
+    String? chr_y
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -40,8 +40,8 @@ task FilterUnassignedSexGenotypesTask {
     File vcf
     String output_prefix
     File ped_file
-    String chr_x
-    String chr_y
+    String? chr_x
+    String? chr_y
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -68,6 +68,8 @@ task FilterUnassignedSexGenotypesTask {
     python ~{default="/opt/sv-pipeline/scripts/filter_unassigned_sex.py" script} \
       --vcf ~{vcf} \
       --ped-file ~{ped_file} \
+      ~{"--chr-x " + chr_x} \
+      ~{"--chr-y " + chr_y} \
       --out ~{output_prefix}.vcf.gz
     tabix ~{output_prefix}.vcf.gz
   >>>
