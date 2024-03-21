@@ -105,6 +105,7 @@ workflow FilterOutlierSamplesFinal {
     File? updated_sample_list = GetOutliersListAndCount.updated_sample_list
     Int? new_sample_count = GetOutliersListAndCount.new_sample_count
     Array[File]? vcfs_samples_removed = SubsetVcfBySamplesList.vcf_subset
+    Array[File]? vcf_indexes_samples_removed = SubsetVcfBySamplesList.vcf_subset_index
   }
 }
 
