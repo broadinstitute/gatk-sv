@@ -7,13 +7,13 @@ workflow ClusterTloc {
   input {
     String prefix
 
-    Array[File] manta_tloc_vcfs  # 1 batch's manta_tloc vcfs
+    File manta_tloc_vcfs  # 1 batch's manta_tloc vcfs - FOFN
 
     Float max_af
 
     File ped_file
 
-    Array[String] batch_sample_ids
+    File batch_sample_ids
     File? final_cohort_sample_ids  # final cohort samples - if provided, will filter batch sample list
 
     # Reference
@@ -51,9 +51,9 @@ workflow ClusterTloc {
 
   call FilterSamplesAndVcfsLists {
     input:
-      sample_ids=write_lines(batch_sample_ids),
-      final_cohort_sample_ids=select_first([final_cohort_sample_ids, write_lines(batch_sample_ids)]),
-      vcfs=write_lines(manta_tloc_vcfs),
+      sample_ids=batch_sample_ids,
+      final_cohort_sample_ids=select_first([final_cohort_sample_ids, batch_sample_ids]),
+      vcfs=manta_tloc_vcfs,
       batch=prefix,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_filter_lists
