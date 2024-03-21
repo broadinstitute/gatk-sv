@@ -122,7 +122,7 @@ workflow ClusterTloc {
   output {
     File tloc_vcf = SelectRareAndLabelArms.rare_witharms_vcf
     File tloc_vcf_index = SelectRareAndLabelArms.rare_witharms_vcf_index
-    File batch_sample_ids = FilterSamplesAndVcfsLists.sample_ids_file
+    File batch_sample_ids_file = FilterSamplesAndVcfsLists.sample_ids_file
   }
 }
 
