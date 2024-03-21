@@ -8,7 +8,7 @@ workflow VisualizeCnvs {
   input {
     # Note vcf will be faster
     # Note vcf will include CNV intervals of CPX > min_size (bed will not)
-    File vcf_or_bed  # bed columns: chrom,start,end,name,svtype,samples
+    Array[File] vcf_or_bed  # bed columns: chrom,start,end,name,svtype,samples
     String prefix
     Array[File] median_files
     Array[File] rd_files
@@ -29,17 +29,19 @@ workflow VisualizeCnvs {
     File rd_file_indexes = file + ".tbi"
   }
 
-  call RdTestScatter {
-    input:
-      vcf_or_bed=vcf_or_bed,
-      shard_prefix="~{prefix}.shard",
-      min_size=min_size,
-      lines_per_shard=records_per_shard,
-      sv_pipeline_docker=sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_rdtest_scatter
+  scatter (i in range(length(vcf_or_bed))) {
+    call RdTestScatter {
+      input:
+        vcf_or_bed=vcf_or_bed[i],
+        shard_prefix="~{prefix}.input_~{i}.shard",
+        min_size=min_size,
+        lines_per_shard=records_per_shard,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_rdtest_scatter
+    }
   }
 
-  scatter (shard in RdTestScatter.shards) {
+  scatter (shard in flatten(RdTestScatter.shards)) {
     call RdTestPlot {
       input:
         bed_shard=shard,
