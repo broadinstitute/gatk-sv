@@ -31,6 +31,7 @@ workflow GenotypeGenomicDisorderRegions {
     File reference_dict
 
     File? preprocess_intervals_script
+    String? revise_args
     File? revise_script
     File? reset_genotypes_script
 
@@ -87,6 +88,7 @@ workflow GenotypeGenomicDisorderRegions {
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
         min_gdr_overlap_frac_plotting = min_gdr_overlap_frac_plotting,
+        revise_args = revise_args,
         revise_script = revise_script,
         linux_docker = linux_docker,
         sv_base_mini_docker = sv_base_mini_docker,

@@ -20,6 +20,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File par_bed
     Float? min_gdr_overlap_frac_plotting
 
+    String? revise_args
     File? revise_script
 
     String linux_docker
@@ -143,6 +144,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       ped_file = ped_file,
       genomic_disorder_regions_bed = preprocessed_genomic_disorder_regions_bed,
       par_bed = par_bed,
+      args = revise_args,
       script = revise_script,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_revise_vcf_batch
@@ -218,7 +220,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File batch_new_gdr_records_vcf = ReviseGenomicDisorderRegions.new_records_vcf
     File batch_new_gdr_records_index = ReviseGenomicDisorderRegions.new_records_index
 
-    File batch_original_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.original_invalidated_records_index
+    File batch_original_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.original_invalidated_records_vcf
     File batch_original_invalidated_gdr_records_index = ReviseGenomicDisorderRegions.original_invalidated_records_index
 
     File batch_subtracted_invalidated_gdr_records_vcf = ReviseGenomicDisorderRegions.subtracted_invalidated_records_vcf
@@ -300,6 +302,7 @@ task ReviseGenomicDisorderRegions {
     File ped_file
     File genomic_disorder_regions_bed
     File par_bed
+    String? args
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -321,6 +324,7 @@ task ReviseGenomicDisorderRegions {
     done < ~{write_lines(rdtest_tars)}
     ls rdtest/*/*.median_geno > median_geno_files.list
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
+      ~{args} \
       --vcf ~{vcf} \
       --median-geno-list median_geno_files.list \
       --ped-file ~{ped_file} \
