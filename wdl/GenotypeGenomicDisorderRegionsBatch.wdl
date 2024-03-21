@@ -97,7 +97,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
   call RunRdTest as RunRdTestGDROverlappingVariants {
     input:
       output_prefix = "rdtest_gdr2var_~{batch_name}",
-      rdtest_bed = GetGDROverlappingVariants.variants_bed,
+      rdtest_bed = GetGDROverlappingVariants.gdr_bed,
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
       median_file = median_file,
