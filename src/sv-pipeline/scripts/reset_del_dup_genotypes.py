@@ -50,6 +50,8 @@ def read_gzip_text_mode(path):
 
 
 def read_tsv(path):
+    if path is None:
+        return dict()
     open_func = read_gzip_text_mode if path.endswith(".gz") else open
     with open_func(path) as f:
         data_sets = defaultdict(set)
