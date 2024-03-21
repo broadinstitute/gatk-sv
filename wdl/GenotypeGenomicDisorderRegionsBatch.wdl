@@ -198,7 +198,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
   call RunRdTest as RunRdTestSubtractedInvalid {
     input:
       output_prefix = "rdtest_subtract_invalid_~{batch_name}",
-      rdtest_bed = VcfToBedOriginalInvalidatedRecords.bed,
+      rdtest_bed = VcfToBedSubtractedInvalidatedRecords.bed,
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
       median_file = median_file,
