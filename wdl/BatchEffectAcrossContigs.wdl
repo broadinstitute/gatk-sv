@@ -7,6 +7,7 @@ workflow BatchEffectAcrossContigs {
     Array[File] vcfs
     File sample_batch_assignments
     File batches_list
+    File excludesamples_list #empty file if need be
     File sample_pop_assignments
     File famfile
     File contiglist
@@ -20,19 +21,38 @@ workflow BatchEffectAcrossContigs {
 
   Array[String] contigs = read_lines(contiglist)
 
-  scatter ( i in range(length(vcfs)) ) {
+  Array[String] batches = read_lines(batches_list)
+
+  scatter ( vcf in vcfs)  {
     call IndexVcf {
       input:
-        vcf=vcfs[i],
+        vcf=vcf,
         sv_base_mini_docker=sv_base_mini_docker
     }
+  }
+
+  scatter ( batch in batches ) {
+    # Get list of samples to include & exclude per batch
+    call batch_effect.GetBatchSamplesList {
+      input:
+        vcf=IndexVcf.vcf_out[0],
+        vcf_idx=IndexVcf.vcf_out_index[0],
+        batch=batch,
+        sample_batch_assignments=sample_batch_assignments,
+        probands_list=excludesamples_list,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
+  }
+
+  scatter ( i in range(length(vcfs)) ) {
 
     call batch_effect.XfBatchEffect {
       input:
-        vcf=IndexVcf.vcf_out,
-        vcf_idx=IndexVcf.vcf_out_index,
+        vcf=IndexVcf.vcf_out[i],
+        vcf_idx=IndexVcf.vcf_out_index[i],
         sample_batch_assignments=sample_batch_assignments,
         batches_list=batches_list,
+        batch_include_lists = GetBatchSamplesList.include_samples_list,
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
         par_bed=par_bed,

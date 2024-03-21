@@ -15,8 +15,8 @@ workflow XfBatchEffect {
     File vcf_idx
     File sample_batch_assignments
     File batches_list
+    Array[File] batch_include_lists
     File sample_pop_assignments
-    File excludesamples_list #empty file if need be
     File famfile
     File? par_bed
     Int? onevsall_cutoff=2
@@ -34,24 +34,14 @@ workflow XfBatchEffect {
   Array[String] batches = read_lines(batches_list)
 
   # Shard VCF per batch, compute pops-specific AFs, and convert to table of VID & AF stats
-  scatter ( batch in batches ) {
-    # Get list of samples to include & exclude per batch
-    call GetBatchSamplesList {
-      input:
-        vcf=vcf,
-        vcf_idx=vcf_idx,
-        batch=batch,
-        sample_batch_assignments=sample_batch_assignments,
-        probands_list=excludesamples_list,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
+  scatter ( i in range(length(batches)) ) {
 
     call util.SubsetVcfBySamplesList {
       input:
         vcf = vcf,
         vcf_idx = vcf_idx,
-        outfile_name = "~{prefix}.~{batch}.subset.vcf.gz",
-        list_of_samples = GetBatchSamplesList.include_samples_list,
+        outfile_name = "~{prefix}.~{batches[i]}.subset.vcf.gz",
+        list_of_samples = batch_include_lists[i],
         remove_private_sites = false,
         sv_base_mini_docker = sv_base_mini_docker
     }
@@ -60,7 +50,7 @@ workflow XfBatchEffect {
       input:
         vcf=SubsetVcfBySamplesList.vcf_subset,
         vcf_idx=SubsetVcfBySamplesList.vcf_subset_index,
-        prefix="~{prefix}.~{batch}",
+        prefix="~{prefix}.~{batches[i]}",
         sample_pop_assignments=sample_pop_assignments,
         famfile=famfile,
         drop_empty_records="FALSE",
@@ -74,7 +64,7 @@ workflow XfBatchEffect {
       input:
         vcf=CalcAF.vcf_wAFs,
         sample_pop_assignments=sample_pop_assignments,
-        prefix=batch,
+        prefix=batches[i],
         sv_pipeline_docker=sv_pipeline_docker
     }
   }
