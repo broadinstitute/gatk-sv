@@ -3,6 +3,7 @@
 import argparse
 import gzip
 import logging
+import math
 import subprocess
 import sys
 import tempfile
@@ -33,8 +34,12 @@ RESET_PESR_FORMATS_DICT = {
 RESET_RD_GQ_VALUE = 99
 RESET_GQ_VALUE = 99
 
+RESCUE_RD_GQ_VALUE = 99
+RESCUE_GQ_VALUE = 99
+
 _gt_sum_map = dict()
 _gt_set_hom_ref_map = dict()
+_gt_set_het_map = dict()
 
 
 def _cache_gt_sum(gt):
@@ -52,6 +57,16 @@ def _cache_gt_set_hom_ref(gt):
     if s is None:
         s = tuple(0 for _ in gt)
         _gt_set_hom_ref_map[gt] = s
+    return s
+
+
+def _cache_gt_set_het(gt):
+    s = _gt_set_het_map.get(gt, None)
+    if s is None:
+        s = list(0 for _ in gt)
+        if len(s) > 0:
+            s[-1] = 1
+        _gt_set_het_map[gt] = s
     return s
 
 
@@ -100,7 +115,7 @@ def overlap_size(interval_a, interval_b):
 class GDRMatch:
 
     def __init__(self, name, chrom, pos, end, sample, overlapping_region_intervals, valid_region_intervals,
-                 supporting_intervals, region, n_region_subdivisions):
+                 supporting_intervals, region, n_region_subdivisions, genotype_medians):
         self.name = name
         self.chrom = chrom
         self.pos = pos
@@ -110,7 +125,8 @@ class GDRMatch:
         self.valid_region_intervals = valid_region_intervals
         self.supporting_intervals = supporting_intervals
         self.region = region
-        self.n_region_subdivisions = n_region_subdivisions
+        self.n_region_subdivisions = n_region_subdivisions,
+        self.genotype_medians = genotype_medians
 
     def __repr__(self):
         return self.__str__()
@@ -122,6 +138,13 @@ class GDRMatch:
                                                 self.n_region_subdivisions]) + ")"
 
 
+class GenotypeMedian:
+    def __init__(self, median, threshold, hom_ref_cn):
+        self.median = median
+        self.threshold = threshold
+        self.hom_ref_cn = hom_ref_cn
+
+
 def get_base_name_and_index(interval_id):
     tokens = interval_id.split(INDEX_DELIMITER)
     if len(tokens) != 2:
@@ -129,8 +152,32 @@ def get_base_name_and_index(interval_id):
     return tokens[0], int(tokens[1])
 
 
-def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutoff, vcf_min_size, min_rdtest_support,
-                                min_region_overlap, min_rejected_intervals_frac):
+def add_match(matches_dict, svtype, name, chrom, pos, end, sample, overlapping_region_intervals, valid_region_intervals,
+              supporting_intervals, region, n_region_subdivisions, genotype_medians):
+    if svtype not in matches_dict:
+        matches_dict[svtype] = dict()
+    if sample not in matches_dict[svtype]:
+        matches_dict[svtype][sample] = dict()
+    if name not in matches_dict[svtype][sample]:
+        matches_dict[svtype][sample][name] = list()
+    matches_dict[svtype][sample][name].append(
+        GDRMatch(name=name, chrom=chrom, pos=pos, end=end, sample=sample,
+                 overlapping_region_intervals=overlapping_region_intervals,
+                 valid_region_intervals=valid_region_intervals,
+                 supporting_intervals=supporting_intervals,
+                 region=region,
+                 n_region_subdivisions=n_region_subdivisions,
+                 genotype_medians=genotype_medians)
+    )
+
+
+def get_n_alt_alleles(genotype_median):
+    # Returns either 1 or 2
+    return min(2, max(1, math.ceil(math.fabs(genotype_median.median - genotype_median.threshold) / 0.5)))
+
+
+def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutoff, vcf_min_size, min_supported_valid_overlapping_intervals_frac,
+                                min_region_overlap, min_supported_region_intervals_frac):
 
     interval_subdivision_counts = dict()
     unique_subdivision_names = set()
@@ -145,7 +192,8 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                     interval_subdivision_counts[name] = 0
                 interval_subdivision_counts[name] += 1
 
-    vcf_overlappers = dict()
+    false_positive_matches = dict()
+    false_negative_matches = dict()
     vcf_vids = set()
     with pysam.VariantFile(vcf_path) as vcf:
         current_chrom = None
@@ -161,9 +209,10 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                 raise ValueError(f"All variant ids in the input vcf must be unique; encountered duplicate: {name}")
             vcf_vids.add(name)
             svtype = record.info.get("SVTYPE", "")
+            svlen = record.info.get("SVLEN", 0)
             if svtype not in intervals.keys():
                 continue
-            if record.info.get("SVLEN", 0) < vcf_min_size:
+            if svlen < vcf_min_size:
                 continue
             if record.chrom not in intervals[svtype]:
                 continue
@@ -187,40 +236,48 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
                 if len(valid_region_intersect) / num_region_subdivisions < min_region_overlap:
                     continue
                 if carriers is None:
-                    carriers = [s for s in record.samples if _cache_gt_sum(record.samples[s]["GT"]) > 0]
-                for sample in carriers:
+                    carriers = set(s for s in record.samples if _cache_gt_sum(record.samples[s]["GT"]) > 0)
+                for sample in record.samples:
                     supported_intersect = list()
+                    genotype_medians = list()
                     for interval in valid_region_intersect:
                         interval_name = interval.data
                         if interval_name not in median_vids:
                             raise ValueError(f"Interval {interval_name} not found in median_geno file")
                         if sample in medians and interval_name in medians[sample]:
                             supported_intersect.append(interval)
+                            genotype_medians.append(medians[sample][interval_name])
                     n_support = len(supported_intersect)
                     n_valid_overlap = len(valid_region_intersect)
-                    frac_intervals_with_rdtest_support = n_support / n_valid_overlap
-                    frac_region_intervals_rejected = (n_valid_overlap - n_support) / num_region_subdivisions
-                    # Require sufficient fraction of region intervals to be rejected
-                    if frac_region_intervals_rejected < min_rejected_intervals_frac:
-                        continue
-                    # Load FPs only
-                    if frac_intervals_with_rdtest_support >= min_rdtest_support:
-                        continue
-                    if svtype not in vcf_overlappers:
-                        vcf_overlappers[svtype] = dict()
-                    if sample not in vcf_overlappers[svtype]:
-                        vcf_overlappers[svtype][sample] = dict()
-                    if name not in vcf_overlappers[svtype][sample]:
-                        vcf_overlappers[svtype][sample][name] = list()
-                    vcf_overlappers[svtype][sample][name].append(
-                        GDRMatch(name=name, chrom=chrom, pos=pos, end=stop, sample=sample,
-                                 overlapping_region_intervals=overlapping_region_intervals,
-                                 valid_region_intervals=valid_region_intersect,
-                                 supporting_intervals=supported_intersect,
-                                 region=region,
-                                 n_region_subdivisions=num_region_subdivisions)
-                        )
-    return vcf_overlappers
+                    frac_valid_overlapping_intervals_supported = n_support / n_valid_overlap
+                    frac_region_intervals_supported = n_support / num_region_subdivisions
+                    if frac_valid_overlapping_intervals_supported >= min_supported_valid_overlapping_intervals_frac \
+                            and frac_region_intervals_supported >= min_supported_region_intervals_frac \
+                            and sample not in carriers:
+                        # False negative
+                        # We will try to add this sample to the variant
+                        add_match(false_negative_matches, svtype, name=name, chrom=chrom, pos=pos, end=stop,
+                                  sample=sample,
+                                  overlapping_region_intervals=overlapping_region_intervals,
+                                  valid_region_intervals=valid_region_intersect,
+                                  supporting_intervals=supported_intersect,
+                                  region=region,
+                                  n_region_subdivisions=num_region_subdivisions,
+                                  genotype_medians=genotype_medians)
+                    elif frac_valid_overlapping_intervals_supported < min_supported_valid_overlapping_intervals_frac \
+                            and frac_region_intervals_supported < min_supported_region_intervals_frac \
+                            and sample in carriers:
+                        # False positive
+                        # We will subtract this sample from the variant
+                        add_match(false_positive_matches, svtype, name=name, chrom=chrom, pos=pos, end=stop,
+                                  sample=sample,
+                                  overlapping_region_intervals=overlapping_region_intervals,
+                                  valid_region_intervals=valid_region_intersect,
+                                  supporting_intervals=supported_intersect,
+                                  region=region,
+                                  n_region_subdivisions=num_region_subdivisions,
+                                  genotype_medians=genotype_medians)
+    return false_positive_matches, false_negative_matches
 
 
 def read_ped_file(path):
@@ -305,7 +362,7 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                         continue
                     elif (not is_del) and median <= cutoff:
                         continue
-                    data[sample][vid] = median
+                    data[sample][vid] = GenotypeMedian(median=median, threshold=cutoff, hom_ref_cn=expected_cn)
     return data, vids
 
 
@@ -337,35 +394,37 @@ def get_flanking_intervals_to_remove(sample_overlappers, invalidated_intervals, 
     return flanking_intervals_to_remove
 
 
-def remap_overlapper_dict(overlappers_dict):
-    # make dictionary: vid -> list of GDR overlap records, for fast lookup as we traverse the vcf
-    result = defaultdict(list)
-    for _, svtype_dict in overlappers_dict.items():
-        for _, sample_dict in svtype_dict.items():
-            for record_name, record_list in sample_dict.items():
-                result[record_name].extend(record_list)
-    return result
-
-
-def subtract_vcf(fin, fsub, forig, fsubinv, vid_overlappers_dict, sample_sex_dict, chr_x, chr_y):
+def revise_vcf(fin, fsub, forig, frevise, false_positives_dict, rescue_dict):
     # Pull out invalidated records and reset their genotypes
     current_chrom = None
     for record in fin:
         if record.chrom != current_chrom:
             current_chrom = record.chrom
             logging.info(f"  Subtracting {record.chrom}")
-        if record.id in vid_overlappers_dict:
+        if record.id in false_positives_dict or record.id in rescue_dict:
+            svtype = record.info.get("SVTYPE", "")
             # Write original record for review
             forig.write(record)
-            gdr_records = vid_overlappers_dict[record.id]
-            samples = [r.sample for r in gdr_records]
-            # Reset genotypes to hom-ref for invalidated samples
-            for s in samples:
-                fsub.write(f"{record.chrom}\t{record.id}\t{s}\n")
-                # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
-                reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
+            if record.id in false_positives_dict:
+                gdr_records = false_positives_dict[record.id]
+                samples = [r.sample for r in gdr_records]
+                # Reset genotypes to hom-ref for invalidated samples
+                for s in samples:
+                    fsub.write(f"{record.chrom}\t{record.id}\t{s}\t0\n")
+                    # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
+                    reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
+            if record.id in rescue_dict:
+                gdr_records = rescue_dict[record.id]
+                # Set genotypes to het for supported samples
+                for gdr_match in gdr_records:
+                    fsub.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
+                    # Set RD genotyping fields but not PESR since we did not re-examine that evidence
+                    rescue_format_fields(gt=record.samples[gdr_match.sample],
+                                         svtype=svtype,
+                                         genotype_medians=gdr_match.genotype_medians,
+                                         rescue_genotype=True, reset_pesr=False)
             # Write revised record for review
-            fsubinv.write(record)
+            frevise.write(record)
 
 
 def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fraction):
@@ -400,7 +459,7 @@ def retain_values_if_present(data_dict, key, values_list):
         return value
 
 
-def write_revised_record(frev, interval, index, base_record, vid, samples, original_gt_dict):
+def write_new_variant_record(frev, interval, index, base_record, vid, samples, original_gt_dict):
     new_record = base_record.copy()
     new_record.id = f"{vid}_GDR_{index}"
     new_record.pos = interval[0]
@@ -434,12 +493,37 @@ def reset_format_fields(gt, reset_genotype, reset_pesr):
     if ecn == 0:
         # Should already be empty
         return
-    gt["GQ"] = RESET_GQ_VALUE
     gt["RD_CN"] = ecn
     gt["RD_GQ"] = RESET_RD_GQ_VALUE
+    gt["GQ"] = RESET_GQ_VALUE
     if reset_genotype:
-        gt_tuple = _cache_gt_set_hom_ref(gt["GT"])
-        gt["GT"] = gt_tuple
+        gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
+    if reset_pesr:
+        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
+        for key, val in RESET_PESR_FORMATS_DICT.items():
+            reset_format_if_exists(gt, key, val)
+
+
+def rescue_format_fields(gt, svtype, genotype_medians, rescue_genotype, reset_pesr):
+    ecn = get_ecn(gt)
+    if ecn == 0:
+        # Do not rescue on ploidy 0
+        return
+    # Use median alt allele count for new genotype
+    genotype_alt_counts = sorted(genotype_medians, key=get_n_alt_alleles)
+    median_genotype = genotype_alt_counts[len(genotype_alt_counts) // 2]
+    alt_count = get_n_alt_alleles(median_genotype)
+    if svtype == "DEL":
+        rd_cn = max(median_genotype.hom_ref_cn - alt_count, 0)
+    elif svtype == "DUP":
+        rd_cn = min(median_genotype.hom_ref_cn + alt_count, 4)
+    else:
+        raise ValueError(f"Attempted to rescue unsupported SVTYPE: {svtype}")
+    gt["RD_CN"] = rd_cn
+    gt["RD_GQ"] = RESCUE_RD_GQ_VALUE
+    gt["GQ"] = RESCUE_GQ_VALUE
+    if rescue_genotype:
+        gt["GT"] = _cache_gt_set_het(gt["GT"])
     if reset_pesr:
         gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
         for key, val in RESET_PESR_FORMATS_DICT.items():
@@ -459,7 +543,7 @@ def get_interval_key(interval):
     return interval.begin, interval.end
 
 
-def revise_variants(forig, frev, vid_overlappers_dict, dangling_fraction):
+def create_new_variants(forig, frev, false_positives_dict, dangling_fraction):
     current_chrom = None
     for vcf_record in forig:
         if vcf_record.chrom != current_chrom:
@@ -468,7 +552,7 @@ def revise_variants(forig, frev, vid_overlappers_dict, dangling_fraction):
         vid = vcf_record.id
         pos = vcf_record.pos
         stop = vcf_record.stop
-        overlappers = vid_overlappers_dict[vid]
+        overlappers = false_positives_dict[vid]
         regions = list(set(overlapper.region for overlapper in overlappers))
         if len(overlappers) == 0:
             raise ValueError(f"Should have found variant {vid} in overlap record set (bug)")
@@ -491,26 +575,110 @@ def revise_variants(forig, frev, vid_overlappers_dict, dangling_fraction):
         sorted_intervals = sorted(intervals_dict.keys())
         for i, interval in enumerate(sorted_intervals):
             # Write out new revised record. Note that these are not globally sorted.
-            write_revised_record(frev=frev, interval=interval, index=i, base_record=wiped_record, vid=vid,
+            write_new_variant_record(frev=frev, interval=interval, index=i, base_record=wiped_record, vid=vid,
                                  samples=intervals_dict[interval], original_gt_dict=original_gt_dict)
+
+
+def remap_overlapper_dict_by_vid(overlappers_dict):
+    # make dictionary: vid -> list of GDR overlap records, for fast lookup as we traverse the vcf
+    result = defaultdict(list)
+    for _, svtype_dict in overlappers_dict.items():
+        for _, sample_dict in svtype_dict.items():
+            for record_name, record_list in sample_dict.items():
+                result[record_name].extend(record_list)
+    return result
+
+
+def remap_overlapper_dict_by_sample_and_region(overlappers_dict):
+    # make dictionary: svtype -> sample -> region -> list of GDR overlap records, for fast lookup
+    result = dict()
+    for svtype, svtype_dict in overlappers_dict.items():
+        for sample, sample_dict in svtype_dict.items():
+            for _, record_list in sample_dict.items():
+                for record in record_list:
+                    if svtype not in result:
+                        result[svtype] = dict()
+                    if sample not in result[svtype]:
+                        result[svtype][sample] = defaultdict(list)
+                    result[svtype][sample][record.region].append(record)
+    return result
+
+
+def fraction_supporting_intervals_in_variant(record):
+    return sum([interval.end - interval.begin for interval in record.supporting_intervals]) / (record.end - record.pos)
+
+
+def get_maximal_record(record_list, key):
+    max_value = 0
+    max_records = list()
+    for record in record_list:
+        value = key(record)
+        if value > max_value:
+            max_records.clear()
+            max_records.append(record)
+            max_value = value
+        elif value == max_value:
+            max_records.append(record)
+    # Should be very rare, but use variant ID as tiebreaker
+    max_record = sorted(max_records, key=attrgetter("name"))[0]
+    return max_value, max_record
+
+
+def adjudicate_false_negatives(false_negative_dict, min_false_negative_rescue_overlap):
+    # make dictionary: vid -> record list for false negatives to rescue
+    rescue_dict = defaultdict(list)
+    # make dictionary: svtype -> sample -> region -> record corresponding to new variants to create
+    new_records_dict = dict()
+    for svtype, svtype_dict in false_negative_dict.items():
+        for sample, sample_dict in svtype_dict.items():
+            for region, record_list in sample_dict.items():
+                if len(record_list) == 0:
+                    # Should not happen but catch it in case
+                    continue
+                max_overlap, max_record = get_maximal_record(record_list=record_list,
+                                                             key=fraction_supporting_intervals_in_variant)
+                if max_overlap >= min_false_negative_rescue_overlap:
+                    # Enforce sufficient overlap of supporting intervals on the variant
+                    # We will rescue the call by adding it to the existing record
+                    rescue_dict[max_record.name].append(max_record)
+                else:
+                    # We will rescue the call by creating a new record
+                    # Note there is an edge case where overlapping GDRs could result in duplicated calls, but this
+                    # should be handled by downstream reclustering/deduplication
+                    if svtype not in new_records_dict:
+                        new_records_dict[svtype] = dict()
+                    if sample not in new_records_dict[svtype]:
+                        new_records_dict[svtype][sample] = dict()
+                    new_records_dict[svtype][sample][region] = max_record
+    return rescue_dict, new_records_dict
 
 
 def subtract_and_revise_vcf(input_vcf_path, subtracted_tsv_path, original_invalidated_records_vcf_path,
                             subtracted_invalidated_records_vcf_path, new_revised_records_vcf_path,
-                            vcf_overlappers, sample_sex_dict, chr_x, chr_y, dangling_fraction):
-    vid_overlappers_dict = remap_overlapper_dict(vcf_overlappers)
+                            false_positive_matches, false_negative_matches, dangling_fraction,
+                            min_false_negative_rescue_overlap):
+    false_positives_dict = remap_overlapper_dict_by_vid(false_positive_matches)
+    false_negative_dict = remap_overlapper_dict_by_sample_and_region(false_negative_matches)
+    print(f"false_negative_matches: {false_negative_matches}")
+    print(f"false_negative_dict: {false_negative_dict}")
+    rescue_dict, new_records_dict = \
+        adjudicate_false_negatives(false_negative_dict=false_negative_dict,
+                                   min_false_negative_rescue_overlap=min_false_negative_rescue_overlap)
+    print(f"rescue_dict: {rescue_dict}")
+    print(f"new_records_dict: {new_records_dict}")
     # Pull out invalidated records and reset their genotypes
     with pysam.VariantFile(input_vcf_path) as fin, \
             gzip.open(subtracted_tsv_path, mode="wt") as fsub, \
             pysam.VariantFile(original_invalidated_records_vcf_path, mode="w", header=fin.header) as forig, \
-            pysam.VariantFile(subtracted_invalidated_records_vcf_path, mode="w", header=fin.header) as fsubinv:
-        subtract_vcf(fin=fin, fsub=fsub, forig=forig, fsubinv=fsubinv, vid_overlappers_dict=vid_overlappers_dict,
-                     sample_sex_dict=sample_sex_dict, chr_x=chr_x, chr_y=chr_y)
+            pysam.VariantFile(subtracted_invalidated_records_vcf_path, mode="w", header=fin.header) as frevise:
+        revise_vcf(fin=fin, fsub=fsub, forig=forig, frevise=frevise, false_positives_dict=false_positives_dict,
+                   rescue_dict=rescue_dict)
     # Revise invalidated records
     with pysam.VariantFile(original_invalidated_records_vcf_path) as forig, \
             pysam.VariantFile(new_revised_records_vcf_path, mode="w", header=forig.header) as frev:
-        revise_variants(forig=forig, frev=frev, vid_overlappers_dict=vid_overlappers_dict,
-                        dangling_fraction=dangling_fraction)
+        # TODO : add rescued variants
+        create_new_variants(forig=forig, frev=frev, false_positives_dict=false_positives_dict,
+                            dangling_fraction=dangling_fraction)
 
 
 def sort_vcf(vcf_path, out_path, temp_dir):
@@ -543,17 +711,19 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--del-median', type=float, default=0.6, help='DEL RDTest median cutoff')
     parser.add_argument('--dup-median', type=float, default=1.4, help='DUP RDTest median cutoff')
     parser.add_argument('--vcf-min-size', type=int, default=1000, help='Min size of vcf variants')
-    parser.add_argument('--min-frac-supporting-genotypes', type=float, default=0.7,
-                        help='Min fraction of sufficiently overlapping genotyped intervals that support the call '
-                             'needed to keep it')
     parser.add_argument('--min-region-overlap', type=float, default=0.3,
                         help='Min fraction of sufficiently overlapping genotyped intervals in the GD region')
-    parser.add_argument('--min-rejected-intervals-frac', type=float, default=0.5,
-                        help='Min fraction of region intervals that must be rejected to filter a call')
+    parser.add_argument('--min-frac-supporting-genotypes', type=float, default=0.7,
+                        help='Min fraction of sufficiently overlapping genotyped intervals that must support a call')
+    parser.add_argument('--min-supported-region-intervals-frac', type=float, default=0.5,
+                        help='Min fraction of region intervals that must be supported to accept a call')
     parser.add_argument('--min-dangling-frac', type=float, default=0.3,
                         help='Min interval fraction of variant size for removing leftover fragments')
     parser.add_argument('--min-par-overlap', type=float, default=0.5,
                         help='Min overlap fraction for an interval to be treated as PAR')
+    parser.add_argument('--min-false-negative-rescue-overlap', type=float, default=0.8,
+                        help='Min overlap fraction of a variant to rescue false negatives in an existing call. '
+                             'If not met, a new variant will be created')
     parser.add_argument('--chr-x', type=str, default="chrX", help='Chromosome X identifier')
     parser.add_argument('--chr-y', type=str, default="chrY", help='Chromosome Y identifier')
     parser.add_argument('--temp', type=str, default="./", help='Temporary directory path')
@@ -582,12 +752,15 @@ def main(argv: Optional[List[Text]] = None):
                                             sample_sex_dict=sample_sex_dict, par_trees=par_trees,
                                             chr_x=args.chr_x, chr_y=args.chr_y, min_par_overlap=args.min_par_overlap)
     logging.info("Parsing VCF for variants overlapping genomic disorder regions...")
-    vcf_overlappers = get_overlapping_samples_vcf(vcf_path=args.vcf, intervals=gdr_trees,
-                                                  medians=medians, median_vids=median_vids, cutoff=args.overlap,
-                                                  vcf_min_size=args.vcf_min_size,
-                                                  min_rdtest_support=args.min_frac_supporting_genotypes,
-                                                  min_region_overlap=args.min_region_overlap,
-                                                  min_rejected_intervals_frac=args.min_rejected_intervals_frac)
+    false_positive_matches, false_negative_matches = \
+        get_overlapping_samples_vcf(vcf_path=args.vcf, intervals=gdr_trees,
+                                    medians=medians,
+                                    median_vids=median_vids,
+                                    cutoff=args.overlap,
+                                    vcf_min_size=args.vcf_min_size,
+                                    min_supported_valid_overlapping_intervals_frac=args.min_frac_supporting_genotypes,
+                                    min_region_overlap=args.min_region_overlap,
+                                    min_supported_region_intervals_frac=args.min_supported_region_intervals_frac)
     subtracted_tsv_path = f"{args.out}.subtracted.tsv.gz"
     original_invalidated_records_vcf_path = f"{args.out}.original_invalidated_records.vcf.gz"
     subtracted_invalidated_records_vcf_path = f"{args.out}.subtracted_invalidated_records.vcf.gz"
@@ -599,9 +772,10 @@ def main(argv: Optional[List[Text]] = None):
                                 original_invalidated_records_vcf_path=original_invalidated_records_vcf_path,
                                 subtracted_invalidated_records_vcf_path=subtracted_invalidated_records_vcf_path,
                                 new_revised_records_vcf_path=temp_vcf.name,
-                                vcf_overlappers=vcf_overlappers,
-                                sample_sex_dict=sample_sex_dict, chr_x=args.chr_x, chr_y=args.chr_y,
-                                dangling_fraction=args.min_dangling_frac)
+                                false_positive_matches=false_positive_matches,
+                                false_negative_matches=false_negative_matches,
+                                dangling_fraction=args.min_dangling_frac,
+                                min_false_negative_rescue_overlap=args.min_false_negative_rescue_overlap)
         pysam.tabix_index(original_invalidated_records_vcf_path, preset="vcf", force=True)
         pysam.tabix_index(subtracted_invalidated_records_vcf_path, preset="vcf", force=True)
         with tempfile.TemporaryDirectory(dir=args.temp) as temp_dir:
