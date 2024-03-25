@@ -34,12 +34,10 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
     RuntimeAttr? runtime_revise_vcf_batch
-    RuntimeAttr? runtime_vcf2bed_new_records
     RuntimeAttr? runtime_vcf2bed_original_invalid
     RuntimeAttr? runtime_vcf2bed_subracted_invalid
-    RuntimeAttr? runtime_rdtest_new_records
-    RuntimeAttr? runtime_rdtest_original_invalid
-    RuntimeAttr? runtime_rdtest_subtracted_invalid
+    RuntimeAttr? runtime_rdtest_before_revise
+    RuntimeAttr? runtime_rdtest_after_revise
   }
 
   call util.GetSampleIdsFromMedianCoverageFile {
@@ -150,43 +148,43 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_revise_vcf_batch
   }
-  call VcfToBed as VcfToBedOriginalInvalidatedRecords {
+  call VcfToBed as VcfToBedRevisedBeforeUpdateRecords {
     input:
       vcf = ReviseGenomicDisorderRegions.revised_before_update_vcf,
-      prefix = "~{output_prefix}.original_invalidated_records",
+      prefix = "~{output_prefix}.before_revise",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_vcf2bed_original_invalid
   }
-  call VcfToBed as VcfToBedSubtractedInvalidatedRecords {
+  call VcfToBed as VcfToBedRevisedAfterUpdateRecords {
     input:
       vcf = ReviseGenomicDisorderRegions.revised_after_update_vcf,
-      prefix = "~{output_prefix}.subtracted_invalidated_records",
+      prefix = "~{output_prefix}.after_revise",
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_vcf2bed_subracted_invalid
   }
-  call RunRdTest as RunRdTestOriginalInvalid {
+  call RunRdTest as RunRdTestBeforeUpdate {
     input:
-      output_prefix = "rdtest_orig_invalid_~{batch_name}",
-      rdtest_bed = VcfToBedOriginalInvalidatedRecords.bed,
+      output_prefix = "rdtest_before_revise_~{batch_name}",
+      rdtest_bed = VcfToBedRevisedBeforeUpdateRecords.bed,
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
       median_file = median_file,
       do_plot = true,
       do_genotyping = false,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_rdtest_original_invalid
+      runtime_attr_override = runtime_rdtest_before_revise
   }
-  call RunRdTest as RunRdTestSubtractedInvalid {
+  call RunRdTest as RunRdTestAfterUpdate {
     input:
-      output_prefix = "rdtest_subtract_invalid_~{batch_name}",
-      rdtest_bed = VcfToBedSubtractedInvalidatedRecords.bed,
+      output_prefix = "rdtest_after_revise_~{batch_name}",
+      rdtest_bed = VcfToBedRevisedAfterUpdateRecords.bed,
       rd_file = rd_file,
       rd_index = rd_file + ".tbi",
       median_file = median_file,
       do_plot = true,
       do_genotyping = false,
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_rdtest_subtracted_invalid
+      runtime_attr_override = runtime_rdtest_after_revise
   }
   output{
     File batch_rdtest_variants_overlapping_gdr = RunRdTestVariantsOverlappingGDR.out
@@ -194,8 +192,8 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File batch_rdtest_gdr_full = RunRdTestFullRegions.out
     File batch_rdtest_gdr_subdiv = RunRdTestFullRegions.out
 
-    File batch_rdtest_gdr_before_revise = RunRdTestOriginalInvalid.out
-    File batch_rdtest_gdr_after_revise = RunRdTestSubtractedInvalid.out
+    File batch_rdtest_gdr_before_revise = RunRdTestBeforeUpdate.out
+    File batch_rdtest_gdr_after_revise = RunRdTestAfterUpdate.out
 
     File batch_gdr_revised_before_update_vcf = ReviseGenomicDisorderRegions.revised_before_update_vcf
     File batch_gdr_revised_before_update_index = ReviseGenomicDisorderRegions.revised_before_update_index

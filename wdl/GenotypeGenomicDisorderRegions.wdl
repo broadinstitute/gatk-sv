@@ -47,12 +47,10 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
     RuntimeAttr? runtime_revise_vcf_batch
-    RuntimeAttr? runtime_vcf2bed_new_records
     RuntimeAttr? runtime_vcf2bed_original_invalid
     RuntimeAttr? runtime_vcf2bed_subracted_invalid
-    RuntimeAttr? runtime_rdtest_new_records
-    RuntimeAttr? runtime_rdtest_original_invalid
-    RuntimeAttr? runtime_rdtest_subtracted_invalid
+    RuntimeAttr? runtime_rdtest_before_revise
+    RuntimeAttr? runtime_rdtest_after_revise
 
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_cat_subtracted_genotypes
@@ -100,12 +98,10 @@ workflow GenotypeGenomicDisorderRegions {
         runtime_rdtest_full = runtime_rdtest_full,
         runtime_rdtest_subdiv = runtime_rdtest_subdiv,
         runtime_revise_vcf_batch = runtime_revise_vcf_batch,
-        runtime_vcf2bed_new_records = runtime_vcf2bed_new_records,
         runtime_vcf2bed_original_invalid = runtime_vcf2bed_original_invalid,
         runtime_vcf2bed_subracted_invalid = runtime_vcf2bed_subracted_invalid,
-        runtime_rdtest_new_records = runtime_rdtest_new_records,
-        runtime_rdtest_original_invalid = runtime_rdtest_original_invalid,
-        runtime_rdtest_subtracted_invalid = runtime_rdtest_subtracted_invalid
+        runtime_rdtest_before_revise = runtime_rdtest_before_revise,
+        runtime_rdtest_after_revise = runtime_rdtest_after_revise
     }
   }
 
