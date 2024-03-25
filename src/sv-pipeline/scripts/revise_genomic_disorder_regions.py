@@ -17,10 +17,6 @@ from typing import List, Text, Optional
 from intervaltree import IntervalTree
 import pysam
 
-SEX_MALE = "M"
-SEX_FEMALE = "F"
-SEX_UNKNOWN = "U"
-
 # Delimiter suffix appended to the end of interval IDs before the index, e.g. "intervalA__0", "intervalA__1", ...
 INDEX_DELIMITER = "__"
 
