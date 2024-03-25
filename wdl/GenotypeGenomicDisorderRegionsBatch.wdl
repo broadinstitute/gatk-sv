@@ -34,8 +34,8 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_rdtest_full
     RuntimeAttr? runtime_rdtest_subdiv
     RuntimeAttr? runtime_revise_vcf_batch
-    RuntimeAttr? runtime_vcf2bed_original_invalid
-    RuntimeAttr? runtime_vcf2bed_subracted_invalid
+    RuntimeAttr? runtime_vcf2bed_before_revise
+    RuntimeAttr? runtime_vcf2bed_after_revise
     RuntimeAttr? runtime_rdtest_before_revise
     RuntimeAttr? runtime_rdtest_after_revise
   }
@@ -153,14 +153,14 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       vcf = ReviseGenomicDisorderRegions.revised_before_update_vcf,
       prefix = "~{output_prefix}.before_revise",
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_vcf2bed_original_invalid
+      runtime_attr_override = runtime_vcf2bed_before_revise
   }
   call VcfToBed as VcfToBedRevisedAfterUpdateRecords {
     input:
       vcf = ReviseGenomicDisorderRegions.revised_after_update_vcf,
       prefix = "~{output_prefix}.after_revise",
       sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_vcf2bed_subracted_invalid
+      runtime_attr_override = runtime_vcf2bed_after_revise
   }
   call RunRdTest as RunRdTestBeforeUpdate {
     input:
