@@ -96,6 +96,30 @@ def create_trees_from_bed_records_by_type(bed_path):
     return trees, del_ids, dup_ids
 
 
+def create_region_intervals_dict(trees):
+    regions_dict = dict()
+    # Get interval sets for each region
+    for svtype, svtype_dict in trees.items():
+        if svtype not in regions_dict:
+            regions_dict[svtype] = dict()
+        for contig, contig_tree in svtype_dict.items():
+            for interval in contig_tree:
+                region_subinterval = interval.data
+                region, _ = get_base_name_and_index(region_subinterval)
+                if region not in regions_dict[svtype]:
+                    regions_dict[svtype][region] = list()
+                regions_dict[svtype][region].append((contig, interval.begin, interval.end))
+    # Merge intervals using the min/max endpoints, assuming they are all contiguous
+    for svtype, svtype_dict in regions_dict.items():
+        for region, interval_list in svtype_dict.items():
+            contigs = list(set(interval[0] for interval in interval_list))
+            if len(contigs) > 1:
+                raise ValueError(f"Region {region} is on multiple contigs: {contigs}")
+            svtype_dict[region] = (contigs[0], min(interval[1] for interval in interval_list),
+                                   max(interval[2] for interval in interval_list))
+    return regions_dict
+
+
 def create_trees_from_bed_records(bed_path):
     trees = defaultdict(IntervalTree)
     with open(bed_path) as f:
@@ -280,20 +304,28 @@ def get_overlapping_samples_vcf(vcf_path, intervals, medians, median_vids, cutof
     return false_positive_matches, false_negative_matches
 
 
-def read_ped_file(path):
-    with open(path) as f:
-        data = dict()
+def read_ploidy_table(path):
+    """
+    Parses tsv of sample ploidy values.
+
+    Parameters
+    ----------
+    path: Text
+        table path
+
+    Returns
+    -------
+    header: Dict[Text, Dict[Text, int]]
+        map of sample to contig to ploidy, i.e. Dict[sample][contig] = ploidy
+    """
+    ploidy_dict = dict()
+    with open(path, 'r') as f:
+        header = f.readline().strip().split('\t')
         for line in f:
-            record = line.strip().split('\t')
-            sample = record[1]
-            x_ploidy = record[4]
-            if x_ploidy == "1":
-                data[sample] = SEX_MALE
-            elif x_ploidy == "2":
-                data[sample] = SEX_FEMALE
-            else:
-                data[sample] = SEX_UNKNOWN
-    return data
+            tokens = line.strip().split('\t')
+            sample = tokens[0]
+            ploidy_dict[sample] = {header[i]: int(tokens[i]) for i in range(1, len(header))}
+    return ploidy_dict
 
 
 def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
@@ -306,24 +338,18 @@ def is_in_par_region(chrom, pos, stop, par_trees, cutoff):
     return False
 
 
-def get_expected_cn(chrom, sample_sex, chr_x, chr_y, is_par=False):
-    if sample_sex == SEX_UNKNOWN:
-        return None
-    elif (chrom != chr_x and chrom != chr_y) or is_par:
+def get_expected_cn(chrom, sample, ploidy_table_dict, is_par=False):
+    if is_par:
         return 2
-    elif sample_sex == SEX_MALE:
-        return 1
-    elif sample_sex == SEX_FEMALE:
-        if chrom == chr_x:
-            return 2
-        else:
-            # chrY
-            return 0
     else:
-        raise ValueError(f"Unknown sex assignment {sample_sex} (bug)")
+        if sample not in ploidy_table_dict:
+            raise ValueError(f"Sample {sample} not defined in ploidy table")
+        if chrom not in ploidy_table_dict[sample]:
+            raise ValueError(f"Contig {chrom} not defined in ploidy table")
+        return ploidy_table_dict[sample][chrom]
 
 
-def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample_sex_dict, par_trees, chr_x, chr_y,
+def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, ploidy_table_dict, par_trees,
                      min_par_overlap):
     with open(list_path) as f:
         file_paths = [line.strip() for line in f]
@@ -354,8 +380,9 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, sample
                     else:
                         cutoff = dup_cutoff
                     sample = samples_list[i]
-                    expected_cn = get_expected_cn(chrom, sample_sex_dict[sample], chr_x, chr_y, is_par=is_par)
-                    if expected_cn is None or expected_cn == 0:
+                    expected_cn = get_expected_cn(chrom=chrom, sample=sample, ploidy_table_dict=ploidy_table_dict,
+                                                  is_par=is_par)
+                    if expected_cn == 0:
                         continue
                     cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
                     if is_del and median >= cutoff:
@@ -394,37 +421,37 @@ def get_flanking_intervals_to_remove(sample_overlappers, invalidated_intervals, 
     return flanking_intervals_to_remove
 
 
-def revise_vcf(fin, fsub, forig, frevise, false_positives_dict, rescue_dict):
-    # Pull out invalidated records and reset their genotypes
+def revise_genotypes(f_in, f_geno, f_before, f_after, false_positives_dict, revise_false_negative_dict):
+    # Find genotypes to reset from existing records
     current_chrom = None
-    for record in fin:
+    for record in f_in:
         if record.chrom != current_chrom:
             current_chrom = record.chrom
             logging.info(f"  Subtracting {record.chrom}")
-        if record.id in false_positives_dict or record.id in rescue_dict:
+        if record.id in false_positives_dict or record.id in revise_false_negative_dict:
             svtype = record.info.get("SVTYPE", "")
             # Write original record for review
-            forig.write(record)
+            f_before.write(record)
             if record.id in false_positives_dict:
                 gdr_records = false_positives_dict[record.id]
                 samples = [r.sample for r in gdr_records]
                 # Reset genotypes to hom-ref for invalidated samples
                 for s in samples:
-                    fsub.write(f"{record.chrom}\t{record.id}\t{s}\t0\n")
+                    f_geno.write(f"{record.chrom}\t{record.id}\t{s}\t0\n")
                     # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
                     reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
-            if record.id in rescue_dict:
-                gdr_records = rescue_dict[record.id]
+            if record.id in revise_false_negative_dict:
+                gdr_records = revise_false_negative_dict[record.id]
                 # Set genotypes to het for supported samples
                 for gdr_match in gdr_records:
-                    fsub.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
+                    f_geno.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
                     # Set RD genotyping fields but not PESR since we did not re-examine that evidence
                     rescue_format_fields(gt=record.samples[gdr_match.sample],
                                          svtype=svtype,
                                          genotype_medians=gdr_match.genotype_medians,
                                          rescue_genotype=True, reset_pesr=False)
             # Write revised record for review
-            frevise.write(record)
+            f_after.write(record)
 
 
 def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fraction):
@@ -459,9 +486,9 @@ def retain_values_if_present(data_dict, key, values_list):
         return value
 
 
-def write_new_variant_record(frev, interval, index, base_record, vid, samples, original_gt_dict):
+def write_revised_variant_record(f_revise_after, interval, index, base_record, vid, samples, original_gt_dict):
     new_record = base_record.copy()
-    new_record.id = f"{vid}_GDR_{index}"
+    new_record.id = f"{vid}_revised_{index}"
     new_record.pos = interval[0]
     new_record.stop = interval[1]
     new_record.info["SVLEN"] = new_record.stop - new_record.pos
@@ -472,12 +499,7 @@ def write_new_variant_record(frev, interval, index, base_record, vid, samples, o
         sample_gt["GT"] = original_gt_tuple[0]
         sample_gt["RD_CN"] = original_gt_tuple[1]
         sample_gt["RD_GQ"] = original_gt_tuple[2]
-    frev.write(new_record)
-
-
-def reset_format_if_exists(gt, key, value):
-    if key in gt:
-        gt[key] = value
+    f_revise_after.write(new_record)
 
 
 def get_ecn(gt):
@@ -499,9 +521,9 @@ def reset_format_fields(gt, reset_genotype, reset_pesr):
     if reset_genotype:
         gt["GT"] = _cache_gt_set_hom_ref(gt["GT"])
     if reset_pesr:
-        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
+        gt["EV"] = ("RD",)
         for key, val in RESET_PESR_FORMATS_DICT.items():
-            reset_format_if_exists(gt, key, val)
+            gt[key] = val
 
 
 def rescue_format_fields(gt, svtype, genotype_medians, rescue_genotype, reset_pesr):
@@ -525,9 +547,9 @@ def rescue_format_fields(gt, svtype, genotype_medians, rescue_genotype, reset_pe
     if rescue_genotype:
         gt["GT"] = _cache_gt_set_het(gt["GT"])
     if reset_pesr:
-        gt["EV"] = retain_values_if_present(gt, "EV", ["RD"])
+        gt["EV"] = ("RD",)
         for key, val in RESET_PESR_FORMATS_DICT.items():
-            reset_format_if_exists(gt, key, val)
+            gt[key] = val
 
 
 def reset_record(record):
@@ -543,9 +565,10 @@ def get_interval_key(interval):
     return interval.begin, interval.end
 
 
-def create_new_variants(forig, frev, false_positives_dict, dangling_fraction):
+def revise_partially_supported_variants(f_before, f_revise_after, false_positives_dict, dangling_fraction):
+    # Create partial events from existing variants
     current_chrom = None
-    for vcf_record in forig:
+    for vcf_record in f_before:
         if vcf_record.chrom != current_chrom:
             current_chrom = vcf_record.chrom
             logging.info(f"  Revising {vcf_record.chrom}")
@@ -575,8 +598,47 @@ def create_new_variants(forig, frev, false_positives_dict, dangling_fraction):
         sorted_intervals = sorted(intervals_dict.keys())
         for i, interval in enumerate(sorted_intervals):
             # Write out new revised record. Note that these are not globally sorted.
-            write_new_variant_record(frev=frev, interval=interval, index=i, base_record=wiped_record, vid=vid,
-                                 samples=intervals_dict[interval], original_gt_dict=original_gt_dict)
+            write_revised_variant_record(f_revise_after=f_revise_after, interval=interval, index=i,
+                                         base_record=wiped_record, vid=vid, samples=intervals_dict[interval],
+                                         original_gt_dict=original_gt_dict)
+
+
+def create_new_variants(f_revise_after, new_records_dict, region_intervals_dict, ploidy_table_dict):
+    # Create new rescued calls not derived from existing variants
+    # note new_records_dict structure: svtype -> sample -> region -> record corresponding to new variants to create
+    #      region_intervals_dict structure: svtype -> region -> interval
+    record_index = 0
+    for svtype, svtype_dict in new_records_dict.items():
+        for sample, sample_dict in svtype_dict.items():
+            for region, match in sample_dict.items():
+                if svtype not in region_intervals_dict:
+                    raise ValueError(f"Attempted to rescue variant with SVTYPE {svtype} "
+                                     f"but no regions of that type exist")
+                if region not in region_intervals_dict[svtype]:
+                    raise ValueError(f"Region {region} interval undefined (bug)")
+                region_contig, region_start, region_end = region_intervals_dict[svtype][region]
+                # TODO: get reference allele
+                alleles = ("N", f"<{svtype}>")
+                vid = f"{match.name}_rescue_{record_index}"
+                record = f_revise_after.new_record(contig=region_contig, start=region_start, stop=region_end, alleles=alleles,
+                                         id=vid, filter=None)
+                record.info["SVTYPE"] = svtype
+                record.info["SVLEN"] = region_end - region_start
+                record.info["EVIDENCE"] = ("RD",)
+                record.info["ALGORITHMS"] = ("depth",)
+                for s, gt in record.samples.items():
+                    # Set GT and ECN so we can use the rescue/reset format field methods
+                    # TODO : we use diploid genotypes to follow gatk-sv format, but ideally we'd
+                    #  detect it from an existing record
+                    gt["GT"] = (None, None)
+                    gt["ECN"] = get_expected_cn(chrom=region_contig, sample=sample, ploidy_table_dict=ploidy_table_dict)
+                    if s == sample:
+                        rescue_format_fields(gt=gt, svtype=svtype, genotype_medians=match.genotype_medians,
+                                             rescue_genotype=True, reset_pesr=True)
+                    else:
+                        reset_format_fields(gt, reset_genotype=True, reset_pesr=True)
+                f_revise_after.write(record)
+                record_index += 1
 
 
 def remap_overlapper_dict_by_vid(overlappers_dict):
@@ -626,7 +688,7 @@ def get_maximal_record(record_list, key):
 
 def adjudicate_false_negatives(false_negative_dict, min_false_negative_rescue_overlap):
     # make dictionary: vid -> record list for false negatives to rescue
-    rescue_dict = defaultdict(list)
+    revise_false_negative_dict = defaultdict(list)
     # make dictionary: svtype -> sample -> region -> record corresponding to new variants to create
     new_records_dict = dict()
     for svtype, svtype_dict in false_negative_dict.items():
@@ -640,7 +702,7 @@ def adjudicate_false_negatives(false_negative_dict, min_false_negative_rescue_ov
                 if max_overlap >= min_false_negative_rescue_overlap:
                     # Enforce sufficient overlap of supporting intervals on the variant
                     # We will rescue the call by adding it to the existing record
-                    rescue_dict[max_record.name].append(max_record)
+                    revise_false_negative_dict[max_record.name].append(max_record)
                 else:
                     # We will rescue the call by creating a new record
                     # Note there is an edge case where overlapping GDRs could result in duplicated calls, but this
@@ -650,35 +712,35 @@ def adjudicate_false_negatives(false_negative_dict, min_false_negative_rescue_ov
                     if sample not in new_records_dict[svtype]:
                         new_records_dict[svtype][sample] = dict()
                     new_records_dict[svtype][sample][region] = max_record
-    return rescue_dict, new_records_dict
+    return revise_false_negative_dict, new_records_dict
 
 
-def subtract_and_revise_vcf(input_vcf_path, subtracted_tsv_path, original_invalidated_records_vcf_path,
-                            subtracted_invalidated_records_vcf_path, new_revised_records_vcf_path,
-                            false_positive_matches, false_negative_matches, dangling_fraction,
-                            min_false_negative_rescue_overlap):
+def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_path, revised_records_before_update_path,
+                                        unsorted_revised_records_after_update_path, new_revised_records_vcf_path,
+                                        region_intervals_dict, false_positive_matches, false_negative_matches,
+                                        dangling_fraction, min_false_negative_rescue_overlap, ploidy_table_dict):
     false_positives_dict = remap_overlapper_dict_by_vid(false_positive_matches)
     false_negative_dict = remap_overlapper_dict_by_sample_and_region(false_negative_matches)
-    print(f"false_negative_matches: {false_negative_matches}")
-    print(f"false_negative_dict: {false_negative_dict}")
-    rescue_dict, new_records_dict = \
+    revise_false_negative_dict, new_records_dict = \
         adjudicate_false_negatives(false_negative_dict=false_negative_dict,
                                    min_false_negative_rescue_overlap=min_false_negative_rescue_overlap)
-    print(f"rescue_dict: {rescue_dict}")
-    print(f"new_records_dict: {new_records_dict}")
-    # Pull out invalidated records and reset their genotypes
-    with pysam.VariantFile(input_vcf_path) as fin, \
-            gzip.open(subtracted_tsv_path, mode="wt") as fsub, \
-            pysam.VariantFile(original_invalidated_records_vcf_path, mode="w", header=fin.header) as forig, \
-            pysam.VariantFile(subtracted_invalidated_records_vcf_path, mode="w", header=fin.header) as frevise:
-        revise_vcf(fin=fin, fsub=fsub, forig=forig, frevise=frevise, false_positives_dict=false_positives_dict,
-                   rescue_dict=rescue_dict)
+    # Find invalidated records and reset their genotypes
+    with pysam.VariantFile(input_vcf_path) as f_in, \
+            gzip.open(revised_genotypes_tsv_path, mode="wt") as f_geno, \
+            pysam.VariantFile(revised_records_before_update_path, mode="w", header=f_in.header) as f_before, \
+            pysam.VariantFile(unsorted_revised_records_after_update_path, mode="w", header=f_in.header) as f_after:
+        revise_genotypes(f_in=f_in, f_geno=f_geno, f_before=f_before, f_after=f_after,
+                         false_positives_dict=false_positives_dict,
+                         revise_false_negative_dict=revise_false_negative_dict)
     # Revise invalidated records
-    with pysam.VariantFile(original_invalidated_records_vcf_path) as forig, \
-            pysam.VariantFile(new_revised_records_vcf_path, mode="w", header=forig.header) as frev:
-        # TODO : add rescued variants
-        create_new_variants(forig=forig, frev=frev, false_positives_dict=false_positives_dict,
-                            dangling_fraction=dangling_fraction)
+    with pysam.VariantFile(revised_records_before_update_path) as f_before, \
+            pysam.VariantFile(new_revised_records_vcf_path, mode="w", header=f_before.header) as f_revise_after:
+        create_new_variants(f_revise_after=f_revise_after, new_records_dict=new_records_dict,
+                            region_intervals_dict=region_intervals_dict, ploidy_table_dict=ploidy_table_dict)
+        revise_partially_supported_variants(f_before=f_before,
+                                            f_revise_after=f_revise_after,
+                                            false_positives_dict=false_positives_dict,
+                                            dangling_fraction=dangling_fraction)
 
 
 def sort_vcf(vcf_path, out_path, temp_dir):
@@ -705,7 +767,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--par-bed', type=str, required=True, help='PAR region bed')
     parser.add_argument('--median-geno-list', type=str, required=True,
                         help='List of paths to RDTest ".median_geno" files')
-    parser.add_argument('--ped-file', type=str, required=True, help='Ped file')
+    parser.add_argument('--ploidy-table', type=str, required=True, help='Sample ploidy table')
     parser.add_argument('--out', type=str, required=True, help='Output base path')
     parser.add_argument('--overlap', type=float, default=0.9, help='Subdivision overlap fraction cutoff')
     parser.add_argument('--del-median', type=float, default=0.6, help='DEL RDTest median cutoff')
@@ -724,8 +786,6 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--min-false-negative-rescue-overlap', type=float, default=0.8,
                         help='Min overlap fraction of a variant to rescue false negatives in an existing call. '
                              'If not met, a new variant will be created')
-    parser.add_argument('--chr-x', type=str, default="chrX", help='Chromosome X identifier')
-    parser.add_argument('--chr-y', type=str, default="chrY", help='Chromosome Y identifier')
     parser.add_argument('--temp', type=str, default="./", help='Temporary directory path')
     if len(argv) <= 1:
         parser.parse_args(["--help"])
@@ -741,16 +801,17 @@ def main(argv: Optional[List[Text]] = None):
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
     logging.info("Reading ped file...")
-    sample_sex_dict = read_ped_file(args.ped_file)
+    ploidy_table_dict = read_ploidy_table(args.ploidy_table)
     logging.info("Reading genomic disorder regions bed file...")
     gdr_trees, gdr_del_ids, gdr_dup_ids = create_trees_from_bed_records_by_type(args.region_bed)
+    region_intervals_dict = create_region_intervals_dict(gdr_trees)
     logging.info("Reading PAR bed file...")
     par_trees = create_trees_from_bed_records(args.par_bed)
     logging.info("Reading \"median_geno\" file...")
     medians, median_vids = read_median_geno(list_path=args.median_geno_list, del_ids=gdr_del_ids, dup_ids=gdr_dup_ids,
                                             del_cutoff=args.del_median, dup_cutoff=args.dup_median,
-                                            sample_sex_dict=sample_sex_dict, par_trees=par_trees,
-                                            chr_x=args.chr_x, chr_y=args.chr_y, min_par_overlap=args.min_par_overlap)
+                                            ploidy_table_dict=ploidy_table_dict, par_trees=par_trees,
+                                            min_par_overlap=args.min_par_overlap)
     logging.info("Parsing VCF for variants overlapping genomic disorder regions...")
     false_positive_matches, false_negative_matches = \
         get_overlapping_samples_vcf(vcf_path=args.vcf, intervals=gdr_trees,
@@ -761,26 +822,28 @@ def main(argv: Optional[List[Text]] = None):
                                     min_supported_valid_overlapping_intervals_frac=args.min_frac_supporting_genotypes,
                                     min_region_overlap=args.min_region_overlap,
                                     min_supported_region_intervals_frac=args.min_supported_region_intervals_frac)
-    subtracted_tsv_path = f"{args.out}.subtracted.tsv.gz"
-    original_invalidated_records_vcf_path = f"{args.out}.original_invalidated_records.vcf.gz"
-    subtracted_invalidated_records_vcf_path = f"{args.out}.subtracted_invalidated_records.vcf.gz"
-    sorted_revised_records_vcf_path = f"{args.out}.new_records.vcf.gz"
-    logging.info("Subtracting and revising variants...")
+    revised_genotypes_tsv_path = f"{args.out}.revised_genotypes.tsv.gz"
+    revised_records_before_update_path = f"{args.out}.revised_before_update.vcf.gz"
+    unsorted_revised_records_after_update_path = f"{args.out}.revised_after_update.unsorted.vcf.gz"
+    sorted_revised_records_after_update_path = f"{args.out}.revised_after_update.vcf.gz"
+    logging.info("Revising genotypes and variants...")
     with tempfile.NamedTemporaryFile(dir=args.temp, suffix=".vcf.gz") as temp_vcf:
-        subtract_and_revise_vcf(input_vcf_path=args.vcf,
-                                subtracted_tsv_path=subtracted_tsv_path,
-                                original_invalidated_records_vcf_path=original_invalidated_records_vcf_path,
-                                subtracted_invalidated_records_vcf_path=subtracted_invalidated_records_vcf_path,
-                                new_revised_records_vcf_path=temp_vcf.name,
-                                false_positive_matches=false_positive_matches,
-                                false_negative_matches=false_negative_matches,
-                                dangling_fraction=args.min_dangling_frac,
-                                min_false_negative_rescue_overlap=args.min_false_negative_rescue_overlap)
-        pysam.tabix_index(original_invalidated_records_vcf_path, preset="vcf", force=True)
-        pysam.tabix_index(subtracted_invalidated_records_vcf_path, preset="vcf", force=True)
+        revise_genotypes_and_create_records(input_vcf_path=args.vcf,
+                                            revised_genotypes_tsv_path=revised_genotypes_tsv_path,
+                                            revised_records_before_update_path=revised_records_before_update_path,
+                                            unsorted_revised_records_after_update_path=unsorted_revised_records_after_update_path,
+                                            new_revised_records_vcf_path=temp_vcf.name,
+                                            region_intervals_dict=region_intervals_dict,
+                                            false_positive_matches=false_positive_matches,
+                                            false_negative_matches=false_negative_matches,
+                                            dangling_fraction=args.min_dangling_frac,
+                                            min_false_negative_rescue_overlap=args.min_false_negative_rescue_overlap,
+                                            ploidy_table_dict=ploidy_table_dict)
+        pysam.tabix_index(revised_records_before_update_path, preset="vcf", force=True)
+        pysam.tabix_index(unsorted_revised_records_after_update_path, preset="vcf", force=True)
         with tempfile.TemporaryDirectory(dir=args.temp) as temp_dir:
-            sort_vcf(vcf_path=temp_vcf.name, out_path=sorted_revised_records_vcf_path, temp_dir=temp_dir)
-            pysam.tabix_index(sorted_revised_records_vcf_path, preset="vcf", force=True)
+            sort_vcf(vcf_path=temp_vcf.name, out_path=sorted_revised_records_after_update_path, temp_dir=temp_dir)
+            pysam.tabix_index(sorted_revised_records_after_update_path, preset="vcf", force=True)
 
 
 if __name__ == "__main__":
