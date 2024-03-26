@@ -125,7 +125,7 @@ workflow GenotypeGenomicDisorderRegions {
   scatter (i in range(length(cohort_vcfs))) {
     call SetGenotypesInExistingVariants {
       input:
-        prefix="~{output_prefix}.~{contigs[i]}.subtract_genotypes",
+        prefix="~{output_prefix}.~{contigs[i]}.set_genotypes",
         vcf = cohort_vcfs[i],
         vcf_index = cohort_vcfs[i] + ".tbi",
         genotype_tsv = CatUncompressedFiles.outfile,
@@ -345,7 +345,7 @@ task SetMissingGenotypingFormatFields {
     set -euxo pipefail
     python ~{default="/opt/src/sv-pipeline/scripts/reset_del_dup_genotypes.py" script} \
       --vcf ~{vcf} \
-      --reset-rd-genotype \
+      --reset-format-fields \
       --out ~{prefix}.vcf.gz
   >>>
   output {

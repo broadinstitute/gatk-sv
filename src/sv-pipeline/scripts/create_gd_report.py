@@ -40,17 +40,20 @@ class ImageData:
 
     def title(self):
         if self.kind == "before_revise":
-            title = f"Variant before revision"
+            title = f"Existing variant before revision"
         elif self.kind == "after_revise":
-            title = f"Variant after revision"
+            if "new_rescue" in self.name:
+                title = f"New variant"
+            else:
+                title = f"Existing variant after revision"
         elif self.kind == "new":
             title = f"New variant resulting from another partially invalidated call"
         elif self.kind == "gdr":
             title = f"Raw region (random sample)"
         elif self.kind == "gdr2var":
-            title = f"Region overlapping variant"
+            title = f"Region overlapping existing variant"
         elif self.kind == "var2gdr":
-            title = f"Variant overlapping region"
+            title = f"Existing variant overlapping region"
         elif self.kind == "subdiv":
             title = f"Region subdivision (random sample)"
         return title
