@@ -14,7 +14,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
 
     Array[File] cohort_vcfs
 
-    File ped_file
+    File ploidy_table
     File preprocessed_genomic_disorder_regions_bed
     File genomic_disorder_regions_bed
     File par_bed
@@ -140,7 +140,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       rdtest_tars = [RunRdTestSubdivision.out],
       vcf = ConcatVcfs.concat_vcf,
       new_record_prefix = "~{output_prefix}_revise_gdr_",
-      ped_file = ped_file,
+      ploidy_table = ploidy_table,
       genomic_disorder_regions_bed = preprocessed_genomic_disorder_regions_bed,
       par_bed = par_bed,
       args = revise_args,
@@ -274,7 +274,7 @@ task ReviseGenomicDisorderRegions {
     String prefix
     Array[File] rdtest_tars
     File vcf
-    File ped_file
+    File ploidy_table
     File genomic_disorder_regions_bed
     File par_bed
     String new_record_prefix
@@ -303,7 +303,7 @@ task ReviseGenomicDisorderRegions {
       ~{args} \
       --vcf ~{vcf} \
       --median-geno-list median_geno_files.list \
-      --ped-file ~{ped_file} \
+      --ploidy-table ~{ploidy_table} \
       --region-bed ~{genomic_disorder_regions_bed} \
       --par-bed ~{par_bed} \
       --out ~{prefix}

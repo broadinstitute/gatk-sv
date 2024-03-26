@@ -20,7 +20,6 @@ workflow GenotypeGenomicDisorderRegions {
     File contig_list
 
     File ploidy_table
-    File ped_file
 
     Float? min_gdr_overlap_frac_plotting
 
@@ -81,7 +80,7 @@ workflow GenotypeGenomicDisorderRegions {
         median_file = median_files[i],
         depth_sepcutoff_file = depth_sepcutoff_files[i],
         cohort_vcfs = cohort_vcfs,
-        ped_file = ped_file,
+        ploidy_table = ploidy_table,
         preprocessed_genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
