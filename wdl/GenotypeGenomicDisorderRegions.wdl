@@ -123,7 +123,7 @@ workflow GenotypeGenomicDisorderRegions {
 
   Array[String] contigs = transpose(read_tsv(select_first([contig_list])))[0]
   scatter (i in range(length(cohort_vcfs))) {
-    call SubtractGenotypes {
+    call SetGenotypesInExistingVariants {
       input:
         prefix="~{output_prefix}.~{contigs[i]}.subtract_genotypes",
         vcf = cohort_vcfs[i],
@@ -174,8 +174,8 @@ workflow GenotypeGenomicDisorderRegions {
     }
     call tasks_cohort.ConcatVcfs as ConcatVcfsFinal {
       input:
-        vcfs = [SubtractGenotypes.out, ReorderVcfSamples.out],
-        vcfs_idx = [SubtractGenotypes.out_index, ReorderVcfSamples.out_index],
+        vcfs = [SetGenotypesInExistingVariants.out, ReorderVcfSamples.out],
+        vcfs_idx = [SetGenotypesInExistingVariants.out_index, ReorderVcfSamples.out_index],
         allow_overlaps = true,
         outfile_prefix = "~{output_prefix}.concat_revise_gdr",
         sv_base_mini_docker = sv_base_mini_docker,
@@ -269,7 +269,7 @@ task PreprocessGenomicDisorderIntervals {
   }
 }
 
-task SubtractGenotypes {
+task SetGenotypesInExistingVariants {
   input{
     String prefix
     File vcf
