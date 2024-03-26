@@ -11,6 +11,7 @@ from typing import List, Text, Optional
 
 import pysam
 
+IMAGE_WIDTH = 500
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
@@ -30,31 +31,32 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
 class ImageData:
 
-    def __init__(self, kind, interval, path, vid, region):
+    def __init__(self, kind, interval, path, name, region):
         self.kind = kind
         self.interval = interval
         self.path = path
-        self.vid = vid
+        self.name = name
         self.region = region
 
     def title(self):
-        if self.kind == "orig_invalid":
-            title = f"Flagged original variant {self.vid}"
-        elif self.kind == "subtract_invalid":
-            title = f"Flagged variant after correction {self.vid}"
+        if self.kind == "before_revise":
+            title = f"Variant before revision"
+        elif self.kind == "after_revise":
+            title = f"Variant after revision"
         elif self.kind == "new":
-            title = f"New variant {self.vid} resulting from another partially invalidated call"
+            title = f"New variant resulting from another partially invalidated call"
         elif self.kind == "gdr":
-            title = f"Raw region {self.region}"
+            title = f"Raw region (random sample)"
         elif self.kind == "gdr2var":
-            title = f"Region {self.region} overlapping variant {self.vid}"
+            title = f"Region overlapping variant"
         elif self.kind == "var2gdr":
-            title = f"Variant {self.vid} overlapping region {self.region}"
-        title = "## " + title + "\n\n"
+            title = f"Variant overlapping region"
+        elif self.kind == "subdiv":
+            title = f"Region subdivision (random sample)"
         return title
 
     def image_string(self):
-        return f"![Image]({self.path})\n\n"
+        return f"<img src=\"{self.path}\" width={IMAGE_WIDTH}><br>\n\n"
 
 
 def main(argv: Optional[List[Text]] = None):
@@ -78,53 +80,45 @@ def main(argv: Optional[List[Text]] = None):
         pos = int(tokens[1])
         stop = int(tokens[2])
         sample = tokens[3]
-        vid = "_".join(tokens[4:10])
+        name = filename.replace(".jpg", "")
         region = None
         for r in region_names:
             if r in filename:
                 region = r
                 break
-        if "rdtest_orig_invalid" in filename:
-            kind = "orig_invalid"
-        elif "rdtest_subtract_invalid" in filename:
-            kind = "subtract_invalid"
-        elif "rdtest_new" in filename:
-            kind = "new"
+        if "rdtest_before_revise" in filename:
+            kind = "before_revise"
+        elif "rdtest_after_revise" in filename:
+            kind = "after_revise"
         elif "rdtest_full" in filename:
             kind = "gdr"
-            vid = None
         elif "rdtest_gdr2var" in filename:
             kind = "gdr2var"
         elif "rdtest_var2gdr" in filename:
             kind = "var2gdr"
+        elif "rdtest_subdiv" in filename:
+            kind = "subdiv"
         else:
             raise ValueError(f"Unknown type for {path}")
+        # TODO create separate pdf for subdivisions
+        if kind == "subdiv":
+            continue
         interval_str = f"{chrom}:{pos}-{stop}"
-        image_list.append(ImageData(kind=kind, interval=interval_str, path=path, vid=vid, region=region))
+        image_list.append(ImageData(kind=kind, interval=interval_str, path=path, name=name, region=region))
 
     region_to_image_dict = defaultdict(list)
-    vid_to_image_dict = defaultdict(list)
     for image in image_list:
         if image.region is not None:
             region_to_image_dict[image.region].append(image)
-        if image.vid is not None:
-            vid_to_image_dict[image.vid].append(image)
 
-    with open("temp.md", "w") as f:
+    with open("temp.html", "w") as f:
         for region in region_names:
-            if len(region_to_image_dict[region]) > 1:
-                f.write("# " + region + "\n\n")
-                for image in region_to_image_dict[region]:
-                    f.write(image.title())
-                    f.write(image.image_string())
-                f.write("\n---\n")
-
-        for vid in sorted(list(vid_to_image_dict.keys())):
-            f.write("# " + vid + "\n")
-            for image in vid_to_image_dict[vid]:
-                f.write(image.title())
+            f.write("<h2>" + region + "</h2>\n\n")
+            for image in region_to_image_dict[region]:
+                f.write(f"<h3>{image.name}<br>\n")
+                f.write(f"{image.title()}</h3>\n")
                 f.write(image.image_string())
-            f.write("\n---\n")
+            f.write("\n<hr>\n")
 
 
 if __name__ == "__main__":
