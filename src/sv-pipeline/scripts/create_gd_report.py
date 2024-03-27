@@ -1,7 +1,7 @@
 #!/bin/python
 
 import argparse
-import gzip
+import textwrap
 import logging
 import os
 import sys
@@ -9,9 +9,12 @@ import sys
 from collections import defaultdict
 from typing import List, Text, Optional
 
-import pysam
-
 IMAGE_WIDTH = 500
+TABLE_PADDING = 20
+TEXT_WRAP_WIDTH = 50
+
+KIND_ORDERING = ["gdr", "gdr2var", "var2gdr", "before_revise", "after_revise"]
+
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
@@ -60,7 +63,6 @@ class ImageData:
 
     def image_string(self):
         return f"<img src=\"{self.path}\" width={IMAGE_WIDTH}><br>\n\n"
-
 
 def main(argv: Optional[List[Text]] = None):
     if argv is None:
@@ -117,10 +119,23 @@ def main(argv: Optional[List[Text]] = None):
     with open("temp.html", "w") as f:
         for region in region_names:
             f.write("<h2>" + region + "</h2>\n\n")
-            for image in region_to_image_dict[region]:
-                f.write(f"<h3>{image.name}<br>\n")
-                f.write(f"{image.title()}</h3>\n")
+            num_images = len(region_to_image_dict[region])
+            table_width = num_images * (IMAGE_WIDTH + TABLE_PADDING)
+            f.write(f"<table width={table_width} border=1>\n")
+            f.write("<tr>\n")
+            images = sorted(region_to_image_dict[region], key=lambda x: KIND_ORDERING.index(x.kind))
+            for image in images:
+                name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
+                if image.kind != "gdr":
+                    f.write("<td align=center bgcolor=\"#FFAAAA\">\n")
+                else:
+                    f.write("<td align=center>\n")
                 f.write(image.image_string())
+                f.write(f"{name}<br>\n")
+                f.write(f"<b>{image.title()}</b><br>\n")
+                f.write("</td>\n")
+            f.write("</tr>\n")
+            f.write(f"</table>\n")
             f.write("\n<hr>\n")
 
 
