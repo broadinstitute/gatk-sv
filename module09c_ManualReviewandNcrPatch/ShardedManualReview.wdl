@@ -618,7 +618,8 @@ task SplitBndDel{
         fin=pysam.VariantFile("~{vcf}")
         fo=pysam.VariantFile("~{prefix}.bnd_del.vcf.gz", 'w', header = fin.header)
         for record in fin:
-            if record.info['SVTYPE'] in ['BND'] and record.info['STRANDS']=="+-" and record.info['SVLEN']!=-1:
+            if record.info['SVTYPE'] in ['BND'] and record.info['STRANDS']=="+-" and record.chrom == record.info['CHR2']:
+                record.info['SVLEN'] = record.info['END2'] - record.start
                 fo.write(record)
         fin.close()
         fo.close()
