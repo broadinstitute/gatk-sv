@@ -330,7 +330,7 @@ task GetGDROverlappingVariants {
   input {
     File vcf
     File genomic_disorder_regions_bed
-    Float min_gdr_overlap_frac_plotting = 0.5
+    Float min_gdr_overlap_frac_plotting = 0.3
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -367,7 +367,7 @@ task GetGDROverlappingVariants {
     awk -F'\t' -v OFS='\t' '$5=="DEL"' ~{genomic_disorder_regions_bed} > gdr.DEL.bed
     awk -F'\t' -v OFS='\t' '$5=="DUP"' ~{genomic_disorder_regions_bed} > gdr.DUP.bed
 
-    # Get variants overlapping at least 50% of a GDR
+    # Get variants overlapping at least X% of a GDR
     # Records are named <VARIANT_ID>__<GDR_ID>
     # Note we swap columns 5 and 6 (SVTYPE and SAMPLES) for RdTest
     bedtools intersect -wo -F ~{min_gdr_overlap_frac_plotting} -a intervals.DEL.bed -b gdr.DEL.bed \
@@ -380,13 +380,13 @@ task GetGDROverlappingVariants {
       | sort -k1,1V -k2,2n -k3,3n \
       > ~{prefix}.variants_with_gdr_overlaps.bed
 
-    # Get GDRs overlapped at least 50% by a variant
+    # Get GDRs overlapped at least X% by a variant
     # Records are named <GDR_ID>__<VARIANT_ID>
     # Note we swap columns 5 and 6 (SVTYPE and SAMPLES) for RdTest
-    bedtools intersect -wo -F 0.5 -a intervals.DEL.bed -b gdr.DEL.bed \
+    bedtools intersect -wo -F ~{min_gdr_overlap_frac_plotting} -a intervals.DEL.bed -b gdr.DEL.bed \
       | awk -F'\t' -v OFS='\t' '{print $7,$8,$9,$10"__"$4,$6,$5}' \
       > gdr.DEL.variant_overlaps.bed
-    bedtools intersect -wo -F 0.5 -a intervals.DUP.bed -b gdr.DUP.bed \
+    bedtools intersect -wo -F ~{min_gdr_overlap_frac_plotting} -a intervals.DUP.bed -b gdr.DUP.bed \
       | awk -F'\t' -v OFS='\t' '{print $7,$8,$9,$10"__"$4,$6,$5}' \
       > gdr.DUP.variant_overlaps.bed
     cat gdr.DEL.variant_overlaps.bed gdr.DUP.variant_overlaps.bed \

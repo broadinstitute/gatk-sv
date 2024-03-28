@@ -36,6 +36,7 @@ RESCUE_GQ_VALUE = 99
 _gt_sum_map = dict()
 _gt_set_hom_ref_map = dict()
 _gt_set_het_map = dict()
+_gt_set_hom_var_map = dict()
 
 
 def _cache_gt_sum(gt):
@@ -63,6 +64,14 @@ def _cache_gt_set_het(gt):
         if len(s) > 0:
             s[-1] = 1
         _gt_set_het_map[gt] = s
+    return s
+
+
+def _cache_gt_set_hom_var(gt):
+    s = _gt_set_hom_var_map.get(gt, None)
+    if s is None:
+        s = tuple(1 for _ in gt)
+        _gt_set_hom_var_map[gt] = s
     return s
 
 
@@ -306,7 +315,9 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
             for interval in valid_region_intersect:
                 interval_name = interval.data
                 if interval_name not in median_vids:
-                    raise ValueError(f"Interval {interval_name} not found in median_geno file")
+                    # TODO
+                    # raise ValueError(f"Interval {interval_name} not found in median_geno file")
+                    logging.warning(f"Interval {interval_name} not found in median_geno file")
                 if sample in medians and interval_name in medians[sample]:
                     supported_intersect.append(interval)
                     genotype_medians.append(medians[sample][interval_name])
@@ -316,7 +327,6 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
             frac_region_intervals_supported = n_support / num_region_subdivisions
             if frac_valid_overlapping_intervals_supported >= min_supported_valid_overlapping_intervals_frac \
                     and frac_region_intervals_supported >= min_supported_region_intervals_frac:
-
                 if sample not in carriers:
                     # False negative
                     # We will try to add this sample to the variant
@@ -488,7 +498,7 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, false_positives_dict, revi
                     reset_format_fields(record.samples[s], reset_genotype=True, reset_pesr=False)
             if record.id in revise_false_negative_dict:
                 gdr_records = revise_false_negative_dict[record.id]
-                # Set genotypes to het for supported samples
+                # Set genotypes to het/hom-var for supported samples
                 for gdr_match in gdr_records:
                     f_geno.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
                     # Set RD genotyping fields but not PESR since we did not re-examine that evidence
@@ -591,8 +601,12 @@ def rescue_format_fields(gt, svtype, genotype_medians, rescue_genotype, reset_pe
     gt["RD_GQ"] = RESCUE_RD_GQ_VALUE
     gt["GQ"] = RESCUE_GQ_VALUE
     if rescue_genotype:
-        # TODO set genotype properly
-        gt["GT"] = _cache_gt_set_het(gt["GT"])
+        if alt_count == 1:
+            gt["GT"] = _cache_gt_set_het(gt["GT"])
+        elif alt_count == 2:
+            gt["GT"] = _cache_gt_set_hom_var(gt["GT"])
+        else:
+            raise ValueError(f"Cannot rescue genotype with alt count {alt_count}")
     if reset_pesr:
         gt["EV"] = ("RD",)
         for key, val in RESET_PESR_FORMATS_DICT.items():
@@ -860,11 +874,11 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--vcf-min-size', type=int, default=1000, help='Min size of vcf variants')
     parser.add_argument('--min-region-overlap', type=float, default=0.3,
                         help='Min fraction of sufficiently overlapping genotyped intervals in the GD region')
-    parser.add_argument('--min-frac-supporting-genotypes', type=float, default=0.7,
+    parser.add_argument('--min-frac-supporting-genotypes', type=float, default=0.5,
                         help='Min fraction of sufficiently overlapping genotyped intervals that must support a call')
-    parser.add_argument('--min-supported-region-intervals-frac', type=float, default=0.5,
+    parser.add_argument('--min-supported-region-intervals-frac', type=float, default=0.1,
                         help='Min fraction of region intervals that must be supported to accept a call')
-    parser.add_argument('--min-dangling-frac', type=float, default=0.3,
+    parser.add_argument('--min-dangling-frac', type=float, default=0.5,
                         help='Min interval fraction of variant size for removing leftover fragments')
     parser.add_argument('--min-par-overlap', type=float, default=0.5,
                         help='Min overlap fraction for an interval to be treated as PAR')

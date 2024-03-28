@@ -34,12 +34,13 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
 
 class ImageData:
 
-    def __init__(self, kind, interval, path, name, region):
+    def __init__(self, kind, interval, path, name, region, batch):
         self.kind = kind
         self.interval = interval
         self.path = path
         self.name = name
         self.region = region
+        self.batch = batch
 
     def title(self):
         if self.kind == "before_revise":
@@ -93,37 +94,58 @@ def main(argv: Optional[List[Text]] = None):
                 break
         if "rdtest_before_revise" in filename:
             kind = "before_revise"
+            batch_sep = "rdtest_before_revise"
         elif "rdtest_after_revise" in filename:
             kind = "after_revise"
+            batch_sep = "rdtest_after_revise"
         elif "rdtest_full" in filename:
             kind = "gdr"
+            batch_sep = "rdtest_full"
         elif "rdtest_gdr2var" in filename:
             kind = "gdr2var"
+            batch_sep = "rdtest_gdr2var"
         elif "rdtest_var2gdr" in filename:
             kind = "var2gdr"
+            batch_sep = "rdtest_var2gdr"
         elif "rdtest_subdiv" in filename:
             kind = "subdiv"
+            batch_sep = "rdtest_subdiv"
         else:
             raise ValueError(f"Unknown type for {path}")
         # TODO create separate pdf for subdivisions
         if kind == "subdiv":
             continue
+        batch = filename.split(batch_sep + "_")[-1].replace(".jpg", "")
         interval_str = f"{chrom}:{pos}-{stop}"
-        image_list.append(ImageData(kind=kind, interval=interval_str, path=path, name=name, region=region))
+        image_list.append(ImageData(kind=kind, interval=interval_str, path=path, name=name, region=region, batch=batch))
 
-    region_to_image_dict = defaultdict(list)
+    region_to_image_dict = dict()
+    batches = set()
     for image in image_list:
         if image.region is not None:
-            region_to_image_dict[image.region].append(image)
+            if image.region not in region_to_image_dict:
+                region_to_image_dict[image.region] = dict()
+            if image.batch not in region_to_image_dict[image.region]:
+                region_to_image_dict[image.region][image.batch] = list()
+            batches.add(image.batch)
+            region_to_image_dict[image.region][image.batch].append(image)
 
-    with open("temp.html", "w") as f:
-        for region in region_names:
+    batches = sorted(list(batches))
+    f_dict = {batch: open(f"gdr.{batch}.html", "w") for batch in batches}
+    for region in region_names:
+        for f in f_dict.values():
             f.write("<h2>" + region + "</h2>\n\n")
-            num_images = len(region_to_image_dict[region])
+        for batch in batches:
+            if region not in region_to_image_dict:
+                continue
+            f = f_dict[batch]
+            f.write("<h3>" + batch + "</h3>\n\n")
+            images = region_to_image_dict.get(region, dict).get(batch, list)
+            num_images = len(images)
             table_width = num_images * (IMAGE_WIDTH + TABLE_PADDING)
             f.write(f"<table width={table_width} border=1>\n")
             f.write("<tr>\n")
-            images = sorted(region_to_image_dict[region], key=lambda x: KIND_ORDERING.index(x.kind))
+            images = sorted(images, key=lambda x: KIND_ORDERING.index(x.kind))
             for image in images:
                 name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
                 if image.kind != "gdr":
@@ -136,7 +158,10 @@ def main(argv: Optional[List[Text]] = None):
                 f.write("</td>\n")
             f.write("</tr>\n")
             f.write(f"</table>\n")
+        for f in f_dict.values():
             f.write("\n<hr>\n")
+    for f in f_dict.values():
+        f.close()
 
 
 if __name__ == "__main__":
