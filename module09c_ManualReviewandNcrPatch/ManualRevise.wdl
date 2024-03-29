@@ -517,7 +517,7 @@ task ReviseVcf{
         import argparse
 
         #Define global variables
-        filts_for_info = 'PESR_GT_OVERDISPERSION HIGH_SR_BACKGROUND BOTHSIDES_SUPPORT VARIABLE_ACROSS_BATCHES'.split(' ')
+        filts_for_info = 'PESR_GT_OVERDISPERSION HIGH_SR_BACKGROUND BOTHSIDES_SUPPORT'.split(' ')
         filts_to_remove = 'HIGH_PCRPLUS_NOCALL_RATE HIGH_PCRMINUS_NOCALL_RATE'.split(' ')
         filts_to_remove = filts_to_remove + filts_for_info
         NULL_GTs = [(None, None), (None, )]
