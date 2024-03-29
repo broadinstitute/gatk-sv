@@ -24,7 +24,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     )
     parser.add_argument('--image-list', type=str, required=True, help='Input images')
     parser.add_argument('--region-bed', type=str, required=True, help='GDR bed')
-    parser.add_argument('--out', type=str, required=True, help='Output pdf')
+    parser.add_argument('--out', type=str, default="gdr", help='Output prefix')
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -131,7 +131,7 @@ def main(argv: Optional[List[Text]] = None):
             region_to_image_dict[image.region][image.batch].append(image)
 
     batches = sorted(list(batches))
-    f_dict = {batch: open(f"gdr.{batch}.html", "w") for batch in batches}
+    f_dict = {batch: open(f"{args.out}.{batch}.html", "w") for batch in batches}
     for region in region_names:
         for f in f_dict.values():
             f.write("<h2>" + region + "</h2>\n\n")
@@ -145,7 +145,7 @@ def main(argv: Optional[List[Text]] = None):
             table_width = num_images * (IMAGE_WIDTH + TABLE_PADDING)
             f.write(f"<table width={table_width} border=1>\n")
             f.write("<tr>\n")
-            images = sorted(images, key=lambda x: KIND_ORDERING.index(x.kind))
+            images = sorted(images, key=lambda x: (KIND_ORDERING.index(x.kind), x.name))
             for image in images:
                 name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
                 if image.kind != "gdr":
