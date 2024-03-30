@@ -17,7 +17,7 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] depth_sepcutoff_files
 
     Array[File] cohort_vcfs
-    File contig_list
+    File? contig_list
 
     File ploidy_table
 
@@ -38,6 +38,8 @@ workflow GenotypeGenomicDisorderRegions {
     String gatk_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
+
+    String? NONE_STRING_
 
     RuntimeAttr? runtime_override_ids_from_median
     RuntimeAttr? runtime_attr_subset_by_samples
@@ -129,15 +131,17 @@ workflow GenotypeGenomicDisorderRegions {
       runtime_attr_override = runtime_get_vcf_header
   }
 
-  Array[String] contigs = transpose(read_tsv(select_first([contig_list])))[0]
+  Array[String] contigs = if defined(contig_list) then transpose(read_tsv(select_first([contig_list])))[0] else []
   scatter (i in range(length(cohort_vcfs))) {
+    String? contig = if defined(contig_list) then contigs[i] else NONE_STRING_
+    String contig_str = if defined(contig_list) then contigs[i] else "shard_~{i}"
     call SetGenotypesInExistingVariants {
       input:
-        prefix="~{output_prefix}.~{contigs[i]}.set_genotypes",
+        prefix="~{output_prefix}.~{contig_str}.set_genotypes",
         vcf = cohort_vcfs[i],
         vcf_index = cohort_vcfs[i] + ".tbi",
         genotype_tsv = CatRevisedGenotypes.outfile,
-        contig = contigs[i],
+        contig = contig,
         script = reset_genotypes_script,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_subtract_genotypes
@@ -146,8 +150,8 @@ workflow GenotypeGenomicDisorderRegions {
       input:
         vcfs=flatten([[GetVcfHeader.out], GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_after_update_vcf]),
         ploidy_table=ploidy_table,
-        output_prefix="~{output_prefix}.~{contigs[i]}.clustered_new_records",
-        contig=contigs[i],
+        output_prefix="~{output_prefix}.~{contig_str}.clustered_new_records",
+        contig=contig,
         fast_mode=false,
         pesr_sample_overlap=0,
         pesr_interval_overlap=1,
@@ -158,13 +162,13 @@ workflow GenotypeGenomicDisorderRegions {
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
-        variant_prefix="~{variant_prefix}_~{contigs[i]}_GDR_",
+        variant_prefix="~{variant_prefix}_~{contig_str}_GDR_",
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_svcluster
     }
     call SetMissingGenotypingFormatFields {
       input:
-        prefix="~{output_prefix}.~{contigs[i]}.set_missing_fields",
+        prefix="~{output_prefix}.~{contig_str}.set_missing_fields",
         vcf = SVCluster.out,
         vcf_index = SVCluster.out_index,
         script = reset_genotypes_script,
@@ -175,7 +179,7 @@ workflow GenotypeGenomicDisorderRegions {
       input:
         vcf = SetMissingGenotypingFormatFields.out,
         sample_ordered_vcf = GetVcfHeader.out,
-        output_prefix = "~{output_prefix}.~{contigs[i]}.clustered_new_records.reorder_samples",
+        output_prefix = "~{output_prefix}.~{contig_str}.clustered_new_records.reorder_samples",
         generate_index = true,
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_reorder_samples
@@ -185,7 +189,7 @@ workflow GenotypeGenomicDisorderRegions {
         vcfs = [SetGenotypesInExistingVariants.out, ReorderVcfSamples.out],
         vcfs_idx = [SetGenotypesInExistingVariants.out_index, ReorderVcfSamples.out_index],
         allow_overlaps = true,
-        outfile_prefix = "~{output_prefix}.concat_revise_gdr",
+        outfile_prefix = "~{output_prefix}.~{contig_str}.concat_revise_gdr",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_concat_revised_vcfs
     }
@@ -284,7 +288,7 @@ task SetGenotypesInExistingVariants {
     File vcf
     File vcf_index
     File genotype_tsv
-    String contig
+    String? contig
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -301,9 +305,13 @@ task SetGenotypesInExistingVariants {
   command <<<
     set -euxo pipefail
     # Filter down to this contig
-    zcat ~{genotype_tsv} \
-      | awk -F'\t' -v OFS='\t' -v chrom=~{contig} '$1==chrom' \
-      | gzip > genotypes.tsv.gz
+    if ~{defined(contig)}; then
+      zcat ~{genotype_tsv} \
+        | awk -F'\t' -v OFS='\t' -v chrom='~{contig}' '$1==chrom' \
+        | gzip > genotypes.tsv.gz
+    else
+      cp ~{genotype_tsv} genotypes.tsv.gz
+    fi
     N_RECORDS=$(zcat genotypes.tsv.gz | wc -l)
     # If there are no changes on this contig, just copy the input
     if [ "$N_RECORDS" -eq "0" ]; then
