@@ -53,6 +53,7 @@ workflow GenotypeGenomicDisorderRegions {
 
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_cat_subtracted_genotypes
+    RuntimeAttr? runtime_cat_manifest
     RuntimeAttr? runtime_get_vcf_header
     RuntimeAttr? runtime_subtract_genotypes
     RuntimeAttr? runtime_attr_svcluster
@@ -105,12 +106,19 @@ workflow GenotypeGenomicDisorderRegions {
   }
 
   # Note these tsv's are gzipped but can be concatenated normally
-  call tasks_cohort.CatUncompressedFiles {
+  call tasks_cohort.CatUncompressedFiles as CatRevisedGenotypes {
     input:
         shards = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_genotypes_tsv,
-        outfile_name = "~{output_prefix}.gdr_subtracted_genotypes.tsv.gz",
+        outfile_name = "~{output_prefix}.gdr_revised_genotypes.tsv.gz",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_cat_subtracted_genotypes
+  }
+  call tasks_cohort.CatUncompressedFiles as CatRevisionManifest {
+    input:
+      shards = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revision_manifest_tsv,
+      outfile_name = "~{output_prefix}.gdr_revision_manifest.tsv.gz",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_cat_manifest
   }
   # Use this make sure all samples are included in the clustering output
   # Needed when running on a subset of batches
@@ -128,7 +136,7 @@ workflow GenotypeGenomicDisorderRegions {
         prefix="~{output_prefix}.~{contigs[i]}.set_genotypes",
         vcf = cohort_vcfs[i],
         vcf_index = cohort_vcfs[i] + ".tbi",
-        genotype_tsv = CatUncompressedFiles.outfile,
+        genotype_tsv = CatRevisedGenotypes.outfile,
         contig = contigs[i],
         script = reset_genotypes_script,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -196,7 +204,8 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] cohort_gdr_revised_vcf = ConcatVcfsFinal.concat_vcf
     Array[File] cohort_gdr_revised_index = ConcatVcfsFinal.concat_vcf_idx
 
-    File cohort_gdr_revised_genotypes = CatUncompressedFiles.outfile
+    File cohort_gdr_revised_genotypes = CatRevisedGenotypes.outfile
+    File cohort_gdr_revision_manifest = CatRevisionManifest.outfile
     File cohort_gdr_revised_record_subset_vcf = ConcatNewRecords.concat_vcf
     File cohort_gdr_revised_record_subset_index = ConcatNewRecords.concat_vcf_idx
 

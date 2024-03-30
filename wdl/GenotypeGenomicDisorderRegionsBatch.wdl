@@ -202,6 +202,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File batch_gdr_revised_after_update_index = ReviseGenomicDisorderRegions.revised_after_update_index
 
     File batch_gdr_revised_genotypes_tsv = ReviseGenomicDisorderRegions.revised_genotypes_tsv
+    File batch_gdr_revision_manifest_tsv = ReviseGenomicDisorderRegions.revision_manifest_tsv
 
     File batch_subsetted_vcf = ConcatVcfs.concat_vcf
     File batch_subsetted_index = ConcatVcfs.concat_vcf_idx
@@ -314,6 +315,7 @@ task ReviseGenomicDisorderRegions {
     File revised_after_update_vcf = "~{prefix}.revised_after_update.vcf.gz"
     File revised_after_update_index = "~{prefix}.revised_after_update.vcf.gz.tbi"
     File revised_genotypes_tsv = "~{prefix}.revised_genotypes.tsv.gz"
+    File revision_manifest_tsv = "~{prefix}.revision_manifest.tsv.gz"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
