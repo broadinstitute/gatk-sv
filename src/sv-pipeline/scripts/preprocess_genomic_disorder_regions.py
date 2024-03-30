@@ -25,7 +25,7 @@ def subdivide_intervals(input_path, output_path, default_subdivisions, min_size)
             length = stop - start
             subdivision_size = math.ceil(length / default_subdivisions)
             if subdivision_size < min_size:
-                subdivisions = math.ceil(length / min_size)
+                subdivisions = max(1, length // min_size)
                 subdivision_size = round(length / subdivisions)
             else:
                 subdivisions = default_subdivisions

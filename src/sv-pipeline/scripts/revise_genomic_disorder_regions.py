@@ -81,7 +81,7 @@ def _cache_gt_set_hom_var(gt):
 
 
 # Creates dictionary of trees[sv_type][contig] from bed file
-def create_trees_from_bed_records_by_type(bed_path):
+def create_trees_from_bed_records_by_type(bed_path, min_region_size):
     trees = defaultdict(dict)
     variant_types = ["DEL", "DUP"]
     for svtype in variant_types:
@@ -96,6 +96,8 @@ def create_trees_from_bed_records_by_type(bed_path):
             stop = int(record[2])
             name = record[3]
             svtype = record[4]
+            if stop - start < min_region_size:
+                logging.warning(f"Region {name} smaller than minimum region size ({min_region_size})")
             if svtype not in trees:
                 raise ValueError("Unexpected SVTYPE in bed file: %s" % type)
             if svtype == "DEL":
@@ -923,6 +925,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--min-false-negative-rescue-overlap', type=float, default=0.8,
                         help='Min overlap fraction of a variant to rescue false negatives in an existing call. '
                              'If not met, a new variant will be created')
+    parser.add_argument('--min-region-size', type=int, default=10000, help='Min region/subdivision size for revisions')
     parser.add_argument('--temp', type=str, default="./", help='Temporary directory path')
     if len(argv) <= 1:
         parser.parse_args(["--help"])
@@ -940,7 +943,8 @@ def main(argv: Optional[List[Text]] = None):
     logging.info("Reading ped file...")
     ploidy_table_dict = read_ploidy_table(args.ploidy_table)
     logging.info("Reading genomic disorder regions bed file...")
-    gdr_trees, gdr_del_ids, gdr_dup_ids = create_trees_from_bed_records_by_type(args.region_bed)
+    gdr_trees, gdr_del_ids, gdr_dup_ids = create_trees_from_bed_records_by_type(bed_path=args.region_bed,
+                                                                                min_region_size=args.min_region_size)
     region_intervals_dict = create_region_intervals_dict(gdr_trees)
     logging.info("Reading PAR bed file...")
     par_trees = create_trees_from_bed_records(args.par_bed)
