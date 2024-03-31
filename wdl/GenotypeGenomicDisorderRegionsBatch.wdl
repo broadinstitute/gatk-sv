@@ -138,6 +138,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     input:
       prefix = "~{output_prefix}.revise_gdr",
       rdtest_tars = [RunRdTestSubdivision.out],
+      batch_name = batch_name,
       vcf = ConcatVcfs.concat_vcf,
       new_record_prefix = "~{output_prefix}_revise_gdr_",
       ploidy_table = ploidy_table,
@@ -274,6 +275,7 @@ task ReviseGenomicDisorderRegions {
   input{
     String prefix
     Array[File] rdtest_tars
+    String batch_name
     File vcf
     File ploidy_table
     File genomic_disorder_regions_bed
@@ -303,6 +305,7 @@ task ReviseGenomicDisorderRegions {
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
       ~{args} \
       --vcf ~{vcf} \
+      --batch ~{batch_name} \
       --median-geno-list median_geno_files.list \
       --ploidy-table ~{ploidy_table} \
       --region-bed ~{genomic_disorder_regions_bed} \
