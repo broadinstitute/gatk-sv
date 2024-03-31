@@ -98,6 +98,7 @@ def create_trees_from_bed_records_by_type(bed_path, min_region_size):
             svtype = record[4]
             if stop - start < min_region_size:
                 logging.warning(f"Region {name} smaller than minimum region size ({min_region_size})")
+                continue
             if svtype not in trees:
                 raise ValueError("Unexpected SVTYPE in bed file: %s" % type)
             if svtype == "DEL":

@@ -19,9 +19,9 @@ TEXT_WRAP_WIDTH = 30
 HIGHLIGHT_BG_COLOR_VAR2GDR = "#AAAAFF"
 HIGHLIGHT_BG_COLOR = "#FFAAAA"
 
-PLOT_TYPE_ENUM = Enum("PlotType", ["GDR", "GDR2VAR", "VAR2GDR", "BEFORE_REVISE", "AFTER_REVISE", "SUBDIVISION"])
+PLOT_TYPE_ENUM = Enum("PlotType", ["GDR", "GDR2VAR", "VAR2GDR", "BEFORE_REVISE", "AFTER_REVISE", "NEW", "SUBDIVISION"])
 KIND_ORDERING = [PLOT_TYPE_ENUM.GDR, PLOT_TYPE_ENUM.GDR2VAR, PLOT_TYPE_ENUM.VAR2GDR, PLOT_TYPE_ENUM.BEFORE_REVISE,
-                 PLOT_TYPE_ENUM.AFTER_REVISE]
+                 PLOT_TYPE_ENUM.AFTER_REVISE, PLOT_TYPE_ENUM.NEW]
 
 RDTEST_GDR = "rdtest_full"
 RDTEST_GDR2VAR = "rdtest_gdr2var"
@@ -29,6 +29,7 @@ RDTEST_VAR2GDR = "rdtest_var2gdr"
 RDTEST_BEFORE_REVISE = "rdtest_before_revise"
 RDTEST_AFTER_REVISE = "rdtest_after_revise"
 RDTEST_SUBDIVISION = "rdtest_subdiv"
+RDTEST_NEW = "rdtest_new"
 
 RDTEST_NAME_TO_TYPE = {
     RDTEST_GDR: PLOT_TYPE_ENUM.GDR,
@@ -36,7 +37,8 @@ RDTEST_NAME_TO_TYPE = {
     RDTEST_VAR2GDR: PLOT_TYPE_ENUM.VAR2GDR,
     RDTEST_BEFORE_REVISE: PLOT_TYPE_ENUM.BEFORE_REVISE,
     RDTEST_AFTER_REVISE: PLOT_TYPE_ENUM.AFTER_REVISE,
-    RDTEST_SUBDIVISION: PLOT_TYPE_ENUM.SUBDIVISION
+    RDTEST_SUBDIVISION: PLOT_TYPE_ENUM.SUBDIVISION,
+    RDTEST_NEW: PLOT_TYPE_ENUM.NEW
 }
 
 # Delimiter suffix appended to the end of interval IDs before the index, e.g. "intervalA__0", "intervalA__1", ...
@@ -61,12 +63,9 @@ class ImageData:
         if self.plot_type == PLOT_TYPE_ENUM.BEFORE_REVISE:
             title = f"Existing variant before revision"
         elif self.plot_type == PLOT_TYPE_ENUM.AFTER_REVISE:
-            if "new_rescue" in self.name:
-                title = f"New variant"
-            else:
-                title = f"Existing variant after revision"
-        elif self.plot_type == "new":
-            title = f"New variant resulting from another partially invalidated call"
+            title = f"Existing variant after revision"
+        elif self.plot_type == PLOT_TYPE_ENUM.NEW:
+            title = f"Revised breakpoints or new variant"
         elif self.plot_type == PLOT_TYPE_ENUM.GDR:
             title = f"Raw region (random sample)"
         elif self.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
@@ -218,6 +217,9 @@ def get_candidate_tokens(rdtest_name, m):
     elif rdtest_name == RDTEST_BEFORE_REVISE:
         middle = None
         suffix = f"_{m['old_vid']}_{rdtest_name}_{m['batch']}.jpg"
+    elif rdtest_name == RDTEST_NEW:
+        middle = None
+        suffix = f"_{m['new_vid']}_{rdtest_name}_{m['batch']}.jpg"
     else:
         raise ValueError(f"Unknown rdtest name: {rdtest_name}")
     return subdir, middle, suffix
@@ -228,17 +230,18 @@ def get_candidate_paths(rdtest_names, m, image_paths):
         subdir, middle, suffix = get_candidate_tokens(rdtest_name=name, m=m)
         for p in image_paths:
             if p.endswith(suffix) and subdir in p and (middle is None or middle in p):
-                yield (name, p)
+                yield name, p
 
 
 def get_image_paths(m, image_paths):
     # m : manifest record
     if m["code"] == CODE_FALSE_NEGATIVE_IN_EXISTING_VARIANT \
-            or m["code"] == CODE_FALSE_POSITIVE_IN_EXISTING_VARIANT \
-            or m["code"] == CODE_REVISED_BREAKPOINTS_OF_EXISTING_VARIANT:
+            or m["code"] == CODE_FALSE_POSITIVE_IN_EXISTING_VARIANT:
         rdtest_names = [RDTEST_BEFORE_REVISE, RDTEST_AFTER_REVISE]
+    elif m["code"] == CODE_REVISED_BREAKPOINTS_OF_EXISTING_VARIANT:
+        rdtest_names = [RDTEST_BEFORE_REVISE, RDTEST_AFTER_REVISE, RDTEST_NEW]
     elif m["code"] == CODE_NEW_VARIANT_FOR_FALSE_NEGATIVE_IN_REGION:
-        rdtest_names = [RDTEST_AFTER_REVISE]
+        rdtest_names = [RDTEST_AFTER_REVISE, RDTEST_NEW]
     candidate_paths = list(set(get_candidate_paths(rdtest_names=rdtest_names, m=m, image_paths=image_paths)))
     return candidate_paths
 
