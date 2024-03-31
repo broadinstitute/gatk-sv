@@ -163,6 +163,13 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_vcf2bed_after_revise
   }
+  call VcfToBed as VcfToBedNewRecords {
+    input:
+      vcf = ReviseGenomicDisorderRegions.revised_new_records_vcf,
+      prefix = "~{output_prefix}.new_records",
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_vcf2bed_after_revise
+  }
   call RunRdTest as RunRdTestBeforeUpdate {
     input:
       output_prefix = "rdtest_before_revise_~{batch_name}",
@@ -187,6 +194,18 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_rdtest_after_revise
   }
+  call RunRdTest as RunRdTestNewRecords {
+    input:
+      output_prefix = "rdtest_new_~{batch_name}",
+      rdtest_bed = VcfToBedNewRecords.bed,
+      rd_file = rd_file,
+      rd_index = rd_file + ".tbi",
+      median_file = median_file,
+      do_plot = true,
+      do_genotyping = false,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_rdtest_after_revise
+  }
   output{
     File batch_rdtest_variants_overlapping_gdr = RunRdTestVariantsOverlappingGDR.out
     File batch_rdtest_gdr_overlapping_variants = RunRdTestGDROverlappingVariants.out
@@ -195,12 +214,16 @@ workflow GenotypeGenomicDisorderRegionsBatch {
 
     File batch_rdtest_gdr_before_revise = RunRdTestBeforeUpdate.out
     File batch_rdtest_gdr_after_revise = RunRdTestAfterUpdate.out
+    File batch_rdtest_gdr_new_records = RunRdTestNewRecords.out
 
     File batch_gdr_revised_before_update_vcf = ReviseGenomicDisorderRegions.revised_before_update_vcf
     File batch_gdr_revised_before_update_index = ReviseGenomicDisorderRegions.revised_before_update_index
 
     File batch_gdr_revised_after_update_vcf = ReviseGenomicDisorderRegions.revised_after_update_vcf
     File batch_gdr_revised_after_update_index = ReviseGenomicDisorderRegions.revised_after_update_index
+
+    File batch_gdr_new_records_vcf = ReviseGenomicDisorderRegions.revised_new_records_vcf
+    File batch_gdr_new_records_index = ReviseGenomicDisorderRegions.revised_new_records_index
 
     File batch_gdr_revised_genotypes_tsv = ReviseGenomicDisorderRegions.revised_genotypes_tsv
     File batch_gdr_revision_manifest_tsv = ReviseGenomicDisorderRegions.revision_manifest_tsv
@@ -317,6 +340,8 @@ task ReviseGenomicDisorderRegions {
     File revised_before_update_index = "~{prefix}.revised_before_update.vcf.gz.tbi"
     File revised_after_update_vcf = "~{prefix}.revised_after_update.vcf.gz"
     File revised_after_update_index = "~{prefix}.revised_after_update.vcf.gz.tbi"
+    File revised_new_records_vcf = "~{prefix}.new_records.vcf.gz"
+    File revised_new_records_index = "~{prefix}.new_records.vcf.gz.tbi"
     File revised_genotypes_tsv = "~{prefix}.revised_genotypes.tsv.gz"
     File revision_manifest_tsv = "~{prefix}.revision_manifest.tsv.gz"
   }

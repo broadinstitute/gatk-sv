@@ -648,7 +648,7 @@ def get_interval_key(interval):
     return interval.begin, interval.end
 
 
-def revise_partially_supported_variants(f_before, f_revise_after, f_manifest, batch,
+def revise_partially_supported_variants(f_before, f_new, f_manifest, batch,
                                         false_positives_dict, dangling_fraction):
     # Create partial events from existing variants
     current_chrom = None
@@ -683,13 +683,13 @@ def revise_partially_supported_variants(f_before, f_revise_after, f_manifest, ba
         sorted_intervals = sorted(intervals_dict.keys())
         for i, interval in enumerate(sorted_intervals):
             # Write out new revised record. Note that these are not globally sorted.
-            write_revised_variant_record(f_revise_after=f_revise_after, f_manifest=f_manifest, interval=interval,
+            write_revised_variant_record(f_revise_after=f_new, f_manifest=f_manifest, interval=interval,
                                          index=i, base_record=wiped_record, vid=vid, samples=intervals_dict[interval],
                                          original_gt_dict=original_gt_dict, regions=regions,
                                          svtype=svtype, batch=batch, code=CODE_REVISED_BREAKPOINTS_OF_EXISTING_VARIANT)
 
 
-def create_new_variants(f_revise_after, f_manifest, new_records_dict, region_intervals_dict, batch, ploidy_table_dict):
+def create_new_variants(f_new, f_manifest, new_records_dict, region_intervals_dict, batch, ploidy_table_dict):
     # Create new rescued calls not derived from existing variants
     # note new_records_dict structure: svtype -> sample -> region -> record corresponding to new variants to create
     #      region_intervals_dict structure: svtype -> region -> interval
@@ -707,7 +707,7 @@ def create_new_variants(f_revise_after, f_manifest, new_records_dict, region_int
                 # TODO: get reference allele
                 alleles = ("N", f"<{svtype}>")
                 vid = f"{match.name}_rescue_{record_index}"
-                record = f_revise_after.new_record(contig=region_contig, start=match.pos, stop=match.end,
+                record = f_new.new_record(contig=region_contig, start=match.pos, stop=match.end,
                                                    alleles=alleles, id=vid, filter=None)
                 record.info["SVTYPE"] = svtype
                 record.info["SVLEN"] = record.stop - record.pos
@@ -724,7 +724,7 @@ def create_new_variants(f_revise_after, f_manifest, new_records_dict, region_int
                                              rescue_genotype=True, reset_pesr=True)
                     else:
                         reset_format_fields(gt, reset_genotype=True, reset_pesr=True)
-                f_revise_after.write(record)
+                f_new.write(record)
                 f_manifest.write(manifest_record(new_id=vid, old_id=".", svtype=svtype, region=match.region,
                                                  sample=sample, batch=batch,
                                                  code=CODE_NEW_VARIANT_FOR_FALSE_NEGATIVE_IN_REGION))
@@ -852,7 +852,8 @@ def adjudicate_false_negatives(false_negative_dict, raw_region_false_negatives, 
 
 
 def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_path, revised_records_before_update_path,
-                                        unsorted_revised_records_after_update_path, revision_manifest_path,
+                                        revised_records_after_update_path, unsorted_new_records_path,
+                                        revision_manifest_path,
                                         region_intervals_dict, false_positive_matches, false_negative_matches,
                                         raw_region_false_negatives, true_positives, dangling_fraction,
                                         min_false_negative_rescue_overlap, ploidy_table_dict, batch):
@@ -865,21 +866,22 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                                    min_false_negative_rescue_overlap=min_false_negative_rescue_overlap,
                                    dangling_fraction=dangling_fraction)
     with gzip.open(revision_manifest_path, "wt") as f_manifest, \
-            pysam.VariantFile(input_vcf_path) as f_in, \
-            pysam.VariantFile(unsorted_revised_records_after_update_path, mode="w", header=f_in.header) as f_after:
+            pysam.VariantFile(input_vcf_path) as f_in:
         # Find invalidated records and reset their genotypes
         with gzip.open(revised_genotypes_tsv_path, mode="wt") as f_geno, \
-                pysam.VariantFile(revised_records_before_update_path, mode="w", header=f_in.header) as f_before:
+                pysam.VariantFile(revised_records_before_update_path, mode="w", header=f_in.header) as f_before, \
+                pysam.VariantFile(revised_records_after_update_path, mode="w", header=f_in.header) as f_after:
             revise_genotypes(f_in=f_in, f_geno=f_geno, f_before=f_before, f_after=f_after, f_manifest=f_manifest,
                              batch=batch, false_positives_dict=false_positives_dict,
                              revise_false_negative_dict=revise_false_negative_dict)
         # Revise invalidated records
-        with pysam.VariantFile(revised_records_before_update_path) as f_before:
-            create_new_variants(f_revise_after=f_after, f_manifest=f_manifest, new_records_dict=new_records_dict,
+        with pysam.VariantFile(revised_records_before_update_path) as f_before, \
+                pysam.VariantFile(unsorted_new_records_path, mode="w", header=f_in.header) as f_new:
+            create_new_variants(f_new=f_new, f_manifest=f_manifest, new_records_dict=new_records_dict,
                                 region_intervals_dict=region_intervals_dict, batch=batch,
                                 ploidy_table_dict=ploidy_table_dict)
             revise_partially_supported_variants(f_before=f_before,
-                                                f_revise_after=f_after,
+                                                f_new=f_new,
                                                 f_manifest=f_manifest,
                                                 batch=batch,
                                                 false_positives_dict=false_positives_dict,
@@ -972,14 +974,16 @@ def main(argv: Optional[List[Text]] = None):
                                     min_supported_region_intervals_frac=args.min_supported_region_intervals_frac)
     revised_genotypes_tsv_path = f"{args.out}.revised_genotypes.tsv.gz"
     revised_records_before_update_path = f"{args.out}.revised_before_update.vcf.gz"
-    sorted_revised_records_after_update_path = f"{args.out}.revised_after_update.vcf.gz"
+    revised_records_after_update_path = f"{args.out}.revised_after_update.vcf.gz"
+    sorted_new_records_path = f"{args.out}.new_records.vcf.gz"
     revision_manifest_path = f"{args.out}.revision_manifest.tsv.gz"
     logging.info("Revising genotypes and variants...")
     with tempfile.NamedTemporaryFile(dir=args.temp, suffix=".vcf.gz") as temp_vcf:
         revise_genotypes_and_create_records(input_vcf_path=args.vcf,
                                             revised_genotypes_tsv_path=revised_genotypes_tsv_path,
                                             revised_records_before_update_path=revised_records_before_update_path,
-                                            unsorted_revised_records_after_update_path=temp_vcf.name,
+                                            revised_records_after_update_path=revised_records_after_update_path,
+                                            unsorted_new_records_path=temp_vcf.name,
                                             revision_manifest_path=revision_manifest_path,
                                             region_intervals_dict=region_intervals_dict,
                                             false_positive_matches=false_positive_matches,
@@ -991,9 +995,10 @@ def main(argv: Optional[List[Text]] = None):
                                             ploidy_table_dict=ploidy_table_dict,
                                             batch=args.batch)
         pysam.tabix_index(revised_records_before_update_path, preset="vcf", force=True)
+        pysam.tabix_index(revised_records_after_update_path, preset="vcf", force=True)
         with tempfile.TemporaryDirectory(dir=args.temp) as temp_dir:
-            sort_vcf(vcf_path=temp_vcf.name, out_path=sorted_revised_records_after_update_path, temp_dir=temp_dir)
-            pysam.tabix_index(sorted_revised_records_after_update_path, preset="vcf", force=True)
+            sort_vcf(vcf_path=temp_vcf.name, out_path=sorted_new_records_path, temp_dir=temp_dir)
+            pysam.tabix_index(sorted_new_records_path, preset="vcf", force=True)
 
 
 if __name__ == "__main__":

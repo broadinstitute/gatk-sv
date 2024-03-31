@@ -148,7 +148,7 @@ workflow GenotypeGenomicDisorderRegions {
     }
     call tasks_cluster.SVCluster {
       input:
-        vcfs=flatten([[GetVcfHeader.out], GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_after_update_vcf]),
+        vcfs=flatten([[GetVcfHeader.out], GenotypeGenomicDisorderRegionsBatch.batch_gdr_new_records_vcf]),
         ploidy_table=ploidy_table,
         output_prefix="~{output_prefix}.~{contig_str}.clustered_new_records",
         contig=contig,
@@ -231,13 +231,18 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] batch_rdtest_gdr_before_revise = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_before_revise
     # Plots of revised input variants after revising and new records of rescued false negatives, with carriers shown
     Array[File] batch_rdtest_gdr_after_revise = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_after_revise
+    # Plots of new records of variants with revised breakpoints and/or novel variants recovering false negatives
+    Array[File] batch_rdtest_gdr_new_records = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_new_records
 
-    # Batch VCF outputs
+    # Batched outputs
     Array[File] batch_gdr_revised_before_update_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_before_update_vcf
     Array[File] batch_gdr_revised_before_update_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_before_update_index
     Array[File] batch_gdr_revised_after_update_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_after_update_vcf
     Array[File] batch_gdr_revised_after_update_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_after_update_index
+    Array[File] batch_gdr_new_records_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_new_records_vcf
+    Array[File] batch_gdr_new_records_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_new_records_index
     Array[File] batch_gdr_revised_genotypes_tsv = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_genotypes_tsv
+    Array[File] batch_gdr_revision_manifest_tsv = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revision_manifest_tsv
 
     Array[File] batch_gdr_subsetted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_vcf
     Array[File] batch_gdr_subsetted_index = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_index
