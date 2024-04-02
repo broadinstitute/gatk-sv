@@ -12,11 +12,13 @@ from itertools import groupby
 from operator import itemgetter
 from typing import List, Text, Optional
 
-IMAGE_WIDTH = 350
-TABLE_WIDTH = 400
+IMAGE_WIDTH = 300
+TABLE_WIDTH = 600
 TABLE_PADDING = 20
-TEXT_WRAP_WIDTH = 30
-HIGHLIGHT_BG_COLOR_VAR2GDR = "#AAAAFF"
+TEXT_WRAP_WIDTH = 120
+CODE_TABLE_TEXT_WRAP_WIDTH = 25
+HIGHLIGHT_BG_COLOR_VAR2GDR = "#FFAAFF"
+HIGHLIGHT_BG_COLOR_GDR2VAR = "#AAAAFF"
 HIGHLIGHT_BG_COLOR = "#FFAAAA"
 
 PLOT_TYPE_ENUM = Enum("PlotType", ["GDR", "GDR2VAR", "VAR2GDR", "BEFORE_REVISE", "AFTER_REVISE", "NEW", "SUBDIVISION"])
@@ -80,97 +82,24 @@ class ImageData:
         return f"<img src=\"{self.path}\" width={IMAGE_WIDTH}><br>\n\n"
 
 
-def load_images(paths, region_names):
-    image_list = list()
-    for path in paths:
-        filename = os.path.basename(path)
-        tokens = filename.split('_')
-        chrom = tokens[0]
-        pos = int(tokens[1])
-        stop = int(tokens[2])
-        name = filename.replace(".jpg", "")
-        region = None
-        for r in region_names:
-            if r in filename:
-                region = r
-                break
-        if "rdtest_before_revise" in filename:
-            plot_type = PLOT_TYPE_ENUM.BEFORE_REVISE
-            batch_sep = "rdtest_before_revise"
-        elif "rdtest_after_revise" in filename:
-            plot_type = PLOT_TYPE_ENUM.AFTER_REVISE
-            batch_sep = "rdtest_after_revise"
-        elif "rdtest_full" in filename:
-            plot_type = PLOT_TYPE_ENUM.GDR
-            batch_sep = "rdtest_full"
-        elif "rdtest_gdr2var" in filename:
-            plot_type = PLOT_TYPE_ENUM.GDR2VAR
-            batch_sep = "rdtest_gdr2var"
-        elif "rdtest_var2gdr" in filename:
-            plot_type = PLOT_TYPE_ENUM.VAR2GDR
-            batch_sep = "rdtest_var2gdr"
-        elif "rdtest_subdiv" in filename:
-            plot_type = PLOT_TYPE_ENUM.SUBDIVISION
-            batch_sep = "rdtest_subdiv"
-        else:
-            raise ValueError(f"Unknown type for {path}")
-        # TODO create separate report for subdivisions
-        if plot_type == PLOT_TYPE_ENUM.SUBDIVISION:
-            continue
-        batch = filename.split(batch_sep + "_")[-1].replace(".jpg", "")
-        interval_str = f"{chrom}:{pos}-{stop}"
-        image_list.append(ImageData(plot_type=plot_type, interval=interval_str, path=path, name=name, region=region,
-                                    batch=batch))
-    return image_list
-
-
-def create_image_dict(image_list):
-    region_to_image_dict = dict()
-    batches = set()
-    no_region_images = list()
-    for image in image_list:
-        if image.region is None:
-            no_region_images.append(image)
-        else:
-            if image.region not in region_to_image_dict:
-                region_to_image_dict[image.region] = dict()
-            if image.batch not in region_to_image_dict[image.region]:
-                region_to_image_dict[image.region][image.batch] = list()
-            batches.add(image.batch)
-            region_to_image_dict[image.region][image.batch].append(image)
-    batches = sorted(list(batches))
-    return region_to_image_dict, no_region_images, batches
-
-
-def show_image(f, image):
-    name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
-    f.write(f"<table width={TABLE_WIDTH} border=1 cellpadding=10>\n")
-    f.write("<tr>\n")
-    if image.plot_type != PLOT_TYPE_ENUM.GDR:
-        if image.plot_type == PLOT_TYPE_ENUM.VAR2GDR or image.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
-            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_VAR2GDR}\">\n")
-        else:
-            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR}\">\n")
-    elif image.plot_type == PLOT_TYPE_ENUM.GDR:
-        f.write("<td align=center>\n")
-    f.write(image.image_string())
-    f.write(f"{name}<br>\n")
-    f.write(f"<b>{image.title()}</b><br>\n")
-    f.write("</td>\n")
-    f.write("</tr>\n")
-    f.write(f"</table>\n")
-
-
 def show_images_table(f, images):
+    unique_images = list()
+    unique_image_names = set()
+    for image in images:
+        if image.name not in unique_image_names:
+            unique_image_names.add(image.name)
+            unique_images.append(image)
+    images = unique_images
     f.write(f"<table border=1 cellpadding=10 width={TABLE_WIDTH}>\n")
     for image in images:
         f.write("<tr>\n")
-        if image.plot_type != PLOT_TYPE_ENUM.GDR:
-            if image.plot_type == PLOT_TYPE_ENUM.VAR2GDR or image.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
-                f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_VAR2GDR}\">\n")
-            else:
-                f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR}\">\n")
-        elif image.plot_type == PLOT_TYPE_ENUM.GDR:
+        if image.plot_type == PLOT_TYPE_ENUM.VAR2GDR:
+            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_VAR2GDR}\">\n")
+        elif image.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
+            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_GDR2VAR}\">\n")
+        elif image.plot_type != PLOT_TYPE_ENUM.GDR:
+            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR}\">\n")
+        else:
             f.write("<td align=center>\n")
         f.write(image.image_string())
         name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
@@ -190,9 +119,12 @@ def show_manifest_table(f, manifest_records):
     f.write("</tr>\n")
     for m in manifest_records:
         f.write("<tr>\n")
-        f.write(f"<td>{m['new_vid']}</td>\n")
-        f.write(f"<td>{m['old_vid']}</td>\n")
-        f.write(f"<td>{m['code']}</td>\n")
+        new_vid = "<br>".join(textwrap.wrap(m['new_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+        old_vid = "<br>".join(textwrap.wrap(m['old_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+        code = "<br>".join(textwrap.wrap(m['code'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+        f.write(f"<td>{new_vid}</td>\n")
+        f.write(f"<td>{old_vid}</td>\n")
+        f.write(f"<td>{code}</td>\n")
         f.write("</tr>\n")
     f.write(f"</table>\n")
 
@@ -226,10 +158,12 @@ def get_candidate_tokens(rdtest_name, m):
 
 
 def get_candidate_paths(rdtest_names, m, image_paths):
+    found_paths = set()
     for name in rdtest_names:
         subdir, middle, suffix = get_candidate_tokens(rdtest_name=name, m=m)
         for p in image_paths:
-            if p.endswith(suffix) and subdir in p and (middle is None or middle in p):
+            if p.endswith(suffix) and subdir in p and (middle is None or middle in p) and p not in found_paths:
+                found_paths.add(p)
                 yield name, p
 
 
@@ -242,43 +176,51 @@ def get_image_paths(m, image_paths):
         rdtest_names = [RDTEST_BEFORE_REVISE, RDTEST_AFTER_REVISE, RDTEST_NEW]
     elif m["code"] == CODE_NEW_VARIANT_FOR_FALSE_NEGATIVE_IN_REGION:
         rdtest_names = [RDTEST_AFTER_REVISE, RDTEST_NEW]
+    elif m["code"] is None:
+        # special case for region-wide images
+        rdtest_names = [RDTEST_GDR, RDTEST_VAR2GDR, RDTEST_GDR2VAR]
     candidate_paths = list(set(get_candidate_paths(rdtest_names=rdtest_names, m=m, image_paths=image_paths)))
     return candidate_paths
 
 
-def write_reports2(base_path, image_paths, region_names, batches, genotypes, manifest):
+def get_images(manifest, image_paths, region, batch):
+    images_out = list()
+    for m in manifest:
+        m_image_paths = get_image_paths(m=m, image_paths=image_paths)
+        images = list()
+        for rdtest_name, path in m_image_paths:
+            name = os.path.basename(path).replace(".jpg", "")
+            images.append(
+                ImageData(plot_type=RDTEST_NAME_TO_TYPE[rdtest_name], interval=None, path=path, name=name,
+                          region=region, batch=batch))
+        images = sorted(images, key=lambda x: (KIND_ORDERING.index(x.plot_type), x.name))
+        images_out.extend(images)
+    return images_out
+
+
+def write_reports(base_path, image_paths, region_names, batches, genotypes, manifest):
     f_dict = {batch: open(f"{base_path}.{batch}.html", "w") for batch in batches}
     for batch in f_dict:
         f_dict[batch].write("<style>@page { size: letter portrait; margin: 2cm; } </style>\n")
     for region in region_names:
         region_manifest = [m for m in manifest if m["region"] == region]
-        m_region = {"new_vid": None, "old_vid": None, "svtype": None, "region": region,
-                    "sample": None, "batch": batch, "code": RDTEST_GDR}
-        gdr_image_paths = get_candidate_paths(rdtest_names=[RDTEST_GDR, RDTEST_GDR2VAR, RDTEST_VAR2GDR], m=m_region, image_paths=image_paths)
-        gdr_images = list()
-        for rdtest_name, path in gdr_image_paths:
-            name = os.path.basename(path).replace(".jpg", "")
-            gdr_images.append(
-                ImageData(plot_type=RDTEST_NAME_TO_TYPE[rdtest_name], interval=None, path=path, name=name,
-                          region=region, batch=batch))
         for f in f_dict.values():
             f.write("<h2>" + region + "</h2>\n\n")
-            show_images_table(f, gdr_images)
         for batch in batches:
+            f = f_dict[batch]
+            m_region = {"new_vid": None, "old_vid": None, "svtype": None, "region": region,
+                        "sample": None, "batch": batch, "code": None}
+            gdr_image_paths = [p for _, p in get_candidate_paths(rdtest_names=[RDTEST_GDR, RDTEST_GDR2VAR, RDTEST_VAR2GDR],
+                                                                 m=m_region, image_paths=image_paths)]
+            gdr_images = get_images(manifest=[m_region], image_paths=gdr_image_paths, region=region, batch=batch)
+            show_images_table(f, gdr_images)
             # Need to sort for groupby
             batch_manifest = sorted([m for m in region_manifest if m["batch"] == batch], key=itemgetter("sample"))
-            f = f_dict[batch]
             for sample, sample_manifest in groupby(batch_manifest, key=itemgetter("sample")):
                 sample_manifest = list(sample_manifest)
                 sample_images = list()
                 for m in sample_manifest:
-                    m_image_paths = get_image_paths(m=m, image_paths=image_paths)
-                    images = list()
-                    for rdtest_name, path in m_image_paths:
-                        name = os.path.basename(path).replace(".jpg", "")
-                        images.append(
-                            ImageData(plot_type=RDTEST_NAME_TO_TYPE[rdtest_name], interval=None, path=path, name=name,
-                                      region=region, batch=batch))
+                    images = get_images(manifest=sample_manifest, image_paths=image_paths, region=region, batch=batch)
                     images = sorted(images, key=lambda x: (KIND_ORDERING.index(x.plot_type), x.name))
                     sample_images.extend(images)
                 f.write("<h3>" + m['sample'] + "</h3>\n\n")
@@ -357,8 +299,8 @@ def main(argv: Optional[List[Text]] = None):
 
     # image_list = load_images(paths=image_paths, region_names=region_names)
     # region_to_image_dict, no_region_images, batches = create_image_dict(image_list=image_list)
-    write_reports2(base_path=args.out, image_paths=image_paths,
-                   region_names=region_names, batches=batches, genotypes=genotypes, manifest=manifest)
+    write_reports(base_path=args.out, image_paths=image_paths,
+                  region_names=region_names, batches=batches, genotypes=genotypes, manifest=manifest)
 
 
 if __name__ == "__main__":

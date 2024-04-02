@@ -53,7 +53,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       input:
         vcf = cohort_vcfs[i],
         list_of_samples = GetSampleIdsFromMedianCoverageFile.out_file,
-        outfile_name = "~{output_prefix}.shard_{i}",
+        outfile_name = "~{output_prefix}.shard_~{i}",
         remove_samples = false,
         remove_private_sites = true,
         sv_base_mini_docker = sv_base_mini_docker,
