@@ -173,47 +173,46 @@ def cpx_SV_readin(input_bed, header_pos, descriptor_fields):
       breakpints = None
       ref_alt = None
       if (not pin[0][0]=="#") and (not is_interchromosomal(pin, header_pos)):
-        if pin[header_pos['CHR2']]==pin[0]:
-          if pin[header_pos['SVTYPE']] == "INV":
-            ref_alt = ["INV"]
-            breakpints = [pin[header_pos['#chrom']], int(pin[header_pos['start']]), int(pin[header_pos['end']])]
-          elif pin[header_pos['CPX_TYPE']] in ['delINV', 'INVdel', 'dupINV','INVdup','delINVdel', 'delINVdup','dupINVdel','dupINVdup']:
-            segments = pin[header_pos['CPX_INTERVALS']].split(',')
-            breakpints = extract_bp_list(segments,pin[header_pos['CPX_TYPE']])
-            if pin[header_pos['CPX_TYPE']] == 'delINV':
-              ref_alt = ['ab','b^']
-            if pin[header_pos['CPX_TYPE']] == 'INVdel':
-              ref_alt = ['ab','a^']
-            if pin[header_pos['CPX_TYPE']] == 'dupINV':
-              ref_alt = ['ab','aba^']
-            if pin[header_pos['CPX_TYPE']] == 'INVdup':
-              ref_alt = ['ab','b^ab']
-            if pin[header_pos['CPX_TYPE']] == 'delINVdel':
-              ref_alt = ['abc','b^']
-            if pin[header_pos['CPX_TYPE']] == 'delINVdup':
-              ref_alt = ['abc','c^bc']
-            if pin[header_pos['CPX_TYPE']] == 'dupINVdel':
-              ref_alt = ['abc','aba^']
-            if pin[header_pos['CPX_TYPE']] == 'dupINVdup':
-              ref_alt = ['abc','ac^b^a^c']
-          elif pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
-            segments = pin[header_pos['CPX_INTERVALS']].split(',')
-            cpx_info = extract_bp_list_V2(pin[:3], segments)
-            ref_alt = cpx_info[1]
-            breakpints = cpx_info[0]
-          elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
-            segments = pin[header_pos['CPX_INTERVALS']].split(',')
-            cpx_info = extract_bp_list_V3(pin[:3], segments)
-            ref_alt = cpx_info[1]
-            breakpints = cpx_info[0]
-          # else:
-          #   segments = pin[header_pos['SOURCE']].split(',')
-          #   cpx_info = extract_bp_list_V4(pin[:3], segments)
-          #   ref_alt = cpx_info[1]
-          #   breakpints = cpx_info[0]
-          if breakpints is not None and ref_alt is not None:
-            descriptor = "#" + "\t".join([pin[header_pos[x]] for x in descriptor_fields])
-            out.append([breakpints, ref_alt,pin[header_pos['name']], descriptor])
+        if pin[header_pos['SVTYPE']] == "INV":
+          ref_alt = ["INV"]
+          breakpints = [pin[header_pos['#chrom']], int(pin[header_pos['start']]), int(pin[header_pos['end']])]
+        elif pin[header_pos['CPX_TYPE']] in ['delINV', 'INVdel', 'dupINV','INVdup','delINVdel', 'delINVdup','dupINVdel','dupINVdup']:
+          segments = pin[header_pos['CPX_INTERVALS']].split(',')
+          breakpints = extract_bp_list(segments,pin[header_pos['CPX_TYPE']])
+          if pin[header_pos['CPX_TYPE']] == 'delINV':
+            ref_alt = ['ab','b^']
+          if pin[header_pos['CPX_TYPE']] == 'INVdel':
+            ref_alt = ['ab','a^']
+          if pin[header_pos['CPX_TYPE']] == 'dupINV':
+            ref_alt = ['ab','aba^']
+          if pin[header_pos['CPX_TYPE']] == 'INVdup':
+            ref_alt = ['ab','b^ab']
+          if pin[header_pos['CPX_TYPE']] == 'delINVdel':
+            ref_alt = ['abc','b^']
+          if pin[header_pos['CPX_TYPE']] == 'delINVdup':
+            ref_alt = ['abc','c^bc']
+          if pin[header_pos['CPX_TYPE']] == 'dupINVdel':
+            ref_alt = ['abc','aba^']
+          if pin[header_pos['CPX_TYPE']] == 'dupINVdup':
+            ref_alt = ['abc','ac^b^a^c']
+        elif pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
+          segments = pin[header_pos['CPX_INTERVALS']].split(',')
+          cpx_info = extract_bp_list_V2(pin[:3], segments)
+          ref_alt = cpx_info[1]
+          breakpints = cpx_info[0]
+        elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
+          segments = pin[header_pos['CPX_INTERVALS']].split(',')
+          cpx_info = extract_bp_list_V3(pin[:3], segments)
+          ref_alt = cpx_info[1]
+          breakpints = cpx_info[0]
+        # else:
+        #   segments = pin[header_pos['SOURCE']].split(',')
+        #   cpx_info = extract_bp_list_V4(pin[:3], segments)
+        #   ref_alt = cpx_info[1]
+        #   breakpints = cpx_info[0]
+        if breakpints is not None and ref_alt is not None:
+          descriptor = "#" + "\t".join([pin[header_pos[x]] for x in descriptor_fields])
+          out.append([breakpints, ref_alt,pin[header_pos['name']], descriptor])
       else:
         continue
   return out
