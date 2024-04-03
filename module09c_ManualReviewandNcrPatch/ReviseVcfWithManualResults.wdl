@@ -128,7 +128,7 @@ task SplitFilePerContig{
 
         touch ~{prefix}.~{contig}
 
-        if [ $(wc -l ~{input_file}) -gt 1]; then
+        if [ $(cat ~{input_file} | wc -l) -gt 1 ]; then
             grep ".~{contig}." ~{input_file} > ~{prefix}.~{contig}
         fi
 
