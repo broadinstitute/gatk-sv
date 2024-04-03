@@ -79,7 +79,7 @@ workflow AnnotateGenomicDisorderRegions {
 task AnnotateGenomicDisorderRegionsTask {
   input{
     String prefix
-    String vcf
+    File vcf
     File region_bed
     Float? overlap
     String? additional_args
