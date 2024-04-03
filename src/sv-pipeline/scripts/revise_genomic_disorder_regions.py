@@ -403,7 +403,7 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
                         true_positives[svtype][sample] = dict()
                     if region not in true_positives[svtype][sample]:
                         true_positives[svtype][sample][region] = list()
-                    true_positives[svtype][sample][region].add((pos, stop))
+                    true_positives[svtype][sample][region].append((pos, stop))
             elif sample in carriers:
                 # False positive
                 # We will subtract this sample from the variant
