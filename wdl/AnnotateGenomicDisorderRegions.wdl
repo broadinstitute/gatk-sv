@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "FilterGenotypes.wdl" as filter_genotypes
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
 import "Utils.wdl" as util
 
@@ -10,14 +11,19 @@ workflow AnnotateGenomicDisorderRegions {
     Array[File] vcfs
     File genomic_disorder_regions_bed
 
+    # Reciprocal overlap cutoff
     Float? overlap
     String? annotate_additional_args
-
     File? annotate_gdr_script
 
+    String linux_docker
+    String sv_base_mini_docker
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_annotate
+    RuntimeAttr? runtime_cat_variant_bed
+    RuntimeAttr? runtime_cat_region_bed
+    RuntimeAttr? runtime_cat_manifest
   }
 
   scatter (i in range(length(vcfs))) {
@@ -33,11 +39,40 @@ workflow AnnotateGenomicDisorderRegions {
         runtime_attr_override=runtime_attr_annotate
     }
   }
+  call tasks_cohort.ConcatBeds as CatVariantBed {
+    input:
+      shard_bed_files = AnnotateGenomicDisorderRegionsTask.out_variant_bed,
+      prefix = "~{output_prefix}.gd_region_variants",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_cat_variant_bed
+  }
+  call tasks_cohort.ConcatBeds as CatRegionBed {
+    input:
+      shard_bed_files = AnnotateGenomicDisorderRegionsTask.out_region_bed,
+      prefix = "~{output_prefix}.gd_regions",
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_cat_region_bed
+  }
+  call filter_genotypes.MergeCompressedHeaderedTables {
+    input:
+      tables = AnnotateGenomicDisorderRegionsTask.out_manifest_tsv,
+      output_prefix = "~{output_prefix}.gd_region_manifest",
+      linux_docker = linux_docker,
+      runtime_attr_override = runtime_cat_manifest
+  }
 
   output{
-    # Cohort VCF outputs
+    # Annotated vcfs
     Array[File] gdr_annotated_vcf = AnnotateGenomicDisorderRegionsTask.out_vcf
     Array[File] gdr_annotated_vcf_index = AnnotateGenomicDisorderRegionsTask.out_vcf_index
+    # Bed file of annotated variants, with padding
+    File gdr_variant_bed = CatVariantBed.merged_bed_file
+    File gdr_variant_bed_index = CatVariantBed.merged_bed_idx
+    # Bed file of annotated variants, with padding
+    File gdr_region_bed = CatRegionBed.merged_bed_file
+    File gdr_region_bed_index = CatRegionBed.merged_bed_idx
+    # Table of variants and associated regions
+    File gdr_manifest_tsv = MergeCompressedHeaderedTables.out
   }
 }
 
@@ -70,13 +105,16 @@ task AnnotateGenomicDisorderRegionsTask {
       --out ~{prefix} \
       ~{"--overlap " + overlap} \
       ~{additional_args}
+    bgzip ~{prefix}.padded_variants.bed
+    bgzip ~{prefix}.padded_regions.bed
+    gzip ~{prefix}.manifest.tsv
   >>>
-  output{
+  output {
     File out_vcf = "~{prefix}.vcf.gz"
     File out_vcf_index = "~{prefix}.vcf.gz.tbi"
-    File out_variant_rdtest_bed = "~{prefix}.padded_variants.rdtest.bed"
-    File out_region_rdtest_bed = "~{prefix}.padded_regions.rdtest.bed"
-    File out_manifest_tsv = "~{prefix}.manifest.tsv"
+    File out_variant_bed = "~{prefix}.padded_variants.bed.gz"
+    File out_region_bed = "~{prefix}.padded_regions.bed.gz"
+    File out_manifest_tsv = "~{prefix}.manifest.tsv.gz"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

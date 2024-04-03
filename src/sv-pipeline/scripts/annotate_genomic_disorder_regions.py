@@ -90,8 +90,8 @@ def main(argv: Optional[List[Text]] = None):
     gdr_trees, gdr_del_ids, gdr_dup_ids = create_trees_from_bed_records_by_type(bed_path=args.region_bed)
     vcf_out_path = f"{args.out}.vcf.gz"
     variant_manifest_path = f"{args.out}.manifest.tsv"
-    variant_records_bed_path = f"{args.out}.padded_variants.rdtest.bed"
-    region_records_bed_path = f"{args.out}.padded_regions.rdtest.bed"
+    variant_records_bed_path = f"{args.out}.padded_variants.bed"
+    region_records_bed_path = f"{args.out}.padded_regions.bed"
     region_data = {interval.data: (svtype, chrom, interval.begin, interval.end, set())
                    for svtype in gdr_trees for chrom in gdr_trees[svtype] for interval in gdr_trees[svtype][chrom]}
     with pysam.VariantFile(args.vcf) as vcf_in:
@@ -100,7 +100,7 @@ def main(argv: Optional[List[Text]] = None):
         with pysam.VariantFile(vcf_out_path, mode="w", header=vcf_in.header) as vcf_out, \
                 open(variant_manifest_path, "w") as manifest_out, \
                 open(variant_records_bed_path, "w") as bed_out:
-            manifest_out.write(f"#CHROM\tPOS\tEND\tVARIANT_ID\tSVTYPE\tREGION_ID\tREGION_POS\tREGION_END\n")
+            manifest_out.write(f"#CHROM\tPOS\tEND\tVARIANT_ID\tSVTYPE\tREGION_ID\tREGION_POS\tREGION_END\tSAMPLES\n")
             for record in vcf_in:
                 svtype = record.info.get("SVTYPE", "")
                 if svtype in gdr_trees and record.chrom in gdr_trees[svtype]:
@@ -114,18 +114,17 @@ def main(argv: Optional[List[Text]] = None):
                         region_name = overlappers[-1][0].data
                         record.info[GENOMIC_DISORDER_KEY] = region_name
                         logging.info(f"{record.id} : {region_name}")
-                        manifest_out.write(f"{record.chrom}\t{record.pos}\t{record.stop}\t{record.id}\t{svtype}\t"
-                                           f"{region_name}\t{region_start}\t{region_stop}\n")
                         carriers = sorted([s for s, gt in record.samples.items() if _cache_gt_sum(gt["GT"]) > 0])
-                        if len(carriers) > 0:
-                            padding = int(args.plot_padding * (record.stop - record.pos))
-                            padded_pos = max(0, record.pos - padding)
-                            padded_stop = record.stop + padding
-                            sample_col = ",".join(carriers)
-                            bed_out.write(
-                                f"{record.chrom}\t{padded_pos}\t{padded_stop}\t{record.id}\t{sample_col}\t{svtype}\n")
-                            for c in carriers:
-                                region_data[region_name][4].add(c)
+                        sample_col = ",".join(carriers)
+                        manifest_out.write(f"{record.chrom}\t{record.pos}\t{record.stop}\t{record.id}\t{svtype}\t"
+                                           f"{region_name}\t{region_start}\t{region_stop}\t{sample_col}\n")
+                        padding = int(args.plot_padding * (record.stop - record.pos))
+                        padded_pos = max(0, record.pos - padding)
+                        padded_stop = record.stop + padding
+                        bed_out.write(
+                            f"{record.chrom}\t{padded_pos}\t{padded_stop}\t{record.id}\t{svtype}\t{sample_col}\n")
+                        for c in carriers:
+                            region_data[region_name][4].add(c)
                 vcf_out.write(record)
     pysam.tabix_index(vcf_out_path, preset="vcf", force=True)
     # Write GDRs
@@ -137,7 +136,7 @@ def main(argv: Optional[List[Text]] = None):
                 padded_pos = max(0, pos - padding)
                 padded_stop = stop + padding
                 sample_col = ",".join(carriers)
-                bed_out.write(f"{chrom}\t{padded_pos}\t{padded_stop}\t{region_name}\t{sample_col}\t{svtype}\n")
+                bed_out.write(f"{chrom}\t{padded_pos}\t{padded_stop}\t{region_name}\t{svtype}\t{sample_col}\n")
 
 
 if __name__ == "__main__":
