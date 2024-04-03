@@ -101,7 +101,6 @@ task AnnotateGenomicDisorderRegionsTask {
     python ~{default="/opt/src/sv-pipeline/scripts/annotate_genomic_disorder_regions.py" script} \
       --region-bed ~{region_bed} \
       --vcf ~{vcf} --out annotate_test
-      --input ~{region_bed} \
       --out ~{prefix} \
       ~{"--overlap " + overlap} \
       ~{additional_args}
