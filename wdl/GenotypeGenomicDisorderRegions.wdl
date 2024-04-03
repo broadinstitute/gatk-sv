@@ -69,6 +69,8 @@ workflow GenotypeGenomicDisorderRegions {
     input:
       prefix = "~{output_prefix}.preprocess_gdr",
       bed = genomic_disorder_regions_bed,
+      reference_fasta = reference_fasta,
+      reference_fasta_fai = reference_fasta_fai,
       script = preprocess_intervals_script,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_preprocess
@@ -253,6 +255,8 @@ task PreprocessGenomicDisorderIntervals {
   input{
     String prefix
     File bed
+    File reference_fasta
+    File reference_fasta_fai
     Int? subdivisions
     Int? min_size
     File? script
@@ -272,6 +276,7 @@ task PreprocessGenomicDisorderIntervals {
     set -euxo pipefail
     python ~{default="/opt/src/sv-pipeline/scripts/preprocess_genomic_disorder_regions.py" script} \
       --input ~{bed} \
+      --reference ~{reference_fasta} \
       --out ~{prefix}.bed \
       ~{"--sudivisions " + subdivisions} \
       ~{"--min-size " + min_size}
