@@ -52,208 +52,232 @@ workflow ManuallyReviewBalancedSVs {
 
   # select svs cohort-wide and merge across contigs
   # then select samples in batch in separate step
-  scatter (i in range(length(cohort_vcfs))) {
-    call SelectSVType as SelectCTX {
-      input:
-        vcf = cohort_vcfs[i],
-        svtype = "CTX",
-        prefix="~{prefix}.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_select_ctx
+
+  if (process_ctx) {
+    scatter (i in range(length(cohort_vcfs))) {
+      call SelectSVType as SelectCTX {
+        input:
+          vcf = cohort_vcfs[i],
+          svtype = "CTX",
+          prefix="~{prefix}.shard_~{i}",
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_select_ctx
+      }
     }
-    call SelectSVType as SelectCPX {
+
+    call tasks.ConcatVcfs as ConcatCTX {
       input:
-        vcf = cohort_vcfs[i],
-        svtype = "CPX",
-        min_size=min_size,
-        prefix="~{prefix}.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_select_cpx
+        vcfs = SelectCTX.svtype_vcf,
+        vcfs_idx = SelectCTX.svtype_vcf_index,
+        naive = true,
+        outfile_prefix = "~{prefix}.CTX",
+        sv_base_mini_docker = sv_base_mini_docker
     }
-    call SelectSVType as SelectINV {
+
+    call LabelArms {
       input:
-        vcf = cohort_vcfs[i],
-        svtype = "INV",
-        min_size=min_size,
-        prefix="~{prefix}.shard_~{i}",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_attr_select_inv
+        ctx_vcf = ConcatCTX.concat_vcf,
+        ctx_vcf_index = ConcatCTX.concat_vcf_idx,
+        prefix = prefix,
+        cytobands = cytobands,
+        cytobands_index = cytobands_index,
+        sv_pipeline_docker = sv_pipeline_docker
     }
-  }
 
-  call tasks.ConcatVcfs as ConcatCTX {
-    input:
-      vcfs = SelectCTX.svtype_vcf,
-      vcfs_idx = SelectCTX.svtype_vcf_index,
-      naive = true,
-      outfile_prefix = "~{prefix}.CTX",
-      sv_base_mini_docker = sv_base_mini_docker
-  }
+    scatter (i in range(length(batches))) {
+      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCTXPerBatch {
+        input:
+          batch = batches[i],
+          svtype = "CTX",
+          cohort_vcf = LabelArms.witharms_vcf,
+          cohort_vcf_index = LabelArms.witharms_vcf_index,
+          batch_pe_file = batch_pe_files[i],
+          batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
+          collect_background_pe = true,
+          batch_samples = samples_in_batches[i],
+          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_subset_samples=runtime_attr_subset_samples,
+          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
+          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
+          runtime_attr_generate_script=runtime_attr_generate_script,
+          runtime_attr_collect_pe=runtime_attr_collect_pe,
+          runtime_attr_collect_pe_background=runtime_attr_collect_pe_background
+      }
+    }
 
-  call tasks.ConcatVcfs as ConcatCPX {
-    input:
-      vcfs = SelectCPX.svtype_vcf,
-      vcfs_idx = SelectCPX.svtype_vcf_index,
-      naive = true,
-      outfile_prefix = "~{prefix}.CPX",
-      sv_base_mini_docker = sv_base_mini_docker
-  }
-
-  call tasks.ConcatVcfs as ConcatINV {
-    input:
-      vcfs = SelectINV.svtype_vcf,
-      vcfs_idx = SelectINV.svtype_vcf_index,
-      naive = true,
-      outfile_prefix = "~{prefix}.INV",
-      sv_base_mini_docker = sv_base_mini_docker
-  }
-
-  call LabelArms {
-    input:
-      ctx_vcf = ConcatCTX.concat_vcf,
-      ctx_vcf_index = ConcatCTX.concat_vcf_idx,
-      prefix = prefix,
-      cytobands = cytobands,
-      cytobands_index = cytobands_index,
-      sv_pipeline_docker = sv_pipeline_docker
-  }
-
-  scatter (i in range(length(batches))) {
-    call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCTXPerBatch {
+    # concatenate per-batch evidence files
+    call ConcatEvidences as ConcatCTXEvidences {
       input:
-        batch = batches[i],
-        svtype = "CTX",
-        cohort_vcf = LabelArms.witharms_vcf,
-        cohort_vcf_index = LabelArms.witharms_vcf_index,
-        batch_pe_file = batch_pe_files[i],
-        batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
-        collect_background_pe = true,
-        batch_samples = samples_in_batches[i],
-        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+        prefix = "~{prefix}.CTX",
+        evidences = ManuallyReviewCTXPerBatch.batch_pe_evidence,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat_ctx
+    }
+
+    # no overall file header so use different task
+    call tasks.ZcatCompressedFiles as ConcatCTXBackground {
+      input:
+        outfile_name = "~{prefix}.CTX.background_PE.tsv.gz",
+        shards = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat_ctx_background
+    }
+
+    # compute stats about PE evidence
+    call CalculatePEBackground as CalculateCTXBackground {
+      input:
+        prefix = "~{prefix}.CTX",
+        background_pe = ConcatCTXBackground.outfile,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_subset_samples=runtime_attr_subset_samples,
-        runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-        runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-        runtime_attr_generate_script=runtime_attr_generate_script,
-        runtime_attr_collect_pe=runtime_attr_collect_pe,
-        runtime_attr_collect_pe_background=runtime_attr_collect_pe_background
+        runtime_attr_override = runtime_attr_calculate_ctx_background
     }
-    call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCPXPerBatch {
+
+    call CalculatePEStats as CalculateCTXStats {
       input:
-        batch = batches[i],
-        svtype = "CPX",
-        cohort_vcf = ConcatCPX.concat_vcf,
-        cohort_vcf_index = ConcatCPX.concat_vcf_idx,
-        batch_pe_file = batch_pe_files[i],
-        batch_samples = samples_in_batches[i],
-        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+        prefix = "~{prefix}.CTX",
+        evidence = ConcatCTXEvidences.concat_evidence,
+        background = CalculateCTXBackground.stats,
+        calculate_pe_stats_script = calculate_pe_stats_script,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_subset_samples=runtime_attr_subset_samples,
-        runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-        runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-        runtime_attr_generate_script=runtime_attr_generate_script,
-        runtime_attr_collect_pe=runtime_attr_collect_pe
+        runtime_attr_override = runtime_attr_calculate_ctx_stats
     }
-    call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewINVPerBatch {
+
+  }
+
+  if (process_cpx) {
+    scatter (i in range(length(cohort_vcfs))) {
+      call SelectSVType as SelectCPX {
+        input:
+          vcf = cohort_vcfs[i],
+          svtype = "CPX",
+          min_size=min_size,
+          prefix="~{prefix}.shard_~{i}",
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_select_cpx
+      }
+    }
+
+    call tasks.ConcatVcfs as ConcatCPX {
       input:
-        batch = batches[i],
-        svtype = "INV",
-        cohort_vcf = ConcatINV.concat_vcf,
-        cohort_vcf_index = ConcatINV.concat_vcf_idx,
-        batch_pe_file = batch_pe_files[i],
-        batch_samples = samples_in_batches[i],
-        generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+        vcfs = SelectCPX.svtype_vcf,
+        vcfs_idx = SelectCPX.svtype_vcf_index,
+        naive = true,
+        outfile_prefix = "~{prefix}.CPX",
+        sv_base_mini_docker = sv_base_mini_docker
+    }
+
+    scatter (i in range(length(batches))) {
+      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCPXPerBatch {
+        input:
+          batch = batches[i],
+          svtype = "CPX",
+          cohort_vcf = ConcatCPX.concat_vcf,
+          cohort_vcf_index = ConcatCPX.concat_vcf_idx,
+          batch_pe_file = batch_pe_files[i],
+          batch_samples = samples_in_batches[i],
+          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_subset_samples=runtime_attr_subset_samples,
+          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
+          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
+          runtime_attr_generate_script=runtime_attr_generate_script,
+          runtime_attr_collect_pe=runtime_attr_collect_pe
+      }
+    }
+
+    # concatenate per-batch evidence files
+    call ConcatEvidences as ConcatCPXEvidences {
+      input:
+        prefix = "~{prefix}.CPX",
+        evidences = ManuallyReviewCPXPerBatch.batch_pe_evidence,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat_cpx
+    }
+
+    # compute stats about PE evidence
+    call CalculatePEStats as CalculateCPXStats {
+      input:
+        prefix = "~{prefix}.CPX",
+        evidence = ConcatCPXEvidences.concat_evidence,
+        calculate_pe_stats_script = calculate_pe_stats_script,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_base_mini_docker = sv_base_mini_docker,
-        runtime_attr_subset_samples=runtime_attr_subset_samples,
-        runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
-        runtime_attr_vcf2bed=runtime_attr_vcf2bed,
-        runtime_attr_generate_script=runtime_attr_generate_script,
-        runtime_attr_collect_pe=runtime_attr_collect_pe
+        runtime_attr_override = runtime_attr_calculate_cpx_stats
     }
   }
 
-  # concatenate per-batch evidence files
-  call ConcatEvidences as ConcatCTXEvidences {
-    input:
-      prefix = "~{prefix}.CTX",
-      evidences = ManuallyReviewCTXPerBatch.batch_pe_evidence,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_ctx
-  }
+  if (process_inv) {
+    scatter (i in range(length(cohort_vcfs))) {
+      call SelectSVType as SelectINV {
+        input:
+          vcf = cohort_vcfs[i],
+          svtype = "INV",
+          min_size=min_size,
+          prefix="~{prefix}.shard_~{i}",
+          sv_pipeline_docker=sv_pipeline_docker,
+          runtime_attr_override=runtime_attr_select_inv
+      }
+    }
 
-  # no overall file header so use different task
-  call tasks.ZcatCompressedFiles as ConcatCTXBackground {
-    input:
-      outfile_name = "~{prefix}.CTX.background_PE.tsv.gz",
-      shards = select_all(ManuallyReviewCTXPerBatch.batch_pe_background),
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_ctx_background
-  }
+    call tasks.ConcatVcfs as ConcatINV {
+      input:
+        vcfs = SelectINV.svtype_vcf,
+        vcfs_idx = SelectINV.svtype_vcf_index,
+        naive = true,
+        outfile_prefix = "~{prefix}.INV",
+        sv_base_mini_docker = sv_base_mini_docker
+    }
 
-  call ConcatEvidences as ConcatCPXEvidences {
-    input:
-      prefix = "~{prefix}.CPX",
-      evidences = ManuallyReviewCPXPerBatch.batch_pe_evidence,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_cpx
-  }
+    scatter (i in range(length(batches))) {
+      call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewINVPerBatch {
+        input:
+          batch = batches[i],
+          svtype = "INV",
+          cohort_vcf = ConcatINV.concat_vcf,
+          cohort_vcf_index = ConcatINV.concat_vcf_idx,
+          batch_pe_file = batch_pe_files[i],
+          batch_samples = samples_in_batches[i],
+          generate_pe_tabix_py_script=generate_pe_tabix_py_script,
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_subset_samples=runtime_attr_subset_samples,
+          runtime_attr_combine_tlocs=runtime_attr_combine_tlocs,
+          runtime_attr_vcf2bed=runtime_attr_vcf2bed,
+          runtime_attr_generate_script=runtime_attr_generate_script,
+          runtime_attr_collect_pe=runtime_attr_collect_pe
+      }
+    }
 
-  call ConcatEvidences as ConcatINVEvidences {
-    input:
-      prefix = "~{prefix}.INV",
-      evidences = ManuallyReviewINVPerBatch.batch_pe_evidence,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_inv
-  }
+    # concatenate per-batch evidence files
+    call ConcatEvidences as ConcatINVEvidences {
+      input:
+        prefix = "~{prefix}.INV",
+        evidences = ManuallyReviewINVPerBatch.batch_pe_evidence,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_concat_inv
+    }
 
-  # compute stats about PE evidence
-  call CalculatePEBackground as CalculateCTXBackground {
-    input:
-      prefix = "~{prefix}.CTX",
-      background_pe = ConcatCTXBackground.outfile,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_calculate_ctx_background
-  }
-
-  call CalculatePEStats as CalculateCTXStats {
-    input:
-      prefix = "~{prefix}.CTX",
-      evidence = ConcatCTXEvidences.concat_evidence,
-      background = CalculateCTXBackground.stats,
-      calculate_pe_stats_script = calculate_pe_stats_script,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_calculate_ctx_stats
-  }
-
-  call CalculatePEStats as CalculateCPXStats {
-    input:
-      prefix = "~{prefix}.CPX",
-      evidence = ConcatCPXEvidences.concat_evidence,
-      calculate_pe_stats_script = calculate_pe_stats_script,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_calculate_cpx_stats
-  }
-
-  call CalculatePEStats as CalculateINVStats {
-    input:
-      prefix = "~{prefix}.INV",
-      evidence = ConcatINVEvidences.concat_evidence,
-      calculate_pe_stats_script = calculate_pe_stats_script,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_calculate_inv_stats
+    # compute stats about PE evidence
+    call CalculatePEStats as CalculateINVStats {
+      input:
+        prefix = "~{prefix}.INV",
+        evidence = ConcatINVEvidences.concat_evidence,
+        calculate_pe_stats_script = calculate_pe_stats_script,
+        sv_pipeline_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_calculate_inv_stats
+    }
   }
 
   output {
-    File ctx_evidence = ConcatCTXEvidences.concat_evidence
-    File cpx_evidence = ConcatCPXEvidences.concat_evidence
-    File inv_evidence = ConcatINVEvidences.concat_evidence
+    File? ctx_evidence = ConcatCTXEvidences.concat_evidence
+    File? cpx_evidence = ConcatCPXEvidences.concat_evidence
+    File? inv_evidence = ConcatINVEvidences.concat_evidence
 
-    File ctx_stats = CalculateCTXStats.stats
-    File cpx_stats = CalculateCPXStats.stats
-    File inv_stats = CalculateINVStats.stats
+    File? ctx_stats = CalculateCTXStats.stats
+    File? cpx_stats = CalculateCPXStats.stats
+    File? inv_stats = CalculateINVStats.stats
   }
 }
 
