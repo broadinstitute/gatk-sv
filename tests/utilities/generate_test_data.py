@@ -34,7 +34,7 @@ SUBJECT_WORKFLOW_INPUTS = {
         ),
         "preprocessed_intervals": Handler(
             downsamplers.IntervalListDownsampler,
-            lambda x: {"preprocessed_intervals": x}
+            lambda x: {"preprocessed_intervals": x, "melt_metrics_intervals": x}
         ),
         "sd_locs_vcf": Handler(
             downsamplers.VcfDownsampler,
