@@ -389,7 +389,7 @@ for record in vcf:
 
 CODE
 
-    tabix ~{prefix}.witharms.rare.clustered_manta_tloc.vcf.gz
+    tabix ~{prefix}.CTX.witharms.vcf.gz
   >>>
 
   output {
