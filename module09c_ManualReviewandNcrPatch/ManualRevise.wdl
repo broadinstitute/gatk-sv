@@ -396,21 +396,26 @@ task ReviseVcf{
             for filt in filts_to_remove:
                 if filt in header.filters.keys():
                     header.filters.remove_header(filt)
-            header.filters.add('REDUNDANT_LG_CNV', None, None, "Multiple large CNVs called at the same locus likely indicates unreliable clustering and/or low-quality multiallelic locus")
-            header.filters.add('FAIL_MANUAL_REVIEW', None, None, "Low-quality variant that did not pass manual review of supporting evidence")
-            header.filters.add('OUTLIER_SAMPLE_ENRICHED',None, None, "Deletion is enriched for non-reference genotypes in outlier samples, likely indicating noisy or unreliable genotypes")
+            if not 'REDUNDANT_LG_CNV' in header.filters:
+                header.filters.add('REDUNDANT_LG_CNV', None, None, "Multiple large CNVs called at the same locus likely indicates unreliable clustering and/or low-quality multiallelic locus")
+            if not 'FAIL_MANUAL_REVIEW' in header.filters:
+                header.filters.add('FAIL_MANUAL_REVIEW', None, None, "Low-quality variant that did not pass manual review of supporting evidence")
+            if not 'OUTLIER_SAMPLE_ENRICHED' in header.filters:
+                header.filters.add('OUTLIER_SAMPLE_ENRICHED',None, None, "Deletion is enriched for non-reference genotypes in outlier samples, likely indicating noisy or unreliable genotypes")
             if 'BOTHSIDES_SUPPORT' in header.filters:
                 header.filters.remove_header('BOTHSIDES_SUPPORT')
             if 'HIGH_SR_BACKGROUND' in header.filters:
                 header.filters.remove_header('HIGH_SR_BACKGROUND')
             if 'PESR_GT_OVERDISPERSION' in header.filters:
                 header.filters.remove_header('PESR_GT_OVERDISPERSION')
-            header.formats.add('MANUAL', '1', 'String', 'Reason for a failure from manual review')
-            NEW_INFOS = ['##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="PESR genotyping data is overdispersed. Flags sites where genotypes are likely noisier.">',
-                         '##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Suspicious accumulation of split reads in predicted non-carrier samples. Flags sites more prone to false discoveries and where breakpoint precision is reduced.">',
-                         '##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint.Indicates higher-confidence variants.">']
+            if not 'MANUAL' in header.formats:
+                header.formats.add('MANUAL', '1', 'String', 'Reason for a failure from manual review')
+            NEW_INFOS = {'PESR_GT_OVERDISPERSION': '##INFO=<ID=PESR_GT_OVERDISPERSION,Number=0,Type=Flag,Description="PESR genotyping data is overdispersed. Flags sites where genotypes are likely noisier.">',
+                         'HIGH_SR_BACKGROUND': '##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Suspicious accumulation of split reads in predicted non-carrier samples. Flags sites more prone to false discoveries and where breakpoint precision is reduced.">',
+                         'BOTHSIDES_SUPPORT': '##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint.Indicates higher-confidence variants.">'}
             for info in NEW_INFOS:
-                header.add_line(info)
+                if not info in header.info:
+                    header.add_line(info)
             fo=pysam.VariantFile(vcf_output, 'w', header = header)
             fo2 = pysam.VariantFile(ctx_output, 'w', header = header)
             for record in fin:
