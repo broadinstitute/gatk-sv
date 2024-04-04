@@ -265,7 +265,7 @@ task ConcatBeds {
 
   command <<<
     set -euxo pipefail
-    zcat ~{shard_bed_files[0]} | (grep -Ev "^#" || printf "") > header.txt
+    zcat ~{shard_bed_files[0]} | (grep -E "^#" || printf "") > header.txt
     while read SPLIT; do
       zcat $SPLIT
     done < ~{write_lines(shard_bed_files)} \
