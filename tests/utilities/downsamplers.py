@@ -4,6 +4,7 @@ from typing import Callable, List
 from dataclasses import dataclass
 from pathlib import Path
 
+
 @dataclass
 class Region:
     chr: str
@@ -47,9 +48,9 @@ class CramDownsampler(BaseDownsampler):
                 pysam.AlignmentFile(output_filename, "wc",
                                     header=input_cram_file.header,
                                     reference_names=input_cram_file.references) as output_cram_file:
-                for region in regions:
-                    for read in input_cram_file.fetch(region=f"{region.chr}:{region.start}-{region.end}"):
-                        output_cram_file.write(read)
+            for region in regions:
+                for read in input_cram_file.fetch(region=f"{region.chr}:{region.start}-{region.end}"):
+                    output_cram_file.write(read)
         index_filename = f"{output_filename}.crai"
         pysam.index(output_filename, index_filename)
         return self.callback(output_filename, index_filename)
@@ -76,6 +77,17 @@ class VcfDownsampler(BaseDownsampler):
 
 
 class IntervalListDownsampler(BaseDownsampler):
+    # Implementation note:
+    # An alternative to the down sampling approach implemented here is to take
+    # a BED file containing target regions as input, and convert the BED to .interval_list
+    # as the following.
+    #
+    # > java -jar picard.jar BedToIntervalList I=regions.bed O=regions.interval_list SD=/Homo_sapiens_assembly38.dict
+    #
+    # There are two downsides to converting BED to .interval_list:
+    # 1. It needs the picard tool installed;
+    # 2. It needs an additional "SD" input, which would make the `downsample` method signature complicated.
+
     def __init__(self, working_dir, callback: Callable[[str], dict]):
         super().__init__(working_dir, callback)
 
@@ -86,22 +98,21 @@ class IntervalListDownsampler(BaseDownsampler):
     def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         # Note that this algorithm is not efficient.
-        with open(input_filename, "r") as input_file:
-            with open(output_filename, "w") as output_file:
-                for line in input_file:
-                    if line.startswith("@"):
-                        output_file.write(line)
-                    else:
-                        cols = line.rstrip().split()
-                        chr, start, end = cols[0], int(cols[1]), int(cols[2])
-                        for region in regions:
-                            if chr == region.chr and start <= region.end and end >= region.start:
-                                output_file.write(line)
+        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+            for line in input_file:
+                if line.startswith("@"):
+                    output_file.write(line)
+                else:
+                    cols = line.rstrip().split()
+                    chr, start, end = cols[0], int(cols[1]), int(cols[2])
+                    for region in regions:
+                        if chr == region.chr and max(start, region.start) < min(end, region.end):
+                            output_file.write(line)
         return self.callback(output_filename)
 
 
 class PrimaryContigsDownsampler(BaseDownsampler):
-    def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str="\t"):
+    def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str = "\t"):
         super().__init__(working_dir, callback)
         self.delimiter = delimiter
 

@@ -82,7 +82,9 @@ def initialize_downsamplers(working_dir: str):
             handler.downsampler = handler.downsampler(working_dir, handler.callback)
 
 
-def update_workflow_json(working_dir: str, input_filename: str, output_filename: str, output_filename_prefix: str, regions: List[Region], bucket_name: str=None, blob_name: str=None):
+def update_workflow_json(
+        working_dir: str, input_filename: str, output_filename: str, output_filename_prefix: str,
+        regions: List[Region], bucket_name: str = None, blob_name: str = None):
     with open(input_filename, "r") as f:
         workflow_inputs = json.load(f)
 
@@ -100,9 +102,7 @@ def update_workflow_json(working_dir: str, input_filename: str, output_filename:
         logging.info(f"Processing input {k}.")
         workflow_input_local_filename = Path(working_dir).joinpath(Path(v).name)
         localize_file(v, workflow_input_local_filename)
-        #downsampler = downsampler_factory.get_downsampler(Path(workflow_input_local_filename).suffix)
         updated_files = handler.downsampler.downsample(workflow_input_local_filename, output_filename_prefix, regions)
-        #updated_files = downsampler.downsample(workflow_input_local_filename, output_filename_prefix, regions, callback)
         if bucket_name is not None and blob_name is not None:
             for varname, filename in updated_files.items():
                 logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
