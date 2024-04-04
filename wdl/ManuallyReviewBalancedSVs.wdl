@@ -17,6 +17,13 @@ workflow ManuallyReviewBalancedSVs {
 
     Int min_size
 
+    File cytobands
+    File cytobands_index
+
+    Boolean process_ctx
+    Boolean process_cpx
+    Boolean process_inv
+
     File generate_pe_tabix_py_script # for development
     File calculate_pe_stats_script # for development
 
@@ -101,13 +108,23 @@ workflow ManuallyReviewBalancedSVs {
       sv_base_mini_docker = sv_base_mini_docker
   }
 
+  call LabelArms {
+    input:
+      ctx_vcf = ConcatCTX.concat_vcf,
+      ctx_vcf_index = ConcatCTX.concat_vcf_idx,
+      prefix = prefix,
+      cytobands = cytobands,
+      cytobands_index = cytobands_index,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   scatter (i in range(length(batches))) {
     call batch_rev.ManuallyReviewBalancedSVsPerBatch as ManuallyReviewCTXPerBatch {
       input:
         batch = batches[i],
         svtype = "CTX",
-        cohort_vcf = ConcatCTX.concat_vcf,
-        cohort_vcf_index = ConcatCTX.concat_vcf_idx,
+        cohort_vcf = LabelArms.witharms_vcf,
+        cohort_vcf_index = LabelArms.witharms_vcf_index,
         batch_pe_file = batch_pe_files[i],
         batch_manta_tloc_vcf = batch_manta_tloc_vcfs[i],
         collect_background_pe = true,
@@ -285,6 +302,80 @@ task SelectSVType {
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: "4 GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+task LabelArms {
+  input {
+    String prefix
+    File ctx_vcf
+    File ctx_vcf_index
+    File cytobands
+    File cytobands_index
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + 2 * size(ctx_vcf, "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+
+    python <<CODE
+import pysam
+import gzip
+
+def get_arms(record, cytobands):
+  regionA = '{0}:{1}-{1}'.format(record.chrom, record.pos)
+  regionB = '{0}:{1}-{1}'.format(record.info['CHR2'], record.info['END2'])
+
+  def _get_arm(region):
+    print(region)
+    arm = next(cytobands.fetch(region))
+    return arm.split()[3][0]
+
+  return _get_arm(regionA), _get_arm(regionB)
+
+cytobands = pysam.TabixFile("~{cytobands}")
+vcf = pysam.VariantFile("~{ctx_vcf}")
+vcf.header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Second position">')
+outvcf = pysam.VariantFile("~{prefix}.CTX.witharms.vcf.gz", 'w', header=vcf.header)
+for record in vcf:
+  armA, armB = get_arms(record, cytobands)
+  # get CTX arm information
+  if armA == armB:
+    record.info['CPX_TYPE'] = "CTX_PP/QQ"
+  else:
+    record.info['CPX_TYPE'] = "CTX_PQ/QP"
+  outvcf.write(record)
+
+CODE
+
+    tabix ~{prefix}.witharms.rare.clustered_manta_tloc.vcf.gz
+  >>>
+
+  output {
+    File witharms_vcf = "~{prefix}.CTX.witharms.vcf.gz"
+    File witharms_vcf_index = "~{prefix}.CTX.witharms.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
