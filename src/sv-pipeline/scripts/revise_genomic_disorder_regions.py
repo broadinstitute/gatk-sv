@@ -311,7 +311,8 @@ def get_overlapping_samples_vcf(vcf_path, gdr_trees, region_intervals_dict,
         for region_name in region_intervals_dict[svtype]:
             region_chrom, region_start, region_end = region_intervals_dict[svtype][region_name][MIDDLE_INDEX_PREFIX]
             name = f"{region_name}_new"
-            padded_pos = get_padded_start(svtype=svtype, region=region_name, region_intervals_dict=region_intervals_dict)
+            padded_pos = get_padded_start(svtype=svtype, region=region_name,
+                                          region_intervals_dict=region_intervals_dict)
             padded_end = get_padded_end(svtype=svtype, region=region_name, region_intervals_dict=region_intervals_dict)
             get_revisions_over_regions(
                 regions=[region_name],
@@ -401,7 +402,7 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
                 if sample not in carriers:
                     # Check for this here instead of earlier since we need to keep more of the true positives
                     # TODO eliminating this check for false negatives since we already use min_supported_valid_overlapping_intervals_frac
-                    #if frac_region_overlap >= min_region_overlap:
+                    # if frac_region_overlap >= min_region_overlap:
                     # False negative
                     # We will try to add this sample to the variant
                     add_match(false_negative_matches, svtype, name=name, chrom=chrom, pos=pos, end=stop,
@@ -924,7 +925,7 @@ def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region
                                           new_partial_events_tree_dict, region_intervals_dict,
                                           min_supported_valid_overlapping_intervals_frac,
                                           min_true_positive_reciprocal_overlap,
-                                          min_new_variant_reciprocal_overlap):
+                                          min_new_variant_region_overlap):
     # Note: region_intervals_dict structure: svtype -> region -> index_prefix -> interval
     # Re-key for fast lookup
     false_negative_svtype_sample_region_dict = defaultdict(list)
@@ -956,7 +957,9 @@ def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region
                 for interval in new_intervals:
                     tree.add(interval)
                 overlappers = sorted(list(tree.overlap(region_interval)))
-                reciprocal_overlappers = [ov for ov in overlappers if reciprocal_overlap(ov, region_interval) >= min_new_variant_reciprocal_overlap]
+                reciprocal_overlappers = \
+                    [ov for ov in overlappers if overlap_size(ov, region_interval) / (
+                                region_interval.end - region_interval.begin) >= min_new_variant_region_overlap]
                 if len(reciprocal_overlappers) > 0:
                     # Take interval most overlapping the region
                     new_interval = sorted(reciprocal_overlappers, key=lambda x: overlap_size(region_interval, x))[-1]
@@ -973,7 +976,7 @@ def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region
                         if total_overlap / record_size >= min_supported_valid_overlapping_intervals_frac:
                             is_rescued = True
                     is_true_positive = svtype in true_positives and sample in true_positives[svtype] \
-                        and region in true_positives[svtype][sample] and any(
+                                       and region in true_positives[svtype][sample] and any(
                         reciprocal_overlap(new_interval, tp_interval) >= min_true_positive_reciprocal_overlap
                         for tp_interval in true_positives[svtype][sample][region])
                     if (not is_rescued) and (not is_true_positive):
@@ -1027,7 +1030,7 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                                         min_false_negative_rescue_overlap,
                                         min_supported_valid_overlapping_intervals_frac,
                                         min_true_positive_reciprocal_overlap,
-                                        min_new_variant_reciprocal_overlap,
+                                        min_new_variant_region_overlap,
                                         ploidy_table_dict, batch):
     false_positives_dict = remap_overlapper_dict_by_vid(false_positive_matches)
     false_negative_dict = remap_overlapper_dict_by_sample_and_region(false_negative_matches)
@@ -1065,7 +1068,7 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                     region_intervals_dict=region_intervals_dict,
                     min_supported_valid_overlapping_intervals_frac=min_supported_valid_overlapping_intervals_frac,
                     min_true_positive_reciprocal_overlap=min_true_positive_reciprocal_overlap,
-                    min_new_variant_reciprocal_overlap=min_new_variant_reciprocal_overlap
+                    min_new_variant_region_overlap=min_new_variant_region_overlap
                 )
             create_new_variants(f_new=f_new, f_manifest=f_manifest, new_records_dict=new_records_dict,
                                 batch=batch, ploidy_table_dict=ploidy_table_dict)
@@ -1116,8 +1119,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--min-true-positive-reciprocal-overlap', type=float, default=0.5,
                         help='Min reciprocal overlap for a variant to be considered true positive. Used for '
                              'determining whether a raw region signal needs to be rescued with a novel variant.')
-    parser.add_argument('--min-new-variant-reciprocal-overlap', type=float, default=0.5,
-                        help='Min reciprocal overlap for a new variant to be created during raw region rescue.')
+    parser.add_argument('--min-new-variant-region-overlap', type=float, default=0.5,
+                        help='Min overlap over a region for a new variant to be created during raw region rescue.')
     parser.add_argument('--min-region-size', type=int, default=10000, help='Min region/subdivision size for revisions')
     parser.add_argument('--temp', type=str, default="./", help='Temporary directory path')
     if len(argv) <= 1:
@@ -1179,7 +1182,7 @@ def main(argv: Optional[List[Text]] = None):
                                             min_false_negative_rescue_overlap=args.min_false_negative_rescue_overlap,
                                             min_true_positive_reciprocal_overlap=args.min_true_positive_reciprocal_overlap,
                                             min_supported_valid_overlapping_intervals_frac=args.min_frac_supporting_genotypes,
-                                            min_new_variant_reciprocal_overlap=args.min_new_variant_reciprocal_overlap,
+                                            min_new_variant_region_overlap=args.min_new_variant_region_overlap,
                                             ploidy_table_dict=ploidy_table_dict,
                                             batch=args.batch)
         pysam.tabix_index(revised_records_before_update_path, preset="vcf", force=True)
