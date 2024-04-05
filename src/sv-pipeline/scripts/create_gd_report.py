@@ -33,6 +33,8 @@ RDTEST_AFTER_REVISE = "rdtest_after_revise"
 RDTEST_SUBDIVISION = "rdtest_subdiv"
 RDTEST_NEW = "rdtest_new"
 
+MANIFEST_EMPTY_FIELD = "."
+
 RDTEST_NAME_TO_TYPE = {
     RDTEST_GDR: PLOT_TYPE_ENUM.GDR,
     RDTEST_GDR2VAR: PLOT_TYPE_ENUM.GDR2VAR,
@@ -251,6 +253,15 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     return parsed_arguments
 
 
+def read_manifest_entry(val, integer=False):
+    if val == MANIFEST_EMPTY_FIELD:
+        return None
+    elif integer:
+        return int(val)
+    else:
+        return val
+
+
 def main(argv: Optional[List[Text]] = None):
     if argv is None:
         argv = sys.argv
@@ -270,15 +281,21 @@ def main(argv: Optional[List[Text]] = None):
         manifest = list()
         for line in f:
             tokens = line.strip().split("\t")
-            new_vid = tokens[0]
-            old_vid = tokens[1]
-            svtype = tokens[2]
-            region = tokens[3]
-            sample = tokens[4]
-            batch = tokens[5]
-            code = tokens[6]
-            manifest.append({"new_vid": new_vid, "old_vid": old_vid, "svtype": svtype, "region": region,
-                             "sample": sample, "batch": batch, "code": code})
+            chrom = tokens[0]
+            pos = int(tokens[1])
+            stop = int(tokens[2])
+            new_vid = tokens[3]
+            old_vid = read_manifest_entry(tokens[4])
+            old_pos = read_manifest_entry(tokens[5], integer=True)
+            old_stop = read_manifest_entry(tokens[6], integer=True)
+            svtype = tokens[7]
+            region = tokens[8]
+            sample = tokens[9]
+            batch = tokens[10]
+            code = tokens[11]
+            manifest.append({"chrom": chrom, "pos": pos, "stop": stop, "new_vid": new_vid,
+                             "old_vid": old_vid, "old_pos": old_pos, "old_stop": old_stop,
+                             "svtype": svtype, "region": region, "sample": sample, "batch": batch, "code": code})
 
     with gzip.open(args.genotypes, "rt") as f:
         genotypes = list()
