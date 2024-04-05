@@ -47,6 +47,10 @@ SUBJECT_WORKFLOW_INPUTS = {
         "primary_contigs_fai": Handler(
             downsamplers.PrimaryContigsDownsampler,
             lambda x: {"primary_contigs_fai": x}
+        ),
+        "wham_include_list_bed_file": Handler(
+            downsamplers.BedDownsampler,
+            lambda x: {"wham_include_list_bed_file": x}
         )
     }
 }
