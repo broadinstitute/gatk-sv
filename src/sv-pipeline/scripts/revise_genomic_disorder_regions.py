@@ -370,7 +370,7 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
         if n_sufficiently_overlapping_middle_intervals == 0:
             continue
         region_interval = region_intervals_dict[svtype][region][MIDDLE_INDEX_PREFIX]
-        frac_region_overlap = (stop - pos) / (region_interval[2] - region_interval[1])
+        frac_region_overlap = overlap_size((pos, stop), region_interval[1:]) / (region_interval[2] - region_interval[1])
         # Lazily load carriers
         if carriers is None:
             carriers = set(s for s, gt in samples.items() if _cache_gt_sum(gt["GT"]) > 0)
@@ -519,13 +519,20 @@ def read_median_geno(list_path, del_ids, dup_ids, del_cutoff, dup_cutoff, ploidy
                                                   is_par=is_par)
                     if expected_cn == 0:
                         continue
-                    cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
-                    if is_del and median >= cutoff:
+                    # TODO use medians or genotypes?
+                    if is_del and median >= expected_cn:
                         continue
-                    elif (not is_del) and median <= cutoff:
+                    elif (not is_del) and median <= expected_cn:
                         continue
-                    data[sample][vid] = GenotypeMedian(median=median, threshold=cutoff, hom_ref_cn=expected_cn,
+                    data[sample][vid] = GenotypeMedian(median=median, threshold=expected_cn, hom_ref_cn=expected_cn,
                                                        pos=pos, stop=stop)
+                    #cutoff = max(cutoff - 0.5 * (2 - expected_cn), 0)
+                    #if is_del and median >= cutoff:
+                    #    continue
+                    #elif (not is_del) and median <= cutoff:
+                    #    continue
+                    #data[sample][vid] = GenotypeMedian(median=median, threshold=cutoff, hom_ref_cn=expected_cn,
+                    #                                   pos=pos, stop=stop)
     return data, vids
 
 

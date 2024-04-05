@@ -116,16 +116,27 @@ def show_manifest_table(f, manifest_records):
     f.write(f"<table border=1 cellpadding=5 width={TABLE_WIDTH}>\n")
     f.write("<tr bgcolor=#EEEEEE>\n")
     f.write(f"<td>new_vid</td>\n")
+    f.write(f"<td>coords</td>\n")
     f.write(f"<td>old_vid</td>\n")
+    f.write(f"<td>old_coords</td>\n")
     f.write(f"<td>code</td>\n")
     f.write("</tr>\n")
     for m in manifest_records:
-        f.write("<tr>\n")
         new_vid = "<br>".join(textwrap.wrap(m['new_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
-        old_vid = "<br>".join(textwrap.wrap(m['old_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+        if m['old_vid'] is not None:
+            old_vid = "<br>".join(textwrap.wrap(m['old_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+        else:
+            old_vid = None
+        coords = f"{m['chrom']}:{m['pos']}-{m['stop']}"
+        if m['old_pos'] is not None and m['old_stop'] is not None:
+            old_coords = f"{m['chrom']}:{m['old_pos']}-{m['old_stop']}"
+        else:
+            old_coords = None
         code = "<br>".join(textwrap.wrap(m['code'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
         f.write(f"<td>{new_vid}</td>\n")
+        f.write(f"<td>{coords}</td>\n")
         f.write(f"<td>{old_vid}</td>\n")
+        f.write(f"<td>{old_coords}</td>\n")
         f.write(f"<td>{code}</td>\n")
         f.write("</tr>\n")
     f.write(f"</table>\n")
