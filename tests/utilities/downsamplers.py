@@ -73,6 +73,7 @@ class VcfDownsampler(BaseDownsampler):
                 for region in regions:
                     if record.contig == region.chr and region.start <= record.pos <= region.end:
                         output_file.write(record)
+                        break
         return self.callback(output_filename)
 
 
@@ -108,6 +109,29 @@ class IntervalListDownsampler(BaseDownsampler):
                     for region in regions:
                         if chr == region.chr and max(start, region.start) < min(end, region.end):
                             output_file.write(line)
+                            break
+        return self.callback(output_filename)
+
+
+class BedDownsampler(BaseDownsampler):
+    def __init__(self, working_dir, callback: Callable[[str], dict]):
+        super().__init__(working_dir, callback)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".bed"]
+
+    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        # Note that this algorithm is not efficient.
+        with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
+            for line in input_file:
+                cols = line.rstrip().split()
+                chr, start, end = cols[0], int(cols[1]), int(cols[2])
+                for region in regions:
+                    if chr == region.chr and max(start, region.start) < min(end, region.end):
+                        output_file.write(line)
+                        break
         return self.callback(output_filename)
 
 
