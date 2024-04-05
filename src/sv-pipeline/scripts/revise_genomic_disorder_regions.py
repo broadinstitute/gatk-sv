@@ -968,8 +968,6 @@ def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region
                     new_interval = sorted(reciprocal_overlappers, key=lambda x: overlap_size(region_interval, x))[-1]
                     # If too large, it's likely to be explained by a non-GD variant, mosaicism, or aneuploidy
                     if (new_interval.end - new_interval.begin) > (max_new_variant_size * (region_interval.end - region_interval.begin)):
-                        print(sample)
-                        print(region)
                         continue
                     new_records = list()
                     # Check that a genotype revision rescued this region
