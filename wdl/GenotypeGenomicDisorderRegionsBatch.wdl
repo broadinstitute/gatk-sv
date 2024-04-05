@@ -338,13 +338,13 @@ task ReviseGenomicDisorderRegions {
     while read -r FILE; do
       tar xzf $FILE -C rdtest/
     done < ~{write_lines(rdtest_tars)}
-    ls rdtest/*/*.geno > median_geno_files.list
+    ls rdtest/*/*.geno > geno_files.list
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
       ~{args} \
       --min-region-overlap ~{min_gdr_overlap_frac} \
       --vcf ~{vcf} \
       --batch ~{batch_name} \
-      --median-geno-list median_geno_files.list \
+      --geno-file-list geno_files.list \
       --ploidy-table ~{ploidy_table} \
       --region-bed ~{genomic_disorder_regions_bed} \
       --par-bed ~{par_bed} \
