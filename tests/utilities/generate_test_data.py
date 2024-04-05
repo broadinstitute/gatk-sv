@@ -1,5 +1,5 @@
 import argparse
-import downsamplers
+import transformers
 import json
 import logging
 import os
@@ -22,36 +22,36 @@ class Region:
 
 @dataclass
 class Handler:
-    transformer: Union[downsamplers.BaseTransformer, Type[downsamplers.BaseTransformer]]
+    transformer: Union[transformers.BaseTransformer, Type[transformers.BaseTransformer]]
     callback: Callable[[str, ...], dict]
 
 
 SUBJECT_WORKFLOW_INPUTS = {
     "GatherSampleEvidence": {
         "bam_or_cram_file": Handler(
-            downsamplers.CramDownsampler,
+            transformers.CramDownsampler,
             lambda cram, index: {"bam_or_cram_file": cram, "bam_or_cram_index": index}
         ),
-        # "preprocessed_intervals": Handler(
-        #     downsamplers.BedToIntervalListConverter,
-        #     lambda x: {"preprocessed_intervals": x, "melt_metrics_intervals": x}
-        # ),
-        # "sd_locs_vcf": Handler(
-        #     downsamplers.VcfDownsampler,
-        #     lambda x: {"sd_locs_vcf": x}
-        # ),
-        # "primary_contigs_list": Handler(
-        #     downsamplers.PrimaryContigsDownsampler,
-        #     lambda x: {"primary_contigs_list": x}
-        # ),
-        # "primary_contigs_fai": Handler(
-        #     downsamplers.PrimaryContigsDownsampler,
-        #     lambda x: {"primary_contigs_fai": x}
-        # ),
-        # "wham_include_list_bed_file": Handler(
-        #     downsamplers.BedDownsampler,
-        #     lambda x: {"wham_include_list_bed_file": x}
-        # )
+        "preprocessed_intervals": Handler(
+            transformers.BedToIntervalListConverter,
+            lambda x: {"preprocessed_intervals": x, "melt_metrics_intervals": x}
+        ),
+        "sd_locs_vcf": Handler(
+            transformers.VcfDownsampler,
+            lambda x: {"sd_locs_vcf": x}
+        ),
+        "primary_contigs_list": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x: {"primary_contigs_list": x}
+        ),
+        "primary_contigs_fai": Handler(
+            transformers.PrimaryContigsDownsampler,
+            lambda x: {"primary_contigs_fai": x}
+        ),
+        "wham_include_list_bed_file": Handler(
+            transformers.BedDownsampler,
+            lambda x: {"wham_include_list_bed_file": x}
+        )
     }
 }
 
@@ -80,12 +80,9 @@ def localize_file(input_filename, output_filename):
         raise NotImplementedError()
 
 
-def initialize_downsamplers(working_dir: str):
+def initialize_transformers(working_dir: str):
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
         for _, handler in inputs.items():
-            # if type(handler.transformer) == type(downsamplers.BedToIntervalListConverter):
-            #     handler.transformer = handler.transformer(working_dir, handler.callback, )
-            # exit()
             handler.transformer = handler.transformer(
                 working_dir=working_dir,
                 callback=handler.callback,
@@ -207,13 +204,6 @@ def main():
 
     args = parser.parse_args()
 
-    # sd = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
-    # sd_out = "./tmp_homo.dict"
-    # localize_file(sd, sd_out)
-    # test = downsamplers.BedToIntervallistConverter(".", lambda x: {}, sd_out, "/Users/jvahid/code/picard.jar")
-    # test.convert("default_downsampling_regions.bed", "tmp_tmp_")
-    #
-
     regions = parse_target_regions(args.target_regions)
     logging.info(f"Found {len(regions)} target regions for downsampling.")
 
@@ -224,7 +214,7 @@ def main():
             f"{args.output_filename_prefix}{Path(args.input_workflow_json).name}"
         )
 
-    initialize_downsamplers(args.working_dir)
+    initialize_transformers(args.working_dir)
 
     update_workflow_json(
         working_dir=args.working_dir,
