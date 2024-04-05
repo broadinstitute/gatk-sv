@@ -91,6 +91,7 @@ workflow GatherSampleEvidence {
 
     # Docker
     String sv_pipeline_docker
+    String? sv_pipeline_base_docker
     String sv_base_mini_docker
     String samtools_cloud_docker
     String? manta_docker
@@ -369,8 +370,8 @@ task LocalizeReads {
       mv ~{reads_path} $(basename ~{reads_path})
       mv ~{reads_index} $(basename ~{reads_index})
     else
-      cp ~{reads_path} $(basename ~{reads_path})
-      cp ~{reads_index} $(basename ~{reads_index})
+      cp ~{reads_path} ~{reads_path}
+      cp ~{reads_index} ~{reads_index}
     fi
   }
   output {
