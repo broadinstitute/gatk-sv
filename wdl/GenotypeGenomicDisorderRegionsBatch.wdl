@@ -18,7 +18,9 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     File preprocessed_genomic_disorder_regions_bed
     File genomic_disorder_regions_bed
     File par_bed
-    Float? min_gdr_overlap_frac_plotting
+
+    Float min_gdr_overlap_frac
+    Boolean plot_subdivisions
 
     String? revise_args
     File? revise_script
@@ -74,7 +76,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     vcf = ConcatVcfs.concat_vcf,
     genomic_disorder_regions_bed = genomic_disorder_regions_bed,
     prefix = "~{output_prefix}",
-    min_gdr_overlap_frac_plotting = min_gdr_overlap_frac_plotting,
+    min_gdr_overlap_frac_plotting = min_gdr_overlap_frac,
     sv_pipeline_docker = sv_pipeline_docker,
     runtime_attr_override = runtime_gdr_overlapping_variants
   }
@@ -129,7 +131,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       median_file = median_file,
       depth_sepcutoff = depth_sepcutoff_file,
       inject_sample = true,
-      do_plot = true,
+      do_plot = plot_subdivisions,
       do_genotyping = true,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_rdtest_subdiv
@@ -144,6 +146,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       ploidy_table = ploidy_table,
       genomic_disorder_regions_bed = preprocessed_genomic_disorder_regions_bed,
       par_bed = par_bed,
+      min_gdr_overlap_frac = min_gdr_overlap_frac,
       args = revise_args,
       script = revise_script,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -304,6 +307,7 @@ task ReviseGenomicDisorderRegions {
     File genomic_disorder_regions_bed
     File par_bed
     String new_record_prefix
+    Float min_gdr_overlap_frac
     String? args
     File? script
     String sv_pipeline_docker
@@ -327,6 +331,7 @@ task ReviseGenomicDisorderRegions {
     ls rdtest/*/*.median_geno > median_geno_files.list
     python ~{default="/opt/src/sv-pipeline/scripts/revise_genomic_disorder_regions.py" script} \
       ~{args} \
+      --min-region-overlap ~{min_gdr_overlap_frac} \
       --vcf ~{vcf} \
       --batch ~{batch_name} \
       --median-geno-list median_geno_files.list \
@@ -360,7 +365,7 @@ task GetGDROverlappingVariants {
   input {
     File vcf
     File genomic_disorder_regions_bed
-    Float min_gdr_overlap_frac_plotting = 0.3
+    Float min_gdr_overlap_frac_plotting
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override

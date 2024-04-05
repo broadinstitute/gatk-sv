@@ -21,7 +21,8 @@ workflow GenotypeGenomicDisorderRegions {
 
     File ploidy_table
 
-    Float? min_gdr_overlap_frac_plotting
+    Float min_gdr_overlap_frac = 0.4
+    Boolean plot_subdivisions = false
 
     File genomic_disorder_regions_bed
     File par_bed
@@ -89,7 +90,8 @@ workflow GenotypeGenomicDisorderRegions {
         preprocessed_genomic_disorder_regions_bed = PreprocessGenomicDisorderIntervals.out,
         genomic_disorder_regions_bed = genomic_disorder_regions_bed,
         par_bed = par_bed,
-        min_gdr_overlap_frac_plotting = min_gdr_overlap_frac_plotting,
+        min_gdr_overlap_frac = min_gdr_overlap_frac,
+        plot_subdivisions = plot_subdivisions,
         revise_args = revise_args,
         revise_script = revise_script,
         linux_docker = linux_docker,
