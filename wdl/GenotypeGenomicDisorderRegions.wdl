@@ -33,6 +33,7 @@ workflow GenotypeGenomicDisorderRegions {
     File? preprocess_intervals_script
     String? revise_args
     File? revise_script
+    File? report_script
     File? reset_genotypes_script
 
     String linux_docker
@@ -53,6 +54,7 @@ workflow GenotypeGenomicDisorderRegions {
     RuntimeAttr? runtime_vcf2bed_after_revise
     RuntimeAttr? runtime_rdtest_before_revise
     RuntimeAttr? runtime_rdtest_after_revise
+    RuntimeAttr? runtime_create_report
 
     RuntimeAttr? runtime_attr_preprocess
     RuntimeAttr? runtime_cat_subtracted_genotypes
@@ -94,6 +96,7 @@ workflow GenotypeGenomicDisorderRegions {
         plot_subdivisions = plot_subdivisions,
         revise_args = revise_args,
         revise_script = revise_script,
+        report_script = report_script,
         linux_docker = linux_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -107,7 +110,8 @@ workflow GenotypeGenomicDisorderRegions {
         runtime_vcf2bed_before_revise = runtime_vcf2bed_before_revise,
         runtime_vcf2bed_after_revise = runtime_vcf2bed_after_revise,
         runtime_rdtest_before_revise = runtime_rdtest_before_revise,
-        runtime_rdtest_after_revise = runtime_rdtest_after_revise
+        runtime_rdtest_after_revise = runtime_rdtest_after_revise,
+        runtime_create_report = runtime_create_report
     }
   }
 
@@ -220,25 +224,9 @@ workflow GenotypeGenomicDisorderRegions {
     File cohort_gdr_revised_record_subset_vcf = ConcatNewRecords.concat_vcf
     File cohort_gdr_revised_record_subset_index = ConcatNewRecords.concat_vcf_idx
 
-    # Batch RdTest outputs
+    # Batch outputs
+    Array[File] batch_gdr_report = GenotypeGenomicDisorderRegionsBatch.batch_gdr_report
 
-    # Plots of input variants that overlap one or more GDRs, with carriers shown
-    Array[File] batch_rdtest_variants_overlapping_gdr = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_variants_overlapping_gdr
-    # Plots of GDRs that overlap one or more input variants, with carriers shown
-    Array[File] batch_rdtest_gdr_overlapping_variants = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_overlapping_variants
-    # Plots of all GDRs, carriers not shown (random sample is the carrier)
-    Array[File] batch_rdtest_gdr_full = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_full
-    # Plots and genotyping of GDR subdivisions (default 10 per region), carriers not shown (random sample is the carrier)
-    Array[File] batch_rdtest_gdr_subdiv = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_subdiv
-
-    # Plots of revised input variants with their original genotypes, with carriers shown
-    Array[File] batch_rdtest_gdr_before_revise = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_before_revise
-    # Plots of revised input variants after revising and new records of rescued false negatives, with carriers shown
-    Array[File] batch_rdtest_gdr_after_revise = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_after_revise
-    # Plots of new records of variants with revised breakpoints and/or novel variants recovering false negatives
-    Array[File] batch_rdtest_gdr_new_records = GenotypeGenomicDisorderRegionsBatch.batch_rdtest_gdr_new_records
-
-    # Batched outputs
     Array[File] batch_gdr_revised_before_update_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_before_update_vcf
     Array[File] batch_gdr_revised_before_update_index = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_before_update_index
     Array[File] batch_gdr_revised_after_update_vcf = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_after_update_vcf
@@ -248,6 +236,7 @@ workflow GenotypeGenomicDisorderRegions {
     Array[File] batch_gdr_revised_genotypes_tsv = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revised_genotypes_tsv
     Array[File] batch_gdr_revision_manifest_tsv = GenotypeGenomicDisorderRegionsBatch.batch_gdr_revision_manifest_tsv
 
+    # Auxiliary
     Array[File] batch_gdr_subsetted_vcf = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_vcf
     Array[File] batch_gdr_subsetted_index = GenotypeGenomicDisorderRegionsBatch.batch_subsetted_index
   }

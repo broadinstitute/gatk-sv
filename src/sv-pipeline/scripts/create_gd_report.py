@@ -15,8 +15,8 @@ from typing import List, Text, Optional
 IMAGE_WIDTH = 300
 TABLE_WIDTH = 600
 TABLE_PADDING = 20
-TEXT_WRAP_WIDTH = 120
-CODE_TABLE_TEXT_WRAP_WIDTH = 25
+TEXT_WRAP_WIDTH = 100
+CODE_TABLE_TEXT_WRAP_WIDTH = 15
 HIGHLIGHT_BG_COLOR_VAR2GDR = "#FFAAFF"
 HIGHLIGHT_BG_COLOR_GDR2VAR = "#AAAAFF"
 HIGHLIGHT_BG_COLOR = "#FFAAAA"
@@ -93,26 +93,36 @@ def show_images_table(f, images):
             unique_images.append(image)
     images = unique_images
     f.write(f"<table border=1 cellpadding=10 width={TABLE_WIDTH}>\n")
-    for image in images:
-        f.write("<tr>\n")
-        if image.plot_type == PLOT_TYPE_ENUM.VAR2GDR:
-            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_VAR2GDR}\">\n")
-        elif image.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
-            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_GDR2VAR}\">\n")
-        elif image.plot_type != PLOT_TYPE_ENUM.GDR:
-            f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR}\">\n")
-        else:
-            f.write("<td align=center>\n")
-        f.write(image.image_string())
-        name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
-        f.write(f"{name}<br>\n")
-        f.write(f"<b>{image.title()}</b><br>\n")
-        f.write("</td>\n")
-        f.write("</tr>\n")
+    if len(images) == 0:
+        f.write("<tr><td><h3>Warning: no images found!</h3></td></tr>")
+    else:
+        for image in images:
+            f.write("<tr>\n")
+            if image.plot_type == PLOT_TYPE_ENUM.VAR2GDR:
+                f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_VAR2GDR}\">\n")
+            elif image.plot_type == PLOT_TYPE_ENUM.GDR2VAR:
+                f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR_GDR2VAR}\">\n")
+            elif image.plot_type != PLOT_TYPE_ENUM.GDR:
+                f.write(f"<td align=center bgcolor=\"{HIGHLIGHT_BG_COLOR}\">\n")
+            else:
+                f.write("<td align=center>\n")
+            f.write(image.image_string())
+            name = "<br>".join(textwrap.wrap(image.name, width=TEXT_WRAP_WIDTH))
+            f.write(f"{name}<br>\n")
+            f.write(f"<b>{image.title()}</b><br>\n")
+            f.write("</td>\n")
+            f.write("</tr>\n")
     f.write(f"</table>\n")
 
 
-def show_manifest_table(f, manifest_records):
+def wrap_text_table(text):
+    if text is None:
+        return None
+    else:
+        return "<br>".join(textwrap.wrap(text, width=CODE_TABLE_TEXT_WRAP_WIDTH))
+
+
+def show_manifest_table(f, manifest_records, genotypes):
     f.write(f"<table border=1 cellpadding=5 width={TABLE_WIDTH}>\n")
     f.write("<tr bgcolor=#EEEEEE>\n")
     f.write(f"<td>new_vid</td>\n")
@@ -120,24 +130,25 @@ def show_manifest_table(f, manifest_records):
     f.write(f"<td>old_vid</td>\n")
     f.write(f"<td>old_coords</td>\n")
     f.write(f"<td>code</td>\n")
+    f.write(f"<td>geno</td>\n")
     f.write("</tr>\n")
     for m in manifest_records:
-        new_vid = "<br>".join(textwrap.wrap(m['new_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
-        if m['old_vid'] is not None:
-            old_vid = "<br>".join(textwrap.wrap(m['old_vid'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
-        else:
-            old_vid = None
-        coords = f"{m['chrom']}:{m['pos']}-{m['stop']}"
+        new_vid = wrap_text_table(m['new_vid'])
+        old_vid = wrap_text_table(m['old_vid'])
+        coords = wrap_text_table(f"{m['chrom']}:{m['pos']}-{m['stop']}")
         if m['old_pos'] is not None and m['old_stop'] is not None:
-            old_coords = f"{m['chrom']}:{m['old_pos']}-{m['old_stop']}"
+            old_coords = wrap_text_table(f"{m['chrom']}:{m['old_pos']}-{m['old_stop']}")
         else:
-            old_coords = None
-        code = "<br>".join(textwrap.wrap(m['code'], width=CODE_TABLE_TEXT_WRAP_WIDTH))
+            old_coords = wrap_text_table(None)
+        code = wrap_text_table(m['code'])
+        table_genotypes = [g["genotype"] for g in genotypes if g['vid'] == m['new_vid']]
+        genotypes_col = wrap_text_table(', '.join(table_genotypes))
         f.write(f"<td>{new_vid}</td>\n")
         f.write(f"<td>{coords}</td>\n")
         f.write(f"<td>{old_vid}</td>\n")
         f.write(f"<td>{old_coords}</td>\n")
         f.write(f"<td>{code}</td>\n")
+        f.write(f"<td>{genotypes_col}</td>\n")
         f.write("</tr>\n")
     f.write(f"</table>\n")
 
@@ -161,7 +172,7 @@ def get_candidate_tokens(rdtest_name, m):
         suffix = f"_{m['new_vid']}_{rdtest_name}_{m['batch']}.jpg"
     elif rdtest_name == RDTEST_BEFORE_REVISE:
         middle = None
-        suffix = f"_{m['old_vid']}_{rdtest_name}_{m['batch']}.jpg"
+        suffix = f"_{m['new_vid']}_{rdtest_name}_{m['batch']}.jpg"
     elif rdtest_name == RDTEST_NEW:
         middle = None
         suffix = f"_{m['new_vid']}_{rdtest_name}_{m['batch']}.jpg"
@@ -230,6 +241,7 @@ def write_reports(base_path, image_paths, region_names, batches, genotypes, mani
             # Need to sort for groupby
             batch_manifest = sorted([m for m in region_manifest if m["batch"] == batch], key=itemgetter("sample"))
             for sample, sample_manifest in groupby(batch_manifest, key=itemgetter("sample")):
+                sample_genotypes = [g for g in genotypes if g["sample"] == sample]
                 sample_manifest = list(sample_manifest)
                 sample_images = list()
                 for m in sample_manifest:
@@ -237,7 +249,7 @@ def write_reports(base_path, image_paths, region_names, batches, genotypes, mani
                     images = sorted(images, key=lambda x: (KIND_ORDERING.index(x.plot_type), x.name))
                     sample_images.extend(images)
                 f.write("<h3>" + m['sample'] + "</h3>\n\n")
-                show_manifest_table(f=f, manifest_records=sample_manifest)
+                show_manifest_table(f=f, manifest_records=sample_manifest, genotypes=sample_genotypes)
                 show_images_table(f, sample_images)
         for f in f_dict.values():
             f.write("\n<hr>\n")
@@ -252,7 +264,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument('--image-list', type=str, required=True, help='Input images')
-    parser.add_argument('--genotypes', type=str, required=True, help='Genotype revisions file (.tsv.gz)')
+    parser.add_argument('--genotypes', type=str, required=True, help='Genotype revision file (.tsv.gz)')
     parser.add_argument('--manifest', type=str, required=True, help='Revision manifest file (.tsv.gz)')
     parser.add_argument('--batch-list', type=str, required=True, help='List of batch names')
     parser.add_argument('--region-bed', type=str, required=True, help='Region bed')

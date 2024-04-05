@@ -24,6 +24,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
 
     String? revise_args
     File? revise_script
+    File? report_script
 
     String linux_docker
     String sv_base_mini_docker
@@ -40,6 +41,7 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     RuntimeAttr? runtime_vcf2bed_after_revise
     RuntimeAttr? runtime_rdtest_before_revise
     RuntimeAttr? runtime_rdtest_after_revise
+    RuntimeAttr? runtime_create_report
   }
 
   call util.GetSampleIdsFromMedianCoverageFile {
@@ -209,15 +211,23 @@ workflow GenotypeGenomicDisorderRegionsBatch {
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_rdtest_after_revise
   }
-  output{
-    File batch_rdtest_variants_overlapping_gdr = RunRdTestVariantsOverlappingGDR.out
-    File batch_rdtest_gdr_overlapping_variants = RunRdTestGDROverlappingVariants.out
-    File batch_rdtest_gdr_full = RunRdTestFullRegions.out
-    File batch_rdtest_gdr_subdiv = RunRdTestFullRegions.out
 
-    File batch_rdtest_gdr_before_revise = RunRdTestBeforeUpdate.out
-    File batch_rdtest_gdr_after_revise = RunRdTestAfterUpdate.out
-    File batch_rdtest_gdr_new_records = RunRdTestNewRecords.out
+  call CreateRevisionReport {
+    input:
+      prefix = "~{output_prefix}.gdr_report",
+      rdtest_tars = [RunRdTestVariantsOverlappingGDR.out, RunRdTestGDROverlappingVariants.out,
+                    RunRdTestFullRegions.out, RunRdTestSubdivision.out, RunRdTestBeforeUpdate.out,
+                    RunRdTestAfterUpdate.out, RunRdTestNewRecords.out],
+      batch_name = batch_name,
+      revised_genotypes_tsv = ReviseGenomicDisorderRegions.revised_genotypes_tsv,
+      revision_manifest_tsv = ReviseGenomicDisorderRegions.revision_manifest_tsv,
+      genomic_disorder_regions_bed = genomic_disorder_regions_bed,
+      script = report_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_create_report
+  }
+  output{
+    File batch_gdr_report = CreateRevisionReport.out
 
     File batch_gdr_revised_before_update_vcf = ReviseGenomicDisorderRegions.revised_before_update_vcf
     File batch_gdr_revised_before_update_index = ReviseGenomicDisorderRegions.revised_before_update_index
@@ -349,6 +359,62 @@ task ReviseGenomicDisorderRegions {
     File revised_new_records_index = "~{prefix}.new_records.vcf.gz.tbi"
     File revised_genotypes_tsv = "~{prefix}.revised_genotypes.tsv.gz"
     File revision_manifest_tsv = "~{prefix}.revision_manifest.tsv.gz"
+  }
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task CreateRevisionReport {
+  input{
+    String prefix
+    String batch_name
+    Array[File] rdtest_tars
+    File revised_genotypes_tsv
+    File revision_manifest_tsv
+    File genomic_disorder_regions_bed
+    File? script
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(100.0 + size(rdtest_tars, "GiB") * 5),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  command <<<
+    set -euxo pipefail
+    mkdir rdtest/
+    while read -r FILE; do
+      tar xzf $FILE -C rdtest/
+    done < ~{write_lines(rdtest_tars)}
+    find rdtest/ -name '*.jpg' > images.list
+    echo "~{batch_name}" > batches.list
+    python ~{default="/opt/src/sv-pipeline/scripts/create_gd_report.py" script} \
+      --image-list images.list \
+      --batch-list batches.list \
+      --region-bed ~{genomic_disorder_regions_bed} \
+      --genotypes ~{revised_genotypes_tsv} \
+      --manifest ~{revision_manifest_tsv} \
+      --out ~{prefix}
+    # Create output tarball
+    mkdir ~{prefix}/
+    mv rdtest ~{prefix}/
+    mv ~{prefix}.~{batch_name}.html ~{prefix}/
+    tar czf ~{prefix}.tar.gz ~{prefix}/
+  >>>
+  output {
+    File out = "~{prefix}.tar.gz"
   }
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
