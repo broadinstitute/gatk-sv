@@ -22,7 +22,7 @@ class Region:
 
 @dataclass
 class Handler:
-    downsampler: Union[downsamplers.BaseDownsampler, Type[downsamplers.BaseDownsampler]]
+    transformer: Union[downsamplers.BaseTransformer, Type[downsamplers.BaseTransformer]]
     callback: Callable[[str, ...], dict]
 
 
@@ -32,26 +32,26 @@ SUBJECT_WORKFLOW_INPUTS = {
             downsamplers.CramDownsampler,
             lambda cram, index: {"bam_or_cram_file": cram, "bam_or_cram_index": index}
         ),
-        "preprocessed_intervals": Handler(
-            downsamplers.IntervalListDownsampler,
-            lambda x: {"preprocessed_intervals": x, "melt_metrics_intervals": x}
-        ),
-        "sd_locs_vcf": Handler(
-            downsamplers.VcfDownsampler,
-            lambda x: {"sd_locs_vcf": x}
-        ),
-        "primary_contigs_list": Handler(
-            downsamplers.PrimaryContigsDownsampler,
-            lambda x: {"primary_contigs_list": x}
-        ),
-        "primary_contigs_fai": Handler(
-            downsamplers.PrimaryContigsDownsampler,
-            lambda x: {"primary_contigs_fai": x}
-        ),
-        "wham_include_list_bed_file": Handler(
-            downsamplers.BedDownsampler,
-            lambda x: {"wham_include_list_bed_file": x}
-        )
+        # "preprocessed_intervals": Handler(
+        #     downsamplers.BedToIntervalListConverter,
+        #     lambda x: {"preprocessed_intervals": x, "melt_metrics_intervals": x}
+        # ),
+        # "sd_locs_vcf": Handler(
+        #     downsamplers.VcfDownsampler,
+        #     lambda x: {"sd_locs_vcf": x}
+        # ),
+        # "primary_contigs_list": Handler(
+        #     downsamplers.PrimaryContigsDownsampler,
+        #     lambda x: {"primary_contigs_list": x}
+        # ),
+        # "primary_contigs_fai": Handler(
+        #     downsamplers.PrimaryContigsDownsampler,
+        #     lambda x: {"primary_contigs_fai": x}
+        # ),
+        # "wham_include_list_bed_file": Handler(
+        #     downsamplers.BedDownsampler,
+        #     lambda x: {"wham_include_list_bed_file": x}
+        # )
     }
 }
 
@@ -83,7 +83,17 @@ def localize_file(input_filename, output_filename):
 def initialize_downsamplers(working_dir: str):
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
         for _, handler in inputs.items():
-            handler.downsampler = handler.downsampler(working_dir, handler.callback)
+            # if type(handler.transformer) == type(downsamplers.BedToIntervalListConverter):
+            #     handler.transformer = handler.transformer(working_dir, handler.callback, )
+            # exit()
+            handler.transformer = handler.transformer(
+                working_dir=working_dir,
+                callback=handler.callback,
+                reference_fasta="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+                reference_index="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+                sequence_dict_filename="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+                picard_path="/Users/jvahid/code/picard.jar"
+            )
 
 
 def update_workflow_json(
@@ -106,7 +116,7 @@ def update_workflow_json(
         logging.info(f"Processing input {k}.")
         workflow_input_local_filename = Path(working_dir).joinpath(Path(v).name)
         localize_file(v, workflow_input_local_filename)
-        updated_files = handler.downsampler.downsample(workflow_input_local_filename, output_filename_prefix, regions)
+        updated_files = handler.transformer.downsample(workflow_input_local_filename, output_filename_prefix, regions)
         if bucket_name is not None and blob_name is not None:
             for varname, filename in updated_files.items():
                 logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
@@ -140,7 +150,8 @@ def main():
                     "In addition to other inputs, the script takes a JSON file containing the inputs to a workflow, "
                     "downsamples the inputs according to the defined rules (see `SUBJECT_WORKFLOW_INPUTS`), "
                     "pushes the downsampled files to a given cloud storage, and creates a new JSON "
-                    "file with the updated downsampled inputs.",
+                    "file with the updated downsampled inputs."
+                    "This script needs samtools version 1.19.2 or newer installed and added to PATH.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument(
@@ -159,6 +170,11 @@ def main():
         help="Sets a JSON filename containing the updated input arguments from the input JSON."
              "The default value is a JSON file created in the working directory with the same "
              "name as the input JSON with an added prefix."
+    )
+
+    parser.add_argument(
+        "picard_path",
+        help="Sets the absolute path, including the filename, to `picard.jar`."
     )
 
     parser.add_argument(
@@ -190,6 +206,13 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # sd = "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
+    # sd_out = "./tmp_homo.dict"
+    # localize_file(sd, sd_out)
+    # test = downsamplers.BedToIntervallistConverter(".", lambda x: {}, sd_out, "/Users/jvahid/code/picard.jar")
+    # test.convert("default_downsampling_regions.bed", "tmp_tmp_")
+    #
 
     regions = parse_target_regions(args.target_regions)
     logging.info(f"Found {len(regions)} target regions for downsampling.")

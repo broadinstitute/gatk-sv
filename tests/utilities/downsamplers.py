@@ -1,4 +1,6 @@
+import os
 import pysam
+import subprocess
 
 from typing import Callable, List
 from dataclasses import dataclass
@@ -12,14 +14,59 @@ class Region:
     end: int
 
 
-class BaseDownsampler:
+class BaseTransformer:
     def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
         # Convert the string to an ABS path and make sure it exists.
         self.working_dir = Path(working_dir).resolve(strict=True)
         self.callback = callback
 
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        """
+        The file types should include the '.' prefix to match with Path().suffix output
+        (e.g., it should return '.cram' instead of 'cram').
+        """
+        raise NotImplementedError()
+
     def get_output_filename(self, input_filename, output_prefix):
         return str(self.working_dir.joinpath(f"{output_prefix}{Path(input_filename).name}"))
+
+
+class BaseConverter(BaseTransformer):
+    def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
+        super().__init__(working_dir, callback)
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        raise NotImplementedError()
+
+    def convert(self, input_filename: str, output_prefix: str) -> dict:
+        raise NotImplementedError()
+
+
+class BedToIntervalListConverter(BaseConverter):
+    def __init__(self, working_dir, callback: Callable[[str], dict], sequence_dict_filename: str, picard_path: str, **kwargs):
+        super().__init__(working_dir, callback)
+        self.sequence_dict_filename = sequence_dict_filename
+        self.picard_path = picard_path
+
+    @staticmethod
+    def get_supported_file_types() -> List[str]:
+        return [".interval_list"]
+
+    def convert(self, input_filename: str, output_prefix: str) -> dict:
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        subprocess.run(
+            ["java", "-jar", self.picard_path, "BedToIntervalList",
+             "-I", input_filename, "-O", output_filename, "-SD", self.sequence_dict_filename],
+            check=True)
+        return self.callback(output_filename)
+
+
+
+class BaseDownsampler(BaseTransformer):
+    def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
+        super().__init__(working_dir, callback)
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
@@ -34,30 +81,44 @@ class BaseDownsampler:
 
 
 class CramDownsampler(BaseDownsampler):
-    def __init__(self, working_dir, callback: Callable[[str, str], dict]):
+    def __init__(self, working_dir, callback: Callable[[str, str], dict], reference_fasta: str, reference_index: str, **kwargs):
         super().__init__(working_dir, callback)
+        self.reference_fasta = reference_fasta
+        self.reference_index = reference_index
 
     @staticmethod
     def get_supported_file_types() -> List[str]:
         return [".cram"]
 
     def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
-        output_filename = self.get_output_filename(input_filename, output_prefix)
-        with \
-                pysam.AlignmentFile(input_filename, "rc") as input_cram_file, \
-                pysam.AlignmentFile(output_filename, "wc",
-                                    header=input_cram_file.header,
-                                    reference_names=input_cram_file.references) as output_cram_file:
+        # Implementation notes:
+        # 1. This method calls `samtools` instead of using `pysam` since it needs to include
+        #    distant pair-end reads in the downsampled regions (i.e., the `--fetch-pairs` flag).
+        #    Such reads are needed for MELT to function properly.
+        #
+        # 2. The method writes target regions to a BED file. While taking the BED file containing
+        #    the regions as input seems a better option, the current approach is implemented as
+        #    taking a BED file as input instead of a list of regions would convolut the method signature.
+
+        regions_filename = os.path.join(self.working_dir, "_tmp_regions.bed")
+        with open(regions_filename, "w") as f:
             for region in regions:
-                for read in input_cram_file.fetch(region=f"{region.chr}:{region.start}-{region.end}"):
-                    output_cram_file.write(read)
-        index_filename = f"{output_filename}.crai"
-        pysam.index(output_filename, index_filename)
-        return self.callback(output_filename, index_filename)
+                f.write("\t".join([str(region.chr), str(region.start), str(region.end)]) + "\n")
+
+        output_filename = self.get_output_filename(input_filename, output_prefix)
+        subprocess.run(
+            ["samtools", "view", input_filename, "--reference", self.reference_fasta,
+             "--targets-file", regions_filename, "--output", output_filename, "--cram", "--fetch-pairs"]
+        )
+
+        subprocess.run(["samtools", "index", output_filename])
+
+        os.remove(regions_filename)
+        return self.callback(output_filename, output_filename + ".fai")
 
 
 class VcfDownsampler(BaseDownsampler):
-    def __init__(self, working_dir, callback: Callable[[str], dict]):
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
     @staticmethod
@@ -89,7 +150,7 @@ class IntervalListDownsampler(BaseDownsampler):
     # 1. It needs the picard tool installed;
     # 2. It needs an additional "SD" input, which would make the `downsample` method signature complicated.
 
-    def __init__(self, working_dir, callback: Callable[[str], dict]):
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
     @staticmethod
@@ -114,7 +175,7 @@ class IntervalListDownsampler(BaseDownsampler):
 
 
 class BedDownsampler(BaseDownsampler):
-    def __init__(self, working_dir, callback: Callable[[str], dict]):
+    def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
     @staticmethod
@@ -136,7 +197,7 @@ class BedDownsampler(BaseDownsampler):
 
 
 class PrimaryContigsDownsampler(BaseDownsampler):
-    def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str = "\t"):
+    def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str = "\t", **kwargs):
         super().__init__(working_dir, callback)
         self.delimiter = delimiter
 
