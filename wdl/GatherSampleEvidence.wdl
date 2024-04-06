@@ -328,6 +328,7 @@ task LocalizeReads {
   input {
     File reads_path
     File reads_index
+    String collaborator_participant_id
     Boolean move_files = false
     RuntimeAttr? runtime_attr_override
   }
@@ -367,15 +368,15 @@ task LocalizeReads {
     # space, hence it will be more expensive to run.
 
     if ~{move_files}; then
-      mv ~{reads_path} ~{reads_path}
-      mv ~{reads_index} ~{reads_index}
+      mv ~{reads_path} $basename(~{reads_path})
+      mv ~{reads_index} $basename(~{reads_index})
     else
       cp ~{reads_path} ~{reads_path}
       cp ~{reads_index} ~{reads_index}
     fi
   }
   output {
-    File output_file = reads_path
-    File output_index = reads_index
+    File output_file = basename(reads_path) + ".cram"
+    File output_index = basename(reads_index) + ".cram.crai"
   }
 }
