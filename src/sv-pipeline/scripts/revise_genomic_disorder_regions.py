@@ -354,6 +354,7 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
         if n_sufficiently_overlapping_middle_intervals == 0:
             continue
         region_interval = region_intervals_dict[svtype][region][MIDDLE_INDEX_PREFIX]
+        # Note region_interval: (chrom, pos, stop)
         frac_region_overlap = overlap_size((pos, stop), region_interval[1:]) / (region_interval[2] - region_interval[1])
         # Lazily load carriers
         if carriers is None:
@@ -380,16 +381,18 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
             frac_valid_overlapping_intervals_supported = n_support / n_sufficiently_overlapping_middle_intervals
             if frac_valid_overlapping_intervals_supported >= min_supported_valid_overlapping_intervals_frac:
                 if sample not in carriers:
-                    # Check for this here instead of earlier since we need to keep more of the true positives
-                    add_match(false_negative_matches, svtype, name=name, chrom=chrom, pos=pos, end=stop,
-                              sample=sample,
-                              overlapping_region_intervals=overlapping_region_intervals,
-                              valid_padded_region_intervals=region_padded_sufficiently_overlapping_intersect,
-                              left_supporting_intervals=left_supported_intersect,
-                              middle_supporting_intervals=middle_supported_intersect,
-                              right_supporting_intervals=right_supported_intersect,
-                              region=region,
-                              genotype_calls=genotype_calls)
+                    # Check for this here instead of earlier since we need to keep all potential true positives
+                    if frac_region_overlap >= min_region_overlap:
+                        # False negative
+                        add_match(false_negative_matches, svtype, name=name, chrom=chrom, pos=pos, end=stop,
+                                  sample=sample,
+                                  overlapping_region_intervals=overlapping_region_intervals,
+                                  valid_padded_region_intervals=region_padded_sufficiently_overlapping_intersect,
+                                  left_supporting_intervals=left_supported_intersect,
+                                  middle_supporting_intervals=middle_supported_intersect,
+                                  right_supporting_intervals=right_supported_intersect,
+                                  region=region,
+                                  genotype_calls=genotype_calls)
                 else:
                     # True positive
                     if svtype not in true_positives:
@@ -400,7 +403,7 @@ def get_revisions_over_regions(regions, false_negative_matches, false_positive_m
                         true_positives[svtype][sample][region] = list()
                     true_positives[svtype][sample][region].append((pos, stop))
             elif sample in carriers:
-                # Check for this here instead of earlier since we need to keep more of the true positives
+                # Check for this here instead of earlier since we need to keep all potential true positives
                 if frac_region_overlap >= min_region_overlap:
                     # False positive
                     # We will subtract this sample from the variant
@@ -465,7 +468,6 @@ def read_geno_file(list_path, del_ids, dup_ids, ploidy_table_dict, par_trees,
     with open(list_path) as f:
         file_paths = [line.strip() for line in f]
     data = defaultdict(dict)
-    vids = set()
     for path in file_paths:
         with open(path) as f:
             header = f.readline().strip().split('\t')
@@ -476,7 +478,6 @@ def read_geno_file(list_path, del_ids, dup_ids, ploidy_table_dict, par_trees,
                 pos = int(record[1])
                 stop = int(record[2])
                 vid = record[3]
-                vids.add(vid)
                 if vid in del_ids:
                     is_del = True
                 elif vid in dup_ids:
@@ -497,7 +498,7 @@ def read_geno_file(list_path, del_ids, dup_ids, ploidy_table_dict, par_trees,
                         continue
                     data[sample][vid] = GenotypeCall(call=g, threshold=expected_cn, hom_ref_cn=expected_cn,
                                                      pos=pos, stop=stop)
-    return data, vids
+    return data
 
 
 def get_fragment_intervals_to_remove(sample_overlappers, invalidated_intervals, region):
@@ -536,6 +537,7 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                      true_positives, min_false_negative_rescue_overlap):
     # Find genotypes to reset from existing records
     current_chrom = None
+    new_false_negatives_dict = defaultdict(list)
     for record in f_in:
         if record.chrom != current_chrom:
             current_chrom = record.chrom
@@ -556,6 +558,7 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                         min_false_negative_rescue_overlap=min_false_negative_rescue_overlap
                     )
                     if not has_true_positive:
+                        new_false_negatives_dict[record.id].append(match)
                         f_geno.write(f"{record.chrom}\t{record.id}\t{match.sample}\t0\n")
                         # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
                         reset_format_fields(record.samples[match.sample], reset_genotype=True, reset_pesr=False)
@@ -582,6 +585,8 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                                                      batch=batch, code=CODE_FALSE_NEGATIVE_IN_EXISTING_VARIANT))
             # Write revised record for review
             f_after.write(record)
+    # Return updated dict that has removed calls with existing true positives
+    return new_false_negatives_dict
 
 
 def get_revised_intervals(sample_overlappers, regions, pos, stop, dangling_fraction):
@@ -910,7 +915,7 @@ def get_padded_end(svtype, region, region_intervals_dict):
         return region_intervals_dict[svtype][region][MIDDLE_INDEX_PREFIX][2]
 
 
-def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region_false_negatives, true_positives,
+def adjudicate_raw_region_false_negatives(new_false_negatives_dict, raw_region_false_negatives, true_positives,
                                           new_partial_events_tree_dict, region_intervals_dict,
                                           min_supported_valid_overlapping_intervals_frac,
                                           min_true_positive_reciprocal_overlap,
@@ -919,7 +924,7 @@ def adjudicate_raw_region_false_negatives(revise_false_negative_dict, raw_region
     # Note: region_intervals_dict structure: svtype -> region -> index_prefix -> interval
     # Re-key for fast lookup
     false_negative_svtype_sample_region_dict = defaultdict(list)
-    for record_list in revise_false_negative_dict.values():
+    for record_list in new_false_negatives_dict.values():
         for record in record_list:
             false_negative_svtype_sample_region_dict[(record.svtype, record.sample, record.region)].append(record)
     # make dictionary: svtype -> sample -> region -> record corresponding to new variants to create
@@ -1044,11 +1049,12 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
         with gzip.open(revised_genotypes_tsv_path, mode="wt") as f_geno, \
                 pysam.VariantFile(revised_records_before_update_path, mode="w", header=f_in.header) as f_before, \
                 pysam.VariantFile(revised_records_after_update_path, mode="w", header=f_in.header) as f_after:
-            revise_genotypes(f_in=f_in, f_geno=f_geno, f_before=f_before, f_after=f_after, f_manifest=f_manifest,
-                             batch=batch, false_positives_dict=false_positives_dict,
-                             revise_false_negative_dict=revise_false_negative_dict,
-                             true_positives=true_positives,
-                             min_false_negative_rescue_overlap=min_false_negative_rescue_overlap)
+            new_false_negatives_dict = revise_genotypes(
+                f_in=f_in, f_geno=f_geno, f_before=f_before, f_after=f_after, f_manifest=f_manifest,
+                batch=batch, false_positives_dict=false_positives_dict,
+                revise_false_negative_dict=revise_false_negative_dict,
+                true_positives=true_positives,
+                min_false_negative_rescue_overlap=min_false_negative_rescue_overlap)
         # Revise invalidated records
         with pysam.VariantFile(revised_records_before_update_path) as f_before, \
                 pysam.VariantFile(unsorted_new_records_path, mode="w", header=f_in.header) as f_new:
@@ -1062,7 +1068,7 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
             )
             new_records_dict = \
                 adjudicate_raw_region_false_negatives(
-                    revise_false_negative_dict=revise_false_negative_dict,
+                    new_false_negatives_dict=new_false_negatives_dict,
                     raw_region_false_negatives=raw_region_false_negatives,
                     true_positives=true_positives,
                     new_partial_events_tree_dict=new_partial_events_tree_dict,
