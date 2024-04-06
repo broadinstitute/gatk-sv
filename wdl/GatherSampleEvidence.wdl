@@ -376,7 +376,7 @@ task LocalizeReads {
     fi
   }
   output {
-    File output_file = basename(reads_path)
-    File output_index = basename(reads_index)
+    File output_file = reads_path
+    File output_index = reads_index + ".crai"
   }
 }
