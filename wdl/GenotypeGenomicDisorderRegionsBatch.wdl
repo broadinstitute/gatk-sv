@@ -68,7 +68,6 @@ workflow GenotypeGenomicDisorderRegionsBatch {
     input:
       vcfs = SubsetVcfBySamplesList.vcf_subset,
       vcfs_idx = SubsetVcfBySamplesList.vcf_subset_index,
-      naive = true,
       outfile_prefix = "~{output_prefix}.concat",
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_override_concat_batch
