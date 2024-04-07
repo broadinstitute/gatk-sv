@@ -376,7 +376,7 @@ task LocalizeReads {
     fi
   }
   output {
-    File output_file = reads_path
-    File output_index = reads_index + ".crai"
+    File output_file = collaborator_participant_id + ".cram"
+    File output_index = collaborator_participant_id + ".cram.crai"
   }
 }
