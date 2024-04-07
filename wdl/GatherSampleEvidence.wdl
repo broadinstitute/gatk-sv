@@ -369,10 +369,10 @@ task LocalizeReads {
 
     if ~{move_files}; then
       mv ~{reads_path} $(basename ~{reads_path})
-      mv ~{reads_index} $(basename~{reads_index})
+      mv ~{reads_index} $(basename ~{reads_index})
     else
       cp ~{reads_path} $(basename ~{reads_path})
-      cp ~{reads_index} $(basename~{reads_index})
+      cp ~{reads_index} $(basename ~{reads_index})
     fi
   }
   output {
