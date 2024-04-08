@@ -77,7 +77,7 @@ with open("~{sample_id_rename_map}", 'r') as rename, open("samples.list", 'r') a
     sample = line.strip("\n")
     if sample not in all_to_rename:
       raise ValueError(f"Sample {sample} is in the VCF header but not in the renaming map")
-    CODE
+CODE
 
     bcftools view --no-version -h ~{vcf} > header.vcf
 
