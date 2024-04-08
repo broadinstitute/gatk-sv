@@ -163,7 +163,7 @@ workflow ManuallyReviewBalancedSVs {
       input:
         vcfs = SelectCPX.svtype_vcf,
         vcfs_idx = SelectCPX.svtype_vcf_index,
-        naive = true,
+        naive = false,
         outfile_prefix = "~{prefix}.CPX",
         sv_base_mini_docker = sv_base_mini_docker
     }
