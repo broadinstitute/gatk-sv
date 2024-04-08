@@ -5,7 +5,7 @@ import "HailMerge.wdl" as HailMerge
 import "TasksMakeCohortVcf.wdl" as tasks
 import "Utils.wdl" as utils
 
-# Applies some post-hoc revisions to CNVs. Intended to be run following genotype and NCR filtering.
+# Applies some post-hoc revisions to CTX and large CNV/CPX/INV. Intended to be run following genotype filtering.
 
 workflow ManualCnvRevision {
   input {
@@ -15,17 +15,17 @@ workflow ManualCnvRevision {
 
     # See src/sv-pipeline/scripts/manual_review.py for file descriptions and formats
     File? new_cnv_table
+    File? new_ctx_table
     File? remove_vids_list
     File? multiallelic_vids_list
     File? add_call_table
     File? remove_call_table
+    File? filter_call_table
     File? coords_table
     File? gd_table
     File? spanned_del_table
 
-    # Must be supplied together
-    File? spanned_del_cpx_vids_list
-    Array[File]? cpx_vcfs
+    File cytobands
 
     Int records_per_shard
 
@@ -53,47 +53,6 @@ workflow ManualCnvRevision {
     RuntimeAttr? runtime_attr_apply_cpx
   }
 
-  call utils.GetSampleIdsFromVcf {
-    input:
-      vcf = vcf,
-      sv_base_mini_docker = sv_base_mini_docker,
-      runtime_attr_override = runtime_attr_ids_from_vcf
-  }
-
-  if (defined(spanned_del_cpx_vids_list)) {
-    Array[File] cpx_vcfs_ = select_first([cpx_vcfs])
-    File vids_list_ = select_first([spanned_del_cpx_vids_list])
-    scatter ( i in range(length(cpx_vcfs_))) {
-      call GetSpannedDeletionsFromComplexResolve {
-        input:
-          vcf = cpx_vcfs_[i],
-          vcf_index = cpx_vcfs_[i] + ".tbi",
-          vids_list = vids_list_,
-          prefix = "~{output_prefix}.spanned_del_cpx.shard_~{i}",
-          sample_list=GetSampleIdsFromVcf.out_file,
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_override_spanned_cpx
-      }
-      call ApplyManualReviewUpdates as ApplyUpdatesToDeletionsFromComplexResolve {
-        input:
-          vcf=GetSpannedDeletionsFromComplexResolve.out,
-          ped_file=ped_file,
-          prefix="~{output_prefix}.spanned_del_cpx_manual_review.shard_~{i}",
-          remove_vids_list=remove_vids_list,
-          multiallelic_vids_list=multiallelic_vids_list,
-          add_call_table=add_call_table,
-          remove_call_table=remove_call_table,
-          coords_table=coords_table,
-          gd_table=gd_table,
-          spanned_del_table=spanned_del_table,
-          spanned_del_vids_list = vids_list_,
-          script=apply_manual_review_script,
-          sv_pipeline_docker=sv_pipeline_docker,
-          runtime_attr_override=runtime_attr_apply_cpx
-      }
-    }
-  }
-
   call tasks.ScatterVcf {
     input:
       vcf=vcf,
@@ -109,11 +68,15 @@ workflow ManualCnvRevision {
       vcf=ScatterVcf.shards[i],
       ped_file=ped_file,
       prefix="~{output_prefix}.manual_review.shard_~{i}",
+      cytobands=cytobands,
+      cytobands_index = "~{cytobands}.tbi",
       new_cnv_table=if i == 0 then new_cnv_table else NONE_FILE_,
+      new_ctx_table=if i == 0 then new_ctx_table else NONE_FILE_,
       remove_vids_list=remove_vids_list,
       multiallelic_vids_list=multiallelic_vids_list,
       add_call_table=add_call_table,
       remove_call_table=remove_call_table,
+      filter_call_table=filter_call_table,
       coords_table=coords_table,
       gd_table=gd_table,
       spanned_del_table=spanned_del_table,
@@ -123,8 +86,8 @@ workflow ManualCnvRevision {
     }
   }
 
-  Array[File] vcf_shards = flatten(select_all([ApplyManualReviewUpdates.out, ApplyUpdatesToDeletionsFromComplexResolve.out]))
-  Array[File] vcf_shard_indexes = flatten(select_all([ApplyManualReviewUpdates.out_index, ApplyUpdatesToDeletionsFromComplexResolve.out_index]))
+  Array[File] vcf_shards = ApplyManualReviewUpdates.out
+  Array[File] vcf_shard_indexes = ApplyManualReviewUpdates.out_index
 
   if (use_hail) {
     call HailMerge.HailMerge {
@@ -210,11 +173,16 @@ task ApplyManualReviewUpdates {
     File ped_file
     String prefix
 
+    File cytobands
+    File cytobands_index
+
     File? new_cnv_table
+    File? new_ctx_table
     File? remove_vids_list
     File? multiallelic_vids_list
     File? add_call_table
     File? remove_call_table
+    File? filter_call_table
     File? coords_table
     File? gd_table
     File? spanned_del_table
@@ -252,11 +220,14 @@ task ApplyManualReviewUpdates {
       --vcf ~{vcf} \
       --out ~{prefix}.unsorted.vcf.gz \
       --ped-file ~{ped_file} \
+      --cytobands ~{cytobands} \
       ~{"--new-cnv-table " + new_cnv_table} \
+      ~{"--new-ctx-table " + new_ctx_table} \
       ~{"--remove-vids-list " + remove_vids_list} \
       ~{"--multiallelic-vids-list " + multiallelic_vids_list} \
       ~{"--add-call-table " + add_call_table} \
       ~{"--remove-call-table " + remove_call_table} \
+      ~{"--filter-call-table " + filter_call_table} \
       ~{"--coords-table " + coords_table} \
       ~{"--gd-table " + gd_table} \
       ~{"--spanned-del-table " + spanned_del_table} \
