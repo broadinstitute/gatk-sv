@@ -555,15 +555,19 @@ def process(pe_background, out_file):
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
         curr_svid = None
         curr_samples = None
+        curr_lines = None
         background = dict()  # {svid: {non_carrier_sample: pe_count}}
         for line in pe:
             if line.startswith("#"):
                 curr_svid, samp_string = line.strip().lstrip("#").split("\t")
                 curr_samples = set(samp_string.split(","))
+                curr_lines = set()
                 if curr_svid not in background:
                     background[curr_svid] = dict()
             else:
-                increment_count(background, line, curr_svid, curr_samples, pe_header)
+                if line not in curr_lines:
+                    curr_lines.add(line)
+                    increment_count(background, line, curr_svid, curr_samples, pe_header)
     write_background(out_file, background)
 
 process("~{background_pe}", "~{prefix}.background.stats.tsv")

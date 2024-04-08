@@ -96,6 +96,7 @@ def process(pe_evidence, out_file, background):
         pe_header = {x:i for i,x in enumerate("chrom1 pos1 dir1 chrom2 pos2 dir2 sample".split())}
         curr_descriptor = None
         curr_pe = None
+        curr_lines = None
         for line in pe:
             fields = line.strip().lstrip("#").split("\t")
             if first:
@@ -107,8 +108,11 @@ def process(pe_evidence, out_file, background):
                     out.write("\t".join(curr_out) + "\n")
                 curr_descriptor = fields
                 curr_pe = []
+                curr_lines = set()
             else:
-                curr_pe.append(fields)
+                if line not in curr_lines:
+                    curr_lines.add(line)
+                    curr_pe.append(fields)
         # handle last variant
         if len(curr_pe) > 0:
             curr_out = evaluate(curr_descriptor, curr_pe, descriptor_header, pe_header, background)
