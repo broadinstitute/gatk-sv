@@ -1056,10 +1056,13 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
         )
     with gzip.open(revision_manifest_path, "wt") as f_manifest, \
             pysam.VariantFile(input_vcf_path) as f_in:
+        # Propagate header and add ECN in case it doesn't exist
+        header = f_in.header
+        header.add_line('##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number for ref genotype">')
         # Find invalidated records and reset their genotypes
         with gzip.open(revised_genotypes_tsv_path, mode="wt") as f_geno, \
-                pysam.VariantFile(revised_records_before_update_path, mode="w", header=f_in.header) as f_before, \
-                pysam.VariantFile(revised_records_after_update_path, mode="w", header=f_in.header) as f_after:
+                pysam.VariantFile(revised_records_before_update_path, mode="w", header=header) as f_before, \
+                pysam.VariantFile(revised_records_after_update_path, mode="w", header=header) as f_after:
             new_false_negatives_dict = revise_genotypes(
                 f_in=f_in, f_geno=f_geno, f_before=f_before, f_after=f_after, f_manifest=f_manifest,
                 batch=batch, false_positives_dict=false_positives_dict,
@@ -1069,7 +1072,7 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                 ploidy_table_dict=ploidy_table_dict)
         # Revise invalidated records
         with pysam.VariantFile(revised_records_before_update_path) as f_before, \
-                pysam.VariantFile(unsorted_new_records_path, mode="w", header=f_in.header) as f_new:
+                pysam.VariantFile(unsorted_new_records_path, mode="w", header=header) as f_new:
             new_partial_events_tree_dict = revise_partially_supported_variants(
                 f_before=f_before,
                 f_new=f_new,
@@ -1160,7 +1163,7 @@ def main(argv: Optional[List[Text]] = None):
     args = _parse_arguments(argv)
     logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
-    logging.info("Reading ped file...")
+    logging.info("Reading ploidy table file...")
     ploidy_table_dict = read_ploidy_table(args.ploidy_table)
     logging.info("Reading genomic disorder regions bed file...")
     gdr_trees, gdr_del_ids, gdr_dup_ids = create_trees_from_bed_records_by_type(bed_path=args.region_bed,
