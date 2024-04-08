@@ -588,6 +588,7 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                     # Set RD genotyping fields but not PESR since we did not re-examine that evidence
                     rescue_format_fields(gt=record.samples[gdr_match.sample],
                                          sample=gdr_match.sample,
+                                         chrom=record.chrom,
                                          svtype=svtype,
                                          genotype_calls=gdr_match.genotype_calls,
                                          rescue_genotype=True, reset_pesr=False,
@@ -678,8 +679,8 @@ def reset_format_fields(gt, sample, chrom, reset_genotype, reset_pesr, ploidy_ta
             gt[key] = val
 
 
-def rescue_format_fields(gt, sample, svtype, genotype_calls, rescue_genotype, reset_pesr, ploidy_table_dict):
-    ecn = get_expected_cn(gt, sample=sample, ploidy_table_dict=ploidy_table_dict)
+def rescue_format_fields(gt, sample, chrom, svtype, genotype_calls, rescue_genotype, reset_pesr, ploidy_table_dict):
+    ecn = get_expected_cn(chrom=chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
     if ecn == 0:
         # Do not rescue on ploidy 0
         return
@@ -794,7 +795,8 @@ def create_new_variants(f_new, f_manifest, new_records_dict, batch, ploidy_table
                     gt["GT"] = (None, None)
                     gt["ECN"] = get_expected_cn(chrom=match.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
                     if s == sample:
-                        rescue_format_fields(gt=gt, sample=sample, svtype=svtype, genotype_calls=match.genotype_calls,
+                        rescue_format_fields(gt=gt, sample=sample, chrom=record.chrom,
+                                             svtype=svtype, genotype_calls=match.genotype_calls,
                                              rescue_genotype=True, reset_pesr=True, ploidy_table_dict=ploidy_table_dict)
                     else:
                         reset_format_fields(gt=gt, sample=sample, chrom=record.chrom, reset_genotype=True, reset_pesr=True,
