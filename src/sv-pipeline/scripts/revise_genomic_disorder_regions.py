@@ -246,6 +246,13 @@ def get_n_alt_alleles(genotype_call):
     return min(2, max(1, math.ceil(math.fabs(genotype_call.call - genotype_call.threshold) / 0.5)))
 
 
+def pop_vid(dictionary, name):
+    for svtype_dict in dictionary.values():
+        for sample_dict in svtype_dict.values():
+            if name in sample_dict:
+                sample_dict.pop(name)
+
+
 def get_overlapping_samples_vcf(vcf_path, gdr_trees, region_intervals_dict,
                                 genotypes, cutoff, vcf_min_size,
                                 min_supported_valid_overlapping_intervals_frac,
@@ -266,7 +273,10 @@ def get_overlapping_samples_vcf(vcf_path, gdr_trees, region_intervals_dict,
             stop = record.stop
             name = record.id
             if name in vcf_vids:
-                raise ValueError(f"All variant ids in the input vcf must be unique; encountered duplicate: {name}")
+                logging.warning(f"Variants with non-unique IDs will be ignored. Encountered duplicate: {name}")
+                pop_vid(false_negative_matches, name)
+                pop_vid(false_positive_matches, name)
+                continue
             vcf_vids.add(name)
             svtype = record.info.get("SVTYPE", "")
             svlen = record.info.get("SVLEN", 0)
