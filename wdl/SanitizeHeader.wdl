@@ -4,27 +4,32 @@ import "Structs.wdl"
 
 workflow SanitizeHeader {
   input {
-    File vcf
-    File? vcf_index
+    Array[File] vcfs
     String prefix
     String drop_fields
-    String sv_base_mini_docker
+    File sample_id_rename_map
+    File primary_contigs_list
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_sanitize_header
   }
 
-  call SanitizeHeaderTask {
-    input:
-      vcf=vcf,
-      vcf_index=select_first([vcf_index, "~{vcf}.tbi"]),
-      prefix=prefix,
-      drop_fields=drop_fields,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_sanitize_header
+  Array[String] contigs = read_lines(primary_contigs_list)
+  scatter (i in range(length(vcfs))) {
+    call SanitizeHeaderTask {
+      input:
+        vcf=vcfs[i],
+        vcf_index="~{vcfs[i]}.tbi",
+        prefix="~{prefix}.~{contigs[i]}",
+        drop_fields=drop_fields,
+        sample_id_rename_map=sample_id_rename_map,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_sanitize_header
+    }
   }
 
   output {
-    File vcf_header_sanitized = SanitizeHeaderTask.out
-    File vcf_header_sanitized_index = SanitizeHeaderTask.out_index
+    Array[File] vcf_header_sanitized = SanitizeHeaderTask.out
+    Array[File] vcf_header_sanitized_index = SanitizeHeaderTask.out_index
 
   }
 }
@@ -34,8 +39,9 @@ task SanitizeHeaderTask {
     File vcf
     File vcf_index
     String prefix
+    File sample_id_rename_map
     String drop_fields
-    String sv_base_mini_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -54,19 +60,33 @@ task SanitizeHeaderTask {
     cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
     preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
     maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-    docker: sv_base_mini_docker
+    docker: sv_pipeline_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
 
   command <<<
     set -euxo pipefail
 
+    bcftools query -l ~{vcf} | sort > samples.list
+    python <<CODE
+with open("~{sample_id_rename_map}", 'r') as rename, open("samples.list", 'r') as header:
+  all_to_rename = set()
+  for line in rename:
+    all_to_rename.add(line.strip("\n").split("\t")[0])  # create set of sample IDs to rename
+  for line in header:
+    sample = line.strip("\n")
+    if sample not in all_to_rename:
+      raise ValueError(f"Sample {sample} is in the VCF header but not in the renaming map")
+    CODE
+
     bcftools view --no-version -h ~{vcf} > header.vcf
 
     grep -v -e ^"##bcftools" header.vcf -e ^"##source=depth" -e ^"##ALT=<ID=UNR" \
-      | sed 's/Minimum passing GQ for each biallelic non-refvariant/Minimum passing SL for each biallelic variant/g' > newheader.vcf
+      | sed 's/Minimum passing GQ for each biallelic non-refvariant/Minimum passing SL for each biallelic variant/g' \
+      | sed 's/Split read genotype quality/Split-read genotype quality/g' \
+      | sed 's/##ALT=<ID=BND,Description="Translocation">/##ALT=<ID=BND,Description="Breakend">/g' > newheader.vcf
 
-    bcftools reheader -h newheader.vcf ~{vcf} \
+    bcftools reheader -h newheader.vcf ~{vcf} --samples ~{sample_id_rename_map} \
       | bcftools annotate -x ~{drop_fields} \
         --no-version \
         -O z \
