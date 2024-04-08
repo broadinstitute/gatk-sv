@@ -544,7 +544,8 @@ def check_if_true_positive_against_revision(sample, regions, svtype, true_positi
 
 def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                      false_positives_dict, revise_false_negative_dict,
-                     true_positives, min_false_negative_rescue_overlap):
+                     true_positives, min_false_negative_rescue_overlap,
+                     ploidy_table_dict):
     # Find genotypes to reset from existing records
     current_chrom = None
     new_false_negatives_dict = defaultdict(list)
@@ -571,7 +572,8 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                         new_false_negatives_dict[record.id].append(match)
                         f_geno.write(f"{record.chrom}\t{record.id}\t{match.sample}\t0\n")
                         # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
-                        reset_format_fields(record.samples[match.sample], reset_genotype=True, reset_pesr=False)
+                        reset_format_fields(gt=record.samples[match.sample], sample=match.sample, chrom=record.chrom,
+                                            reset_genotype=True, reset_pesr=False, ploidy_table_dict=ploidy_table_dict)
                         f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop,
                                                          new_id=record.id, old_id=MANIFEST_EMPTY_FIELD,
                                                          old_pos=MANIFEST_EMPTY_FIELD, old_stop=MANIFEST_EMPTY_FIELD,
@@ -585,9 +587,11 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
                     f_geno.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
                     # Set RD genotyping fields but not PESR since we did not re-examine that evidence
                     rescue_format_fields(gt=record.samples[gdr_match.sample],
+                                         sample=gdr_match.sample,
                                          svtype=svtype,
                                          genotype_calls=gdr_match.genotype_calls,
-                                         rescue_genotype=True, reset_pesr=False)
+                                         rescue_genotype=True, reset_pesr=False,
+                                         ploidy_table_dict=ploidy_table_dict)
                     f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop,
                                                      new_id=record.id, old_id=MANIFEST_EMPTY_FIELD,
                                                      old_pos=MANIFEST_EMPTY_FIELD, old_stop=MANIFEST_EMPTY_FIELD,
@@ -657,16 +661,9 @@ def write_revised_variant_record(f_revise_after, f_manifest, interval, index, ba
                                              svtype=svtype, region=region, sample=sample, batch=batch, code=code))
 
 
-def get_ecn(gt):
-    ecn = gt.get("ECN", None)
-    if ecn is None:
-        raise ValueError("Missing ECN format field")
-    return ecn
-
-
-def reset_format_fields(gt, reset_genotype, reset_pesr):
+def reset_format_fields(gt, sample, chrom, reset_genotype, reset_pesr, ploidy_table_dict):
     # Note we do not take PAR into account here to match the rest of the pipeline
-    ecn = get_ecn(gt)
+    ecn = get_expected_cn(chrom=chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
     if ecn == 0:
         # Should already be empty
         return
@@ -681,8 +678,8 @@ def reset_format_fields(gt, reset_genotype, reset_pesr):
             gt[key] = val
 
 
-def rescue_format_fields(gt, svtype, genotype_calls, rescue_genotype, reset_pesr):
-    ecn = get_ecn(gt)
+def rescue_format_fields(gt, sample, svtype, genotype_calls, rescue_genotype, reset_pesr, ploidy_table_dict):
+    ecn = get_expected_cn(gt, sample=sample, ploidy_table_dict=ploidy_table_dict)
     if ecn == 0:
         # Do not rescue on ploidy 0
         return
@@ -712,17 +709,20 @@ def rescue_format_fields(gt, svtype, genotype_calls, rescue_genotype, reset_pesr
             gt[key] = val
 
 
-def reset_record(record):
+def reset_record(record, ploidy_table_dict):
     new_record = record.copy()
     new_record.info["EVIDENCE"] = retain_values_if_present(new_record.info, "EVIDENCE", ["RD", "BAF"])
     # Reset all other samples to hom-ref
     for s, gt in new_record.samples.items():
-        reset_format_fields(gt, reset_genotype=True, reset_pesr=True)
+        reset_format_fields(gt=gt, sample=s, chrom=new_record.chrom,
+                            reset_genotype=True, reset_pesr=True,
+                            ploidy_table_dict=ploidy_table_dict)
     return new_record
 
 
 def revise_partially_supported_variants(f_before, f_new, f_manifest, batch,
-                                        false_positives_dict, dangling_fraction):
+                                        false_positives_dict, dangling_fraction,
+                                        ploidy_table_dict):
     # Create partial events from existing variants
     # (svtype, sample, chrom) -> list(intervals)
     new_partial_events_tree_dict = dict()
@@ -744,7 +744,7 @@ def revise_partially_supported_variants(f_before, f_new, f_manifest, batch,
         original_gt_dict = {sample: (vcf_record.samples[sample]["GT"], vcf_record.samples[sample]["RD_CN"],
                                      vcf_record.samples[sample]["RD_GQ"]) for sample in overlapper_samples}
         # Copy of record with all genotypes reset to hom ref
-        wiped_record = reset_record(vcf_record)
+        wiped_record = reset_record(vcf_record, ploidy_table_dict=ploidy_table_dict)
         # Dictionary keyed on interval mapping to a list of carrier samples
         intervals_dict = defaultdict(list)
         # Iterate over samples, subtracting invalidated intervals and creating new records from the result
@@ -788,16 +788,17 @@ def create_new_variants(f_new, f_manifest, new_records_dict, batch, ploidy_table
                 record.info["EVIDENCE"] = ("RD",)
                 record.info["ALGORITHMS"] = ("depth",)
                 for s, gt in record.samples.items():
-                    # Set GT and ECN so we can use the rescue/reset format field methods
+                    # Set GT so we can use the rescue/reset format field methods
                     # TODO : we use diploid genotypes to follow gatk-sv format, but ideally we'd
                     #  detect it from an existing record
                     gt["GT"] = (None, None)
                     gt["ECN"] = get_expected_cn(chrom=match.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
                     if s == sample:
-                        rescue_format_fields(gt=gt, svtype=svtype, genotype_calls=match.genotype_calls,
-                                             rescue_genotype=True, reset_pesr=True)
+                        rescue_format_fields(gt=gt, sample=sample, svtype=svtype, genotype_calls=match.genotype_calls,
+                                             rescue_genotype=True, reset_pesr=True, ploidy_table_dict=ploidy_table_dict)
                     else:
-                        reset_format_fields(gt, reset_genotype=True, reset_pesr=True)
+                        reset_format_fields(gt=gt, sample=sample, chrom=record.chrom, reset_genotype=True, reset_pesr=True,
+                                            ploidy_table_dict=ploidy_table_dict)
                 f_new.write(record)
                 f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop, new_id=vid,
                                                  old_id=MANIFEST_EMPTY_FIELD, old_pos=MANIFEST_EMPTY_FIELD,
@@ -1064,7 +1065,8 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                 batch=batch, false_positives_dict=false_positives_dict,
                 revise_false_negative_dict=revise_false_negative_dict,
                 true_positives=true_positives,
-                min_false_negative_rescue_overlap=min_false_negative_rescue_overlap)
+                min_false_negative_rescue_overlap=min_false_negative_rescue_overlap,
+                ploidy_table_dict=ploidy_table_dict)
         # Revise invalidated records
         with pysam.VariantFile(revised_records_before_update_path) as f_before, \
                 pysam.VariantFile(unsorted_new_records_path, mode="w", header=f_in.header) as f_new:
@@ -1074,7 +1076,8 @@ def revise_genotypes_and_create_records(input_vcf_path, revised_genotypes_tsv_pa
                 f_manifest=f_manifest,
                 batch=batch,
                 false_positives_dict=false_positives_dict,
-                dangling_fraction=dangling_fraction
+                dangling_fraction=dangling_fraction,
+                ploidy_table_dict=ploidy_table_dict
             )
             new_records_dict = \
                 adjudicate_raw_region_false_negatives(
@@ -1111,7 +1114,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         description="Cleans up biallelic DEL/DUP variants in genomic disorder regions",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--vcf', type=str, required=True, help='Input vcf, GATK-formatted with ECN format fields')
+    parser.add_argument('--vcf', type=str, required=True, help='Input vcf')
     parser.add_argument('--region-bed', type=str, required=True, help='Preprocessed genomic disorder regions bed')
     parser.add_argument('--par-bed', type=str, required=True, help='PAR region bed')
     parser.add_argument('--geno-file-list', type=str, required=True,
