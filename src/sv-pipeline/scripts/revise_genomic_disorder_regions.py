@@ -641,7 +641,8 @@ def manifest_record(chrom, pos, stop, new_id, old_id, old_pos, old_stop, svtype,
 
 
 def write_revised_variant_record(f_revise_after, f_manifest, interval, index, base_record, vid, samples,
-                                 original_gt_dict, regions, old_pos, old_stop, svtype, batch, code):
+                                 original_gt_dict, regions, old_pos, old_stop, svtype, batch, ploidy_table_dict,
+                                 code):
     new_record = base_record.copy()
     new_record.id = f"{vid}_revised_{index}"
     new_record.pos = interval[0]
@@ -654,6 +655,8 @@ def write_revised_variant_record(f_revise_after, f_manifest, interval, index, ba
         sample_gt["GT"] = original_gt_tuple[0]
         sample_gt["RD_CN"] = original_gt_tuple[1]
         sample_gt["RD_GQ"] = original_gt_tuple[2]
+        # TODO this isn't necessary but we set it just in case
+        sample_gt["ECN"] = get_expected_cn(chrom=new_record.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
     f_revise_after.write(new_record)
     for sample in samples:
         for region in regions:
@@ -767,6 +770,7 @@ def revise_partially_supported_variants(f_before, f_new, f_manifest, batch,
                                          index=i, base_record=wiped_record, vid=vid, samples=intervals_dict[interval],
                                          original_gt_dict=original_gt_dict, regions=regions,
                                          old_pos=pos, old_stop=stop, svtype=svtype, batch=batch,
+                                         ploidy_table_dict=ploidy_table_dict,
                                          code=CODE_REVISED_BREAKPOINTS_OF_EXISTING_VARIANT)
     return new_partial_events_tree_dict
 
