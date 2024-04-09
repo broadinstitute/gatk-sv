@@ -648,6 +648,9 @@ def write_revised_variant_record(f_revise_after, f_manifest, interval, index, ba
     new_record.pos = interval[0]
     new_record.stop = interval[1]
     new_record.info["SVLEN"] = new_record.stop - new_record.pos
+    # TODO this isn't necessary but we set ECN for all samples just in case
+    for sample, gt in new_record.samples.items():
+        gt["ECN"] = get_expected_cn(chrom=new_record.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
     # Restore carriers' original GT and RD genotype data
     for sample in samples:
         sample_gt = new_record.samples[sample]
@@ -655,8 +658,6 @@ def write_revised_variant_record(f_revise_after, f_manifest, interval, index, ba
         sample_gt["GT"] = original_gt_tuple[0]
         sample_gt["RD_CN"] = original_gt_tuple[1]
         sample_gt["RD_GQ"] = original_gt_tuple[2]
-        # TODO this isn't necessary but we set it just in case
-        sample_gt["ECN"] = get_expected_cn(chrom=new_record.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
     f_revise_after.write(new_record)
     for sample in samples:
         for region in regions:
@@ -797,7 +798,7 @@ def create_new_variants(f_new, f_manifest, new_records_dict, batch, ploidy_table
                     # TODO : we use diploid genotypes to follow gatk-sv format, but ideally we'd
                     #  detect it from an existing record
                     gt["GT"] = (None, None)
-                    gt["ECN"] = get_expected_cn(chrom=match.chrom, sample=sample, ploidy_table_dict=ploidy_table_dict)
+                    gt["ECN"] = get_expected_cn(chrom=match.chrom, sample=s, ploidy_table_dict=ploidy_table_dict)
                     if s == sample:
                         rescue_format_fields(gt=gt, sample=sample, chrom=record.chrom,
                                              svtype=svtype, genotype_calls=match.genotype_calls,
