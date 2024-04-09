@@ -149,6 +149,7 @@ workflow GenotypeGenomicDisorderRegions {
         vcf = cohort_vcfs[i],
         vcf_index = cohort_vcfs[i] + ".tbi",
         genotype_tsv = CatRevisedGenotypes.outfile,
+        ploidy_table = ploidy_table,
         contig = contig,
         script = reset_genotypes_script,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -182,6 +183,7 @@ workflow GenotypeGenomicDisorderRegions {
         prefix="~{output_prefix}.~{contig_str}.set_missing_fields",
         vcf = SVCluster.out,
         vcf_index = SVCluster.out_index,
+        ploidy_table = ploidy_table,
         script = reset_genotypes_script,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_set_missing_formats
@@ -292,6 +294,7 @@ task SetGenotypesInExistingVariants {
     File vcf
     File vcf_index
     File genotype_tsv
+    File ploidy_table
     String? contig
     File? script
     String sv_pipeline_docker
@@ -324,6 +327,7 @@ task SetGenotypesInExistingVariants {
     else
       python ~{default="/opt/src/sv-pipeline/scripts/reset_del_dup_genotypes.py" script} \
         --vcf ~{vcf} \
+        --ploidy-table ~{ploidy_table} \
         --genotype-tsv ~{genotype_tsv} \
         --out ~{prefix}.vcf.gz
     fi
@@ -349,6 +353,7 @@ task SetMissingGenotypingFormatFields {
     String prefix
     File vcf
     File vcf_index
+    File ploidy_table
     File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -366,6 +371,7 @@ task SetMissingGenotypingFormatFields {
     set -euxo pipefail
     python ~{default="/opt/src/sv-pipeline/scripts/reset_del_dup_genotypes.py" script} \
       --vcf ~{vcf} \
+      --ploidy-table ~{ploidy_table} \
       --reset-format-fields \
       --out ~{prefix}.vcf.gz
   >>>
