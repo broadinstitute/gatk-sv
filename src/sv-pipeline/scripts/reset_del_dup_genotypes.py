@@ -123,7 +123,7 @@ def set_genotypes(in_path, out_path, genotype_data, reset_all_format_fields, plo
                         reset_format_fields(gt=gt, sample=sample, chrom=record.chrom,
                                             ploidy_table_dict=ploidy_table_dict, n_alt_alleles=n_alt_alleles)
                 elif reset_all_format_fields:
-                    for _, gt in record.samples.items():
+                    for sample, gt in record.samples.items():
                         reset_format_fields(gt=gt, sample=sample, chrom=record.chrom,
                                             ploidy_table_dict=ploidy_table_dict)
                 fout.write(record)
