@@ -113,7 +113,12 @@ def update_workflow_json(
         logging.info(f"Processing input {k}.")
         workflow_input_local_filename = Path(working_dir).joinpath(Path(v).name)
         localize_file(v, workflow_input_local_filename)
-        updated_files = handler.transformer.downsample(workflow_input_local_filename, output_filename_prefix, regions)
+        updated_files = handler.transformer.transform(
+            input_filename=workflow_input_local_filename,
+            output_prefix=output_filename_prefix,
+            regions=regions
+        )
+
         if bucket_name is not None and blob_name is not None:
             for varname, filename in updated_files.items():
                 logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")

@@ -32,6 +32,9 @@ class BaseTransformer:
     def get_output_filename(self, input_filename, output_prefix):
         return str(self.working_dir.joinpath(f"{output_prefix}{Path(input_filename).name}"))
 
+    def transform(self, input_filename: str, output_prefix: str, **kwargs):
+        raise NotImplementedError()
+
 
 class BaseConverter(BaseTransformer):
     def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
@@ -41,7 +44,7 @@ class BaseConverter(BaseTransformer):
     def get_supported_file_types() -> List[str]:
         raise NotImplementedError()
 
-    def convert(self, input_filename: str, output_prefix: str) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, **kwargs) -> dict:
         raise NotImplementedError()
 
 
@@ -55,14 +58,13 @@ class BedToIntervalListConverter(BaseConverter):
     def get_supported_file_types() -> List[str]:
         return [".interval_list"]
 
-    def convert(self, input_filename: str, output_prefix: str) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         subprocess.run(
             ["java", "-jar", self.picard_path, "BedToIntervalList",
              "-I", input_filename, "-O", output_filename, "-SD", self.sequence_dict_filename],
             check=True)
         return self.callback(output_filename)
-
 
 
 class BaseDownsampler(BaseTransformer):
@@ -77,7 +79,7 @@ class BaseDownsampler(BaseTransformer):
         """
         raise NotImplementedError()
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         raise NotImplementedError()
 
 
@@ -91,7 +93,7 @@ class CramDownsampler(BaseDownsampler):
     def get_supported_file_types() -> List[str]:
         return [".cram"]
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename_unsorted = self.get_output_filename(input_filename, f"unsorted_{output_prefix}")
         with pysam.AlignmentFile(input_filename, "rc") as cram:
             header = cram.header
@@ -137,7 +139,6 @@ class CramDownsampler(BaseDownsampler):
                     del read_dict[q_name]
 
 
-
 class VcfDownsampler(BaseDownsampler):
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
@@ -146,7 +147,7 @@ class VcfDownsampler(BaseDownsampler):
     def get_supported_file_types() -> List[str]:
         return [".vcf"]
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         with \
                 pysam.VariantFile(input_filename) as input_file, \
@@ -178,7 +179,7 @@ class IntervalListDownsampler(BaseDownsampler):
     def get_supported_file_types() -> List[str]:
         return [".interval_list"]
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         # Note that this algorithm is not efficient.
         with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
@@ -203,7 +204,7 @@ class BedDownsampler(BaseDownsampler):
     def get_supported_file_types() -> List[str]:
         return [".bed"]
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         # Note that this algorithm is not efficient.
         with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
@@ -226,7 +227,7 @@ class PrimaryContigsDownsampler(BaseDownsampler):
     def get_supported_file_types() -> List[str]:
         return []
 
-    def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         include_chrs = set([r.chr for r in regions])
         with open(input_filename, "r") as input_file, open(output_filename, "w") as output_file:
