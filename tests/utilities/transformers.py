@@ -2,6 +2,7 @@ import os
 import pysam
 import subprocess
 
+from collections import defaultdict
 from typing import Callable, List
 from dataclasses import dataclass
 from pathlib import Path
@@ -91,30 +92,50 @@ class CramDownsampler(BaseDownsampler):
         return [".cram"]
 
     def downsample(self, input_filename: str, output_prefix: str, regions: List[Region]) -> dict:
-        # Implementation notes:
-        # 1. This method calls `samtools` instead of using `pysam` since it needs to include
-        #    distant pair-end reads in the downsampled regions (i.e., the `--fetch-pairs` flag).
-        #    Such reads are needed for MELT to function properly.
-        #
-        # 2. The method writes target regions to a BED file. While taking the BED file containing
-        #    the regions as input seems a better option, the current approach is implemented as
-        #    taking a BED file as input instead of a list of regions would convolut the method signature.
+        output_filename_unsorted = self.get_output_filename(input_filename, f"unsorted_{output_prefix}")
+        with pysam.AlignmentFile(input_filename, "rc") as cram:
+            header = cram.header
+            references = cram.references
 
-        regions_filename = os.path.join(self.working_dir, "_tmp_regions.bed")
-        with open(regions_filename, "w") as f:
+        with pysam.AlignmentFile(output_filename_unsorted, "wc",header=header,reference_names=references) as output_cram_file:
             for region in regions:
-                f.write("\t".join([str(region.chr), str(region.start), str(region.end)]) + "\n")
-
+                for r1, r2 in self.read_pair_generator(input_filename,
+                                                       region=f"{region.chr}:{region.start}-{region.end}"):
+                    output_cram_file.write(r1)
+                    output_cram_file.write(r2)
         output_filename = self.get_output_filename(input_filename, output_prefix)
-        subprocess.run(
-            ["samtools", "view", input_filename, "--reference", self.reference_fasta,
-             "--targets-file", regions_filename, "--output", output_filename, "--cram", "--fetch-pairs"]
-        )
+        pysam.sort("-o", output_filename, output_filename_unsorted)
+        os.remove(output_filename_unsorted)
+        index_filename = f"{output_filename}.crai"
+        pysam.index(output_filename, index_filename)
+        return self.callback(output_filename, index_filename)
 
-        subprocess.run(["samtools", "index", output_filename])
+    @staticmethod
+    def read_pair_generator(filename, region=None):
+        """
+        Generate read pairs in a BAM file or within a region string.
+        Reads are added to read_dict until a pair is found.
 
-        os.remove(regions_filename)
-        return self.callback(output_filename, output_filename + ".fai")
+        See the following Q&A for details: https://www.biostars.org/p/306041/#332022
+        """
+        read_dict = defaultdict(lambda: [None, None])
+        with pysam.AlignmentFile(filename, "rc") as cram:
+            for read in cram.fetch(region=region):
+                if not read.is_proper_pair or read.is_secondary or read.is_supplementary:
+                    continue
+                q_name = read.query_name
+                if q_name not in read_dict:
+                    if read.is_read1:
+                        read_dict[q_name][0] = read
+                    else:
+                        read_dict[q_name][1] = read
+                else:
+                    if read.is_read1:
+                        yield read, read_dict[q_name][1]
+                    else:
+                        yield read_dict[q_name][0], read
+                    del read_dict[q_name]
+
 
 
 class VcfDownsampler(BaseDownsampler):
