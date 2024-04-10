@@ -531,14 +531,13 @@ def get_fragment_intervals_to_remove(sample_overlappers, invalidated_intervals, 
     return flanking_intervals_to_remove
 
 
-def check_if_true_positive_against_revision(sample, regions, svtype, true_positives, record_interval,
+def check_if_true_positive_against_revision(sample, region, svtype, true_positives, record_interval,
                                             min_false_negative_rescue_overlap):
     record_size = record_interval[1] - record_interval[0]
-    for region in regions:
-        if svtype in true_positives and sample in true_positives[svtype] and region in true_positives[svtype][sample]:
-            for tp_interval in true_positives[svtype][sample][region]:
-                if overlap_size(tp_interval, record_interval) / record_size >= min_false_negative_rescue_overlap:
-                    return True
+    if svtype in true_positives and sample in true_positives[svtype] and region in true_positives[svtype][sample]:
+        for tp_interval in true_positives[svtype][sample][region]:
+            if overlap_size(tp_interval, record_interval) / record_size >= min_false_negative_rescue_overlap:
+                return True
     return False
 
 
@@ -559,45 +558,45 @@ def revise_genotypes(f_in, f_geno, f_before, f_after, f_manifest, batch,
             f_before.write(record)
             if record.id in false_positives_dict:
                 gdr_records = false_positives_dict[record.id]
-                record_interval = Interval(record.pos, record.stop)
                 # Reset genotypes to hom-ref for invalidated samples
                 for match in gdr_records:
+                    f_geno.write(f"{record.chrom}\t{record.id}\t{match.sample}\t0\n")
+                    # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
+                    reset_format_fields(gt=record.samples[match.sample], sample=match.sample, chrom=record.chrom,
+                                        reset_genotype=True, reset_pesr=False, ploidy_table_dict=ploidy_table_dict)
+                    f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop,
+                                                     new_id=record.id, old_id=MANIFEST_EMPTY_FIELD,
+                                                     old_pos=MANIFEST_EMPTY_FIELD, old_stop=MANIFEST_EMPTY_FIELD,
+                                                     svtype=svtype, region=match.region,
+                                                     sample=match.sample,
+                                                     batch=batch, code=CODE_FALSE_POSITIVE_IN_EXISTING_VARIANT))
+            if record.id in revise_false_negative_dict:
+                gdr_records = revise_false_negative_dict[record.id]
+                # Set genotypes to het/hom-var for supported samples
+                for match in gdr_records:
                     # Check for true positives that could explain this call
+                    record_interval = Interval(record.pos, record.stop)
                     has_true_positive = check_if_true_positive_against_revision(
-                        sample=match.sample, regions=match.region, svtype=svtype, true_positives=true_positives,
+                        sample=match.sample, region=match.region, svtype=svtype, true_positives=true_positives,
                         record_interval=record_interval,
                         min_false_negative_rescue_overlap=min_false_negative_rescue_overlap
                     )
                     if not has_true_positive:
                         new_false_negatives_dict[record.id].append(match)
-                        f_geno.write(f"{record.chrom}\t{record.id}\t{match.sample}\t0\n")
-                        # Reset RD genotyping fields but not PESR since we did not re-examine that evidence
-                        reset_format_fields(gt=record.samples[match.sample], sample=match.sample, chrom=record.chrom,
-                                            reset_genotype=True, reset_pesr=False, ploidy_table_dict=ploidy_table_dict)
+                        f_geno.write(f"{record.chrom}\t{record.id}\t{match.sample}\t1\n")
+                        # Set RD genotyping fields but not PESR since we did not re-examine that evidence
+                        rescue_format_fields(gt=record.samples[match.sample],
+                                             sample=match.sample,
+                                             chrom=record.chrom,
+                                             svtype=svtype,
+                                             genotype_calls=match.genotype_calls,
+                                             rescue_genotype=True, reset_pesr=False,
+                                             ploidy_table_dict=ploidy_table_dict)
                         f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop,
                                                          new_id=record.id, old_id=MANIFEST_EMPTY_FIELD,
                                                          old_pos=MANIFEST_EMPTY_FIELD, old_stop=MANIFEST_EMPTY_FIELD,
-                                                         svtype=svtype, region=match.region,
-                                                         sample=match.sample,
-                                                         batch=batch, code=CODE_FALSE_POSITIVE_IN_EXISTING_VARIANT))
-            if record.id in revise_false_negative_dict:
-                gdr_records = revise_false_negative_dict[record.id]
-                # Set genotypes to het/hom-var for supported samples
-                for gdr_match in gdr_records:
-                    f_geno.write(f"{record.chrom}\t{record.id}\t{gdr_match.sample}\t1\n")
-                    # Set RD genotyping fields but not PESR since we did not re-examine that evidence
-                    rescue_format_fields(gt=record.samples[gdr_match.sample],
-                                         sample=gdr_match.sample,
-                                         chrom=record.chrom,
-                                         svtype=svtype,
-                                         genotype_calls=gdr_match.genotype_calls,
-                                         rescue_genotype=True, reset_pesr=False,
-                                         ploidy_table_dict=ploidy_table_dict)
-                    f_manifest.write(manifest_record(chrom=record.chrom, pos=record.pos, stop=record.stop,
-                                                     new_id=record.id, old_id=MANIFEST_EMPTY_FIELD,
-                                                     old_pos=MANIFEST_EMPTY_FIELD, old_stop=MANIFEST_EMPTY_FIELD,
-                                                     svtype=svtype, region=gdr_match.region, sample=gdr_match.sample,
-                                                     batch=batch, code=CODE_FALSE_NEGATIVE_IN_EXISTING_VARIANT))
+                                                         svtype=svtype, region=match.region, sample=match.sample,
+                                                         batch=batch, code=CODE_FALSE_NEGATIVE_IN_EXISTING_VARIANT))
             # Write revised record for review
             f_after.write(record)
     # Return updated dict that has removed calls with existing true positives
