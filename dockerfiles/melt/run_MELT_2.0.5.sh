@@ -85,7 +85,7 @@ elif [[ "$REF_VER" == "19" ]]; then
   GENE_BED_FILE="${MELT_DIR}/add_bed_files/1KGP_Hg19/hg19.genes.bed"
 fi
 
-##### Create output directory if it doesn't exist. then run MELT Single
+##### Run MELT Single
 java -Xmx"${JVM_MAX_MEM}" \
   -jar "${MELT_DIR}/MELT.jar" \
   Single \
