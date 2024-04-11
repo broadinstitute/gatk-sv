@@ -161,12 +161,24 @@ def _process(record, fout, sample_set, remove_vids_set, spanned_del_vids_set, sp
             gt['EV'] = ('RD',)
             for key in GQ_FIELDS:
                 gt[key] = 99
+    # annotate CTX arms
     if record.info['SVTYPE'] == "CTX":
         armA, armB = get_arms(record, cytobands)
         if armA == armB:
             record.info['CPX_TYPE'] = "CTX_PP/QQ"
         else:
             record.info['CPX_TYPE'] = "CTX_PQ/QP"
+    # for INS revised to dDUP, revise back to INS unless manually reviewed for depth info (>1Mb)
+    if record.info['SVTYPE'] == 'CPX' and "_INS_" in record.id and int(record.info['SVLEN']) < 1000000:
+        record.alts = ('<INS>',)
+        record.info['SVTYPE'] = 'INS'
+        record.info['SOURCE'] = [x for x in record.info['CPX_INTERVALS'] if x.startswith("INV_")][0]
+        del record.info['CPX_INTERVALS']
+        del record.info['CPX_TYPE']
+    # remove CHR2 from INS if present (added back during reclustering)
+    if record.info['SVTYPE'] == 'INS' and 'CHR2' in record.info:
+        del record.info['CHR2']
+    # set GTs for samples with unassigned sex to null on allosomes
     if record.chrom in allosomes:
         for s in no_sex_samples:
             if s in sample_set:
@@ -182,8 +194,8 @@ def _create_new_variants(fout, new_cnv_dict):
         pos = int(value[1])
         end = int(value[2])
         carrier_samples = set(value[3].split(','))
-        is_dup = 'DUP' in vid
-        is_del = 'DEL' in vid
+        is_dup = 'DUP' in vid or 'dup' in vid
+        is_del = 'DEL' in vid or 'del' in vid
         if is_dup:
             alt = '<DUP>'
             svtype = 'DUP'
