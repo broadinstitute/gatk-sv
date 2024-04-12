@@ -133,11 +133,20 @@ workflow GatherSampleEvidence {
   File bam_or_cram_index_ = select_first([bam_or_cram_index, bam_or_cram_file + index_ext_])
 
   # move the reads nearby -- handles requester_pays and makes cross-region transfers just once
+
+
+
   if (run_localize_reads) {
+    call getBasename{
+      input:
+        cram_file = bam_or_cram_file,
+        cram_index = bam_or_cram_index,
+        move_files = move_bam_or_cram_files
+    }
     call LocalizeReads {
     input:
-      reads_path = bam_or_cram_file,
-      reads_index = bam_or_cram_index_,
+      reads_path = getBasename.output_cram_file_name,
+      reads_index = getBasename.output_cram_file_index_name,
       move_files = move_bam_or_cram_files,
       runtime_attr_override = runtime_attr_localize_reads
     }
@@ -324,11 +333,51 @@ workflow GatherSampleEvidence {
 }
 
 
+task getBasename {
+  input {
+    File cram_file
+    File cram_index
+    Boolean move_files = false
+    RuntimeAttr? runtime_attr_override
+  }
+  Float input_size = if move_files then size(cram_file, "GB") * 2 else size(cram_file, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(50.0 + input_size),
+                                  cpu_cores: 2,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: "ubuntu:18.04"
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command {
+    ln -s ~{cram_file} .
+    ln -s ~{cram_index} .
+    ls *.cram > cram_file.txt
+    ls *.cram.crai > cram_file_index.txt
+  }
+  output {
+    String output_cram_name = read_string("cram_file.txt")
+    String output_cram_index_name = read_string("cram_file_index.txt")
+  }
+}
+
+
 task LocalizeReads {
   input {
     File reads_path
     File reads_index
-    String collaborator_participant_id
     Boolean move_files = false
     RuntimeAttr? runtime_attr_override
   }
@@ -376,7 +425,7 @@ task LocalizeReads {
     fi
   }
   output {
-    File output_file = collaborator_participant_id + ".cram"
-    File output_index = collaborator_participant_id + ".cram.crai"
+    File output_file = basename(reads_path)
+    File output_index = basename(reads_index)
   }
 }
