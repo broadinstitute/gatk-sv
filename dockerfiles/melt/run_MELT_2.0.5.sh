@@ -35,7 +35,7 @@ EOF
 ##### Args parsing and validation
 if [[ "$#" -eq 0 ]]; then
   usage && exit 0;
-elif [[ "$#" -lt 8 ]]; then
+elif [[ "$#" -lt 7 ]]; then
   echo "At least one of the required parameters is not properly set by the given command:"
   temp_args="$@" && echo "$0 ${temp_args}" && exit 1;
 fi
