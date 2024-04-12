@@ -16,7 +16,7 @@ import "GatherSampleEvidenceMetrics.wdl" as metrics
 workflow GatherSampleEvidence {
   input {
     File bam_or_cram_file
-    File? bam_or_cram_index
+    File bam_or_cram_index
 
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
@@ -145,8 +145,8 @@ workflow GatherSampleEvidence {
     }
     call LocalizeReads {
     input:
-      reads_path = getBasename.output_cram_file_name,
-      reads_index = getBasename.output_cram_file_index_name,
+      reads_path = getBasename.output_cram_name,
+      reads_index = getBasename.output_cram_index_name,
       move_files = move_bam_or_cram_files,
       runtime_attr_override = runtime_attr_localize_reads
     }
