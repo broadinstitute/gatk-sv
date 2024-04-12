@@ -134,15 +134,14 @@ workflow GatherSampleEvidence {
 
   # move the reads nearby -- handles requester_pays and makes cross-region transfers just once
 
-
-
-  if (run_localize_reads) {
-    call getBasename{
+call getBasename{
       input:
         cram_file = bam_or_cram_file,
         cram_index = bam_or_cram_index,
         move_files = move_bam_or_cram_files
     }
+
+  if (run_localize_reads) {
     call LocalizeReads {
     input:
       reads_path = getBasename.output_cram_name,
