@@ -17,7 +17,7 @@ workflow ManualCnvRevisionAcrossContigs {
     File? multiallelic_vids_list
     File? add_call_table
     File? remove_call_table
-    File? filter_call_table
+    Array[File]? filter_call_table
     File? coords_table
     File? gd_table
     File? spanned_del_table
@@ -53,7 +53,7 @@ workflow ManualCnvRevisionAcrossContigs {
         multiallelic_vids_list=if defined(multiallelic_vids_list) then select_first([multiallelic_vids_list]) else NONE_FILE_,
         add_call_table=if defined(add_call_table) then select_first([add_call_table]) else NONE_FILE_,
         remove_call_table=if defined(remove_call_table) then select_first([remove_call_table]) else NONE_FILE_,
-        filter_call_table=if defined(filter_call_table) then select_first([filter_call_table]) else NONE_FILE_,
+        filter_call_table=if defined(filter_call_table) then select_first([filter_call_table])[i] else NONE_FILE_,
         coords_table=if defined(coords_table) then select_first([coords_table]) else NONE_FILE_,
         gd_table=if defined(gd_table) then select_first([gd_table]) else NONE_FILE_,
         spanned_del_table=if defined(spanned_del_table) then select_first([spanned_del_table]) else NONE_FILE_,
