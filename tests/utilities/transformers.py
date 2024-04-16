@@ -25,7 +25,6 @@ class Region:
         return filename
 
 
-
 class BaseTransformer:
     def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
         # Convert the string to an ABS path and make sure it exists.
@@ -86,7 +85,9 @@ class CramDownsampler(BaseTransformer):
             header = cram.header
             references = cram.references
 
-        with pysam.AlignmentFile(output_filename_unsorted, "wc",header=header,reference_names=references) as output_cram_file:
+        with pysam.AlignmentFile(output_filename_unsorted, "wc",
+                                 header=header,
+                                 reference_names=references) as output_cram_file:
             for region in regions:
                 for r1, r2 in self.read_pair_generator(input_filename,
                                                        region=f"{region.chr}:{region.start}-{region.end}"):
