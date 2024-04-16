@@ -71,6 +71,7 @@ def parse_target_regions(input_filename):
 
 def localize_file(input_filename, output_filename):
     if os.path.isfile(output_filename):
+        logging.info(f"File {input_filename} exists locally, skipping localization.")
         return
     if input_filename.startswith("gs://"):
         logging.info(f"Localizing from GCP; blob: {input_filename} ...")
@@ -80,16 +81,21 @@ def localize_file(input_filename, output_filename):
         raise NotImplementedError()
 
 
-def initialize_transformers(working_dir: str):
+def initialize_transformers(
+        working_dir: str,
+        reference_fasta: str,
+        reference_index: str,
+        sequence_dict_filename: str,
+        picard_path: str):
     for _, inputs in SUBJECT_WORKFLOW_INPUTS.items():
         for _, handler in inputs.items():
             handler.transformer = handler.transformer(
                 working_dir=working_dir,
                 callback=handler.callback,
-                reference_fasta="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-                reference_index="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-                sequence_dict_filename="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-                picard_path="/Users/jvahid/code/picard.jar"
+                reference_fasta=reference_fasta,
+                reference_index=reference_index,
+                sequence_dict_filename=sequence_dict_filename,
+                picard_path=picard_path
             )
 
 
@@ -176,7 +182,8 @@ def main():
 
     parser.add_argument(
         "picard_path",
-        help="Sets the absolute path, including the filename, to `picard.jar`."
+        help="Sets the absolute path to `picard.jar`."
+             "You may download picard.jar from `https://github.com/broadinstitute/picard/releases`."
     )
 
     parser.add_argument(
@@ -207,6 +214,24 @@ def main():
              "such that the downsampled files contains data from the input files overlapping these regions."
     )
 
+    parser.add_argument(
+        "--reference-fasta",
+        default="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+        help="Set the path to reference fasta file. "
+    )
+
+    parser.add_argument(
+        "--reference-fasta-index",
+        default="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+        help="Set the path to index file of the reference fasta file. "
+    )
+
+    parser.add_argument(
+        "--reference-dict",
+        default="gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
+        help="Set the path to the reference dictionary file."
+    )
+
     args = parser.parse_args()
 
     regions = parse_target_regions(args.target_regions)
@@ -219,7 +244,12 @@ def main():
             f"{args.output_filename_prefix}{Path(args.input_workflow_json).name}"
         )
 
-    initialize_transformers(args.working_dir)
+    Path(args.working_dir).mkdir(parents=True, exist_ok=True)
+
+    sequence_dict_local_filename = Path(args.working_dir).joinpath(Path(args.reference_dict).name)
+    localize_file(args.reference_dict, sequence_dict_local_filename)
+    initialize_transformers(args.working_dir, args.reference_fasta, args.reference_fasta_index,
+                            sequence_dict_local_filename, args.picard_path)
 
     update_workflow_json(
         working_dir=args.working_dir,
