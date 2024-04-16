@@ -1,6 +1,7 @@
 import os
 import pysam
 import subprocess
+import uuid
 
 from collections import defaultdict
 from typing import Callable, List
@@ -13,6 +14,16 @@ class Region:
     chr: str
     start: int
     end: int
+
+    @staticmethod
+    def to_file(working_dir, regions):
+        filename = str(uuid.uuid4())
+        filename = os.path.join(working_dir, filename + ".bed")
+        with open(filename, "w") as regions_file:
+            for r in regions:
+                regions_file.write("\t".join([str(r.chr), str(r.start), str(r.end)]) + "\n")
+        return filename
+
 
 
 class BaseTransformer:
@@ -48,10 +59,14 @@ class BedToIntervalListConverter(BaseTransformer):
 
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
+        regions_filename = Region.to_file(self.working_dir, regions)
+
         subprocess.run(
             ["java", "-jar", self.picard_path, "BedToIntervalList",
-             "-I", input_filename, "-O", output_filename, "-SD", self.sequence_dict_filename],
+             "-I", regions_filename, "-O", output_filename, "-SD", self.sequence_dict_filename],
             check=True)
+
+        os.remove(regions_filename)
         return self.callback(output_filename)
 
 
