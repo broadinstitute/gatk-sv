@@ -13,7 +13,7 @@ import pysam
 
 GENOMIC_DISORDER_KEY = "GENOMIC_DISORDER"
 GENOMIC_DISORDER_HEADER = \
-    f"##INFO=<ID={GENOMIC_DISORDER_KEY},Number=1,Type=String,Description=\"Genomic disorder region\">"
+    f"##INFO=<ID={GENOMIC_DISORDER_KEY},Number=.,Type=String,Description=\"Genomic disorder region\">"
 
 _gt_sum_map = dict()
 
@@ -100,31 +100,31 @@ def main(argv: Optional[List[Text]] = None):
         with pysam.VariantFile(vcf_out_path, mode="w", header=vcf_in.header) as vcf_out, \
                 open(variant_manifest_path, "w") as manifest_out, \
                 open(variant_records_bed_path, "w") as bed_out:
-            manifest_out.write(f"#CHROM\tPOS\tEND\tVARIANT_ID\tSVTYPE\tREGION_ID\tREGION_POS\tREGION_END\tSAMPLES\n")
+            manifest_out.write(f"#CHROM\tPOS\tEND\tVARIANT_ID\tSVTYPE\tREGION_IDS\tSAMPLES\n")
             for record in vcf_in:
                 svtype = record.info.get("SVTYPE", "")
                 if svtype in gdr_trees and record.chrom in gdr_trees[svtype]:
                     record_interval = Interval(record.pos, record.stop)
                     tree = gdr_trees[svtype][record.chrom]
-                    overlappers = sorted([(ov, reciprocal_overlap(ov, record_interval))
-                                           for ov in tree.overlap(record_interval)], key=itemgetter(1))
-                    if len(overlappers) > 0 and overlappers[-1][1] >= args.overlap:
-                        region_start = overlappers[-1][0].begin
-                        region_stop = overlappers[-1][0].end
-                        region_name = overlappers[-1][0].data
-                        record.info[GENOMIC_DISORDER_KEY] = region_name
-                        logging.info(f"{record.id} : {region_name}")
+                    overlappers = [(ov, reciprocal_overlap(ov, record_interval)) for ov in tree.overlap(record_interval)]
+                    min_overlap_hits = [x[0] for x in overlappers if x[1] >= args.overlap]
+                    if len(min_overlap_hits) > 0:
+                        regions = sorted([ov.data for ov in min_overlap_hits])
+                        region_names = ",".join(regions)
+                        record.info[GENOMIC_DISORDER_KEY] = region_names
+                        logging.info(f"{record.id} : {region_names}")
                         carriers = sorted([s for s, gt in record.samples.items() if _cache_gt_sum(gt["GT"]) > 0])
                         sample_col = ",".join(carriers)
                         manifest_out.write(f"{record.chrom}\t{record.pos}\t{record.stop}\t{record.id}\t{svtype}\t"
-                                           f"{region_name}\t{region_start}\t{region_stop}\t{sample_col}\n")
+                                           f"{region_names}\t{sample_col}\n")
                         padding = int(args.plot_padding * (record.stop - record.pos))
                         padded_pos = max(0, record.pos - padding)
                         padded_stop = record.stop + padding
                         bed_out.write(
                             f"{record.chrom}\t{padded_pos}\t{padded_stop}\t{record.id}\t{svtype}\t{sample_col}\n")
                         for c in carriers:
-                            region_data[region_name][4].add(c)
+                            for r in regions:
+                                region_data[r][4].add(c)
                 vcf_out.write(record)
     pysam.tabix_index(vcf_out_path, preset="vcf", force=True)
     # Write GDRs
