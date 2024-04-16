@@ -32,23 +32,11 @@ class BaseTransformer:
     def get_output_filename(self, input_filename, output_prefix):
         return str(self.working_dir.joinpath(f"{output_prefix}{Path(input_filename).name}"))
 
-    def transform(self, input_filename: str, output_prefix: str, **kwargs):
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs):
         raise NotImplementedError()
 
 
-class BaseConverter(BaseTransformer):
-    def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
-        super().__init__(working_dir, callback)
-
-    @staticmethod
-    def get_supported_file_types() -> List[str]:
-        raise NotImplementedError()
-
-    def transform(self, input_filename: str, output_prefix: str, **kwargs) -> dict:
-        raise NotImplementedError()
-
-
-class BedToIntervalListConverter(BaseConverter):
+class BedToIntervalListConverter(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str], dict], sequence_dict_filename: str, picard_path: str, **kwargs):
         super().__init__(working_dir, callback)
         self.sequence_dict_filename = sequence_dict_filename
@@ -58,7 +46,7 @@ class BedToIntervalListConverter(BaseConverter):
     def get_supported_file_types() -> List[str]:
         return [".interval_list"]
 
-    def transform(self, input_filename: str, output_prefix: str, **kwargs) -> dict:
+    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
         output_filename = self.get_output_filename(input_filename, output_prefix)
         subprocess.run(
             ["java", "-jar", self.picard_path, "BedToIntervalList",
@@ -67,23 +55,7 @@ class BedToIntervalListConverter(BaseConverter):
         return self.callback(output_filename)
 
 
-class BaseDownsampler(BaseTransformer):
-    def __init__(self, working_dir: str, callback: Callable[[str, ...], dict]):
-        super().__init__(working_dir, callback)
-
-    @staticmethod
-    def get_supported_file_types() -> List[str]:
-        """
-        The file types should include the '.' prefix to match with Path().suffix output
-        (e.g., it should return '.cram' instead of 'cram').
-        """
-        raise NotImplementedError()
-
-    def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
-        raise NotImplementedError()
-
-
-class CramDownsampler(BaseDownsampler):
+class CramDownsampler(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str, str], dict], reference_fasta: str, reference_index: str, **kwargs):
         super().__init__(working_dir, callback)
         self.reference_fasta = reference_fasta
@@ -139,7 +111,7 @@ class CramDownsampler(BaseDownsampler):
                     del read_dict[q_name]
 
 
-class VcfDownsampler(BaseDownsampler):
+class VcfDownsampler(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
@@ -160,18 +132,7 @@ class VcfDownsampler(BaseDownsampler):
         return self.callback(output_filename)
 
 
-class IntervalListDownsampler(BaseDownsampler):
-    # Implementation note:
-    # An alternative to the down sampling approach implemented here is to take
-    # a BED file containing target regions as input, and convert the BED to .interval_list
-    # as the following.
-    #
-    # > java -jar picard.jar BedToIntervalList I=regions.bed O=regions.interval_list SD=/Homo_sapiens_assembly38.dict
-    #
-    # There are two downsides to converting BED to .interval_list:
-    # 1. It needs the picard tool installed;
-    # 2. It needs an additional "SD" input, which would make the `downsample` method signature complicated.
-
+class IntervalListDownsampler(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
@@ -196,7 +157,7 @@ class IntervalListDownsampler(BaseDownsampler):
         return self.callback(output_filename)
 
 
-class BedDownsampler(BaseDownsampler):
+class BedDownsampler(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str], dict], **kwargs):
         super().__init__(working_dir, callback)
 
@@ -218,7 +179,7 @@ class BedDownsampler(BaseDownsampler):
         return self.callback(output_filename)
 
 
-class PrimaryContigsDownsampler(BaseDownsampler):
+class PrimaryContigsDownsampler(BaseTransformer):
     def __init__(self, working_dir, callback: Callable[[str], dict], delimiter: str = "\t", **kwargs):
         super().__init__(working_dir, callback)
         self.delimiter = delimiter
