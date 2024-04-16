@@ -197,7 +197,7 @@ task ApplyManualReviewUpdates {
 
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + size(vcf, "GB") * 3.0),
+                                  disk_gb: ceil(50.0 + size(vcf, "GB") * 5.0),
                                   cpu_cores: 1,
                                   preemptible_tries: 1,
                                   max_retries: 1,
