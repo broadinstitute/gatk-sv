@@ -34,7 +34,7 @@ workflow ShardedAnnotateVcf {
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
 
-    Boolean use_hail
+    Boolean use_hail = false
     String? gcs_project
 
     String sv_pipeline_docker
@@ -102,10 +102,18 @@ workflow ShardedAnnotateVcf {
         runtime_attr_svannotate = runtime_attr_svannotate
     }
 
+    if (contig == "chrX") {
+      call FixGTPloidy {
+        input:
+          vcf = AnnotateFunctionalConsequences.annotated_vcf,
+          prefix = shard_prefix,
+          sv_pipeline_docker = sv_pipeline_docker
+      }
+    }
     # Compute AC, AN, and AF per population & sex combination
     call ComputeAFs {
       input:
-        vcf = AnnotateFunctionalConsequences.annotated_vcf,
+        vcf = select_first([FixGTPloidy.gt_ploidy_fixed_vcf, AnnotateFunctionalConsequences.annotated_vcf]),
         prefix = shard_prefix,
         sample_pop_assignments = sample_pop_assignments,
         ped_file = ped_file,
@@ -153,6 +161,60 @@ workflow ShardedAnnotateVcf {
     File annotated_vcf_idx = ConcatVcfs.concat_vcf_idx
   }
 }
+
+
+task FixGTPloidy {
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.5,
+    disk_gb: ceil(20 + size(vcf, "GB") * 2),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    python <<CODE
+import pysam
+vcf = pysam.VariantFile("~{vcf}", 'r')
+out = pysam.VariantFile("~{prefix}.fixedGTploidy.vcf.gz", 'w', header=vcf.header)
+gt_update = {(None,):(None,None), (0,):(0,0), (1,):(0,1)}
+for record in vcf:
+  if record.info['SVTYPE'] != 'CNV':
+    for s, gt in record.samples.items():
+      if len(gt['GT']) == 1:
+        orig_gt = gt['GT']
+        gt['GT'] = gt_update[orig_gt]
+  out.write(record)
+CODE
+
+    tabix -p vcf "~{prefix}.fixedGTploidy.vcf.gz"
+  >>>
+
+  output {
+    File gt_ploidy_fixed_vcf = "~{prefix}.fixedGTploidy.vcf.gz"
+    File gt_ploidy_fixed_idx = "~{prefix}.fixedGTploidy.vcf.gz.tbi"
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task ComputeAFs {
   input {

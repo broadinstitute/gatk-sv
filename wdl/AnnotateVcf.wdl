@@ -29,9 +29,6 @@ workflow AnnotateVcf {
     String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
     Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
 
-    Boolean use_hail
-    String? gcs_project
-
     String sv_pipeline_docker
     String? sv_pipeline_hail_docker
     String sv_base_mini_docker
@@ -74,9 +71,6 @@ workflow AnnotateVcf {
         ref_bed = ref_bed,
         ref_prefix = ref_prefix,
         population = population,
-
-        use_hail = use_hail,
-        gcs_project = gcs_project,
 
         gatk_docker = gatk_docker,
         sv_pipeline_docker = sv_pipeline_docker,
