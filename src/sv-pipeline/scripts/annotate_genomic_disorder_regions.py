@@ -115,16 +115,18 @@ def main(argv: Optional[List[Text]] = None):
                         record.info[GENOMIC_DISORDER_KEY] = region_name
                         logging.info(f"{record.id} : {region_name}")
                         carriers = sorted([s for s, gt in record.samples.items() if _cache_gt_sum(gt["GT"]) > 0])
-                        sample_col = ",".join(carriers)
-                        manifest_out.write(f"{record.chrom}\t{record.pos}\t{record.stop}\t{record.id}\t{svtype}\t"
-                                           f"{region_name}\t{region_start}\t{region_stop}\t{sample_col}\n")
-                        padding = int(args.plot_padding * (record.stop - record.pos))
-                        padded_pos = max(0, record.pos - padding)
-                        padded_stop = record.stop + padding
-                        bed_out.write(
-                            f"{record.chrom}\t{padded_pos}\t{padded_stop}\t{record.id}\t{svtype}\t{sample_col}\n")
-                        for c in carriers:
-                            region_data[region_name][4].add(c)
+                        if len(carriers) > 0:
+                            # Exclude variants with no carriers
+                            sample_col = ",".join(carriers)
+                            manifest_out.write(f"{record.chrom}\t{record.pos}\t{record.stop}\t{record.id}\t{svtype}\t"
+                                               f"{region_name}\t{region_start}\t{region_stop}\t{sample_col}\n")
+                            padding = int(args.plot_padding * (record.stop - record.pos))
+                            padded_pos = max(0, record.pos - padding)
+                            padded_stop = record.stop + padding
+                            bed_out.write(
+                                f"{record.chrom}\t{padded_pos}\t{padded_stop}\t{record.id}\t{svtype}\t{sample_col}\n")
+                            for c in carriers:
+                                region_data[region_name][4].add(c)
                 vcf_out.write(record)
     pysam.tabix_index(vcf_out_path, preset="vcf", force=True)
     # Write GDRs
