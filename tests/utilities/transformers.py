@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import Callable, List
 from dataclasses import dataclass
 from pathlib import Path
+from tqdm import tqdm
 
 
 @dataclass
@@ -85,14 +86,27 @@ class CramDownsampler(BaseTransformer):
             header = cram.header
             references = cram.references
 
-        with pysam.AlignmentFile(output_filename_unsorted, "wc",
-                                 header=header,
-                                 reference_names=references) as output_cram_file:
+        reads_for_second_pass = {}
+        with pysam.AlignmentFile(output_filename_unsorted, "wc", header=header, reference_names=references) as output_cram_file:
             for region in regions:
-                for r1, r2 in self.read_pair_generator(input_filename,
-                                                       region=f"{region.chr}:{region.start}-{region.end}"):
-                    output_cram_file.write(r1)
-                    output_cram_file.write(r2)
+                generator = self.read_pair_generator(input_filename, region=f"{region.chr}:{region.start}-{region.end}")
+                try:
+                    while True:
+                        r1, r2 = next(generator)
+                        output_cram_file.write(r1)
+                        output_cram_file.write(r2)
+                except StopIteration as e:
+                    reads_for_second_pass = reads_for_second_pass | e.value
+
+            for r1, r2 in self.get_distant_read_pairs(input_filename, reads_for_second_pass):
+                output_cram_file.write(r1)
+                output_cram_file.write(r2)
+
+
+                # for r1, r2 in self.read_pair_generator(input_filename, region=f"{region.chr}:{region.start}-{region.end}"):
+                #     output_cram_file.write(r1)
+                #     output_cram_file.write(r2)
+
         output_filename = self.get_output_filename(input_filename, output_prefix)
         pysam.sort("-o", output_filename, output_filename_unsorted)
         os.remove(output_filename_unsorted)
@@ -103,28 +117,52 @@ class CramDownsampler(BaseTransformer):
     @staticmethod
     def read_pair_generator(filename, region=None):
         """
-        Generate read pairs in a BAM file or within a region string.
-        Reads are added to read_dict until a pair is found.
+        Generate read pairs in a CRAM file.
+        If the `region` string is provided, it only generates the reads overlapping this region.
 
-        See the following Q&A for details: https://www.biostars.org/p/306041/#332022
+
         """
-        read_dict = defaultdict(lambda: [None, None])
+        read_dict = {}
+        secondary_dict = {}
         with pysam.AlignmentFile(filename, "rc") as cram:
             for read in cram.fetch(region=region):
-                if not read.is_proper_pair or read.is_secondary or read.is_supplementary:
-                    continue
                 q_name = read.query_name
+                if not read.is_proper_pair or read.is_secondary or read.is_supplementary:
+                    # Maybe it would be better to exclude such reads
+                    if q_name not in secondary_dict:
+                        secondary_dict[q_name] = [None, None]
+                    secondary_dict[q_name][0 if read.is_read1 else 1] = read
+                    continue
                 if q_name not in read_dict:
-                    if read.is_read1:
-                        read_dict[q_name][0] = read
-                    else:
-                        read_dict[q_name][1] = read
+                    read_dict[q_name] = [None, None]
+                    read_dict[q_name][0 if read.is_read1 else 1] = read
                 else:
                     if read.is_read1:
                         yield read, read_dict[q_name][1]
                     else:
                         yield read_dict[q_name][0], read
                     del read_dict[q_name]
+
+        return read_dict #| secondary_dict
+
+    @staticmethod
+    def get_distant_read_pairs(filename, reads):
+        with pysam.AlignmentFile(filename, "rc") as cram:
+            for read in tqdm(cram.fetch(), desc="Iterating on reads", unit=" read", dynamic_ncols=True,
+                             bar_format="{desc}: {n:,} [{elapsed}] {rate_fmt}"):
+                query_name = read.query_name
+                pair = reads.get(query_name)
+                if pair is not None:
+                    if (read.is_read1 and pair[0] is not None) or (not read.is_read1 and pair[1] is not None):
+                        # It is the same read as the one seen before.
+                        continue
+                    if read.is_read1:
+                        yield read, pair[1]
+                    else:
+                        yield pair[0], read
+                    del reads[query_name]
+        print(f"\n\n\n size at the end: {len(reads)}")
+
 
 
 class VcfDownsampler(BaseTransformer):
