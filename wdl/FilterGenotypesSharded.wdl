@@ -79,11 +79,5 @@ workflow FilterGenotypesSharded {
     Array[File] filtered_vcf = FilterGenotypes.filtered_vcf
     Array[File] filtered_vcf_index = FilterGenotypes.filtered_vcf_index
     File? filter_genotypes_main_vcf_qc_tarball = MainVcfQc.sv_vcf_qc_output
-
-    # For optional analysis
-    Array[File?] vcf_optimization_table = FilterGenotypes.vcf_optimization_table
-    Array[File?] sl_cutoff_qc_tarball = FilterGenotypes.sl_cutoff_qc_tarball
-    Array[File] unfiltered_recalibrated_vcf = FilterGenotypes.unfiltered_recalibrated_vcf
-    Array[File] unfiltered_recalibrated_vcf_index = FilterGenotypes.unfiltered_recalibrated_vcf_index
   }
 }
