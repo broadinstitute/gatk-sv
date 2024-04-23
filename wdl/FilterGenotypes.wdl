@@ -12,18 +12,10 @@ workflow FilterGenotypes {
     String? output_prefix
     File ploidy_table
 
-    File gq_recalibrator_model_file
-    Array[String] recalibrate_gq_args = []
-    Array[File] genome_tracks = []
     Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
-    Float fmax_beta = 0.5  # Recommended range [0.3, 0.5] (use lower values for higher specificity)
 
-    # One of the following must be provided
-    File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args. TODO: UNIMPLEMENTED!
     String sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
 
-    Int? recalibrate_records_per_shard
-    Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
 
     RuntimeAttr? runtime_attr_recalibrate_scatter
