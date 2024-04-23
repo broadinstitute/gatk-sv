@@ -12,7 +12,7 @@ _HIGH_NCR_FILTER = "HIGH_NCR"
 _REFERENCE_ARTIFACT_FILTER = "REFERENCE_ARTIFACT"
 _REFERENCE_ARTIFACT_THRESHOLD = 0.99
 SVTYPES = ["DEL", "DUP", "INS", "CNV", "INV", "CPX", "CTX", "BND"]
-GT_UPDATE = {(None,):(None,None), (0,):(0,0), (1,):(0,1)}
+GT_UPDATE = {(None,): (None, None), (0,): (0, 0), (1,): (0, 1)}
 
 
 def _is_no_call(gt):
@@ -95,6 +95,7 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
             del record.info[field]
     return True
 
+
 def _increment_counter(record, counter, prev_chrom):
     if prev_chrom is not None and prev_chrom != record.chrom:
         counter = {svtype: 0 for svtype in SVTYPES}
@@ -114,7 +115,7 @@ def process(vcf, fout, ploidy_dict, args):
         prev_chrom = None
         shard_str = ""
         if args.shard_index is not None:
-            shard_str = f"shard{shard_index}_"
+            shard_str = f"shard{args.shard_index}_"
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
@@ -140,6 +141,7 @@ def process(vcf, fout, ploidy_dict, args):
             fout.write(record)
     if args.cohort_id is not None:
         id_map.close()
+
 
 def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
     """
