@@ -7,6 +7,7 @@ workflow ApplyNCRAndRefArtifactFiltersPerContig {
   input {
     File vcf
     String prefix
+    String cohort_id
 
     File ploidy_table
     Int records_per_shard = 20000
@@ -39,6 +40,8 @@ workflow ApplyNCRAndRefArtifactFiltersPerContig {
       input:
         vcf = ScatterVcf.shards[i],
         prefix = "~{prefix}.shard_~{i}",
+        cohort_id = cohort_id,
+        shard_index = i,
         ploidy_table = ploidy_table,
         no_call_rate_cutoff = no_call_rate_cutoff,
         filter_reference_artifacts = filter_reference_artifacts,
@@ -70,6 +73,8 @@ task ApplyFilters {
     File vcf
     String prefix
     File ploidy_table
+    String cohort_id
+    Int shard_index
     Float? no_call_rate_cutoff
     Boolean filter_reference_artifacts
     Boolean remove_zero_carrier_sites
@@ -96,6 +101,8 @@ task ApplyFilters {
       --out ~{prefix}.vcf.gz \
       --ploidy-table ~{ploidy_table} \
       --ncr-threshold ~{no_call_rate_cutoff} \
+      --cohort-id ~{cohort_id} \
+      --shard-index ~{shard_index} \
       ~{if (filter_reference_artifacts) then "--filter-reference-artifacts" else ""} \
       ~{if (remove_zero_carrier_sites) then "--remove-zero-carrier-sites" else ""}
 

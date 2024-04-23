@@ -11,6 +11,8 @@ _gt_ref_map = dict()
 _HIGH_NCR_FILTER = "HIGH_NCR"
 _REFERENCE_ARTIFACT_FILTER = "REFERENCE_ARTIFACT"
 _REFERENCE_ARTIFACT_THRESHOLD = 0.99
+SVTYPES = ["DEL", "DUP", "INS", "CNV", "INV", "CPX", "CTX", "BND"]
+GT_UPDATE = {(None,):(None,None), (0,):(0,0), (1,):(0,1)}
 
 
 def _is_no_call(gt):
@@ -38,6 +40,13 @@ def _is_hom_var(gt):
 
 
 def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifacts, remove_zero_carrier_sites):
+    # remove previous NCR annotations and filters prior to recalculating
+    if _HIGH_NCR_FILTER in record.filter:
+        del record.filter[_HIGH_NCR_FILTER]
+    for field in ['NCR', 'NCN']:
+        if field in record.info:
+            record.info.pop(field)
+
     if record.info['SVTYPE'] == 'CNV':
         return True  # skip checks and annotations for mCNVs due to lack of GT
 
@@ -46,6 +55,10 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
     n_hom_var = 0
     has_carrier = False
     for s, gt in record.samples.items():
+        # set all GTs for biallelic SVs back to diploid
+        if len(gt['GT']) == 1:
+            orig_gt = gt['GT']
+            gt['GT'] = GT_UPDATE[orig_gt]
         # Count every sample where ploidy > 0
         if ploidy_dict[s][record.chrom] == 0:
             continue
@@ -69,12 +82,12 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
     if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
         record.filter.add(_HIGH_NCR_FILTER)
         if 'PASS' in record.filter:
-            record.filter.pop('PASS')
+            del record.filter['PASS']
 
     if filter_reference_artifacts and n_hom_var / n_samples > _REFERENCE_ARTIFACT_THRESHOLD:
         record.filter.add(_REFERENCE_ARTIFACT_FILTER)
         if 'PASS' in record.filter:
-            record.filter.pop('PASS')
+            del record.filter['PASS']
 
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
@@ -82,8 +95,26 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
             del record.info[field]
     return True
 
+def _increment_counter(record, counter, prev_chrom):
+    if prev_chrom is not None and prev_chrom != record.chrom:
+        counter = {svtype: 0 for svtype in SVTYPES}
+    counter[record.info['SVTYPE']] += 1
+    return counter, record.chrom
+
+
+def _new_variant_id(record, counter, cohort_id, shard_str):
+    svtype = record.info['SVTYPE']
+    return f"{cohort_id}.{svtype}_{record.chrom}_{shard_str}{str(counter[svtype])}"
+
 
 def process(vcf, fout, ploidy_dict, args):
+    if args.cohort_id is not None:
+        id_map = open(f"{args.cohort_id}.vid_map.tsv", 'w')
+        counter = {svtype: 0 for svtype in SVTYPES}
+        prev_chrom = None
+        shard_str = ""
+        if args.shard_index is not None:
+            shard_str = f"shard{shard_index}_"
     n_samples = float(len(fout.header.samples))
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
@@ -94,8 +125,21 @@ def process(vcf, fout, ploidy_dict, args):
                               filter_reference_artifacts=args.filter_reference_artifacts,
                               remove_zero_carrier_sites=args.remove_zero_carrier_sites)
         if keep:
+            # add SVLEN to ME DELs
+            if record.info['SVTYPE'] == 'DEL' and '_BND_' in record.id:
+                record.info['SVLEN'] = record.info['END2'] - record.start
+                record.stop = record.info['END2']
+                record.info.pop('END2')
+                record.info.pop('CHR2')
+            # re-set all variant IDs if cohort ID is provided to be part of variant IDs
+            if args.cohort_id is not None:
+                counter, prev_chrom = _increment_counter(record, counter, prev_chrom)
+                new_id = _new_variant_id(record, counter, args.cohort_id, shard_str)
+                id_map.write(f"{record.id}\t{new_id}\n")
+                record.id = new_id
             fout.write(record)
-
+    if args.cohort_id is not None:
+        id_map.close()
 
 def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
     """
@@ -138,6 +182,10 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                              f">{_REFERENCE_ARTIFACT_THRESHOLD*100}% of samples>")
     parser.add_argument("--remove-zero-carrier-sites", action='store_true', default=False,
                         help="If provided, hard filters sites with zero carriers>")
+    parser.add_argument("--cohort-id", type=str, required=False,
+                        help="If provided, rename all variant IDs, using cohort-id as base")
+    parser.add_argument("--shard-index", type=str, required=False,
+                        help="Provide if sharding within chromosomes for unique variant IDs")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)

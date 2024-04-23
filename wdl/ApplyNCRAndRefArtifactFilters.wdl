@@ -5,6 +5,8 @@ import "ApplyNCRAndRefArtifactFiltersPerContig.wdl" as per_contig
 workflow ApplyNCRAndRefArtifactFilters {
   input {
     Array[File] vcfs
+    File primary_contigs_list
+    String cohort_id
     String label = "ncr_and_refartifact"
     File ploidy_table
 
@@ -14,12 +16,14 @@ workflow ApplyNCRAndRefArtifactFilters {
     String sv_base_mini_docker
   }
 
-  scatter (vcf in vcfs) {
-    String base = basename(vcf, ".vcf.gz")
+  Array[String] contigs = read_lines(primary_contigs_list)
+
+  scatter (i in range(length(vcfs))) {
     call per_contig.ApplyNCRAndRefArtifactFiltersPerContig {
       input:
-        vcf = vcf,
-        prefix = "~{base}.~{label}",
+        vcf = vcfs[i],
+        prefix = "~{cohort_id}.~{label}.~{contigs[i]}",
+        cohort_id = cohort_id,
         ploidy_table = ploidy_table,
         apply_filters_script = apply_filters_script,
         sv_pipeline_docker = sv_pipeline_docker,
