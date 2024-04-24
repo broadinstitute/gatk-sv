@@ -62,10 +62,17 @@ workflow FilterGenotypes {
   }
 
   scatter ( i in range(length(ScatterForFilter.shards)) ) {
+    call FixMEDels {
+      input:
+        vcf=ScatterForFilter.shards[i],
+        prefix="~{output_prefix}.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker
+
+    }
     # Applies genotype and NCR filtering as specified by sl_filter_args
     call FilterVcf {
       input:
-        vcf=ScatterForFilter.shards[i],
+        vcf=FixMEDels.out,
         ploidy_table=ploidy_table,
         args=sl_filter_args + " --ncr-threshold ~{no_call_rate_cutoff}",
         output_prefix="~{output_prefix_}.filter_genotypes.shard_~{i}",
@@ -249,6 +256,63 @@ task OptimizeCutoffs {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+task FixMEDels {
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(100 + size(vcf, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{prefix}.fixed_me_dels.vcf.gz"
+    File out_index = "~{prefix}.fixed_me_dels.vcf.gz.tbi"
+  }
+
+  command <<<
+  set -euo pipefail
+
+  python <<CODE
+import pysam
+vcf = pysam.VariantFile("~{vcf}", 'r')
+out = pysam.VariantFile("~{prefix}.fixed_me_dels.vcf.gz", 'w', header=vcf.header)
+for record in vcf:
+  # add SVLEN to ME DELs
+  if record.info['SVTYPE'] == 'DEL' and '_BND_' in record.id:
+    record.info['SVLEN'] = record.info['END2'] - record.start
+    record.stop = record.info['END2']
+    record.info.pop('END2')
+    record.info.pop('CHR2')
+vcf.close()
+out.close()
+CODE
+
+  tabix ~{prefix}.fixed_me_dels.vcf.gz
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 
 task FilterVcf {
   input {
