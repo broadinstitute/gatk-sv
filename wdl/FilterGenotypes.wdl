@@ -295,6 +295,7 @@ for record in vcf:
     record.stop = record.info['END2']
     record.info.pop('END2')
     record.info.pop('CHR2')
+  out.write(record)
 vcf.close()
 out.close()
 CODE
