@@ -157,8 +157,7 @@ class CramDownsampler(BaseTransformer):
                     del discordant_reads[query_name]
         if len(discordant_reads) > 0:
             logging.warning(f"Did not find discordant pairs for {len(read)} reads.")
-        logging.info(f"Finished linear scanning.")
-
+        logging.info("Finished linear scanning.")
 
 
 class VcfDownsampler(BaseTransformer):
