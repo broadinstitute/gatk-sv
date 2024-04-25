@@ -21,9 +21,6 @@ workflow EvidenceQC {
     # Optional QC tasks
     Boolean run_vcf_qc
 
-    # Global files
-    File genome_file
-
     # Coverage files
     Array[File] counts
 
