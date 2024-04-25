@@ -189,7 +189,7 @@ workflow GatherBatchEvidence {
     call mbm.MakeBincovMatrix as MakeBincovMatrix {
       input:
         samples = samples,
-        count_files = counts,
+        coverage_counts = counts,
         bincov_matrix = ref_panel_bincov_matrix,
         bincov_matrix_samples = ref_panel_samples,
         batch = batch,
