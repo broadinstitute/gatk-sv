@@ -1,13 +1,16 @@
+import logging
 import os
 import pysam
 import subprocess
 import uuid
 
-from collections import defaultdict
 from typing import Callable, List
 from dataclasses import dataclass
 from pathlib import Path
 from tqdm import tqdm
+
+
+logging.basicConfig(format="%(levelname)s: %(message)s", level=logging.INFO)
 
 
 @dataclass
@@ -81,6 +84,7 @@ class CramDownsampler(BaseTransformer):
         return [".cram"]
 
     def transform(self, input_filename: str, output_prefix: str, regions: List[Region], **kwargs) -> dict:
+        include_discordant_reads = kwargs.get("include_discordant_reads", False)
         output_filename_unsorted = self.get_output_filename(input_filename, f"unsorted_{output_prefix}")
         with pysam.AlignmentFile(input_filename, "rc") as cram:
             header = cram.header
@@ -98,14 +102,10 @@ class CramDownsampler(BaseTransformer):
                 except StopIteration as e:
                     reads_for_second_pass = reads_for_second_pass | e.value
 
-            for r1, r2 in self.get_distant_read_pairs(input_filename, reads_for_second_pass):
-                output_cram_file.write(r1)
-                output_cram_file.write(r2)
-
-
-                # for r1, r2 in self.read_pair_generator(input_filename, region=f"{region.chr}:{region.start}-{region.end}"):
-                #     output_cram_file.write(r1)
-                #     output_cram_file.write(r2)
+            if include_discordant_reads:
+                for r1, r2 in self.get_discordant_reads(input_filename, reads_for_second_pass):
+                    output_cram_file.write(r1)
+                    output_cram_file.write(r2)
 
         output_filename = self.get_output_filename(input_filename, output_prefix)
         pysam.sort("-o", output_filename, output_filename_unsorted)
@@ -115,23 +115,16 @@ class CramDownsampler(BaseTransformer):
         return self.callback(output_filename, index_filename)
 
     @staticmethod
-    def read_pair_generator(filename, region=None):
+    def read_pair_generator(filename: str, region: str = None):
         """
         Generate read pairs in a CRAM file.
         If the `region` string is provided, it only generates the reads overlapping this region.
-
-
         """
         read_dict = {}
-        secondary_dict = {}
         with pysam.AlignmentFile(filename, "rc") as cram:
             for read in cram.fetch(region=region):
                 q_name = read.query_name
                 if not read.is_proper_pair or read.is_secondary or read.is_supplementary:
-                    # Maybe it would be better to exclude such reads
-                    if q_name not in secondary_dict:
-                        secondary_dict[q_name] = [None, None]
-                    secondary_dict[q_name][0 if read.is_read1 else 1] = read
                     continue
                 if q_name not in read_dict:
                     read_dict[q_name] = [None, None]
@@ -143,15 +136,16 @@ class CramDownsampler(BaseTransformer):
                         yield read_dict[q_name][0], read
                     del read_dict[q_name]
 
-        return read_dict #| secondary_dict
+        return read_dict
 
     @staticmethod
-    def get_distant_read_pairs(filename, reads):
+    def get_discordant_reads(filename: str, discordant_reads: dict):
+        logging.info(f"Linearly scanning {filename} for discordant pairs of {len(discordant_reads)} reads.")
         with pysam.AlignmentFile(filename, "rc") as cram:
             for read in tqdm(cram.fetch(), desc="Iterating on reads", unit=" read", dynamic_ncols=True,
                              bar_format="{desc}: {n:,} [{elapsed}] {rate_fmt}"):
                 query_name = read.query_name
-                pair = reads.get(query_name)
+                pair = discordant_reads.get(query_name)
                 if pair is not None:
                     if (read.is_read1 and pair[0] is not None) or (not read.is_read1 and pair[1] is not None):
                         # It is the same read as the one seen before.
@@ -160,8 +154,10 @@ class CramDownsampler(BaseTransformer):
                         yield read, pair[1]
                     else:
                         yield pair[0], read
-                    del reads[query_name]
-        print(f"\n\n\n size at the end: {len(reads)}")
+                    del discordant_reads[query_name]
+        if len(discordant_reads) > 0:
+            logging.warning(f"Did not find discordant pairs for {len(read)} reads.")
+        logging.info(f"Finished linear scanning.")
 
 
 
