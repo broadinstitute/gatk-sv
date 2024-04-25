@@ -56,6 +56,15 @@ SUBJECT_WORKFLOW_INPUTS = {
 }
 
 
+WORKFLOW_INPUTS_TO_DROP = {
+    "GatherSampleEvidence": [
+        "melt_docker",
+        "melt_metrics_intervals",
+        "melt_standard_vcf_header"
+    ]
+}
+
+
 def parse_target_regions(input_filename):
     regions = []
     with open(input_filename, "r") as f:
@@ -105,7 +114,9 @@ def update_workflow_json(
     with open(input_filename, "r") as f:
         workflow_inputs = json.load(f)
 
-    for k, v in dict(workflow_inputs).items():
+    updated_workflow_inputs = {}
+
+    for k, v in workflow_inputs.items():
         # Example of the following split:
         # k="a.b.c" --> workflow_name="a.b", input_var="c"
         workflow_name, input_var = k.rsplit(".", maxsplit=1)
@@ -113,7 +124,11 @@ def update_workflow_json(
         try:
             handler = SUBJECT_WORKFLOW_INPUTS[workflow_name][input_var]
         except KeyError:
-            # This workflow input is not set to be downsampled.
+            if workflow_name in WORKFLOW_INPUTS_TO_DROP and input_var in WORKFLOW_INPUTS_TO_DROP[workflow_name]:
+                logging.info(f"Dropping {k}.")
+            else:
+                updated_workflow_inputs[k] = v
+                logging.info(f"Leaving {k} unchanged.")
             continue
 
         logging.info(f"Processing input {k}.")
@@ -125,15 +140,17 @@ def update_workflow_json(
             regions=regions
         )
 
-        if bucket_name is not None and blob_name is not None:
-            for varname, filename in updated_files.items():
+        for varname, filename in updated_files.items():
+            input_key = f"{workflow_name}.{varname}"
+            updated_workflow_inputs[input_key] = filename
+            if bucket_name is not None and blob_name is not None:
                 logging.info(f"Uploading downsampled file {filename} to bucket {bucket_name}.")
                 blob = upload_to_gs_blob(filename, bucket_name, blob_name)
                 logging.info(f"Finished uploading {filename}.")
-                workflow_inputs[f"{workflow_name}.{varname}"] = blob
+                updated_workflow_inputs[input_key] = blob
     logging.info(f"Creating output JSON {output_filename}.")
     with open(output_filename, "w") as f:
-        json.dump(workflow_inputs, f, indent=4)
+        json.dump(updated_workflow_inputs, f, indent=4)
     logging.info(f"Finished creating output JSON {output_filename}.")
 
 
