@@ -65,63 +65,44 @@ def _filter_gt(gt, allele):
 
 
 def recalculate_gq(sl, scale_factor, is_hom_ref, upper, lower, shift):
+    if sl is None:
+        return None
     sign = -1 if is_hom_ref else 1
     sl = (sign * min(max(sl, lower), upper)) + shift
     return int(math.floor(-10 * math.log10(1 / (math.pow(scale_factor, sl) + 1))))
 
 
-def _fails_filter(sl, gt_is_ref, cutoff):
+def _fails_filter(gq, cutoff):
     if cutoff is None:
         return False
-    if gt_is_ref:
-        sl = -sl
-    return sl < cutoff
+    return gq < cutoff
 
 
-def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshold,
-                  keep_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
-    record.info['MINSL'] = sl_threshold
+def _apply_filter(record, gq_threshold, ploidy_dict, apply_hom_ref, ncr_threshold):
     allele = 0 if apply_hom_ref else None
-    sl_list = []
     n_samples = 0
     n_no_call = 0
     for s, gt in record.samples.items():
         # Always set this to avoid weird values from pysam
         gt['GT_FILTER'] = '.'
-        # Skip over ploidy 0 or if SL is missing
-        if ploidy_dict[s][record.chrom] == 0:
+        # Skip over ploidy 0 or if GT is already null (will also skip mCNVs)
+        if ploidy_dict[s][record.chrom] == 0 or _is_no_call(gt['GT']):
             continue
         # Count every sample where ploidy > 0 for NCR
         n_samples += 1
-        sl = gt.get('SL', None)
-        if sl is None:
+        gq = gt.get('GQ', None)
+        if gq is None:
             continue
-        gt_is_ref = _is_hom_ref(gt['GT'])
-        # SL metrics are over non-ref / no-call samples
-        if not gt_is_ref:
-            sl_list.append(sl)
-        if not keep_gq:
-            # Recalculate GQ values based on SL
-            gt['GQ'] = min(recalculate_gq(sl=sl, scale_factor=gq_scale_factor, is_hom_ref=gt_is_ref,
-                                          upper=upper_sl_cap, lower=lower_sl_cap, shift=sl_shift), max_gq)
         # Check and apply filter
-        fails_filter = _fails_filter(sl, gt_is_ref, sl_threshold)
+        fails_filter = _fails_filter(gq, gq_threshold)
         gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
         if fails_filter:
             gt['GT'] = _filter_gt(gt['GT'], allele)
             n_no_call += 1
-    # Annotate metrics
-    record.info['NCN'] = n_no_call
-    record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
-    if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
-        record.filter.add(_HIGH_NCR_FILTER)
-    n_sl = len(sl_list)
-    record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
-    record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
         if field in record.info:
-            del record.info[field]
+            record.info.pop(field)
 
 
 def get_threshold(record, sl_thresholds, med_size, large_size):
@@ -144,26 +125,27 @@ def process(vcf, fout, ploidy_dict, thresholds, args):
     if n_samples == 0:
         raise ValueError("This is a sites-only vcf")
     for record in vcf:
-        sl_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
+        gq_threshold = get_threshold(record=record, sl_thresholds=thresholds, med_size=args.medium_size,
                                      large_size=args.large_size)
-        _apply_filter(record=record, sl_threshold=sl_threshold,
+        _apply_filter(record=record, gq_threshold=gq_threshold,
                       ploidy_dict=ploidy_dict, apply_hom_ref=args.apply_hom_ref,
-                      ncr_threshold=args.ncr_threshold,
-                      keep_gq=args.keep_gq, gq_scale_factor=args.gq_scale_factor,
-                      upper_sl_cap=args.upper_sl_cap, lower_sl_cap=args.lower_sl_cap, sl_shift=args.sl_shift,
-                      max_gq=args.max_gq)
+                      ncr_threshold=args.ncr_threshold)
         fout.write(record)
 
 
 def _create_threshold_dict(args):
     return {
-        'DEL': [args.small_del_threshold, args.medium_del_threshold, args.large_del_threshold],
-        'DUP': [args.small_dup_threshold, args.medium_dup_threshold, args.large_dup_threshold],
-        'INS': [args.ins_threshold],
-        'INV': [args.inv_threshold],
-        'BND': [args.bnd_threshold],
-        'CPX': [args.cpx_threshold],
-        'CTX': [args.ctx_threshold],
+        'DEL': [recalculate_gq(args.small_del_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift),
+                recalculate_gq(args.medium_del_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift),
+                recalculate_gq(args.large_del_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'DUP': [recalculate_gq(args.small_dup_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift),
+                recalculate_gq(args.medium_dup_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift),
+                recalculate_gq(args.large_dup_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'INS': [recalculate_gq(args.ins_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'INV': [recalculate_gq(args.inv_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'BND': [recalculate_gq(args.bnd_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'CPX': [recalculate_gq(args.cpx_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
+        'CTX': [recalculate_gq(args.ctx_threshold, args.gq_scale_factor, False, args.upper_sl_cap, args.lower_sl_cap, args.sl_shift)],
         'CNV': [None]
     }
 
