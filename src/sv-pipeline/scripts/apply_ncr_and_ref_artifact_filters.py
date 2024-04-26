@@ -126,12 +126,6 @@ def process(vcf, fout, ploidy_dict, args):
                               filter_reference_artifacts=args.filter_reference_artifacts,
                               remove_zero_carrier_sites=args.remove_zero_carrier_sites)
         if keep:
-            # add SVLEN to ME DELs
-            if record.info['SVTYPE'] == 'DEL' and '_BND_' in record.id:
-                record.info['SVLEN'] = record.info['END2'] - record.start
-                record.stop = record.info['END2']
-                record.info.pop('END2')
-                record.info.pop('CHR2')
             # re-set all variant IDs if cohort ID is provided to be part of variant IDs
             if args.cohort_id is not None:
                 counter, prev_chrom = _increment_counter(record, counter, prev_chrom)
