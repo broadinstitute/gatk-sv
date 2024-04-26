@@ -89,6 +89,10 @@ def _apply_filters(record, ploidy_dict, ncr_threshold, filter_reference_artifact
         if 'PASS' in record.filter:
             del record.filter['PASS']
 
+    # if filter is . set to PASS
+    if len(record.filter) == 0:
+        record.filter.add('PASS')
+
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
         if field in record.info:
