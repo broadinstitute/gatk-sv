@@ -15,6 +15,7 @@ workflow FilterGenotypes {
     Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
 
     String sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
+    File? filter_script
 
     Int filter_vcf_records_per_shard = 20000
 
@@ -74,6 +75,7 @@ workflow FilterGenotypes {
       input:
         vcf=FixMEDels.out,
         ploidy_table=ploidy_table,
+        script=filter_script,
         args=sl_filter_args + " --ncr-threshold ~{no_call_rate_cutoff}",
         output_prefix="~{output_prefix_}.filter_genotypes.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
