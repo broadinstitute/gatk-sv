@@ -61,9 +61,17 @@ workflow ApplyNCRAndRefArtifactFiltersPerContig {
       runtime_attr_override = runtime_attr_concat_vcfs
   }
 
+  call tasks.CatUncompressedFiles {
+    input:
+      shards=ApplyFilters.id_rename_map,
+      outfile_name="~{prefix}.id_rename_map.tsv",
+      sv_base_mini_docker=sv_base_mini_docker
+  }
+
   output {
     File filtered_vcf = ConcatVcfs.concat_vcf
     File filtered_vcf_index = ConcatVcfs.concat_vcf_idx
+    File id_rename_map = CatUncompressedFiles.outfile
   }
 }
 
@@ -110,6 +118,7 @@ task ApplyFilters {
 
   output {
     File filtered_vcf = "~{prefix}.vcf.gz"
+    File id_rename_map = "~{cohort_id}.vid_map.tsv"
   }
 
   runtime {

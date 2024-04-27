@@ -35,5 +35,6 @@ workflow ApplyNCRAndRefArtifactFilters {
   output {
     Array[File] filtered_vcfs = ApplyNCRAndRefArtifactFiltersPerContig.filtered_vcf
     Array[File] filtered_vcf_indexes = ApplyNCRAndRefArtifactFiltersPerContig.filtered_vcf_index
+    Array[File] id_rename_maps = ApplyNCRAndRefArtifactFiltersPerContig.id_rename_map
   }
 }
