@@ -46,7 +46,7 @@ workflow DeNovoSVsScatter {
                 raw_depth_proband=raw_depth_proband,
                 raw_depth_parents=raw_depth_parents,
                 exclude_regions = exclude_regions,
-                coverage_indeces = coverage_index_files,
+                coverage_indices = coverage_index_files,
                 sample_batches = sample_batches,
                 batch_bincov_index = batch_bincov_index,
                 python_config=python_config,
@@ -90,7 +90,7 @@ task RunDeNovo {
         File raw_depth_proband
         File raw_depth_parents
         File exclude_regions
-        Array[File] coverage_indeces
+        Array[File] coverage_indices
         File batch_bincov_index
         File sample_batches
         File python_config
@@ -98,7 +98,7 @@ task RunDeNovo {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size(select_all([vcf_input, ped_input, disorder_input, coverage_indeces, raw_proband, raw_parents, exclude_regions, batch_bincov_index, sample_batches]), "GB")
+    Float input_size = size(select_all([vcf_input, ped_input, disorder_input, coverage_indices, raw_proband, raw_parents, exclude_regions, batch_bincov_index, sample_batches]), "GB")
     Float bed_size = size(bed_input, "GB")
 
     RuntimeAttr default_attr = object {
