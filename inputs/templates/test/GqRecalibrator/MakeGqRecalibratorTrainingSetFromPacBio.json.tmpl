@@ -1,6 +1,6 @@
 {
   "MakeGqRecalibratorTrainingSetFromPacBio.vcfs": [{{ test_batch.concordance_vcf | tojson }}],
-  "MakeGqRecalibratorTrainingSetFromPacBio.training_sample_ids": {{ test_batch.pacbio_samples | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.training_sample_ids": {{ test_batch.pacbio_samples_list | tojson }},
   "MakeGqRecalibratorTrainingSetFromPacBio.output_prefix": {{ test_batch.name | tojson }},
   "MakeGqRecalibratorTrainingSetFromPacBio.ploidy_table": {{ test_batch.ploidy_table | tojson }},
 

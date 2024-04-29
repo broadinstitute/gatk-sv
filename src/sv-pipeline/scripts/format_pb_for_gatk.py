@@ -94,22 +94,26 @@ def convert(record: pysam.VariantRecord,
             min_size: int,
             ploidy_dict: Dict[Text, Dict[Text, int]]) -> pysam.VariantRecord:
     """
-    Converts a record from svtk to gatk style. This includes updating all GT fields with proper ploidy, and adding
-    necessary fields such as ECN and CN.
+    Converts a record from for use in PacBio call comparisons. This includes updating all GT fields with proper
+    ploidy, adding necessary fields such as ECN and CN, enforcing min size, and updating the ALGORITHMS field.
 
     Parameters
     ----------
     record: pysam.VariantRecord
-        svtk-style record
+        input record
     vcf_out: pysam.VariantFile
         new vcf, to which the converted record will be written
+    algorithm: Text
+        name of the pacbio caller
+    min_size: int
+        Minimum SV size
     ploidy_dict: Dict[Text, Dict[Text, int]]
         map from sample to contig to ploidy
 
     Returns
     -------
     pysam.VariantRecord
-        gatk-style record
+        reformatted record
     """
     svtype = record.info['SVTYPE']
     if not supported_type(record):

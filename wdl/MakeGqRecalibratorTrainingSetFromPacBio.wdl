@@ -14,7 +14,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     # Assumes all vcfs have indexes, i.e. at {VCF_PATH}.tbi
     Array[File] vcfs
 
-    Array[String] training_sample_ids  # Sample IDs with PacBio or array data
+    File training_sample_ids  # Sample IDs with PacBio or array data
     String? output_prefix
     File ploidy_table
 
@@ -63,19 +63,12 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     else
         basename(vcfs[0], ".vcf.gz")
 
-  call utils.WriteLines as WriteTrainingSampleIds {
-    input:
-      lines = training_sample_ids,
-      output_filename = "~{output_prefix_}.training_sample_ids.list",
-      linux_docker = linux_docker
-  }
-
   scatter (i in range(length(vcfs))) {
     call utils.SubsetVcfBySamplesList as SubsetTrainingSamples {
       input:
         vcf = vcfs[i],
         vcf_idx = vcfs[i] + ".tbi",
-        list_of_samples = WriteTrainingSampleIds.out,
+        list_of_samples = training_sample_ids,
         outfile_name = "~{output_prefix_}.training_samples.shard_~{i}.vcf.gz",
         remove_samples = false,
         remove_private_sites = true,
@@ -223,16 +216,17 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
       sv_pipeline_docker=sv_pipeline_docker
   }
 
-  call MergeHeaderedTables {
+  call mini_tasks.ConcatHeaderedTextFiles {
     input:
-      tables=RefineSampleLabels.out_table,
-      output_prefix="~{output_prefix_}.gq_training_labels",
+      text_files=RefineSampleLabels.out_table,
+      gzipped=false,
+      output_filename="~{output_prefix_}.gq_training_labels.tsv",
       linux_docker=linux_docker
   }
 
   output {
     File gq_recalibrator_training_json = MergeJsons.out
-    File pacbio_support_summary_table = MergeHeaderedTables.out
+    File pacbio_support_summary_table = ConcatHeaderedTextFiles.out
 
     File training_sample_vcf = ConcatTrainingSampleVcfs.concat_vcf
     File training_sample_vcf_index = ConcatTrainingSampleVcfs.concat_vcf_idx
@@ -287,7 +281,7 @@ task GetVariantListsFromVaporAndIRS {
   command <<<
     set -euxo pipefail
 
-    # JSON prepprocessing taken from GetTruthOverlap.wdl
+    # JSON preprocessing taken from GetTruthOverlap.wdl
     # construct a vapor JSON file if vapor data was passed
     VAPOR_SAMPLE_IDS=~{write_lines(vapor_sample_ids)}
     VAPOR_FILES=~{write_lines(vapor_files)}
@@ -431,7 +425,7 @@ task VaporAndIRSSupportReport {
   command <<<
     set -euxo pipefail
 
-    # JSON prepprocessing taken from GetTruthOverlap.wdl
+    # JSON preprocessing taken from GetTruthOverlap.wdl
     # construct a vapor JSON file if vapor data was passed
     VAPOR_SAMPLE_IDS=~{write_lines(vapor_sample_ids)}
     VAPOR_FILES=~{write_lines(vapor_files)}
@@ -593,53 +587,6 @@ task MergeJsons {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-
-task MergeHeaderedTables {
-  input {
-    Array[File] tables
-    String output_prefix
-    String linux_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 1,
-                               disk_gb: ceil(10 + 2 * size(tables, "GB")),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 1,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.tsv"
-  }
-  command <<<
-    set -euo pipefail
-    OUT_FILE="~{output_prefix}.tsv"
-    i=0
-    while read path; do
-      if [ $i == 0 ]; then
-        # Get header from first line of first file
-        awk 'NR==1' $path > $OUT_FILE
-      fi
-      # Get data from each file, skipping header line
-      awk 'NR>1' $path >> $OUT_FILE
-      i=$((i+1))
-    done < ~{write_lines(tables)}
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: linux_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

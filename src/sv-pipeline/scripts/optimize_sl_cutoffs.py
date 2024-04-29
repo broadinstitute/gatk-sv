@@ -241,7 +241,7 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
         description="Optimizes cutoffs for SL filtering",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--table', type=str, help='Gzipped input vcf with SL annotations')
+    parser.add_argument('--table', type=str, help='Gzipped input record table with SL annotations')
     parser.add_argument('--out-dir', type=str, help='Output directory', default="./")
     parser.add_argument('--out-name', type=str, help='Output filename base', default="filter_qc")
     parser.add_argument("--beta", type=float, default=1.0,

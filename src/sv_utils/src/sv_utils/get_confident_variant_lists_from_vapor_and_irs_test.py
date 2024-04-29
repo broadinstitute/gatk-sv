@@ -152,9 +152,9 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument("--vapor-read-support-pos-thresh", type=int, default=2,
                         help="Min Number of supporting vapor reads required for positive example")
     parser.add_argument("--vapor-read-support-neg-thresh", type=int, default=0,
-                        help="MaNumber of supporting vapor reads required for neg example")
+                        help="Max number of supporting vapor reads required for neg example")
     parser.add_argument("--vapor-read-support-neg-cov-thresh", type=int, default=5,
-                        help="MaNumber of covering vapor reads required for neg example")
+                        help="Max number of covering vapor reads required for neg example")
     parser.add_argument("--irs-output", type=str, default="-",
                         help="File to output IRS results to. If omitted or set to '-', print to stdout")
     parser.add_argument("--vapor-output", type=str, default="-",
