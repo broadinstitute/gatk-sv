@@ -98,12 +98,12 @@ task RunDeNovo {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size(select_all([vcf_input, ped_input, disorder_input, coverage_indices, raw_proband, raw_parents, exclude_regions, batch_bincov_index, sample_batches]), "GB")
+    Float vcf_size = size(vcf_input, "GB")
     Float bed_size = size(bed_input, "GB")
 
     RuntimeAttr default_attr = object {
         mem_gb: 16, #3.75
-        disk_gb: ceil(10 + input_size + bed_size * 1.5),
+        disk_gb: ceil(15 + vcf_size + bed_size * 1.5),
         cpu_cores: 1,
         preemptible_tries: 2,
         max_retries: 1,
@@ -164,11 +164,11 @@ task VcfToBed {
         RuntimeAttr? runtime_attr_override
     }
 
-    Float input_size = size(vcf_file, "GB")
+    Float vcf_size = size(vcf_file, "GB")
 
     RuntimeAttr default_attr = object {
         mem_gb: 3.75,
-        disk_gb: ceil(10 + input_size * 1.5),
+        disk_gb: ceil(10 + vcf_size * 1.5),
         cpu_cores: 1,
         preemptible_tries: 2,
         max_retries: 1,
