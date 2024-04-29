@@ -33,7 +33,6 @@ workflow AnnotateVcf {
     String? gcs_project
 
     String sv_pipeline_docker
-    String? sv_pipeline_hail_docker
     String sv_base_mini_docker
     String gatk_docker
 
@@ -84,7 +83,6 @@ workflow AnnotateVcf {
         gatk_docker = gatk_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_hail_docker = sv_pipeline_hail_docker,
 
         runtime_attr_svannotate = runtime_attr_svannotate,
         runtime_attr_scatter_vcf = runtime_attr_scatter_vcf,
@@ -110,7 +108,6 @@ workflow AnnotateVcf {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
         runtime_override_preconcat=runtime_attr_preconcat,
         runtime_override_hail_merge=runtime_attr_hail_merge,
         runtime_override_fix_header=runtime_attr_fix_header
