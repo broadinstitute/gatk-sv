@@ -32,9 +32,9 @@
   "concordance_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.vcf.gz",
   "concordance_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.vcf.gz.tbi",
 
-  "pacbio_sample_concordance_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/training/hgdp.concordance.subset.vcf.gz",
-  "pacbio_sample_concordance_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/training/hgdp.concordance.subset.vcf.gz.tbi",
-  "recalibrate_gq_truth_json": "gs://gatk-sv-hgdp/mw-sv-concordance-update/training/hgdp.gq_training_labels.json",
+  "pacbio_sample_concordance_vcf": "gs://gatk-sv-hgdp/mw-train-genotype-filtering/hgdp.pacbio_samples.vcf.gz",
+  "pacbio_sample_concordance_vcf_index": "gs://gatk-sv-hgdp/mw-train-genotype-filtering/hgdp.pacbio_samples.vcf.gz.tbi",
+  "recalibrate_gq_truth_json": "gs://gatk-sv-hgdp/mw-train-genotype-filtering/hgdp.gq_training_labels.json",
 
   "aou_recalibrated_vcf": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.aou_gq_recalibrated.vcf.gz",
   "aou_recalibrated_vcf_index": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.concordance.aou_gq_recalibrated.vcf.gz.tbi",

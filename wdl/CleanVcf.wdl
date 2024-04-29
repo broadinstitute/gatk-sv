@@ -33,7 +33,7 @@ workflow CleanVcf {
     String? gcs_project
 
     # Module metrics parameters
-    # Run module metrics workflow at the end - on by default
+    # Run module metrics workflow at the end - off by default to avoid resource errors
     Boolean? run_module_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
     File? baseline_cluster_vcf  # baseline files are optional for metrics workflow
@@ -203,7 +203,7 @@ workflow CleanVcf {
 
   File cleaned_vcf_ = select_first([ConcatCleanedVcfs.concat_vcf, ConcatVcfsHail.merged_vcf])
 
-  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true
+  Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else false
   if (run_module_metrics_) {
     call metrics.MakeCohortVcfMetrics {
       input:
