@@ -233,7 +233,7 @@ def main(argv: Optional[List[Text]] = None) -> get_truth_overlap.ConfidentVarian
                                                                           valid_irs_variant_ids,
                                                                           samples_list_to_confident_irs_variant_ids_mapping)
     else:
-        logging.info(f"No IRS batches were provided.")
+        logging.info("No IRS batches were provided.")
         irs_sample_confident_variants = {}
     logging.info(f"Samples with confident IRS variants: {len(irs_sample_confident_variants)}")
 
