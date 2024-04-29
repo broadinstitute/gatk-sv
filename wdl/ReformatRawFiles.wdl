@@ -248,8 +248,8 @@ task RawReformatBedDepth {
 
         # Reformat bed file
         Rscript /src/denovo/reformat_raw_bed.R ~{per_chromosome_bed_file} ~{ped_input} ~{chromosome}.proband.reformatted.bed ~{chromosome}.parents.reformatted.bed
-        bedtools sort -i ~{chromosome}.proband.reformatted.bed | bgzip -c > ~{chromosome}.proband.depth.reformatted.sorted.bed.gz
-        bedtools sort -i ~{chromosome}.parents.reformatted.bed | bgzip -c > ~{chromosome}.parents.depth.reformatted.sorted.bed.gz
+        bedtools sort -i ~{chromosome}.proband.reformatted.bed | bgzip > ~{chromosome}.proband.depth.reformatted.sorted.bed.gz
+        bedtools sort -i ~{chromosome}.parents.reformatted.bed | bgzip > ~{chromosome}.parents.depth.reformatted.sorted.bed.gz
     }
 
     runtime {
