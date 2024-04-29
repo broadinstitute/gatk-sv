@@ -1,0 +1,19 @@
+{
+  "MakeGqRecalibratorTrainingSetFromPacBio.vcfs": [{{ test_batch.concordance_vcf | tojson }}],
+  "MakeGqRecalibratorTrainingSetFromPacBio.training_sample_ids": {{ test_batch.pacbio_samples_list | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.output_prefix": {{ test_batch.name | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.ploidy_table": {{ test_batch.ploidy_table | tojson }},
+
+"MakeGqRecalibratorTrainingSetFromPacBio.pacbio_sample_ids": {{ test_batch.pacbio_samples | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.vapor_files": {{ test_batch.vapor_files | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.pbsv_vcfs": {{ test_batch.pacbio_pbsv_vcfs | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.pav_vcfs": {{ test_batch.pacbio_pav_vcfs | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.sniffles_vcfs": {{ test_batch.pacbio_sniffles_vcfs | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.reference_dict": {{ reference_resources.reference_dict | tojson }},
+
+  "MakeGqRecalibratorTrainingSetFromPacBio.sv_utils_docker" : {{ dockers.sv_utils_docker | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.gatk_docker" : {{ dockers.gatk_docker | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.sv_base_mini_docker" : {{ dockers.sv_base_mini_docker | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.sv_pipeline_docker" : {{ dockers.sv_pipeline_docker | tojson }},
+  "MakeGqRecalibratorTrainingSetFromPacBio.linux_docker" : {{ dockers.linux_docker | tojson }}
+}
