@@ -1,6 +1,7 @@
 version 1.0
     
 import "Structs.wdl"
+import "Utils.wdl" as Utils
 
 workflow DeNovoSVsScatter {
 
@@ -27,9 +28,10 @@ workflow DeNovoSVsScatter {
 
     # Scatter genotyping over shards
     scatter (shard in vcf_files) {
-        call VcfToBed {
+        call Utils.VcfToBed as VcfToBed {
             input:
                 vcf_file=shard,
+                args="--info ALL --include-filters",
                 variant_interpretation_docker=variant_interpretation_docker,
                 runtime_attr_override = runtime_attr_vcf_to_bed
         }
@@ -143,50 +145,6 @@ task RunDeNovo {
 
         bgzip ~{basename}.denovo.bed
         bgzip ~{basename}.annotation.bed
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-        docker: variant_interpretation_docker
-    }
-}
-
-task VcfToBed {
-
-    input {
-        File vcf_file
-        String variant_interpretation_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float vcf_size = size(vcf_file, "GB")
-
-    RuntimeAttr default_attr = object {
-        mem_gb: 3.75,
-        disk_gb: ceil(10 + vcf_size * 1.5),
-        cpu_cores: 1,
-        preemptible_tries: 2,
-        max_retries: 1,
-        boot_disk_gb: 8
-    }
-    
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output {
-        File bed_output = "~{basename}.bed.gz"
-    }
-
-    String basename = basename(vcf_file, ".vcf.gz")
-    command {
-        set -exuo pipefail
-
-        svtk vcf2bed ~{vcf_file} --info ALL --include-filters ~{basename}.bed
-        bgzip ~{basename}.bed
     }
 
     runtime {
