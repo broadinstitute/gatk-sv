@@ -813,7 +813,7 @@ task VcfToBed {
     command {
         set -exuo pipefail
 
-        svtk vcf2bed ~{vcf_file} --info ALL --include-filters ~{basename}.bed
+        svtk vcf2bed ~{vcf_file} ~{args} ~{basename}.bed
         bgzip ~{basename}.bed
     }
 

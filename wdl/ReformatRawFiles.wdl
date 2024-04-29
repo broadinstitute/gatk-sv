@@ -1,6 +1,7 @@
 version 1.0
     
 import "Structs.wdl"
+import "Utils.wdl" as Utils
 
 workflow ReformatRawFiles {
 
@@ -19,9 +20,10 @@ workflow ReformatRawFiles {
     Array[String] raw_files = transpose(read_tsv(raw_files_list))[1]
 
     scatter(raw_file in raw_files) {
-        call RawVcfToBed {
+        call Utils.VcfToBed as VcfToBed {
             input:
                 vcf_file=raw_file,
+                args="--info SVTYPE",
                 variant_interpretation_docker=variant_interpretation_docker,
                 prefix = basename(raw_file, ".vcf.gz"),
                 runtime_attr_override = runtime_attr_vcf_to_bed
@@ -30,7 +32,7 @@ workflow ReformatRawFiles {
 
     call RawMergeBed {
         input:
-            bed_files=RawVcfToBed.bed_output,
+            bed_files=VcfToBed.bed_output,
             variant_interpretation_docker=variant_interpretation_docker,
             runtime_attr_override = runtime_attr_merge_bed
     }
@@ -73,51 +75,6 @@ workflow ReformatRawFiles {
     output {
         Array[File] reformatted_parents_raw_files = reformatted_parents_output_
         Array[File] reformatted_proband_raw_files = reformatted_proband_output_
-    }
-}   
-
-task RawVcfToBed {
-
-    input {
-        File vcf_file
-        String variant_interpretation_docker
-        String prefix
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(vcf_file, "GB")
-
-    RuntimeAttr default_attr = object {
-        mem_gb: 3.75,
-        disk_gb: ceil(10 + input_size * 2.0),
-        cpu_cores: 1,
-        preemptible_tries: 2,
-        max_retries: 1,
-        boot_disk_gb: 8
-    }
-    
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output {
-        File bed_output = "${prefix}.bed.gz"
-    }
-
-    command {
-        set -exuo pipefail
-
-        # convert from vcf to bed file
-        svtk vcf2bed ~{vcf_file} --info SVTYPE ~{prefix}.bed
-        bgzip ~{prefix}.bed
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-        docker: variant_interpretation_docker
     }
 }
 
