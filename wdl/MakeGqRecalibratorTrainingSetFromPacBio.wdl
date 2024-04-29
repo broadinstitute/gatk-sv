@@ -271,8 +271,6 @@ task GetVariantListsFromVaporAndIRS {
     RuntimeAttr? runtime_attr_override
   }
 
-  String vapor_json = "vapor_data.json"
-
   output {
     File vapor_json = "~{output_prefix}.gq_recalibrator_labels.vapor.json"
     File irs_json = "~{output_prefix}.gq_recalibrator_labels.irs.json"
@@ -297,14 +295,14 @@ task GetVariantListsFromVaporAndIRS {
       | sed 's/,}/}/' \
       | sed -e 's/\(,\|{\)/\1\n/g' -e 's/"}/"\n}\n/' \
       | sed 's/^"/  "/g' \
-      > ~{vapor_json}
-    printf "~{vapor_json}: "
-    cat ~{vapor_json}
+      > vapor_data.json
+    printf "vapor_data.json: "
+    cat vapor_data.json
 
     IRS_SAMPLE_BATCHES=~{write_lines(irs_sample_batches)}
     IRS_TEST_REPORTS=~{write_lines(irs_test_reports)}
     python ~{default="/opt/sv_utils/src/sv_utils/get_confident_variant_lists_from_vapor_and_irs_test.py" script} \
-      --vapor-json ~{vapor_json}  \
+      --vapor-json vapor_data.json  \
       --vcf ~{vcf} \
       ~{if length(irs_sample_batches) > 0 then "--irs-sample-batch-lists $IRS_SAMPLE_BATCHES" else ""} \
       ~{if length(irs_test_reports) > 0 then "--irs-test-report-list $IRS_TEST_REPORTS" else ""} \
@@ -415,8 +413,6 @@ task VaporAndIRSSupportReport {
     RuntimeAttr? runtime_attr_override
   }
 
-  String vapor_json = "vapor_data.json"
-
   output {
     File summary = "${output_prefix}.irs_vapor_support.summary.tsv"
     File detail = "${output_prefix}.irs_vapor_support.detail.tsv.gz"
@@ -441,15 +437,15 @@ task VaporAndIRSSupportReport {
       | sed 's/,}/}/' \
       | sed -e 's/\(,\|{\)/\1\n/g' -e 's/"}/"\n}\n/' \
       | sed 's/^"/  "/g' \
-      > ~{vapor_json}
-    printf "~{vapor_json}: "
-    cat ~{vapor_json}
+      > vapor_data.json
+    printf "vapor_data.json: "
+    cat vapor_data.json
 
     touch ~{output_prefix}.irs_vapor_support.detail.tsv.gz
     IRS_SAMPLE_BATCHES=~{write_lines(irs_sample_batches)}
     IRS_TEST_REPORTS=~{write_lines(irs_test_reports)}
     python ~{default="/opt/sv_utils/src/sv_utils/report_confident_irs_vapor_variants.py" script} \
-      --vapor-json ~{vapor_json}  \
+      --vapor-json vapor_data.json  \
       --vcf ~{vcf} \
       ~{if length(irs_sample_batches) > 0 then "--irs-sample-batch-lists $IRS_SAMPLE_BATCHES" else ""} \
       ~{if length(irs_test_reports) > 0 then "--irs-test-report-list $IRS_TEST_REPORTS" else ""} \
