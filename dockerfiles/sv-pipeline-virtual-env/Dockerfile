@@ -58,7 +58,7 @@ RUN conda clean -ay --force-pkgs-dirs
 ############## merge envs by copying python virtual env (smaller env) into R virtual env (bigger env)
 FROM $R_VIRTUAL_ENV_IMAGE as build_virtual_env
 
-# copy in python env (not the whole conda install: we don't need conda anymore) and set ENV variables
+# copy in python env (not the whole conda install: we don't need conda anymore) and set ENV variables.
 ARG CONDA_INSTALL_DIR
 ARG CONDA_ENV_NAME
 ARG CONDA_ENV_PATH=$CONDA_INSTALL_DIR/envs/$CONDA_ENV_NAME
