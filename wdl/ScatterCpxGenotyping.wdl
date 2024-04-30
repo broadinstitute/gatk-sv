@@ -31,9 +31,7 @@ workflow ScatterCpxGenotyping {
 
     String linux_docker
     String sv_base_mini_docker
-    String sv_pipeline_updates_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
 
     # overrides for MiniTasks
     RuntimeAttr? runtime_override_split_vcf_to_genotype
@@ -61,7 +59,7 @@ workflow ScatterCpxGenotyping {
       vcf=vcf,
       prefix=contig_prefix,
       records_per_shard=records_per_shard,
-      sv_pipeline_docker=sv_pipeline_updates_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_override_split_vcf_to_genotype
   }
 
@@ -105,7 +103,6 @@ workflow ScatterCpxGenotyping {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_override_preconcat,
         runtime_override_hail_merge=runtime_override_hail_merge,
         runtime_override_fix_header=runtime_override_fix_header
