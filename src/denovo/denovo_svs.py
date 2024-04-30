@@ -824,6 +824,10 @@ def main():
     output = bed_final
     de_novo = bed_final[(bed_final['is_de_novo']) | (bed_final['filter_flag'] == 'ins_filter') | (bed_final['in_gd'])]
 
+    # Add a `#` prefix to column name so that it matches the convention used in gatk-sv
+    output.columns = ["#" + output.columns[0]] + output.columns[1:].tolist()
+    de_novo.columns = ["#" + de_novo.columns[0]] + de_novo.columns[1:].tolist()
+
     # Write output
     output.to_csv(path_or_buf=out_file, mode='a', index=False, sep='\t', header=True)
     de_novo.to_csv(path_or_buf=de_novo_out_file, mode='a', index=False, sep='\t', header=True)
