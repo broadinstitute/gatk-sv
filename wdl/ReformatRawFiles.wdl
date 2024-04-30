@@ -2,6 +2,7 @@ version 1.0
     
 import "Structs.wdl"
 import "Utils.wdl" as Utils
+import "TasksMakeCohortVcf.wdl" as TasksMakeCohortVcf
 
 workflow ReformatRawFiles {
 
@@ -10,6 +11,7 @@ workflow ReformatRawFiles {
         File raw_files_list
         File ped_input
         String variant_interpretation_docker
+        String sv_base_mini_docker
         Boolean depth
         RuntimeAttr? runtime_attr_vcf_to_bed
         RuntimeAttr? runtime_attr_merge_bed
@@ -29,41 +31,41 @@ workflow ReformatRawFiles {
         }
     }
 
-    call RawMergeBed {
+    call TasksMakeCohortVcf.CatUncompressedFiles as MergeBedFiles {
         input:
-            bed_files=VcfToBed.bed_output,
-            variant_interpretation_docker=variant_interpretation_docker,
-            runtime_attr_override = runtime_attr_merge_bed
+            shards=VcfToBed.bed_output,
+            sv_base_mini_docker=sv_base_mini_docker,
+            runtime_attr_override=runtime_attr_merge_bed
     }
 
     scatter (contig in contigs) {
         call RawDivideByChrom {
             input:
-                bed_file = RawMergeBed.concat_bed_output,
-                chromosome = contig,
+                bed_file=MergeBedFiles.outfile,
+                chromosome=contig,
                 variant_interpretation_docker=variant_interpretation_docker,
-                runtime_attr_override = runtime_attr_divide_by_chrom
+                runtime_attr_override=runtime_attr_divide_by_chrom
         }
 
         if (depth) {
             call RawReformatBedDepth {
                 input:
-                    per_chromosome_bed_file = RawDivideByChrom.per_chromosome_bed_output,
+                    per_chromosome_bed_file=RawDivideByChrom.per_chromosome_bed_output,
                     ped_input=ped_input,
                     chromosome=contig,
                     variant_interpretation_docker=variant_interpretation_docker,
-                    runtime_attr_override = runtime_attr_reformat_bed
+                    runtime_attr_override=runtime_attr_reformat_bed
             }
         }
 
         if (!(depth)) {
             call RawReformatBed {
                 input:
-                    per_chromosome_bed_file = RawDivideByChrom.per_chromosome_bed_output,
+                    per_chromosome_bed_file=RawDivideByChrom.per_chromosome_bed_output,
                     ped_input=ped_input,
                     chromosome=contig,
                     variant_interpretation_docker=variant_interpretation_docker,
-                    runtime_attr_override = runtime_attr_reformat_bed
+                    runtime_attr_override=runtime_attr_reformat_bed
             }
         }
         File reformatted_parents_output_ = select_first([RawReformatBed.reformatted_parents_output, RawReformatBedDepth.reformatted_parents_depth_output])
@@ -74,48 +76,6 @@ workflow ReformatRawFiles {
     output {
         Array[File] reformatted_parents_raw_files = reformatted_parents_output_
         Array[File] reformatted_proband_raw_files = reformatted_proband_output_
-    }
-}
-
-task RawMergeBed {
-
-    input {
-        Array[File] bed_files
-        String variant_interpretation_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    Float input_size = size(bed_files, "GB")
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1,
-        mem_gb: 3.75,
-        disk_gb: ceil(10 + input_size * 1.5),
-        preemptible_tries: 2,
-        max_retries: 1,
-        boot_disk_gb: 8
-    }
-    
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-    output {
-        File concat_bed_output = "concat.bed.gz"
-    }
-
-    command {
-        set -exuo pipefail
-
-        zcat ~{sep=" " bed_files} | bgzip -c > concat.bed.gz
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-        docker: variant_interpretation_docker
     }
 }
 

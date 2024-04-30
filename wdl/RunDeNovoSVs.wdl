@@ -29,6 +29,7 @@ workflow DeNovoSV {
         Int records_per_shard
 
         String variant_interpretation_docker
+        String sv_base_mini_docker
         String sv_pipeline_updates_docker
         String python_docker
         RuntimeAttr? runtime_attr_gd
@@ -97,6 +98,7 @@ workflow DeNovoSV {
             ped_input = CleanPed.cleaned_ped,
             depth = false,
             variant_interpretation_docker = variant_interpretation_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_vcf_to_bed = runtime_attr_raw_vcf_to_bed,
             runtime_attr_merge_bed = runtime_attr_raw_merge_bed,
             runtime_attr_divide_by_chrom = runtime_attr_raw_divide_by_chrom,
@@ -111,6 +113,7 @@ workflow DeNovoSV {
             ped_input = CleanPed.cleaned_ped,
             depth = true,
             variant_interpretation_docker = variant_interpretation_docker,
+            sv_base_mini_docker = sv_base_mini_docker,
             runtime_attr_vcf_to_bed = runtime_attr_raw_vcf_to_bed,
             runtime_attr_merge_bed = runtime_attr_raw_merge_bed,
             runtime_attr_divide_by_chrom = runtime_attr_raw_divide_by_chrom,
