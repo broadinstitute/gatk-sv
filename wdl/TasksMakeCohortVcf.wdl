@@ -1004,6 +1004,5 @@ task ScatterVcf {
   >>>
   output {
     Array[File] shards = glob("~{prefix}.shard_*.vcf.gz")
-    Array[String] shards_string = glob("~{prefix}.shard_*.vcf.gz")
   }
 }
