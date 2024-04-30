@@ -89,7 +89,6 @@ workflow GATKSVPipelineBatch {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -224,7 +223,6 @@ workflow GATKSVPipelineBatch {
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       linux_docker=linux_docker,
       cnmops_docker=cnmops_docker,
@@ -253,7 +251,6 @@ workflow GATKSVPipelineBatch {
       primary_contigs_list = primary_contigs_list,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker
   }
 
@@ -271,8 +268,7 @@ workflow GATKSVPipelineBatch {
       contig_list=primary_contigs_list,
       regeno_coverage_medians=[GenotypeBatch.regeno_coverage_medians],
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+      sv_pipeline_docker=sv_pipeline_docker
   }
   
 
@@ -302,7 +298,6 @@ workflow GATKSVPipelineBatch {
       primary_contigs_list = primary_contigs_list,
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker
   }
