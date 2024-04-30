@@ -27,7 +27,7 @@ workflow GetBatchedVcf {
             runtime_attr_override=runtime_override_shard_vcf
     }
 
-    scatter (shard in SplitVcf.shards_string) {
+    scatter (shard in SplitVcf.shards) {
         call BatchVcf {
             input:
                 vcf_file = shard,
@@ -53,7 +53,7 @@ workflow GetBatchedVcf {
 task BatchVcf {
 
     input {
-        String vcf_file
+        File vcf_file
         File samples
         String variant_interpretation_docker
         RuntimeAttr? runtime_attr_override
