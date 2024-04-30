@@ -37,7 +37,6 @@ workflow CleanVcfChromosome {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_clean_vcf_1a
@@ -118,7 +117,6 @@ workflow CleanVcfChromosome {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_override_preconcat_step1,
         runtime_override_hail_merge=runtime_override_hail_merge_step1,
         runtime_override_fix_header=runtime_override_fix_header_step1
@@ -264,7 +262,6 @@ workflow CleanVcfChromosome {
         reset_cnv_gts=true,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_override_preconcat_drc,
         runtime_override_hail_merge=runtime_override_hail_merge_drc,
         runtime_override_fix_header=runtime_override_fix_header_drc
