@@ -290,7 +290,7 @@ def _parse_coords_table(path: Text) -> Dict[Text, List[Text]]:
         for line in f:
             tokens = line.strip().split()
             # { vid: [chrom, pos, end] }
-            d[tokens[0]] = tokens[1:-1]
+            d[tokens[0]] = tokens[1:4]
     return d
 
 
