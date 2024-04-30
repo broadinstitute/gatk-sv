@@ -25,7 +25,6 @@ workflow ReformatRawFiles {
                 vcf_file=raw_file,
                 args="--info SVTYPE",
                 variant_interpretation_docker=variant_interpretation_docker,
-                prefix = basename(raw_file, ".vcf.gz"),
                 runtime_attr_override = runtime_attr_vcf_to_bed
         }
     }
