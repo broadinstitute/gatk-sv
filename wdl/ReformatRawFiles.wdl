@@ -110,7 +110,7 @@ task RawDivideByChrom {
         set -exuo pipefail
         
         zcat ~{bed_file} | \
-        grep -w ^~{chromosome} | \
+        awk '$1 == "~{chromosome}"' | \
         bgzip -c > ~{chromosome}.bed.gz
     }
 
