@@ -82,7 +82,7 @@ task GetSitesInfo {
   command <<<
     set -euo pipefail
 
-    bcftools query -f '~{sites_query_string}' | bgzip -c > ~{prefix}.sites_info.tsv.gz
+    bcftools query -f '~{sites_query_string}' ~{vcf} | bgzip -c > ~{prefix}.sites_info.tsv.gz
   >>>
 
   output {
