@@ -4,12 +4,13 @@ import "Structs.wdl"
 import "ReformatRawFiles.wdl" as raw
 import "TasksMakeCohortVcf.wdl" as miniTasks
 import "DeNovoSVsScatter.wdl" as runDeNovo
-import "SplitVcf.wdl" as splitVcf
+import "Utils.wdl" as util
 
 workflow DeNovoSV {
 
     input {
         File vcf_file
+        File? vcf_index
         File ped_input
         File batch_raw_file
         File batch_depth_raw_file
@@ -46,6 +47,7 @@ workflow DeNovoSV {
         RuntimeAttr? runtime_attr_clean_ped
         RuntimeAttr? runtime_attr_call_outliers
         RuntimeAttr? runtime_attr_get_batched_files
+        RuntimeAttr? runtime_attr_subset_by_samples
         RuntimeAttr? runtime_attr_merge_gd
         RuntimeAttr? runtime_attr_batch_vcf
         RuntimeAttr? runtime_attr_merge
@@ -67,17 +69,16 @@ workflow DeNovoSV {
                 runtime_attr_override = runtime_attr_get_batched_files
         }
 
-        call splitVcf.GetBatchedVcf as GetBatchedVcf {
+        call util.SubsetVcfBySamplesList {
             input:
-                vcf_file = vcf_file,
-                prefix = prefix,
-                samples = GetBatchedFiles.samples,
-                records_per_shard = 10000,
-                variant_interpretation_docker = variant_interpretation_docker,
-                sv_pipeline_updates_docker = sv_pipeline_updates_docker,
-                runtime_attr_batch_vcf = runtime_attr_batch_vcf,
-                runtime_override_shard_vcf = runtime_override_shard_vcf,
-                runtime_attr_merge = runtime_attr_merge
+                vcf = vcf_file,
+                vcf_idx = vcf_index,
+                list_of_samples = GetBatchedFiles.samples,
+                outfile_name = prefix,
+                keep_af = true,
+                remove_private_sites = false,
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_subset_by_samples
         }
     }
 
@@ -85,7 +86,7 @@ workflow DeNovoSV {
     call CleanPed {
         input:
             ped_input = ped_input,
-            vcf_input = select_first([GetBatchedVcf.split_vcf, vcf_file]),
+            vcf_input = select_first([SubsetVcfBySamplesList.vcf_subset, vcf_file]),
             variant_interpretation_docker=variant_interpretation_docker,
             runtime_attr_override = runtime_attr_clean_ped
     }
@@ -126,7 +127,7 @@ workflow DeNovoSV {
             input:
                 genomic_disorder_input=genomic_disorder_input,
                 ped = ped_input,
-                vcf_file = select_first([GetBatchedVcf.split_vcf, vcf_file]),
+                vcf_file = select_first([SubsetVcfBySamplesList.vcf_subset, vcf_file]),
                 depth_raw_file_proband = ReformatDepthRawFiles.reformatted_proband_raw_files[i],
                 depth_raw_file_parents = ReformatDepthRawFiles.reformatted_parents_raw_files[i],
                 chromosome=contigs[i],
@@ -137,7 +138,7 @@ workflow DeNovoSV {
         # Splits vcf by chromosome
         call SubsetVcf {
             input:
-                vcf_file = select_first([GetBatchedVcf.split_vcf, vcf_file]),
+                vcf_file = select_first([SubsetVcfBySamplesList.vcf_subset, vcf_file]),
                 chromosome=contigs[i],
                 variant_interpretation_docker=variant_interpretation_docker,
                 runtime_attr_override = runtime_attr_subset_vcf
