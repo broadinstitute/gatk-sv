@@ -81,8 +81,12 @@ CODE
 
     bcftools view --no-version -h ~{vcf} > header.vcf
 
-    grep -v -e ^"##bcftools" header.vcf -e ^"##source=depth" -e ^"##ALT=<ID=UNR" \
-      | sed 's/Minimum passing GQ for each biallelic non-refvariant/Minimum passing SL for each biallelic variant/g' \
+    grep -v -e ^"##bcftools" header.vcf \
+      -e ^"##source=depth" \
+      -e ^"##ALT=<ID=UNR" \
+      -e "assembly=38" \
+      -e ^"##CPX_TYPE_piDUP_FR" \
+      -e ^"##CPX_TYPE_piDUP_RF" \
       | sed 's/Split read genotype quality/Split-read genotype quality/g' \
       | sed 's/##ALT=<ID=BND,Description="Translocation">/##ALT=<ID=BND,Description="Breakend">/g' > newheader.vcf
 
