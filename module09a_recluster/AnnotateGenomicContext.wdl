@@ -7,8 +7,8 @@ import "Structs.wdl"
 # Workflow to annotate vcf file with genomic context
 workflow AnnotateSVsWithGenomicContext {
     input {
-        File vcf
-        File vcf_index
+        Array[File] vcf
+        Array[File] vcf_index
         File Repeat_Masks
         File Simple_Repeats
         File Segmental_Duplicates
@@ -24,50 +24,59 @@ workflow AnnotateSVsWithGenomicContext {
         RuntimeAttr? runtime_attr_override_inte_gc
     }
 
-    call ExtractSitesFromVcf {
-        input:
-            vcf = vcf,
-            vcf_index = vcf_index,
-            sv_base_mini_docker=sv_base_mini_docker,
-            runtime_attr_override=runtime_override_extract_SV_sites
+    scatter (i in range(length(vcf))) {
+        call ExtractSitesFromVcf {
+            input:
+                vcf = vcf[i],
+                vcf_index = vcf_index[i],
+                sv_base_mini_docker=sv_base_mini_docker,
+                runtime_attr_override=runtime_override_extract_SV_sites
+        }
+
+        call Vcf2Bed{
+            input:
+                vcf = ExtractSitesFromVcf.out,
+                vcf_index = ExtractSitesFromVcf.out_idx,
+                sv_pipeline_docker=sv_pipeline_docker,
+                runtime_attr_override=runtime_override_vcf_to_bed
+        }
+
+        call AnnotateGenomicContext{
+            input:
+                bed_gz = Vcf2Bed.out,
+                simp_rep = Simple_Repeats,
+                seg_dup = Segmental_Duplicates,
+                rep_mask = Repeat_Masks,
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_override_anno_gc
+        }
+
+        call IntegrateGenomicContext{
+            input:
+                bed_gz = Vcf2Bed.out,
+                le_bp_vs_sr = AnnotateGenomicContext.le_bp_vs_sr,
+                le_bp_vs_sd = AnnotateGenomicContext.le_bp_vs_sd,
+                le_bp_vs_rm = AnnotateGenomicContext.le_bp_vs_rm,
+                ri_bp_vs_sr = AnnotateGenomicContext.ri_bp_vs_sr,
+                ri_bp_vs_sd = AnnotateGenomicContext.ri_bp_vs_sd,
+                ri_bp_vs_rm = AnnotateGenomicContext.ri_bp_vs_rm,
+                lg_cnv_vs_sr = AnnotateGenomicContext.lg_cnv_vs_sr,
+                lg_cnv_vs_sd = AnnotateGenomicContext.lg_cnv_vs_sd,
+                lg_cnv_vs_rm = AnnotateGenomicContext.lg_cnv_vs_rm,
+                sv_benchmark_docker = sv_benchmark_docker,
+                runtime_attr_override = runtime_attr_override_inte_gc
+        }
     }
 
-    call Vcf2Bed{
+    call ConcatTextFiles {
         input:
-            vcf = ExtractSitesFromVcf.out,
-            vcf_index = ExtractSitesFromVcf.out_idx, 
-            sv_pipeline_docker=sv_pipeline_docker,
-            runtime_attr_override=runtime_override_vcf_to_bed
-    }
-
-    call AnnotateGenomicContext{
-        input:
-            bed_gz = Vcf2Bed.out,
-            simp_rep = Simple_Repeats,
-            seg_dup = Segmental_Duplicates,
-            rep_mask = Repeat_Masks,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_override_anno_gc
-    }
-
-    call IntegrateGenomicContext{
-        input:
-            bed_gz = Vcf2Bed.out,
-            le_bp_vs_sr = AnnotateGenomicContext.le_bp_vs_sr,
-            le_bp_vs_sd = AnnotateGenomicContext.le_bp_vs_sd,
-            le_bp_vs_rm = AnnotateGenomicContext.le_bp_vs_rm,
-            ri_bp_vs_sr = AnnotateGenomicContext.ri_bp_vs_sr,
-            ri_bp_vs_sd = AnnotateGenomicContext.ri_bp_vs_sd,
-            ri_bp_vs_rm = AnnotateGenomicContext.ri_bp_vs_rm,
-            lg_cnv_vs_sr = AnnotateGenomicContext.lg_cnv_vs_sr,
-            lg_cnv_vs_sd = AnnotateGenomicContext.lg_cnv_vs_sd,
-            lg_cnv_vs_rm = AnnotateGenomicContext.lg_cnv_vs_rm,
-            sv_benchmark_docker = sv_benchmark_docker,
-            runtime_attr_override = runtime_attr_override_inte_gc
+            shards = IntegrateGenomicContext.anno,
+            out_filename = "genomic_contexts.GC",
+            sv_base_mini_docker = sv_base_mini_docker
     }
 
     output{
-        File annotated_SVs = IntegrateGenomicContext.anno
+        File annotated_SVs = ConcatTextFiles.merged_file
     }
 }
 
@@ -285,8 +294,41 @@ task IntegrateGenomicContext{
     }        
 }
 
+# Concatenate multiple text files with no sorting
+task ConcatTextFiles {
+    input {
+        Array[File] shards
+        String out_filename
+        String sv_base_mini_docker
+    }
 
+    Float input_size = size(shards, "GiB")
+    Float compression_factor = 5.0
+    Float base_disk_gb = 10
+    Int disk_gb = ceil(base_disk_gb + (compression_factor * input_size))
+    runtime {
+        memory: "2.0 GiB"
+        disks: "local-disk ~{disk_gb} HDD"
+        cpu: 1
+        preemptible: 1
+        maxRetries: 1
+        docker: sv_base_mini_docker
+        bootDiskSizeGb: 10
+    }
 
+    command <<<
+        set -eu -o pipefail
+
+        # Note: for gzip-compressed files, can take advantage of their support of
+        # direct concatenation (no need to use zcat). Just need to provide ".gz" as
+        # the suffix for out_filename
+        cat ~{sep=" " shards} > ~{out_filename}
+    >>>
+
+    output {
+        File merged_file = "~{out_filename}"
+    }
+}
 
 
 
