@@ -27,5 +27,6 @@
   "sv-utils-env": "vahid.azurecr.io/gatk-sv/sv-utils-env:2023-02-01-v0.26.8-beta-9b25c72d",
   "sv_utils_docker": "vahid.azurecr.io/gatk-sv/sv-utils:2024-01-24-v0.28.4-beta-9debd6d7",
   "gq_recalibrator_docker": "vahid.azurecr.io/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
-  "str": "vahid.azurecr.io/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6"
+  "str": "vahid.azurecr.io/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
+  "denovo": "vahid.azurecr.io/gatk-sv/denovo:2024-05-02-v0.28.4-beta-76060cf3"
 }
