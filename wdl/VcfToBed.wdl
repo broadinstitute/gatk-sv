@@ -8,6 +8,7 @@ workflow VcfToBed {
     File vcf
     Int records_per_shard = 20000
     String prefix
+    String? flags
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -26,6 +27,7 @@ workflow VcfToBed {
     call collect.SvtkVcf2bed {
       input:
         vcf=ScatterVcf.shards[i],
+        flags=flags,
         prefix="~{prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker
     }

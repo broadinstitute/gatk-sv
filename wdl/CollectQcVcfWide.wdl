@@ -71,6 +71,7 @@ workflow CollectQcVcfWide {
     call SvtkVcf2bed {
       input:
         vcf=filtered_vcf,
+        flags="--info ALL",
         prefix="~{output_prefix}.shard_~{i}",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_svtk_vcf_2_bed
@@ -218,6 +219,7 @@ task SvtkVcf2bed {
   input {
     File vcf
     String prefix
+    String? flags
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -249,7 +251,7 @@ task SvtkVcf2bed {
   command <<<
     set -eu -o pipefail
     
-    svtk vcf2bed --info ALL ~{vcf} stdout \
+    svtk vcf2bed ~{flags} ~{vcf} stdout \
       | bgzip -c \
       > "~{output_file}"
   >>>
