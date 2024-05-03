@@ -8,6 +8,8 @@ workflow GetVcfStats {
     String prefix
     Array[File] vcfs  # sharded by contig, in order
 
+    Boolean count_per_sample = true
+
     String sites_query_string = "%ID\t%INFO/SVTYPE\t%FILTER\n"
     String bcftools_preprocessing_options = "-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'" # for preprocessing prior to per-sample SV counting
 
@@ -28,22 +30,6 @@ workflow GetVcfStats {
         sites_query_string = sites_query_string,
         sv_pipeline_docker = sv_pipeline_docker
     }
-
-    call count.ShardedCountSVs {
-      input:
-        vcf = vcfs[i],
-        bcftools_preprocessing_options = bcftools_preprocessing_options,
-        prefix = "~{prefix}.~{contigs[i]}",
-        sv_pipeline_docker = sv_pipeline_docker,
-        sv_base_mini_docker = sv_base_mini_docker
-    }
-  }
-
-  call count.SumSVCounts {
-    input:
-      counts = ShardedCountSVs.sv_counts,
-      prefix = "~{prefix}.all_contigs",
-      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call tasks.ZcatCompressedFiles {
@@ -53,8 +39,27 @@ workflow GetVcfStats {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
+  if (count_per_sample) {
+    scatter ( i in range(length(vcfs)) ) {
+      call count.ShardedCountSVs {
+        input:
+          vcf = vcfs[i],
+          bcftools_preprocessing_options = bcftools_preprocessing_options,
+          prefix = "~{prefix}.~{contigs[i]}",
+          sv_pipeline_docker = sv_pipeline_docker,
+          sv_base_mini_docker = sv_base_mini_docker
+      }
+    }
+    call count.SumSVCounts {
+      input:
+        counts = ShardedCountSVs.sv_counts,
+        prefix = "~{prefix}.all_contigs",
+        sv_pipeline_docker = sv_pipeline_docker
+    }
+  }
+
   output {
-    File sv_counts = SumSVCounts.sv_counts_summed
+    File? sv_counts = SumSVCounts.sv_counts_summed
     File sites_info = ZcatCompressedFiles.outfile
   }
 }
