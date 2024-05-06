@@ -149,8 +149,8 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     if len(all_outliers) == 0:
         all_outliers_df = pd.DataFrame(columns=[ID_COL, outlier_type + "_overall_outliers"])
     else:
-        all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
         all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
+        all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
     return all_outliers_df
 
 
