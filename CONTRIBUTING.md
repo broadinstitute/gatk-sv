@@ -22,13 +22,20 @@ By participating, you are expected to uphold this code.
 
 # What Should I Know Before I Get Started?
 
+GATK-SV is a _pipeline_ written in [Workflow Description Language](https://openwdl.org/) (WDL) 
+that orchestrates joint genotyping structural variations using open-source tools and custom scripts. 
+The tools and scripts are distributed in Docker containers, and the pipeline is executed using a 
+[Cromwell](https://cromwell.readthedocs.io/en/stable/) 
+server running on commercial cloud platforms. You may interface with a Cromwell server using 
+[Cromshell](https://github.com/broadinstitute/cromshell) or [Terra platform](https://terra.bio). 
+We currently publish Docker images on Google Container Registry (GCR) and Azure Container Registry (work-in-progress).
 
 To study your data using the GATK-SV pipeline, please 
 refer to the [documentation](README.md) for details.
 
 # I have a question! 
 
-Please refer to the [documentation](README.md).
+Please refer to the [documentation](README.md). 
 If you still have questions, please start a new discussion under the 
 [Discussions](https://github.com/broadinstitute/gatk-sv/discussions) tab. 
 
@@ -49,13 +56,14 @@ The following guidelines help submit bug reports that are
 easier to understand and reproduce by the maintainers and 
 the community and help find related reports.
 
-Use a clear and descriptive title for the issue;
-Provide a minimally reproducible example;
+Use a clear and descriptive title for the issue; 
+Provide a minimally reproducible example; 
 Provide specific details on how the observed and expected behaviors differ.
 
 
 ## Your First Code Contribution
 
+Thank you for considering code contributions to GATK-SV. 
 All code contributions to the GATK-SV repository are made through 
 [pull requests (PR)](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/about-pull-requests), 
 and you may take the following steps to prepare and submit your PRs.
@@ -72,9 +80,9 @@ following [these instructions](https://docs.github.com/en/get-started/quickstart
 
 Once you have forked [broadinstitute/gatk-sv](https://github.com/broadinstitute/gatk-sv), 
 you need to download your fork to your computer so you can implement any changes. 
-This process is commonly known as _cloning_ a GitHub repository. You may follow 
+This process is commonly known as _clone_ing a GitHub repository. You may follow 
 [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) 
-on cloning your fork of GATK-SV, or you may run the following commands.
+on cloning your fork of GATK-SV, or in a nutshell, you may run the following commands.
 
 Clone your fork
 ```shell
@@ -82,7 +90,7 @@ $ git clone https://github.com/YOUR_GITHUB_USERNAME/gatk-sv ./gatk-sv
 $ cd gatk-sv
 ```
 
-Add a reference to `broadinstitute/gatk-sv` so you can keep your fork in synch in the future.
+Add a reference to `broadinstitute/gatk-sv` so you can keep your fork in sync in the future.
 
 ```shell
 $ git remote add upstream https://github.com/broadinstitute/gatk-sv
@@ -100,7 +108,7 @@ the upstream and get a fresh copy of the up-to-date codebase to start your featu
 
 You may create a branch using [Github](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) 
 or [git](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging). 
-In a nutshell, you may create a branch with the following steps.
+In a nutshell, you may create a branch as the following. 
 
 Ensure you are on the `main` branch.  
 ```shell
@@ -147,7 +155,13 @@ that we highly recommend. In GATK-SV, we
 pull requests, which squashes all the commits into a single commit and 
 merge on the `main` branch.
 
-You may commit changes to git from within your IDE or from the terminal with the `git commit` command:
+You may commit changes to git using its command line interface (CLI) from a terminal 
+or use the graphical user interface (GUI) of the IDE you are using. 
+You may use the following command if you are using a terminal 
+(details [here](https://www.atlassian.com/git/tutorials/saving-changes/git-commit), 
+or follow the guidelines on making commits in 
+[PyCharm](https://www.jetbrains.com/help/pycharm/commit-and-push-changes.html#commit) 
+and [Visual Studio](https://learn.microsoft.com/en-us/visualstudio/version-control/git-make-commit?view=vs-2022)).
 
 ```shell
 $ git commit -m "commit message"
