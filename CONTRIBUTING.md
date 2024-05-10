@@ -173,12 +173,19 @@ git commit -m "commit message"
 
 The commits you created are tracked on the feature branch of your fork. 
 To bring these changes to GATK-SV, you need to create a pull request. 
-You may follow these guidelines on 
-[creating a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request?tool=webui&platform=windows). 
-When creating a pull request, please provide concise and descriptive 
-information on the expected behavior, thoroughly test your changes and 
-provide minimally reproducible steps to test your code. After your pull 
-request is reviewed and approved, your commits can be squash-committed 
+
+- You may follow these guidelines on 
+[creating a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request?tool=webui&platform=windows).
+
+- Choose a concise and descriptive title for your pull request 
+  that briefly summarizes your proposed improvements. 
+  Avoid unnecessary details such as your initials or branch names in the title.
+
+- Provide concise and descriptive information on the expected behavior.
+
+- Thoroughly test your changes and provide minimally reproducible steps to test your code.
+
+After your pull request is reviewed and approved, your commits can be squash-committed 
 to the `main` branch of GATK-SV.
 
 
