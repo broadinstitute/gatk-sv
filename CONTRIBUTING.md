@@ -22,7 +22,7 @@ By participating, you are expected to uphold this code.
 
 # What Should I Know Before I Get Started?
 
-GATK-SV is a _pipeline_ written in [Workflow Description Language](https://openwdl.org/) (WDL) 
+GATK-SV is a _cloud-native pipeline_ written in [Workflow Description Language](https://openwdl.org/) (WDL) 
 that orchestrates joint genotyping structural variations using open-source tools and custom scripts. 
 The tools and scripts are distributed in Docker containers, and the pipeline is executed using a 
 [Cromwell](https://cromwell.readthedocs.io/en/stable/) 
@@ -36,8 +36,8 @@ refer to the [documentation](README.md) for details.
 # I have a question! 
 
 Please refer to the [documentation](README.md). 
-If you still have questions, please start a new discussion under the 
-[Discussions](https://github.com/broadinstitute/gatk-sv/discussions) tab. 
+If you still have questions, please start a new issue under the 
+[Issues](https://github.com/broadinstitute/gatk-sv/issues) tab. 
 
 
 # How Can I Contribute?
@@ -56,9 +56,9 @@ The following guidelines help submit bug reports that are
 easier to understand and reproduce by the maintainers and 
 the community and help find related reports.
 
-Use a clear and descriptive title for the issue; 
-Provide a minimally reproducible example; 
-Provide specific details on how the observed and expected behaviors differ.
+- Use a clear and descriptive title for the issue; 
+- Provide a minimally reproducible example; 
+- Provide specific details on how the observed and expected behaviors differ.
 
 
 ## Your First Code Contribution
@@ -80,21 +80,21 @@ following [these instructions](https://docs.github.com/en/get-started/quickstart
 
 Once you have forked [broadinstitute/gatk-sv](https://github.com/broadinstitute/gatk-sv), 
 you need to download your fork to your computer so you can implement any changes. 
-This process is commonly known as _clone_ing a GitHub repository. You may follow 
+This process is commonly known as `clone`ing a GitHub repository. You may follow 
 [these instructions](https://docs.github.com/en/get-started/quickstart/fork-a-repo#cloning-your-forked-repository) 
 on cloning your fork of GATK-SV, or in a nutshell, you may run the following commands.
 
-Clone your fork
-```shell
-$ git clone https://github.com/YOUR_GITHUB_USERNAME/gatk-sv ./gatk-sv
-$ cd gatk-sv
-```
+* Clone your fork
+    ```shell
+    git clone https://github.com/YOUR_GITHUB_USERNAME/gatk-sv .
+    cd gatk-sv
+    ```
 
-Add a reference to `broadinstitute/gatk-sv` so you can keep your fork in sync in the future.
+* Add a reference to `broadinstitute/gatk-sv` so you can keep your fork in sync in the future.
 
-```shell
-$ git remote add upstream https://github.com/broadinstitute/gatk-sv
-```
+    ```shell
+    git remote add upstream https://github.com/broadinstitute/gatk-sv
+    ```
 
 ### Create a feature branch (once per feature)
 
@@ -104,31 +104,33 @@ you implement in one branch does not affect the code on the other branches.
 It is a common practice to create one branch per each feature you would like 
 to implement, and do not implement features on the `main` branch of the repository. 
 It is mainly because you can use the `main` branch to synchronize your fork with 
-the upstream and get a fresh copy of the up-to-date codebase to start your feature development. 
+the upstream (i.e., `broadinstitute/gatk-sv`) and get a fresh copy of the up-to-date codebase to start your feature development. 
 
-You may create a branch using [Github](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) 
+You may create a branch using [GitHub](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) 
 or [git](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging). 
 In a nutshell, you may create a branch as the following. 
 
-Ensure you are on the `main` branch.  
-```shell
-$ git checkout main
-```
+* Ensure you are on the `main` branch.  
+    ```shell
+    git checkout main
+    ```
 
-Create a branch
-```shell
-$ git checkout -b YOUR-BRANCH-NAME
-```
-Synchronize your branch with `broadinstitute/gatk-sv`. 
-```shell
-$ git fetch upstream
-$ git merge upstream/main
-```
+* Create a branch.
+    ```shell
+    git checkout -b YOUR-BRANCH-NAME
+    ```
 
-Push your branch to GitHub
-```shell
-$ git push –set-upstream origin YOUR-BRANCH-NAME
-```
+* Synchronize your branch with `broadinstitute/gatk-sv`. 
+    ```shell
+    git fetch upstream
+    git merge upstream/main
+    ```
+
+* Push your branch to GitHub.
+    ```shell
+    git push –set-upstream origin YOUR-BRANCH-NAME
+    ```
+
 ### Implement a new feature or fix a bug
 
 You may open the code base in any text editor or integrated development environment (IDE). 
@@ -146,7 +148,7 @@ language; e.g., [PEP-8](https://peps.python.org/pep-0008/) for Python.
 
 
 ### Commit changes
-_Commiting_ changes means tracking them via _git_. You may submit a change in 
+_Committing_ changes means tracking them via _git_. You may submit a change in 
 one commit or split it into multiple related commits. Though there is no hard 
 rule on splitting your commits, there are 
 [best practices](https://github.blog/2022-06-30-write-better-commits-build-better-projects/) 
@@ -164,7 +166,7 @@ or follow the guidelines on making commits in
 and [Visual Studio](https://learn.microsoft.com/en-us/visualstudio/version-control/git-make-commit?view=vs-2022)).
 
 ```shell
-$ git commit -m "commit message"
+git commit -m "commit message"
 ```
 
 ### Make a pull request
