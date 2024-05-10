@@ -21,7 +21,10 @@ and the latter is useful for small scale and isolated WDL development.
 :::info
 Due to its dependency on cloud-hosted resources and large-scale execution needs,
 we currently do not support running the entire GATK-SV pipeline using 
-Cromwell as a [stand-alone Java application](https://cromwell.readthedocs.io/en/stable/Modes/#run) 
+Cromwell as a [stand-alone Java application](https://cromwell.readthedocs.io/en/stable/Modes/#run).
+
+Additionally, we currently only support running the pipeline on 
+Google Cloud Platform (GCP).
 :::
 
 # Cromwell Server
