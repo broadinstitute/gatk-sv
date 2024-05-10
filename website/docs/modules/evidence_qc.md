@@ -11,7 +11,7 @@ The results from this module can be used for QC and batching.
 For large cohorts, this workflow can be run on arbitrary cohort 
 partitions of up to about 500 samples. Afterwards, we recommend 
 using the results to divide samples into smaller batches (~100-500 samples) 
-with ~1:1 male:female ratio. Refer to the [Batching](/docs/run/batching) section 
+with ~1:1 male:female ratio. Refer to the [Batching](/docs/run/joint#batching) section 
 for further guidance on creating batches.
 
 We also recommend using sex assignments generated from the ploidy 
