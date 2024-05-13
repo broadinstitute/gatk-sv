@@ -9,12 +9,8 @@ manta_docker	{{ dockers.manta_docker }}
 samtools_cloud_docker	{{ dockers.samtools_cloud_docker }}
 sv_base_docker	{{ dockers.sv_base_docker }}
 sv_base_mini_docker	{{ dockers.sv_base_mini_docker }}
-sv_pipeline_base_docker	{{ dockers.sv_pipeline_base_docker }}
 sv_pipeline_docker	{{ dockers.sv_pipeline_docker }}
-sv_pipeline_hail_docker	{{ dockers.sv_pipeline_hail_docker }}
-sv_pipeline_updates_docker	{{ dockers.sv_pipeline_updates_docker }}
 sv_pipeline_qc_docker	{{ dockers.sv_pipeline_qc_docker }}
-sv_pipeline_rdtest_docker	{{ dockers.sv_pipeline_rdtest_docker }}
 wham_docker	{{ dockers.wham_docker }}
 ref_panel_name	{{ ref_panel.name }}
 ref_panel_bincov_matrix	{{ ref_panel.merged_coverage_file }}
@@ -54,9 +50,11 @@ reference_external_af_ref_bed	{{ reference_resources.external_af_ref_bed }}
 reference_external_af_ref_bed_prefix	{{ reference_resources.external_af_ref_bed_prefix }}
 reference_genome_file	{{ reference_resources.genome_file }}
 reference_manta_region_bed	{{ reference_resources.manta_region_bed }}
+reference_manta_region_bed_index	{{ reference_resources.manta_region_bed_index }}
 reference_mei_bed	{{ reference_resources.mei_bed }}
 reference_melt_std_vcf_header	{{ reference_resources.melt_std_vcf_header }}
 reference_noncoding_bed	{{ reference_resources.noncoding_bed }}
+reference_par_bed	{{ reference_resources.par_bed }}
 reference_pesr_exclude_list	{{ reference_resources.pesr_exclude_list }}
 reference_preprocessed_intervals	{{ reference_resources.preprocessed_intervals }}
 reference_primary_contigs_list	{{ reference_resources.primary_contigs_list }}

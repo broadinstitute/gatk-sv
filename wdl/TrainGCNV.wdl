@@ -17,7 +17,7 @@ workflow TrainGCNV {
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
 
-    # Options for subsetting samples for training. Both options require providing sv_pipeline_base_docker
+    # Options for subsetting samples for training.
     # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
@@ -88,7 +88,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
-    String? sv_pipeline_base_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
+    String? sv_pipeline_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr
@@ -108,7 +108,7 @@ workflow TrainGCNV {
         all_strings = write_lines(samples),
         subset_strings = write_lines(select_first([sample_ids_training_subset])),
         prefix = cohort,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
 
@@ -119,7 +119,7 @@ workflow TrainGCNV {
         seed = subsample_seed,
         subset_size = select_first([n_samples_subsample]),
         prefix = cohort,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker])
+        sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
 

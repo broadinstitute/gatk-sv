@@ -11,6 +11,7 @@
   "GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
 
   "GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GatherSampleEvidenceBatch.manta_region_bed_index": {{ reference_resources.manta_region_bed_index | tojson }},
   "GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
 
@@ -29,7 +30,6 @@
 
   "GatherSampleEvidenceBatch.batch": {{ test_batch.name | tojson }},
   "GatherSampleEvidenceBatch.primary_contigs_fai": {{ reference_resources.primary_contigs_fai | tojson }},
-  "GatherSampleEvidenceBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GatherSampleEvidenceBatch.linux_docker": {{ dockers.linux_docker | tojson }},
 
   "GatherSampleEvidenceBatch.bam_or_cram_files": {{ test_batch.bam_or_cram_files | tojson }},

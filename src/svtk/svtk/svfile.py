@@ -107,7 +107,10 @@ class SVRecord(GSNode):
 
         chrA = record.chrom
         posA = record.pos
-        chrB = record.info['CHR2']
+        if 'CHR2' in record.info:
+            chrB = record.info['CHR2']
+        else:
+            chrB = chrA
         posB = record.stop
         name = record.id
 

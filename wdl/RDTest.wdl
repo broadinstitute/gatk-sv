@@ -22,7 +22,6 @@ workflow RDTest {
     File ref_dict
 
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String linux_docker
     RuntimeAttr? runtime_attr_rdtest
     RuntimeAttr? runtime_attr_split_rd_vcf
@@ -52,7 +51,6 @@ workflow RDTest {
         allosome = false,
         ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         linux_docker = linux_docker,
         runtime_attr_rdtest = runtime_attr_rdtest,
         runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,
@@ -80,7 +78,6 @@ workflow RDTest {
         allosome = true,
         ref_dict = ref_dict,
         sv_pipeline_docker = sv_pipeline_docker,
-        sv_pipeline_rdtest_docker = sv_pipeline_rdtest_docker,
         linux_docker = linux_docker,
         runtime_attr_rdtest = runtime_attr_rdtest,
         runtime_attr_split_rd_vcf = runtime_attr_split_rd_vcf,

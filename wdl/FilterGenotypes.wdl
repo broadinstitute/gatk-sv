@@ -8,7 +8,7 @@ import "TasksMakeCohortVcf.wdl" as tasks_cohort
 workflow FilterGenotypes {
 
   input {
-    File vcf  # Cleaned GATK-formatted vcf
+    File vcf  # Cleaned GATK-formatted vcf run through SVConcordance
     String? output_prefix
     File ploidy_table
 
@@ -16,10 +16,10 @@ workflow FilterGenotypes {
     Array[String] recalibrate_gq_args = []
     Array[File] genome_tracks = []
     Float no_call_rate_cutoff = 0.05  # Set to 1 to disable NCR filtering
-    Float fmax_beta = 0.5  # Recommended range [0.3, 0.5] (use lower values for higher specificity)
+    Float fmax_beta = 0.4  # Recommended range [0.3, 0.5] (use lower values for higher specificity)
 
     # One of the following must be provided
-    File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args. TODO: UNIMPLEMENTED!
+    File? truth_json  # If given, SL cutoffs will be automatically optimized. Overrides sl_filter_args.
     String? sl_filter_args  # Explicitly set SL cutoffs. See apply_sl_filter.py for arguments.
 
     Int optimize_vcf_records_per_shard = 50000
@@ -76,15 +76,16 @@ workflow FilterGenotypes {
           sv_pipeline_docker=sv_pipeline_docker
       }
     }
-    call MergeCompressedHeaderedTables {
+    call tasks_cohort.ConcatHeaderedTextFiles {
       input:
-        tables=MakeVcfTable.out,
-        output_prefix="~{output_prefix_}.vcf_table",
+        text_files=MakeVcfTable.out,
+        gzipped=true,
+        output_filename="~{output_prefix_}.vcf_table.tsv.gz",
         linux_docker=linux_docker
     }
     call OptimizeCutoffs {
       input:
-        table=MergeCompressedHeaderedTables.out,
+        table=ConcatHeaderedTextFiles.out,
         fmax_beta=fmax_beta,
         output_prefix="~{output_prefix_}.sl_optimization",
         sv_pipeline_docker=sv_pipeline_docker
@@ -146,57 +147,10 @@ workflow FilterGenotypes {
     File? main_vcf_qc_tarball = MainVcfQc.sv_vcf_qc_output
 
     # For optional analysis
-    File? vcf_optimization_table = MergeCompressedHeaderedTables.out
+    File? vcf_optimization_table = ConcatHeaderedTextFiles.out
     File? sl_cutoff_qc_tarball = OptimizeCutoffs.out
     File unfiltered_recalibrated_vcf = RecalibrateGq.filtered_vcf
     File unfiltered_recalibrated_vcf_index = RecalibrateGq.filtered_vcf_index
-  }
-}
-
-
-task MergeCompressedHeaderedTables {
-  input {
-    Array[File] tables
-    String output_prefix
-    String linux_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 1,
-                               disk_gb: ceil(10 + 2 * size(tables, "GB")),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 1,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  output {
-    File out = "~{output_prefix}.tsv.gz"
-  }
-  command <<<
-    set -euo pipefail
-    OUT_FILE="~{output_prefix}.tsv.gz"
-    i=0
-    while read path; do
-      if [ $i == 0 ]; then
-        # Get header from first line of first file
-        zcat $path | awk 'NR==1' - | gzip > $OUT_FILE
-      fi
-      # Get data from each file, skipping header line
-      zcat $path | awk 'NR>1' - | gzip >> $OUT_FILE
-      i=$((i+1))
-    done < ~{write_lines(tables)}
-  >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: linux_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
 

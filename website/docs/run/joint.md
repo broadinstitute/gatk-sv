@@ -1,8 +1,15 @@
 ---
-title: Batching
-description: Batching
-slug: batching
+title: Joint-calling
+description: Run the pipeline on a cohort
+sidebar_position: 4
+slug: joint
 ---
+
+:::info
+This documentation page is incomplete, and we are actively working on improving it with comprehensive information.
+:::
+
+## Batching
 
 For larger cohorts, samples should be split up into batches of about 100-500 
 samples with similar characteristics. We recommend batching based on overall 

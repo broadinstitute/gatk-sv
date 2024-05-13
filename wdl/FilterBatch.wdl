@@ -23,7 +23,6 @@ workflow FilterBatch {
     # Module metrics parameters
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
     File? ped_file  # required if run_module_metrics = true
     File? baseline_filtered_depth_vcf  # baseline files are optional for metrics workflow
@@ -120,7 +119,7 @@ workflow FilterBatch {
         baseline_filtered_depth_vcf = baseline_filtered_depth_vcf,
         contig_list = select_first([primary_contigs_list]),
         linux_docker = linux_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker
     }
   }

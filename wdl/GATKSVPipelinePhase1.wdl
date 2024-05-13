@@ -26,9 +26,7 @@ workflow GATKSVPipelinePhase1 {
 
     String sv_base_mini_docker
     String sv_base_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -333,8 +331,7 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_postprocess = runtime_attr_postprocess,
       runtime_attr_explode = runtime_attr_explode,
       run_module_metrics = run_batchevidence_metrics,
-      primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      primary_contigs_list = primary_contigs_list
   }
 
   call clusterbatch.ClusterBatch as ClusterBatch {
@@ -366,7 +363,6 @@ workflow GATKSVPipelinePhase1 {
       N_IQR_cutoff_plotting = N_IQR_cutoff_plotting,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
       baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
@@ -422,9 +418,7 @@ workflow GATKSVPipelinePhase1 {
       allosome_contigs=allosome_contigs,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_base_docker=sv_base_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
       runtime_attr_sample_list=runtime_attr_sample_list,
       runtime_attr_petest=runtime_attr_petest,
@@ -465,7 +459,6 @@ workflow GATKSVPipelinePhase1 {
       runtime_attr_filter_samples=runtime_attr_filter_samples,
       run_module_metrics = run_filterbatch_metrics,
       primary_contigs_list = primary_contigs_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
       ped_file = ped_file
   }
 
