@@ -10,7 +10,6 @@ workflow SVConcordanceScattered {
     Array[File] truth_vcfs
     String output_prefix
 
-    File contig_list
     File reference_dict
 
     String gatk_docker
