@@ -2,11 +2,12 @@ version 1.0
 
 import "Structs.wdl"
 import "SVConcordance.wdl" as svc
+import "TasksMakeCohortVcf.wdl" as tasks_cohort
 
 workflow SVConcordanceScattered {
   input {
     Array[File] eval_vcfs
-    Array[File] truth_vcf
+    Array[File] truth_vcfs
     String output_prefix
 
     File contig_list
@@ -23,24 +24,28 @@ workflow SVConcordanceScattered {
   }
 
   scatter (i in range(length(eval_vcfs))) {
-    call svc.SVConcordance {
+    call svc.SVConcordanceTask {
       input:
         eval_vcf=eval_vcfs[i],
-        truth_vcf=truth_vcf[i],
-        output_prefix=output_prefix,
-        contig_list=contig_list,
+        truth_vcf=truth_vcfs[i],
+        output_prefix="~{output_prefix}.concordance.shard_~{i}.unsorted",
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
-        sv_base_mini_docker=sv_base_mini_docker,
         gatk_docker=gatk_docker,
-        runtime_attr_sv_concordance=runtime_attr_sv_concordance,
-        runtime_attr_sort_vcf=runtime_attr_sort_vcf,
-        runtime_override_concat_shards=runtime_override_concat_shards
+        runtime_attr_override=runtime_attr_sv_concordance
+    }
+
+    call tasks_cohort.SortVcf {
+      input:
+        vcf=SVConcordanceTask.out_unsorted,
+        outfile_prefix="~{output_prefix}.concordance.shard_~{i}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_sort_vcf
     }
   }
 
   output {
-    Array[File] concordance_vcf = SVConcordance.concordance_vcf
-    Array[File] concordance_vcf_index = SVConcordance.concordance_vcf_index
+    Array[File] concordance_vcf = SortVcf.out
+    Array[File] concordance_vcf_index = SortVcf.out_index
   }
 }
