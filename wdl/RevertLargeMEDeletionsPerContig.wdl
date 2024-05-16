@@ -80,7 +80,7 @@ for record in vcf:
     record.alts = ("<BND>",)
     record.info['SVTYPE'] = "BND"
     record.filter.clear()
-    record.filter.add("PASS")
+    record.filter.add("UNRESOLVED")
     record.info['CHR2'] = record.chrom
     record.info['END2'] = record.pos + record.info['SVLEN']
     record.info.pop('SVLEN')
