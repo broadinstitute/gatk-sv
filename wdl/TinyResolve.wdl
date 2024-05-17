@@ -13,46 +13,25 @@ import "Structs.wdl"
 # Does perlim translocation resolve from raw manta calls
 workflow TinyResolve {
   input {
-    Array[String] samples         # Sample ID
-    Array[File] manta_vcfs        # Manta VCF
+  	String sample
+  	File manta_vcf
+  	File discfile
     File cytoband
-    Array[File] discfile
     File mei_bed
     File contigs
     Int min_svsize
-    Int samples_per_shard = 25
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr
   }
 
-  scatter (disc in discfile) {
-    File discfile_idx = disc + ".tbi"
-  }
+  File discfile_idx = discfile + ".tbi"
   File cytoband_idx = cytoband + ".tbi"
 
-  Int num_samples = length(samples)
-  Float num_samples_float = num_samples
-  Int num_shards = ceil(num_samples_float / samples_per_shard)
-
-  scatter (i in range(num_shards)) {
-    scatter (j in range(samples_per_shard)) {
-      Int idx_ = i * samples_per_shard + j
-      if (idx_ < num_samples) {
-        String shard_samples_ = samples[idx_]
-        File shard_vcfs_ = manta_vcfs[idx_]
-        File shard_discfiles_ = discfile[idx_]
-        File shard_discfiles_idx_ = discfile_idx[idx_]
-      }
-    }
-    Array[String] shard_samples = select_all(shard_samples_)
-    Array[File] shard_vcfs = select_all(shard_vcfs_)
-    Array[File] shard_discfiles = select_all(shard_discfiles_)
-    Array[File] shard_discfiles_idx = select_all(shard_discfiles_idx_)
 
     call StandardizeVCFs {
     	input:
-	        raw_vcfs=shard_vcfs,
-	        samples=shard_samples,
+	        vcf = manta_vcf,
+	        sample_id = sample,
 	        caller = "manta",
 	        contigs = contigs,
 	        min_svsize = min_svsize,
@@ -62,13 +41,13 @@ workflow TinyResolve {
 
     call ResolveManta {
       input:
-        raw_vcfs=StandardizeVCFs.out,
-        samples=shard_samples,
+        vcf = StandardizeVCFs.out,
+        sample_id = sample,
         sv_pipeline_docker = sv_pipeline_docker,
         cytoband=cytoband,
         cytoband_idx=cytoband_idx,
-        discfile=shard_discfiles,
-        discfile_idx=shard_discfiles_idx,
+        discfile=discfile,
+        discfile_idx=discfile_idx,
         mei_bed=mei_bed,
         runtime_attr_override=runtime_attr
     }
@@ -82,18 +61,17 @@ workflow TinyResolve {
 
 task ResolveManta {
   input {
-    Array[File] raw_vcfs
-    Array[String] samples
+    File vcf
+    String sample_id
     File cytoband_idx
-    Array[File] discfile
-    Array[File] discfile_idx
+    File discfile
+    File discfile_idx
     File cytoband
     File mei_bed
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
-  Int num_samples = length(samples)
   Float input_size = size(discfile,"GiB")
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
@@ -107,26 +85,18 @@ task ResolveManta {
 
   command <<<
     set -euo pipefail
-    vcfs=(~{sep=" " raw_vcfs})
-    sample_ids=(~{sep=" " samples})
-    discfiles=(~{sep=" " discfile})
-    for (( i=0; i<~{num_samples}; i++ ));
-    do
-      vcf=${vcfs[$i]}
+
       tabix -p vcf $vcf
-      sample_id=${sample_ids[$i]}
-      pe=${discfiles[$i]}
-      sample_no=`printf %03d $i`
-      bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $pe ${sample_id} ~{mei_bed} ~{cytoband}
+      bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $discfile ${sample_id} ~{mei_bed} ~{cytoband}
       bgzip manta.unresolved.vcf
-      mv manta.unresolved.vcf.gz unresolved_${sample_no}.${sample_id}.manta.complex.vcf.gz
-      mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz
+      mv manta.unresolved.vcf.gz unresolved_${sample_id}.manta.complex.vcf.gz
+      mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_id}.manta.complex.vcf.gz
     done
   >>>
 
   output {
-    Array[File] tloc_vcf = glob("tloc_*.vcf.gz")
-    Array[File] unresolved_vcf = glob("unresolved_*.vcf.gz")
+  	File tloc_vcf = "tloc_${sample_id}.manta.complex.vcf.gz"
+  	File unresolved_vcf = "unresolved_${sample_id}.manta.complex.vcf.gz"
   }
   
   runtime {
@@ -140,12 +110,10 @@ task ResolveManta {
   }
 }
 
-
-
 task StandardizeVCFs {
   input {
-    Array[File] raw_vcfs
-    Array[String] samples
+  	File vcf
+    String sample_id
     String caller
     File contigs
     Int min_svsize
@@ -167,20 +135,14 @@ task StandardizeVCFs {
 
   command <<<
     set -euo pipefail
-    vcfs=(~{sep=" " raw_vcfs})
-    sample_ids=(~{sep=" " samples})
-    for (( i=0; i<~{num_samples}; i++ ));
-    do
-      vcf=${vcfs[$i]}
-      sample_id=${sample_ids[$i]}
-      svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
-      sample_no=`printf %03d $i`
-      bcftools sort tmp.vcf -Oz -o std_${sample_no}.~{caller}.${sample_id}.vcf.gz
-    done
+    svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
+    sample_no=`printf %03d $i`
+    bcftools sort tmp.vcf -Oz -o std_${sample_no}.~{caller}.${sample_id}.vcf.gz
+
   >>>
 
   output {
-    Array[File] out = glob("std_*.vcf.gz")
+    File out = glob("std_*.vcf.gz")
   }
   
   runtime {
