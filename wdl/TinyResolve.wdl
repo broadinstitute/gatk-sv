@@ -61,6 +61,7 @@ workflow TinyResolve {
   }
 
   output {
+    Array[File] tloc_unresolved_vcf = flatten(ResolveManta.unresolved_vcf)
     Array[File] tloc_manta_vcf = flatten(ResolveManta.tloc_vcf)
   }
 }
