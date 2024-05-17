@@ -103,12 +103,15 @@ task ResolveManta {
       pe=${discfiles[$i]}
       sample_no=`printf %03d $i`
       bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $pe ${sample_id} ~{mei_bed} ~{cytoband}
+      bgzip manta.unresolved.vcf
+      mv manta.unresolved.vcf.gz unresolved_${sample_no}.${sample_id}.manta.complex.vcf.gz
       mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz
     done
   >>>
 
   output {
     Array[File] tloc_vcf = glob("tloc_*.vcf.gz")
+    Array[File] unresolved_vcf = glob("unresolved_*.vcf.gz")
   }
   
   runtime {
