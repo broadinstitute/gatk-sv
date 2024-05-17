@@ -1,3 +1,4 @@
+
 ##########################################################################################
 
 ## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/00_pesr_preprocessing_MMDLW/15/wdl
@@ -17,6 +18,8 @@ workflow TinyResolve {
     File cytoband
     Array[File] discfile
     File mei_bed
+    File contigs
+    Int min_svsize
     Int samples_per_shard = 25
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr
@@ -46,9 +49,20 @@ workflow TinyResolve {
     Array[File] shard_discfiles = select_all(shard_discfiles_)
     Array[File] shard_discfiles_idx = select_all(shard_discfiles_idx_)
 
+    call StandardizeVCFs {
+    	input:
+	        raw_vcfs=shard_vcfs,
+	        samples=shard_samples,
+	        caller = "manta",
+	        contigs = contigs,
+	        min_svsize = min_svsize,
+	        sv_pipeline_docker = sv_pipeline_docker,
+	        runtime_attr_override = runtime_attr
+	  }
+
     call ResolveManta {
       input:
-        raw_vcfs=shard_vcfs,
+        raw_vcfs=StandardizeVCFs.out,
         samples=shard_samples,
         sv_pipeline_docker = sv_pipeline_docker,
         cytoband=cytoband,
@@ -125,3 +139,60 @@ task ResolveManta {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
+
+
+task StandardizeVCFs {
+  input {
+    Array[File] raw_vcfs
+    Array[String] samples
+    String caller
+    File contigs
+    Int min_svsize
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Int num_samples = length(samples)
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75, 
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 3
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+    set -euo pipefail
+    vcfs=(~{sep=" " raw_vcfs})
+    sample_ids=(~{sep=" " samples})
+    for (( i=0; i<~{num_samples}; i++ ));
+    do
+      vcf=${vcfs[$i]}
+      sample_id=${sample_ids[$i]}
+      svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
+      sample_no=`printf %03d $i`
+      bcftools sort tmp.vcf -Oz -o std_${sample_no}.~{caller}.${sample_id}.vcf.gz
+    done
+  >>>
+
+  output {
+    Array[File] out = glob("std_*.vcf.gz")
+  }
+  
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+
