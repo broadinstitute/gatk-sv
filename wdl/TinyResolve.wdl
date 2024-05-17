@@ -85,11 +85,10 @@ task ResolveManta {
     set -euo pipefail
 
       tabix -p vcf $vcf
-      bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $discfile ${sample_id} ~{mei_bed} ~{cytoband}
+      bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $discfile ${sample_id} ${mei_bed} ${cytoband}
       bgzip manta.unresolved.vcf
       mv manta.unresolved.vcf.gz unresolved_${sample_id}.manta.complex.vcf.gz
       mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_id}.manta.complex.vcf.gz
-    done
   >>>
 
   output {
@@ -133,14 +132,13 @@ task StandardizeVCFs {
 
   command <<<
     set -euo pipefail
-    svtk standardize --sample-names ${sample_id} --prefix ~{caller}_${sample_id} --contigs ~{contigs} --min-size ~{min_svsize} $vcf tmp.vcf ~{caller}
-    sample_no=`printf %03d $i`
-    bcftools sort tmp.vcf -Oz -o std_${sample_no}.~{caller}.${sample_id}.vcf.gz
+    svtk standardize --sample-names ${sample_id} --prefix ${caller}_${sample_id} --contigs ${contigs} --min-size ${min_svsize} $vcf tmp.vcf ${caller}
+    bcftools sort tmp.vcf -Oz -o std_${caller}.${sample_id}.vcf.gz
 
   >>>
 
   output {
-    File out = glob("std_*.vcf.gz")
+    File out = "std_${caller}.${sample_id}.vcf.gz"
   }
   
   runtime {
@@ -153,7 +151,6 @@ task StandardizeVCFs {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 
 
