@@ -1,4 +1,3 @@
-
 ##########################################################################################
 
 ## Base script:   https://portal.firecloud.org/#methods/Talkowski-SV/00_pesr_preprocessing_MMDLW/15/wdl
@@ -13,9 +12,9 @@ import "Structs.wdl"
 # Does perlim translocation resolve from raw manta calls
 workflow TinyResolve {
   input {
-  	String sample
-  	File manta_vcf
-  	File discfile
+    String sample
+    File manta_vcf
+    File discfile
     File cytoband
     File mei_bed
     File contigs
@@ -29,15 +28,15 @@ workflow TinyResolve {
 
 
     call StandardizeVCFs {
-    	input:
-	        vcf = manta_vcf,
-	        sample_id = sample,
-	        caller = "manta",
-	        contigs = contigs,
-	        min_svsize = min_svsize,
-	        sv_pipeline_docker = sv_pipeline_docker,
-	        runtime_attr_override = runtime_attr
-	  }
+      input:
+          vcf = manta_vcf,
+          sample_id = sample,
+          caller = "manta",
+          contigs = contigs,
+          min_svsize = min_svsize,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_override = runtime_attr
+    }
 
     call ResolveManta {
       input:
@@ -95,8 +94,8 @@ task ResolveManta {
   >>>
 
   output {
-  	File tloc_vcf = "tloc_${sample_id}.manta.complex.vcf.gz"
-  	File unresolved_vcf = "unresolved_${sample_id}.manta.complex.vcf.gz"
+    File tloc_vcf = "tloc_${sample_id}.manta.complex.vcf.gz"
+    File unresolved_vcf = "unresolved_${sample_id}.manta.complex.vcf.gz"
   }
   
   runtime {
@@ -112,7 +111,7 @@ task ResolveManta {
 
 task StandardizeVCFs {
   input {
-  	File vcf
+    File vcf
     String sample_id
     String caller
     File contigs
@@ -155,6 +154,7 @@ task StandardizeVCFs {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
 
 
 
