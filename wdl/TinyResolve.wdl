@@ -118,7 +118,6 @@ task StandardizeVCFs {
     RuntimeAttr? runtime_attr_override
   }
 
-  Int num_samples = length(samples)
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
