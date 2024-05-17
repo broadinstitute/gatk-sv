@@ -50,11 +50,10 @@ workflow TinyResolve {
         mei_bed=mei_bed,
         runtime_attr_override=runtime_attr
     }
-  }
 
   output {
-    Array[File] tloc_unresolved_vcf = flatten(ResolveManta.unresolved_vcf)
-    Array[File] tloc_manta_vcf = flatten(ResolveManta.tloc_vcf)
+    File tloc_unresolved_vcf = ResolveManta.unresolved_vcf
+    File tloc_manta_vcf = ResolveManta.tloc_vcf
   }
 }
 
