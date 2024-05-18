@@ -20,7 +20,7 @@ workflow ClusterPESR {
         Int min_size
         File exclude_intervals
         File contig_list
-
+        File ped_file
         Float pesr_interval_overlap
         Int pesr_breakend_window
         String? clustering_algorithm
@@ -43,6 +43,7 @@ workflow ClusterPESR {
         RuntimeAttr? runtime_attr_exclude_intervals_pesr
         RuntimeAttr? runtime_override_concat_vcfs_pesr
         RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
+        RuntimeAttr? runtime_attr_create_ploidy
     }
 
 
@@ -77,7 +78,7 @@ workflow ClusterPESR {
         call tasks_cluster.SVCluster {
             input:
                 vcfs_tar=PreparePESRVcfs.out,
-                ploidy_table=ploidy_table,
+                ploidy_table=CreatePloidyTableFromPed.out,
                 output_prefix="~{batch}.cluster_batch.~{caller}.~{contig}.clustered",
                 contig=contig,
                 fast_mode=true,
