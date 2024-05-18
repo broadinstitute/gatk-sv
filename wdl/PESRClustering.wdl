@@ -34,6 +34,8 @@ workflow ClusterPESR {
         String sv_pipeline_docker
 
         Float? java_mem_fraction
+        String? chr_x
+        String? chr_y
 
         RuntimeAttr? runtime_attr_ids_from_vcf_list
         RuntimeAttr? runtime_attr_prepare_pesr_vcfs
