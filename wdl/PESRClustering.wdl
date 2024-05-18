@@ -61,7 +61,7 @@ workflow ClusterPESR {
             reference_fasta_fai=reference_fasta_fai,
             exclude_intervals=exclude_intervals,
             exclude_intervals_index=exclude_intervals + ".tbi",
-            ploidy_table=CreatePloidyTableFromPed.out,,
+            ploidy_table=CreatePloidyTableFromPed.out,
             min_size=min_size,
             output_prefix="~{batch}.cluster_batch.~{caller}.prep_vcfs",
             script=svtk_to_gatk_script,
