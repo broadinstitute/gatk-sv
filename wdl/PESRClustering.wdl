@@ -1,6 +1,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksClusterBatch.wdl" as tasks
 import "TasksClusterBatch.wdl" as tasks_cluster
 import "TasksMakeCohortVcf.wdl" as tasks_cohort
 import "Utils.wdl" as util
