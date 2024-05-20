@@ -173,8 +173,9 @@ task PreparePESRVcfs {
             NAME=$(basename $VCF .vcf.gz)
             SAMPLE_NUM=`printf %05d $i`
             # Convert format
+            zcat $VCF | awk '{if ($1!="chrM") print}' | bgzip > input.vcf.gz
             python ~{default="/opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py" script} \
-                --vcf $VCF \
+                --vcf input.vcf.gz \
                 --out tmp.vcf.gz \
                 --ploidy-table ~{ploidy_table} \
                 ~{"--remove-infos " + remove_infos} \
