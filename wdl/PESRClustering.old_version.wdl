@@ -108,8 +108,6 @@ task SortVcf{
   }
 }
 
-}
-
 
 task VCFCluster {
   input {
