@@ -84,7 +84,7 @@ task SortVcf{
     boot_disk_gb: 5,
     preemptible_tries: 0,
     max_retries: 1
-  }   
+  }
 
   String prefix = basename(vcf, ".vcf.gz")
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
@@ -92,7 +92,6 @@ task SortVcf{
   command <<<
     set -euo pipefail
     vcf-sort -c ~{vcf} | bgzip -c > ~{prefix}.sorted.vcf.gz
-
   >>>
   output {
     File sorted_vcf = "~{prefix}.sorted.vcf.gz"
