@@ -91,7 +91,7 @@ task SortVcf{
   
   command <<<
     set -euo pipefail
-    vcf-sort -c ~{vcf} | bgzip -c > ~{prefix}.sorted.vcf.gz
+    bcftools sort -Oz -o ~{prefix}.sorted.vcf.gz  ~{vcf}
   >>>
   output {
     File sorted_vcf = "~{prefix}.sorted.vcf.gz"
