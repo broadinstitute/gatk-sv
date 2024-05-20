@@ -31,10 +31,18 @@ workflow ClusterPESR {
 
   Array[Array[String]] contiglist = read_tsv(contigs)
 
+  scatter (vcf in vcfs){
+    call SortVcf{
+      input:
+        vcf = vcf,
+        sv_base_mini_docker = sv_base_mini_docker
+    }
+  }
+
   scatter (contig in contiglist) {
     call VCFCluster {
       input:
-        vcfs = vcfs,
+        vcfs = SortVcf.sorted_vcf,
         batch = batch,
         algorithm = algorithm,
         chrom = contig[0],
@@ -61,6 +69,47 @@ workflow ClusterPESR {
     File clustered_vcf = ConcatVCFs.vcf
   }
 }
+
+task SortVcf{
+  input {
+    File vcf
+    String sv_base_mini_docker
+    RuntimeAttr? runtime_attr_override
+  }
+  
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 2, 
+    disk_gb: 5,
+    boot_disk_gb: 5,
+    preemptible_tries: 0,
+    max_retries: 1
+  }   
+
+  String prefix = basename(vcf, ".vcf.gz")
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  
+  command <<<
+    set -euo pipefail
+    vcf-sort -c ~{vcf} | bgzip -c > ~{prefix}.sorted.vcf.gz
+
+  >>>
+  output {
+    File sorted_vcf = "~{prefix}.sorted.vcf.gz"
+  }
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+}
+
 
 task VCFCluster {
   input {
