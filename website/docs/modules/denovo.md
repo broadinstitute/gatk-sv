@@ -6,7 +6,8 @@ slug: denovo
 ---
 
 The de-novo workflow operates on the annotated multi-sample VCF file created by 
-the [AnnotateVCF](./av) workflow. 
+the [AnnotateVCF](./av) workflow. The method the de-novo workflow implements is discussed in 
+[this page](/docs/concepts/denovo).
 
 
 ### Inputs
