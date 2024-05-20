@@ -120,6 +120,8 @@ task SVCluster {
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
             ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy}
+        
+        tabix -p vcf ~{output_prefix}.vcf.gz
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
