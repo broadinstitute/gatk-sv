@@ -50,6 +50,10 @@ workflow ShardedAnnotateVcf {
     RuntimeAttr? runtime_attr_bedtools_closest
     RuntimeAttr? runtime_attr_select_matched_svs
     RuntimeAttr? runtime_attr_scatter_vcf
+    RuntimeAttr? runtime_attr_preconcat
+    RuntimeAttr? runtime_attr_hail_merge
+    RuntimeAttr? runtime_attr_fix_header
+    RuntimeAttr? runtime_attr_concat
   }
 
   if (defined(ref_bed)) {
