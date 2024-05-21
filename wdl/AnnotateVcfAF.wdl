@@ -153,13 +153,9 @@ workflow ShardedAnnotateVcf {
         runtime_attr_override=runtime_attr_concat
     }
   }
-
   output {
     File annotated_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
     File annotated_vcf_index = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
-  }
-}
-  output {
   }
 }
 
