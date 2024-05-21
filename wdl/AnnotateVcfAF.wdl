@@ -52,9 +52,11 @@ workflow AnnotateVcf {
     # Annotate per chromosome
     call annotate_af_by_chrom.ShardedAnnotateVcfAF as AnnotateChromosome {
       input:
-        vcf                = SubsetVcf.subsetted_vcf,
-        prefix             = "${prefix}.${contig[0]}",
+        vcf = SubsetVcf.subsetted_vcf,
+        vcf_idx = SubsetVcf.subsetted_vcf_idx,
+        prefix = "${prefix}.${contig[0]}",
         sv_pipeline_docker = sv_pipeline_docker,
+        contig  = contig[0],
         sv_pipeline_hail_docker = sv_pipeline_hail_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         gatk_docker = gatk_docker
