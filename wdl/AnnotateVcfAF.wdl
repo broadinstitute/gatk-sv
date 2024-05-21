@@ -23,8 +23,10 @@ workflow AnnotateVcf {
     File vcf_idx
     File contig_list
 
-    String sv_base_mini_docker
     String sv_pipeline_docker
+    String sv_base_mini_docker
+    String gatk_docker
+    String sv_pipeline_hail_docker
 
     RuntimeAttr? runtime_attr_annotate_intervals
     RuntimeAttr? runtime_attr_merge_annotations
@@ -53,6 +55,9 @@ workflow AnnotateVcf {
         vcf                = SubsetVcf.subsetted_vcf,
         prefix             = "${prefix}.${contig[0]}",
         sv_pipeline_docker = sv_pipeline_docker,
+        sv_pipeline_hail_docker = sv_pipeline_hail_docker,
+        sv_base_mini_docker = sv_base_mini_docker,
+        gatk_docker = gatk_docker,
         runtime_attr_annotate_intervals = runtime_attr_annotate_intervals,
         runtime_attr_merge_annotations  = runtime_attr_merge_annotations
     }
