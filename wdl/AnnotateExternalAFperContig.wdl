@@ -4,17 +4,26 @@ version 1.0
 
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
-import "AnnotateExternalAFperContig.wdl" as AnnotateExternalAFperContig
 
-workflow AnnotateExternalAF {
+workflow AnnotateExternalAFperContig {
     input {
         File vcf
         File vcf_idx
         File ref_bed
+        File split_query_vcf_del
+        File split_query_vcf_dup
+        File split_query_vcf_ins
+        File split_query_vcf_inv
+        File split_query_vcf_bnd
+        File split_ref_bed_del
+        File split_ref_bed_dup
+        File split_ref_bed_ins
+        File split_ref_bed_inv
+        File split_ref_bed_bnd
+
         Array[String] population
-        Array[String] contigs
+        String contig
         String ref_prefix
-        String prefix
 
         Int max_shards_per_chrom_step1
         Int min_records_per_shard_step1
@@ -24,72 +33,148 @@ workflow AnnotateExternalAF {
 
         # overrides for local tasks
         RuntimeAttr? runtime_attr_modify_vcf
-        RuntimeAttr? runtime_override_combine_vcfs
         RuntimeAttr? runtime_override_split_vcf
-        RuntimeAttr? runtime_attr_split_ref_bed
-        RuntimeAttr? runtime_attr_split_query_vcf
+        RuntimeAttr? runtime_override_combine_vcfs
         RuntimeAttr? runtime_attr_bedtools_closest
         RuntimeAttr? runtime_attr_select_matched_svs
+    }
 
-    }
-    call SplitBed as split_ref_bed {
+    call BedtoolsClosest as compare_del {
         input:
-            bed = ref_bed,
-            sv_base_mini_docker = sv_base_mini_docker,
-            runtime_attr_override = runtime_attr_split_ref_bed
-    }
-    call SplitVcf as split_query_vcf {
-        input:
-            vcf = vcf,
+            bed_a = split_query_vcf_del,
+            bed_b = split_ref_bed_del,
+            svtype = "del",
+            contig = contig,
             sv_pipeline_docker = sv_pipeline_docker,
-            runtime_attr_override = runtime_attr_split_query_vcf
+            runtime_attr_override = runtime_attr_bedtools_closest
     }
 
-    Array[String] svtype_list = ["DEL","DUP","INS","INV_CPX","BND_CTX"]
+    call BedtoolsClosest as compare_dup {
+        input:
+            bed_a = split_query_vcf_dup,
+            bed_b = split_ref_bed_dup,
+            svtype = "dup",
+            contig = contig,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
+    }
 
-    scatter ( contig in contigs ) {
-        call AnnotateExternalAFperContig.AnnotateExternalAFperContig as AnnotateExternalAFperContig{
+    call BedtoolsClosest as compare_ins {
+        input:
+            bed_a = split_query_vcf_ins,
+            bed_b = split_ref_bed_ins,
+            svtype = "ins",
+            contig = contig,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
+    }
+
+    call BedtoolsClosest as compare_inv {
+        input:
+            bed_a = split_query_vcf_inv,
+            bed_b = split_ref_bed_inv,
+            svtype = "inv",
+            contig = contig,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
+    }
+
+    call BedtoolsClosest as compare_bnd {
+        input:
+            bed_a = split_query_vcf_bnd,
+            bed_b = split_ref_bed_bnd,
+            svtype = "bnd",
+            contig = contig,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_bedtools_closest
+    }
+
+    call SelectMatchedSVs as calcu_del {
+        input:
+            svtype = "del",
+            input_bed = compare_del.output_bed,
+            population = population,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
+    }
+
+    call SelectMatchedSVs as calcu_dup {
+        input:
+            input_bed=compare_dup.output_bed,
+            svtype="dup",
+            population = population,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
+    }
+
+    call SelectMatchedINSs as calcu_ins {
+        input:
+            input_bed = compare_ins.output_bed,
+            svtype = "ins",
+            population = population,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
+    }
+
+    call SelectMatchedSVs as calcu_inv {
+        input:
+            input_bed = compare_inv.output_bed,
+            svtype = "inv",
+            population = population,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
+    }
+
+    call SelectMatchedINSs as calcu_bnd {
+        input:
+            input_bed = compare_bnd.output_bed,
+            svtype = "bnd",
+            population = population,
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_select_matched_svs
+    }
+
+    call MiniTasks.SplitVcf as SplitVcf {
+      input:
+        vcf = vcf,
+        vcf_idx = vcf_idx,
+        contig=contig,
+        prefix="~{contig}.shard_",
+        n_shards=max_shards_per_chrom_step1,
+        min_vars_per_shard=min_records_per_shard_step1,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_split_vcf
+    }
+
+
+    scatter (vcf_shard in SplitVcf.vcf_shards) {
+        call ModifyVcf {
             input:
-                vcf = vcf,
-                vcf_idx = vcf_idx,
-                ref_bed = ref_bed,
-                split_query_vcf_del = split_query_vcf.del,
-                split_query_vcf_dup = split_query_vcf.dup,
-                split_query_vcf_ins = split_query_vcf.ins,
-                split_query_vcf_inv = split_query_vcf.inv,
-                split_query_vcf_bnd = split_query_vcf.bnd,
-                split_ref_bed_del = split_ref_bed.del,
-                split_ref_bed_dup = split_ref_bed.dup,
-                split_ref_bed_ins = split_ref_bed.ins,
-                split_ref_bed_inv = split_ref_bed.inv,
-                split_ref_bed_bnd = split_ref_bed.bnd,
-                population = population,
-                contig = contig,
+                labeled_del = calcu_del.output_comp,
+                labeled_dup = calcu_dup.output_comp,
+                labeled_ins = calcu_ins.output_comp,
+                labeled_inv = calcu_inv.output_comp,
+                labeled_bnd = calcu_bnd.output_comp,
+                vcf = vcf_shard,
                 ref_prefix = ref_prefix,
-                max_shards_per_chrom_step1 = max_shards_per_chrom_step1,
-                min_records_per_shard_step1 = min_records_per_shard_step1,
-                sv_base_mini_docker = sv_base_mini_docker,
                 sv_pipeline_docker = sv_pipeline_docker,
-                runtime_override_split_vcf = runtime_override_split_vcf,
-                runtime_attr_modify_vcf = runtime_attr_modify_vcf,
-                runtime_attr_select_matched_svs = runtime_attr_select_matched_svs,
-                runtime_attr_bedtools_closest = runtime_attr_bedtools_closest
+                runtime_attr_override = runtime_attr_modify_vcf       
         }
     }
 
-    call MiniTasks.ConcatVcfs as CombineVcfStep2 {
+    call MiniTasks.ConcatVcfs as CombineVcfStep1 {
       input:
-        vcfs = AnnotateExternalAFperContig.annotated_vcf,
-        vcfs_idx = AnnotateExternalAFperContig.annotated_vcf_tbi,
+        vcfs = ModifyVcf.annotated_vcf,
+        vcfs_idx = ModifyVcf.annotated_vcf_tbi,
         naive = true,
-        outfile_prefix = "~{prefix}.annotated",
+        outfile_prefix = "~{contig}.annotated.vcf",
         sv_base_mini_docker = sv_base_mini_docker,
         runtime_attr_override = runtime_override_combine_vcfs
     }
 
-     output {
-        File annotated_vcf = CombineVcfStep2.concat_vcf
-        File annotated_vcf_tbi = CombineVcfStep2.concat_vcf_idx
+    output {
+        File annotated_vcf = CombineVcfStep1.concat_vcf
+        File annotated_vcf_tbi = CombineVcfStep1.concat_vcf_idx
     }
 
 }
@@ -173,12 +258,8 @@ task SplitVcf {
     String prefix = basename(vcf, ".vcf.gz")
     
     command <<<
-        svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} - |
-            cut -f1-4,7-8 > tmp.bed
-        head -1 tmp.bed > ~{prefix}.bed
-        awk 'NR > 1' < tmp.bed \
-            | sort -k1,1V -k2,2n -k3,3n >> ~{prefix}.bed
-        rm tmp.bed
+        svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} tmp.bed
+        cut -f1-4,7-8 tmp.bed > ~{prefix}.bed
         head -1 ~{prefix}.bed > header
         cat header <(awk '{if ($5=="DEL") print}' ~{prefix}.bed )> ~{prefix}.DEL.bed
         cat header <(awk '{if ($5=="DUP") print}' ~{prefix}.bed )> ~{prefix}.DUP.bed
@@ -334,11 +415,11 @@ task SelectMatchedINSs {
 
 task ModifyVcf {
     input {
-        Array[File] labeled_del
-        Array[File] labeled_dup
-        Array[File] labeled_ins
-        Array[File] labeled_inv
-        Array[File] labeled_bnd
+        File labeled_del
+        File labeled_dup
+        File labeled_ins
+        File labeled_inv
+        File labeled_bnd
         File vcf
         String ref_prefix
         String sv_pipeline_docker
@@ -346,8 +427,8 @@ task ModifyVcf {
     }
 
     RuntimeAttr runtime_default = object {
-        mem_gb: 3,
-        disk_gb: 5,
+        mem_gb: 10,
+        disk_gb: 15,
         cpu_cores: 1,
         preemptible_tries: 1,
         max_retries: 1,
@@ -368,11 +449,11 @@ task ModifyVcf {
 
     String prefix = basename(vcf,'.vcf.gz')
     command <<<
-        cat ~{sep=" " labeled_del} > labeled.bed
-        cat ~{sep=" " labeled_dup} >> labeled.bed
-        cat ~{sep=" " labeled_ins} >> labeled.bed
-        cat ~{sep=" " labeled_inv} >> labeled.bed
-        cat ~{sep=" " labeled_bnd} >> labeled.bed
+        cat ~{labeled_del} > labeled.bed
+        cat ~{labeled_dup} >> labeled.bed
+        cat ~{labeled_ins} >> labeled.bed
+        cat ~{labeled_inv} >> labeled.bed
+        cat ~{labeled_bnd} >> labeled.bed
 
         python <<CODE
         import os
@@ -400,6 +481,7 @@ task ModifyVcf {
         for line in fin:
             pin=line.strip().split()
             if pin[0]=='query_svid': continue
+            if not pin[0] in body.keys(): continue
             info_add = ["~{ref_prefix}"+'_SVID'+'='+pin[1]]
             for j in range(len(colname)-1):
                 if j>1:
