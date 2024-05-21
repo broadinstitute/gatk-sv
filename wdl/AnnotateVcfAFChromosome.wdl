@@ -7,7 +7,7 @@ import "Utils.wdl" as util
 import "AnnotateFunctionalConsequences.wdl" as func
 import "AnnotateExternalAFPerShard.wdl" as eaf
 
-# Perform annotation per contig
+# Perform annotation per v
 
 workflow ShardedAnnotateVcfAF {
 
@@ -125,9 +125,9 @@ workflow ShardedAnnotateVcfAF {
   }
 
   # Concat VCF shards with or without hail
-  # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per contig
-  Array[File] vcfs_for_concatenation = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), ComputeAFs.af_vcf])
-  Array[File] vcf_idxs_for_concatenation = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), ComputeAFs.af_vcf_idx])
+  # ShardedAnnotateVcf.sharded_annotated_vcf is is an Array[Array[File]] with one inner Array[File] of shards per v
+  Array[File] vcfs_for_concatenation = select_first([ComputeAFs.af_vcf])
+  Array[File] vcf_idxs_for_concatenation = select_first([ComputeAFs.af_vcf_idx])
 
 
   if (use_hail) {
