@@ -9,7 +9,7 @@
 version 1.0
 
 import "Structs.wdl"
-import "TasksBenchmark.wdl" as taks
+import "TasksBenchmark.wdl" as tasks
 
 workflow ClusterPESR {
   input {
