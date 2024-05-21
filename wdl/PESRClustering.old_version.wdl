@@ -9,6 +9,7 @@
 version 1.0
 
 import "Structs.wdl"
+import "TasksBenchmark.wdl" as taks
 
 workflow ClusterPESR {
   input {
@@ -65,9 +66,17 @@ workflow ClusterPESR {
       runtime_attr_override = runtime_attr_concat
   }
 
+  call tasks.vcf2bed as vcf2bed{
+    input:
+      vcf = ConcatVCFs.vcf,
+      vcf_index = ConcatVCFs.idx,
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   output {
     File clustered_vcf = ConcatVCFs.vcf
     File clustered_vcf_idx = ConcatVCFs.idx
+    File clustered_bed = vcf2bed.bed
   }
 }
 
