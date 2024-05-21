@@ -57,8 +57,7 @@ workflow AnnotateVcf {
         sv_pipeline_docker = sv_pipeline_docker,
         sv_pipeline_hail_docker = sv_pipeline_hail_docker,
         sv_base_mini_docker = sv_base_mini_docker,
-        gatk_docker = gatk_docker,
-        runtime_attr_annotate_intervals = runtime_attr_annotate_intervals
+        gatk_docker = gatk_docker
     }
   }
 
