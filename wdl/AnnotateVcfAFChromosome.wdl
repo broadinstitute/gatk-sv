@@ -138,7 +138,7 @@ workflow ShardedAnnotateVcfAF {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker = sv_pipeline_hail_docker
+        sv_pipeline_hail_docker = sv_pipeline_hail_docker,
         runtime_override_preconcat=runtime_attr_preconcat,
         runtime_override_hail_merge=runtime_attr_hail_merge,
         runtime_override_fix_header=runtime_attr_fix_header
