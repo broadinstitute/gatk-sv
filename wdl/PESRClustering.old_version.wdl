@@ -67,6 +67,7 @@ workflow ClusterPESR {
 
   output {
     File clustered_vcf = ConcatVCFs.vcf
+    File clustered_vcf_idx = ConcatVCFs.idx
   }
 }
 
