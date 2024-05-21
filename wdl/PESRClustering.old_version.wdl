@@ -66,7 +66,7 @@ workflow ClusterPESR {
       runtime_attr_override = runtime_attr_concat
   }
 
-  call tasks.vcf2bed as vcf2bed{
+  call vcf2bed{
     input:
       vcf = ConcatVCFs.vcf,
       vcf_index = ConcatVCFs.idx,
@@ -116,7 +116,6 @@ task SortVcf{
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
 
 task VCFCluster {
   input {
@@ -175,7 +174,6 @@ task VCFCluster {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-
 }
 
 task ConcatVCFs {
@@ -217,5 +215,49 @@ task ConcatVCFs {
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
-
 }
+
+task vcf2bed {
+  input {
+    File vcf
+    File? vcf_index
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 10, 
+    disk_gb: 100,
+    boot_disk_gb: 10,
+    preemptible_tries: 0,
+    max_retries: 1
+  }
+
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  String filename = basename(vcf, ".vcf.gz")
+
+  output {
+    File bed = "${filename}.bed"
+  }
+
+  command <<<
+
+    set -Eeuo pipefail
+    svtk vcf2bed -i SVTYPE -i SVLEN ~{vcf} ~{filename}.bed
+
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+
+
+
