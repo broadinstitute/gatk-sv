@@ -1,3 +1,5 @@
+version 1.0
+
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 import "HailMerge.wdl" as HailMerge
