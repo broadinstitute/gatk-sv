@@ -84,7 +84,7 @@ workflow ShardedAnnotateVcf {
       call util.SubsetVcfBySamplesList {
         input:
           vcf = ScatterVcf.shards[i],
-          list_of_samples = select_first([sample_keep_list]),
+          list_of_samples_to_keep = select_first([sample_keep_list]),
           sv_base_mini_docker = sv_base_mini_docker,
           runtime_attr_override = runtime_attr_subset_vcf_by_samples_list
       }
