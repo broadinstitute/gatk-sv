@@ -6,7 +6,7 @@ slug: gse
 ---
 
 Runs raw evidence collection on each sample with the following SV callers: 
-Manta, Wham, and/or MELT. For guidance on pre-filtering prior to GatherSampleEvidence, 
+Manta, Wham, Scramble, and/or MELT. For guidance on pre-filtering prior to GatherSampleEvidence, 
 refer to the Sample Exclusion section.
 
 
