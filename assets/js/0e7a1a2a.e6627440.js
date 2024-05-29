@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkGATK_SV=self.webpackChunkGATK_SV||[]).push([[603],{3369:e=>{e.exports=JSON.parse('{"title":"Modules","slug":"/category/modules","permalink":"/gatk-sv/docs/category/modules","navigation":{"previous":{"title":"FAQ","permalink":"/gatk-sv/docs/troubleshooting/faq"},"next":{"title":"Overview","permalink":"/gatk-sv/docs/modules/"}}}')}}]);
