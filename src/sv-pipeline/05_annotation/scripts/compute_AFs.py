@@ -348,7 +348,7 @@ def main():
         '##INFO=<ID=FREQ_HOMALT,Number=1,Type=Float,Description="Homozygous alternate genotype frequency (biallelic sites only).">',
         '##INFO=<ID=CN_NUMBER,Number=1,Type=Integer,Description="Total number of samples with estimated copy numbers (multiallelic CNVs only).">',
         '##INFO=<ID=CN_COUNT,Number=.,Type=Integer,Description="Number of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
-        '##INFO=<ID=CN_STATUS,Number=.,Type=Integer,Description="Differnt copy states observed, starting from CN=0 (multiallelic CNVs only).">',
+        '##INFO=<ID=CN_STATUS,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT, CN_FREQ: 0,1,...,maximum observed copy state (multiallelic CNVs only).">',
         '##INFO=<ID=CN_FREQ,Number=.,Type=Float,Description="Frequency of samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">',
         '##INFO=<ID=CN_NONREF_COUNT,Number=1,Type=Integer,Description="Number of samples with non-reference copy states (multiallelic CNVs only).">',
         '##INFO=<ID=CN_NONREF_FREQ,Number=1,Type=Float,Description="Frequency of samples with non-reference copy states (multiallelic CNVs only).">'
