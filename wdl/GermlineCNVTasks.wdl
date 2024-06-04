@@ -18,10 +18,12 @@ task AnnotateIntervals {
       RuntimeAttr? runtime_attr_override
     }
 
+    Float input_size = size(select_all([intervals, ref_fasta, mappability_track_bed, segmental_duplication_track_bed]), "GB")
+
     RuntimeAttr default_attr = object {
       cpu_cores: 1,
       mem_gb: 1.7,
-      disk_gb: 10,
+      disk_gb: ceil(10.0 + input_size),
       boot_disk_gb: 10,
       preemptible_tries: 3,
       max_retries: 1
