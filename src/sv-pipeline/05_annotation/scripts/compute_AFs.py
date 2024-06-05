@@ -380,7 +380,7 @@ def main():
             INFO_ADD.append(
                 '##INFO=<ID=CN_COUNT_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
             INFO_ADD.append(
-                '##INFO=<ID=CN_STATUS_%s,Number=.,Type=Integer,Description="Differnt copy states observed in %s samples, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
+                '##INFO=<ID=CN_STATUS_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (sex, sex, sex))
             INFO_ADD.append(
                 '##INFO=<ID=CN_FREQ_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (sex, sex))
             INFO_ADD.append(
@@ -428,7 +428,7 @@ def main():
             INFO_ADD.append(
                 '##INFO=<ID=CN_COUNT_%s,Number=.,Type=Integer,Description="Number of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
             INFO_ADD.append(
-                '##INFO=<ID=CN_STATUS_%s,Number=.,Type=Integer,Description="Differnt copy states observed in %s samples, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
+                '##INFO=<ID=CN_STATUS_%s,Number=.,Type=Integer,Description="Copy states corresponding to CN_COUNT_%s, CN_FREQ_%s: 0,1,...,maximum observed copy state (multiallelic CNVs only).">' % (pop, pop, pop))
             INFO_ADD.append(
                 '##INFO=<ID=CN_FREQ_%s,Number=.,Type=Float,Description="Frequency of %s samples observed at each copy state, starting from CN=0 (multiallelic CNVs only).">' % (pop, pop))
             INFO_ADD.append(
