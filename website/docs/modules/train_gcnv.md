@@ -115,5 +115,12 @@ of the tool for a description on these optional inputs.
 
 ## Outputs
 
+- `annotated_intervals` [Optional]. 
+  Count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
+  locus-sorted `DepthEvidence` files using `GATK CondenseDepthEvidence` tool, which are
+  annotated with GC content, mappability, and segmental-duplication content using 
+  [`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals).
+  This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
+
 - Contig ploidy model tarball
 - gCNV model tarballs
