@@ -16,7 +16,7 @@ The following inputs must be provided for each sample in the cohort, via the sam
 |Input Type|Input Name|Description|
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier*|
-|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
+|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bam.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`. If using CRAM files, an index `.cram.crai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
 
 *See **Sample ID requirements** below for specifications.
 
@@ -35,7 +35,7 @@ The following are the main pipeline outputs. For more information on the outputs
 |Output Type|Output Name|Description|
 |---------|--------|--------------|
 |`File`|`annotated_vcf`|Annotated SV VCF for the cohort***|
-|`File`|`annotated_vcf_idx`|Index for `output_vcf`|
+|`File`|`annotated_vcf_idx`|Index for `annotated_vcf`|
 |`File`|`sv_vcf_qc_output`|QC plots (bundled in a .tar.gz file)|
 
 ***Note that this VCF is not filtered
@@ -54,15 +54,15 @@ The following workflows are included in this workspace, to be executed in this o
 6. `06-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
 7. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR cutoff for outlier filtration in `08-FilterBatchSamples`
 8. `08-FilterBatchSamples`: Per-batch outlier sample filtration
-9. (Skip for a single batch) `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
-10. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort. Use `10-GenotypeBatch_SingleBatch` if you only have one batch.
-11. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls. Use `11-RegenotypeCNVs_SingleBatch` if you only have one batch.
-12. `12-CombineBatches`: Cohort-level cross-batch integration and clustering. Use `12-CombineBatches_SingleBatch` if you only have one batch.
-13. `13-ResolveComplexVariants`: Complex variant resolution. Use `13-ResolveComplexVariants_SingleBatch` if you only have one batch.
-14. `14-GenotypeComplexVariants`: Complex variant re-genotyping. Use `14-GenotypeComplexVariants_SingleBatch` if you only have one batch.
-15. `15-CleanVcf`: VCF cleanup. Use `15-CleanVcf_SingleBatch` if you only have one batch.
-16. `16-MainVcfQc`: Generates VCF QC reports. Use `16-MainVcfQc_SingleBatch` if you only have one batch.
-17. `17-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets. Use `17-AnnotateVcf_SingleBatch` if you only have one batch.
+9. `09-MergeBatchSites`: Site merging of SVs discovered across batches, run on a cohort-level `sample_set_set`
+10. `10-GenotypeBatch`: Per-batch genotyping of all sites in the cohort
+11. `11-RegenotypeCNVs`: Cohort-level genotype refinement of some depth calls
+12. `12-CombineBatches`: Cohort-level cross-batch integration and clustering
+13. `13-ResolveComplexVariants`: Complex variant resolution
+14. `14-GenotypeComplexVariants`: Complex variant re-genotyping
+15. `15-CleanVcf`: VCF cleanup
+16. `16-MainVcfQc`: Generates VCF QC reports
+17. `17-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets
 
 Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
 
@@ -74,18 +74,17 @@ For detailed instructions on running the pipeline in Terra, see **Step-by-step i
 
 ### How many samples can I process at once?
 
-#### Single-sample vs. single-batch vs. multi-batch mode
+#### Single-sample vs. cohort mode
 
-There are three modes for this pipeline according to the number of samples you need to process:
+There are two modes for this pipeline according to the number of samples you need to process:
 
 1. Single-sample mode (<100 samples): The cohort mode of this pipeline requires at least 100 samples, so for smaller sets of samples we recommend the single-sample version of this pipeline, which is available as a [featured Terra workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample).
-2. Single-batch mode (100-500 samples)
-3. Cohort (multi-batch) mode (>200 samples): Batches should be 100-500 samples, so you may choose to divide your cohort into multiple batches if you have at least 200 samples. Refer to the [Batching](https://github.com/broadinstitute/gatk-sv#batching) section of the README for further information.
+2. Cohort mode (>100 samples): Batches should be 100-500 samples, so you may choose to divide your cohort into multiple batches if you have at least 200 samples. Refer to the [Batching](https://github.com/broadinstitute/gatk-sv#batching) section of the README for further information.
 
 
 #### What is the maximum number of samples the pipeline can handle?
 
-In Terra, we have tested batch sizes of up to 500 samples and cohort sizes of up to 11,000 samples (and 40,000 samples with the final steps split by chromosome). On a separate cromwell server, we have tested the pipeline on cohorts of up to ~140,000 samples, but Terra's metadata handling will likely limit cohort sizes further.
+In Terra, we have tested batch sizes of up to 500 samples and cohort sizes of up to 11,000 samples (and 98,000 samples with the final steps split by chromosome). On a separate cromwell server, we have tested the pipeline on cohorts of up to ~140,000 samples.
 
 
 ### Time and cost estimates
@@ -144,7 +143,6 @@ To create batches (in the `sample_set` table), the easiest way is to upload a ta
 	* Another option is to use the `fiss mop` API call to delete all files that do not appear in one of the Terra data tables (intermediate files). Always ensure that you are completely done with a step and you will not need to return before using this option, as it will break call-caching. See [this blog post](https://terra.bio/deleting-intermediate-workflow-outputs/) for more details. This can also be done [via the command line](https://github.com/broadinstitute/fiss/wiki/MOP:-reducing-your-cloud-storage-footprint).
 * If your workflow fails, check the job manager for the error message. Most issues can be resolved by increasing the memory or disk. Do not delete workflow log files until you are done troubleshooting. If call-caching is enabled, do not delete any files from the failed workflow until you have run it successfully.
 * To display run costs, see [this article](https://support.terra.bio/hc/en-us/articles/360037862771#h_01EX5ED53HAZ59M29DRCG24CXY) for one-time setup instructions for non-Broad users.
-* If you only have one batch, you will need to skip `09-MergeBatchSites` and use the single-batch versions of all workflows after `10-GenotypeBatch`.
 
 #### 01-GatherSampleEvidence
 
@@ -167,8 +165,8 @@ Read the full EvidenceQC documentation [here](https://github.com/broadinstitute/
 #### 03-TrainGCNV
 
 Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/gatk-sv#gcnv-training-1).
-* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. 
 * Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline based on sample coverage, WGD score (from `02-EvidenceQC`), and PCR status. These will likely not be the same as the batches you used for `02-EvidenceQC`.
+* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. If your `sample_set` contains fewer than 100 samples (not recommended), you will need to edit the `n_samples_subsample` parameter to be less than or equal to the number of samples.
 
 #### 04-GatherBatchEvidence
 
@@ -192,26 +190,19 @@ These two workflows make up FilterBatch; they are subdivided in this workspace t
 #### 09-MergeBatchSites
 
 Read the full MergeBatchSites documentation [here](https://github.com/broadinstitute/gatk-sv#merge-batch-sites).
-* If you only have one batch, skip this workflow.
-* For a multi-batch cohort, `09-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `09-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `08-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**.
+* `09-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `09-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `08-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**.
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
-
-#### Single-batch vs. Multi-batch processing
-* If you only have one batch (`sample_set`), you will be using the workflows with the suffix `_SingleBatch` from `10-GenotypeBatch_SingleBatch` to `17-AnnotateVcf_SingleBatch`. We recommend deleting the workflow versions without the `_SingleBatch` suffix from `10-GenotypeBatch` to `17-AnnotateVcf` now to avoid confusion.
-* If you have multiple batches (`sample_set`s), you will be using the cohort-mode versions of the workflows from `10-GenotypeBatch` onwards, which do not have the suffix `_SingleBatch`. We recommend deleting the workflow versions with the `_SingleBatch` suffix now to avoid confusion.
 
 #### 10-GenotypeBatch
 
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `08-FilterBatchSamples`.
-* If you only have one batch, use the `10-GenotypeBatch_SingleBatch` version of the workflow.
 
 #### 11-RegenotypeCNVs, 12-CombineBatches, 13-ResolveComplexVariants, 14-GenotypeComplexVariants, 15-CleanVcf, 16-MainVcfQc, and 17-AnnotateVcf
 
 Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`, `MainVcfQc`), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
-* For a multi-batch cohort, use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.
-* If you only have one batch, use the `[...]_SingleBatch` version of the workflow.
+* Use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.
 
 #### Downstream steps
 
