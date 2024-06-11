@@ -2886,6 +2886,7 @@
         "NA21133"
     ],
     "samples_list": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/samples_list.txt",
+    "sample_pop_assignments": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/populations.ref_panel_1kg.tsv",
     "scramble_vcfs": [
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-scramble/Scramble/HG00096.scramble.vcf.gz",
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-scramble/Scramble/HG00129.scramble.vcf.gz",
