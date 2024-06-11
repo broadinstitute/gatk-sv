@@ -38,7 +38,6 @@ workflow ShardedAnnotateVcf {
     String? gcs_project
 
     String sv_pipeline_docker
-    String? sv_pipeline_hail_docker
     String sv_base_mini_docker
     String gatk_docker
 
@@ -138,8 +137,8 @@ workflow ShardedAnnotateVcf {
   }
 
   output {
-    Array[File] sharded_annotated_vcf = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf), ComputeAFs.af_vcf])
-    Array[File] sharded_annotated_vcf_idx = select_first([select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi), ComputeAFs.af_vcf_idx])
+    Array[File] sharded_annotated_vcf = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf) else ComputeAFs.af_vcf
+    Array[File] sharded_annotated_vcf_idx = if (defined (ref_bed)) then select_all(AnnotateExternalAFPerShard.annotated_vcf_tbi) else ComputeAFs.af_vcf_idx
   }
 }
 
@@ -169,7 +168,7 @@ task ComputeAFs {
     /opt/sv-pipeline/05_annotation/scripts/compute_AFs.py "~{vcf}" stdout \
       ~{"-p " + sample_pop_assignments} \
       ~{"-f " + ped_file} \
-      ~{"-par " + par_bed} \
+      ~{"--par " + par_bed} \
       ~{"--allosomes-list " + allosomes_list} \
     | bgzip -c \
     > "~{prefix}.wAFs.vcf.gz"

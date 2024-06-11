@@ -29,14 +29,10 @@
   "MakeCohortVcf.random_seed": 0,
 
   "MakeCohortVcf.primary_contigs_list": {{ reference_resources.primary_contigs_list | tojson }},
-  "MakeCohortVcf.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
 
   "MakeCohortVcf.linux_docker": {{ dockers.linux_docker | tojson }},
   "MakeCohortVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_updates_docker": {{ dockers.sv_pipeline_updates_docker | tojson }},
   "MakeCohortVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "MakeCohortVcf.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
   "MakeCohortVcf.cohort_name": {{ test_batch.name | tojson }},

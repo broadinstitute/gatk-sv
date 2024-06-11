@@ -8,7 +8,7 @@ workflow GenerateBatchMetricsMetrics {
     File metrics
     File metrics_common
     File contig_list
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     String linux_docker
 
     RuntimeAttr? runtime_attr_metrics_file_metrics
@@ -22,7 +22,7 @@ workflow GenerateBatchMetricsMetrics {
       contig_list = contig_list,
       common = false,
       prefix = "GenerateBatchMetrics.non_common." + name,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_metrics_file_metrics
   }
 
@@ -32,7 +32,7 @@ workflow GenerateBatchMetricsMetrics {
       contig_list = contig_list,
       common = true,
       prefix = "GenerateBatchMetrics.common." + name,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_common_metrics_metrics
   }
 

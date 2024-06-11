@@ -146,8 +146,11 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     for counted in outlier_dicts:
         merged_dicts.update(counted)
     all_outliers = dict(merged_dicts)
-    all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
-    all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
+    if len(all_outliers) == 0:
+        all_outliers_df = pd.DataFrame(columns=[ID_COL, outlier_type + "_overall_outliers"])
+    else:
+        all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
+        all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
     return all_outliers_df
 
 
@@ -187,6 +190,8 @@ def merge_evidence_qc_table(
            df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
+    for df in dfs:
+        df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
 

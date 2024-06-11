@@ -117,7 +117,7 @@ const config = {
         indexName: 'gatk-sv',
         contextualSearch: true
     },
-      prism: {
+    prism: {
         theme: prismThemes.github,
         darkTheme: prismThemes.vsDark,
         additionalLanguages: [

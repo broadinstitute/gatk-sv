@@ -2,7 +2,7 @@
 # some basic bioinformatics utilities.
 ARG UBUNTU_RELEASE="22.04"
 ARG HTSLIB_VERSION="1.15.1"
-ARG BEDTOOLS_VERSION="2.30.0"
+ARG BEDTOOLS_VERSION="2.31.0"
 ARG VCFTOOLS_VERSION="0.1.16"
 
 ARG APT_REQUIRED_PACKAGES="/opt/apt-required-packages.list"
@@ -46,9 +46,9 @@ RUN wget -q https://github.com/vcftools/vcftools/releases/download/v$VCFTOOLS_VE
 #   during install, bedtools needs python2 to be callable as "python"
 RUN ln -s /usr/bin/python2 /usr/bin/python
 ARG BEDTOOLS_VERSION
-RUN wget -q https://github.com/arq5x/bedtools2/releases/download/v$BEDTOOLS_VERSION/bedtools.static.binary && \
+RUN wget -q https://github.com/arq5x/bedtools2/releases/download/v$BEDTOOLS_VERSION/bedtools.static && \
     mkdir -p /opt/bedtools/bin && \
-    mv bedtools.static.binary /opt/bedtools/bin/bedtools && \
+    mv bedtools.static /opt/bedtools/bin/bedtools && \
     chmod a+x /opt/bedtools/bin/bedtools
 
 

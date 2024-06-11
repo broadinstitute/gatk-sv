@@ -56,7 +56,6 @@ workflow ClusterBatch {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     String? linux_docker  # required if run_module_metrics = true
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? baseline_depth_vcf  # baseline files are optional for metrics workflow
     File? baseline_manta_vcf
     File? baseline_wham_vcf
@@ -284,7 +283,7 @@ workflow ClusterBatch {
         baseline_melt_vcf = baseline_melt_vcf,
         contig_list = select_first([contig_list]),
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         linux_docker = select_first([linux_docker])
     }
   }

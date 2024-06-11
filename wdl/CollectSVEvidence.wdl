@@ -113,7 +113,8 @@ task RunCollectSVEvidence {
         --site-depth-min-mapq "~{site_depth_min_mapq}" \
         --site-depth-min-baseq "~{site_depth_min_baseq}" \
         ~{"-R " + reference_fasta} \
-        ~{"-L " + primary_contigs_list}
+        ~{"-L " + primary_contigs_list} \
+        --read-filter NonZeroReferenceLengthAlignmentReadFilter
 
   >>>
   runtime {

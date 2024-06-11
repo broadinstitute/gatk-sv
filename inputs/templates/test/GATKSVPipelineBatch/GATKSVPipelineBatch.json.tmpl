@@ -23,13 +23,9 @@
   "GATKSVPipelineBatch.genomes_in_the_cloud_docker" : {{ dockers.genomes_in_the_cloud_docker | tojson }},
   "GATKSVPipelineBatch.scramble_docker" : {{ dockers.scramble_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_docker": {{ dockers.sv_base_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_base_docker": {{ dockers.sv_pipeline_base_docker | tojson }},
   "GATKSVPipelineBatch.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
   "GATKSVPipelineBatch.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_updates_docker": {{ dockers.sv_pipeline_updates_docker | tojson }},
   "GATKSVPipelineBatch.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
-  "GATKSVPipelineBatch.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "GATKSVPipelineBatch.samtools_cloud_docker": {{ dockers.samtools_cloud_docker | tojson }},
   "GATKSVPipelineBatch.cloud_sdk_docker": {{ dockers.cloud_sdk_docker | tojson }},
 
@@ -47,6 +43,7 @@
 
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_version": {{ reference_resources.reference_version | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed": {{ reference_resources.manta_region_bed | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.manta_region_bed_index": {{ reference_resources.manta_region_bed_index | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.sd_locs_vcf": {{ reference_resources.sd_locs_vcf | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},

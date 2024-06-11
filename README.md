@@ -5,6 +5,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 ## Table of Contents
 * [Requirements](#requirements)
 * [Citation](#citation)
+* [Acknowledgements](#acknowledgements)
 * [Quickstart](#quickstart)
 * [Pipeline Overview](#overview)
     * [Cohort mode](#cohort-mode)
@@ -102,6 +103,14 @@ Please cite the following publication:
 
 Additional references:
 [Werling et al. 2018. "An analytical framework for whole-genome sequence association studies and its implications for autism spectrum disorder." Nature genetics 50.5, 727-736.](http://dx.doi.org/10.1038/s41588-018-0107-y)
+
+
+## <a name="acknowledgements">Acknowledgements</a>
+The following resources were produced using data from the All of Us Research Program and have been approved by the Program for public dissemination:
+
+* Genotype filtering model: "aou_recalibrate_gq_model_file" in "inputs/values/resources_hg38.json"
+
+The All of Us Research Program is supported by the National Institutes of Health, Office of the Director: Regional Medical Centers: 1 OT2 OD026549; 1 OT2 OD026554; 1 OT2 OD026557; 1 OT2 OD026556; 1 OT2 OD026550; 1 OT2 OD 026552; 1 OT2 OD026553; 1 OT2 OD026548; 1 OT2 OD026551; 1 OT2 OD026555; IAA #: AOD 16037; Federally Qualified Health Centers: HHSN 263201600085U; Data and Research Center: 5 U2C OD023196; Biobank: 1 U24 OD023121; The Participant Center: U24 OD023176; Participant Technology Systems Center: 1 U24 OD023163; Communications and Engagement: 3 OT2 OD023205; 3 OT2 OD023206; and Community Partners: 1 OT2 OD025277; 3 OT2 OD025315; 1 OT2 OD025337; 1 OT2 OD025276. In addition, the All of Us Research Program would not be possible without the partnership of its participants.
 
 
 ## <a name="quickstart">Quickstart</a>
@@ -372,10 +381,9 @@ Generates variant metrics for filtering.
 ## <a name="generate-batch-metrics">FilterBatch</a>
 *Formerly Module03*
 
-Filters poor quality variants and filters outlier samples. This workflow can be run all at once with the WDL at `wdl/FilterBatch.wdl`, or it can be run in three steps to enable tuning of outlier filtration cutoffs. The three subworkflows are:
-1. FilterBatchSites: Per-batch variant filtration
-2. PlotSVCountsPerSample: Visualize SV counts per sample per type to help choose an IQR cutoff for outlier filtering, and preview outlier samples for a given cutoff
-3. FilterBatchSamples: Per-batch outlier sample filtration; provide an appropriate `outlier_cutoff_nIQR` based on the SV count plots and outlier previews from step 2. Note that not removing high outliers can result in increased compute cost and a higher false positive rate in later steps.
+Filters poor quality variants and filters outlier samples. This workflow can be run all at once with the WDL at `wdl/FilterBatch.wdl`, or it can be run in two steps to enable tuning of outlier filtration cutoffs. The two subworkflows are:
+1. FilterBatchSites: Per-batch variant filtration. Visualize SV counts per sample per type to help choose an IQR cutoff for outlier filtering, and preview outlier samples for a given cutoff
+2. FilterBatchSamples: Per-batch outlier sample filtration; provide an appropriate `outlier_cutoff_nIQR` based on the SV count plots and outlier previews from step 1. Note that not removing high outliers can result in increased compute cost and a higher false positive rate in later steps.
 
 #### Prerequisites:
 * [GenerateBatchMetrics](#generate-batch-metrics)
