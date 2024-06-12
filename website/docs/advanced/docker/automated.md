@@ -115,8 +115,8 @@ This job is responsible for determining the arguments to be used by the
 This job is triggered when **a commit is pushed to the pull request branch.**
 It serves the purpose of regression testing of the Docker images.
 It builds Docker images according to the arguments determined in [`Determine Build Args`](#args). 
-This job fails if it fails to build the Docker images, 
-and the images it builds are discarded when the job finishes.
+If the Docker images are not successfully built, then the 
+job fails and all images are discarded.
 
 
 ### Publishing Docker Images {#publish}
