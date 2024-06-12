@@ -19,7 +19,7 @@ However, if you are working on extending or improving the GATK-SV Docker images,
 you may need to build them locally
 for testing or storing them on an alternative container registry. 
 In this section, we provide detailed guidelines on both approaches. 
-Specifically, this section covers the following topics.
+Specifically, this section covers the following topics:
 
 
 - [Docker primer](#docker-primer);
