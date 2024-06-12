@@ -10,9 +10,9 @@ import TabItem from '@theme/TabItem';
 
 If you contribute to the GATK-SV codebase, we recommend you ensure that affected Docker images build successfully and function as intended. The process involves two steps:
 
-- **Build**: Create Docker images from Dockerfiles.
+1. **Build**: Create Docker images from Dockerfiles.
 
-- **Publish**: Upload the built Docker images to container registries 
+2. **Publish**: Upload the built Docker images to container registries 
 (e.g., Google or Azure container registries, GCR and ACR, respectively) 
 to make them available for use in Terra or Cromwell.
 _You may skip this step unless you would like to host the images you built on your own container registry._
