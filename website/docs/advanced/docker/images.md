@@ -84,7 +84,7 @@ extracts the list of changed files from the diff between two
 
 The user provides these commit SHAs (or references the images specifically)
 when building the images manually. 
-However, the automated builds as part of CI/CD, determine the commit SHAs automatically as the following example.
+However, the automated CI/CD builds determine the commit SHAs automatically as the following example.
 
 ```mermaid
 %%{init: { 
