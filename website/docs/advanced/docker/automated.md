@@ -21,7 +21,7 @@ and Azure Container Registry (ACR), and updates their references.
 
 
 The latest Docker images are listed in the files below. 
-with detailed automated deployment descriptions in the following sections.
+Detailed automated deployment is described in the following sections.
 
 <Tabs
  groupId="cr"
