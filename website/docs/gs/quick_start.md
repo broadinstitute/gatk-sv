@@ -21,22 +21,9 @@ demo data on a managed Cromwell server.
 
 ### Build Inputs
 
-- Example workflow inputs can be found in `/inputs`. 
-  Build using `scripts/inputs/build_default_inputs.sh`, 
-  which generates input jsons in `/inputs/build`.
-
-- Some workflows require a Google Cloud Project ID to be defined in 
-  a cloud environment parameter group. Workspace builds require a 
-  Terra billing project ID as well. An example is provided at 
-  `/inputs/values/google_cloud.json` but should not be used, 
-  as modifying this file will cause tracked changes in the repository. 
-  Instead, create a copy in the same directory with the format 
-  `google_cloud.my_project.json` and modify as necessary.
-
-  Note that these inputs are required only when certain data are 
-  located in requester pays buckets. If this does not apply, 
-  users may use placeholder values for the cloud configuration 
-  and simply delete the inputs manually.
+We provide options for building example inputs that you may use as a reference 
+to configure a Terra workspace or Cromwell submissions (advanced) with your own data. 
+Please refer to [this page](/docs/advanced/build_inputs) for instructions on how to build these inputs.
 
 ### MELT
 Important: The example input files contain MELT inputs that are NOT public 
