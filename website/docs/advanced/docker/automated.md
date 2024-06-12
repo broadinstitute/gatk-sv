@@ -20,7 +20,7 @@ pipeline publishes images on the Google Container Registry (GCR)
 and Azure Container Registry (ACR), and updates their references.
 
 
-Latest Docker images are listed in the files, 
+The latest Docker images are listed in the files below. 
 with detailed automated deployment descriptions in the following sections.
 
 <Tabs
