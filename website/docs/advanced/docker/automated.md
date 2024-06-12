@@ -9,8 +9,8 @@ import TabItem from '@theme/TabItem';
 
 
 GATK-SV Docker images are automatically built, tested, and pushed to 
-container registries. The automation is part of the pipeline’s continuous 
-integration and continuous delivery (CI/CD), which ensures the 
+container registries. An automated continuous 
+integration and continuous delivery (CI/CD) ensures the 
 images are built and tested consistently and reproducibly in standardized Linux virtual machines.
 
 
