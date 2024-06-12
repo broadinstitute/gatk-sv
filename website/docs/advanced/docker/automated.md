@@ -67,7 +67,7 @@ and utilizes the
 script for building and publishing Docker images.
 The workflow consists of three 
 [_jobs_](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobs) 
-discussed in the following sections.
+discussed in the following sections:
 
 1. [Determine build arguments](#args)
 2. [Regression testing](#build) (pull request and merge)
