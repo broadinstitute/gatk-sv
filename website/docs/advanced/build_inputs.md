@@ -71,8 +71,8 @@ python scripts/inputs/build_inputs.py \
 This section only applies to the single-sample mode. 
 New reference panels can be generated from a single run of the 
 `GATKSVPipelineBatch` workflow. 
-If using a Cromwell server, we recommend copying the outputs to a p
-ermanent location by adding the following option to the workflow configuration file:
+If using a Cromwell server, we recommend copying the outputs to a 
+permanent location by adding the following option to the workflow configuration file:
 
 ```json
 "final_workflow_outputs_dir" : "gs://my-outputs-bucket",
