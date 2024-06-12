@@ -127,7 +127,7 @@ it builds Docker images. In addition,
 this job also pushes the built images to the GCR and ACR 
 and updates their list. 
 The job fails if it cannot successfully run all the steps.
-Specifically, it takes the following steps.
+The publishing process is summarized below.
   
 
 - **Login**
