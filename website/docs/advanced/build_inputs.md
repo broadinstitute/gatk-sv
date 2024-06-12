@@ -1,6 +1,6 @@
 ---
-title: Default inputs
-description: Building default inputs
+title: Building inputs
+description: Building work input json files
 sidebar_position: 1
 slug: build_inputs
 ---
