@@ -79,9 +79,9 @@ You may [skip to the next step](#connect-to-vm) if you have already created a VM
       --project=$PROJECT_ID \
       --zone=$ZONE_ID \
       --machine-type=e2-standard-2 \
-      --create-disk=auto-delete=yes,boot=yes,device-name=$INSTANCE_NAMES,image=projects/ubuntu-os-cloud/global/images/ubuntu-2310-mantic-amd64-v20240213,mode=rw,size=50
+      --create-disk=auto-delete=yes,boot=yes,device-name=$INSTANCE_NAMES,image=projects/ubuntu-os-cloud/global/images/ubuntu-2310-mantic-amd64-v20240213,mode=rw,size=100
     ```
-    Note that this command creates a VM with `50 GiB` disk size, 
+    Note that this command creates a VM with `100 GiB` disk size, 
     to accommodate for the disk space requirements of GATK-SV Docker images.  
 
     You may follow the documentation on 
