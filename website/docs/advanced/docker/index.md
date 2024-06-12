@@ -87,3 +87,10 @@ and Azure Container Registry (ACR) so they are accessible to the
 workflow execution environment on the Terra platform. 
 Docker containers are ephemeral runtime environments, created on 
 virtual machines when the analysis starts, and are “purged” when the analysis finishes.
+
+
+:::tip Images hosted on ACR and GCR are identical
+The GATK-SV images hosted on GCR and ACR are identical. 
+We maintain these mirrored repositories to enable running GATK-SV on Terra 
+with both GCP and Azure (WIP) backends.
+:::
