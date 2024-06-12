@@ -5,6 +5,8 @@ sidebar_position: 3
 slug: gcnv
 ---
 
+import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+
 [GATK-gCNV](https://www.nature.com/articles/s41588-023-01449-0)
 is a method for detecting rare germline copy number variants (CNVs)
 from short-read sequencing read-depth information.
@@ -115,12 +117,15 @@ of the tool for a description on these optional inputs.
 
 ## Outputs
 
-- `annotated_intervals` [Optional]. 
-  Count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
+- `annotated_intervals` 
+  <HighlightOptionalArg>Optional</HighlightOptionalArg>.
+  The count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
   locus-sorted `DepthEvidence` files using `GATK CondenseDepthEvidence` tool, which are
   annotated with GC content, mappability, and segmental-duplication content using 
-  [`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals).
-  This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
+  [`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals)
+  tool. This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
+
+- `filtered_intervals_cnv` [Optional].
 
 - Contig ploidy model tarball
 - gCNV model tarballs
