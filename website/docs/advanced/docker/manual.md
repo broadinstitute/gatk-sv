@@ -304,7 +304,7 @@ GATK-SV Docker images are tagged using the following template
 For example:
 
 ```
-2023-07-28-v0.28.1-beta-e70dfbd7
+--image-tag 2023-07-28-v0.28.1-beta-e70dfbd7
 ```
 
 
