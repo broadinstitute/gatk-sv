@@ -46,7 +46,7 @@ The following are the key components to define and run in this environment:
 - **Docker container**; is an isolated runtime environment created based on a Docker image, 
   which runs on a host machine (e.g., laptop or a virtual machine on the cloud) and can execute scripts. 
 
-The following figure illustrates the relationship between Dockerfile, Docker images, and Docker containers. 
+The following figure illustrates the relationship between Dockerfiles, Docker images, and Docker containers:
 
 
 ```mermaid
