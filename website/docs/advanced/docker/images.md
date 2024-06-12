@@ -82,7 +82,7 @@ extracts the list of changed files from the diff between two
 - `BASE_SHA`: the reference commit (e.g., `HEAD` of the `main` branch);
 - `HEAD_SHA`: the target commit (e.g., the latest commit on the feature branch).
 
-User provides these commit SHAs (or references the images specifically)
+The user provides these commit SHAs (or references the images specifically)
 when building the images manually. 
 However, the automated builds as part of CI/CD, determine the commit SHAs automatically as the following example.
 
