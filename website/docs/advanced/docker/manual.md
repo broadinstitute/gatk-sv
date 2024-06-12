@@ -24,9 +24,9 @@ This section provides guidelines on setting up the environment and running the
 script with a minimal example.
 
 
-:::danger Linux Machine Required
+:::danger x86 Linux Machine Required
 Only Linux machines (dedicated or virtual) are supported for building GATK-SV Docker images. 
-Images created on non-Linux machines (e.g., Apple M1) may not function as intended, 
+In addition, images created on non-Intel processor architectures (e.g., Apple M1) may not function as intended, 
 even if the build process runs successfully. 
 :::
 
