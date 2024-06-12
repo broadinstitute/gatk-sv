@@ -78,7 +78,7 @@ This job is responsible for determining the arguments to be used by the
 `build_docker.py` script, specifically:
 
 - **Determining commit SHAs**:
-  Considering the size and number of GATK-SV Docker images, 
+  Considering the large number of GATK-SV Docker images, 
   the workflow builds and publishes only the 
   Docker images affected by the changes introduced 
   in a pull request.
