@@ -16,19 +16,25 @@ of building these images, please refer to the
 :::
 
 
-GATK-SV organizes tools, scripts, and their dependencies and configurations 
+GATK-SV organizes the tools, scripts, and their dependencies and configurations 
 into multiple Docker images. Each Docker image is built for a specific purpose, 
-and images have a hierarchical dependency. This modular design has several advantages; 
-first, it results in focused and more straightforward instructions in Dockerfiles, 
+and images have a hierarchical dependency. 
+This modular design has the following key advantages.
+
+- It results in focused and more straightforward instructions in Dockerfiles, 
 facilitating their development, maintenance, and extensibility. 
-Second, it results in smaller Docker images, as each image contains only 
+
+- It results in smaller Docker images, as each image contains only 
 the related tools and scripts. Smaller images reduce storage costs on container 
 registries and are transferred faster to virtual machines, resulting in shorter start-up. 
-Third, the modular design reduces duplication in Dockerfiles and ensures configuration 
+
+- The modular design reduces duplication in Dockerfiles and ensures configuration 
 consistency across different Docker images.
-Finally, this architecture significantly lowers the maintenance cost as it 
+
+- This architecture significantly lowers the maintenance cost as it 
 necessitates updating only the affected Docker images throughout the development
 (discussed in details in the [following section](#incremental)). 
+
 
 
 The following figure illustrates the hierarchical relationship between GATK-SV Docker images. 
