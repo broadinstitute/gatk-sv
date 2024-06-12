@@ -16,7 +16,7 @@ of building these images, please refer to the
 :::
 
 
-GATK-SV organizes the tools, scripts, and their dependencies and configurations 
+GATK-SV organizes tools, scripts, and their dependencies and configurations 
 into multiple Docker images. Each Docker image is built for a specific purpose, 
 and images have a hierarchical dependency. This modular design has several advantages; 
 first, it results in focused and more straightforward instructions in Dockerfiles, 
