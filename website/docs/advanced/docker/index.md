@@ -22,10 +22,10 @@ In this section, we provide detailed guidelines on both approaches.
 Specifically, this section covers the following topics:
 
 
-- [Docker primer](#docker-primer);
-- [GATK-SV Docker images](./images);
-- [Automatic deployment](./automated);
-- [Manual deployment](./manual).
+- [Docker primer](#docker-primer)
+- [GATK-SV Docker images](./images)
+- [Automatic deployment](./automated)
+- [Manual deployment](./manual)
 
 
 ## Docker Primer
