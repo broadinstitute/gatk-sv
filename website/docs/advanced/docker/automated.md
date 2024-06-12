@@ -69,9 +69,9 @@ The workflow consists of three
 [_jobs_](https://docs.github.com/en/actions/learn-github-actions/workflow-syntax-for-github-actions#jobs) 
 discussed in the following sections.
 
-- [Determine build arguments](#args);
-- [Regression testing](#build) (pull request and merge);
-- [Publishing Docker images](#publish) (merge only).
+1. [Determine build arguments](#args)
+2. [Regression testing](#build) (pull request and merge)
+3. [Publishing Docker images](#publish) (merge only)
 
 ### Determine Build Args {#args}
 This job is responsible for determining the arguments to be used by the 
