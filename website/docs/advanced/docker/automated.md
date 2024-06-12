@@ -124,7 +124,7 @@ job fails and all images are discarded.
 This job is triggered when **a pull request is merged or a commit is pushed to the `main` branch.**
 Similar to the [`Test Images Build`](#build) job, 
 it builds Docker images. In addition, 
-this job also pushes the built images to the GCR and ACR, 
+this job also pushes the built images to the GCR and ACR 
 and updates their list. 
 The job fails if it cannot successfully run all the steps.
 Specifically, it takes the following steps.
