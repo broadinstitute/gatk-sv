@@ -103,7 +103,7 @@ This job is responsible for determining the arguments to be used by the
   of the `HEAD` commit SHA. 
   
   The following is an example of a tag generated
-  in this step.
+  in this step:
   
   ```
   2023-05-24-v0.27.3-beta-1796b665
