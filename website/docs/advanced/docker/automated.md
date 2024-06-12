@@ -148,7 +148,7 @@ The publishing process is summarized below.
   Once the newly built images are successfully pushed, 
   this job updates the JSON files containing the list of images (i.e., `dockers*.json`),
   and commits and pushes the changes to the `main` branch.
-  To achieve this, we use a _bot_ account; specifically:
+  To achieve this, we use a _bot_ account that performs the following actions:
 
   - Login to git using the bot's Personal Access Token (PAT)
     in order to authorize it to push to the `main` branch.
