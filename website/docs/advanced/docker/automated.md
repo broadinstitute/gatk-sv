@@ -150,15 +150,15 @@ The publishing process is summarized below.
   and commits and pushes the changes to the `main` branch.
   To achieve this, we use a _bot_ account that performs the following actions:
 
-  - Login to git using the bot's Personal Access Token (PAT)
+  a. Login to git using the bot's Personal Access Token (PAT)
     in order to authorize it to push to the `main` branch.
   
-  - Configure the Git installation in the GitHub Actions VMs using the _bot_'s credentials. 
+  b. Configure the Git installation in the GitHub Actions VMs using the _bot_'s credentials. 
 
-  - Commit the changed files. The commit message references the 
+  c. Commit the changed files. The commit message references the 
     Git commit that triggered the [publish](#publish) job. 
   
-  - Push the commit to the main branch.
+  d. Push the commit to the main branch.
   
   It is worth noting that GitHub recognizes that this push to the `main` branch is made from a GitHub 
   Actions environment, hence it does not trigger another [Publish](#publish) job,
