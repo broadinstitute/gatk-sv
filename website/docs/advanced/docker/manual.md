@@ -226,9 +226,9 @@ python3 scripts/docker/build_docker.py \
 
 The arguments are explained in the following.
 
-- [`--targets`](#targets);
-- [`--image-tag`](#tag);
-- [`--docker-repo`](#registry).
+- [`--targets`](#targets)
+- [`--image-tag`](#tag)
+- [`--docker-repo`](#registry)
 
 ### `--targets` {#targets}
 
