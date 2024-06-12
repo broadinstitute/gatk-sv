@@ -312,8 +312,8 @@ For example:
 
 If you are only testing GATK-SV Docker image build, 
 you may skip this section and avoid providing `--docker-repo <registry>`.
-However, you need to push image to container registries,
-if you need images for WDL testing, or need to host the images on a container registry 
+However, if you need to push image to container registries, 
+need images for WDL testing, or need to host the images on a container registry 
 other than those maintained by the GATK-SV team. 
    
 The `build_docker.py` script automatically pushes Docker images to a container registry
