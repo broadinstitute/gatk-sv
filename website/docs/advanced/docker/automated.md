@@ -142,7 +142,7 @@ The publishing process is summarized below.
   Similar to the [build job](#build), this job builds Docker images 
   based on the list of changed files specified using the 
   `HEAD` and `BASE` commit SHA. It's important to note 
-  that the images pushed to GCR and ACR are identical, and they only differ in their tag.
+  that the images pushed to GCR and ACR are identical and only differ in their tags.
 
 - **Update the list of published images**:
   Once the newly built images are successfully pushed, 
