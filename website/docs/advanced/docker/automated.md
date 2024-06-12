@@ -14,7 +14,7 @@ integration and continuous delivery (CI/CD), which ensures the
 images are built and tested consistently and reproducibly in standardized Linux virtual machines.
 
 
-The automation pipeline runs on GitHub Actions; it performs a regression 
+The automation pipeline runs on GitHub Actions and performs a regression 
 test as part of every pull request. When a pull request is merged, the automation 
 pipeline publishes images on the Google Container Registry (GCR) 
 and Azure Container Registry (ACR), and updates their references.
