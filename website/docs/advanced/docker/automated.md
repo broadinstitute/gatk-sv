@@ -61,8 +61,8 @@ If you only need the list of latest Docker images, you may refer to the above-li
 ## Workflow Layout
 
 The automation workflow is defined in 
-[`sv_pipeline.yml`](https://github.com/broadinstitute/gatk-sv/blob/main/.github/workflows/sv_pipeline_docker.yml), 
-and it utilizes the 
+[`sv_pipeline.yml`](https://github.com/broadinstitute/gatk-sv/blob/main/.github/workflows/sv_pipeline_docker.yml) 
+and utilizes the 
 [`build_docker.py`](https://github.com/broadinstitute/gatk-sv/blob/main/scripts/docker/build_docker.py)
 script for building and publishing Docker images.
 The workflow consists of three 
