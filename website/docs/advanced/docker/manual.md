@@ -8,8 +8,7 @@ import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 
-If you contribute to the GATK-SV codebase, we recommend you build Docker images 
-to ensure they build successfully and function as intended. The process involves two steps:
+If you contribute to the GATK-SV codebase, we recommend you ensure that affected Docker images build successfully and function as intended. The process involves two steps:
 
 - **Build**: Create Docker images from Dockerfiles.
 
