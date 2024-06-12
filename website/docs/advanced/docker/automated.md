@@ -88,7 +88,7 @@ This job is responsible for determining the arguments to be used by the
   commits.
 
 - **Compose image tag**:
-  The images are tagged with a consistent template as the following.
+  The images are tagged with a consistent template as the following:
   
   ```
   [DATE]-[RELEASE_TAG]-[HEAD_SHA_8]
