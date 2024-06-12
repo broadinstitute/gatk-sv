@@ -40,7 +40,7 @@ workflow GatherBatchEvidence {
     # PE/SR/BAF/bincov files
     # If neither SD_files nor ref_panel_SD_files is present, BAF_files must be supplied
     # If BAF_files is absent, SD_files and/or ref_panel_SD_files and sd_locs_vcf must be supplied
-    Array[File] counts
+    Array[File] coverage_counts
     File? ref_panel_bincov_matrix
     File? bincov_matrix
     File? bincov_matrix_index
@@ -189,7 +189,7 @@ workflow GatherBatchEvidence {
     call mbm.MakeBincovMatrix as MakeBincovMatrix {
       input:
         samples = samples,
-        count_files = counts,
+        coverage_counts = coverage_counts,
         bincov_matrix = ref_panel_bincov_matrix,
         bincov_matrix_samples = ref_panel_samples,
         batch = batch,
@@ -311,7 +311,7 @@ workflow GatherBatchEvidence {
   scatter (i in range(length(samples))) {
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
-        counts = counts[i],
+        coverage_counts = coverage_counts[i],
         sample = samples[i],
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,

@@ -78,7 +78,7 @@ task CollectCounts {
 
 task CondenseReadCounts {
   input {
-    File counts
+    File coverage_counts
     String sample
     Int? max_interval_size
     Int? min_interval_size
@@ -103,8 +103,8 @@ task CondenseReadCounts {
     set -euo pipefail
     export GATK_LOCAL_JAR=~{default="/root/gatk.jar" gatk4_jar_override}
 
-    zcat ~{counts} | grep '^@' | grep -v '@RG' > ref.dict
-    zcat ~{counts} | grep -v '^@' | sed -e 1d | \
+    zcat ~{coverage_counts} | grep '^@' | grep -v '@RG' > ref.dict
+    zcat ~{coverage_counts} | grep -v '^@' | sed -e 1d | \
         awk 'BEGIN{FS=OFS="\t";print "#Chr\tStart\tEnd\tNA21133"}{print $1,$2-1,$3,$4}' | bgzip > in.rd.txt.gz 
     tabix -0 -s1 -b2 -e3 in.rd.txt.gz 
     gatk --java-options -Xmx2g CondenseDepthEvidence -F in.rd.txt.gz -O out.rd.txt.gz --sequence-dictionary ref.dict \

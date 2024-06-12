@@ -9,7 +9,7 @@ import "Utils.wdl" as util
 workflow TrainGCNV {
   input {
     Array[String] samples
-    Array[File] count_files
+    Array[File] coverage_counts
 
     # Common parameters
     String cohort
@@ -129,7 +129,7 @@ workflow TrainGCNV {
     String sample_ids_ = samples[i]
     call cov.CondenseReadCounts as CondenseReadCounts {
       input:
-        counts = count_files[i],
+        counts = coverage_counts[i],
         sample = samples[i],
         min_interval_size = min_interval_size,
         max_interval_size = max_interval_size,
