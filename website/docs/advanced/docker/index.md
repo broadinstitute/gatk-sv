@@ -5,7 +5,7 @@ sidebar_position: 0
 ---
 
 GATK-SV is a cloud-native pipeline, making it scalable and reproducible. 
-All the tools, scripts, and settings required to run the pipeline are 
+All of the tools, scripts, and settings required to run the pipeline are 
 packaged in multiple Docker images. All the images are built and hosted 
 on container registries and are ready to use in Terra workspaces. 
 
