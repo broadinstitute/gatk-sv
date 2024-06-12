@@ -182,7 +182,7 @@ You may [skip to the next step](#checkout) if you have already installed and con
           on the browser of your computer (_not_ the VM).
 
         - Follow the prompts on your browser, and login with an account that will provide you
-          with ccess to the GCR repository. If you are planning on _publishing_ to images you 
+          with access to the GCR repository. If you are planning on _publishing_ images you 
           build to GCR, you need to make sure you account has [sufficient access](https://cloud.google.com/artifact-registry/docs/docker/pushing-and-pulling#required_roles)
           to GCR. 
 
