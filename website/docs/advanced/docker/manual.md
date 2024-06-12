@@ -179,7 +179,7 @@ You may [skip to the next step](#checkout) if you have already installed and con
           ```
 
         - Follow the on-screen prompts, it will display a URL that you need to copy-paste it
-          on the browser of your computer, _not_ the VM.
+          on the browser of your computer (_not_ the VM).
 
         - Follow the prompts on your browser, and login with an account that will provide you
           with ccess to the GCR repository. If you are planning on _publishing_ to images you 
