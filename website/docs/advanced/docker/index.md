@@ -31,7 +31,7 @@ Specifically, this section covers the following topics:
 ## Docker Primer
 
 Docker technology enables creating a reproducible environment for data analysis. 
-Accordingly, it enables defining an environment with all the tools, scripts, 
+It enables defining an environment with all the tools, scripts, 
 and their dependencies installed and configured as needed to run a data analysis pipeline. 
 The following are the key components to define and run in this environment:
 
