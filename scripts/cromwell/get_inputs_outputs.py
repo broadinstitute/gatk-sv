@@ -17,9 +17,9 @@ import os
 # Author: Mark Walker (markw@broadinstitute.org)
 
 
-def getSubworkflows(m, alias):
+def get_subworkflows(m, alias):
     if isinstance(m, list):
-        return getSubworkflows(m[0], alias)
+        return get_subworkflows(m[0], alias)
 
     task = ''
     if 'workflowName' in m:
@@ -32,12 +32,12 @@ def getSubworkflows(m, alias):
     call_metadata = []
     if 'calls' in m:
         for call in m['calls']:
-            call_metadata.extend(getSubworkflows(m['calls'][call], call))
+            call_metadata.extend(get_subworkflows(m['calls'][call], call))
 
     if 'subWorkflowMetadata' in m:
-        call_metadata.extend(getSubworkflows(m['subWorkflowMetadata'], alias))
+        call_metadata.extend(get_subworkflows(m['subWorkflowMetadata'], alias))
 
-    if ('inputs' in m and 'outputs' in m and task):
+    if ('inputs' in m or 'outputs' in m) and task:
         call_metadata.append((m, task, alias))
 
     return call_metadata
@@ -45,27 +45,19 @@ def getSubworkflows(m, alias):
 
 def write_files(workflow_metadata, output_dir):
     for (m, task, alias) in workflow_metadata:
-        m_copy = {}
-        m_copy['inputs'] = m['inputs']
-        m_copy['outputs'] = m['outputs']
-        for key in list(m_copy['inputs']):
-            if m_copy['inputs'][key]:
-                m_copy['inputs'][task + '.' + key] = m_copy['inputs'][key]
-            del m_copy['inputs'][key]
-        for key in list(m_copy['outputs']):
-            if not m_copy['outputs'][key]:
-                del m_copy['outputs'][key]
-
         inputs_path = os.path.join(output_dir, alias + '.inputs.json')
         outputs_path = os.path.join(output_dir, alias + '.outputs.json')
-        with open(inputs_path, 'w') as f:
-            f.write(json.dumps(m_copy['inputs'], sort_keys=True, indent=2))
-        with open(outputs_path, 'w') as f:
-            f.write(json.dumps(m_copy['outputs'], sort_keys=True, indent=2))
+        if 'inputs' in m:
+            inputs = {task + "." + key: val for key, val in m['inputs'].items() if val}
+            with open(inputs_path, 'w') as f:
+                f.write(json.dumps(inputs, sort_keys=True, indent=2))
+        if 'outputs' in m:
+            outputs = {key: val for key, val in m['outputs'].items() if val}
+            with open(outputs_path, 'w') as f:
+                f.write(json.dumps(outputs, sort_keys=True, indent=2))
+
 
 # Main function
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("workflow_metadata",
@@ -77,7 +69,7 @@ def main():
     output_dir = args.output_dir
 
     metadata = json.load(open(metadata_file, 'r'))
-    workflow_metadata = getSubworkflows(metadata, metadata['workflowName'])
+    workflow_metadata = get_subworkflows(metadata, metadata['workflowName'])
     write_files(workflow_metadata, output_dir)
 
 
