@@ -194,7 +194,7 @@ def has_reciprocal_overlap(chrom1, start1, end1, chrom2, start2, end2, min_recip
 def get_overlap(chrom1, start1, end1, chrom2, start2, end2):
     if chrom1 != chrom2:
         return 0
-    if not (start1 <= end2 and start1 <= end1):
+    if not (start1 <= end2 and start2 <= end1):
         return 0
     return min(end1, end2) - max(start1, start2)
 
@@ -287,7 +287,7 @@ def genotype_counts_per_variant(intervals_path: Text,
             control_cn = [var.genotype_copy_numbers[s] for s in control_samples for var in matching_variants
                           if var.genotype_copy_numbers.get(s, None) is not None]
             if len(control_cn) == 0:
-                # If no valid carriers, assume default
+                # If no valid controls, assume default
                 median_control_cn = default_median_cn
             else:
                 median_control_cn = median(control_cn)
@@ -1056,6 +1056,7 @@ def make_genotype_tree(genotype_counts):
 def parse_genotypes(path: Text) -> Dict:
     genotype_list_dict = dict()
     with gzip.open(path, 'rt') as f:
+        # Traverse depth genotypes table, containing one line per genotype per interval
         for line in f:
             if line.startswith('#') or line == "\n":
                 continue
@@ -1070,12 +1071,16 @@ def parse_genotypes(path: Text) -> Dict:
                 genotype_list_dict[vid] = list()
             matching_variant_info = None
             for variant_info in genotype_list_dict[vid]:
+                # Find if there is already a variant matching on vid, chrom, start, and end
+                # Note that one variant may map to multiple intervals
                 if variant_info.chrom == chrom and variant_info.start == start and variant_info.end == end:
                     matching_variant_info = variant_info
                     break
             if matching_variant_info is None:
+                # If match wasn't found, create new object for the site
                 matching_variant_info = VariantInfo(chrom, start, end)
                 genotype_list_dict[vid].append(matching_variant_info)
+            # Add sample copy state
             matching_variant_info.genotype_copy_numbers[sample] = copy_number
     return genotype_list_dict
 
@@ -1147,9 +1152,10 @@ def main(argv: Optional[List[Text]] = None):
                                                                        all_samples=all_samples,
                                                                        male_samples=male_samples,
                                                                        female_samples=female_samples)
+    del genotype_dict
     genotype_counts_tree_dict = make_genotype_tree(genotype_counts)
     cleaned_genotype_counts = list(clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tree_dict))
-    del genotype_counts_tree_dict
+    del genotype_counts, intervals_list_dict, genotype_counts_tree_dict
     variants_to_reclassify = read_vcf(args.vcf, cleaned_genotype_counts)
     assessment = list(final_assessment(cleaned_genotype_counts, variants_to_reclassify))
     del cleaned_genotype_counts, variants_to_reclassify
