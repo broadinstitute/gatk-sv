@@ -6,11 +6,13 @@ on:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
   pull_request:
     branches:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
 
 jobs:
   syntax_test_job:
