@@ -6,11 +6,21 @@ on:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
+      - 'scripts/inputs/build_default_inputs.sh'
+      - 'scripts/test/terra_validation.py'
+      - 'scripts/test/miniwdl_validation.py'
+      - 'scripts/test/validate.sh'
   pull_request:
     branches:
       - main
     paths:
       - 'wdl/**'
+      - 'inputs/**'
+      - 'scripts/inputs/build_default_inputs.sh'
+      - 'scripts/test/terra_validation.py'
+      - 'scripts/test/miniwdl_validation.py'
+      - 'scripts/test/validate.sh'
 
 jobs:
   syntax_test_job:
