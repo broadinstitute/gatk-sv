@@ -2,6 +2,7 @@
 
 import argparse
 import gzip
+import logging
 import sys
 
 from collections import Counter
@@ -320,6 +321,7 @@ def genotype_counts_per_variant(intervals_path: Text,
 
 def clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tree_dict):
     visited_vids = set()  # Only visit each unique extended vid (w/ interval info)
+    cleaned_genotype_counts = dict()
     for query_record in genotype_counts:
         if query_record.merged_vid in visited_vids:
             continue
@@ -354,14 +356,19 @@ def clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tre
                         cnv_assessment = "TOO_SMALL"
                     else:
                         cnv_assessment = "WT"
-                    yield CleanedVariantIntervalRecord(interval_chrom, interval_start, interval_end,
-                                                       interval_type, matching_record.vid, matching_record.sv_type,
-                                                       matching_record.cpx_type, matching_record.carrier_del,
-                                                       matching_record.carrier_wt, matching_record.carrier_dup,
-                                                       matching_record.control_del, matching_record.control_wt,
-                                                       matching_record.control_dup,
-                                                       matching_record.diff_case_control_del_frac,
-                                                       matching_record.diff_case_control_dup_frac, cnv_assessment)
+                    record = CleanedVariantIntervalRecord(interval_chrom, interval_start, interval_end,
+                                                          interval_type, matching_record.vid, matching_record.sv_type,
+                                                          matching_record.cpx_type, matching_record.carrier_del,
+                                                          matching_record.carrier_wt, matching_record.carrier_dup,
+                                                          matching_record.control_del, matching_record.control_wt,
+                                                          matching_record.control_dup,
+                                                          matching_record.diff_case_control_del_frac,
+                                                          matching_record.diff_case_control_dup_frac, cnv_assessment)
+                    if record.vid not in cleaned_genotype_counts:
+                        cleaned_genotype_counts[record.vid] = [record]
+                    else:
+                        cleaned_genotype_counts[record.vid].append(record)
+    return cleaned_genotype_counts
 
 
 def parse_ends(vcf_path: Text) -> Dict[Text, int]:
@@ -398,20 +405,13 @@ def parse_ends(vcf_path: Text) -> Dict[Text, int]:
     return end_dict
 
 
-def read_vcf(vcf_path, cleaned_genotype_counts):
+def read_vcf(vcf_path, cleaned_genotype_counts_vids):
     end_dict = parse_ends(vcf_path)
-    vids = set([r.vid for r in cleaned_genotype_counts])
     with VariantFile(vcf_path) as f:
-        return {r.id: VcfRecord(r, end_dict) for r in f if r.id in vids}
+        return {r.id: VcfRecord(r, end_dict) for r in f if r.id in cleaned_genotype_counts_vids}
 
 
 def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
-    # Group records by vid, ie dictionary of vid: list of records
-    genotype_counts_dict = dict()
-    for record in cleaned_genotype_counts:
-        if record.vid not in genotype_counts_dict:
-            genotype_counts_dict[record.vid] = list()
-        genotype_counts_dict[record.vid].append(record)
 
     def _subtract_interval(start1, end1, start2, end2):
         # Spanning case results in null (shouldn't ever do this in this context)
@@ -490,6 +490,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                            if has_reciprocal_overlap(r.source_chrom, r.source_start, r.source_end,
                                                      m.chrom, m.start, m.end, 0.95)]
         source_is_dup = any(m.cnv_assessment == "DUP" for m in source_overlaps)
+        # TODO: could overlap against r.sink_*
         sinks = [m for m in records_list
                  if not has_reciprocal_overlap(r.source_chrom, r.source_start, r.source_end,
                                                m.chrom, m.start, m.end, 0.95)]
@@ -606,7 +607,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                     # Revise inv interval (subtracting del interval)
                     inv_start, inv_end = _subtract_interval(inv_start, inv_end, r.sink_start, r.sink_end)
                     if inv_start is None:
-                        raise ValueError(f"Snk interval {r.sink_start}-{r.sink_end} spans inversion interval "
+                        raise ValueError(f"Sink interval {r.sink_start}-{r.sink_end} spans inversion interval "
                                          f"{inv_start}-{inv_end} for record {r.vid}")
                     return VariantAssessment(
                         vid=r.vid,
@@ -731,7 +732,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                         new_end=max(dup_start, dup_end, inv_start, inv_end, r.sink_start, r.sink_end)
                     )
                 else:
-                    # If sink is not clearly deleted (or too small), classify as dupINV (no del)
+                    # If sink is not clearly deleted (or too small), classify as INVdup (no del)
                     return VariantAssessment(
                         vid=r.vid,
                         modification="RECLASSIFY",
@@ -802,19 +803,11 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
             if len(sinks) > 0:
                 # TODO unstable ordering
                 sink_record = sinks[0]
+                # TODO Both sink_is_del and sink_is_not_del could both be true. The logic here needs to be cleaned up.
                 if sink_record.size() >= MIN_SIZE_IDEL:
                     # If insertion site size >= MINSIZEiDEL, check if insertion site is deleted
-                    sink_is_del = any(
-                        m.cnv_assessment == "DEL" and not has_reciprocal_overlap(
-                            r.sink_chrom, r.sink_start, r.sink_end,
-                            m.chrom, m.start, m.end, 0.95)
-                        for m in records_list
-                    )
-                    sink_is_not_del = any(
-                        m.cnv_assessment == "WT" and not has_reciprocal_overlap(
-                            r.sink_chrom, r.sink_start, r.sink_end, m.chrom, m.start, m.end, 0.95)
-                        for m in records_list
-                    )
+                    sink_is_del = any(m.cnv_assessment == "DEL" for m in sinks)
+                    sink_is_not_del = any(m.cnv_assessment == "WT" for m in sinks)
                 else:
                     sink_is_del = False
                     sink_is_not_del = False
@@ -829,7 +822,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
                         new_sv_type="CPX",
                         new_cpx_type="INS_iDEL",
                         new_cpx_intervals=f"DEL_{r.sink_string()}",
-                        new_svlen=None + r.source_size(),
+                        new_svlen=r.sink_size() + r.source_size(),
                         new_source=f"INS_{r.source_string()}",
                         new_start=None,
                         new_end=None
@@ -907,6 +900,7 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         )
         if dup_confirmed:
             # If dup confirms, resolve as palindromic inverted duplication
+            # TODO Investigate why these are never being found
             new_cpx_type = "piDUP_FR" if default_cpx_type == "INVERSION_SINGLE_ENDER_" else "piDUP_RF"
             return VariantAssessment(
                 vid=r.vid,
@@ -952,8 +946,9 @@ def final_assessment(cleaned_genotype_counts, variants_to_reclassify):
         )
 
     # SV and CPX class each is most common one
-    for vid, records in genotype_counts_dict.items():
+    for vid, records in cleaned_genotype_counts.items():
         if vid not in variants_to_reclassify:
+            logging.warning(f"Variant ID {vid} was not found in vcf, ignoring...")
             continue
         vcf_record = variants_to_reclassify[vid]
         sv_type = Counter([r.variant_sv_type for r in records]).most_common(1)[0][0]
@@ -1131,6 +1126,9 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser.add_argument('--reclassification-table', type=str, help='Output reclassification table path', required=False)
     parser.add_argument('--chrx', type=str, help='Chromosome X contig name', default='chrX')
     parser.add_argument('--chry', type=str, help='Chromosome Y contig name', default='chrY')
+    parser.add_argument("-l", "--log-level", required=False, default="INFO",
+                        help="Specify level of logging information, ie. info, warning, error (not case-sensitive). "
+                             "Default: INFO")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -1143,6 +1141,13 @@ def main(argv: Optional[List[Text]] = None):
         argv = sys.argv
     args = _parse_arguments(argv)
 
+    # Set logging level from -l input
+    log_level = args.log_level
+    numeric_level = getattr(logging, log_level.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % log_level)
+    logging.basicConfig(level=numeric_level, format='%(asctime)s - %(levelname)s: %(message)s')
+
     all_samples, male_samples, female_samples = parse_ped(args.ped)
     genotype_dict = parse_genotypes(args.genotypes)
     intervals_list_dict, genotype_counts = genotype_counts_per_variant(intervals_path=args.intervals,
@@ -1154,9 +1159,9 @@ def main(argv: Optional[List[Text]] = None):
                                                                        female_samples=female_samples)
     del genotype_dict
     genotype_counts_tree_dict = make_genotype_tree(genotype_counts)
-    cleaned_genotype_counts = list(clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tree_dict))
+    cleaned_genotype_counts = clean_up_intervals(genotype_counts, intervals_list_dict, genotype_counts_tree_dict)
     del genotype_counts, intervals_list_dict, genotype_counts_tree_dict
-    variants_to_reclassify = read_vcf(args.vcf, cleaned_genotype_counts)
+    variants_to_reclassify = read_vcf(args.vcf, cleaned_genotype_counts_vids=cleaned_genotype_counts.keys())
     assessment = list(final_assessment(cleaned_genotype_counts, variants_to_reclassify))
     del cleaned_genotype_counts, variants_to_reclassify
     if args.reclassification_table:
