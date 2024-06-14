@@ -331,9 +331,141 @@ task vcf2bed {
 }
 
 
+#for the tasks to recluster SVs of specific type and fell within specific genomic regions
+task IntegrateReClusterdVcfs{
+    input{
+        File vcf_all
+        File vcf_all_idx
+        File vcf_recluster
+        File vcf_recluster_idx
+
+        String sv_pipeline_docker
+
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr runtime_default = object {
+        mem_gb: 7.5,
+        disk_gb: ceil(10.0 + size(vcf_all, "GiB")*4),
+        cpu_cores: 1,
+        preemptible_tries: 1,
+        max_retries: 1,
+        boot_disk_gb: 10
+    }
+
+    RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+    
+    runtime {
+        memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+        disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+        cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+        preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+        maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+        docker: sv_pipeline_docker
+        bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+    }
+
+    String prefix = basename(vcf_recluster, ".vcf.gz")
+    String prefix_all = basename(vcf_all, ".vcf.gz")
+    
+    command <<<
+        svtk vcf2bed -i MEMBERS ~{vcf_recluster} ~{prefix}.bed
+        cut -f4,7 ~{prefix}.bed > ~{prefix}.SVID_anno
+        
+        python3 <<CODE
+
+        import os
+        import pysam
+
+        clustered_vs_origin_SVID = {}
+        SVID_list = []
+        fin=open("~{prefix}.SVID_anno")
+        for line in fin:
+            pin=line.strip().split()
+            if not pin[0]=='name' and len(pin[1].split(','))>1:
+                SVID_list.append(pin[0])
+                for i in pin[1].split(','):
+                    if not i in clustered_vs_origin_SVID.keys():
+                        clustered_vs_origin_SVID[i] = pin[0]
+        fin.close()
+
+        fin = pysam.VariantFile("~{vcf_all}")
+        fin2 = pysam.VariantFile("~{vcf_recluster}")
+        fo = pysam.VariantFile("~{prefix_all}.ReClustered_unsort.vcf.gz", 'w', header = fin2.header)
+        fo2 = pysam.VariantFile("~{prefix}.ReClustered_unsort.vcf.gz", 'w', header = fin2.header)
+        for record in fin:
+            if not record.id in clustered_vs_origin_SVID.keys():
+                fo.write(record)
+        fin.close()
+
+        for record in fin2:
+            if record.id in SVID_list:
+                print(record.id)
+                fo2.write(record)
+        fin2.close()
+        fo.close()
+        fo2.close()
+        print("done")
+        CODE
+
+        tabix -p vcf "~{prefix_all}.ReClustered_unsort.vcf.gz"
+        tabix -p vcf "~{prefix}.ReClustered_unsort.vcf.gz"
+    >>>
+
+    output{
+        File SVID_anno = "~{prefix}.SVID_anno"
+        File reclustered_Part1 = "~{prefix_all}.ReClustered_unsort.vcf.gz"
+        File reclustered_Part2 = "~{prefix}.ReClustered_unsort.vcf.gz"
+        File reclustered_Part1_idx = "~{prefix_all}.ReClustered_unsort.vcf.gz.tbi"
+        File reclustered_Part2_idx = "~{prefix}.ReClustered_unsort.vcf.gz.tbi"
+    }
+}
 
 
+task SortReClusterdVcfs{
+  input{
+    File vcf_1
+    File vcf_2
+    File vcf_1_idx
+    File vcf_2_idx
 
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10.0 + size(vcf_1, "GiB")*2 + size(vcf_2, "GiB")*2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 1,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
 
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
 
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  String prefix_all = basename(vcf_1, ".ReClustered_unsort.vcf.gz")
+
+  command <<<
+    echo "~{vcf_1}" >> vcf_list
+    echo "~{vcf_2}" >> vcf_list
+    bcftools concat --allow-overlaps --output-type z --file-list vcf_list --output ~{prefix_all}.ReClustered.vcf.gz
+    tabix -p vcf ~{prefix_all}.ReClustered.vcf.gz
+
+  >>>
+
+  output{
+    File sorted_vcf = "~{prefix_all}.ReClustered.vcf.gz"
+    File sorted_vcf_idx = "~{prefix_all}.ReClustered.vcf.gz.tbi"
+  }
+}
