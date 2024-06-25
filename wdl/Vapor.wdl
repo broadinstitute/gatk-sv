@@ -16,11 +16,14 @@ workflow Vapor {
     File ref_dict
     File contigs
 
+    # If set to true, the plots are produced in final output
+    Boolean produce_plots
+
     String vapor_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    RuntimeAttr? runtime_attr_vapor 
+    RuntimeAttr? runtime_attr_vapor
     RuntimeAttr? runtime_attr_bcf2vcf
     RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_split_vcf
@@ -57,16 +60,16 @@ workflow Vapor {
 
   call tasks10.ConcatVapor {
     input:
-      shard_bed_files=RunVaporWithCram.vapor,
-      shard_plots=RunVaporWithCram.vapor_plot,
-      prefix=prefix,
-      sv_base_mini_docker=sv_base_mini_docker,
-      runtime_attr_override=runtime_attr_concat_beds
+      shard_bed_files = RunVaporWithCram.vapor,
+      shard_plots = RunVaporWithCram.vapor_plot,
+      prefix = prefix,
+      sv_base_mini_docker = sv_base_mini_docker,
+      runtime_attr_override = runtime_attr_concat_beds
   }
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File vapor_plots = ConcatVapor.merged_bed_plot
+    File? vapor_plots = if produce_plots then ConcatVapor.merged_bed_plot else "null"
   }
 }
 
@@ -85,8 +88,8 @@ task RunVaporWithCram {
   }
 
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 15, 
+    cpu_cores: 1,
+    mem_gb: 15,
     disk_gb: 30,
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -107,8 +110,8 @@ task RunVaporWithCram {
     export GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token`
     samtools view -h -T ~{ref_fasta} -o ~{contig}.bam ~{bam_or_cram_file} ~{contig}
     samtools index ~{contig}.bam
-  
-    #run vapor
+
+    # run vapor
     mkdir ~{prefix}.~{contig}
 
     vapor bed \
