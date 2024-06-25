@@ -440,6 +440,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_update_sr_list_fail
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_concat_resolve
+    RuntimeAttr? runtime_override_concat_bothside_pass
+    RuntimeAttr? runtime_override_concat_background_fail
 
     RuntimeAttr? runtime_override_get_se_cutoff
     RuntimeAttr? runtime_override_shard_vcf_cpx
@@ -1192,6 +1194,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat_resolve=runtime_override_concat_resolve,
+      runtime_override_concat_bothside_pass=runtime_override_concat_bothside_pass,
+      runtime_override_concat_background_fail=runtime_override_concat_background_fail,
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
       runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
       runtime_override_shard_vids_resolve=runtime_override_shard_vids_resolve,
