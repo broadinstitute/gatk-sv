@@ -17,7 +17,8 @@ workflow Vapor {
     File contigs
 
     # If set to true, the plots are produced in final output
-    Boolean produce_plots
+    Boolean save_plots
+    File? NONE_FILE
 
     String vapor_docker
     String sv_base_mini_docker
@@ -69,7 +70,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File? vapor_plots = if produce_plots then ConcatVapor.merged_bed_plot else "null"
+    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
   }
 }
 
