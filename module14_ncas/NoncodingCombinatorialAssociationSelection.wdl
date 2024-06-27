@@ -9,59 +9,77 @@ workflow NoncodingCombinatorialAssociationSelection {
         File SV_sites_file
         File SV_function_file
         File SVID_genomic_context
+        File src_tar
+        File ref_tar
+        File gene_tar
+        File gencode_tar
+        File conserve_tar
+        File noncoding_tar
         String prefix
         File contig_file
-        String ncas_docker
         String sv_base_mini_docker
 
     }
 
     call CalculateAPS{
         input:
+            ref_tar = ref_tar,
+            src_tar = src_tar,
             SV_sites_file = SV_sites_file,
             SV_function_file = SV_function_file,
             SVID_genomic_context = SVID_genomic_context,
             prefix = prefix,
-            ncas_docker = ncas_docker
+            sv_base_mini_docker = sv_base_mini_docker
     }
 
     scatter(i in range(permutation_rounds)){
         call GeneratePermutatedSVs{
             input:
                 permu = i, 
+                ref_tar = ref_tar,
+                src_tar = src_tar,
                 SV_sites_file = SV_sites_file,
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
         }
 
         call SVvsConservative.SV_vs_Conservative as SV_vs_Conservative{
             input:
+                src_tar = src_tar,
                 SV_file = GeneratePermutatedSVs.permutated_SV,
+                conserve_tar = conserve_tar,
                 contig_file = contig_file,
-                ncas_docker = ncas_docker,
+                sv_base_mini_docker = sv_base_mini_docker,
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
         call SVvsGencode{
             input: 
+                src_tar = src_tar,
+                gencode_tar = gencode_tar,
                 SV_file = GeneratePermutatedSVs.permutated_SV,
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
         }
 
         call SVvsNoncoding{
             input:
+                src_tar = src_tar,
+                noncoding_tar = noncoding_tar,
                 SV_file = GeneratePermutatedSVs.permutated_SV,
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
         }
 
         call SVvsGene{
             input:
+                src_tar = src_tar,
+                gene_tar = gene_tar,
                 SV_file = GeneratePermutatedSVs.permutated_SV,
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
 
         }
 
         call GenerateNcasMetrics{
             input:
+                src_tar = src_tar,
                 aps = CalculateAPS.svid_aps,
                 sv_file_real = SV_sites_file,
                 sv_file_permu = GeneratePermutatedSVs.permutated_SV,
@@ -70,7 +88,7 @@ workflow NoncodingCombinatorialAssociationSelection {
                 sv_vs_noncoding = SVvsNoncoding.SV_vs_noncoding,
                 sv_vs_gene = SVvsGene.SV_vs_trans,
                 sv_vs_coding = SVvsGene.SV_vs_cds,
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
         }
     }
     output{
@@ -80,11 +98,13 @@ workflow NoncodingCombinatorialAssociationSelection {
 
 task CalculateAPS{
     input{
+        File src_tar
+        File ref_tar
         File SV_sites_file
         File SV_function_file
         File SVID_genomic_context
         String prefix
-        String ncas_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -110,7 +130,12 @@ task CalculateAPS{
     command <<<
         set -Eeuo pipefail
 
-        Rscript ncas_docker/src/calculate_APS.R \
+        gsutil cp ~{ref_tar} ./
+        tar zxvf ref_tar.tar.gz 
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+        Rscript ./src/calculate_APS.R \
         --SV_color ref/SV_colors.tsv \
         --genomic_context ~{SVID_genomic_context} \
         --SV_function_prediction ~{SV_function_file} \
@@ -126,7 +151,7 @@ task CalculateAPS{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -136,8 +161,10 @@ task CalculateAPS{
 task GeneratePermutatedSVs{
     input{
         Int permu
+        File src_tar
+        File ref_tar
         File SV_sites_file
-        String ncas_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -161,11 +188,16 @@ task GeneratePermutatedSVs{
     command <<<
         set -Eeuo pipefail
 
+        gsutil cp ~{ref_tar} ./
+        tar zxvf ref_tar.tar.gz 
 
-        Rscript src/generate_SV_permutations.R -p ~{permu} -i ~{SV_sites_file} -o ~{filebase}.permu_~{permu}
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+        Rscript ./src/generate_SV_permutations.R -p ~{permu} -i ~{SV_sites_file} -o ~{filebase}.permu_~{permu} -g ref/hg38.genome.tsv
         bgzip ~{filebase}.permu_~{permu}
 
-        Rscript src/correct_permutated_SVs.R -i ~{filebase}.permu_~{permu}.gz
+        Rscript ./src/correct_permutated_SVs.R -i ~{filebase}.permu_~{permu}.gz
         bgzip ~{filebase}.permu_~{permu}.corrected
 
     >>>
@@ -175,7 +207,7 @@ task GeneratePermutatedSVs{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -184,6 +216,7 @@ task GeneratePermutatedSVs{
 task GenerateNcasMetrics{
     input{
         File aps
+        File src_tar
         File sv_file_real
         File sv_file_permu
         File sv_vs_gencode
@@ -192,7 +225,7 @@ task GenerateNcasMetrics{
         File sv_vs_gene
         File sv_vs_coding
 
-        String ncas_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -216,7 +249,10 @@ task GenerateNcasMetrics{
     command <<<
         set -Eeuo pipefail
 
-             Rscript src/generate_cwas_metrics.sh \
+            gsutil cp ~{src_tar}
+            tar zxvf src.tar.gz
+
+             Rscript ./src/generate_cwas_metrics.sh \
              --sv_file_real ~{sv_file_real} \
              --sv_file_permu ~{sv_file_permu} \
              --sv_vs_gencode ~{sv_vs_gencode} \
@@ -233,7 +269,7 @@ task GenerateNcasMetrics{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -241,8 +277,10 @@ task GenerateNcasMetrics{
 
 task SVvsGene{
     input{
+        File src_tar
         File SV_file
-        String ncas_docker
+        File gene_tar
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -266,6 +304,13 @@ task SVvsGene{
 
     command <<<
         set -Eeuo pipefail
+
+        gsutil cp ~{gene_tar} ./
+        tar zxvf gene.tar.gz
+
+        gsutil cp ~{src_tar}
+        tar zxvf src.tar.gz
+
         bedtools coverage -wo -a ~{SV_file} -b gene/r3.gencode.v39.ensembl.105.CDS.sorted.bed.gz | awk '{if ($NF>0) print}' > ~{filebase}.coding_interruptive.bed
         bedtools coverage -wo -a ~{SV_file} -b gene/r3.gencode.v39.ensembl.105.transcript.sorted.bed.gz | awk '{if ($NF>0) print}' > ~{filebase}.genic.bed
         bgzip ~{filebase}.coding_interruptive.bed
@@ -278,7 +323,7 @@ task SVvsGene{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -287,7 +332,9 @@ task SVvsGene{
 task SVvsGencode{
     input{
         File SV_file
-        String ncas_docker
+        File src_tar
+        File gencode_tar
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -311,11 +358,17 @@ task SVvsGencode{
     command <<<
         set -Eeuo pipefail
 
+        gsutil cp ~{gencode_tar} ./
+        tar zxvf gencode.tar.gz
+
+        gsutil cp ~{src_tar}
+        tar zxvf src.tar.gz
+
         zcat ~{SV_file} | cut -f1-4 > input_SVs.bed
         zcat gencode/gencode.v39.integrated.bed.gz | cut -f1-4,8 > gencode.bed
         bedtools intersect -wo -a input_SVs.bed -b gencode.bed > ~{filebase}.vs.gencode.bed
         cat gencode/header ~{filebase}.vs.gencode.bed | bgzip >  ~{filebase}.vs.gencode.bed.gz
-        Rscript src/integrate_SV_vs_gencode.R -i ~{filebase}.vs.gencode.bed.gz  -o ~{filebase}.vs.gencode.integrated
+        Rscript ./src/integrate_SV_vs_gencode.R -i ~{filebase}.vs.gencode.bed.gz  -o ~{filebase}.vs.gencode.integrated
         bgzip ~{filebase}.vs.gencode.integrated
     >>>
 
@@ -324,7 +377,7 @@ task SVvsGencode{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -333,7 +386,9 @@ task SVvsGencode{
 task SVvsNoncoding{
     input{
         File SV_file
-        String ncas_docker
+        File src_tar
+        File noncoding_tar
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -356,6 +411,13 @@ task SVvsNoncoding{
 
     command <<<
         set -Eeuo pipefail
+
+            gsutil cp ~{noncoding_tar} ./
+            tar zxvf noncoding.tar.gz
+
+            gsutil cp ~{src_tar}
+            tar zxvf src.tar.gz
+
             bedtools intersect -wo -f .5 -a <(zcat ~{SV_file} ) -b noncoding/vista_cores.neg.vs_zscore.uniq  | sed -e  's/$/\tvista_cores.neg/' | bgzip > ~{filebase}.vs.vista_cores.neg.over_50perc_ovr.bed.gz
             bedtools intersect -wo -f .5 -a <(zcat ~{SV_file} ) -b noncoding/vista_cores.pos.vs_zscore.uniq| sed -e  's/$/\tvista_cores.pos/' | bgzip > ~{filebase}.vs.vista_cores.pos.over_50perc_ovr.bed.gz
             bedtools intersect -wo -f .5 -a <(zcat ~{SV_file} ) -b noncoding/DCR2.general.vs_zscore.uniq| sed -e  's/$/\tDCR2.general/' | bgzip > ~{filebase}.vs.DCR2.general.over_50perc_ovr.bed.gz
@@ -531,7 +593,7 @@ task SVvsNoncoding{
             zcat ~{filebase}.vs.vista_cores.pos.over_50perc_ovr.bed.gz | cut -f4 | sort | uniq -c > ~{filebase}.vs.vista_cores.pos.over_50perc_ovr.stat
 
             ls *.over_50perc_ovr.stat > SV_vs_nc_stat_list.tsv
-            Rscript ../ncas_docker/src/integrate_stats_across_nc_elements.R -i SV_vs_nc_stat_list.tsv -o ~{filebase}.vs.nc_elements.integrated
+            Rscript ./src/integrate_stats_across_nc_elements.R -i SV_vs_nc_stat_list.tsv -o ~{filebase}.vs.nc_elements.integrated
             bgzip ~{filebase}.vs.nc_elements.integrated
 
     >>>
@@ -541,7 +603,7 @@ task SVvsNoncoding{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }

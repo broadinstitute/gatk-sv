@@ -6,16 +6,17 @@ workflow SV_vs_Conservative {
 
     input{
         File SV_file
+        File src_tar
+        File conserve_tar
         File contig_file
-        String ncas_docker
         String sv_base_mini_docker
-
     }
 
     call SVvsConservative{
         input:
             SV_file = SV_file,
-            ncas_docker = ncas_docker
+            conserve_tar = conserve_tar,
+            sv_base_mini_docker = sv_base_mini_docker
     }
 
 
@@ -24,8 +25,9 @@ workflow SV_vs_Conservative {
         call SVvsConservativebyContig{
             input:
                 SV_file = SV_file,
+                conserve_tar = conserve_tar,
                 contig = contig[0],
-                ncas_docker = ncas_docker
+                sv_base_mini_docker = sv_base_mini_docker
         }
     }
 
@@ -48,6 +50,7 @@ workflow SV_vs_Conservative {
     call IntegrateConserveAnno{
         input:
             SV_file = SV_file,
+            src_tar = src_tar,
             SV_vs_DHS_mamm = SVvsConservative.SV_vs_DHS_mamm,
             SV_vs_DHS_prim = SVvsConservative.SV_vs_DHS_prim,
             SV_vs_footprint_mamm = SVvsConservative.SV_vs_footprint_mamm,
@@ -57,7 +60,7 @@ workflow SV_vs_Conservative {
             SV_vs_Z_over_4 = SVvsConservative.SV_vs_Z_over_4,
             SV_vs_phyloP100way = concat_SV_vs_phyloP100way.Concat_file,
             SV_vs_phastCons100way = concat_SV_vs_phastCons100way.Concat_file,
-            ncas_docker = ncas_docker
+            sv_base_mini_docker = sv_base_mini_docker
     }
 
     output{
@@ -69,7 +72,8 @@ workflow SV_vs_Conservative {
 task SVvsConservative{
     input{
         File SV_file
-        String ncas_docker
+        File conserve_tar
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -100,14 +104,17 @@ task SVvsConservative{
     command <<<
         set -Eeuo pipefail
 
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/239prim.DHS.constrained.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.mamm.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/239prim.DHS.constrained.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.prim.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/239prim.footprint.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.mamm.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/239prim.footprint.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.prim.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/239prim.uce.bed.gz | bgzip >  ~{filebase}.vs.239prim.uce.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/constraint_z_genome_1kb.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.tsv.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/constraint_z_genome_1kb.z_over_2.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_2.tsv.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve_element/constraint_z_genome_1kb.z_over_4.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_4.tsv.gz
+            gsutil cp ~{conserve_tar} ./
+            tar zxvf conserve.tar.gz 
+
+            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.DHS.constrained.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.mamm.bed.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.DHS.constrained.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.prim.bed.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.footprint.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.mamm.bed.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.footprint.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.prim.bed.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.uce.bed.gz | bgzip >  ~{filebase}.vs.239prim.uce.bed.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.tsv.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.z_over_2.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_2.tsv.gz
+            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.z_over_4.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_4.tsv.gz
     >>>
 
     runtime {
@@ -115,7 +122,7 @@ task SVvsConservative{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
@@ -124,8 +131,9 @@ task SVvsConservative{
 task SVvsConservativebyContig{
     input{
         File SV_file
+        File conserve_tar
         String contig
-        String ncas_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -150,12 +158,15 @@ task SVvsConservativebyContig{
     command <<<
         set -Eeuo pipefail
 
-            zcat ~{SV_file} | awk '{if ($1=="~{contig}") print}' > input_SVs.bed
-            zcat conserve_element/hg38.phyloP100way.removeless2.autosomes.sorted.bed.gz | awk '{if ($1=="~{contig}") print}' > phyloP100way.bed
-            zcat conserve_element/hg38.phastCons100way.removeless0.2.autosomes.sorted.bed.gz | awk '{if ($1=="~{contig}") print}' > phastCons100way.bed
+            gsutil cp ~{conserve_tar} ./
+            tar zxvf conserve.tar.gz 
 
-            bedtools bedtools coverage -wo -a input_SVs.bed -b phyloP100way.bed | bgzip > ~{filebase}.~{contig}.vs.hg38.phyloP100way.bed.gz
-            bedtools bedtools coverage -wo -a input_SVs.bed -b phastCons100way.bed | bgzip > ~{filebase}.~{contig}.vs.hg38.phastCons100way.bed.gz
+            zcat ~{SV_file} | awk '{if ($1=="~{contig}") print}' > input_SVs.bed
+            zcat conserve/hg38.phyloP100way.removeless2.autosomes.sorted.bed.gz | awk '{if ($1=="~{contig}") print}' > phyloP100way.bed
+            zcat conserve/hg38.phastCons100way.removeless0.2.autosomes.sorted.bed.gz | awk '{if ($1=="~{contig}") print}' > phastCons100way.bed
+
+            bedtools coverage -wo -a input_SVs.bed -b phyloP100way.bed | bgzip > ~{filebase}.~{contig}.vs.hg38.phyloP100way.bed.gz
+            bedtools coverage -wo -a input_SVs.bed -b phastCons100way.bed | bgzip > ~{filebase}.~{contig}.vs.hg38.phastCons100way.bed.gz
     >>>
 
     runtime {
@@ -163,7 +174,7 @@ task SVvsConservativebyContig{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }    
@@ -226,6 +237,7 @@ task ConcatComparisons {
 
 task IntegrateConserveAnno {
     input {
+        File src_tar
         File SV_file
         File SV_vs_DHS_mamm
         File SV_vs_DHS_prim
@@ -236,7 +248,7 @@ task IntegrateConserveAnno {
         File SV_vs_Z_over_4
         File SV_vs_phyloP100way
         File SV_vs_phastCons100way
-        String ncas_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     } 
     
@@ -260,7 +272,7 @@ task IntegrateConserveAnno {
         cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
         preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
         maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-        docker: ncas_docker
+        docker: sv_base_mini_docker
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
@@ -269,7 +281,9 @@ task IntegrateConserveAnno {
 
     set -o pipefail
 
-    Rscript src/reorganize_sv_vs_conservative.R \
+    gsutil cp ~{src_tar} ./
+    tar zxvf src.tar.gz
+    Rscript ./src/reorganize_sv_vs_conservative.R \
             --sv_vs_DHS_mamm ~{SV_vs_DHS_mamm} \
             --sv_vs_DHS_prim ~{SV_vs_DHS_prim} \
             --sv_vs_footprint_mamm ~{SV_vs_footprint_mamm} \
