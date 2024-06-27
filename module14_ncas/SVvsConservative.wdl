@@ -60,9 +60,9 @@ workflow SVvsConservative {
     }
 
     output{
-    	File SV_vs_conserved = IntegrateConserveAnno.SV_vs_conserved_elements
+        File SV_vs_conserved = IntegrateConserveAnno.SV_vs_conserved_elements
     }
-
+}
 
 
 task SVvsConservative{
@@ -176,7 +176,7 @@ task ConcatComparisons {
         Boolean? index_output
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
-  } 
+    } 
     
     Boolean call_tabix = select_first([index_output, true])
     String filebase = basename(SV_file,".gz")
@@ -203,20 +203,20 @@ task ConcatComparisons {
         bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
     }
 
-  command <<<
-    set -eux
+    command <<<
+        set -eux
 
-    set -o pipefail
+        set -o pipefail
 
-    while read SPLIT; do
-      zcat $SPLIT
-    done < ~{write_lines(shard_bed_files)} \
-      | (grep -Ev "^#" || printf "") \
-      | sort -Vk1,1 -k2,2n -k3,3n \
-      | bgzip -c \
-      > ~{filebase}.~{appendix}.gz
+        while read SPLIT; do
+          zcat $SPLIT
+        done < ~{write_lines(shard_bed_files)} \
+          | (grep -Ev "^#" || printf "") \
+          | sort -Vk1,1 -k2,2n -k3,3n \
+          | bgzip -c \
+          > ~{filebase}.~{appendix}.gz
 
-  >>>
+    >>>
 
   output {
     File Concat_file = "~{filebase}.~{appendix}.gz"
@@ -237,7 +237,7 @@ task IntegrateConserveAnno {
         File SV_vs_phastCons100way
         String ncas_docker
         RuntimeAttr? runtime_attr_override
-  } 
+    } 
     
     String filebase = basename(SV_file,".gz")
     
