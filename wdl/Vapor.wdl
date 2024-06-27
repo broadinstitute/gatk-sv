@@ -70,7 +70,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
+    File vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
   }
 }
 
