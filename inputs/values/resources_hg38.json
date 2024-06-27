@@ -50,20 +50,17 @@
 
   "aou_recalibrate_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model",
   "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
-  "recalibrate_gq_genome_tracks": [
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz"
-  ],
-  "recalibrate_gq_genome_track_indexes": [
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz.tbi",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz.tbi",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz.tbi",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz.tbi",
-    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi"
-  ],
+
+  "recalibrate_gq_genome_track_repeatmasker": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
+  "recalibrate_gq_genome_track_repeatmasker_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz.tbi",
+  "recalibrate_gq_genome_track_segdup": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
+  "recalibrate_gq_genome_track_segdup_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz.tbi",
+  "recalibrate_gq_genome_track_simple_repeats": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
+  "recalibrate_gq_genome_track_simple_repeats_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz.tbi",
+  "recalibrate_gq_genome_track_umap100": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
+  "recalibrate_gq_genome_track_umap100_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz.tbi",
+  "recalibrate_gq_genome_track_umap24": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz",
+  "recalibrate_gq_genome_track_umap24_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi",
 
   "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
   "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/gnomAD_v2_Collins_perSample.tar.gz"],
