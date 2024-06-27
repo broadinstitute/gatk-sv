@@ -6,19 +6,30 @@ import "SVvsConservative.wdl" as SVvsConservative
 workflow NoncodingCombinatorialAssociationSelection {
     input{
         Int permutation_rounds
-        File aps
-        File SV_sites_vcf
+        File SV_sites_file
+        File SV_function_file
+        File SVID_genomic_context
+        String prefix
         File contig_file
         String ncas_docker
         String sv_base_mini_docker
 
     }
 
+    call CalculateAPS{
+        input:
+            SV_sites_file = SV_sites_file,
+            SV_function_file = SV_function_file,
+            SVID_genomic_context = SVID_genomic_context,
+            prefix = prefix,
+            ncas_docker = ncas_docker
+    }
+
     scatter(i in range(permutation_rounds)){
         call GeneratePermutatedSVs{
             input:
                 permu = i, 
-                SV_sites_vcf = SV_sites_vcf,
+                SV_sites_file = SV_sites_file,
                 ncas_docker = ncas_docker
         }
 
@@ -51,8 +62,8 @@ workflow NoncodingCombinatorialAssociationSelection {
 
         call GenerateNcasMetrics{
             input:
-                aps = aps,
-                sv_file_real = SV_sites_vcf,
+                aps = CalculateAPS.svid_aps,
+                sv_file_real = SV_sites_file,
                 sv_file_permu = GeneratePermutatedSVs.permutated_SV,
                 sv_vs_gencode = SVvsGencode.SV_vs_gencode,
                 sv_vs_conserve = SV_vs_Conservative.SV_vs_conserved,
@@ -67,10 +78,65 @@ workflow NoncodingCombinatorialAssociationSelection {
     }
 }
 
+task CalculateAPS{
+    input{
+        File SV_sites_file
+        File SV_function_file
+        File SVID_genomic_context
+        String prefix
+        String ncas_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 15, 
+        disk_gb: 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File svid_aps = "~{prefix}.SVID_aps"
+        File aps_deviation = "~{prefix}.aps_deviation.tsv"
+        File aps_figures = "~{prefix}.aps.tar.gz"
+    }
+
+    String filebase = basename(SV_sites_file,".gz")
+
+    command <<<
+        set -Eeuo pipefail
+
+        Rscript ncas_docker/src/calculate_APS.R \
+        --SV_color ref/SV_colors.tsv \
+        --genomic_context ~{SVID_genomic_context} \
+        --SV_function_prediction ~{SV_function_file} \
+        --SV_info ~{SV_sites_file} \
+        --prefix ~{prefix} \
+        -f "~{prefix}.aps"
+
+        tar czvf ~{prefix}.aps.tar.gz ~{prefix}.aps/
+    >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: ncas_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+    
+}
+
 task GeneratePermutatedSVs{
     input{
         Int permu
-        File SV_sites_vcf
+        File SV_sites_file
         String ncas_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -90,13 +156,13 @@ task GeneratePermutatedSVs{
         File permutated_SV = "~{filebase}.permu_~{permu}.corrected.gz"
     }
 
-    String filebase = basename(SV_sites_vcf,".gz")
+    String filebase = basename(SV_sites_file,".gz")
 
     command <<<
         set -Eeuo pipefail
 
 
-        Rscript src/generate_SV_permutations.R -p ~{permu} -i ~{SV_sites_vcf} -o ~{filebase}.permu_~{permu}
+        Rscript src/generate_SV_permutations.R -p ~{permu} -i ~{SV_sites_file} -o ~{filebase}.permu_~{permu}
         bgzip ~{filebase}.permu_~{permu}
 
         Rscript src/correct_permutated_SVs.R -i ~{filebase}.permu_~{permu}.gz
