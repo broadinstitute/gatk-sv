@@ -2,7 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 
-workflow SVvsConservative {
+workflow SV_vs_Conservative {
 
     input{
         File SV_file

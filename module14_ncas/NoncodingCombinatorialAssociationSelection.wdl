@@ -22,7 +22,7 @@ workflow NoncodingCombinatorialAssociationSelection {
                 ncas_docker = ncas_docker
         }
 
-        call SVvsConservative.SVvsConservative{
+        call SVvsConservative.SV_vs_Conservative as SV_vs_Conservative{
             input:
                 SV_file = GeneratePermutatedSVs.permutated_SV,
                 contig_file = contig_file,
@@ -55,7 +55,7 @@ workflow NoncodingCombinatorialAssociationSelection {
                 sv_file_real = SV_sites_vcf,
                 sv_file_permu = GeneratePermutatedSVs.permutated_SV,
                 sv_vs_gencode = SVvsGencode.SV_vs_gencode,
-                sv_vs_conserve = SVvsConservative.SV_vs_conserved,
+                sv_vs_conserve = SV_vs_Conservative.SV_vs_conserved,
                 sv_vs_noncoding = SVvsNoncoding.SV_vs_noncoding,
                 sv_vs_gene = SVvsGene.SV_vs_trans,
                 sv_vs_coding = SVvsGene.SV_vs_cds,
