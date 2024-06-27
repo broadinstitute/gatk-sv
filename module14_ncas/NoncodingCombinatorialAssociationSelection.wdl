@@ -131,7 +131,7 @@ task CalculateAPS{
         set -Eeuo pipefail
 
         gsutil cp ~{ref_tar} ./
-        tar zxvf ref_tar.tar.gz 
+        tar zxvf ref.tar.gz 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
@@ -189,7 +189,7 @@ task GeneratePermutatedSVs{
         set -Eeuo pipefail
 
         gsutil cp ~{ref_tar} ./
-        tar zxvf ref_tar.tar.gz 
+        tar zxvf ref.tar.gz 
 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
