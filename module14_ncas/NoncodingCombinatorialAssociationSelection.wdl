@@ -14,7 +14,7 @@ workflow NoncodingCombinatorialAssociationSelection {
 
     }
 
-    scatter(i in range(length(permutation_rounds))){
+    scatter(i in range(permutation_rounds)){
         call GeneratePermutatedSVs{
             input:
                 permu = i, 
