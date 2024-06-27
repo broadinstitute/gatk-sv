@@ -9,6 +9,9 @@ workflow NoncodingCombinatorialAssociationSelection {
         File aps
         File SV_sites_vcf
         File contig_file
+        String ncas_docker
+        String sv_base_mini_docker
+
     }
 
     scatter(i in range(length(permutation_rounds))){
@@ -23,7 +26,8 @@ workflow NoncodingCombinatorialAssociationSelection {
             input:
                 SV_file = GeneratePermutatedSVs.permutated_SV,
                 contig_file = contig_file,
-                ncas_docker = ncas_docker                
+                ncas_docker = ncas_docker,
+                sv_base_mini_docker = sv_base_mini_docker
         }
 
         call SVvsGencode{

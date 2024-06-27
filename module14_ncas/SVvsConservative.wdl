@@ -8,6 +8,7 @@ workflow SVvsConservative {
         File SV_file
         File contig_file
         String ncas_docker
+        String sv_base_mini_docker
 
     }
 
