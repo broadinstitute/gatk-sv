@@ -210,7 +210,7 @@ task ConcatComparisons {
 
         while read SPLIT; do
           zcat $SPLIT
-        done < ~{write_lines(shard_bed_files)} \
+        done < ~{write_lines(SV_comparison_list)} \
           | (grep -Ev "^#" || printf "") \
           | sort -Vk1,1 -k2,2n -k3,3n \
           | bgzip -c \
