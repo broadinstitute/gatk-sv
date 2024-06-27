@@ -188,8 +188,8 @@ task SVvsGene{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-    	File SV_vs_cds = ~{filebase}.coding_interruptive.bed
-    	File SV_vs_trans = ~{filebase}.genic.bed
+    	File SV_vs_cds = "~{filebase}.coding_interruptive.bed"
+    	File SV_vs_trans = "~{filebase}.genic.bed"
     }
 
     String filebase = basename(SV_file,".gz")
@@ -233,7 +233,7 @@ task SVvsGencode{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-    	File SV_vs_gencode = ~{filebase}.vs.gencode.integrated.gz
+    	File SV_vs_gencode = "~{filebase}.vs.gencode.integrated.gz"
     }
 
     String filebase = basename(SV_file,".gz")
@@ -279,7 +279,7 @@ task SVvsNoncoding{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-    	File SV_vs_noncoding = ~{filebase}.vs.nc_elements.integrated
+    	File SV_vs_noncoding = "~{filebase}.vs.nc_elements.integrated"
     }
 
     String filebase = basename(SV_file,".gz")
