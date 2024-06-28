@@ -249,7 +249,7 @@ task GenerateNcasMetrics{
     command <<<
         set -Eeuo pipefail
 
-            gsutil cp ~{src_tar}
+            gsutil cp ~{src_tar} ./
             tar zxvf src.tar.gz
 
              Rscript ./src/generate_cwas_metrics.sh \
@@ -308,7 +308,7 @@ task SVvsGene{
         gsutil cp ~{gene_tar} ./
         tar zxvf gene.tar.gz
 
-        gsutil cp ~{src_tar}
+        gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz
 
         bedtools coverage -wo -a ~{SV_file} -b gene/r3.gencode.v39.ensembl.105.CDS.sorted.bed.gz | awk '{if ($NF>0) print}' > ~{filebase}.coding_interruptive.bed
@@ -361,7 +361,7 @@ task SVvsGencode{
         gsutil cp ~{gencode_tar} ./
         tar zxvf gencode.tar.gz
 
-        gsutil cp ~{src_tar}
+        gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz
 
         zcat ~{SV_file} | cut -f1-4 > input_SVs.bed
@@ -415,7 +415,7 @@ task SVvsNoncoding{
             gsutil cp ~{noncoding_tar} ./
             tar zxvf noncoding.tar.gz
 
-            gsutil cp ~{src_tar}
+            gsutil cp ~{src_tar} ./
             tar zxvf src.tar.gz
 
             bedtools intersect -wo -f .5 -a ~{SV_file}  -b noncoding/atac-seq_OCRs_2020.hg38.autosomes.reformat.vs_zscore.uniq  | sed -e  's/$/\tatac-seq_OCRs_2020.hg38.autosomes.reformat/' | bgzip >  ~{filebase}.vs.atac-seq_OCRs_2020.hg38.autosomes.reformat.over_50perc_ovr.bed.gz
