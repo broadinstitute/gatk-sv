@@ -48,7 +48,7 @@ workflow Vapor {
         contig = contig,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
-        bed = PreprocessBedForVapor.contig_bed,
+        bed = select_first([PreprocessBedForVapor.contig_bed, []]),
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -59,7 +59,7 @@ workflow Vapor {
 
   call tasks10.ConcatVapor {
     input:
-      shard_bed_files = RunVaporWithCram.vapor,
+      shard_bed_files = select_all(RunVaporWithCram.vapor),
       shard_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else [],
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
@@ -134,4 +134,3 @@ task RunVaporWithCram {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
-
