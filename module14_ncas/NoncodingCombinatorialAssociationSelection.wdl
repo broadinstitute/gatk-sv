@@ -821,7 +821,7 @@ task SVvsNoncoding{
 
 
             ls *.over_50perc_ovr.stat > SV_vs_nc_stat_list.tsv
-            Rscript ./src/integrate_stats_across_nc_elements.R -i SV_vs_nc_stat_list.tsv -o ~{filebase}.vs.nc_elements.integrated
+            Rscript ./src/integrate_stats_across_nc_elements.R -i SV_vs_nc_stat_list.tsv -o ~{filebase}.vs.nc_elements.integrated -p ~{filebase}
             bgzip ~{filebase}.vs.nc_elements.integrated
 
     >>>
