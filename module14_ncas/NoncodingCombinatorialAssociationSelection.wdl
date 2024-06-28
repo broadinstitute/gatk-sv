@@ -403,7 +403,7 @@ task SVvsNoncoding{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File SV_vs_noncoding = "~{filebase}.vs.nc_elements.integrated"
+        File SV_vs_noncoding = "~{filebase}.vs.nc_elements.integrated.gz"
     }
 
     String filebase = basename(SV_file,".gz")
