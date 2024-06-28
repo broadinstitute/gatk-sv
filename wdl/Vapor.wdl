@@ -62,7 +62,7 @@ workflow Vapor {
   call tasks10.ConcatVapor {
     input:
       shard_bed_files = RunVaporWithCram.vapor,
-      shard_plots = RunVaporWithCram.vapor_plot,
+      shard_plots = if save_plots then RunVaporWithCram.vapor_plot else [],
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_beds
@@ -70,7 +70,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
+    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
   }
 }
 
