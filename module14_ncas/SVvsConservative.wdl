@@ -322,7 +322,7 @@ task IntegrateConserveAnno {
     gsutil cp ~{src_tar} ./
     tar zxvf src.tar.gz
 
-    Rscript reorganize_sv_vs_conservative.R \
+    Rscript src/reorganize_sv_vs_conservative.R \
             --sv_vs_DHS_mamm ~{SV_vs_DHS_mamm} \
             --sv_vs_DHS_prim ~{SV_vs_DHS_prim} \
             --sv_vs_footprint_mamm ~{SV_vs_footprint_mamm} \
