@@ -1,5 +1,3 @@
-version 1.0
-
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as tasks10
 
@@ -16,10 +14,6 @@ workflow Vapor {
     File ref_dict
     File contigs
 
-    # If set to true, the plots are produced in final output
-    Boolean save_plots
-    File? NONE_FILE
-
     String vapor_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -30,9 +24,11 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_concat_beds
     RuntimeAttr? runtime_attr_LocalizeCram
+
+    Boolean save_plots
   }
 
-  scatter ( contig in read_lines(contigs) ) {
+  scatter (contig in read_lines(contigs)) {
 
     call tasks10.PreprocessBedForVapor {
       input:
@@ -62,7 +58,7 @@ workflow Vapor {
   call tasks10.ConcatVapor {
     input:
       shard_bed_files = RunVaporWithCram.vapor,
-      shard_plots = if save_plots then RunVaporWithCram.vapor_plot else [],
+      shard_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else [],
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_beds
@@ -70,7 +66,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
+    Array[File]? vapor_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else []
   }
 }
 
