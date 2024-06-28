@@ -1,3 +1,5 @@
+version 1.0
+
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as tasks10
 
@@ -132,3 +134,4 @@ task RunVaporWithCram {
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
+
