@@ -28,7 +28,7 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_LocalizeCram
 
     Boolean save_plots
-    File NONE_FILE
+    File NONE_FILE=""
   }
 
   scatter (contig in read_lines(contigs)) {
