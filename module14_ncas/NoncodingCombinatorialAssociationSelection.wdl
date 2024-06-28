@@ -154,8 +154,7 @@ task CalculateAPS{
         docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-    
+    }    
 }
 
 task GeneratePermutatedSVs{
@@ -296,8 +295,8 @@ task SVvsGene{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File SV_vs_cds = "~{filebase}.coding_interruptive.bed"
-        File SV_vs_trans = "~{filebase}.genic.bed"
+        File SV_vs_cds = "~{filebase}.coding_interruptive.bed.gz"
+        File SV_vs_trans = "~{filebase}.genic.bed.gz"
     }
 
     String filebase = basename(SV_file,".gz")
