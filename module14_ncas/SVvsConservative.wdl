@@ -51,13 +51,23 @@ workflow SV_vs_Conservative {
         input:
             SV_file = SV_file,
             src_tar = src_tar,
-            SV_vs_DHS_mamm = SVvsConservative.SV_vs_DHS_mamm,
-            SV_vs_DHS_prim = SVvsConservative.SV_vs_DHS_prim,
-            SV_vs_footprint_mamm = SVvsConservative.SV_vs_footprint_mamm,
-            SV_vs_footprint_prim = SVvsConservative.SV_vs_footprint_prim,
-            SV_vs_UCE = SVvsConservative.SV_vs_UCE,
-            SV_vs_Z_over_2 = SVvsConservative.SV_vs_Z_over_2,
-            SV_vs_Z_over_4 = SVvsConservative.SV_vs_Z_over_4,
+            SV_vs_DHS_mamm                   = SVvsConservative.SV_vs_DHS_mamm,
+            SV_vs_DHS_prim                   = SVvsConservative.SV_vs_DHS_prim,
+            SV_vs_footprint_mamm             = SVvsConservative.SV_vs_footprint_mamm,
+            SV_vs_footprint_prim             = SVvsConservative.SV_vs_footprint_prim,
+            SV_vs_UCE                        = SVvsConservative.SV_vs_UCE,
+            SV_vs_Z_over_2                   = SVvsConservative.SV_vs_Z_over_2,
+            SV_vs_Z_over_4                   = SVvsConservative.SV_vs_Z_over_4,
+            SV_vs_HAR                        = SVvsConservative.SV_vs_HAR,
+            SV_vs_uce_481                    = SVvsConservative.SV_vs_uce_481,
+            SV_vs_UCNE_coord                 = SVvsConservative.SV_vs_UCNE_coord,
+            SV_vs_zooCHAR                    = SVvsConservative.SV_vs_zooCHAR,
+            SV_vs_zooHAR                     = SVvsConservative.SV_vs_zooHAR,
+            SV_vs_zoonomia_actively_evolving = SVvsConservative.SV_vs_zoonomia_actively_evolving,
+            SV_vs_zoonomia_highly_conserved  = SVvsConservative.SV_vs_zoonomia_highly_conserved,
+            SV_vs_zoonomia_primate_spec      = SVvsConservative.SV_vs_zoonomia_primate_spec,
+            SV_vs_zoonomia_TFBSs             = SVvsConservative.SV_vs_zoonomia_TFBSs
+
             SV_vs_phyloP100way = concat_SV_vs_phyloP100way.Concat_file,
             SV_vs_phastCons100way = concat_SV_vs_phastCons100way.Concat_file,
             sv_base_mini_docker = sv_base_mini_docker
@@ -97,6 +107,15 @@ task SVvsConservative{
         File SV_vs_Z_score = "~{filebase}.vs.constraint_z_genome_1kb.tsv.gz"
         File SV_vs_Z_over_2 = "~{filebase}.vs.constraint_z_genome_1kb.z_over_2.tsv.gz"
         File SV_vs_Z_over_4 = "~{filebase}.vs.constraint_z_genome_1kb.z_over_4.tsv.gz"
+        File SV_vs_HAR = "~{filebase}.vs.HAR.hg38.2023.bed.gz"
+        File SV_vs_uce_481 = "~{filebase}.vs.uce.481.trim.bed.gz"
+        File SV_vs_UCNE_coord = "~{filebase}.vs.UCNE_coord.hg38.bed.gz"
+        File SV_vs_zooCHAR = "~{filebase}.vs.zooCHAR.bed.gz"
+        File SV_vs_zooHAR = "~{filebase}.vs.zooHAR.bed.gz"
+        File SV_vs_zoonomia_actively_evolving = "~{filebase}.vs.zoonomia_actively_evolving.bed.gz"
+        File SV_vs_zoonomia_highly_conserved = "~{filebase}.vs.zoonomia_highly_conserved.bed.gz"
+        File SV_vs_zoonomia_primate_spec = "~{filebase}.vs.zoonomia_primate_spec.bed.gz"
+        File SV_vs_zoonomia_TFBSs = "~{filebase}.vs.zoonomia_TFBSs.bed.gz"
     }
 
     String filebase = basename(SV_file,".gz")
@@ -107,14 +126,23 @@ task SVvsConservative{
             gsutil cp ~{conserve_tar} ./
             tar zxvf conserve.tar.gz 
 
-            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.DHS.constrained.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.mamm.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.DHS.constrained.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.prim.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.footprint.mamm.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.mamm.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.footprint.prim.bed.gz | bgzip >  ~{filebase}.vs.239prim.footprint.prim.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/239prim.uce.bed.gz | bgzip >  ~{filebase}.vs.239prim.uce.bed.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.tsv.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.z_over_2.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_2.tsv.gz
-            bedtools coverage -wo -a ~{SV_file} -b conserve/constraint_z_genome_1kb.z_over_4.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_4.tsv.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/239prim.DHS.constrained.mamm.bed.gz     | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.mamm.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/239prim.DHS.constrained.prim.bed.gz     | bgzip >  ~{filebase}.vs.239prim.DHS.constrained.prim.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/239prim.footprint.mamm.bed.gz           | bgzip >  ~{filebase}.vs.239prim.footprint.mamm.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/239prim.footprint.prim.bed.gz           | bgzip >  ~{filebase}.vs.239prim.footprint.prim.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/239prim.uce.bed.gz                      | bgzip >  ~{filebase}.vs.239prim.uce.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/constraint_z_genome_1kb.tsv.gz          | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.tsv.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/constraint_z_genome_1kb.z_over_2.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_2.tsv.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/constraint_z_genome_1kb.z_over_4.tsv.gz | bgzip >  ~{filebase}.vs.constraint_z_genome_1kb.z_over_4.tsv.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/HAR.hg38.2023.bed.gz                    | bgzip >  ~{filebase}.vs.HAR.hg38.2023.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/uce.481.trim.bed.gz                     | bgzip >  ~{filebase}.vs.uce.481.trim.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/UCNE_coord.hg38.bed.gz                  | bgzip >  ~{filebase}.vs.UCNE_coord.hg38.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zooCHAR.bed.gz                          | bgzip >  ~{filebase}.vs.zooCHAR.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zooHAR.bed.gz                           | bgzip >  ~{filebase}.vs.zooHAR.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zoonomia_actively_evolving.bed.gz       | bgzip >  ~{filebase}.vs.zoonomia_actively_evolving.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zoonomia_highly_conserved.bed.gz        | bgzip >  ~{filebase}.vs.zoonomia_highly_conserved.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zoonomia_primate_spec.bed.gz            | bgzip >  ~{filebase}.vs.zoonomia_primate_spec.bed.gz
+            bedtools coverage -wo -a <(zcat ~{SV_file} | cut -f1-4) -b conserve/zoonomia_TFBSs.bed.gz                   | bgzip >  ~{filebase}.vs.zoonomia_TFBSs.bed.gz
     >>>
 
     runtime {
@@ -246,6 +274,17 @@ task IntegrateConserveAnno {
         File SV_vs_UCE
         File SV_vs_Z_over_2
         File SV_vs_Z_over_4
+
+        File SV_vs_HAR
+        File SV_vs_uce_481
+        File SV_vs_UCNE_coord
+        File SV_vs_zooCHAR
+        File SV_vs_zooHAR
+        File SV_vs_zoonomia_actively_evolving
+        File SV_vs_zoonomia_highly_conserved
+        File SV_vs_zoonomia_primate_spec
+        File SV_vs_zoonomia_TFBSs
+
         File SV_vs_phyloP100way
         File SV_vs_phastCons100way
         String sv_base_mini_docker
@@ -283,16 +322,26 @@ task IntegrateConserveAnno {
 
     gsutil cp ~{src_tar} ./
     tar zxvf src.tar.gz
-    Rscript ./src/reorganize_sv_vs_conservative.R \
+
+    Rscript reorganize_sv_vs_conservative.R \
             --sv_vs_DHS_mamm ~{SV_vs_DHS_mamm} \
             --sv_vs_DHS_prim ~{SV_vs_DHS_prim} \
             --sv_vs_footprint_mamm ~{SV_vs_footprint_mamm} \
             --sv_vs_footprint_prim ~{SV_vs_footprint_prim} \
             --sv_vs_UCE ~{SV_vs_UCE} \
+            --sv_vs_UCE_481 ~{SV_vs_uce_481} \
+            --sv_vs_UCNE ~{SV_vs_UCNE_coord} \
             --sv_vs_phastCons100way ~{SV_vs_phastCons100way} \
             --sv_vs_phyloP100way ~{SV_vs_phyloP100way} \
             --sv_vs_z_over_2 ~{SV_vs_Z_over_2} \
             --sv_vs_z_over_4 ~{SV_vs_Z_over_4} \
+            --sv_vs_HAR ~{SV_vs_HAR} \
+            --sv_vs_zooHAR ~{SV_vs_zooHAR} \
+            --sv_vs_zooCHAR ~{SV_vs_zooCHAR} \
+            --sv_vs_zoonomia_actively_evolving ~{SV_vs_zoonomia_actively_evolving} \
+            --sv_vs_zoonomia_highly_conserved ~{SV_vs_zoonomia_highly_conserved} \
+            --sv_vs_zoonomia_primate_spec ~{SV_vs_zoonomia_primate_spec} \
+            --sv_vs_zoonomia_TFBSs ~{SV_vs_zoonomia_TFBSs} \
             --output ~{filebase}.vs.conservative.integrated
 
     bgzip ~{filebase}.vs.conservative.integrated
