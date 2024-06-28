@@ -197,7 +197,7 @@ task GeneratePermutatedSVs{
         Rscript ./src/generate_SV_permutations.R -p ~{permu} -i ~{SV_sites_file} -o ~{filebase}.permu_~{permu} -g ref/hg38.genome.tsv
         bgzip ~{filebase}.permu_~{permu}
 
-        Rscript ./src/correct_permutated_SVs.R -i ~{filebase}.permu_~{permu}.gz
+        Rscript ./src/correct_permutated_SVs.R -i ~{filebase}.permu_~{permu}.gz -r ~{SV_sites_file}
         bgzip ~{filebase}.permu_~{permu}.corrected
 
     >>>
