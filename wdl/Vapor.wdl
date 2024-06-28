@@ -69,7 +69,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
+    Array[File]? vapor_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else []
   }
 }
 
@@ -99,7 +99,7 @@ task RunVaporWithCram {
 
   output {
     File vapor = "~{prefix}.~{contig}.vapor.gz"
-    File vapor_plot = "~{prefix}.~{contig}.tar.gz"
+    File? vapor_plot = "~{prefix}.~{contig}.tar.gz"
   }
 
   command <<<
