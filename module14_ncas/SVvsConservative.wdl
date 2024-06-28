@@ -66,8 +66,7 @@ workflow SV_vs_Conservative {
             SV_vs_zoonomia_actively_evolving = SVvsConservative.SV_vs_zoonomia_actively_evolving,
             SV_vs_zoonomia_highly_conserved  = SVvsConservative.SV_vs_zoonomia_highly_conserved,
             SV_vs_zoonomia_primate_spec      = SVvsConservative.SV_vs_zoonomia_primate_spec,
-            SV_vs_zoonomia_TFBSs             = SVvsConservative.SV_vs_zoonomia_TFBSs
-
+            SV_vs_zoonomia_TFBSs             = SVvsConservative.SV_vs_zoonomia_TFBSs,
             SV_vs_phyloP100way = concat_SV_vs_phyloP100way.Concat_file,
             SV_vs_phastCons100way = concat_SV_vs_phastCons100way.Concat_file,
             sv_base_mini_docker = sv_base_mini_docker
