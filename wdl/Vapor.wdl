@@ -28,6 +28,7 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_LocalizeCram
 
     Boolean save_plots
+    File NONE_FILE
   }
 
   scatter (contig in read_lines(contigs)) {
@@ -48,7 +49,7 @@ workflow Vapor {
         contig = contig,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
-        bed = select_first([PreprocessBedForVapor.contig_bed, []]),
+        bed = PreprocessBedForVapor.contig_bed,
         ref_fasta = ref_fasta,
         ref_fai = ref_fai,
         ref_dict = ref_dict,
@@ -68,7 +69,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    Array[File]? vapor_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else []
+    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
   }
 }
 
