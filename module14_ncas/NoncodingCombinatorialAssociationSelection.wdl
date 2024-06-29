@@ -74,13 +74,14 @@ workflow NoncodingCombinatorialAssociationSelection {
                 gene_tar = gene_tar,
                 SV_file = GeneratePermutatedSVs.permutated_SV,
                 sv_base_mini_docker = sv_base_mini_docker
-
         }
 
         call GenerateNcasMetrics{
             input:
+                permu = permu,
                 src_tar = src_tar,
-                aps = CalculateAPS.svid_aps,
+                svid_aps = CalculateAPS.svid_aps,
+                svid_genomic_context = SVID_genomic_context,
                 sv_file_real = SV_sites_file,
                 sv_file_permu = GeneratePermutatedSVs.permutated_SV,
                 sv_vs_gencode = SVvsGencode.SV_vs_gencode,
@@ -214,7 +215,7 @@ task GeneratePermutatedSVs{
 
 task GenerateNcasMetrics{
     input{
-        File aps
+        Int permu
         File src_tar
         File sv_file_real
         File sv_file_permu
@@ -223,6 +224,8 @@ task GenerateNcasMetrics{
         File sv_vs_noncoding
         File sv_vs_gene
         File sv_vs_coding
+        File svid_aps
+        File svid_genomic_context
 
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
@@ -251,16 +254,18 @@ task GenerateNcasMetrics{
             gsutil cp ~{src_tar} ./
             tar zxvf src.tar.gz
 
-             Rscript ./src/generate_cwas_metrics.sh \
-             --sv_file_real ~{sv_file_real} \
-             --sv_file_permu ~{sv_file_permu} \
-             --sv_vs_gencode ~{sv_vs_gencode} \
-             --sv_vs_conserve ~{sv_vs_conserve} \
-             --sv_vs_noncoding ~{sv_vs_noncoding} \
-             --sv_vs_gene ~{sv_vs_gene} \
-             --sv_vs_coding ~{sv_vs_coding} \
-             --aps ~{aps} \
-             --output ~{filebase}.rData
+            Rscript ./src/generate_cwas_metrics.R \
+                    --permu "permu_~{i}"
+                    --sv_file_real ~{sv_file_real} \
+                    --sv_file_permu ~{sv_file_permu} \
+                    --sv_vs_gencode ~{sv_vs_gencode} \
+                    --sv_vs_conserve ~{sv_vs_conserve} \
+                    --sv_vs_noncoding ~{sv_vs_noncoding} \
+                    --sv_vs_gene ~{sv_vs_gene} \
+                    --sv_vs_coding ~{sv_vs_coding} \
+                    --SVID_aps  ~{svid_aps} \
+                    --SVID_genomic_context  ~{svid_genomic_context} \
+                    --output ~{filebase}.rData
     >>>
 
     runtime {
