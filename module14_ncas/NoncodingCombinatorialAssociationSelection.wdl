@@ -93,9 +93,10 @@ workflow NoncodingCombinatorialAssociationSelection {
         }
 
         call CalcuNcasStat{
-            permu = i,
-            ncas_rdata = GenerateNcasMetrics.ncas_rdata,
-            sv_base_mini_docker = sv_base_mini_docker
+            input:
+                permu = i,
+                ncas_rdata = GenerateNcasMetrics.ncas_rdata,
+                sv_base_mini_docker = sv_base_mini_docker
         }
     }
     output{
