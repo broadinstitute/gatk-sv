@@ -93,7 +93,7 @@ workflow NoncodingCombinatorialAssociationSelection {
         }
 
         call CalcuNcasStat{
-            prefix = 'permu_~{i}',
+            permu = i,
             ncas_rdata = GenerateNcasMetrics.ncas_rdata,
             sv_base_mini_docker = sv_base_mini_docker
         }
@@ -167,7 +167,7 @@ task CalculateAPS{
 
 task CalcuNcasStat{
     input{
-        String prefix
+        String permu
         File ncas_rdata
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
@@ -185,7 +185,7 @@ task CalcuNcasStat{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File ncas_stat = "ncas_stat.~{prefix}.tar.gz"
+        File ncas_stat = "ncas_stat.permu_~{permu}.tar.gz"
     }
 
     String filebase = basename(SV_sites_file,".gz")
@@ -196,18 +196,18 @@ task CalcuNcasStat{
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t ALL -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t DEL -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t DUP -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INV -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t CPX -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:ALU -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:SVA -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:LINE1 -g noncoding
-        mkdir ncas_stat.~{prefix}
-        mv *.stat ncas_stat.~{prefix}/
-        tar czvf ncas_stat.~{prefix}.tar.gz ncas_stat.~{prefix}/
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t ALL -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DEL -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DUP -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INV -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t CPX -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:ALU -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:SVA -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:LINE1 -g noncoding
+        mkdir ncas_stat.permu_~{permu}
+        mv *.stat ncas_stat.permu_~{permu}/
+        tar czvf ncas_stat.permu_~{permu}.tar.gz ncas_stat.permu_~{permu}/
     >>>
 
     runtime {
