@@ -319,7 +319,7 @@ task GenerateNcasMetrics{
             tar zxvf src.tar.gz
 
             Rscript ./src/generate_cwas_metrics.R \
-                    --permu "permu_~{permu}"
+                    --permu "permu_~{permu}" \
                     --sv_file_real ~{sv_file_real} \
                     --sv_file_permu ~{sv_file_permu} \
                     --sv_vs_gencode ~{sv_vs_gencode} \
