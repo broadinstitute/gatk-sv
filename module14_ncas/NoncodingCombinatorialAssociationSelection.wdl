@@ -189,8 +189,6 @@ task CalcuNcasStat{
         File ncas_stat = "ncas_stat.permu_~{permu}.tar.gz"
     }
 
-    String filebase = basename(SV_sites_file,".gz")
-
     command <<<
         set -Eeuo pipefail
 
