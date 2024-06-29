@@ -78,7 +78,7 @@ workflow NoncodingCombinatorialAssociationSelection {
 
         call GenerateNcasMetrics{
             input:
-                permu = permu,
+                permu = i,
                 src_tar = src_tar,
                 svid_aps = CalculateAPS.svid_aps,
                 svid_genomic_context = SVID_genomic_context,
@@ -255,7 +255,7 @@ task GenerateNcasMetrics{
             tar zxvf src.tar.gz
 
             Rscript ./src/generate_cwas_metrics.R \
-                    --permu "permu_~{i}"
+                    --permu "permu_~{permu}"
                     --sv_file_real ~{sv_file_real} \
                     --sv_file_permu ~{sv_file_permu} \
                     --sv_vs_gencode ~{sv_vs_gencode} \
