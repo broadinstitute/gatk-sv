@@ -91,9 +91,16 @@ workflow NoncodingCombinatorialAssociationSelection {
                 sv_vs_coding = SVvsGene.SV_vs_cds,
                 sv_base_mini_docker = sv_base_mini_docker
         }
+
+        call CalcuNcasStat{
+            prefix = 'permu_~{i}',
+            ncas_rdata = GenerateNcasMetrics.ncas_rdata,
+            sv_base_mini_docker = sv_base_mini_docker
+        }
     }
     output{
         Array[File] ncas_data_list = GenerateNcasMetrics.ncas_rdata
+        Array[File] ncas_stat = CalcuNcasStat.ncas_stat
     }
 }
 
@@ -145,6 +152,62 @@ task CalculateAPS{
         -f "~{prefix}.aps"
 
         tar czvf ~{prefix}.aps.tar.gz ~{prefix}.aps/
+    >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }    
+}
+
+task CalcuNcasStat{
+    input{
+        String prefix
+        File ncas_rdata
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 10, 
+        disk_gb: 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File ncas_stat = "ncas_stat.~{prefix}.tar.gz"
+    }
+
+    String filebase = basename(SV_sites_file,".gz")
+
+    command <<<
+        set -Eeuo pipefail
+
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t ALL -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t DEL -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t DUP -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INV -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t CPX -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:ALU -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:SVA -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a ~{prefix}.stat -t INS:ME:LINE1 -g noncoding
+        mkdir ncas_stat.~{prefix}
+        mv *.stat ncas_stat.~{prefix}/
+        tar czvf ncas_stat.~{prefix}.tar.gz ncas_stat.~{prefix}/
     >>>
 
     runtime {
