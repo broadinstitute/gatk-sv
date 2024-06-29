@@ -28,7 +28,7 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_LocalizeCram
 
     Boolean save_plots
-    File NONE_FILE=""
+    File? NONE_FILE
   }
 
   scatter (contig in read_lines(contigs)) {
@@ -61,7 +61,7 @@ workflow Vapor {
   call tasks10.ConcatVapor {
     input:
       shard_bed_files = select_all(RunVaporWithCram.vapor),
-      shard_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else [],
+      shard_plots = select_all(RunVaporWithCram.vapor_plot),
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_beds
