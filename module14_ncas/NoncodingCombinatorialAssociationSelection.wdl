@@ -95,6 +95,7 @@ workflow NoncodingCombinatorialAssociationSelection {
         call CalcuNcasStat{
             input:
                 permu = i,
+                src_tar = src_tar,
                 ncas_rdata = GenerateNcasMetrics.ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
         }
@@ -169,6 +170,7 @@ task CalculateAPS{
 task CalcuNcasStat{
     input{
         String permu
+        File src_tar
         File ncas_rdata
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
