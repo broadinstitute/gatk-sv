@@ -28,7 +28,7 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_LocalizeCram
 
     Boolean save_plots  # New input to control whether plots are final output
-     File NONE_FILE = write_lines([])  # Create an empty file
+    File? NONE_FILE_ # Create an empty file
   }
 
   scatter (contig in read_lines(contigs)) {
@@ -69,7 +69,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
+    File vapor_plots = if save_plots then select_first(ConcatVapor.merged_bed_plot) else NONE_FILE_
   }
 }
 
