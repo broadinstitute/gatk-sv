@@ -27,8 +27,8 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_concat_beds
     RuntimeAttr? runtime_attr_LocalizeCram
 
-    Boolean save_plots
-    File NONE_FILE
+    Boolean save_plots  # New input to control whether plots are final output
+     File NONE_FILE = write_lines([])  # Create an empty file
   }
 
   scatter (contig in read_lines(contigs)) {
@@ -60,8 +60,8 @@ workflow Vapor {
 
   call tasks10.ConcatVapor {
     input:
-      shard_bed_files = select_all(RunVaporWithCram.vapor),
-      shard_plots = select_all(RunVaporWithCram.vapor_plot),
+      shard_bed_files = RunVaporWithCram.vapor,
+      shard_plots = RunVaporWithCram.vapor_plot,
       prefix = prefix,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_beds
@@ -69,7 +69,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    File vapor_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else NONE_FILE
+    File vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE
   }
 }
 
@@ -123,7 +123,7 @@ task RunVaporWithCram {
       --pacbio-input ~{contig}.bam
 
     tar -czf ~{prefix}.~{contig}.tar.gz ~{prefix}.~{contig}
-    bgzip  ~{prefix}.~{contig}.vapor
+    bgzip ~{prefix}.~{contig}.vapor
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
