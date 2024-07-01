@@ -1,0 +1,143 @@
+version 1.0
+
+import "Structs.wdl"
+
+workflow SVCodingConstraint {
+    input{
+        Int permutation_rounds
+        Array[File] permutated_genes_tars
+        File SV_sites_file
+        File contig_file
+        String sv_base_mini_docker
+
+    }
+
+
+    scatter(i in range(permutation_rounds)){
+
+        call SVsVsGenes{
+            input:
+                permu = i,
+                gene_tars = permutated_genes_tars[i],
+                SV_sites_file = SV_sites_file,
+                sv_base_mini_docker = sv_base_mini_docker
+        }
+    }
+
+    output{
+    	Array[File] gene_SV_rdata_list = SVsVsGenes.gene_SV_rdata
+    }
+
+
+
+task SVsVsGenes{
+    input{
+        Int permu
+        File gene_tars
+        File gene_anno_tars
+        File src_tar
+        File SV_sites_file
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 15, 
+        disk_gb: 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File gene_SV_rdata = "~{filebase}.gene_SV_data.rData "
+    }
+
+    String filebase = basename(SV_sites_file,".gz")
+
+    command <<<
+        set -Eeuo pipefail
+
+        gsutil cp ~{gene_tars} ./
+        tar zxvf ~{gene_tars} 
+
+        gsutil cp ~{gene_anno_tars} /
+        tar zxvf gene_annotation.tar.gz
+
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz | bgzip >  ~{filebase}.vs.transcript.bed.gz
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.CDS.permu_~{permu}.bed.gz        |  bgzip > ~{filebase}.vs.CDS.bed.gz
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.intron.permu_~{permu}.bed.gz     | bgzip >  ~{filebase}.vs.intron.bed.gz
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.utr_3.permu_~{permu}.bed.gz      | bgzip >  ~{filebase}.vs.utr_3.bed.gz
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.utr_5.permu_~{permu}.bed.gz      | bgzip >  ~{filebase}.vs.utr_5.bed.gz
+        bedtools intersect -wo -a <(zcat ~{SV_sites_file} | cut -f1-5) -b gene_permu/r3.gencode.v39.ensembl.105.promoter.permu_~{permu}.bed.gz | bgzip >    ~{filebase}.vs.promoter.bed.gz
+
+
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($2<$7 && $3>$8) print}' | cut -f4,5,10,11  > ~{filebase}.vs.whole_transcript_overlap 
+        
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($9=="+" && $2<$7+1 && $3<$8+1) print}' | cut -f4,5,10,11 > ~{filebase}.vs.tss_transcripts_overlap
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($9=="-" && $2>$7-1 && $3>$8-1) print}' | cut -f4,5,10,11 >> ~{filebase}.vs.tss_transcripts_overlap
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($9=="-" && $2<$7+1 && $3<$8+1) print}' | cut -f4,5,10,11 > ~{filebase}.vs.partial_transcripts_overlap
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($9=="+" && $2>$7-1 && $3>$8-1) print}' | cut -f4,5,10,11 >> ~{filebase}.vs.partial_transcripts_overlap
+
+        zcat ~{filebase}.vs.utr_5.bed.gz | awk '{if ($9=="+" && $3<$8+1 && $3>$7-1) print}' | cut -f4,5,10,11 > ~{filebase}.vs.5_prime_utr
+        zcat ~{filebase}.vs.utr_5.bed.gz | awk '{if ($9=="-" && $2<$8+1 && $2>$7-1) print}' | cut -f4,5,10,11 >> ~{filebase}.vs.5_prime_utr
+        zcat ~{filebase}.vs.utr_3.bed.gz | awk '{if ($9=="+" && $2<$8+1 && $2>$7-1) print}' | cut -f4,5,10,11 > ~{filebase}.vs.3_prime_utr
+        zcat ~{filebase}.vs.utr_3.bed.gz | awk '{if ($9=="-" && $3<$8+1 && $3>$7-1) print}' | cut -f4,5,10,11 >> ~{filebase}.vs.3_prime_utr
+
+        zcat ~{filebase}.vs.CDS.bed.gz | awk '{if ($2>$7-1 && $3<$8+1) print}' | cut -f4,5,10,11  > ~{filebase}.vs.inside_exons 
+        zcat ~{filebase}.vs.intron.bed.gz | awk '{if ($2>$7-1 && $3<$8+1) print}' | cut -f4,5,10,11  > ~{filebase}.vs.inside_introns
+        zcat ~{filebase}.vs.promoter.bed.gz | awk '{if ($9=="+" && $3>$7-1 && $3<$8+1) print}' | cut -f4,5,10,11  > ~{filebase}.vs.promoter 
+        zcat ~{filebase}.vs.promoter.bed.gz | awk '{if ($9=="-" && $2>$7-1 && $2<$8+1) print}' | cut -f4,5,10,11  >> ~{filebase}.vs.promoter
+
+        zcat ~{filebase}.vs.transcript.bed.gz | awk '{if ($2>$7 && $3<$8) print}' | cut -f4,5,10,11  > ~{filebase}.vs.SVs_inside_transcripts
+        cut -f2  ~{filebase}.vs.SVs_inside_transcripts | sort | uniq > ~{filebase}.vs.SVs_inside_transcripts.gene_id
+
+        Rscript ./src/categorize_intact_vs_partial_exon_overlap.R \
+                -c ~{filebase}.vs.CDS.bed.gz \
+                -g ~{filebase}.vs.SVs_inside_transcripts \
+                -p ~{filebase}.vs
+
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.whole_transcript_overlap -o ~{filebase}.vs.whole_transcript_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.3_prime_utr  -o ~{filebase}.vs.3_prime_utr.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.5_prime_utr  -o ~{filebase}.vs.5_prime_utr.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.intact_exon_overlap   -o ~{filebase}.vs.intact_exon_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_exon_overlap  -o ~{filebase}.vs.partial_exon_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.tss_transcripts_overlap  -o ~{filebase}.vs.tss_transcripts_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_transcripts_overlap  -o ~{filebase}.vs.partial_transcripts_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_exons -o ~{filebase}.vs.inside_exons.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_introns -o ~{filebase}.vs.inside_introns.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.promoter -o ~{filebase}.vs.promoter.reorganized
+
+        Rscript ./src/integrate_SVID_vs_genes.across_different_overlaps.R -p ~{filebase}
+        bgzip ~{filebase}.integrated
+
+        Rscript src/calcu.gene.data.reaano.R \
+            --sv_file_real ~{SV_sites_file} \
+            --sv_vs_gene ~{filebase}.integrated.gz \
+            --output ~{filebase}.gene_SV_data.rData \
+            --gene_feature gene_annotation/gene_features.bed.gz \
+            --gene_anno gene_annotation/genes_grch38_annotated_4_mapped_gencode_v39.CDS.UTR.tsv.gz \
+            --gene_anno_phaplo_ptriplo gene_annotation/gene_information_loeuf_pHaplo_pTriplo_pLI_4.5.txt.gz \
+            --gene_loeuf gene_annotation/loeuf.csv 
+   >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }    
+}
+
+
+
