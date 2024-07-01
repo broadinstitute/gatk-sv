@@ -63,9 +63,9 @@ task SVsVsGenes{
         set -Eeuo pipefail
 
         gsutil cp ~{gene_tars} ./
-        tar zxvf ~{gene_tars} 
+        tar zxvf gene_permu.tar.gz 
 
-        gsutil cp ~{gene_anno_tars} /
+        gsutil cp ~{gene_anno_tars} ./
         tar zxvf gene_annotation.tar.gz
 
         gsutil cp ~{src_tar} ./
