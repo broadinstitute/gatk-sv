@@ -69,7 +69,7 @@ workflow Vapor {
 
   output {
     File vapor_bed = ConcatVapor.merged_bed_file
-    Array[File]? vapor_plots = if save_plots then select_all(RunVaporWithCram.vapor_plot) else NONE_FILE_
+    File? vapor_plots = if save_plots then ConcatVapor.merged_bed_plot else NONE_FILE_
   }
 }
 
