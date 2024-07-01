@@ -5,7 +5,7 @@ import "Structs.wdl"
 workflow SVCodingConstraint {
     input{
         Int permutation_rounds
-        Array[File] permutated_genes_tars
+        File permutated_genes_tars
         File SV_sites_file
         File contig_file
         String sv_base_mini_docker
@@ -18,7 +18,7 @@ workflow SVCodingConstraint {
         call SVsVsGenes{
             input:
                 permu = i,
-                gene_tars = permutated_genes_tars[i],
+                gene_tars = permutated_genes_tars,
                 SV_sites_file = SV_sites_file,
                 sv_base_mini_docker = sv_base_mini_docker
         }
