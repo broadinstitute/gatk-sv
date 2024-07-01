@@ -27,6 +27,7 @@ workflow SVCodingConstraint {
     output{
     	Array[File] gene_SV_rdata_list = SVsVsGenes.gene_SV_rdata
     }
+}
 
 
 
