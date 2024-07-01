@@ -8,7 +8,6 @@ import argparse
 from collections import defaultdict
 import gzip
 import logging
-import math
 import os
 import sys
 import tempfile
@@ -125,40 +124,24 @@ def read_table(file_lines, ref_path, cluster_distance, alu_size, sva_size, l1_si
         row['sides'] = 1
         _cast_numeric(row, FLOAT_COLUMNS, float)
         _cast_numeric(row, INT_COLUMNS, int)
-        if row['chrom'] == 'chr7' and math.fabs(row['pos'] - 93517316) < 100:
-            logging.getLogger().setLevel(level=logging.DEBUG)
-        else:
-            logging.getLogger().setLevel(level=logging.INFO)
-        logging.debug(f"record: {record}")
         new_buffer = list()
         found_match = False
-        logging.debug(f"buffer: {buffer}")
         for item in buffer:
-            if item['chrom'] == 'chr7' and math.fabs(item['pos'] - 93517316) < 100:
-                logging.getLogger().setLevel(level=logging.DEBUG)
-            else:
-                logging.getLogger().setLevel(level=logging.INFO)
-            logging.debug(f"item: {item}")
             if found_match:
-                logging.debug(f"found_match")
                 new_buffer.append(item)
             elif item['chrom'] != row['chrom'] \
                     or abs(int(item['pos']) - int(row['pos'])) > cluster_distance:
                 item['svlen'] = _calculate_svlen_one_sided(item)
-                logging.debug(f"one_sided size: {item['svlen']}")
                 data.insert(0, item)
             elif item['Clipped_Side'] != row['Clipped_Side'] \
                     and item['Insertion_Direction'] == row['Insertion_Direction']:
                 row['pos'] = item['pos']
                 row['svlen'] = _calculate_svlen_two_sided(item, row)
-                logging.debug(f"two_sided size: {row['svlen']}")
                 data.append(row)
                 found_match = True
             else:
-                logging.debug(f"insert buffer 1")
                 new_buffer.insert(0, item)
         if not found_match:
-            logging.debug(f"insert buffer 2")
             new_buffer.insert(0, row)
         buffer = new_buffer
     for item in buffer:
