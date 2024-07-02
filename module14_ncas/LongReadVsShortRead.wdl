@@ -143,7 +143,7 @@ task ExtractQueryRef{
         set -Eeuo pipefail
 
         zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8 | cat ~{query_header} - | bgzip > ~{sample}.query.gz
-        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8,9 | sed -e 's/$/\t~{sample}' | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
+        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8,9 | sed -e 's/$/\t~{sample}/' | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
 
    >>>
 
