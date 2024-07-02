@@ -19,6 +19,8 @@ workflow VaporBatch {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
+    Boolean save_plots
+
     RuntimeAttr? runtime_attr_vapor
     RuntimeAttr? runtime_attr_bcf2vcf
     RuntimeAttr? runtime_attr_vcf2bed
@@ -38,6 +40,7 @@ workflow VaporBatch {
         ref_fai = ref_fai,
         ref_dict = ref_dict,
         contigs = contigs,
+        save_plots = save_plots,
         vapor_docker = vapor_docker,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -50,7 +53,7 @@ workflow VaporBatch {
   }
   output {
     Array[File] vapor_batch_beds = Vapor.vapor_bed
-    Array[File] vapor_batch_plots = Vapor.vapor_plots
+    Array[File?] vapor_batch_plots = Vapor.vapor_plots
   }
 }
 
