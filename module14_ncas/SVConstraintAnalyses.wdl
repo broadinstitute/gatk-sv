@@ -64,7 +64,7 @@ task SVsVsGenesPart1{
         File vs_inside_exons = "~{filebase}.inside_exons"
         File vs_inside_introns = "~{filebase}.inside_introns"
         File vs_promoter = "~{filebase}.promoter"
-   }
+    }
 
     String filebase = basename(SV_sites_file,".gz")
 
@@ -114,7 +114,7 @@ task SVsVsGenesPart1{
                 -g ~{filebase}.SVs_inside_transcripts \
                 -p ~{filebase}
 
-   >>>
+    >>>
 
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -201,7 +201,7 @@ task SVsVsGenesPart2{
             --gene_anno gene_annotation/genes_grch38_annotated_4_mapped_gencode_v39.CDS.UTR.tsv.gz \
             --gene_anno_phaplo_ptriplo gene_annotation/gene_information_loeuf_pHaplo_pTriplo_pLI_4.5.txt.gz \
             --gene_loeuf gene_annotation/loeuf.csv 
-   >>>
+    >>>
 
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
