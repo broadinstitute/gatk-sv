@@ -54,16 +54,16 @@ task SVsVsGenesPart1{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File vs_whole_transcript_overlap = ~{filebase}.whole_transcript_overlap
-        File vs_3_prime_utr = ~{filebase}.3_prime_utr
-        File vs_5_prime_utr = ~{filebase}.5_prime_utr
-        File vs_intact_exon_overlap = ~{filebase}.intact_exon_overlap 
-        File vs_partial_exon_overlap = ~{filebase}.partial_exon_overlap
-        File vs_tss_transcripts_overlap = ~{filebase}.tss_transcripts_overlap
-        File vs_partial_transcripts_overlap = ~{filebase}.partial_transcripts_overlap
-        File vs_inside_exons = ~{filebase}.inside_exons
-        File vs_inside_introns = ~{filebase}.inside_introns
-        File vs_promoter = ~{filebase}.promoter
+        File vs_whole_transcript_overlap = "~{filebase}.whole_transcript_overlap"
+        File vs_3_prime_utr = "~{filebase}.3_prime_utr"
+        File vs_5_prime_utr = "~{filebase}.5_prime_utr"
+        File vs_intact_exon_overlap = "~{filebase}.intact_exon_overlap"
+        File vs_partial_exon_overlap = "~{filebase}.partial_exon_overlap"
+        File vs_tss_transcripts_overlap = "~{filebase}.tss_transcripts_overlap"
+        File vs_partial_transcripts_overlap = "~{filebase}.partial_transcripts_overlap"
+        File vs_inside_exons = "~{filebase}.inside_exons"
+        File vs_inside_introns = "~{filebase}.inside_introns"
+        File vs_promoter = "~{filebase}.promoter"
    }
 
     String filebase = basename(SV_sites_file,".gz")
@@ -161,7 +161,7 @@ task SVsVsGenesPart2{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File gene_SV_rdata = "~{filebase}.gene_SV_data.rData "
+        File gene_SV_rdata = "~{filebase}.gene_SV_data.rData"
     }
 
     String filebase = basename(SV_sites_file,".gz")
