@@ -5,6 +5,7 @@ import "Structs.wdl"
 workflow SVCodingConstraint {
     input{
         Int permutation_rounds
+        File src_tar
         File permutated_genes_tars
         File SV_sites_file
         File contig_file
@@ -15,17 +16,39 @@ workflow SVCodingConstraint {
 
     scatter(i in range(permutation_rounds)){
 
-        call SVsVsGenes{
+        call SVsVsGenesPart1{
             input:
                 permu = i,
+                src_tar = src_tar,
                 gene_tars = permutated_genes_tars,
                 SV_sites_file = SV_sites_file,
                 sv_base_mini_docker = sv_base_mini_docker
         }
+
+        call SVsVsGenesPart2{
+            input:
+                permu = i,
+                src_tar = src_tar,
+                gene_anno_tars = gene_anno_tars,
+                gene_tars = permutated_genes_tars,
+                SV_sites_file = SV_sites_file,
+                sv_base_mini_docker = sv_base_mini_docker
+
+                vs_3_prime_utr  = SVsVsGenesPart1.vs_3_prime_utr
+                vs_5_prime_utr  = SVsVsGenesPart1.vs_5_prime_utr
+                vs_promoter     = SVsVsGenesPart1.vs_promoter
+                vs_intact_exon_overlap  = SVsVsGenesPart1.vs_intact_exon_overlap
+                vs_partial_exon_overlap  = SVsVsGenesPart1.vs_partial_exon_overlap
+                vs_tss_transcripts_overlap  = SVsVsGenesPart1.vs_tss_transcripts_overlap
+                vs_partial_transcripts_overlap  = SVsVsGenesPart1.vs_partial_transcripts_overlap
+                vs_inside_exons = SVsVsGenesPart1.vs_inside_exons
+                vs_inside_introns = SVsVsGenesPart1.vs_inside_introns
+                vs_whole_transcript_overlap  = SVsVsGenesPart1.vs_whole_transcript_overlap
+        }
     }
 
     output{
-    	Array[File] gene_SV_rdata_list = SVsVsGenes.gene_SV_rdata
+    	Array[File] gene_SV_rdata_list = SVsVsGenesPart2.gene_SV_rdata
     }
 }
 
@@ -35,7 +58,6 @@ task SVsVsGenesPart1{
     input{
         Int permu
         File gene_tars
-        File gene_anno_tars
         File src_tar
         File SV_sites_file
         String sv_base_mini_docker
@@ -73,9 +95,6 @@ task SVsVsGenesPart1{
 
         gsutil cp ~{gene_tars} ./
         tar zxvf gene_permu.tar.gz 
-
-        gsutil cp ~{gene_anno_tars} ./
-        tar zxvf gene_annotation.tar.gz
 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
