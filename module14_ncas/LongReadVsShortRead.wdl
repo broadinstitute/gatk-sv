@@ -92,7 +92,7 @@ task Vcf2Bed{
         File bed = "~{filebase}.bed"
     }
 
-    String filebase = basename(SV_sites_file,".vcf.gz")
+    String filebase = basename(vcf,".vcf.gz")
 
     command <<<
         set -Eeuo pipefail
