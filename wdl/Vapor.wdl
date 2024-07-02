@@ -11,6 +11,8 @@ workflow Vapor {
     File bed_file
     String sample_id
 
+    Boolean save_plots  # Control whether plots are produced in final output
+
     File ref_fasta
     File ref_fai
     File ref_dict
@@ -27,8 +29,7 @@ workflow Vapor {
     RuntimeAttr? runtime_attr_concat_beds
     RuntimeAttr? runtime_attr_LocalizeCram
 
-    Boolean save_plots  # New input to control whether plots are final output
-    File? NONE_FILE_ # Create an empty file
+    File? NONE_FILE_ # Create a null file - do not use this input
   }
 
   scatter (contig in read_lines(contigs)) {
