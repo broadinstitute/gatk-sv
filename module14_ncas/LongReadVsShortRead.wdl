@@ -43,7 +43,7 @@ workflow LongReadVsShortRead {
 
         call SVComparison as LR_vs_SR{
             input:
-                src = src_tar,
+                src_tar = src_tar,
                 query = extract_query_ref_LR.query,
                 ref = extract_query_ref_SR.ref,
                 prefix = "LR_vs_SR",
@@ -53,7 +53,7 @@ workflow LongReadVsShortRead {
 
         call SVComparison as SR_vs_LR{
             input:
-                src = src_tar,
+                src_tar = src_tar,
                 query = extract_query_ref_SR.query,
                 ref = extract_query_ref_LR.ref,
                 prefix = "SR_vs_LR",
