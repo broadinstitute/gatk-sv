@@ -89,7 +89,7 @@ task Vcf2Bed{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File bed = "~{filebase}.bed"
+        File bed = "~{filebase}.bed.gz"
     }
 
     String filebase = basename(vcf,".vcf.gz")
@@ -98,6 +98,7 @@ task Vcf2Bed{
         set -Eeuo pipefail
 
         svtk vcf2bed -i SVTYPE -i SVLEN -i AF --include-filters ~{vcf} ~{filebase}.bed
+        bgzip ~{filebase}.bed
    >>>
 
     runtime {
@@ -141,8 +142,8 @@ task ExtractQueryRef{
     command <<<
         set -Eeuo pipefail
 
-        grep ~{sample} ~{bed} | cut -f1-4,7,8 | cat ~{query_header} - | bgzip > ~{sample}.query.gz
-        grep ~{sample} ~{bed} | cut -f1-4,7,8,9 | sed -e 's/$/\t~{sample}' | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
+        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8 | cat ~{query_header} - | bgzip > ~{sample}.query.gz
+        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8,9 | sed -e 's/$/\t~{sample}' | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
 
    >>>
 
