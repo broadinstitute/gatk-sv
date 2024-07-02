@@ -197,15 +197,25 @@ task CalcuNcasStat{
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t ALL -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DEL -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DUP -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INV -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t CPX -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:ALU -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:SVA -g noncoding
-        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:LINE1 -g noncoding
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DEL -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t DUP -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INV -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t CPX -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:ALU -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:SVA -g noncoding -p "AoU_Phase2"
+        Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t INS:ME:LINE1 -g noncoding -p "AoU_Phase2"
+        Rscript ./src/integrate_cwas_stat_across_svtype.R \
+            --del   "AoU_Phase2.DEL.noncoding.permu_~{permu}.stat" \
+            --dup   "AoU_Phase2.DUP.noncoding.permu_~{permu}.stat" \
+            --inv   "AoU_Phase2.INV.noncoding.permu_~{permu}.stat" \
+            --cpx   "AoU_Phase2.CPX.noncoding.permu_~{permu}.stat" \
+            --ins   "AoU_Phase2.INS.noncoding.permu_~{permu}.stat" \
+            --alu   "AoU_Phase2.INS:ME:ALU.noncoding.permu_~{permu}.stat" \
+            --line1 "AoU_Phase2.INS:ME:LINE1.noncoding.permu_~{permu}.stat" \
+            --sva   "AoU_Phase2.INS:ME:SVA.noncoding.permu_~{permu}.stat" \
+            --output "AoU_Phase2.ALL.noncoding.permu_~{permu}.stat"
+
         mkdir ncas_stat.permu_~{permu}
         mv *.stat ncas_stat.permu_~{permu}/
         tar czvf ncas_stat.permu_~{permu}.tar.gz ncas_stat.permu_~{permu}/
