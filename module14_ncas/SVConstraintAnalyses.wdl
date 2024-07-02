@@ -6,6 +6,7 @@ workflow SVCodingConstraint {
     input{
         Int permutation_rounds
         File src_tar
+        File gene_anno_tars
         File permutated_genes_tars
         File SV_sites_file
         File contig_file
@@ -33,7 +34,6 @@ workflow SVCodingConstraint {
                 gene_tars = permutated_genes_tars,
                 SV_sites_file = SV_sites_file,
                 sv_base_mini_docker = sv_base_mini_docker,
-
                 vs_3_prime_utr  = SVsVsGenesPart1.vs_3_prime_utr,
                 vs_5_prime_utr  = SVsVsGenesPart1.vs_5_prime_utr,
                 vs_promoter     = SVsVsGenesPart1.vs_promoter,
