@@ -17,7 +17,7 @@ workflow LongReadVsShortRead {
 
     call Vcf2Bed{
         input:
-            vcf = long_read_SVs
+            vcf = long_read_SVs,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
