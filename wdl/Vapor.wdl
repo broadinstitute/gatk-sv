@@ -11,7 +11,7 @@ workflow Vapor {
     File bed_file
     String sample_id
 
-    Boolean save_plots  # Control whether plots are produced in final output
+    Boolean save_plots  # Control whether plots are final output
 
     File ref_fasta
     File ref_fai
