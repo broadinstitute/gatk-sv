@@ -178,8 +178,7 @@ task SVsVsGenesPart2{
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
-
-        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{vs_whole_transcript_overlap -o ~{vs_whole_transcript_overlap}.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{vs_whole_transcript_overlap} -o ~{vs_whole_transcript_overlap}.reorganized
         Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{vs_3_prime_utr}  -o ~{vs_3_prime_utr}.reorganized
         Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{vs_5_prime_utr}  -o ~{vs_5_prime_utr}.reorganized
         Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{vs_intact_exon_overlap}   -o ~{vs_intact_exon_overlap}.reorganized
