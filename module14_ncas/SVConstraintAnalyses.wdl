@@ -32,17 +32,17 @@ workflow SVCodingConstraint {
                 gene_anno_tars = gene_anno_tars,
                 gene_tars = permutated_genes_tars,
                 SV_sites_file = SV_sites_file,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
 
-                vs_3_prime_utr  = SVsVsGenesPart1.vs_3_prime_utr
-                vs_5_prime_utr  = SVsVsGenesPart1.vs_5_prime_utr
-                vs_promoter     = SVsVsGenesPart1.vs_promoter
-                vs_intact_exon_overlap  = SVsVsGenesPart1.vs_intact_exon_overlap
-                vs_partial_exon_overlap  = SVsVsGenesPart1.vs_partial_exon_overlap
-                vs_tss_transcripts_overlap  = SVsVsGenesPart1.vs_tss_transcripts_overlap
-                vs_partial_transcripts_overlap  = SVsVsGenesPart1.vs_partial_transcripts_overlap
-                vs_inside_exons = SVsVsGenesPart1.vs_inside_exons
-                vs_inside_introns = SVsVsGenesPart1.vs_inside_introns
+                vs_3_prime_utr  = SVsVsGenesPart1.vs_3_prime_utr,
+                vs_5_prime_utr  = SVsVsGenesPart1.vs_5_prime_utr,
+                vs_promoter     = SVsVsGenesPart1.vs_promoter,
+                vs_intact_exon_overlap  = SVsVsGenesPart1.vs_intact_exon_overlap,
+                vs_partial_exon_overlap  = SVsVsGenesPart1.vs_partial_exon_overlap,
+                vs_tss_transcripts_overlap  = SVsVsGenesPart1.vs_tss_transcripts_overlap,
+                vs_partial_transcripts_overlap  = SVsVsGenesPart1.vs_partial_transcripts_overlap,
+                vs_inside_exons = SVsVsGenesPart1.vs_inside_exons,
+                vs_inside_introns = SVsVsGenesPart1.vs_inside_introns,
                 vs_whole_transcript_overlap  = SVsVsGenesPart1.vs_whole_transcript_overlap
         }
     }
