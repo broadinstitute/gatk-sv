@@ -105,16 +105,16 @@ task SVsVsGenes{
                 -g ~{filebase}.vs.SVs_inside_transcripts \
                 -p ~{filebase}.vs
 
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.whole_transcript_overlap -o ~{filebase}.vs.whole_transcript_overlap.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.3_prime_utr  -o ~{filebase}.vs.3_prime_utr.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.5_prime_utr  -o ~{filebase}.vs.5_prime_utr.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.intact_exon_overlap   -o ~{filebase}.vs.intact_exon_overlap.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_exon_overlap  -o ~{filebase}.vs.partial_exon_overlap.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.tss_transcripts_overlap  -o ~{filebase}.vs.tss_transcripts_overlap.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_transcripts_overlap  -o ~{filebase}.vs.partial_transcripts_overlap.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_exons -o ~{filebase}.vs.inside_exons.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_introns -o ~{filebase}.vs.inside_introns.reorganized
-        Rscript ./src/reorganize_SVID_vs_gene.R -g permu_genes/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.promoter -o ~{filebase}.vs.promoter.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.whole_transcript_overlap -o ~{filebase}.vs.whole_transcript_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.3_prime_utr  -o ~{filebase}.vs.3_prime_utr.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.5_prime_utr  -o ~{filebase}.vs.5_prime_utr.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.intact_exon_overlap   -o ~{filebase}.vs.intact_exon_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_exon_overlap  -o ~{filebase}.vs.partial_exon_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.tss_transcripts_overlap  -o ~{filebase}.vs.tss_transcripts_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.partial_transcripts_overlap  -o ~{filebase}.vs.partial_transcripts_overlap.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_exons -o ~{filebase}.vs.inside_exons.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.inside_introns -o ~{filebase}.vs.inside_introns.reorganized
+        Rscript ./src/reorganize_SVID_vs_gene.R -g gene_permu/r3.gencode.v39.ensembl.105.transcript.permu_~{permu}.bed.gz -i ~{filebase}.vs.promoter -o ~{filebase}.vs.promoter.reorganized
 
         Rscript ./src/integrate_SVID_vs_genes.across_different_overlaps.R -p ~{filebase}
         bgzip ~{filebase}.integrated
