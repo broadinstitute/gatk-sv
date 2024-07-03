@@ -187,7 +187,7 @@ task SVComparison{
     command <<<
         set -Eeuo pipefail
 
-        gsutil cp src_tar ./
+        gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz
         bash src/compare_callsets_V2.sh -O ~{prefix}.~{sample}.bed -p ~{prefix}.~{sample} ~{query} ~{ref}
         bgzip ~{prefix}.~{sample}.bed
@@ -201,19 +201,5 @@ task SVComparison{
         docker: sv_base_mini_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    }    
+    }
