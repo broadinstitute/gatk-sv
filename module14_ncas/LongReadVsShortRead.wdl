@@ -142,8 +142,11 @@ task ExtractQueryRef{
     command <<<
         set -Eeuo pipefail
 
-        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8 | cat ~{query_header} - | bgzip > ~{sample}.query.gz
-        zcat ~{bed} | grep ~{sample} | cut -f1-4,7,8,9 | sed -e 's/$/\t~{sample}/' | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
+        paste <(zcat ~{bed} | grep ~{sample} | cut -f1-3) <(zcat ~{bed} | grep ~{sample} | cut -f4 | sed -e 's/^/__/' | sed -e 's/$/__/') <(zcat ~{bed} | grep ~{sample} | cut -f7,8) | cat ~{query_header} - | bgzip > ~{sample}.query.gz
+
+
+        paste <(zcat ~{bed} | grep ~{sample} | cut -f1-3) <(zcat ~{bed} | grep ~{sample} | cut -f4 | sed -e 's/^/__/' | sed -e 's/$/__/') <(zcat ~{bed} | grep ~{sample} | cut -f7,8,9 | sed -e 's/$/\t~{sample}/') | cat ~{ref_header} - | bgzip > ~{sample}.ref.gz
+
 
    >>>
 
