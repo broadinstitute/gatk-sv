@@ -183,16 +183,16 @@ task SVsVsGenesPart2{
         File gene_SV_rdata = "~{filebase}.gene_SV_data.rData"
     }
 
-    String vs_promoter.base = basename(vs_promoter,"")
-    String vs_3_prime_utr.base = basename(vs_3_prime_utr,"")
-    String vs_5_prime_utr.base = basename(vs_5_prime_utr,"")
-    String vs_inside_exons.base = basename(vs_inside_exons,"")
-    String vs_inside_introns.base = basename(vs_inside_introns,"")
-    String vs_intact_exon_overlap.base = basename(vs_intact_exon_overlap,"")
-    String vs_partial_exon_overlap.base = basename(vs_partial_exon_overlap,"")
-    String vs_tss_transcripts_overlap.base = basename(vs_tss_transcripts_overlap,"")
-    String vs_partial_transcripts_overlap.base = basename(vs_partial_transcripts_overlap,"")
-    String vs_whole_transcript_overlap.base = basename(vs_whole_transcript_overlap,"")
+    String vs_promoter.base = basename(vs_promoter)
+    String vs_3_prime_utr.base = basename(vs_3_prime_utr)
+    String vs_5_prime_utr.base = basename(vs_5_prime_utr)
+    String vs_inside_exons.base = basename(vs_inside_exons)
+    String vs_inside_introns.base = basename(vs_inside_introns)
+    String vs_intact_exon_overlap.base = basename(vs_intact_exon_overlap)
+    String vs_partial_exon_overlap.base = basename(vs_partial_exon_overlap)
+    String vs_tss_transcripts_overlap.base = basename(vs_tss_transcripts_overlap)
+    String vs_partial_transcripts_overlap.base = basename(vs_partial_transcripts_overlap)
+    String vs_whole_transcript_overlap.base = basename(vs_whole_transcript_overlap)
 
     command <<<
         set -Eeuo pipefail
