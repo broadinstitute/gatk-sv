@@ -183,7 +183,7 @@ task SVComparison{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File comparison = "~{prefix}.~{sample}.bed"
+        File comparison = "~{prefix}.~{sample}.bed.gz"
     }
 
 
