@@ -189,7 +189,7 @@ task SVComparison{
 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz
-        bash src/compare_callsets_V2.sh -O ~{prefix}.~{sample}.bed -p ~{prefix}.~{sample} ~{query} ~{ref}
+        bash src/compare_callsets_V2.sh -O ~{prefix}.~{sample}.bed -p ~{prefix}.~{sample} ~{query} ~{ref} src/
         bgzip ~{prefix}.~{sample}.bed
    >>>
 
