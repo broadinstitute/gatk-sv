@@ -120,8 +120,8 @@ task CalculateAPS{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 15, 
-        disk_gb: 20,
+        mem_gb: 25, 
+        disk_gb: 30,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -178,7 +178,7 @@ task CalcuNcasStat{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 20, 
+        mem_gb: 25, 
         disk_gb: 40,
         boot_disk_gb: 10,
         preemptible_tries: 1,
@@ -244,8 +244,8 @@ task GeneratePermutatedSVs{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 15, 
-        disk_gb: 20,
+        mem_gb: 25, 
+        disk_gb: 30,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
