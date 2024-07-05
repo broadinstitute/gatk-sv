@@ -32,7 +32,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 svtype = 'DEL',
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_del
         }
@@ -43,7 +43,7 @@ workflow CalcuNcasStat {
                 svtype = 'DUP',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_dup
         }
@@ -54,7 +54,7 @@ workflow CalcuNcasStat {
                 svtype = 'INV',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_inv
        }
@@ -65,7 +65,7 @@ workflow CalcuNcasStat {
                 svtype = 'CPX',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_cpx
         }
@@ -76,7 +76,7 @@ workflow CalcuNcasStat {
                 svtype = 'INS',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_ins
         }
@@ -87,7 +87,7 @@ workflow CalcuNcasStat {
                 svtype = 'INS:ME:ALU',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_alu
         }
@@ -98,7 +98,7 @@ workflow CalcuNcasStat {
                 svtype = 'INS:ME:LINE1',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_line1
         }
@@ -109,7 +109,7 @@ workflow CalcuNcasStat {
                 svtype = 'INS:ME:SVA',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
+                ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_sva
         }
@@ -130,7 +130,6 @@ workflow CalcuNcasStat {
                 ncas_sva = calcu_ncas_sva.ncas_stat_unit,
 
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
 
         }
@@ -254,7 +253,6 @@ task IntegrateNcasStat{
         File ncas_sva
 
         File src_tar
-        File ncas_rdata
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
