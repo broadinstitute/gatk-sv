@@ -34,6 +34,7 @@ workflow CalcuNcasStat {
 task CalcuNcasStat{
     input{
         String permu
+        String prefix
         File src_tar
         File ncas_rdata
         String sv_base_mini_docker
