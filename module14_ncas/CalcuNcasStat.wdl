@@ -7,7 +7,6 @@ workflow CalcuNcasStat {
     input{
         Array[Int] permutation_list
         Array[File] ncas_rdata_list
-        File? Filter_SVID
         File src_tar
         File ref_tar
         String prefix
@@ -26,18 +25,6 @@ workflow CalcuNcasStat {
 
     scatter(i in range(length(permutation_list))){
 
-        Boolean filter_SV_sites = defined(Filter_SVID)
-
-        if(filter_SV_sites){
-            call FilterSvSites{
-                input:
-                    ncas_rdata = ncas_rdata_list[i],
-                    Filter_SVID = Filter_SVID,
-                    sv_base_mini_docker = sv_base_mini_docker
-            }
-        }
-
-        File ncas_rdata = select_first([FilterSvSites.filtered_rdata, ncas_rdata_list[i]])
         
         call CalcuNcasStat as calcu_ncas_del{
             input:
