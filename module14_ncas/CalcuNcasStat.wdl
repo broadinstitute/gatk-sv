@@ -7,6 +7,7 @@ workflow CalcuNcasStat {
     input{
         Array[Int] permutation_list
         Array[File] ncas_rdata_list
+        File? Filter_SVID
         File src_tar
         File ref_tar
         String prefix
@@ -15,12 +16,26 @@ workflow CalcuNcasStat {
     }
 
     scatter(i in range(length(permutation_list))){
+
+        Boolean filter_SV_sites = defined(Filter_SVID)
+
+        if(filter_SV_sites){
+            call FilterSvSites{
+                input:
+                    ncas_rdata = ncas_rdata_list[i],
+                    Filter_SVID = Filter_SVID,
+                    sv_base_mini_docker = sv_base_mini_docker
+            }
+        }
+
+        File ncas_rdata = select_first([FilterSvSites.filtered_rdata, ncas_rdata_list[i]])
+        
         call CalcuNcasStat{
             input:
                 permu = permutation_list[i],
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
@@ -30,6 +45,54 @@ workflow CalcuNcasStat {
         Array[File] ncas_stat = CalcuNcasStat.ncas_stat
     }
 }
+
+
+task FilterSvSites{
+    input{
+        File Filter_SVID
+        File src_tar
+        File ncas_rdata
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 25, 
+        disk_gb: 40,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    String filebase = basename(ncas_rdata,'.rData')
+
+    output{
+        File filtered_rdata = "~{filebase}.filtered.rData"
+    }
+
+    command <<<
+        set -Eeuo pipefail
+
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+        Rscript src/filter_sv_sites.R -r ~{ncas_rdata} -f ~{Filter_SVID} -o ~{filebase}.filtered.rData
+    >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }    
+}
+
 
 
 task CalcuNcasStat{
