@@ -2,6 +2,7 @@ version 1.0
 
 import "Structs.wdl"
 import "SVvsConservative.wdl" as SVvsConservative
+import "CalcuNcasStat.wdl" as CalcuNcasStat
 
 workflow NoncodingCombinatorialAssociationSelection {
     input{
@@ -92,14 +93,18 @@ workflow NoncodingCombinatorialAssociationSelection {
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
-        call CalcuNcasStat{
-            input:
-                permu = permutation_round_list[i],
-                src_tar = src_tar,
-                ncas_rdata = GenerateNcasMetrics.ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
-        }
     }
+
+
+    call CalcuNcasStat.CalcuNcasStat as calcu_ncas_stat{
+        input:
+            permutation_list = permutation_round_list,
+            src_tar = src_tar,
+            prefix = prefix,
+            ncas_rdata_list = GenerateNcasMetrics.ncas_rdata,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
+
     output{
         Array[File] ncas_data_list = GenerateNcasMetrics.ncas_rdata
         Array[File] ncas_stat = CalcuNcasStat.ncas_stat

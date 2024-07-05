@@ -8,9 +8,7 @@ workflow CalcuNcasStat {
         Array[Int] permutation_list
         Array[File] ncas_rdata_list
         File src_tar
-        File ref_tar
         String prefix
-        File contig_file
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_calcu_ncas_del
         RuntimeAttr? runtime_attr_calcu_ncas_dup
