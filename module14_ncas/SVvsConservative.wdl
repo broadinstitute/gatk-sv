@@ -322,6 +322,9 @@ task IntegrateConserveAnno {
     gsutil cp ~{src_tar} ./
     tar zxvf src.tar.gz
 
+    zcat ~{SV_vs_phastCons100way} | awk '{print $1,$2,$3,$4,$NF}' |sed -e 's/ /\t/g' |bgzip > SV_vs_phastCons100way.gz
+    zcat ~{SV_vs_phyloP100way}  | awk '{print $1,$2,$3,$4,$NF}' |sed -e 's/ /\t/g' |bgzip > SV_vs_phyloP100way.gz
+
     Rscript src/reorganize_sv_vs_conservative.R \
             --sv_vs_DHS_mamm ~{SV_vs_DHS_mamm} \
             --sv_vs_DHS_prim ~{SV_vs_DHS_prim} \
@@ -330,8 +333,8 @@ task IntegrateConserveAnno {
             --sv_vs_UCE ~{SV_vs_UCE} \
             --sv_vs_UCE_481 ~{SV_vs_uce_481} \
             --sv_vs_UCNE ~{SV_vs_UCNE_coord} \
-            --sv_vs_phastCons100way ~{SV_vs_phastCons100way} \
-            --sv_vs_phyloP100way ~{SV_vs_phyloP100way} \
+            --sv_vs_phastCons100way SV_vs_phastCons100way.gz \
+            --sv_vs_phyloP100way SV_vs_phyloP100way.gz \
             --sv_vs_z_over_2 ~{SV_vs_Z_over_2} \
             --sv_vs_z_over_4 ~{SV_vs_Z_over_4} \
             --sv_vs_HAR ~{SV_vs_HAR} \
