@@ -296,8 +296,8 @@ task IntegrateConserveAnno {
     # be held in memory or disk while working, potentially in a form that takes up more space)
     Float input_size = size(SV_file, "GB")
     RuntimeAttr runtime_default = object {
-        mem_gb: 20.0,
-        disk_gb: ceil(40.0 + input_size * 15.0),
+        mem_gb: 10.0,
+        disk_gb: ceil(30.0 + input_size * 15.0),
         cpu_cores: 1,
         preemptible_tries: 3,
         max_retries: 1,
