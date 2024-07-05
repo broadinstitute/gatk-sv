@@ -5,7 +5,7 @@ import "SVvsConservative.wdl" as SVvsConservative
 
 workflow NoncodingCombinatorialAssociationSelection {
     input{
-        Int permutation_rounds
+        Array[Int] permutation_round_list
         File SV_sites_file
         File SV_function_file
         File SVID_genomic_context
@@ -32,10 +32,10 @@ workflow NoncodingCombinatorialAssociationSelection {
             sv_base_mini_docker = sv_base_mini_docker
     }
 
-    scatter(i in range(permutation_rounds)){
+    scatter(i in range(length(permutation_round_list))){
         call GeneratePermutatedSVs{
             input:
-                permu = i, 
+                permu = permutation_round_list[i],
                 ref_tar = ref_tar,
                 src_tar = src_tar,
                 SV_sites_file = SV_sites_file,
@@ -78,7 +78,7 @@ workflow NoncodingCombinatorialAssociationSelection {
 
         call GenerateNcasMetrics{
             input:
-                permu = i,
+                permu = permutation_round_list[i],
                 src_tar = src_tar,
                 svid_aps = CalculateAPS.svid_aps,
                 svid_genomic_context = SVID_genomic_context,
@@ -94,7 +94,7 @@ workflow NoncodingCombinatorialAssociationSelection {
 
         call CalcuNcasStat{
             input:
-                permu = i,
+                permu = permutation_round_list[i],
                 src_tar = src_tar,
                 ncas_rdata = GenerateNcasMetrics.ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
