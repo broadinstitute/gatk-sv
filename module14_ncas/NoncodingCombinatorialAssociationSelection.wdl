@@ -107,7 +107,7 @@ workflow NoncodingCombinatorialAssociationSelection {
 
     output{
         Array[File] ncas_data_list = GenerateNcasMetrics.ncas_rdata
-        Array[File] ncas_stat = CalcuNcasStat.ncas_stat
+        Array[File] ncas_stat = calcu_ncas_stat.ncas_stat
     }
 }
 
