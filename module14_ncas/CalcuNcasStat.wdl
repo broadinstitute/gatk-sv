@@ -14,14 +14,16 @@ workflow CalcuNcasStat {
         String sv_base_mini_docker
     }
 
+    scatter(i in range(length(permutation_list))){
+        call CalcuNcasStat{
+            input:
+                permu = permutation_list[i],
+                prefix = prefix,
+                src_tar = src_tar,
+                ncas_rdata = ncas_rdata_list[i],
+                sv_base_mini_docker = sv_base_mini_docker
+        }
 
-    call CalcuNcasStat{
-        input:
-            permu = i,
-            prefix = prefix,
-            src_tar = src_tar,
-            ncas_rdata = GenerateNcasMetrics.ncas_rdata,
-            sv_base_mini_docker = sv_base_mini_docker
     }
 
     output{
