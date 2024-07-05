@@ -46,7 +46,7 @@ workflow CalcuNcasStat {
                 svtype = 'DEL',
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_del
         }
 
@@ -57,7 +57,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_dup
         }
 
@@ -68,7 +68,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_inv
        }
 
@@ -79,7 +79,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_cpx
         }
 
@@ -90,7 +90,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_ins
         }
 
@@ -101,7 +101,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_alu
         }
 
@@ -112,7 +112,7 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_line1
         }
 
