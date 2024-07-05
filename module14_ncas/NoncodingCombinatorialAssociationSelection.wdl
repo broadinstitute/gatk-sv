@@ -307,7 +307,7 @@ task GenerateNcasMetrics{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 25, 
+        mem_gb: 35, 
         disk_gb: 50,
         boot_disk_gb: 10,
         preemptible_tries: 1,
