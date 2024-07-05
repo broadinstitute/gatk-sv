@@ -13,6 +13,15 @@ workflow CalcuNcasStat {
         String prefix
         File contig_file
         String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_calcu_ncas_del
+        RuntimeAttr? runtime_attr_calcu_ncas_dup
+        RuntimeAttr? runtime_attr_calcu_ncas_inv    
+        RuntimeAttr? runtime_attr_calcu_ncas_cpx    
+        RuntimeAttr? runtime_attr_calcu_ncas_ins
+        RuntimeAttr? runtime_attr_calcu_ncas_alu
+        RuntimeAttr? runtime_attr_calcu_ncas_line1
+        RuntimeAttr? runtime_attr_calcu_ncas_sva
+
     }
 
     scatter(i in range(length(permutation_list))){
@@ -38,6 +47,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_del
         }
 
         call CalcuNcasStat as calcu_ncas_dup{
@@ -48,6 +58,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_dup
         }
 
         call CalcuNcasStat as calcu_ncas_inv{
@@ -58,7 +69,8 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
-        }
+                runtime_attr_override = runtime_attr_calcu_ncas_inv
+       }
 
         call CalcuNcasStat as calcu_ncas_cpx{
             input:
@@ -68,6 +80,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_cpx
         }
 
         call CalcuNcasStat as calcu_ncas_ins{
@@ -78,6 +91,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_ins
         }
 
         call CalcuNcasStat as calcu_ncas_alu{
@@ -88,6 +102,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_alu
         }
 
         call CalcuNcasStat as calcu_ncas_line1{
@@ -98,6 +113,7 @@ workflow CalcuNcasStat {
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker
+                runtime_attr_override = runtime_attr_calcu_ncas_line1
         }
 
         call CalcuNcasStat as calcu_ncas_sva{
@@ -107,7 +123,8 @@ workflow CalcuNcasStat {
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_calcu_ncas_sva
         }
 
         call IntegrateNcasStat{
@@ -134,7 +151,7 @@ workflow CalcuNcasStat {
     }
 
     output{
-        Array[File] ncas_stat = CalcuNcasStat.ncas_stat
+        Array[File] ncas_stat = IntegrateNcasStat.ncas_stat
     }
 }
 
@@ -257,8 +274,8 @@ task IntegrateNcasStat{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 25, 
-        disk_gb: 40,
+        mem_gb: 10, 
+        disk_gb: 20,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
