@@ -42,95 +42,95 @@ workflow CalcuNcasStat {
         
         call CalcuNcasStat as calcu_ncas_del{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 prefix = prefix,
                 svtype = 'DEL',
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_del
         }
 
         call CalcuNcasStat as calcu_ncas_dup{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'DUP',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_dup
         }
 
         call CalcuNcasStat as calcu_ncas_inv{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INV',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_inv
         }
 
         call CalcuNcasStat as calcu_ncas_cpx{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'CPX',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_cpx
         }
 
         call CalcuNcasStat as calcu_ncas_ins{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INS',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_ins
         }
 
         call CalcuNcasStat as calcu_ncas_alu{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INS:ME:ALU',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_alu
         }
 
         call CalcuNcasStat as calcu_ncas_line1{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INS:ME:LINE1',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_line1
         }
 
         call CalcuNcasStat as calcu_ncas_sva{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INS:ME:SVA',
                 prefix = prefix,
                 src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
+                ncas_rdata = ncas_rdata,
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_sva
         }
 
         call IntegrateNcasStat{
             input:
-                permu = ncas_rdata,
+                permu = permutation_list[i],
                 svtype = 'INS:ME:SVA',
                 prefix = prefix,
 
