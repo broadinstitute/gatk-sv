@@ -180,6 +180,7 @@ task FilterSvSites{
 
     output{
         File filtered_rdata = "~{filebase}.filtered.rData"
+        File filtered_svid_list =  "filter_SVID.tsv"
     }
 
     command <<<
