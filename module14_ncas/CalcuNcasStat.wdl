@@ -37,7 +37,7 @@ workflow CalcuNcasStat {
             }
         }
 
-        ncas_rdata = select_first([FilterSvSites.filtered_rdata, ncas_rdata_list[i]])
+        File ncas_rdata = select_first([FilterSvSites.filtered_rdata, ncas_rdata_list[i]])
 
         
         call CalcuNcasStat as calcu_ncas_del{
