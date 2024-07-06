@@ -10,6 +10,7 @@ workflow CalcuNcasStat {
         File src_tar
         String prefix
         String sv_base_mini_docker
+        File? Filter_SVID
         RuntimeAttr? runtime_attr_calcu_ncas_del
         RuntimeAttr? runtime_attr_calcu_ncas_dup
         RuntimeAttr? runtime_attr_calcu_ncas_inv    
@@ -21,12 +22,26 @@ workflow CalcuNcasStat {
 
     }
 
+
     scatter(i in range(length(permutation_list))){
+
+        Boolean run_SVID_filter = defined(Filter_SVID)
+        if(run_SVID_filter){
+            call FilterSvSites{
+                Filter_SVID = Filter_SVID,
+                src_tar = src_tar,
+                ncas_rdata = ncas_rdata_list[i],
+                sv_base_mini_docker = sv_base_mini_docker
+
+            }
+        }
+
+        ncas_rdata = select_first([FilterSvSites.filtered_rdata, ncas_rdata_list[i]])
 
         
         call CalcuNcasStat as calcu_ncas_del{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 prefix = prefix,
                 svtype = 'DEL',
                 src_tar = src_tar,
@@ -37,7 +52,7 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_dup{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'DUP',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -48,18 +63,18 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_inv{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INV',
                 prefix = prefix,
                 src_tar = src_tar,
                 ncas_rdata = ncas_rdata_list[i],
                 sv_base_mini_docker = sv_base_mini_docker,
                 runtime_attr_override = runtime_attr_calcu_ncas_inv
-       }
+        }
 
         call CalcuNcasStat as calcu_ncas_cpx{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'CPX',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -70,7 +85,7 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_ins{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INS',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -81,7 +96,7 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_alu{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INS:ME:ALU',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -92,7 +107,7 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_line1{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INS:ME:LINE1',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -103,7 +118,7 @@ workflow CalcuNcasStat {
 
         call CalcuNcasStat as calcu_ncas_sva{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INS:ME:SVA',
                 prefix = prefix,
                 src_tar = src_tar,
@@ -114,7 +129,7 @@ workflow CalcuNcasStat {
 
         call IntegrateNcasStat{
             input:
-                permu = permutation_list[i],
+                permu = ncas_rdata,
                 svtype = 'INS:ME:SVA',
                 prefix = prefix,
 
@@ -142,7 +157,7 @@ workflow CalcuNcasStat {
 
 task FilterSvSites{
     input{
-        File Filter_SVID
+        File? Filter_SVID
         File src_tar
         File ncas_rdata
         String sv_base_mini_docker
