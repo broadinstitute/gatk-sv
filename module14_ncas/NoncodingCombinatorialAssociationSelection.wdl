@@ -19,6 +19,7 @@ workflow NoncodingCombinatorialAssociationSelection {
         String prefix
         File contig_file
         String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_generate_permutated_SVs
 
     }
 
@@ -40,7 +41,8 @@ workflow NoncodingCombinatorialAssociationSelection {
                 ref_tar = ref_tar,
                 src_tar = src_tar,
                 SV_sites_file = SV_sites_file,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_base_mini_docker = sv_base_mini_docker,
+                runtime_attr_override = runtime_attr_generate_permutated_SVs
         }
 
         call SVvsConservative.SV_vs_Conservative as SV_vs_Conservative{
