@@ -26,13 +26,14 @@ workflow CalcuNcasStat {
     scatter(i in range(length(permutation_list))){
 
         Boolean run_SVID_filter = defined(Filter_SVID)
+
         if(run_SVID_filter){
             call FilterSvSites{
-                Filter_SVID = Filter_SVID,
-                src_tar = src_tar,
-                ncas_rdata = ncas_rdata_list[i],
-                sv_base_mini_docker = sv_base_mini_docker
-
+                input:
+                    Filter_SVID = Filter_SVID,
+                    src_tar = src_tar,
+                    ncas_rdata = ncas_rdata_list[i],
+                    sv_base_mini_docker = sv_base_mini_docker
             }
         }
 
