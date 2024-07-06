@@ -177,6 +177,7 @@ task FilterSvSites{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     String filebase = basename(ncas_rdata,'.rData')
+    String srcbase = basename(src_tar)
 
     output{
         File filtered_rdata = "~{filebase}.filtered.rData"
@@ -187,7 +188,7 @@ task FilterSvSites{
         set -Eeuo pipefail
 
         gsutil cp ~{src_tar} ./
-        tar zxvf src.tar.gz 
+        tar zxvf ~{srcbase}
 
         zcat ~{Filter_SVID} | cut -f4 > filter_SVID.tsv
         Rscript src/filter_sv_sites.R -r ~{ncas_rdata} -f filter_SVID.tsv -o ~{filebase}.filtered.rData
@@ -227,6 +228,7 @@ task CalcuNcasStat{
     }
 
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    String srcbase = basename(src_tar)
 
     output{
         File ncas_stat_unit = "~{prefix}.~{svtype}.noncoding.permu_~{permu}.stat"
@@ -236,7 +238,7 @@ task CalcuNcasStat{
         set -Eeuo pipefail
 
         gsutil cp ~{src_tar} ./
-        tar zxvf src.tar.gz 
+        tar zxvf ~{srcbase}
 
         Rscript ./src/calculate_cwas_statistics.R -d ~{ncas_rdata} -a permu_~{permu}.stat -t ~{svtype} -g noncoding -p ~{prefix}
     >>>
@@ -283,6 +285,7 @@ task IntegrateNcasStat{
     }
 
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+    String srcbase = basename(src_tar)
 
     output{
         File ncas_stat = "ncas_stat.permu_~{permu}.tar.gz"
@@ -292,7 +295,7 @@ task IntegrateNcasStat{
         set -Eeuo pipefail
 
         gsutil cp ~{src_tar} ./
-        tar zxvf src.tar.gz 
+        tar zxvf ~{srcbase}
 
 
         Rscript ./src/integrate_cwas_stat_across_svtype.R \
