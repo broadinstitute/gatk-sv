@@ -188,7 +188,8 @@ task FilterSvSites{
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
-        Rscript src/filter_sv_sites.R -r ~{ncas_rdata} -f ~{Filter_SVID} -o ~{filebase}.filtered.rData
+        zcat ~{Filter_SVID} | cut -f4 > filter_SVID.tsv
+        Rscript src/filter_sv_sites.R -r ~{ncas_rdata} -f filter_SVID.tsv -o ~{filebase}.filtered.rData
     >>>
 
     runtime {
