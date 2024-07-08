@@ -1,11 +1,18 @@
 {
-  "FilterGenotypes.vcf": {{ test_batch.concordance_vcf | tojson }},
-  "FilterGenotypes.output_prefix": {{ test_batch.name | tojson }},
-  "FilterGenotypes.ploidy_table": {{ test_batch.ploidy_table | tojson }},
-  "FilterGenotypes.gq_recalibrator_model_file": {{ reference_resources.aou_recalibrate_gq_model_file | tojson }},
+  "FilterGenotypes.vcf": "${this.concordance_vcf}",
+  "FilterGenotypes.output_prefix": "${this.sample_set_id}",
+  "FilterGenotypes.ploidy_table": "${this.ploidy_table}",
+  "FilterGenotypes.gq_recalibrator_model_file": "${workspace.recalibrate_gq_model_file}",
   "FilterGenotypes.sl_filter_args": "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19",
 
-  "FilterGenotypes.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+  "FilterGenotypes.genome_tracks": "${workspace.recalibrate_gq_genome_tracks}",
+  "FilterGenotypes.genome_tracks": [
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
+  ],
   "FilterGenotypes.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",
@@ -22,17 +29,13 @@
     {{ reference_resources.hgsv_byrska_bishop_site_level_benchmarking_dataset | tojson }},
     {{ reference_resources.thousand_genomes_site_level_benchmarking_dataset | tojson }}
   ],
-  "FilterGenotypes.runtime_override_per_sample_benchmark_plot": {
-    "mem_gb": 30,
-    "disk_gb": 50
-  },
   "FilterGenotypes.runtime_override_plot_qc_per_family": {
     "mem_gb": 15,
     "disk_gb": 100
   },
 
-  "FilterGenotypes.linux_docker": {{ dockers.linux_docker | tojson }},
-  "FilterGenotypes.gatk_docker": {{ dockers.gq_recalibrator_docker | tojson }},
-  "FilterGenotypes.sv_base_mini_docker": {{ dockers.sv_base_mini_docker | tojson }},
-  "FilterGenotypes.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }}
+  "FilterGenotypes.linux_docker": "${workspace.linux_docker}",
+  "FilterGenotypes.gatk_docker": "${workspace.gq_recalibrator_docker}",
+  "FilterGenotypes.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "FilterGenotypes.sv_pipeline_docker": "${workspace.sv_pipeline_docker}"
 }
