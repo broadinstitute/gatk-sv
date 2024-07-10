@@ -74,7 +74,7 @@ workflow LongReadVsShortRead {
                 query = extract_query_ref_SR.query,
                 ref = extract_query_ref_LR.ref,
                 prefix = "~{prefix_SR}_vs_~{prefix_LR}.~{contig}",
-                scontig = contig[0],
+                contig = contig[0],
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
