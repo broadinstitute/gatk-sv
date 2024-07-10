@@ -37,7 +37,8 @@ workflow LongReadVsShortRead {
     File long_read_SVs = select_first([Vcf2Bed_LR.bed, long_read_SVs])
     File short_read_SVs = select_first([Vcf2Bed_SR.bed, short_read_SVs])
 
-    Array[Array[contigs]] samples=read_tsv(contig_list)
+    Array[Array[String]] contigs=read_tsv(contig_list)
+
     scatter(contig in contigs){
         call ExtractQueryRef as extract_query_ref_LR{
             input:
