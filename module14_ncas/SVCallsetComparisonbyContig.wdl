@@ -63,7 +63,7 @@ workflow LongReadVsShortRead {
                 src_tar = src_tar,
                 query = extract_query_ref_LR.query,
                 ref = extract_query_ref_SR.ref,
-                prefix = "~{prefix_LR}_vs_~{prefix_SR}.~{contig}",
+                prefix = "~{prefix_LR}_vs_~{prefix_SR}.~{contig[0]}",
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
@@ -72,7 +72,7 @@ workflow LongReadVsShortRead {
                 src_tar = src_tar,
                 query = extract_query_ref_SR.query,
                 ref = extract_query_ref_LR.ref,
-                prefix = "~{prefix_SR}_vs_~{prefix_LR}.~{contig}",
+                prefix = "~{prefix_SR}_vs_~{prefix_LR}.~{contig[0]}",
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
