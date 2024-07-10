@@ -4,8 +4,8 @@ import "Structs.wdl"
 
 workflow LongReadVsShortRead {
     input{
-        File long_read_SVs
-        File short_read_SVs
+        File long_read_SV_File
+        File short_read_SV_File
         Boolean vcf_2_bed_LR
         Boolean vcf_2_bed_SR
         String prefix_LR
@@ -21,7 +21,7 @@ workflow LongReadVsShortRead {
     if(vcf_2_bed_LR){
         call Vcf2Bed as Vcf2Bed_LR{
             input:
-                vcf = long_read_SVs,
+                vcf = long_read_SV_File,
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
@@ -29,13 +29,13 @@ workflow LongReadVsShortRead {
     if(vcf_2_bed_SR){
         call Vcf2Bed as Vcf2Bed_SR{
             input:
-                vcf = short_read_SVs,
+                vcf = short_read_SV_File,
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
 
-    File long_read_SVs = select_first([Vcf2Bed_LR.bed, long_read_SVs])
-    File short_read_SVs = select_first([Vcf2Bed_SR.bed, short_read_SVs])
+    File long_read_SVs = select_first([Vcf2Bed_LR.bed, long_read_SV_File])
+    File short_read_SVs = select_first([Vcf2Bed_SR.bed, short_read_SV_File])
 
     Array[Array[String]] contigs=read_tsv(contig_list)
 
