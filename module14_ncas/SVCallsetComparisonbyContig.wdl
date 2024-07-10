@@ -64,7 +64,6 @@ workflow LongReadVsShortRead {
                 query = extract_query_ref_LR.query,
                 ref = extract_query_ref_SR.ref,
                 prefix = "~{prefix_LR}_vs_~{prefix_SR}.~{contig}",
-                contig = contig[0],
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
@@ -74,7 +73,6 @@ workflow LongReadVsShortRead {
                 query = extract_query_ref_SR.query,
                 ref = extract_query_ref_LR.ref,
                 prefix = "~{prefix_SR}_vs_~{prefix_LR}.~{contig}",
-                contig = contig[0],
                 sv_base_mini_docker = sv_base_mini_docker
         }
     }
@@ -257,7 +255,6 @@ task SVComparison{
         File query
         File ref
         String prefix
-        String contig
         String sv_base_mini_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -274,7 +271,7 @@ task SVComparison{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File comparison = "~{prefix}.~{contig}.bed.gz"
+        File comparison = "~{prefix}.bed.gz"
     }
 
 
@@ -283,8 +280,8 @@ task SVComparison{
 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz
-        bash src/compare_callsets_V2.sh -O ~{prefix}.~{contig}.bed -p ~{prefix}.~{contig} ~{query} ~{ref} src/
-        bgzip ~{prefix}.~{contig}.bed
+        bash src/compare_callsets_V2.sh -O ~{prefix}.bed -p ~{prefix} ~{query} ~{ref} src/
+        bgzip ~{prefix}.bed
    >>>
 
     runtime {
