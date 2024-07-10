@@ -85,7 +85,7 @@ workflow LongReadVsShortRead {
             sv_base_mini_docker = sv_base_mini_docker
         }
 
-    call ConcatComparisons as concat_comparisons_SR_vs_:R{
+    call ConcatComparisons as concat_comparisons_SR_vs_LR{
         input:
             SV_comparison_list = SR_vs_LR.comparison, 
             prefix = "~{prefix_SR}_vs_~{prefix_LR}",
