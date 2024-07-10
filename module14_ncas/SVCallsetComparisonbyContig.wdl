@@ -34,8 +34,8 @@ workflow LongReadVsShortRead {
         }
     }
 
-    long_read_SVs = select_first([Vcf2Bed_LR.bed, long_read_SVs])
-    short_read_SVs = select_first([Vcf2Bed_SR.bed, short_read_SVs])
+    File long_read_SVs = select_first([Vcf2Bed_LR.bed, long_read_SVs])
+    File short_read_SVs = select_first([Vcf2Bed_SR.bed, short_read_SVs])
 
     Array[Array[contigs]] samples=read_tsv(contig_list)
     scatter(contig in contigs){
