@@ -95,8 +95,8 @@ workflow LongReadVsShortRead {
 
 
     output{
-        File LR_vs_SR_output = ConcatComparisons.Concat_file
-        File SR_vs_LR_output = ConcatComparisons.Concat_file
+        File LR_vs_SR_output = concat_comparisons_LR_vs_SR.Concat_file
+        File SR_vs_LR_output = concat_comparisons_SR_vs_LR.Concat_file
     }
 }
 
