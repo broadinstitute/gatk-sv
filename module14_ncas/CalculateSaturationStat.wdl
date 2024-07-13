@@ -152,9 +152,9 @@ task CalcuSaturationStat{
         set -Eeuo pipefail
 
         Rscript ~{script_calcu_saturation} -i ~{bed} -o ~{filebase}.accumu_table -t ~{SV_count_stat} -s ~{split_cate} --genomic_context ~{SVID_genomic_context}
-        mkdir ~{filebase}.accumu_table.folder
-        mv ~{filebase}.accumu_table.* ~{filebase}.accumu_table.folder
-        tar czvf ~{filebase}.accumu_table.tar.gz ~{filebase}.accumu_table.folder
+        mkdir ~{filebase}.accumu_table_folder
+        mv ~{filebase}.accumu_table.* ~{filebase}.accumu_table_folder
+        tar czvf ~{filebase}.accumu_table.tar.gz ~{filebase}.accumu_table_folder
 
    >>>
 
