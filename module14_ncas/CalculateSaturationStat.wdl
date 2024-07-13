@@ -120,7 +120,7 @@ task ExtractSVsPerContig{
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }    }
 
-task calculate_saturation_all_SVs{
+task CalcuSaturationStat{
     input{
         File bed
         File SV_count_stat
