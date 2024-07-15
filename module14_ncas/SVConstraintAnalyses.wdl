@@ -45,10 +45,23 @@ workflow SVCodingConstraint {
                 vs_inside_introns = SVsVsGenesPart1.vs_inside_introns,
                 vs_whole_transcript_overlap  = SVsVsGenesPart1.vs_whole_transcript_overlap
         }
+
+        call SVsVsGenesPart3{
+            input:
+                permu = i,
+                src_tar = src_tar,
+                gene_anno_tars = gene_anno_tars,
+                gene_tars = permutated_genes_tars,
+                SV_sites_file = SV_sites_file,
+                gene_sv_integration = SVsVsGenesPart2.gene_SV_integrated,
+                sv_base_mini_docker = sv_base_mini_docker
+            }
+
+
     }
 
     output{
-    	Array[File] gene_SV_rdata_list = SVsVsGenesPart2.gene_SV_rdata
+    	Array[File] gene_SV_rdata_list = SVsVsGenesPart3.gene_SV_rdata
     }
 }
 
@@ -180,7 +193,7 @@ task SVsVsGenesPart2{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File gene_SV_rdata = "~{filebase}.gene_SV_data.rData"
+        File gene_SV_integrated = "~{filebase}.integrated.gz"
     }
 
     String filebase = basename(SV_sites_file,".gz")
@@ -220,10 +233,64 @@ task SVsVsGenesPart2{
 
         Rscript ./src/integrate_SVID_vs_genes.across_different_overlaps.R -p ~{filebase}
         bgzip ~{filebase}.integrated
+    >>>
 
-        Rscript src/calcu.gene.data.reaano.R \
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }    
+}
+
+task SVsVsGenesPart3{
+    input{
+        Int permu
+        File gene_sv_integration
+        File gene_tars
+        File gene_anno_tars
+        File src_tar
+        File SV_sites_file
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 15, 
+        disk_gb: 20,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File gene_SV_rdata = "~{filebase}.gene_SV_data.rData"
+    }
+
+    String filebase = basename(SV_sites_file,".gz")
+    String vs_promoter_base = basename(vs_promoter)
+
+    command <<<
+        set -Eeuo pipefail
+
+        gsutil cp ~{gene_tars} ./
+        tar zxvf gene_permu.tar.gz 
+
+        gsutil cp ~{gene_anno_tars} ./
+        tar zxvf gene_annotation.tar.gz
+
+        gsutil cp ~{src_tar} ./
+        tar zxvf src.tar.gz 
+
+        Rscript src/calcu.gene.data.reaano.R -p ~{permu} \
             --sv_file_real ~{SV_sites_file} \
-            --sv_vs_gene ~{filebase}.integrated.gz \
+            --sv_vs_gene ~{gene_sv_integration} \
             --output ~{filebase}.gene_SV_data.rData \
             --gene_feature gene_annotation/gene_features.bed.gz \
             --gene_anno gene_annotation/genes_grch38_annotated_4_mapped_gencode_v39.CDS.UTR.tsv.gz \
