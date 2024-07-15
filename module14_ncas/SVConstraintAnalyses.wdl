@@ -274,7 +274,6 @@ task SVsVsGenesPart3{
     }
 
     String filebase = basename(SV_sites_file,".gz")
-    String vs_promoter_base = basename(vs_promoter)
 
     command <<<
         set -Eeuo pipefail
