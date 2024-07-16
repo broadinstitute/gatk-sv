@@ -25,7 +25,7 @@ workflow CalculateGeneInterruptionPerGenomeUnit {
     
     call ConcatFile{
         input:
-            file_list = CalcuSvGenePerGenome.output,
+            file_list = CalcuSvGenePerGenome.out_tsv,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker
     }
@@ -60,7 +60,7 @@ task CalcuSvGenePerGenome{
 
     String filebase = basename(bed, '.bed.gz')
     output{
-        File output = "~{filebase}.tsv"
+        File out_tsv = "~{filebase}.tsv"
     }
 
     command <<<
