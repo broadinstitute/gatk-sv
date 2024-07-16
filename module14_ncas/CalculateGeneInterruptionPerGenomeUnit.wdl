@@ -116,17 +116,20 @@ task ConcatFile {
     }
 
     command <<<
-        set -eux
+
+        set -eu
+      
+        head -1 ~{file_list[0]} > ~{prefix}
 
         set -o pipefail
 
         while read SPLIT; do
-          zcat $SPLIT
+          tail -n+2 $SPLIT
         done < ~{write_lines(file_list)} \
           | (grep -Ev "^#" || printf "") \
-          | bgzip -c \
-          > ~{prefix}.gz
+          >> ~{prefix}
 
+        bgzip ~{prefix}
     >>>
 
   output {
