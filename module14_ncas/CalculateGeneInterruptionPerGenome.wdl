@@ -1,3 +1,5 @@
+version 1.0
+
 import "Structs.wdl"
 import "CalculateGeneInterruptionPerGenomeUnit.wdl" as calculate_gene_interruption_per_genome_unit
 

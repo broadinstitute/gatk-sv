@@ -32,7 +32,7 @@ workflow CalculateGeneInterruptionPerGenomeUnit {
 
 
     output{
-        SV_gene_sample_stat = ConcatFile.Concat_file
+        File SV_gene_sample_stat = ConcatFile.Concat_file
     }
 }
 
