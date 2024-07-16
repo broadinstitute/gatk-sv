@@ -22,5 +22,6 @@ workflow CalculateGeneInterruptionPerGenome {
     output{
         Array[File] SV_gene_sample_stat_list = CalculateGeneInterruptionPerGenomeUnit.SV_gene_sample_stat
     }
+}
 
 
