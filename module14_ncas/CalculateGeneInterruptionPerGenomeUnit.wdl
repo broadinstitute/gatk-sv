@@ -25,7 +25,7 @@ workflow CalculateGeneInterruptionPerGenomeUnit {
     
     call ConcatFile{
         input:
-            file_list = ExtractSVsPerContig.output,
+            file_list = CalcuSvGenePerGenome.output,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker
     }
