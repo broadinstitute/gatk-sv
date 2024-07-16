@@ -5,6 +5,7 @@ import "Structs.wdl"
 workflow CalculateGeneInterruptionPerGenomeUnit {
     input{
         File AoU_bed
+        String prefix
         File src
         Array[File] sample_list
         String sv_base_mini_docker
@@ -21,7 +22,6 @@ workflow CalculateGeneInterruptionPerGenomeUnit {
         }
     }
 
-    String prefix = basename(AoU_bed, '.bed.gz')
     
     call ConcatFile{
         input:
