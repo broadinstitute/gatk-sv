@@ -50,6 +50,8 @@ workflow GenotypeBatch {
     Int? sr_median_hom_ins
     Float? sr_hom_cutoff_multiplier
 
+    File? reformat_script
+
     String sv_base_mini_docker
     String sv_pipeline_docker
     String linux_docker
@@ -190,6 +192,7 @@ workflow GenotypeBatch {
       ref_dict = ref_dict,
       sr_hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
       sr_median_hom_ins = sr_median_hom_ins,
+      reformat_script = reformat_script,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       linux_docker = linux_docker,
@@ -248,6 +251,7 @@ workflow GenotypeBatch {
       coveragefile_index = coveragefile_index,
       n_per_split = n_per_split,
       ref_dict = ref_dict,
+      reformat_script = reformat_script,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
