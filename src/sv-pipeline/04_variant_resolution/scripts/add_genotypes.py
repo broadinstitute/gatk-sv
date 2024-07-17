@@ -12,23 +12,11 @@ import pandas as pd
 import pysam
 
 
-def make_multiallelic_alts(record, max_CN, is_bca=False):
+def make_multiallelic_alts(record):
     """
-    Add alts for CN states up to half of max observed total CN
+    Sets simple symbolic alt for multi-allelic records
     """
-
-    max_haplo_CN = int(np.ceil(max_CN / 2))
-
-    if is_bca:
-        alts = tuple(['<CN1>'] +
-                     ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
-    else:
-        alts = tuple(['<CN0>'] +
-                     ['<CN{0}>'.format(i) for i in range(2, max_haplo_CN + 1)])
-
-    stop = record.stop
-    record.alts = alts
-    record.stop = stop
+    record.alts = ('<CNV>',)
 
 
 def make_evidence_int(ev):
@@ -61,14 +49,8 @@ def add_genotypes(record, genotypes, varGQ):
     max_GT = genotypes['GT'].max()
     is_bca = record.info['SVTYPE'] not in 'DEL DUP'.split()
 
-    if is_bca:
-        max_CN = max_GT
-    else:
-        max_CN = max_GT + 2
-
     if max_GT > 2:
-        record.info['MULTIALLELIC'] = True
-        make_multiallelic_alts(record, max_CN, is_bca)
+        make_multiallelic_alts(record)
 
     cols = 'name sample GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
     gt_matrix = genotypes.reset_index()[cols].to_numpy()
