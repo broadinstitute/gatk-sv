@@ -4,7 +4,7 @@ import "Structs.wdl"
 
 workflow SVCodingConstraint {
     input{
-        Int permutation_rounds
+        Array[Int] permutation_round_list
         File src_tar
         File gene_anno_tars
         File permutated_genes_tars
@@ -15,7 +15,7 @@ workflow SVCodingConstraint {
     }
 
 
-    scatter(i in range(permutation_rounds)){
+    scatter(i in permutation_round_list){
 
         call SVsVsGenesPart1{
             input:
