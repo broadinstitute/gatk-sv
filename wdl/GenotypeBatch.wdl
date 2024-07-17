@@ -50,6 +50,8 @@ workflow GenotypeBatch {
     Int? sr_median_hom_ins
     Float? sr_hom_cutoff_multiplier
 
+    File? reformat_script
+
     String sv_base_mini_docker
     String sv_pipeline_docker
     String linux_docker
@@ -63,6 +65,7 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
     RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
+    RuntimeAttr? runtime_attr_reformat
 
     # Master
     RuntimeAttr? runtime_attr_add_batch
@@ -190,6 +193,7 @@ workflow GenotypeBatch {
       ref_dict = ref_dict,
       sr_hom_cutoff_multiplier = sr_hom_cutoff_multiplier,
       sr_median_hom_ins = sr_median_hom_ins,
+      reformat_script = reformat_script,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       linux_docker = linux_docker,
@@ -204,7 +208,8 @@ workflow GenotypeBatch {
       runtime_attr_integrate_pesr_gq = runtime_attr_integrate_pesr_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_triple_stream_cat = runtime_attr_triple_stream_cat,
-      runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs
+      runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs,
+      runtime_attr_reformat = runtime_attr_reformat
   }
 
   if (!single_sample_mode) {
@@ -248,6 +253,7 @@ workflow GenotypeBatch {
       coveragefile_index = coveragefile_index,
       n_per_split = n_per_split,
       ref_dict = ref_dict,
+      reformat_script = reformat_script,
       sv_base_mini_docker = sv_base_mini_docker,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_split_variants = runtime_attr_split_variants,
@@ -256,7 +262,8 @@ workflow GenotypeBatch {
       runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_concat_vcfs = runtime_attr_genotype_depths_concat_vcfs,
-      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
+      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med,
+      runtime_attr_reformat = runtime_attr_reformat
   }
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true

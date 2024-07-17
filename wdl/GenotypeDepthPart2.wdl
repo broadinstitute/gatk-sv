@@ -20,6 +20,8 @@ workflow GenotypeDepthPart2 {
     File coveragefile
     File? coveragefile_index
 
+    File? reformat_script
+
     String sv_pipeline_docker
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_split_variants
@@ -29,6 +31,7 @@ workflow GenotypeDepthPart2 {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_concat_vcfs
     RuntimeAttr? runtime_attr_merge_regeno_cov_med
+    RuntimeAttr? runtime_attr_reformat
   }
 
   File bin_exclude_idx = bin_exclude + ".tbi"
@@ -152,13 +155,22 @@ workflow GenotypeDepthPart2 {
       vcfs=flatten(select_all([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf])),
       vcfs_idx=flatten(select_all([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index])),
       allow_overlaps=true,
-      outfile_prefix="~{batch}.genotyped_depth",
+      outfile_prefix="~{batch}.genotyped_depth_concat",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_vcfs
   }
+
+  call tasksgenotypebatch.ReformatGenotypedVcf {
+    input:
+      vcf = ConcatVcfs.concat_vcf,
+      output_prefix = "~{batch}.genotyped_depth_reformatted",
+      script = reformat_script,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_attr_reformat
+  }
   output {
-    File genotyped_vcf = ConcatVcfs.concat_vcf
-    File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx
+    File genotyped_vcf = ReformatGenotypedVcf.out
+    File genotyped_vcf_index = ReformatGenotypedVcf.out_index
     File regeno_coverage_medians = MergeRegenoCoverageMedians.regeno_coverage_medians
   }
 }
