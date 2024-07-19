@@ -24,7 +24,6 @@ workflow ExtractVcfSites {
         Array[String] contig_list
         File sample_list
         Boolean shard_vcf
-        String midfix
         String sv_pipeline_docker
         String sv_base_mini_docker
         String sv_pipeline_hail_docker
