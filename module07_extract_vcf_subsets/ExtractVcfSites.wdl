@@ -22,6 +22,7 @@ workflow ExtractVcfSites {
         Array[File] vcf_list
         Array[File] vcf_idx_list
         Array[String] contig_list
+        File sample_list
         Boolean shard_vcf
         String midfix
         String sv_pipeline_docker
