@@ -21,7 +21,7 @@ workflow ExtractVcfSites {
     input {
         Array[File] vcf_list
         Array[File] vcf_idx_list
-        Array[String] contig_list
+        File contig_file
         File sample_list
         Boolean shard_vcf
         String sv_pipeline_docker
@@ -30,6 +30,8 @@ workflow ExtractVcfSites {
         RuntimeAttr? runtime_attr_override_extract_subset_vcf
     }
 
+    Array[Array[String]] contig_list = read_tsv(contig_file)
+
     scatter(i in range(length(vcf_list))){
         if (!shard_vcf){
             call ExtractSubsetSamples{
@@ -37,7 +39,7 @@ workflow ExtractVcfSites {
                     vcf = vcf_list[i],
                     vcf_idx = vcf_idx_list[i],
                     sample_list = sample_list,
-                    midfix = contig_list[i],
+                    midfix = contig_list[i][0],
                     sv_pipeline_docker = sv_pipeline_docker,
                     runtime_attr_override = runtime_attr_override_extract_subset_vcf
            }
