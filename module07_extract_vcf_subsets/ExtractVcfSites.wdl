@@ -36,7 +36,7 @@ workflow ExtractVcfSites {
                 input:
                     vcf = vcf_list[i],
                     vcf_idx = vcf_idx_list[i],
-                    sample_list = sample_list
+                    sample_list = sample_list,
                     midfix = contig_list[i],
                     sv_pipeline_docker = sv_pipeline_docker,
                     runtime_attr_override = runtime_attr_override_extract_subset_vcf
