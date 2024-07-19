@@ -302,8 +302,14 @@ class SVRecordCluster:
                     new_record.info[key] = sorted(
                         set([v for vlist in values for v in vlist]))
                 elif header_info.number == 1:
+                    to_join = set()
+                    for value in values:
+                        if type(value) == tuple:
+                            to_join.add(value[0])  # if there are multiple values where there should be 1, keep only the first one for now
+                        else:
+                            to_join.add(value)
                     new_record.info[key] = ','.join(
-                        sorted(set(values)))
+                        sorted(to_join))  # TODO: don't do this!!! figure out how to choose the best value
                 else:
                     new_record.info[key] = [
                         ','.join(vlist) for vlist in zip(values)]
