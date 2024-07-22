@@ -382,7 +382,7 @@ task LocalizeReads {
     fi
   }
   output {
-    File output_file = collaborator_participant_id + ".final.cram"
-    File output_index = collaborator_participant_id + ".final.cram.crai"
+    File output_file = collaborator_participant_id + ".cram"
+    File output_index = collaborator_participant_id + ".cram.crai"
   }
 }
