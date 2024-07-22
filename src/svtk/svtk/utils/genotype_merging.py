@@ -137,7 +137,7 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                 elif key == 'EV':
                     ev_values = [r.samples[sample][key] for r in records]
                     ev_values = [_str_to_tuple(v) for v in ev_values]
-                    ev_types = list(set(type(v) for v in ev_values if v is not None))
+                    ev_types = list(set(type(v) for v in ev_values if v not in {None, (None,)}))
                     if len(ev_types) == 0:
                         new_record.samples[sample][key] = None
                     elif len(ev_types) > 1:
