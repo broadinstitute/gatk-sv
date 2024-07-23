@@ -34,7 +34,6 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 
 ## <a name="requirements">Requirements</a>
 
-
 ### Deployment and execution:
 * A [Google Cloud](https://cloud.google.com/) account.
 * A workflow execution system supporting the [Workflow Description Language](https://openwdl.org/) (WDL), either:
