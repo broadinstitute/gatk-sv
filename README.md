@@ -77,7 +77,6 @@ To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -
 We recommend filtering out samples with a high percentage of improperly paired reads (>10% or an outlier for your data) as technical outliers prior to running [GatherSampleEvidence](#gather-sample-evidence). A high percentage of improperly paired reads may indicate issues with library prep, degradation, or contamination. Artifactual improperly paired reads could cause incorrect SV calls, and these samples have been observed to have longer runtimes and higher compute costs for [GatherSampleEvidence](#gather-sample-evidence).
 
 #### <a name="sampleids">Sample ID requirements:</a>
-
 Sample IDs must:
 * Be unique within the cohort
 * Contain only alphanumeric characters and underscores (no dashes, whitespace, or special characters)
