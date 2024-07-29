@@ -177,7 +177,7 @@ def estimate_costs_per_group(data):
         group_data['DynCost'] = sum(
             (group_data['DynCPUCost'], group_data['DynMemCost'], group_data['DynDiskCost']))
 
-        data_grouped = data_grouped.append(group_data, ignore_index=True)
+        data_grouped = pd.concat([data_grouped, pd.DataFrame([group_data])], ignore_index=True)
 
     data_grouped.sort_values(by='TotCost', inplace=True, ascending=False)
     return data_grouped
