@@ -49,6 +49,7 @@ workflow ShardedManualReview{
         File? raw_SVs
         File sample_PE_metrics
         File sample_depth_calls
+        File? script_generate_cpx_review_script
 
         Boolean use_hail = false
         Boolean run_fix_ends = false
@@ -152,6 +153,7 @@ workflow ShardedManualReview{
             input:
                 bed = SplitCpxCtx.cpx_ctx_bed,
                 sample_PE_metrics = sample_PE_metrics,
+                script = script_generate_cpx_review_script,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_generate_cpx_review_script
         }
@@ -440,6 +442,7 @@ task GenerateCpxReviewScript{
     input{
         File bed
         File sample_PE_metrics
+        File? script
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -460,7 +463,7 @@ task GenerateCpxReviewScript{
     command<<<
         set -euo pipefail
     
-        python /opt/sv-pipeline/scripts/manual_review/reformat_CPX_bed_and_generate_script.py \
+        python ~{default="/opt/sv-pipeline/scripts/manual_review/reformat_CPX_bed_and_generate_script.py" script} \
         -i ~{bed} \
         -s ~{sample_PE_metrics} \
         -p CPX_CTX_disINS.PASS.PE_evidences \
