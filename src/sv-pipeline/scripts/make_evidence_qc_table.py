@@ -117,7 +117,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     return outlier_df
 
 
-def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_scramble_df: pd.DataFrame,outlier_type: str) -> pd.DataFrame:
+def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_scramble_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
     Args:
         outlier_manta_df: Outliers determined in EvidenceQC for Manta.
