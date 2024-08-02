@@ -197,7 +197,7 @@ workflow, with an example of possible values.
 
 
 
-### Outputs
+## Outputs
 
 - Combined read count matrix, SR, PE, and BAF files
 - Standardized call VCFs
