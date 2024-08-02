@@ -9,6 +9,30 @@ Runs raw evidence collection on each sample with the following SV callers:
 Manta, Wham, Scramble, and/or MELT. For guidance on pre-filtering prior to GatherSampleEvidence, 
 refer to the Sample Exclusion section.
 
+The downstream dependencies of the GatherSampleEvidence workflow 
+are illustrated in the following diagram.
+
+```mermaid
+
+stateDiagram
+  direction LR
+  
+  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
+  classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
+
+  gse: GatherSampleEvidence
+  eqc: EvidenceQC
+  gcnv: TrainGCNV
+  gbe: GatherBatchEvidence
+  gse --> eqc
+  gse --> gcnv
+  gse --> gbe
+  
+  class gse thisModule
+  class eqc, gcnv, gbe outModules
+```
+
 
 ## Inputs
 

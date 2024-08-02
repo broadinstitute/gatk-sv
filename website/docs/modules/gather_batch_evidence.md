@@ -30,7 +30,6 @@ stateDiagram
   
   class gbe thisModule
   class gse, eqc, gcnv inModules
-  class gbe thisModules
   class cbe outModules
 ```
 

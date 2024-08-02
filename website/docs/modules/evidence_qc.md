@@ -19,7 +19,8 @@ for further guidance on creating batches.
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
-The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
+The upstream and downstream dependencies of the EvidenceQC workflow 
+are illustrated in the following diagram.
 
 <br/>
 
