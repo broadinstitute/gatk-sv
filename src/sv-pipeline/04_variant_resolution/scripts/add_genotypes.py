@@ -71,22 +71,7 @@ def add_genotypes(record, genotypes, varGQ):
                 msg = 'Invalid SVTYPE {0} for multiallelic genotype in record {1}'
                 msg = msg.format(record.info['SVTYPE'], record.id)
                 raise Exception(msg)
-
-            if is_bca:
-                idx1 = int(np.floor(data[2] / 2))
-                idx2 = int(np.ceil(data[2] / 2))
-            else:
-                # split copy state roughly evenly between haplotypes
-                idx1 = int(np.floor((data[2] + 2) / 2))
-                idx2 = int(np.ceil((data[2] + 2) / 2))
-
-                # if copy state is 1, assign reference genotype
-                if idx1 == 1:
-                    idx1 = 0
-                if idx2 == 1:
-                    idx2 = 0
-
-            record.samples[sample]['GT'] = (idx1, idx2)
+            record.samples[sample]['GT'] = (None, None)
 
         elif data[2] == 0:
             record.samples[sample]['GT'] = (0, 0)
