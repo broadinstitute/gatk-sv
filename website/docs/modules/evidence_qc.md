@@ -5,6 +5,8 @@ sidebar_position: 2
 slug: eqc
 ---
 
+import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. 
 The results from this module can be used for QC and batching.
 
@@ -17,9 +19,34 @@ for further guidance on creating batches.
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
-### Prerequisites
+The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
 
-- [Gather Sample Evidence](./gse)
+<br/>
+
+```mermaid
+
+stateDiagram
+  direction LR
+  
+  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
+  classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
+
+  gse: GatherSampleEvidence
+  gbe: GatherBatchEvidence
+  eqc: EvidenceQC
+  t: TrainGCNV
+  gse --> eqc
+  eqc --> t
+  eqc --> gbe
+  
+  class eqc thisModule
+  class gse inModules
+  class t, gbe outModules
+```
+
+<br/>
+
 
 ### Inputs
 

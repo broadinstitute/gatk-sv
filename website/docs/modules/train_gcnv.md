@@ -66,66 +66,71 @@ tool the workflow uses, `GATK GermlineCNVCaller`; hence, you may refer to the
 [documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360040097712-GermlineCNVCaller) 
 of the tool for a description on these optional inputs. 
 
-- `samples`: a list of sample IDs. 
-  The order of IDs in this list, should match the order of files in `count_files .
+#### `samples`
+A list of sample IDs. 
+The order of IDs in this list, should match the order of files in `count_files .
 
-- `count_files`: a list of per-sample coverage counts determined in the [GatherSampleEvidence](./gse#outputs) workflow.
+#### `count_files`
+A list of per-sample coverage counts determined in the [GatherSampleEvidence](./gse#outputs) workflow.
 
-- `contig_ploidy_priors`: a tabular file with ploidy prior probability per contig. 
-  You may use the following file as this input:
+#### `contig_ploidy_priors`
+A tabular file with ploidy prior probability per contig. 
+You may use the following file as this input:
     
-  ```
-  gs://gatk-sv-resources-public/gcnv-exome/contig_ploidy_prior_hg38.tsv
-  ```
+```
+gs://gatk-sv-resources-public/gcnv-exome/contig_ploidy_prior_hg38.tsv
+```
 
-  <details>
-    <summary>File description</summary>
-    <p>
-      This is a tabular file with the following columns: 
-      <code>CONTIG_NAME</code>, <code>PLOIDY_PRIOR_0</code>, <code>PLOIDY_PRIOR_1</code>, 
-      <code>PLOIDY_PRIOR_2</code>, <code>PLOIDY_PRIOR_3</code>.
-    </p>
-    <p>
-      The <code>CONTIG_NAME</code> column lists contigs (e.g., <code>chr1</code>, <code>chrX</code>, 
-      <code>chrY</code>, or <code>chrM</code>). 
-      The <code>PLOIDY_PRIOR</code> columns refer to the copy number of the contig of interest 
-      and represent the prior probability that the contig takes on that copy number in any given sample. 
-      The values in each row should sum to one. 
-      This file primarily specifies the sex chromosomes and the expected counts of <code>chrX</code> and 
-      <code>chrY</code> for males and females. 
-      For humans, autosomes are most likely to have a ploidy of 2, 
-      though zero, one, or three copies are also possible but unlikely. 
-      For <code>chrX</code>, ploidy 1 or 2 are equally likely, meaning no assumptions are made about the sample's sex, 
-      and this tool often helps determine it. Please refer 
-      to <a href="https://gatk.broadinstitute.org/hc/en-us/community/posts/360074399831-What-is-contig-ploidy-priors-table-and-how-to-make-it">this page</a> for 
-      more details.
-    </p>
-  </details>
+<details>
+  <summary>File description</summary>
+  <p>
+    This is a tabular file with the following columns: 
+    <code>CONTIG_NAME</code>, <code>PLOIDY_PRIOR_0</code>, <code>PLOIDY_PRIOR_1</code>, 
+    <code>PLOIDY_PRIOR_2</code>, <code>PLOIDY_PRIOR_3</code>.
+  </p>
+  <p>
+    The <code>CONTIG_NAME</code> column lists contigs (e.g., <code>chr1</code>, <code>chrX</code>, 
+    <code>chrY</code>, or <code>chrM</code>). 
+    The <code>PLOIDY_PRIOR</code> columns refer to the copy number of the contig of interest 
+    and represent the prior probability that the contig takes on that copy number in any given sample. 
+    The values in each row should sum to one. 
+    This file primarily specifies the sex chromosomes and the expected counts of <code>chrX</code> and 
+    <code>chrY</code> for males and females. 
+    For humans, autosomes are most likely to have a ploidy of 2, 
+    though zero, one, or three copies are also possible but unlikely. 
+    For <code>chrX</code>, ploidy 1 or 2 are equally likely, meaning no assumptions are made about the sample's sex, 
+    and this tool often helps determine it. Please refer 
+    to <a href="https://gatk.broadinstitute.org/hc/en-us/community/posts/360074399831-What-is-contig-ploidy-priors-table-and-how-to-make-it">this page</a> for 
+    more details.
+  </p>
+</details>
 
 
-- `reference_fasta`, `reference_index`, `reference_dict`:
-  reference genome sequence in the FASTA format, its index file, and a corresponding 
-  [dictionary file](https://gatk.broadinstitute.org/hc/en-us/articles/360035531652-FASTA-Reference-genome-format).
-  You may use the following files for these inputs.
+#### `reference_fasta`
+`reference_fasta`, `reference_index`, `reference_dict` are respectively the 
+reference genome sequence in the FASTA format, its index file, and a corresponding 
+[dictionary file](https://gatk.broadinstitute.org/hc/en-us/articles/360035531652-FASTA-Reference-genome-format).
+You may use the following files for these inputs.
 
-  ```json
-  "reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-  "reference_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-  "reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
-  ```
+```json
+"reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
+"reference_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
+"reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
+```
 
 
 ## Outputs
 
-- `annotated_intervals` 
-  <HighlightOptionalArg>Optional</HighlightOptionalArg>.
-  The count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
-  locus-sorted `DepthEvidence` files using `GATK CondenseDepthEvidence` tool, which are
-  annotated with GC content, mappability, and segmental-duplication content using 
-  [`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals)
-  tool. This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `annotated_intervals` {#annotated-intervals}
 
-- `filtered_intervals_cnv` [Optional].
+The count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
+locus-sorted `DepthEvidence` files using `GATK CondenseDepthEvidence` tool, which are
+annotated with GC content, mappability, and segmental-duplication content using 
+[`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals)
+tool. This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
 
-- Contig ploidy model tarball
-- gCNV model tarballs
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `filtered_intervals_cnv` {#filtered-intervals-cnv}
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `cohort_contig_ploidy_model_tar` {#contig-ploidy-model-tarball}
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `cohort_gcnv_model_tars` {#model-tarballs}
