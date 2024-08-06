@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Merge duplicate records and counts files across multiple TSVs
+Merge duplicate records and counts files across multiple TSVs.
 """
 
 from typing import List, Text, Optional

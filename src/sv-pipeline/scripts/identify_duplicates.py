@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Identify and classify duplicated variants from a sorted input VCF
+Identify and classify duplicated variants from an input VCF.
 """
 
 from typing import List, Text, Optional
