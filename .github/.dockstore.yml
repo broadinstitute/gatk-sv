@@ -123,6 +123,7 @@ workflows:
     filters:
       branches: 
         - main
+        - mw_scramble_filter
       tags:
         - /.*/
 
