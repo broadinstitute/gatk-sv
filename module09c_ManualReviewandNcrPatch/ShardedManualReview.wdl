@@ -894,7 +894,7 @@ task CalculateCpxEvidences{
                                 pe_supp = 'partial_PE'
                             if PE_supp[svid][sample][0][0]>0 and PE_supp[svid][sample][1][0]>0:
                                 pe_supp = 'low_PE'
-                            if PE_supp[svid][sample][0][0]>2 and PE_supp[svid][sample][1][0]>2:
+                            if PE_supp[svid][sample][0][0]>1 and PE_supp[svid][sample][1][0]>1:
                                 pe_supp = 'high_PE'
                             out[svid][sample] = [pe_supp]
                         else:
