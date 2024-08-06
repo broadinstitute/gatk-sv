@@ -39,6 +39,8 @@ workflow MainVcfQc {
     RuntimeAttr? runtime_override_plot_qc_per_sample
     RuntimeAttr? runtime_override_plot_qc_per_family
     RuntimeAttr? runtime_override_per_sample_benchmark_plot
+    RuntimeAttr? runtime_override_identify_duplicates
+    RuntimeAttr? runtime_override_merge_duplicates
     RuntimeAttr? runtime_override_sanitize_outputs
 
     # overrides for MiniTasks or Utils
@@ -275,6 +277,25 @@ workflow MainVcfQc {
     }
   }
 
+  # Identify all duplicates
+  call IdentifyDuplicates {
+    input:
+      prefix=prefix,
+      vcfs=vcfs_for_qc,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      runtime_attr_override=runtime_override_identify_duplicates
+  }
+
+  # Merge duplicates
+  call MergeDuplicates {
+    input:
+      prefix=prefix,
+      tsvs=IdentifyDuplicates.duplicates,
+      tsvs_counts=IdentifyDuplicates.duplicates_counts,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      runtime_attr_override=runtime_override_merge_duplicates
+  }
+
   # Sanitize all outputs
   call SanitizeOutputs {
     input:
@@ -296,6 +317,8 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
+    File duplicates_output = MergeDuplicates.duplicates
+    File duplicates_counts_output = MergeDuplicates.duplicates_counts
   }
 }
 
@@ -858,3 +881,102 @@ task SanitizeOutputs {
   }
 }
 
+
+# Identify all duplicates
+task IdentifyDuplicates {
+  input {
+    String prefix
+    Array[File] vcfs
+    String sv_pipeline_qc_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 5 + ceil(size(vcfs, "GiB")),
+    cpu_cores: 1,
+    preemptible_tries: 1,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_qc_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    for vcf in ~{sep=' ' vcfs}; do
+      vcf_name=$(basename "$vcf" .vcf.gz)
+      fout_name="~{prefix}_duplicate_${vcf_name}"
+
+      echo "Processing $vcf..."
+      python /opt/sv-pipeline/scripts/identify_duplicates.py \
+        --vcf "$vcf" \
+        --fout "$fout_name"
+    done
+
+    echo "All VCFs processed."
+  >>>
+
+  output {
+    Array[File] duplicates = glob("~{prefix}_duplicate_records_*.tsv")
+    Array[File] duplicates_counts = glob("~{prefix}_duplicate_counts_*.tsv")
+  }
+}
+
+
+# Aggregate distinct duplicate summary files
+task MergeDuplicates {
+  input {
+    String prefix
+    Array[File] tsvs
+    Array[File] tsvs_counts
+    String sv_pipeline_qc_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: 5 + ceil(size(tsvs, "GiB")) + ceil(size(tsvs_counts, "GiB")),
+    cpu_cores: 1,
+    preemptible_tries: 1,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_qc_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    python /opt/sv-pipeline/scripts/merge_duplicates.py \
+      --records ~{sep=' ' tsvs} \
+      --counts ~{sep=' ' tsvs_counts} \
+      --fout "~{prefix}_agg_duplicate"
+
+    echo "All TSVs processed."
+  >>>
+
+  output {
+    File duplicates = "~{prefix}_agg_duplicates.tsv"
+    File duplicates_counts = "~{prefix}_agg_duplicates_counts.tsv"
+  }
+}
