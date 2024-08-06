@@ -17,6 +17,8 @@ workflow MainVcfQc {
     File? ped_file
     File? list_of_samples_to_include
     File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
+    File? identify_duplicates_custom
+    File? merge_duplicates_custom
     Int max_trios = 1000
     String prefix
     Int sv_per_shard
@@ -283,6 +285,7 @@ workflow MainVcfQc {
       prefix=prefix,
       vcfs=vcfs_for_qc,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      custom_script=identify_duplicates_custom,
       runtime_attr_override=runtime_override_identify_duplicates
   }
 
@@ -293,6 +296,7 @@ workflow MainVcfQc {
       tsvs=IdentifyDuplicates.duplicates,
       tsvs_counts=IdentifyDuplicates.duplicates_counts,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      custom_script=merge_duplicates_custom,
       runtime_attr_override=runtime_override_merge_duplicates
   }
 
@@ -888,6 +892,7 @@ task IdentifyDuplicates {
     String prefix
     Array[File] vcfs
     String sv_pipeline_qc_docker
+    File? custom_script
     RuntimeAttr? runtime_attr_override
   }
 
@@ -914,12 +919,14 @@ task IdentifyDuplicates {
   command <<<
     set -euo pipefail
 
+    SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/identify_duplicates.py" custom_script}"
+
     for vcf in ~{sep=' ' vcfs}; do
       vcf_name=$(basename "$vcf" .vcf.gz)
       fout_name="~{prefix}_duplicate_${vcf_name}"
 
       echo "Processing $vcf..."
-      python /opt/sv-pipeline/scripts/identify_duplicates.py \
+      python "$SCRIPT_PATH" \
         --vcf "$vcf" \
         --fout "$fout_name"
     done
@@ -941,6 +948,7 @@ task MergeDuplicates {
     Array[File] tsvs
     Array[File] tsvs_counts
     String sv_pipeline_qc_docker
+    File? custom_script
     RuntimeAttr? runtime_attr_override
   }
 
@@ -967,7 +975,9 @@ task MergeDuplicates {
   command <<<
     set -euo pipefail
 
-    python /opt/sv-pipeline/scripts/merge_duplicates.py \
+    SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/merge_duplicates.py" custom_script}"
+
+    python "$SCRIPT_PATH" \
       --records ~{sep=' ' tsvs} \
       --counts ~{sep=' ' tsvs_counts} \
       --fout "~{prefix}_agg_duplicate"
