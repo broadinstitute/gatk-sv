@@ -280,13 +280,15 @@ workflow MainVcfQc {
   }
 
   # Identify all duplicates
-  call IdentifyDuplicates {
-    input:
-      prefix=prefix,
-      vcfs=vcfs_for_qc,
-      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      custom_script=identify_duplicates_custom,
-      runtime_attr_override=runtime_override_identify_duplicates
+  scatter(vcf in vcfs_for_qc) {
+    call IdentifyDuplicates {
+      input:
+        prefix=prefix,
+        vcf=vcf,
+        sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+        custom_script=identify_duplicates_custom,
+        runtime_attr_override=runtime_override_identify_duplicates
+    }
   }
 
   # Merge duplicates
@@ -890,7 +892,7 @@ task SanitizeOutputs {
 task IdentifyDuplicates {
   input {
     String prefix
-    Array[File] vcfs
+    File vcf
     String sv_pipeline_qc_docker
     File? custom_script
     RuntimeAttr? runtime_attr_override
@@ -898,7 +900,7 @@ task IdentifyDuplicates {
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
-    disk_gb: 5 + ceil(size(vcfs, "GiB")),
+    disk_gb: 2 + ceil(size(vcf, "GiB")),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -921,26 +923,21 @@ task IdentifyDuplicates {
 
     SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/identify_duplicates.py" custom_script}"
 
-    for vcf in ~{sep=' ' vcfs}; do
-      vcf_name=$(basename "$vcf" .vcf.gz)
-      fout_name="~{prefix}.${vcf_name}"
+    vcf_name=$(basename "$vcf" .vcf.gz)
+    fout_name="~{prefix}.${vcf_name}"
 
-      echo "Processing $vcf..."
-      python "$SCRIPT_PATH" \
-        --vcf "$vcf" \
-        --fout "$fout_name"
-    done
-    
-    echo "Listing generated files:"
-    ls -l "~{prefix}.*_duplicate_records.tsv"
-    ls -l "~{prefix}.*_duplicate_counts.tsv"
+    echo "Processing ~{vcf} into ${fout_name}..."
 
-    echo "All VCFs processed."
+    python "$SCRIPT_PATH" \
+      --vcf "$vcf" \
+      --fout "$fout_name"
+
+    echo "Finishing processing VCF."
   >>>
 
   output {
-    Array[File] duplicate_records = glob("~{prefix}.*_duplicate_records.tsv")
-    Array[File] duplicate_counts = glob("~{prefix}.*_duplicate_counts.tsv")
+    File duplicate_records = "~{prefix}.${basename(vcf, '.vcf.gz')}_duplicated_records.tsv"
+    File duplicate_counts = "~{prefix}.${basename(vcf, '.vcf.gz')}_duplicated_counts.tsv"
   }
 }
 
