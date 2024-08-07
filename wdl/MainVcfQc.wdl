@@ -930,11 +930,7 @@ task IdentifyDuplicates {
         --vcf "$vcf" \
         --fout "$fout_name"
     done
-
-    echo "Listing working directory:"
-    pwd
-    echo "Listing files in working directory:"
-    ls
+    
     echo "Listing generated files:"
     ls -l "~{prefix}.*_duplicate_records.tsv"
     ls -l "~{prefix}.*_duplicate_counts.tsv"

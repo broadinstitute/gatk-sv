@@ -66,7 +66,6 @@ def process_duplicates(vcf, fout):
         # Write counts to file
         for match_type in sorted(counts.keys()):
             f_counts.write(f"{match_type}\t{counts[match_type]}\n")
-            print(f"{match_type}: {counts[match_type]}")
 
 
 def process_buffers(exact_buffer, ins_buffer, counts, f_records):
