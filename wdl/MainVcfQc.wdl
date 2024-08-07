@@ -291,7 +291,6 @@ workflow MainVcfQc {
     }
   }
 
-
   # Merge duplicates
   call MergeDuplicates {
     input:
@@ -937,8 +936,8 @@ task IdentifyDuplicates {
   >>>
 
   output {
-    File duplicate_records = "~{full_prefix}_duplicated_records.tsv"
-    File duplicate_counts = "~{full_prefix}_duplicated_counts.tsv"
+    File duplicate_records = "~{full_prefix}_duplicate_records.tsv"
+    File duplicate_counts = "~{full_prefix}_duplicate_counts.tsv"
   }
 }
 
