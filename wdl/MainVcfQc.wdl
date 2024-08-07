@@ -898,6 +898,12 @@ task IdentifyDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
+  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  File active_script = select_first([custom_script, default_script])
+
+  String vcf_basename = basename(vcf, ".vcf.gz")
+  String full_prefix = "~{prefix}.~{vcf_basename}"
+
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
     disk_gb: 2 + ceil(size(vcf, "GiB")),
@@ -921,23 +927,18 @@ task IdentifyDuplicates {
   command <<<
     set -euo pipefail
 
-    SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/identify_duplicates.py" custom_script}"
+    echo "Processing ~{vcf} into ~{full_prefix}..."
 
-    vcf_name=$(basename "$vcf" .vcf.gz)
-    fout_name="~{prefix}.${vcf_name}"
-
-    echo "Processing ~{vcf} into ${fout_name}..."
-
-    python "$SCRIPT_PATH" \
-      --vcf "$vcf" \
-      --fout "$fout_name"
+    python ~{active_script} \
+      --vcf ~{vcf} \
+      --fout ~{full_prefix}
 
     echo "Finishing processing VCF."
   >>>
 
   output {
-    File duplicate_records = "~{prefix}.${basename(vcf, '.vcf.gz')}_duplicated_records.tsv"
-    File duplicate_counts = "~{prefix}.${basename(vcf, '.vcf.gz')}_duplicated_counts.tsv"
+    File duplicate_records = "~{full_prefix}_duplicated_records.tsv"
+    File duplicate_counts = "~{full_prefix}_duplicated_counts.tsv"
   }
 }
 
@@ -952,6 +953,9 @@ task MergeDuplicates {
     File? custom_script
     RuntimeAttr? runtime_attr_override
   }
+
+  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  File active_script = select_first([custom_script, default_script])
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
@@ -976,9 +980,7 @@ task MergeDuplicates {
   command <<<
     set -euo pipefail
 
-    SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/merge_duplicates.py" custom_script}"
-
-    python "$SCRIPT_PATH" \
+    python ~{active_script} \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
       --fout "~{prefix}.agg"
