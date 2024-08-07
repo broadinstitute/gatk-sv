@@ -23,7 +23,7 @@ def process_duplicates(vcf, fout):
     current_pos = None
 
     # Create output files
-    with open(f"{fout}_records.tsv", 'w') as f_records, open(f"{fout}_counts.tsv", 'w') as f_counts:
+    with open(f"{fout}_duplicate_records.tsv", 'w') as f_records, open(f"{fout}_duplicate_counts.tsv", 'w') as f_counts:
         f_records.write("TYPE\tDUP_RECORDS\n")
         f_counts.write("TYPE\tDUP_COUNTS\n")
 

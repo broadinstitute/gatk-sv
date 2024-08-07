@@ -293,8 +293,8 @@ workflow MainVcfQc {
   call MergeDuplicates {
     input:
       prefix=prefix,
-      tsvs=IdentifyDuplicates.duplicates,
-      tsvs_counts=IdentifyDuplicates.duplicates_counts,
+      tsv_records=IdentifyDuplicates.duplicate_records,
+      tsv_counts=IdentifyDuplicates.duplicate_counts,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       custom_script=merge_duplicates_custom,
       runtime_attr_override=runtime_override_merge_duplicates
@@ -321,8 +321,8 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    File duplicates_output = MergeDuplicates.duplicates
-    File duplicates_counts_output = MergeDuplicates.duplicates_counts
+    File duplicate_records_output = MergeDuplicates.duplicate_records
+    File duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 
@@ -923,7 +923,7 @@ task IdentifyDuplicates {
 
     for vcf in ~{sep=' ' vcfs}; do
       vcf_name=$(basename "$vcf" .vcf.gz)
-      fout_name="~{prefix}_duplicate_${vcf_name}"
+      fout_name="~{prefix}_${vcf_name}"
 
       echo "Processing $vcf..."
       python "$SCRIPT_PATH" \
@@ -931,12 +931,16 @@ task IdentifyDuplicates {
         --fout "$fout_name"
     done
 
+    echo "Listing generated files:"
+    ls -l ~{prefix}_*_duplicate_records.tsv
+    ls -l ~{prefix}_*_duplicate_counts.tsv
+
     echo "All VCFs processed."
   >>>
 
   output {
-    Array[File] duplicates = glob("~{prefix}_duplicate_records_*.tsv")
-    Array[File] duplicates_counts = glob("~{prefix}_duplicate_counts_*.tsv")
+    Array[File] duplicate_records = glob("~{prefix}_*_duplicate_records.tsv")
+    Array[File] duplicate_counts = glob("~{prefix}_*_duplicate_counts.tsv")
   }
 }
 
@@ -945,8 +949,8 @@ task IdentifyDuplicates {
 task MergeDuplicates {
   input {
     String prefix
-    Array[File] tsvs
-    Array[File] tsvs_counts
+    Array[File] tsv_records
+    Array[File] tsv_counts
     String sv_pipeline_qc_docker
     File? custom_script
     RuntimeAttr? runtime_attr_override
@@ -954,7 +958,7 @@ task MergeDuplicates {
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
-    disk_gb: 5 + ceil(size(tsvs, "GiB")) + ceil(size(tsvs_counts, "GiB")),
+    disk_gb: 5 + ceil(size(tsv_records, "GiB")) + ceil(size(tsv_counts, "GiB")),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
@@ -978,15 +982,15 @@ task MergeDuplicates {
     SCRIPT_PATH="${default="/opt/sv-pipeline/scripts/merge_duplicates.py" custom_script}"
 
     python "$SCRIPT_PATH" \
-      --records ~{sep=' ' tsvs} \
-      --counts ~{sep=' ' tsvs_counts} \
-      --fout "~{prefix}_agg_duplicate"
+      --records ~{sep=' ' tsv_records} \
+      --counts ~{sep=' ' tsv_counts} \
+      --fout "~{prefix}_agg"
 
     echo "All TSVs processed."
   >>>
 
   output {
-    File duplicates = "~{prefix}_agg_duplicates.tsv"
-    File duplicates_counts = "~{prefix}_agg_duplicates_counts.tsv"
+    File duplicate_records = "~{prefix}_agg_duplicate_records.tsv"
+    File duplicate_counts = "~{prefix}_agg_duplicates_counts.tsv"
   }
 }

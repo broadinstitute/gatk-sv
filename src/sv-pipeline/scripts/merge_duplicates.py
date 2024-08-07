@@ -15,7 +15,7 @@ import csv
 
 def merge_duplicates(record_files: List[str], count_files: List[str], fout: str):
     # Merge records
-    with open(f"{fout}_records.tsv", 'w', newline='') as out_records:
+    with open(f"{fout}_duplicate_records.tsv", 'w', newline='') as out_records:
         writer = csv.writer(out_records, delimiter='\t')
 
         # Write header
@@ -39,7 +39,7 @@ def merge_duplicates(record_files: List[str], count_files: List[str], fout: str)
                 counts[row[0]] += int(row[1])
 
     # Merge counts
-    with open(f"{fout}_counts.tsv", 'w', newline='') as out_counts:
+    with open(f"{fout}_duplicate_counts.tsv", 'w', newline='') as out_counts:
         writer = csv.writer(out_counts, delimiter='\t')
 
         # Write header
