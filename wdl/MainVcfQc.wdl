@@ -292,15 +292,15 @@ workflow MainVcfQc {
   }
 
   # Merge duplicates
-  # call MergeDuplicates {
-  #   input:
-  #     prefix=prefix,
-  #     tsv_records=IdentifyDuplicates.duplicate_records,
-  #     tsv_counts=IdentifyDuplicates.duplicate_counts,
-  #     sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-  #     custom_script=merge_duplicates_custom,
-  #     runtime_attr_override=runtime_override_merge_duplicates
-  # }
+  call MergeDuplicates {
+    input:
+      prefix=prefix,
+      tsv_records=IdentifyDuplicates.duplicate_records,
+      tsv_counts=IdentifyDuplicates.duplicate_counts,
+      sv_pipeline_qc_docker=sv_pipeline_qc_docker,
+      custom_script=merge_duplicates_custom,
+      runtime_attr_override=runtime_override_merge_duplicates
+  }
 
   # Sanitize all outputs
   call SanitizeOutputs {
@@ -323,10 +323,8 @@ workflow MainVcfQc {
   output {
     File sv_vcf_qc_output = SanitizeOutputs.vcf_qc_tarball
     File vcf2bed_output = MergeVcf2Bed.merged_bed_file
-    Array[File] duplicate_records_output = IdentifyDuplicates.duplicate_records
-    Array[File] duplicate_counts_output = IdentifyDuplicates.duplicate_counts
-    # File duplicate_records_output = MergeDuplicates.duplicate_records
-    # File duplicate_counts_output = MergeDuplicates.duplicate_counts
+    File duplicate_records_output = MergeDuplicates.duplicate_records
+    File duplicate_counts_output = MergeDuplicates.duplicate_counts
   }
 }
 
