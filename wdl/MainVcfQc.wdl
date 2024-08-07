@@ -931,9 +931,13 @@ task IdentifyDuplicates {
         --fout "$fout_name"
     done
 
+    echo "Listing working directory:"
+    pwd
+    echo "Listing files in working directory:"
+    ls
     echo "Listing generated files:"
-    ls -l ~{prefix}_*_duplicate_records.tsv
-    ls -l ~{prefix}_*_duplicate_counts.tsv
+    ls -l "~{prefix}_*_duplicate_records.tsv"
+    ls -l "~{prefix}_*_duplicate_counts.tsv"
 
     echo "All VCFs processed."
   >>>
@@ -991,6 +995,6 @@ task MergeDuplicates {
 
   output {
     File duplicate_records = "~{prefix}_agg_duplicate_records.tsv"
-    File duplicate_counts = "~{prefix}_agg_duplicates_counts.tsv"
+    File duplicate_counts = "~{prefix}_agg_duplicate_counts.tsv"
   }
 }
