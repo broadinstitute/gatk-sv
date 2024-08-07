@@ -291,6 +291,7 @@ workflow MainVcfQc {
     }
   }
 
+
   # Merge duplicates
   call MergeDuplicates {
     input:
@@ -376,7 +377,6 @@ task PlotQcVcfWide {
     File plots_tarball = "~{prefix}.plotQC_vcfwide_output.tar.gz"
   }
 }
-
 
 # Task to merge VID lists across shards
 task TarShardVidLists {
@@ -888,7 +888,7 @@ task SanitizeOutputs {
 }
 
 
-# Identify all duplicates
+# Identify all duplicates in a single file
 task IdentifyDuplicates {
   input {
     String prefix
@@ -898,8 +898,8 @@ task IdentifyDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
-  File active_script = select_first([custom_script, default_script])
+  # File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  # File active_script = select_first([custom_script, default_script])
 
   String vcf_basename = basename(vcf, ".vcf.gz")
   String full_prefix = "~{prefix}.~{vcf_basename}"
@@ -929,7 +929,7 @@ task IdentifyDuplicates {
 
     echo "Processing ~{vcf} into ~{full_prefix}..."
 
-    python ~{active_script} \
+    python ~{custom_script} \
       --vcf ~{vcf} \
       --fout ~{full_prefix}
 
@@ -954,8 +954,8 @@ task MergeDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
-  File active_script = select_first([custom_script, default_script])
+  # File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  # File active_script = select_first([custom_script, default_script])
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
@@ -980,7 +980,7 @@ task MergeDuplicates {
   command <<<
     set -euo pipefail
 
-    python ~{active_script} \
+    python ~{custom_script} \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
       --fout "~{prefix}.agg"
