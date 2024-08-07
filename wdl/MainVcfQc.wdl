@@ -923,7 +923,7 @@ task IdentifyDuplicates {
 
     for vcf in ~{sep=' ' vcfs}; do
       vcf_name=$(basename "$vcf" .vcf.gz)
-      fout_name="~{prefix}_${vcf_name}"
+      fout_name="~{prefix}.${vcf_name}"
 
       echo "Processing $vcf..."
       python "$SCRIPT_PATH" \
@@ -936,15 +936,15 @@ task IdentifyDuplicates {
     echo "Listing files in working directory:"
     ls
     echo "Listing generated files:"
-    ls -l "~{prefix}_*_duplicate_records.tsv"
-    ls -l "~{prefix}_*_duplicate_counts.tsv"
+    ls -l "~{prefix}.*_duplicate_records.tsv"
+    ls -l "~{prefix}.*_duplicate_counts.tsv"
 
     echo "All VCFs processed."
   >>>
 
   output {
-    Array[File] duplicate_records = glob("~{prefix}_*_duplicate_records.tsv")
-    Array[File] duplicate_counts = glob("~{prefix}_*_duplicate_counts.tsv")
+    Array[File] duplicate_records = glob("~{prefix}.*_duplicate_records.tsv")
+    Array[File] duplicate_counts = glob("~{prefix}.*_duplicate_counts.tsv")
   }
 }
 
@@ -988,13 +988,13 @@ task MergeDuplicates {
     python "$SCRIPT_PATH" \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
-      --fout "~{prefix}_agg"
+      --fout "~{prefix}.agg"
 
     echo "All TSVs processed."
   >>>
 
   output {
-    File duplicate_records = "~{prefix}_agg_duplicate_records.tsv"
-    File duplicate_counts = "~{prefix}_agg_duplicate_counts.tsv"
+    File duplicate_records = "~{prefix}.agg_duplicate_records.tsv"
+    File duplicate_counts = "~{prefix}.agg_duplicate_counts.tsv"
   }
 }
