@@ -265,7 +265,16 @@ class SVRecordCluster:
             new_record.info['SVLEN'] = END - POS
 
         # QUAL, FILTER currently unused
-        new_record.filter.add('PASS')
+        filters = set()
+        for r in self.records:
+            for filt in r.record.filter:
+                if filt != "PASS":
+                    filters.add(filt)
+        if len(filters) == 0:
+            new_record.filter.add('PASS')
+        else:
+            for filt in filters:
+                new_record.filter.add(filt)
 
         # Report cluster RMSSTD
         #  new_record.info['RMSSTD'] = self.rmsstd

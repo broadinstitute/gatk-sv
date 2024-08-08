@@ -34,10 +34,13 @@ def choose_best_genotype(sample, records):
             _carrier_map[gt] = is_carrier
             return is_carrier
 
+    def _is_no_call(gt):
+        return all([a is None for a in gt])
+
     # find record with max GQ, prioritizing non-ref GTs if any exist
     def _record_key(record):
         format_field = record.samples[sample]
-        return _is_non_ref(format_field), format_field.get('GQ', -math.inf)
+        return _is_non_ref(format_field), is_no_call(format_field['GT']), format_field.get('GQ', -math.inf)
     return max(records, key=_record_key)
 
 
