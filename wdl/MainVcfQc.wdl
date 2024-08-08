@@ -280,7 +280,7 @@ workflow MainVcfQc {
   }
 
   # Identify all duplicates
-  scatter(vcf in select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])) {
+  scatter(vcf in vcfs_for_qc) {
     call IdentifyDuplicates {
       input:
         prefix=prefix,
@@ -975,7 +975,7 @@ task MergeDuplicates {
     docker: sv_pipeline_qc_docker
     bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
   }
-
+  
   command <<<
     set -euo pipefail
 
