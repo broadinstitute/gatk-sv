@@ -280,7 +280,7 @@ workflow MainVcfQc {
   }
 
   # Identify all duplicates
-  scatter(vcf in vcfs_for_qc) {
+  scatter(vcf in select_first([SubsetVcfBySamplesList.vcf_subset, vcfs])) {
     call IdentifyDuplicates {
       input:
         prefix=prefix,
@@ -978,6 +978,10 @@ task MergeDuplicates {
 
   command <<<
     set -euo pipefail
+
+    echo "Merging all TSV files into one..."
+    echo "Records: ~{sep=', ' tsv_records}"
+    echo "Counts: ~{sep=', ' tsv_counts}"
 
     python ~{custom_script} \
       --records ~{sep=' ' tsv_records} \
