@@ -897,8 +897,8 @@ task IdentifyDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
-  File active_script = select_first([custom_script, default_script])
+  # File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
+  # File active_script = select_first([custom_script, default_script])
 
   String vcf_basename = basename(vcf, ".vcf.gz")
   String full_prefix = "~{prefix}.~{vcf_basename}"
@@ -928,7 +928,7 @@ task IdentifyDuplicates {
 
     echo "Processing ~{vcf} into ~{full_prefix}..."
 
-    python ~{active_script} \
+    python ~{custom_script} \
       --vcf ~{vcf} \
       --fout ~{full_prefix}
 
@@ -953,8 +953,8 @@ task MergeDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
-  File active_script = select_first([custom_script, default_script])
+  # File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
+  # File active_script = select_first([custom_script, default_script])
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
@@ -981,7 +981,7 @@ task MergeDuplicates {
 
     echo "Merging all TSV files into one..."
 
-    python ~{active_script} \
+    python ~{custom_script} \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
       --fout "~{prefix}.agg"
