@@ -17,15 +17,13 @@ def merge_duplicates(record_files: List[str], count_files: List[str], fout: str)
     # Merge records
     with open(f"{fout}_duplicate_records.tsv", 'w', newline='') as out_records:
         writer = csv.writer(out_records, delimiter='\t')
-
         # Write header
         writer.writerow(['TYPE', 'DUP_RECORDS'])
-        
         # Append records from each file
         for record_file in record_files:
             with open(record_file, 'r') as f:
                 reader = csv.reader(f, delimiter='\t')
-                next(reader) 
+                next(reader)
                 for row in reader:
                     writer.writerow(row)
 
@@ -48,7 +46,7 @@ def merge_duplicates(record_files: List[str], count_files: List[str], fout: str)
         # Append each row from merged counts
         for category, count in counts.items():
             writer.writerow([category, count])
-    
+
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(

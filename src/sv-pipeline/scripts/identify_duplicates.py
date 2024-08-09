@@ -38,14 +38,14 @@ def process_duplicates(vcf, fout):
 
             # Update buffers with new record
             exact_key = (
-                record.chrom, 
-                record.pos, 
+                record.chrom,
+                record.pos,
                 record.stop,
-                record.info.get('SVTYPE'), 
+                record.info.get('SVTYPE'),
                 record.info.get('SVLEN'),
-                record.info.get('CHR2'), 
+                record.info.get('CHR2'),
                 record.info.get('END2'),
-                record.info.get('STRANDS'), 
+                record.info.get('STRANDS'),
                 record.info.get('CPX_TYPE'),
                 record.info.get('CPX_INTERVALS')
             )
@@ -53,8 +53,8 @@ def process_duplicates(vcf, fout):
 
             if record.info.get('SVTYPE') == 'INS':
                 insert_key = (
-                    record.id, 
-                    record.info.get('SVLEN'), 
+                    record.id,
+                    record.info.get('SVLEN'),
                     record.alts[0]
                 )
                 ins_buffer.append(insert_key)
@@ -80,9 +80,9 @@ def process_buffers(exact_buffer, ins_buffer, counts, f_records):
 
     # Process INS matches
     for i in range(len(ins_buffer)):
-        for j in range(i+1, len(ins_buffer)):
+        for j in range(i + 1, len(ins_buffer)):
             rec1, rec2 = ins_buffer[i], ins_buffer[j]
-            
+
             # Size comparison
             if rec1[1] == rec2[1]:
                 counts['INS 100%'] += 1
@@ -93,7 +93,7 @@ def process_buffers(exact_buffer, ins_buffer, counts, f_records):
             else:
                 counts['INS 0%'] += 1
                 f_records.write(f"INS 0%\t{rec1[0]},{rec2[0]}\n")
-            
+
             # ALT comparison
             if rec1[2] == rec2[2]:
                 counts['INS ALT Identical'] += 1
