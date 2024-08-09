@@ -7,7 +7,6 @@ Identify and classify duplicated variants from an input VCF.
 
 from typing import List, Text, Optional
 from collections import defaultdict
-from itertools import combinations
 
 import argparse
 import sys
