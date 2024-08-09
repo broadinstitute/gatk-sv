@@ -897,7 +897,7 @@ task IdentifyDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
   File active_script = select_first([custom_script, default_script])
 
   String vcf_basename = basename(vcf, ".vcf.gz")
@@ -953,7 +953,7 @@ task MergeDuplicates {
     RuntimeAttr? runtime_attr_override
   }
 
-  File default_script = "/opt/sv-pipeline/scripts/merge_duplicates.py"
+  File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
   File active_script = select_first([custom_script, default_script])
 
   RuntimeAttr runtime_default = object {
