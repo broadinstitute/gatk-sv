@@ -150,6 +150,7 @@ workflows:
     filters:
       branches: 
         - main
+        - kj/701_vcf_qc_duplicates
       tags:
         - /.*/
 
