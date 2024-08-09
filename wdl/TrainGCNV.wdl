@@ -102,7 +102,7 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  Boolean perform_subsampling = defined(n_samples_subsample) && (n_samples_subsample < length(samples))
+  Boolean should_subsample = defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples))
 
   if (defined(sample_ids_training_subset)) {
     call util.GetSubsampledIndices {
