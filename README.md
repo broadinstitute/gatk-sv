@@ -322,7 +322,7 @@ Trains a [gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152) 
 ## <a name="gather-batch-evidence">GatherBatchEvidence</a>
 *Formerly Module00c*
 
-Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [GATK-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching.
+Runs CNV callers ([cn.MOPS](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3351174/), [GATK-gCNV](https://gatk.broadinstitute.org/hc/en-us/articles/360035531152)) and combines single-sample raw evidence into a batch. See [above](#cohort-mode) for more information on batching. `rename_samples` can be set to True in order to rename samples with PE, SR and BAF evidence to their IDs in the _samples_ array - this is always done for RD evidence.
 
 #### Prerequisites:
 * [GatherSampleEvidence](#gather-sample-evidence)
