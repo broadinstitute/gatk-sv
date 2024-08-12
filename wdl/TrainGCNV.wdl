@@ -111,10 +111,8 @@ workflow TrainGCNV {
         sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
-
-  Boolean perform_subsampling = defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples))
-
-  if (perform_subsampling && !defined(sample_ids_training_subset)) {
+  
+  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(sample_ids_training_subset)) {
     call util.RandomSubsampleStringArray {
       input:
         strings = write_lines(samples),
