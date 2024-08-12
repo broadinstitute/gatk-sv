@@ -166,7 +166,7 @@ Read the full EvidenceQC documentation [here](https://github.com/broadinstitute/
 
 Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/gatk-sv#gcnv-training-1).
 * Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline based on sample coverage, WGD score (from `02-EvidenceQC`), and PCR status. These will likely not be the same as the batches you used for `02-EvidenceQC`.
-* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. If your `sample_set` contains fewer than 100 samples (not recommended), this step is skipped - however, you can edit the `n_samples_subsample` parameter to be less than or equal to the number of samples for this to run.
+* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. To modify this behavior, you can set the `n_samples_subsample` parameter to the number of samples to use for training.
 
 #### 04-GatherBatchEvidence
 
