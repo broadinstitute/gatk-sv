@@ -24,7 +24,6 @@ workflows:
     filters:
       branches: 
         - main
-        - kj/706_subset_samples_low_n
       tags:
         - /.*/
 
