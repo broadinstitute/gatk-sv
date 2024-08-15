@@ -230,7 +230,7 @@ task SplitScripts {
 
     set -e pipefail
 
-    awk '{if ($2=="~{batch_name}.PE.txt.gz") print}' ~{script} > tmp_metrics.sh
+    awk '{if ($2~"~{batch_name}") print}' ~{script} > tmp_metrics.sh
     
     if [ $(wc -c < "tmp_metrics.sh") -gt 0 ]; then
       split --additional-suffix ".sh" -l ~{n_per_split} -a 6 tmp_metrics.sh collect_PE_evidences.

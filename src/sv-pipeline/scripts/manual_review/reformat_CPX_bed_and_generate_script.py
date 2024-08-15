@@ -47,7 +47,7 @@ def extract_bp_list_for_inv_cnv_events(segments, cpx_type):
         breakpoints.append(seg_c2)
     else:
       if cpx_type=='INVdup':
-        s1_svtype, s1_chrom, s1_c1, s1_c2 = parse_segment(segments[0])
+        s1_svtype, s1_chrom, s1_c1, s1_c2 = parse_segment(segments[1])
         if s1_c1 < breakpoints[2]:
           breakpoints = breakpoints[:2] + [s1_c1, breakpoints[2]]
       elif cpx_type == 'dupINVdup' or cpx_type == 'delINVdup':
