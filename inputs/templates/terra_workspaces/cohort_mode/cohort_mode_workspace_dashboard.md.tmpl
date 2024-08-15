@@ -173,7 +173,6 @@ Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/g
 Read the full GatherBatchEvidence documentation [here](https://github.com/broadinstitute/gatk-sv#gather-batch-evidence).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV`.
 * Before running this workflow, ensure that you have updated the `cohort_ped_file` attribute in Workspace Data with your cohort's PED file, with sex assignments updated based on ploidy detection from `02-EvidenceQC`.
-* `rename_samples` can be set to True in order to rename samples with PE, SR and BAF evidence to their IDs in the _samples_ array, which is always done for RD evidence.
 
 #### 05-ClusterBatch and 06-GenerateBatchMetrics
 
