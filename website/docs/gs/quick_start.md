@@ -44,8 +44,7 @@ The input values are provided only as an example and are not publicly accessible
 > cp $GATK_SV_ROOT/wdl/*.wdl .
 > zip dep.zip *.wdl
 > cd ..
-> echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT -c google_cloud.my_project
+> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT
 > cp $GATK_SV_ROOT/inputs/build/ref_panel_1kg/test/GATKSVPipelineBatch/GATKSVPipelineBatch.json GATKSVPipelineBatch.my_run.json
 > cromshell submit wdl/GATKSVPipelineBatch.wdl GATKSVPipelineBatch.my_run.json cromwell_config.json wdl/dep.zip
 ```
