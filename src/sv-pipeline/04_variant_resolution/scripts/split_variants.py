@@ -8,7 +8,7 @@ def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
     END_FIELD = 2
     START_FIELD = 1
 
-    # Check the conditions to generate prefixes for the output files
+    # Conditions for each category of variants
     condition_prefixes = {
         'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and
                                             (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
@@ -29,23 +29,22 @@ def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
             # This line swaps the last two columns so the sample names are in the fifth column and SV type in the last
             line[4], line[5] = line[5], line[4]
             for prefix, conditions in condition_prefixes.items():
-                # If a line matches a condition add it to the appropriate file
+                # If a line matches a condition add it to the appropriate category
                 if conditions['condition'](line):
                     current_lines[prefix].append('\t'.join(line))
                     current_counts[prefix] += 1
-                    # If a file has met the number of records per file create a new file with the next suffix and write
-                    # the current line to that new file
+                    # If a category has the specified number of records, create a new file and write the current records
                     if current_counts[prefix] == n_per_split:
                         output_file = get_file_name(prefix, current_suffixes[prefix], digits)
                         with open(output_file, 'w') as outfile:
                             outfile.write('\n'.join(current_lines[prefix]))
-                        # Keep track of which files have been written after reaching the max number of files
+                        # Log the file name that was created
                         logging.info(f"File '{output_file}' written.")
                         # Update the tracking information
                         current_lines[prefix] = []
                         current_counts[prefix] = 0
                         current_suffixes[prefix] = current_suffixes[prefix] + 1
-    # Handle the samples after files with the given number of lines per file have been written
+    # Handle the remaining records
     for prefix, lines in current_lines.items():
         if lines:
             output_file = get_file_name(prefix, current_suffixes[prefix], digits)
@@ -64,7 +63,7 @@ def get_file_name(prefix, suffix, digits):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--bed", help="Path to input bed file", required=True)
-    parser.add_argument("--n", help="number of variants per file", required=True, type=int)
+    parser.add_argument("--n", help="number of variants per output file", required=True, type=int)
     parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs",
                         action='store_true')
     parser.add_argument("--digits", "-d", default=9, help="Number of digits in filename suffix")
