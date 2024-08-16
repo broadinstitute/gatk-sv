@@ -66,7 +66,7 @@ def main():
     parser.add_argument("--n", help="number of variants per output file", required=True, type=int)
     parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs",
                         action='store_true')
-    parser.add_argument("--digits", "-d", default=9, help="Number of digits in filename suffix")
+    parser.add_argument("--digits", "-d", default=9, type=int, help="Number of digits in filename suffix")
     parser.add_argument("--log-level", required=False, default="INFO", help="Specify level of logging information")
     args = parser.parse_args()
 
