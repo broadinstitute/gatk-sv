@@ -3,15 +3,17 @@ import argparse
 import logging
 
 
-def process_bed_file(input_bed, n_per_split, bca=True):
+def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
     SVTYPE_FIELD = 5
     END_FIELD = 2
     START_FIELD = 1
 
     # Check the conditions to generate prefixes for the output files
     condition_prefixes = {
-        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
-        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
+        'gt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and
+                                            (int(line[END_FIELD]) - int(line[START_FIELD]) >= 5000)},
+        'lt5kb': {'condition': lambda line: (line[SVTYPE_FIELD] == 'DEL' or line[SVTYPE_FIELD] == 'DUP') and
+                                            (int(line[END_FIELD]) - int(line[START_FIELD]) < 5000)},
         'bca': {'condition': lambda line: bca and line[SVTYPE_FIELD] not in ['DEL', 'DUP'] and not line[SVTYPE_FIELD].startswith('INS')},
         'ins': {'condition': lambda line: bca and line[SVTYPE_FIELD].startswith('INS')}
     }
@@ -19,7 +21,7 @@ def process_bed_file(input_bed, n_per_split, bca=True):
     # Create trackers for the current file information
     current_lines = {prefix: [] for prefix in condition_prefixes.keys()}
     current_counts = {prefix: 0 for prefix in condition_prefixes.keys()}
-    current_suffixes = {prefix: 'a' for prefix in condition_prefixes.keys()}
+    current_suffixes = {prefix: 0 for prefix in condition_prefixes.keys()}
 
     with open(input_bed, 'r') as infile:
         for line in infile:
@@ -34,8 +36,7 @@ def process_bed_file(input_bed, n_per_split, bca=True):
                     # If a file has met the number of records per file create a new file with the next suffix and write
                     # the current line to that new file
                     if current_counts[prefix] == n_per_split:
-                        output_suffix = current_suffixes[prefix].rjust(6, 'a')
-                        output_file = f"{prefix}.{output_suffix}.bed"
+                        output_file = get_file_name(prefix, current_suffixes[prefix], digits)
                         with open(output_file, 'w') as outfile:
                             outfile.write('\n'.join(current_lines[prefix]))
                         # Keep track of which files have been written after reaching the max number of files
@@ -43,26 +44,26 @@ def process_bed_file(input_bed, n_per_split, bca=True):
                         # Update the tracking information
                         current_lines[prefix] = []
                         current_counts[prefix] = 0
-                        current_suffixes[prefix] = increment_suffix(current_suffixes[prefix])
+                        current_suffixes[prefix] = increment_suffix(current_suffixes[prefix], digits)
     # Handle the samples after files with the given number of lines per file have been written
     for prefix, lines in current_lines.items():
         if lines:
-            output_suffix = current_suffixes[prefix].rjust(6, 'a')
-            output_file = f"{prefix}.{output_suffix}.bed"
+            output_file = get_file_name(prefix, current_suffixes[prefix], digits)
             with open(output_file, 'w') as outfile:
                 outfile.write('\n'.join(lines))
             logging.info(f"File '{output_file}' written.")
 
 
-# Create a function to appropriately add a suffix to each corresponding file
-def increment_suffix(suffix):
-    alphabet = 'abcdefghijklmnopqrstuvwxyz'
-    if suffix == 'z' * 6:
+# Increment file suffix number and error if maximum number of file names is reached
+def increment_suffix(suffix, digits):
+    if suffix + 1 >= 10 ** digits:
         raise ValueError('All possible files generated.')
     else:
-        index = alphabet.index(suffix[0])
-        next_char = alphabet[(index + 1) % 26]
-        return next_char + suffix[1:]
+        return suffix + 1
+
+
+def get_file_name(prefix, suffix, digits):
+    return f"{prefix}.{str(suffix).zfill(digits)}.bed"
 
 
 def main():
@@ -71,6 +72,7 @@ def main():
     parser.add_argument("--n", help="number of variants per file", required=True, type=int)
     parser.add_argument("--bca", default=False, help="Flag to set to True if the VCF contains BCAs",
                         action='store_true')
+    parser.add_argument("--digits", "-d", default=9, help="Number of digits in filename suffix")
     parser.add_argument("--log-level", required=False, default="INFO", help="Specify level of logging information")
     args = parser.parse_args()
 
@@ -79,7 +81,7 @@ def main():
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=numeric_level, format='%(levelname)s: %(message)s')
-    process_bed_file(args.bed, args.n, args.bca)
+    process_bed_file(args.bed, args.n, args.bca, args.digits)
 
 
 if __name__ == '__main__':
