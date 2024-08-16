@@ -44,7 +44,7 @@ def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
                         # Update the tracking information
                         current_lines[prefix] = []
                         current_counts[prefix] = 0
-                        current_suffixes[prefix] = increment_suffix(current_suffixes[prefix], digits)
+                        current_suffixes[prefix] = current_suffixes[prefix] + 1
     # Handle the samples after files with the given number of lines per file have been written
     for prefix, lines in current_lines.items():
         if lines:
@@ -54,15 +54,10 @@ def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
             logging.info(f"File '{output_file}' written.")
 
 
-# Increment file suffix number and error if maximum number of file names is reached
-def increment_suffix(suffix, digits):
-    if suffix + 1 >= 10 ** digits:
-        raise ValueError('All possible files generated.')
-    else:
-        return suffix + 1
-
-
 def get_file_name(prefix, suffix, digits):
+    if suffix >= 10 ** digits:
+        raise ValueError('No more files can be generated with the current naming scheme.'
+                         'Increase the digits parameter or the n parameter to proceed.')
     return f"{prefix}.{str(suffix).zfill(digits)}.bed"
 
 
