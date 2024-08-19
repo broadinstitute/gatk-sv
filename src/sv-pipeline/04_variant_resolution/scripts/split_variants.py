@@ -54,7 +54,7 @@ def process_bed_file(input_bed, n_per_split, bca=True, digits=9):
 
 
 def get_file_name(prefix, suffix, digits):
-    if suffix >= 10 ** digits:
+    if len(str(suffix)) > digits:
         raise ValueError('No more files can be generated with the current naming scheme. '
                          'Increase the digits parameter or the n parameter to proceed.')
     return f"{prefix}.{str(suffix).zfill(digits)}.bed"
