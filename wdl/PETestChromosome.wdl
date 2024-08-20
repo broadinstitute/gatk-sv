@@ -217,7 +217,6 @@ task PETest {
 
     if [ -s region.merged.bed ]; then
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-        --skip-header \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{discfile} \
         -L region.merged.bed \
@@ -225,9 +224,9 @@ task PETest {
     else
       touch local.PE.txt
       bgzip local.PE.txt
+      tabix -0 -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats
   >>>
   runtime {

@@ -42,7 +42,7 @@ class PETest(PESRTest):
         # Clean up columns
         results['name'] = record.id
         results['bg_frac'] = results.called / \
-            (results.background + results.called)
+                             (results.background + results.called)
         results['bg_frac'] = results.bg_frac.fillna(0)
         cols = 'name log_pval called background bg_frac'.split()
 
@@ -89,7 +89,8 @@ class PETest(PESRTest):
         startA, endA = _get_coords(record.pos, strandA)
         startB, endB = _get_coords(record.stop, strandB)
 
-        region = '{0}:{1}-{2}'.format(record.chrom, startA, endA)
+        # Add 1 because evidence is stored/indexed with 0-based coordinates
+        region = '{0}:{1}-{2}'.format(record.chrom, startA + 1, endA + 1)
 
         try:
             pairs = self.discfile.fetch(region=region, parser=pysam.asTuple())
