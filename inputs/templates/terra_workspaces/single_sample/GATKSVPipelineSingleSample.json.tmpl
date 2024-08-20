@@ -3,8 +3,6 @@
   "GATKSVPipelineSingleSample.batch" : "${this.sample_id}",
   "GATKSVPipelineSingleSample.bam_or_cram_file" : "${this.bam_or_cram_file}",
 
-  "GATKSVPipelineSingleSample.use_melt": "false",
-
   "GATKSVPipelineSingleSample.cutoffs" : "${workspace.ref_panel_cutoffs}",
 
   "GATKSVPipelineSingleSample.genotype_pesr_pesr_sepcutoff" : "${workspace.ref_panel_genotype_pesr_pesr_sepcutoff}",
@@ -49,7 +47,14 @@
   "GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
   "GATKSVPipelineSingleSample.manta_region_bed" : "${workspace.reference_manta_region_bed}",
   "GATKSVPipelineSingleSample.manta_region_bed_index" : "${workspace.reference_manta_region_bed_index}",
+  "GATKSVPipelineSingleSample.mei_bed": "${workspace.mei_bed}",
   "GATKSVPipelineSingleSample.sd_locs_vcf" : "${workspace.reference_sd_locs_vcf}",
+  "GATKSVPipelineSingleSample.reference_bwa_alt" : "${workspace.reference_bwa_alt}",
+  "GATKSVPipelineSingleSample.reference_bwa_amb" : "${workspace.reference_bwa_amb}",
+  "GATKSVPipelineSingleSample.reference_bwa_ann" : "${workspace.reference_bwa_ann}",
+  "GATKSVPipelineSingleSample.reference_bwa_bwt" : "${workspace.reference_bwa_bwt}",
+  "GATKSVPipelineSingleSample.reference_bwa_pac" : "${workspace.reference_bwa_pac}",
+  "GATKSVPipelineSingleSample.reference_bwa_sa" : "${workspace.reference_bwa_sa}",
   "GATKSVPipelineSingleSample.reference_dict" : "${workspace.reference_dict}",
   "GATKSVPipelineSingleSample.reference_fasta" : "${workspace.reference_fasta}",
   "GATKSVPipelineSingleSample.reference_index" : "${workspace.reference_index}",
