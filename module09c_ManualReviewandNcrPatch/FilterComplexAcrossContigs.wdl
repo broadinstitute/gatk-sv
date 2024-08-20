@@ -41,7 +41,7 @@ workflow FilterComplexAcrossContigs {
 				PE_metrics_idxes = PE_metrics_idxes,
 				Depth_DUP_beds = Depth_DUP_beds,
 				Depth_DEL_beds = Depth_DEL_beds,
-				prefix = "~{prefix}.~{contig}",
+				prefix = "~{prefix}.~{contigs[i]}",
 				n_per_split = n_per_split,
 				sample_PE_metrics = sample_PE_metrics,
 				sample_depth_calls = sample_depth_calls,
