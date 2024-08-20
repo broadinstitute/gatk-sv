@@ -149,7 +149,7 @@ workflow FilterComplex {
         call MiniTasks.GetVcfHeaderWithMembersInfoLine as GetVcfHeader {
             input:
                 vcf_gz=vcf,
-                prefix="~{prefix}.manual_review",
+                prefix="~{prefix}.cpx_filtered",
                 sv_base_mini_docker=sv_base_mini_docker,
                 runtime_attr_override=runtime_attr_get_vcf_header_with_members_info_line
         }
@@ -160,7 +160,7 @@ workflow FilterComplex {
             call HailMerge.HailMerge as ConcatVcfsHail_annotated {
                 input:
                     vcfs=ReviseVcf.revised_vcf,
-                    prefix="~{prefix}.manual_review",
+                    prefix="~{prefix}.cpx_filtered",
                     gcs_project=gcs_project,
                     sv_base_mini_docker=sv_base_mini_docker,
                     sv_pipeline_docker=sv_pipeline_docker,
@@ -177,7 +177,7 @@ workflow FilterComplex {
                     vcfs=ReviseVcf.revised_vcf,
                     vcfs_idx=ReviseVcf.revised_vcf_idx,
                     allow_overlaps=true,
-                    outfile_prefix="~{prefix}.manual_review",
+                    outfile_prefix="~{prefix}.cpx_filtered",
                     sv_base_mini_docker=sv_base_mini_docker,
                     runtime_attr_override=runtime_attr_concat_sharded_cluster
             }
