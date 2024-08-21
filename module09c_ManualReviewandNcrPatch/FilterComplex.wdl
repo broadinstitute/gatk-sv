@@ -395,9 +395,9 @@ task SplitCpxCtx {
 
         zcat ~{bed} | head -1 > ~{prefix}.cpx_ctx.bed
 
-        set -o pipefail
-
         filterColumn=$(zcat ~{bed} | head -1 | tr "\t" "\n" | awk '$1=="FILTER" {print NR}')
+
+        set -o pipefail
 
         zcat ~{bed} | awk 'NR > 1' | { grep CPX || true; } | awk -v filter_column=${filterColumn} '$filter_column !~ /UNRESOLVED/' >> ~{prefix}.cpx_ctx.bed
 
