@@ -256,7 +256,7 @@ task RunRdTest {
     Boolean inject_sample = false  # If missing a samples column, fill one using the first sample from the median_file
     Boolean do_plot
     Boolean do_genotyping
-    Int large_size_cutoff = 1000000
+    Int large_size_cutoff = 10000000
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
