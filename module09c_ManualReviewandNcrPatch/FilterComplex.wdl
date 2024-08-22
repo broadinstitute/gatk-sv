@@ -228,85 +228,85 @@ task ReviseVcf {
 
         python <<CODE
 
-        def recal_qual_score(record):
-            """
-            Recalibrate quality score for a single variant
-            """
-            quals = []
-            for s in [s for s in record.samples]:
-                GT = record.samples[s]['GT']
-                if GT in NULL_and_REF_GTs:
-                    continue
-                elif GT in HET_GTs:
-                    quals.append(record.samples[s]['GQ'])
-                else:
-                    quals.append(99)
+def recal_qual_score(record):
+    """
+    Recalibrate quality score for a single variant
+    """
+    quals = []
+    for s in [s for s in record.samples]:
+        GT = record.samples[s]['GT']
+        if GT in NULL_and_REF_GTs:
+            continue
+        elif GT in HET_GTs:
+            quals.append(record.samples[s]['GQ'])
+        else:
+            quals.append(99)
 
-            if len(quals) > 0:
-                return int(median(quals))
+    if len(quals) > 0:
+        return int(median(quals))
 
-        def CPX_manual_readin(CPX_manual):
-            out={}
-            fin=open(CPX_manual)
-            for line in fin:
-                pin=line.strip().split()
-                if not pin[0] in out.keys():
-                    out[pin[0]] = {}
-                out[pin[0]][pin[1]] = pin[2:]
-            fin.close()
-            return out
+def CPX_manual_readin(CPX_manual):
+    out={}
+    fin=open(CPX_manual)
+    for line in fin:
+        pin=line.strip().split()
+        if not pin[0] in out.keys():
+            out[pin[0]] = {}
+        out[pin[0]][pin[1]] = pin[2:]
+    fin.close()
+    return out
 
-        def revise_vcf(vcf_input, vcf_output, hash_CPX_manual):
-            fin=pysam.VariantFile(vcf_input)
-            #revise vcf header
-            header = fin.header
-            fo=pysam.VariantFile(vcf_output, 'w', header = header)
-            for record in fin:
-                #label CPX with manual review results:
-                if record.id in hash_CPX_manual.keys():
-                    unresolve_rec = 0
-                    for sample in hash_CPX_manual[record.id].keys():
-                        if sample in record.samples.keys():
-                            if hash_CPX_manual[record.id][sample][0] == 'no_PE':
-                                if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
-                                    record.samples[sample]['GT'] = [None,None]
-                            elif hash_CPX_manual[record.id][sample][0] == 'low_PE':
-                               if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
-                                    record.samples[sample]['GT'] = [None,None]
-                            elif hash_CPX_manual[record.id][sample][0] == 'partial_PE':
-                               if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
-                                    record.samples[sample]['GT'] = [None,None]
-                                    unresolve_rec+=1
-                            elif hash_CPX_manual[record.id][sample][0] == 'high_PE':
-                               if hash_CPX_manual[record.id][sample][1] in ["lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
-                                    record.samples[sample]['GT'] = [None,None]
-                    if not unresolve_rec/len(hash_CPX_manual[record.id].keys())<.5:
-                        if 'PASS' in record.filter:
-                            record.filter.clear()
-                        record.filter.add('UNRESOLVED')
-                    #Recalibrate QUAL score after CPX filtering
-                    newQUAL = recal_qual_score(record)
-                    if newQUAL is not None:
-                        record.qual = newQUAL
-                fo.write(record) # write out every record that was in the input - NCR will remove ones with no carriers left
-            fin.close()
-            fo.close()
+def revise_vcf(vcf_input, vcf_output, hash_CPX_manual):
+    fin=pysam.VariantFile(vcf_input)
+    #revise vcf header
+    header = fin.header
+    fo=pysam.VariantFile(vcf_output, 'w', header = header)
+    for record in fin:
+        #label CPX with manual review results:
+        if record.id in hash_CPX_manual.keys():
+            unresolve_rec = 0
+            for sample in hash_CPX_manual[record.id].keys():
+                if sample in record.samples.keys():
+                    if hash_CPX_manual[record.id][sample][0] == 'no_PE':
+                        if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
+                            record.samples[sample]['GT'] = [None,None]
+                    elif hash_CPX_manual[record.id][sample][0] == 'low_PE':
+                       if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
+                            record.samples[sample]['GT'] = [None,None]
+                    elif hash_CPX_manual[record.id][sample][0] == 'partial_PE':
+                       if hash_CPX_manual[record.id][sample][1] in ["NA","lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
+                            record.samples[sample]['GT'] = [None,None]
+                            unresolve_rec+=1
+                    elif hash_CPX_manual[record.id][sample][0] == 'high_PE':
+                       if hash_CPX_manual[record.id][sample][1] in ["lack_depth","lack_depth,lack_depth", "lack_depth,depth","depth,lack_depth"]:
+                            record.samples[sample]['GT'] = [None,None]
+            if not unresolve_rec/len(hash_CPX_manual[record.id].keys())<.5:
+                if 'PASS' in record.filter:
+                    record.filter.clear()
+                record.filter.add('UNRESOLVED')
+            #Recalibrate QUAL score after CPX filtering
+            newQUAL = recal_qual_score(record)
+            if newQUAL is not None:
+                record.qual = newQUAL
+        fo.write(record) # write out every record that was in the input - NCR will remove ones with no carriers left
+    fin.close()
+    fo.close()
 
-        import os
-        import sys
-        from numpy import median
-        import pysam
-        import argparse
+import os
+import sys
+from numpy import median
+import pysam
+import argparse
 
-        #Define global variables
-        NULL_GTs = [(None, None), (None, )]
-        REF_GTs = [(0, 0), (0, ), (None, 2)]
-        NULL_and_REF_GTs = NULL_GTs + REF_GTs
-        HET_GTs = [(0, 1), (None, 1), (None, 3)]
+#Define global variables
+NULL_GTs = [(None, None), (None, )]
+REF_GTs = [(0, 0), (0, ), (None, 2)]
+NULL_and_REF_GTs = NULL_GTs + REF_GTs
+HET_GTs = [(0, 1), (None, 1), (None, 3)]
 
-        hash_CPX_manual =  CPX_manual_readin("~{CPX_manual}")
-        print(len(hash_CPX_manual.keys()))
-        revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual)
+hash_CPX_manual =  CPX_manual_readin("~{CPX_manual}")
+print(len(hash_CPX_manual.keys()))
+revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual)
 
 CODE
 
