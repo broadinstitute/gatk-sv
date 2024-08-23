@@ -190,6 +190,7 @@ workflow CombineBatches {
         depth_breakend_window=500000,
         mixed_sample_overlap=0.5,
         mixed_interval_overlap=0.5,
+        mixed_breakend_window=1000000,
         reference_fasta=reference_fasta,
         reference_fasta_fai=reference_fasta_fai,
         reference_dict=reference_dict,
