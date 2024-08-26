@@ -20,6 +20,7 @@ workflow RDTestChromosome {
     File samples
     Boolean allosome
     File ref_dict
+    File? outlier_sample_ids
 
     String sv_pipeline_docker
     String linux_docker
@@ -129,6 +130,7 @@ task RDTest {
     File ped_file
     File include_list
     File ref_dict
+    File? outlier_sample_ids
     String prefix
     String flags
     String sv_pipeline_docker
@@ -187,6 +189,7 @@ task RDTest {
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{include_list} \
+      ~{if defined(outlier_sample_ids) then "--outlier_sample_ids " + outlier_sample_ids + " \\" else ""}
       ~{flags}
   
   >>>

@@ -42,7 +42,7 @@ workflow GenerateBatchMetrics {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
-    File? excluded_sample_ids # sample IDs to exclude from training
+    File? outlier_sample_ids # sample IDs to exclude from training
 
     String sv_pipeline_docker
     String sv_base_mini_docker
@@ -50,6 +50,7 @@ workflow GenerateBatchMetrics {
     String linux_docker
 
     RuntimeAttr? runtime_attr_ids_from_vcf
+    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_sample_list
     RuntimeAttr? runtime_attr_baf_samples
@@ -70,10 +71,25 @@ workflow GenerateBatchMetrics {
 
   Array[String] algorithms = ["depth", "melt", "scramble", "wham", "manta"]
   Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
+  Array[File?] filtered_vcfs = SubsetVcfBySamplesList.vcf_subset
+
+  scatter (i in range(length(algorithms))) {
+    if (defined(vcfs[i])) {
+      call util.SubsetVcfBySamplesList {
+        input:
+          vcf = select_first([vcfs[i]]),
+          list_of_samples = select_first([outlier_sample_ids]),
+          outfile_name = "${batch}.${algorithms[i]}.outlier_samples_removed.vcf.gz",
+          remove_samples = true,
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_subset_vcf
+      }
+    }
+  }
 
   call util.GetSampleIdsFromVcf {
     input:
-      vcf = select_first(vcfs),
+      vcf = select_first(filtered_vcfs),
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
@@ -97,10 +113,10 @@ workflow GenerateBatchMetrics {
 
   scatter (i in range(length(algorithms))) {
     
-    if (defined(vcfs[i])) {
+    if (defined(filtered_vcfs[i])) {
 
       String algorithm = algorithms[i]
-      File vcf = select_first([vcfs[i]])
+      File vcf = select_first([filtered_vcfs[i]])
 
       call GetMaleOnlyVariantIDs {
         input:

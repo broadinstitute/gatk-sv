@@ -22,7 +22,7 @@ workflow TrainGCNV {
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
     # Subset of samples to be excluded from gCNV model training. Overrides n_samples_subsample if both provided.
-    File? excluded_sample_ids
+    File? outlier_sample_ids
 
     # Condense read counts
     Int? min_interval_size
@@ -88,7 +88,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
-    String? sv_pipeline_docker # required if using n_samples_subsample or excluded_sample_ids to subset samples
+    String? sv_pipeline_docker # required if using n_samples_subsample or outlier_sample_ids to subset samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr
@@ -102,17 +102,17 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  if (defined(excluded_sample_ids)) {
+  if (defined(outlier_sample_ids)) {
     call util.GetIncludedIndices {
       input:
         all_strings = write_lines(samples),
-        excluded_strings = select_first([excluded_sample_ids]),
+        excluded_strings = select_first([outlier_sample_ids]),
         prefix = cohort,
         sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
 
-  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(excluded_sample_ids)) {
+  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(outlier_sample_ids)) {
     call util.RandomSubsampleStringArray {
       input:
         strings = write_lines(samples),

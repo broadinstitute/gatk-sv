@@ -109,7 +109,9 @@ option_list <- list(
   make_option(c("-l", "--SampleExcludeList"), type="character", default=NULL,
               help="Optional:Single column file with list of samples to exclude", metavar="character"),
   make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
-              help="Optional:Single column file with list of samples to include", metavar="character")
+              help="Optional:Single column file with list of samples to include", metavar="character"),
+  make_option(c("--outlier_sample_ids"), type="character", default=NULL,
+              help="Optional:File containing outlier IDs, one per line", metavar="character")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -434,6 +436,17 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     cov1 <- sampleFilterResult[[1]]
     allnorm <- sampleFilterResult[[2]]
 
+    if (!is.null(outlier_sample_ids)) {
+      outlier_ids <- readLines(outlier_sample_ids)
+      non_outlier_columns <- !(names(cov1) %in% outlier_ids)
+      
+      # Exclude outlier samples only if there are non-outlier samples left
+      if (sum(non_outlier_columns[-(1:3)]) > 0) {
+        cov1 <- cov1[, c(rep(TRUE, 3), non_outlier_columns[-(1:3)])]
+        allnorm <- allnorm[, non_outlier_columns[-(1:3)]]
+      }
+    }
+
     if (ncol(cov1) < 4)
     {
       stop (" WARNING: All samples excluded by filtering")
@@ -507,7 +520,20 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       ##make sure first four columns are not modified##
       columnswithsamp <- c(columnswithsamp, 1, 2, 3, 4)
       genotype_matrix[1,-columnswithsamp] = 2
-    } 
+    }
+
+    ##filter outlier samples##
+    if (!is.null(outlier_sample_ids)) {
+      outlier_ids <- readLines(outlier_sample_ids)
+      non_outlier_samples <- setdiff(colnames(genotype_matrix)[5:ncol(genotype_matrix)], outlier_ids)
+      
+      if (length(non_outlier_samples) == 0) {
+        non_outlier_samples <- colnames(genotype_matrix)[5:ncol(genotype_matrix)]
+      }
+      
+      genotype_matrix <- genotype_matrix[, c(1:4, which(colnames(genotype_matrix) %in% non_outlier_samples))]
+    }
+    
     return(genotype_matrix)
   }
 
