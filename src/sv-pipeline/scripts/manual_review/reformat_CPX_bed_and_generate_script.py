@@ -71,6 +71,9 @@ def extract_bp_list_for_ddup_events(coordinates, segments, small_sv_size_thresho
             dup_bp = [seg_c1, seg_c2]
         if 'INV_' in segment:
             INV_flag = INV_flag + 1
+        if 'DEL_' in segment:
+            seg_svtype, seg_chrom, seg_c1, seg_c2 = parse_segment(segment)
+            del_bp = [seg_chrom, seg_c1, seg_c2]
     #INV_flag == 0 : no INV involved in the insertion
     #INV_flag > 0: INV involved
 
@@ -93,6 +96,8 @@ def extract_bp_list_for_ddup_events(coordinates, segments, small_sv_size_thresho
       elif del_bp[1] < dup_bp[1] and not del_bp[2] < dup_bp[1]:
           breakpints = [del_bp[0]]+dup_bp+[del_bp[2]]
           structures = ['ab','aa']
+      else:
+        return 'unresolved'
     elif INV_flag>0:
       if del_bp[2] < dup_bp[0]:
           breakpints = del_bp + dup_bp
@@ -112,6 +117,8 @@ def extract_bp_list_for_ddup_events(coordinates, segments, small_sv_size_thresho
       elif del_bp[1] < dup_bp[1] and not del_bp[2] < dup_bp[1]:
           breakpints = [del_bp[0]]+dup_bp+[del_bp[2]]
           structures = ['ab','aa^']
+      else:
+          return 'unresolved'
     return [breakpints, structures]
 
 def extract_bp_list_for_ins_idel(coordinates, segments, small_sv_size_threshold):
@@ -201,14 +208,18 @@ def is_interchromosomal(pin, header_pos):
           return True
    return False
 
-def cpx_SV_readin(input_bed, header_pos):
+def cpx_SV_readin(input_bed, header_pos, unresolved):
+  unresolved_svids = []
   fin=os.popen(r'''zcat %s'''%(input_bed))
   out = []
   small_sv_size_threshold = 250
   for line in fin:
     pin=line.strip().split('\t')
+    # just skip pidups since I don't know what to do with them
     if not pin[0][0]=="#":
-      if not is_interchromosomal(pin, header_pos):
+      if pin[header_pos['CPX_TYPE']] in ['piDUP_RF', 'piDUP_FR']:
+        unresolved_svids.append(pin[header_pos['name']])
+      elif not is_interchromosomal(pin, header_pos):
         if pin[header_pos['CPX_TYPE']] in ['delINV', 'INVdel', 'dupINV','INVdup','delINVdel', 'delINVdup','dupINVdel','dupINVdup']:
           segments = pin[header_pos['CPX_INTERVALS']].split(',')
           breakpoints = extract_bp_list_for_inv_cnv_events(segments, pin[header_pos['CPX_TYPE']])
@@ -231,6 +242,9 @@ def cpx_SV_readin(input_bed, header_pos):
         elif pin[header_pos['CPX_TYPE']] in ['dDUP', 'dDUP_iDEL']:
           segments = pin[header_pos['CPX_INTERVALS']].split(',')
           cpx_info = extract_bp_list_for_ddup_events(pin[:3], segments, small_sv_size_threshold)
+          if cpx_info == 'unresolved':
+            unresolved_svids.append(pin[header_pos['name']])
+            continue
           ref_alt = cpx_info[1]
           breakpoints = cpx_info[0]
         elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
@@ -247,6 +261,9 @@ def cpx_SV_readin(input_bed, header_pos):
     else:
       continue
   fin.close()
+  with open(unresolved, 'w') as unres:
+    for svid in unresolved_svids:
+      unres.write(svid + "\n")
   return out
 
 def cpx_inter_chromo_SV_readin(input_bed, header_pos):
@@ -323,7 +340,7 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,sample_pe, PE_evidence, out_file
   flank_front = 100
   fo=open(out_file,'w')
   for info in cpx_SV:
-    print(info)
+    #print(info)
     breakpints = info[0]
     if info[1][0] == 'ab' and info[1][1]=='b^': #delINV
       common_1 = ['tabix', 'PE_metrics', breakpints[0]+':'+str(breakpints[1]-flank_back)+'-'+str(breakpints[1]+flank_front), '| grep', 'sample', '| awk', "'{if ($1==$4", '&&', '$3=="+" && $6=="+"', '&&', '$5>'+str(breakpints[3]-flank_back) , '&&', '$5<'+str(breakpints[3]+flank_front), ") print}' | sed -e 's/$/\\t", info[2],"/'", '>>', PE_evidence]
@@ -390,7 +407,7 @@ def cpx_sample_batch_readin(cpx_SV, SVID_sample,sample_pe, PE_evidence, out_file
     samples = SVID_sample[info[2]]
     if not samples =='' and not samples=='NA': 
       sample_list = samples.split(',')
-      print(len(sample_list))
+      # print(len(sample_list))
       pe_metrics_list = [sample_pe[samp] for samp in sample_list]
       for num in range(len(sample_list)):
         common_1[1] = pe_metrics_list[num]
@@ -434,6 +451,7 @@ def main():
   parser.add_argument('-p','--pe_evidence', required=True, help='name of file to store collected PE metrics')
   parser.add_argument('-c','--command_script', required=True, help='name of file that has scripts to collect PE evidences')
   parser.add_argument('-r','--reformat_SV', required=True, help='reformatted SV in svelter format')
+  parser.add_argument('-u','--unresolved', required=True, help='list of SVIDs to mark unresolved without evaluating (temporary workaround')  # TODO
   args = parser.parse_args()
 
   input_bed = args.input
@@ -446,7 +464,7 @@ def main():
   sample_pe = sample_pe_readin(sample_pe_file)
   SVID_sample = SVID_sample_readin(input_bed, header_pos)
 
-  cpx_SV = cpx_SV_readin(input_bed, header_pos)
+  cpx_SV = cpx_SV_readin(input_bed, header_pos, args.unresolved)
   cpx_inter_chromo_SV = cpx_inter_chromo_SV_readin(input_bed, header_pos)
   write_cpx_SVs(cpx_SV+cpx_inter_chromo_SV, reformatted_SV)
 

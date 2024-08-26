@@ -140,6 +140,7 @@ workflow FilterComplex {
                 vcf_file = ScatterVcf.shards[i],
                 vcf_index = ScatterVcf.shards_idx[i],
                 CPX_manual = CalculateCpxEvidences.manual_revise_CPX_results,
+                unresolved_svids = GenerateCpxReviewScript.unresolved_svids,
                 prefix = "~{prefix}.~{i}",
                 sv_pipeline_docker = sv_pipeline_docker
         }
@@ -208,6 +209,7 @@ task ReviseVcf {
         File vcf_file
         File vcf_index
         File CPX_manual
+        File unresolved_svids
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -256,14 +258,27 @@ def CPX_manual_readin(CPX_manual):
     fin.close()
     return out
 
-def revise_vcf(vcf_input, vcf_output, hash_CPX_manual):
+
+def unresolved_readin(unresolved_svids):
+    svids = set()
+    with open(unresolved_svids, 'r') as inp:
+        for line in inp:
+            svids.add(line.strip())
+    return svids
+
+
+def revise_vcf(vcf_input, vcf_output, hash_CPX_manual, unresolved_svids):
     fin=pysam.VariantFile(vcf_input)
     #revise vcf header
     header = fin.header
     fo=pysam.VariantFile(vcf_output, 'w', header = header)
     for record in fin:
+        if record.id in unresolved_svids:
+            if 'PASS' in record.filter:
+                record.filter.clear()
+            record.filter.add('UNRESOLVED')
         #label CPX with manual review results:
-        if record.id in hash_CPX_manual.keys():
+        elif record.id in hash_CPX_manual.keys():
             unresolve_rec = 0
             for sample in hash_CPX_manual[record.id].keys():
                 if sample in record.samples.keys():
@@ -304,9 +319,10 @@ REF_GTs = [(0, 0), (0, ), (None, 2)]
 NULL_and_REF_GTs = NULL_GTs + REF_GTs
 HET_GTs = [(0, 1), (None, 1), (None, 3)]
 
+unresolved_svids = unresolved_readin("~{unresolved_svids}")
 hash_CPX_manual =  CPX_manual_readin("~{CPX_manual}")
 print(len(hash_CPX_manual.keys()))
-revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual)
+revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual, unresolved_svids)
 
 CODE
 
@@ -449,13 +465,15 @@ task GenerateCpxReviewScript{
         -s ~{sample_PE_metrics} \
         -p CPX_CTX_disINS.PASS.PE_evidences \
         -c collect_PE_evidences.CPX_CTX_disINS.PASS.sh \
-        -r ~{prefix}.svelter
+        -r ~{prefix}.svelter \
+        -u ~{prefix}.unresolved_svids.txt
 
     >>>
 
     output {
         File pe_evidence_collection_script = "collect_PE_evidences.CPX_CTX_disINS.PASS.sh"
         File svelter = "~{prefix}.svelter"
+        File unresolved_svids = "~{prefix}.unresolved_svids.txt"
     }
 
     runtime {
