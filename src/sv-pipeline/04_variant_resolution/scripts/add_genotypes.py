@@ -12,13 +12,6 @@ import pandas as pd
 import pysam
 
 
-def make_multiallelic_alts(record):
-    """
-    Sets simple symbolic alt for multi-allelic records
-    """
-    record.alts = ('<CNV>',)
-
-
 def make_evidence_int(ev):
     ev = ev.split(',')
 
@@ -47,10 +40,14 @@ def add_genotypes(record, genotypes, varGQ):
             del record.format[fmt]
 
     max_GT = genotypes['GT'].max()
-    is_bca = record.info['SVTYPE'] not in 'DEL DUP'.split()
 
     if max_GT > 2:
-        make_multiallelic_alts(record)
+        record.alts = ('<CNV>',)
+        if record.info['SVTYPE'] != 'DUP':
+            msg = 'Invalid SVTYPE {0} for multiallelic record {1}'
+            msg = msg.format(record.info['SVTYPE'], record.id)
+            raise Exception(msg)
+        record.info['SVTYPE'] = 'CNV'
 
     cols = 'name sample GT GQ RD_CN RD_GQ PE_GT PE_GQ SR_GT SR_GQ EV'.split()
     gt_matrix = genotypes.reset_index()[cols].to_numpy()
@@ -67,12 +64,7 @@ def add_genotypes(record, genotypes, varGQ):
             raise Exception(msg)
 
         if max_GT > 2:
-            if record.info['SVTYPE'] == 'DEL':
-                msg = 'Invalid SVTYPE {0} for multiallelic genotype in record {1}'
-                msg = msg.format(record.info['SVTYPE'], record.id)
-                raise Exception(msg)
             record.samples[sample]['GT'] = (None, None)
-
         elif data[2] == 0:
             record.samples[sample]['GT'] = (0, 0)
         elif data[2] == 1:
