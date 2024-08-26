@@ -50,7 +50,6 @@ workflow GenerateBatchMetrics {
     String linux_docker
 
     RuntimeAttr? runtime_attr_ids_from_vcf
-    RuntimeAttr? runtime_attr_subset_vcf
     RuntimeAttr? runtime_attr_subset_ped
     RuntimeAttr? runtime_attr_sample_list
     RuntimeAttr? runtime_attr_baf_samples
