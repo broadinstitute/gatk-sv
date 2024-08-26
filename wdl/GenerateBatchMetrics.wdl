@@ -71,25 +71,10 @@ workflow GenerateBatchMetrics {
 
   Array[String] algorithms = ["depth", "melt", "scramble", "wham", "manta"]
   Array[File?] vcfs = [depth_vcf, melt_vcf, scramble_vcf, wham_vcf, manta_vcf]
-  Array[File?] filtered_vcfs = SubsetVcfBySamplesList.vcf_subset
-
-  scatter (i in range(length(algorithms))) {
-    if (defined(vcfs[i])) {
-      call util.SubsetVcfBySamplesList {
-        input:
-          vcf = select_first([vcfs[i]]),
-          list_of_samples = select_first([outlier_sample_ids]),
-          outfile_name = "${batch}.${algorithms[i]}.outlier_samples_removed.vcf.gz",
-          remove_samples = true,
-          sv_base_mini_docker = sv_base_mini_docker,
-          runtime_attr_override = runtime_attr_subset_vcf
-      }
-    }
-  }
 
   call util.GetSampleIdsFromVcf {
     input:
-      vcf = select_first(filtered_vcfs),
+      vcf = select_first(vcfs),
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_ids_from_vcf
   }
@@ -113,10 +98,10 @@ workflow GenerateBatchMetrics {
 
   scatter (i in range(length(algorithms))) {
     
-    if (defined(filtered_vcfs[i])) {
+    if (defined(vcfs[i])) {
 
       String algorithm = algorithms[i]
-      File vcf = select_first([filtered_vcfs[i]])
+      File vcf = select_first([vcfs[i]])
 
       call GetMaleOnlyVariantIDs {
         input:
