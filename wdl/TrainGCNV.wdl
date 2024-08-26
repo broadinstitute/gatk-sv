@@ -21,8 +21,9 @@ workflow TrainGCNV {
     # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
-    # Subset of full sample list on which to train the gCNV model. Overrides n_samples_subsample if both provided
-    Array[String]? sample_ids_training_subset
+    # Subset of full sample list which identifies samples to exclude from gCNV model training. 
+    # Overrides n_samples_subsample if both provided.
+    Array[String]? excluded_sample_ids
 
     # Condense read counts
     Int? min_interval_size
@@ -88,7 +89,7 @@ workflow TrainGCNV {
     String linux_docker
     String gatk_docker
     String condense_counts_docker
-    String? sv_pipeline_docker # required if using n_samples_subsample or sample_ids_training_subset to subset samples
+    String? sv_pipeline_docker # required if using n_samples_subsample or excluded_sample_ids to subset samples
 
     # Runtime configuration overrides
     RuntimeAttr? condense_counts_runtime_attr
@@ -102,17 +103,17 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  if (defined(sample_ids_training_subset)) {
-    call util.GetSubsampledIndices {
+  if (defined(excluded_sample_ids)) {
+    call util.GetIncludedIndices {
       input:
         all_strings = write_lines(samples),
-        subset_strings = write_lines(select_first([sample_ids_training_subset])),
+        excluded_strings = write_lines(select_first([excluded_sample_ids])),
         prefix = cohort,
         sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
 
-  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(sample_ids_training_subset)) {
+  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(excluded_sample_ids)) {
     call util.RandomSubsampleStringArray {
       input:
         strings = write_lines(samples),
@@ -123,7 +124,7 @@ workflow TrainGCNV {
     }
   }
 
-  Array[Int] sample_indices = select_first([GetSubsampledIndices.subsample_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+  Array[Int] sample_indices = select_first([GetIncludedIndices.subsample_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
 
   scatter (i in sample_indices) {
     String sample_ids_ = samples[i]
