@@ -146,6 +146,7 @@ workflow GenerateBatchMetrics {
             male_samples = GetSampleLists.male_samples,
             female_samples = GetSampleLists.female_samples,
             male_only_variant_ids = GetMaleOnlyVariantIDs.male_only_variant_ids,
+            outlier_sample_ids = outlier_sample_ids,
             sv_pipeline_docker = sv_pipeline_docker,
             linux_docker = linux_docker,
             runtime_attr_rdtest = runtime_attr_rdtest,
