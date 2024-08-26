@@ -21,9 +21,8 @@ workflow TrainGCNV {
     # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
-    # Subset of full sample list which identifies samples to exclude from gCNV model training. 
-    # Overrides n_samples_subsample if both provided.
-    Array[String]? excluded_sample_ids
+    # Subset of samples to be excluded from gCNV model training. Overrides n_samples_subsample if both provided.
+    File? excluded_sample_ids
 
     # Condense read counts
     Int? min_interval_size
@@ -107,7 +106,7 @@ workflow TrainGCNV {
     call util.GetIncludedIndices {
       input:
         all_strings = write_lines(samples),
-        excluded_strings = write_lines(select_first([excluded_sample_ids])),
+        excluded_strings = select_first([excluded_sample_ids]),
         prefix = cohort,
         sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
@@ -124,7 +123,7 @@ workflow TrainGCNV {
     }
   }
 
-  Array[Int] sample_indices = select_first([GetIncludedIndices.subsample_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+  Array[Int] sample_indices = select_first([GetIncludedIndices.included_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
 
   scatter (i in sample_indices) {
     String sample_ids_ = samples[i]

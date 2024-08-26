@@ -42,6 +42,7 @@ workflow GenerateBatchMetrics {
     # Run module metrics workflow at the end - on by default
     Boolean? run_module_metrics
     File? primary_contigs_list  # required if run_module_metrics = true
+    File? excluded_sample_ids # sample IDs to exclude from training
 
     String sv_pipeline_docker
     String sv_base_mini_docker
