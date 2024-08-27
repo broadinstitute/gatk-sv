@@ -22,8 +22,7 @@ def main(argv):
                         help='Final variant scores.')
     parser.add_argument('cutoffs', type=argparse.FileType('w'),
                         help='Learned cutoffs.')
-    parser.add_argument('-o', '--outlier-samples', 
-                        help='Outlier sample IDs')
+    parser.add_argument('-o', '--outlier-samples', help='Outlier sample IDs')
 
     # Print help if no arguments specified
     if len(argv) == 0:
