@@ -22,7 +22,6 @@ def main(argv):
                         help='Final variant scores.')
     parser.add_argument('cutoffs', type=argparse.FileType('w'),
                         help='Learned cutoffs.')
-    parser.add_argument('-o', '--outlier-samples', help='Outlier sample IDs')
 
     # Print help if no arguments specified
     if len(argv) == 0:
@@ -31,10 +30,7 @@ def main(argv):
     args = parser.parse_args(argv)
 
     metrics = pd.read_table(args.metrics)
-    if args.outlier_samples:
-        scores, cutoffs = adjudicate_SV(metrics, args.outlier_samples)
-    else:
-        scores, cutoffs = adjudicate_SV(metrics)
+    scores, cutoffs = adjudicate_SV(metrics)
     scores.to_csv(args.scores, index=False, sep='\t')
     cutoffs.to_csv(args.cutoffs, index=False, sep='\t')
 
