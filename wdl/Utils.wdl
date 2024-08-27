@@ -239,7 +239,73 @@ task RunQC {
     preemptible: preemptible_attempts
     maxRetries: 1
   }
+}
 
+task GetFilteredSubsampledIndices {
+  input {
+    File all_strings
+    File? exclude_strings
+    Int? subset_size
+    Int seed
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  String include_indices_filename = "~{prefix}.filtered_subsampled_indices.list"
+  String include_strings_filename = "~{prefix}.filtered_subsampled_strings.list"
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  command <<<
+
+    set -euo pipefail
+    python3 <<CODE
+    import random
+    string_array = [line.rstrip() for line in open("~{all_strings}", 'r')]
+    exclude_set = set()
+    if "~{exclude_strings}" != "":
+      exclude_set = set([line.rstrip() for line in open("~{exclude_strings}", 'r')])
+    filtered_array = [s for s in string_array if s not in exclude_set]
+    subset_size = len(filtered_array) if ~{subset_size} is None else min(~{subset_size}, len(filtered_array))
+    result_array = filtered_array
+    if subset_size < len(filtered_array):
+        random.seed(~{seed})
+        selected_indices = random.sample(range(len(filtered_array)), k=subset_size)
+        selected_indices.sort()
+        result_array = [filtered_array[i] for i in selected_indices]
+    with open("~{include_indices_filename}", 'w') as indices, open("~{include_strings_filename}", 'w') as strings:
+        for _, sample in enumerate(result_array):
+            indices.write(f"{string_array.index(sample)}\n")
+            strings.write(f"{sample}\n")
+    CODE
+
+  >>>
+
+  output {
+    File include_indices_file = include_indices_filename
+    Array[Int] include_indices_array = read_lines(include_indices_filename)
+    File include_strings_file = include_strings_filename
+    Array[String] include_strings_array = read_lines(include_strings_filename)
+  }
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
 }
 
 task RandomSubsampleStringArray {
@@ -342,58 +408,6 @@ task GetSubsampledIndices {
 
   output {
     Array[Int] subsample_indices_array = read_lines(subsample_indices_filename)
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task GetIncludedIndices {
-  input {
-    File all_strings
-    File excluded_strings
-    String prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  String included_indices_filename = "~{prefix}.included_sample_indices.list"
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1,
-    mem_gb: 1,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  command <<<
-
-    set -euo pipefail
-    python3 <<CODE
-    all_strings = [line.rstrip() for line in open("~{all_strings}", 'r')]
-    exclude_strings = {line.rstrip() for line in open("~{excluded_strings}", 'r')}
-    if not subset_strings.issubset(set(all_strings)):
-      raise ValueError("Subset list must be a subset of full list")
-    with open("~{included_indices_filename}", 'w') as indices:
-      for i, string in enumerate(all_strings):
-        if string not in excluded_strings:
-          indices.write(f"{i}\n")
-    CODE
-
-  >>>
-
-  output {
-    Array[Int] included_indices_array = read_lines(included_indices_filename)
   }
 
   runtime {
@@ -776,7 +790,7 @@ task SubsetVcfBySamplesList {
     File? vcf_idx
     File list_of_samples  # List of samples to keep (default, remove_samples = false) or remove (remove_samples = true)
     String? outfile_name
-    Boolean remove_samples = false  # If false (default), keep samples in provided list. If true, remove them.
+    Boolean remove_samples = false  # If false (default), only keep samples in provided list. If true, remove them.
     Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
     Boolean keep_af = true  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
     String sv_base_mini_docker

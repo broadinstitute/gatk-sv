@@ -20,9 +20,8 @@ workflow TrainGCNV {
     # Options for subsetting samples for training.
     # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
+    File? outlier_sample_ids # Identifies samples to be excluded from provided sample list for trainGCNV
     Int subsample_seed = 42
-    # Identifies samples to be excluded from gCNV model training. Overrides n_samples_subsample if both provided.
-    File? outlier_sample_ids
 
     # Condense read counts
     Int? min_interval_size
@@ -102,28 +101,19 @@ workflow TrainGCNV {
     RuntimeAttr? runtime_attr_explode
   }
 
-  if (defined(outlier_sample_ids)) {
-    call util.GetIncludedIndices {
+  if ((defined(n_samples_subsample) && select_first([n_samples_subsample]) < length(samples)) || (defined(outlier_sample_ids))) {
+    call util.GetFilteredSubsampledIndices {
       input:
         all_strings = write_lines(samples),
-        excluded_strings = select_first([outlier_sample_ids]),
-        prefix = cohort,
-        sv_pipeline_docker = select_first([sv_pipeline_docker])
-    }
-  }
-
-  if (defined(n_samples_subsample) && (select_first([n_samples_subsample]) < length(samples)) && !defined(outlier_sample_ids)) {
-    call util.RandomSubsampleStringArray {
-      input:
-        strings = write_lines(samples),
-        seed = subsample_seed,
+        exclude_strings = select_first([outlier_sample_ids]),
         subset_size = select_first([n_samples_subsample]),
+        seed = subsample_seed,
         prefix = cohort,
         sv_pipeline_docker = select_first([sv_pipeline_docker])
     }
   }
 
-  Array[Int] sample_indices = select_first([GetIncludedIndices.included_indices_array, RandomSubsampleStringArray.subsample_indices_array, range(length(samples))])
+  Array[Int] sample_indices = select_first([GetFilteredSubsampledIndices.include_indices_array, range(length(samples))])
 
   scatter (i in sample_indices) {
     String sample_ids_ = samples[i]
