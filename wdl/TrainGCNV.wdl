@@ -21,7 +21,7 @@ workflow TrainGCNV {
     # Assumes all other inputs correspond to the full sample list. Intended for Terra
     Int? n_samples_subsample # Number of samples to subsample from provided sample list for trainGCNV (rec: ~100)
     Int subsample_seed = 42
-    # Subset of samples to be excluded from gCNV model training. Overrides n_samples_subsample if both provided.
+    # Identifies samples to be excluded from gCNV model training. Overrides n_samples_subsample if both provided.
     File? outlier_sample_ids
 
     # Condense read counts
