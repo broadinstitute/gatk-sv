@@ -11,6 +11,7 @@ workflow FilterBatchSites {
     File? melt_vcf
     File? scramble_vcf
     File? depth_vcf
+    File? outlier_sample_ids # sample IDs to exclude from training
     File evidence_metrics
     File evidence_metrics_common
     String sv_pipeline_docker
@@ -36,6 +37,7 @@ workflow FilterBatchSites {
     input:
       metrics = evidence_metrics,
       batch = batch,
+      outlier_sample_ids = outlier_sample_ids,
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_adjudicate
   }
@@ -98,6 +100,7 @@ task AdjudicateSV {
   input {
     File metrics
     String batch
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -120,7 +123,7 @@ task AdjudicateSV {
   command <<<
 
     set -euo pipefail
-    svtk adjudicate ~{metrics} ~{batch}.scores ~{batch}.cutoffs
+    svtk adjudicate ~{metrics} ~{batch}.scores ~{batch}.cutoffs ~{if defined(outlier_sample_ids) then "-o ~{outlier_sample_ids}" else ""}
     mkdir ~{batch}.RF_intermediate_files
     mv *_trainable.txt ~{batch}.RF_intermediate_files/
     mv *_testable.txt ~{batch}.RF_intermediate_files/

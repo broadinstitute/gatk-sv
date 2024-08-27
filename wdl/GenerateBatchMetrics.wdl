@@ -395,6 +395,7 @@ task AggregateTests {
     File? srtest
     File segdups
     File rmsk
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -420,6 +421,7 @@ task AggregateTests {
       ~{if defined(baftest) then "-b ~{baftest}" else "" } \
       ~{if defined(petest) then "-p ~{petest}" else "" } \
       ~{if defined(srtest) then "-s ~{srtest}" else "" } \
+      ~{if defined(outlier_sample_ids) then "-o ~{outlier_sample_ids}" else ""} \
       --segdups ~{segdups} \
       --rmsk ~{rmsk} \
       aggregated.metrics

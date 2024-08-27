@@ -130,9 +130,9 @@ task RDTest {
     File ped_file
     File include_list
     File ref_dict
-    File? outlier_sample_ids
     String prefix
     String flags
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }

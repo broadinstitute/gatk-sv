@@ -15,13 +15,21 @@ from svtk.adjudicate import rf_classify, labelers
 ALLOSOMES = 'X Y chrX chrY'.split()
 
 
-def adjudicate_BAF(metrics, labeler, name):
+def read_outlier_samples(outlier_file):
+    if outlier_file:
+        with open(outlier_file, 'r') as f:
+            return set(line.strip() for line in f)
+    return set()
+
+
+def adjudicate_BAF(metrics, labeler, name, outlier_samples=None):
     # Deletions
     testable = metrics.loc[(metrics.svtype == 'DEL') &
                            (metrics.svsize >= 5000)].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
 
     trainable['label'] = labeler.label(trainable)
     trainable.to_csv('{0}_DEL_trainable.txt'.format(
@@ -63,26 +71,27 @@ def adjudicate_BAF(metrics, labeler, name):
     return cutoffs
 
 
-def adjudicate_BAF1(metrics):
+def adjudicate_BAF1(metrics, outlier_samples=None):
     cutoffs = adjudicate_BAF(
-        metrics, labelers.BAF1TrainingLabeler(), 'BAF1_prob')
+        metrics, labelers.BAF1TrainingLabeler(), 'BAF1_prob', outlier_samples)
     cutoffs['test'] = 'BAF1'
 
     return cutoffs
 
 
-def adjudicate_BAF2(metrics):
+def adjudicate_BAF2(metrics, outlier_samples=None):
     cutoffs = adjudicate_BAF(
-        metrics, labelers.BAF2TrainingLabeler(), 'BAF2_prob')
+        metrics, labelers.BAF2TrainingLabeler(), 'BAF2_prob', outlier_samples)
     cutoffs['test'] = 'BAF2'
     return cutoffs
 
 
-def adjudicate_SR1(metrics):
+def adjudicate_SR1(metrics, outlier_samples=None):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
     features = ['SR_sum_log_pval', 'SR_sum_bg_frac']
     cutoffs = {'indep': ['SR_sum_log_pval'], 'dep': ['SR_sum_bg_frac']}
     labeler = labelers.SR1TrainingLabeler()
@@ -100,7 +109,7 @@ def adjudicate_SR1(metrics):
     return cutoffs
 
 
-def adjudicate_RD(metrics):
+def adjudicate_RD(metrics, outlier_samples=None):
     features = ["RD_Median_Separation", "RD_log_pval", "RD_log_2ndMaxP"]
     cutoff_features = {'indep': ['RD_log_pval', 'RD_Median_Separation'],
                        'dep': ['RD_log_2ndMaxP']}
@@ -113,7 +122,8 @@ def adjudicate_RD(metrics):
     trainable = testable.loc[(testable.svsize >= 5000) &
                              (testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
 
     testable.to_csv('RD_pesr_gt5kb_testable.txt', index=False, sep='\t')
     trainable['label'] = labeler.label(trainable)
@@ -201,11 +211,12 @@ def adjudicate_RD(metrics):
     return cutoffs
 
 
-def adjudicate_PE(metrics):
+def adjudicate_PE(metrics, outlier_samples=None):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
     features = ['PE_log_pval', 'PE_bg_frac']
     cutoffs = {'indep': ['PE_log_pval'], 'dep': ['PE_bg_frac']}
     labeler = labelers.PETrainingLabeler()
@@ -224,12 +235,13 @@ def adjudicate_PE(metrics):
     return cutoffs
 
 
-def adjudicate_SR2(metrics):
+def adjudicate_SR2(metrics, outlier_samples=None):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.svsize >= 5000) &
                              (testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
     features = ['SR_sum_log_pval', 'SR_sum_bg_frac']
     cutoffs = {'indep': ['SR_sum_log_pval'], 'dep': ['SR_sum_bg_frac']}
     labeler = labelers.SR2TrainingLabeler()
@@ -248,11 +260,12 @@ def adjudicate_SR2(metrics):
     return cutoffs
 
 
-def adjudicate_PESR(metrics):
+def adjudicate_PESR(metrics, outlier_samples=None):
     testable = metrics.loc[~metrics.name.str.contains('_depth_')].copy()
     trainable = testable.loc[(testable.poor_region_cov < 0.3) &
                              ~testable.chrom.isin(ALLOSOMES) &
-                             ~testable.is_outlier_specific].copy()
+                             ~testable.is_outlier_specific &
+                             ~testable.name.isin(outlier_samples or set())].copy()
     features = ['PESR_log_pval', 'PESR_bg_frac']
     cutoffs = {'indep': ['PESR_log_pval'], 'dep': ['PESR_bg_frac']}
     labeler = labelers.PESRTrainingLabeler()
@@ -328,9 +341,13 @@ def consolidate_score(metrics, cutoffs):
     return metrics['name svtype score'.split() + probs].copy()
 
 
-def adjudicate_SV(metrics):
+def adjudicate_SV(metrics, outlier_file=None):
     if 'chrom' not in metrics.columns:
         metrics['chrom'] = metrics.name.str.split('_').str[-2]
+
+    outlier_samples = set()
+    if outlier_file:
+        outlier_samples = read_outlier_samples(outlier_file)
 
     # Remove PE metrics from Manta insertions
     PE_cols = [c for c in metrics.columns if c.startswith('PE_')]
@@ -339,19 +356,19 @@ def adjudicate_SV(metrics):
 
     cutoffs = np.empty(7, dtype=object)
     sys.stderr.write('Adjudicating BAF (1)...\n')
-    cutoffs[0] = adjudicate_BAF1(metrics)
+    cutoffs[0] = adjudicate_BAF1(metrics, outlier_samples)
     sys.stderr.write('Adjudicating SR (1)...\n')
-    cutoffs[1] = adjudicate_SR1(metrics)
+    cutoffs[1] = adjudicate_SR1(metrics, outlier_samples)
     sys.stderr.write('Adjudicating RD...\n')
-    cutoffs[2] = adjudicate_RD(metrics)
+    cutoffs[2] = adjudicate_RD(metrics, outlier_samples)
     sys.stderr.write('Adjudicating PE...\n')
-    cutoffs[3] = adjudicate_PE(metrics)
+    cutoffs[3] = adjudicate_PE(metrics, outlier_samples)
     #  sys.stderr.write('Adjudicating BAF (2)...\n')
-    #  cutoffs[4] = adjudicate_BAF2(metrics)
+    #  cutoffs[4] = adjudicate_BAF2(metrics, outlier_samples)
     #  sys.stderr.write('Adjudicating SR (2)...\n')
-    #  cutoffs[5] = adjudicate_SR2(metrics)
+    #  cutoffs[5] = adjudicate_SR2(metrics, outlier_samples)
     sys.stderr.write('Adjudicating PESR...\n')
-    cutoffs[6] = adjudicate_PESR(metrics)
+    cutoffs[6] = adjudicate_PESR(metrics, outlier_samples)
 
     cutoffs = pd.concat(cutoffs)
     # force consistent column order, since many downstream tools ignore headers and work off column number:
