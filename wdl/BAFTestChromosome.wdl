@@ -113,7 +113,6 @@ task BAFTest {
       set -o pipefail
 
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-        --skip-header \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{baf_metrics} \
         -L "${chrom}:${start}-${end}" \
@@ -121,9 +120,9 @@ task BAFTest {
     else
       touch local.BAF.txt
       bgzip local.BAF.txt
+      tabix -0 -s1 -b2 -e2 local.BAF.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.BAF.txt.gz
     svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
   
   >>>
