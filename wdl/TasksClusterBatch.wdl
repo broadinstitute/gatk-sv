@@ -11,6 +11,7 @@ task SVCluster {
         File ploidy_table
         String output_prefix
 
+        String? vcf_grep_expression
         String? contig
 
         Boolean? fast_mode
@@ -71,7 +72,7 @@ task SVCluster {
         File out_index = "~{output_prefix}.vcf.gz.tbi"
     }
     command <<<
-        set -euo pipefail
+        set -euxo pipefail
 
         function getJavaMem() {
             # get JVM memory in MiB by getting total memory from /proc/meminfo
@@ -97,8 +98,14 @@ task SVCluster {
             exit 1
         fi
 
+        if ~{defined(vcf_grep_expression)}; then
+            fgrep ~{vcf_grep_expression} arguments.txt
+        else
+            cat arguments.txt
+        fi > arguments.grep.txt
+
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
-            --arguments_file arguments.txt \
+            --arguments_file arguments.grep.txt \
             --output ~{output_prefix}.vcf.gz \
             --ploidy-table ~{ploidy_table} \
             --reference ~{reference_fasta} \
