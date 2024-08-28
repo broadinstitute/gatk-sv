@@ -538,7 +538,7 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
 
 ###Kmeans multi-CNV Test##
 ##interval is measured by predicted copy state##
-kMeans <-function(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
+kMeans <- function(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
   {
     samplenames <- rownames(cnv_matrix)
     #create Eucledian matrix###
@@ -956,7 +956,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
 }
 
 ##Provide genotype for VCF format##
-genotype<- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
+genotype <- function(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
 {
  ##get depth intensities##  
  cnv_median <-c(create_groups(genotype_matrix, cnv_matrix)$Control,create_groups(genotype_matrix, cnv_matrix)$Treat)
