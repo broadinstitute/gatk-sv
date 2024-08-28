@@ -790,7 +790,7 @@ task SubsetVcfBySamplesList {
     File? vcf_idx
     File list_of_samples  # List of samples to keep (default, remove_samples = false) or remove (remove_samples = true)
     String? outfile_name
-    Boolean remove_samples = false  # If false (default), only keep samples in provided list. If true, remove them.
+    Boolean remove_samples = false  # If false (default), keep samples in provided list. If true, remove them.
     Boolean remove_private_sites = true  # If true (default), remove sites that are private to excluded samples. If false, keep sites even if no remaining samples are non-ref.
     Boolean keep_af = true  # If true (default), do not recalculate allele frequencies (AC/AF/AN)
     String sv_base_mini_docker

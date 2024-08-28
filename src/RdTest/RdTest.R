@@ -319,7 +319,8 @@ removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
 }
 
 loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargevariantsize,
-                     vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, poorbincov=NULL, raw_cov=NULL)
+                     vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, 
+                     poorbincov=NULL, raw_cov=NULL, outlier_sample_ids=NULL)
   {
     if (is.null(raw_cov)) {
       if (end - start > verylargevariantsize) {
@@ -436,11 +437,11 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     cov1 <- sampleFilterResult[[1]]
     allnorm <- sampleFilterResult[[2]]
 
+    #Exclude outlier samples if there are non-outlier samples left
     if (!is.null(outlier_sample_ids)) {
       outlier_ids <- readLines(outlier_sample_ids)
       non_outlier_columns <- !(names(cov1) %in% outlier_ids)
       
-      # Exclude outlier samples only if there are non-outlier samples left
       if (sum(non_outlier_columns[-(1:3)]) > 0) {
         cov1 <- cov1[, c(rep(TRUE, 3), non_outlier_columns[-(1:3)])]
         allnorm <- allnorm[, non_outlier_columns[-(1:3)]]
@@ -522,18 +523,16 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       genotype_matrix[1,-columnswithsamp] = 2
     }
 
-    ##filter outlier samples##
+    #Exclude outlier samples if there are non-outlier samples left
     if (!is.null(outlier_sample_ids)) {
       outlier_ids <- readLines(outlier_sample_ids)
       non_outlier_samples <- setdiff(colnames(genotype_matrix)[5:ncol(genotype_matrix)], outlier_ids)
       
-      if (length(non_outlier_samples) == 0) {
-        non_outlier_samples <- colnames(genotype_matrix)[5:ncol(genotype_matrix)]
+      if (length(non_outlier_samples) > 0) {
+        genotype_matrix <- genotype_matrix[, c(1:4, which(colnames(genotype_matrix) %in% non_outlier_samples))]
       }
-      
-      genotype_matrix <- genotype_matrix[, c(1:4, which(colnames(genotype_matrix) %in% non_outlier_samples))]
     }
-    
+
     return(genotype_matrix)
   }
 
@@ -1133,28 +1132,30 @@ runRdTest<-function(bed)
     end = round(center + (sizefilter/2))
   } 
   
+  ##Make sure region is in tabix##
   if (end - start <= 0 )
   {
    end=start+1 
   }  
-  ##Make sure region is in tabix##
-  
   
   ##Get Intesity Data##
-  if (exists("poorbincov")) {
-    loadResult <-loadData(chr, start, end, coveragefile,medianfile,bins,
-                          verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
-                          opt$SampleIncludeList,poorbincov)
-    cnv_matrix <- loadResult[["cnv_matrix"]]
-    raw_cov <- loadResult[["raw_cov"]]
-  } else {
-    loadResult<-loadData(chr, start, end, coveragefile,medianfile,bins,
-                         verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
-                         opt$SampleIncludeList)
-    cnv_matrix <- loadResult[["cnv_matrix"]]
-    raw_cov <- loadResult[["raw_cov"]]
-
-  }
+  loadResult<-loadData(
+    chr = chr,
+    start = start,
+    end = end,
+    coveragefile = coveragefile,
+    medianfile = medianfile,
+    bins = bins,
+    verylargevariantsize = verylargevariantsize,
+    vlRegionPoints = verylargevariantpoints,
+    vlWindow = verylargevariantwindows,
+    SampleExcludeList = opt$SampleExcludeList,
+    SampleIncludeList = opt$SampleIncludeList,
+    poorbincov = if(exists("poorbincov")) poorbincov else NULL,
+    outlier_sample_ids = opt$outlier_sample_ids
+  )
+  cnv_matrix<-loadResult[["cnv_matrix"]]
+  raw_cov<-loadResult[["raw_cov"]]
 
   if (cnv_matrix[1]=="Failure") {
     ##assign genotype if no coverage##
@@ -1221,9 +1222,21 @@ runRdTest<-function(bed)
   ##genotype and write to file##
   if (opt$rungenotype == TRUE) {
     ##Compress x-axis to 10 bins so it is easier to view###
-    plot_cnvmatrix<-loadData(chr, start, end, coveragefile, medianfile,
-                             verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
-                             opt$SampleIncludeList,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
+    plot_cnvmatrix<-loadData(
+      chr = chr,
+      start = start,
+      end = end,
+      coveragefile = coveragefile,
+      medianfile = medianfile,
+      bins = 10,
+      verylargevariantsize = verylargevariantsize,
+      vlRegionPoints = verylargevariantpoints,
+      vlWindow = verylargevariantwindows,
+      SampleExcludeList = opt$SampleExcludeList,
+      SampleIncludeList = opt$SampleIncludeList,
+      raw_cov=raw_cov,
+      outlier_sample_ids = get("outlier_sample_ids", ifnotfound = NULL)[["cnv_matrix"]]
+    )
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
   }
   
