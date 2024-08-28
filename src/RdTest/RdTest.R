@@ -496,7 +496,7 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
 
 #Loads specified sample set in genotyping matrix based on the specified cnv type (del=1,dup=3) and unspecified samples as cn=2
 #sampleIDs is comma specficed list of samples##
-specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype)
+specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype, outlier_sample_ids=NULL)
   {
     CNV <- matrix(c(cnvID, chr, start, end), nrow = 1)
     genotype_matrix <- cbind(CNV, t(matrix(seq(1, nrow(cnv_matrix)))))
@@ -1213,7 +1213,7 @@ runRdTest<-function(bed)
     }
   }
   ##Assign intial genotypes (del=1,dup=3,diploid=2)##
-  genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype)
+  genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype, opt$outlier_sample_ids)
   ##check if no samples are found in genotype matrix##
   if (as.matrix(genotype_matrix)[1,1]=="No_Samples") {
     return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis"))
@@ -1235,8 +1235,8 @@ runRdTest<-function(bed)
       SampleExcludeList = opt$SampleExcludeList,
       SampleIncludeList = opt$SampleIncludeList,
       raw_cov=raw_cov,
-      outlier_sample_ids = get("outlier_sample_ids", ifnotfound = NULL)[["cnv_matrix"]]
-    )
+      outlier_sample_ids = opt$outlier_sample_ids
+    )[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
   }
   
@@ -1314,7 +1314,7 @@ runRdTest<-function(bed)
             as.matrix(cnv_matrix[rownames(cnv_matrix)  %in%  family[which(family[, 5] == 1), 2], ])
         }
         ##remove sample of interest from sample exclude list and make new genotype matrix##
-        genotype_matrix<-specified_cnv(cnv_matrix, sampleID1s, cnvID, chr, start, end, cnvtype)
+        genotype_matrix<-specified_cnv(cnv_matrix, sampleID1s, cnvID, chr, start, end, cnvtype, opt$outlier_sample_ids)
         ##remove singlesample for exclusion list##
         p <-onesamplezscore.median(genotype_matrix,cnv_matrix,singlesample,cnvtype)
         ##write meteric for each family member
