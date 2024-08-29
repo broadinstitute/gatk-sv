@@ -224,6 +224,7 @@ workflow GenerateBatchMetrics {
           baftest = BAFTest.baftest,
           segdups = segdups,
           rmsk = rmsk,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_aggregate_tests
       }
@@ -243,6 +244,7 @@ workflow GenerateBatchMetrics {
           srtest = SRTest.srtest_common,
           segdups = segdups,
           rmsk = rmsk,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_aggregate_tests
       }
