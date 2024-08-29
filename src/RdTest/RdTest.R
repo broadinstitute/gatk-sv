@@ -1234,7 +1234,7 @@ runRdTest<-function(bed)
       vlWindow = verylargevariantwindows,
       SampleExcludeList = opt$SampleExcludeList,
       SampleIncludeList = opt$SampleIncludeList,
-      raw_cov =r aw_cov,
+      raw_cov = raw_cov,
       outlier_sample_ids = opt$outlier_sample_ids
     )[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
