@@ -351,6 +351,10 @@ task GroupedSVClusterTask {
     Array[File] context_bed_files
     Array[String] context_names
 
+    Float context_overlap_frac = 0
+    Int context_num_breakpoint_overlaps = 1
+    Int context_interchrom_num_breakpoint_overlaps = 1
+
     String? contig
     String? additional_args
 
@@ -404,7 +408,10 @@ task GroupedSVClusterTask {
       --clustering-config ~{clustering_config} \
       --stratify-config ~{stratification_config} \
       --context-intervals ~{sep=" --context-intervals " context_bed_files} \
-      --context-name ~{sep=" --context-name " context_names}
+      --context-name ~{sep=" --context-name " context_names} \
+      --stratify-overlap-fraction ~{context_overlap_frac} \
+      --stratify-num-breakpoint-overlaps ~{context_num_breakpoint_overlaps} \
+      --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
