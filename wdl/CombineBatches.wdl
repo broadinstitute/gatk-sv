@@ -33,7 +33,8 @@ workflow CombineBatches {
     File stratification_config_part1
     File clustering_config_part2
     File stratification_config_part2
-    # Must be same length and correspond to contexts in the stratification configs
+    # These arrays give the names and intervals for reference contexts for stratification (same lengths)
+    # Names must correspond to those in the stratification config files
     Array[String] context_names
     Array[File] context_bed_files
 
