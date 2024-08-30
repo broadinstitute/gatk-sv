@@ -1,6 +1,6 @@
 version 1.0
 
-import "CombineSRBothsidePass.wdl" as CombineSRBothsidePass
+import "CombineSRBothsidePass.wdl" as CombineSRBothsidePassWorkflow
 import "FormatVcfForGatk.wdl" as GatkFormatting
 import "TasksClusterBatch.wdl" as ClusterTasks
 import "TasksGenotypeBatch.wdl" as GenotypeTasks
@@ -28,6 +28,15 @@ workflow CombineBatches {
     File depth_exclude_list
     Float min_sr_background_fail_batches
 
+    # Reclustering parameters
+    File clustering_config_part1
+    File stratification_config_part1
+    File clustering_config_part2
+    File stratification_config_part2
+    # Must be same length and correspond to contexts in the stratification configs
+    Array[String] context_names
+    Array[File] context_bed_files
+
     File reference_fasta
     File reference_fasta_fai
     File reference_dict
@@ -45,76 +54,23 @@ workflow CombineBatches {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    # overrides for local tasks
     RuntimeAttr? runtime_override_update_sr_list
-    RuntimeAttr? runtime_override_merge_pesr_depth
-    RuntimeAttr? runtime_override_reheader
-    RuntimeAttr? runtime_override_pull_header
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_reformat_1
     RuntimeAttr? runtime_attr_reformat_2
     RuntimeAttr? runtime_attr_svcluster
-
-    # overrides for mini tasks
+    RuntimeAttr? runtime_attr_recluster_part1
+    RuntimeAttr? runtime_attr_recluster_part2
+    RuntimeAttr? runtime_override_subset_bothside_pass
+    RuntimeAttr? runtime_override_subset_background_fail
     RuntimeAttr? runtime_attr_get_non_ref_vids
     RuntimeAttr? runtime_attr_calculate_support_frac
     RuntimeAttr? runtime_override_clean_background_fail
     RuntimeAttr? runtime_override_concat
-    RuntimeAttr? runtime_override_concat_pesr_depth
-    RuntimeAttr? runtime_override_update_fix_pesr_header
-    RuntimeAttr? runtime_override_count_samples
-    RuntimeAttr? runtime_override_preconcat_pesr_depth
-    RuntimeAttr? runtime_override_hail_merge_pesr_depth
-    RuntimeAttr? runtime_override_fix_header_pesr_depth
-    RuntimeAttr? runtime_override_concat_large_pesr_depth
-
-    # overrides for VcfClusterContig
-    RuntimeAttr? runtime_override_localize_vcfs
-    RuntimeAttr? runtime_override_join_vcfs
-    RuntimeAttr? runtime_override_fix_multiallelic
-    RuntimeAttr? runtime_override_fix_ev_tags
-    RuntimeAttr? runtime_override_subset_bothside_pass
-    RuntimeAttr? runtime_override_subset_background_fail
-    RuntimeAttr? runtime_override_subset_sv_type
-    RuntimeAttr? runtime_override_shard_clusters
-    RuntimeAttr? runtime_override_shard_vids
-    RuntimeAttr? runtime_override_pull_vcf_shard
-    RuntimeAttr? runtime_override_svtk_vcf_cluster
-    RuntimeAttr? runtime_override_get_vcf_header_with_members_info_line
-    RuntimeAttr? runtime_override_concat_vcf_cluster
-    RuntimeAttr? runtime_override_concat_svtypes
-    RuntimeAttr? runtime_override_concat_sharded_cluster
-    RuntimeAttr? runtime_override_make_sites_only
-    RuntimeAttr? runtime_override_sort_merged_vcf_cluster
-    RuntimeAttr? runtime_override_preconcat_sharded_cluster
-    RuntimeAttr? runtime_override_hail_merge_sharded_cluster
-    RuntimeAttr? runtime_override_fix_header_sharded_cluster
-
-    # overerides for merge pesr depth
-    RuntimeAttr? runtime_override_shard_clusters_mpd
-    RuntimeAttr? runtime_override_shard_vids_mpd
-    RuntimeAttr? runtime_override_pull_vcf_shard_mpd
-    RuntimeAttr? runtime_override_merge_pesr_depth_mpd
-
-    RuntimeAttr? runtime_override_sort_merged_vcf_mpd
-    RuntimeAttr? runtime_override_subset_small_mpd
-    RuntimeAttr? runtime_override_subset_large_mpd
-    RuntimeAttr? runtime_override_make_sites_only_mpd
-    RuntimeAttr? runtime_override_concat_large_pesr_depth_mpd
-    RuntimeAttr? runtime_override_concat_shards_mpd
-
-    RuntimeAttr? runtime_override_preconcat_large_pesr_depth_mpd
-    RuntimeAttr? runtime_override_hail_merge_large_pesr_depth_mpd
-    RuntimeAttr? runtime_override_fix_header_large_pesr_depth_mpd
-
-    RuntimeAttr? runtime_override_preconcat_pesr_depth_shards_mpd
-    RuntimeAttr? runtime_override_hail_merge_pesr_depth_shards_mpd
-    RuntimeAttr? runtime_override_fix_header_pesr_depth_shards_mpd
-
   }
 
   # Preprocess some inputs
-  call CombineSRBothsidePass.CombineSRBothsidePass {
+  call CombineSRBothsidePassWorkflow.CombineSRBothsidePass {
     input:
       pesr_vcfs=pesr_vcfs,
       raw_sr_bothside_pass_files=raw_sr_bothside_pass_files,
@@ -148,7 +104,6 @@ workflow CombineBatches {
   }
 
   Array[File] all_vcfs = flatten([pesr_vcfs, depth_vcfs])
-
   scatter (vcf in all_vcfs) {
     if (legacy_vcfs) {
       call GenotypeTasks.ReformatGenotypedVcf {
@@ -174,7 +129,7 @@ workflow CombineBatches {
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    # TODO: disable sorting
+    # First round of clustering
     call ClusterTasks.SVCluster {
       input:
         vcfs=FormatVcf.out,
@@ -206,7 +161,7 @@ workflow CombineBatches {
         vid_list=CombineSRBothsidePass.out,
         vid_col=2,
         vcf=SVCluster.out,
-        outfile_name="~{cohort_name}.combine_batches.sr_bothside_pass.~{contig}.subset.list",
+        outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass.subset.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_bothside_pass
     }
@@ -215,25 +170,97 @@ workflow CombineBatches {
         vid_list=CombineBackgroundFail.outfile,
         vid_col=1,
         vcf=SVCluster.out,
-        outfile_name="~{cohort_name}.combine_batches.sr_background_fail.~{contig}.subset.list",
+        outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_background_fail.subset.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_background_fail
     }
 
     #Update SR background fail & bothside pass files (1)
-    call MiniTasks.UpdateSrList as UpdateBackgroundFail {
+    call MiniTasks.UpdateSrList as UpdateBackgroundFail1 {
       input:
         vcf=SVCluster.out,
         original_list=SubsetBothsidePass.filtered_vid_list,
-        outfile="~{cohort_name}.combine_batches.sr_bothside_pass.~{contig}.list",
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass1.list",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list
     }
-    call MiniTasks.UpdateSrList as UpdateBothsidePass {
+    call MiniTasks.UpdateSrList as UpdateBothsidePass1 {
       input:
         vcf=SVCluster.out,
         original_list=SubsetBackgroundFail.filtered_vid_list,
-        outfile="~{cohort_name}.combine_batches.sr_background_fail.~{contig}.list",
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail1.list",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_update_sr_list
+    }
+
+    # Second round of clustering
+    call GroupedSVClusterTask as GroupedSVClusterPart1 {
+      input:
+        vcf=SVCluster.out,
+        ploidy_table=CreatePloidyTableFromPed.out,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.recluster_part_1",
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        clustering_config=clustering_config_part1,
+        stratification_config=stratification_config_part1,
+        context_bed_files=context_bed_files,
+        context_names=context_names,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_recluster_part1
+    }
+
+    #Update SR background fail & bothside pass files (2)
+    call MiniTasks.UpdateSrList as UpdateBackgroundFail2 {
+      input:
+        vcf=GroupedSVClusterPart1.out,
+        original_list=UpdateBackgroundFail1.updated_list,
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass2.list",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_update_sr_list
+    }
+    call MiniTasks.UpdateSrList as UpdateBothsidePass2 {
+      input:
+        vcf=GroupedSVClusterPart1.out,
+        original_list=UpdateBothsidePass1.updated_list,
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail2.list",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_update_sr_list
+    }
+
+    # Third round of clustering
+    call GroupedSVClusterTask as GroupedSVClusterPart2 {
+      input:
+        vcf=GroupedSVClusterPart1.out,
+        ploidy_table=CreatePloidyTableFromPed.out,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.recluster_part_2",
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        clustering_config=clustering_config_part2,
+        stratification_config=stratification_config_part2,
+        context_bed_files=context_bed_files,
+        context_names=context_names,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_recluster_part2
+    }
+
+    #Update SR background fail & bothside pass files (3)
+    call MiniTasks.UpdateSrList as UpdateBackgroundFail3 {
+      input:
+        vcf=GroupedSVClusterPart2.out,
+        original_list=UpdateBackgroundFail2.updated_list,
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass3.list",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_update_sr_list
+    }
+    call MiniTasks.UpdateSrList as UpdateBothsidePass3 {
+      input:
+        vcf=GroupedSVClusterPart2.out,
+        original_list=UpdateBothsidePass2.updated_list,
+        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail3.list",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list
     }
@@ -243,10 +270,10 @@ workflow CombineBatches {
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
       input:
-        vcfs=SVCluster.out,
-        vcfs_idx=SVCluster.out_index,
+        vcfs=GroupedSVClusterPart2.out,
+        vcfs_idx=GroupedSVClusterPart2.out_index,
         naive=true,
-        outfile_prefix="~{cohort_name}.combine_batches",
+        outfile_prefix="~{cohort_name}.combine_batches.concat_all_contigs",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_concat
     }
@@ -254,10 +281,10 @@ workflow CombineBatches {
 
   #Final outputs
   output {
-    Array[File] combined_vcfs = SVCluster.out
-    Array[File] combined_vcf_indexes = SVCluster.out_index
-    Array[File] cluster_bothside_pass_lists = UpdateBothsidePass.updated_list
-    Array[File] cluster_background_fail_lists = UpdateBackgroundFail.updated_list
+    Array[File] combined_vcfs = GroupedSVClusterPart2.out
+    Array[File] combined_vcf_indexes = GroupedSVClusterPart2.out_index
+    Array[File] cluster_background_fail_lists = UpdateBackgroundFail3.updated_list
+    Array[File] cluster_bothside_pass_lists = UpdateBothsidePass3.updated_list
     File? combine_batches_merged_vcf = ConcatVcfs.concat_vcf
     File? combine_batches_merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
@@ -305,5 +332,86 @@ task SubsetVariantList {
 
   output {
     File filtered_vid_list = outfile_name
+  }
+}
+
+task GroupedSVClusterTask {
+  input {
+    File vcf
+    File ploidy_table
+    String output_prefix
+
+    File reference_fasta
+    File reference_fasta_fai
+    File reference_dict
+
+    File clustering_config
+    File stratification_config
+    Array[File] context_bed_files
+    Array[String] context_names
+
+    String? contig
+    String? additional_args
+
+    Float? java_mem_fraction
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    vcf: {
+           localization_optional: true
+         }
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 3.75,
+                               disk_gb: ceil(10 + size(vcf, "GB") * 2),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
+  }
+  command <<<
+    set -euo pipefail
+
+    function getJavaMem() {
+    # get JVM memory in MiB by getting total memory from /proc/meminfo
+    # and multiplying by java_mem_fraction
+    cat /proc/meminfo \
+      | awk -v MEM_FIELD="$1" '{
+        f[substr($1, 1, length($1)-1)] = $2
+      } END {
+        printf "%dM", f[MEM_FIELD] * ~{default="0.85" java_mem_fraction} / 1024
+      }'
+    }
+    JVM_MAX_MEM=$(getJavaMem MemTotal)
+    echo "JVM memory: $JVM_MAX_MEM"
+
+    gatk --java-options "-Xmx${JVM_MAX_MEM}" GroupedSVCluster \
+      ~{"-L " + contig} \
+      --reference ~{reference_fasta} \
+      --ploidy-table ~{ploidy_table} \
+      -V ~{vcf} \
+      -O ~{output_prefix}.vcf.gz \
+      --clustering-config ~{clustering_config} \
+      --stratify-config ~{stratification_config} \
+      ~{sep=" --context-intervals " context_bed_files} \
+      ~{sep=" --context-name " context_names}
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }
