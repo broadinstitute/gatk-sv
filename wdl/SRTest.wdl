@@ -21,6 +21,7 @@ workflow SRTest {
     Boolean run_common
     Int? common_cnv_size_cutoff  # Required if run_common is true
     File ref_dict
+    File? outlier_sample_ids
 
     String sv_pipeline_docker
     String linux_docker
@@ -55,6 +56,7 @@ workflow SRTest {
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
         ref_dict = ref_dict,
+        outlier_sample_ids = outlier_sample_ids,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -85,6 +87,7 @@ workflow SRTest {
         run_common = run_common,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
         ref_dict = ref_dict,
+        outlier_sample_ids = outlier_sample_ids,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,

@@ -14,6 +14,7 @@ workflow BAFTest {
     Int split_size
     File autosome_contigs
     File ref_dict
+    File? outlier_sample_ids
 
     String linux_docker
     String sv_pipeline_docker
@@ -36,6 +37,7 @@ workflow BAFTest {
         split_size = split_size,
         chrom = autosome[0],
         ref_dict = ref_dict,
+        outlier_sample_ids = outlier_sample_ids,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_baftest = runtime_attr_baftest,

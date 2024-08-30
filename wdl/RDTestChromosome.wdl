@@ -57,6 +57,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -72,6 +73,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }
@@ -100,6 +102,7 @@ workflow RDTestChromosome {
           prefix = basename(split),
           flags = flags,
           ref_dict = ref_dict,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_rdtest
       }

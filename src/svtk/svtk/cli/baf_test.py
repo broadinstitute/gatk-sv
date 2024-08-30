@@ -9,7 +9,7 @@ import sys
 ##########
 
 
-def preprocess(chrom, start, end, tbx, samples, window=None):
+def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=None):
     """
     Report normalized BAFs in a set of samples across a desired region.
 
@@ -58,7 +58,13 @@ def preprocess(chrom, start, end, tbx, samples, window=None):
     if bafs.empty:
         return bafs, bafs
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
+
+    # Exclude outlier samples only if non-outlier samples exist
+    non_outlier_samples = [s for s in samples if s not in outlier_sample_ids]
+    if len(non_outlier_samples) > 0:
+        samples = non_outlier_samples
     bafs = bafs[bafs['sample'].isin(samples)]
+
     # print(bafs)
     if bafs.empty:
         return bafs, bafs
@@ -93,6 +99,8 @@ def main(argv):
     parser.add_argument('file', help='Compiled snp file')
     parser.add_argument('-b', '--batch',)
     parser.add_argument('--index', help='Tabix index for remote bed')
+    parser.add_argument('--outlier-sample-ids', type=argparse.FileType('r'), 
+                        default=None, help='Path to file containing outlier sample IDs')
     # help='Samples')
 
     # Print help if no arguments specified
@@ -100,6 +108,11 @@ def main(argv):
         parser.print_help()
         sys.exit(1)
     args = parser.parse_args(argv)
+
+    outlier_samples = set()
+    if args.outlier_sample_ids:
+        with open(args.outlier_sample_ids, 'r') as f:
+            outlier_samples = set([line.strip() for line in f])
 
     # fi = args.file
     # if args.vcf.startswith('s3://'):
@@ -142,7 +155,8 @@ def main(argv):
                 type = dat[5]
                 try:
                     het_counts, called_bafs = preprocess(
-                        chrom, start, end, tbx, samples=splist)
+                        chrom, start, end, tbx, samples=splist, outlier_sample_ids=outlier_samples
+                    )
                 except ValueError:
                     het_counts = pd.DataFrame()
                     called_bafs = pd.DataFrame()

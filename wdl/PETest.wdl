@@ -20,6 +20,7 @@ workflow PETest {
     File male_only_variant_ids
     File samples
     Int common_cnv_size_cutoff
+    File? outlier_sample_ids
 
     String sv_base_mini_docker
     String linux_docker
@@ -52,6 +53,7 @@ workflow PETest {
         allosome = false,
         ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
+        outlier_sample_ids = outlier_sample_ids,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,
@@ -81,6 +83,7 @@ workflow PETest {
         allosome = true,
         ref_dict = ref_dict,
         common_cnv_size_cutoff = common_cnv_size_cutoff,
+        outlier_sample_ids = outlier_sample_ids,
         sv_base_mini_docker = sv_base_mini_docker,
         linux_docker = linux_docker,
         sv_pipeline_docker = sv_pipeline_docker,

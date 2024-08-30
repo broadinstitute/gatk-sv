@@ -111,7 +111,7 @@ option_list <- list(
   make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
               help="Optional:Single column file with list of samples to include", metavar="character"),
   make_option(c("--outlier_sample_ids"), type="character", default=NULL,
-              help="Optional:File containing outlier IDs, one per line", metavar="character")
+              help="Optional:Path to file containing outlier sample IDs", metavar="character")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -437,7 +437,7 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     cov1 <- sampleFilterResult[[1]]
     allnorm <- sampleFilterResult[[2]]
 
-    #Exclude outlier samples if there are non-outlier samples left
+    #Exclude outlier samples only if non-outlier samples exist
     if (!is.null(outlier_sample_ids)) {
       outlier_ids <- readLines(outlier_sample_ids)
       non_outlier_columns <- !(names(cov1) %in% outlier_ids)

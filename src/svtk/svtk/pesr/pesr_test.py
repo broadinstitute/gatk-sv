@@ -93,7 +93,7 @@ class PESRTest:
 
 class PESRTestRunner:
     def __init__(self, vcf, common=False, n_background=160, whitelist=None, blacklist=None,
-                 log=False):
+                 log=False, outlier_sample_ids=None):
         self.vcf = vcf
 
         self.common = common
@@ -104,6 +104,12 @@ class PESRTestRunner:
         self.blacklist = blacklist if blacklist else []
 
         self.log = log
+
+        outlier_samples = set()
+        if outlier_sample_ids:
+            with open(outlier_sample_ids, 'r') as f:
+                outlier_samples = set([line.strip() for line in f])
+        self.outlier_sample_ids = outlier_samples
 
     def run(self):
         if self.log:
@@ -135,6 +141,11 @@ class PESRTestRunner:
         # Select called and background samples
         called = svu.get_called_samples(record)
         background = [s for s in self.samples if s not in called]
+
+        # Exclude outlier samples only if non-outlier samples exist
+        non_outlier_called = [s for s in called if s not in self.outlier_sample_ids]
+        if len(non_outlier_called) > 0:
+            called = non_outlier_called
 
         # Permit override of specified white/blacklists
         whitelist = whitelist if whitelist is not None else self.whitelist

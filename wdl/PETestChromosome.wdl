@@ -20,6 +20,7 @@ workflow PETestChromosome {
     File samples
     Boolean allosome
     Int common_cnv_size_cutoff
+    File? outlier_sample_ids
 
     String sv_base_mini_docker
     String linux_docker
@@ -56,6 +57,7 @@ workflow PETestChromosome {
           prefix = basename(split),
           ref_dict = ref_dict,
           common_model = false,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -70,6 +72,7 @@ workflow PETestChromosome {
           prefix = basename(split),
           ref_dict = ref_dict,
           common_model = false,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -96,6 +99,7 @@ workflow PETestChromosome {
           prefix = basename(split),
           ref_dict = ref_dict,
           common_model = false,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -134,6 +138,7 @@ workflow PETestChromosome {
           ref_dict = ref_dict,
           prefix = basename(split),
           common_model = true,
+          outlier_sample_ids = outlier_sample_ids,
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_petest
       }
@@ -177,12 +182,14 @@ task PETest {
     Boolean common_model
     File ref_dict
     String prefix
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
   Int window = 1000
   String common_arg = if common_model then "--common" else ""
+  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ${outlier_sample_ids}" else ""
 
   parameter_meta {
     discfile: {
@@ -228,7 +235,7 @@ task PETest {
     fi
 
     tabix -s1 -b2 -e2 local.PE.txt.gz
-    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats
+    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats ~{outlier_arg}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

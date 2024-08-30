@@ -13,6 +13,7 @@ workflow BAFTestChromosome {
     Int split_size
     Int? suffix_len
     File ref_dict
+    File? outlier_sample_ids
 
     String linux_docker
     String sv_pipeline_docker
@@ -45,6 +46,7 @@ workflow BAFTestChromosome {
         samples = samples,
         prefix = basename(split),
         batch = batch,
+        outlier_sample_ids = outlier_sample_ids,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_baftest
     }
@@ -72,9 +74,12 @@ task BAFTest {
     Array[String] samples
     String prefix
     String batch
+    File? outlier_sample_ids
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
+
+  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ${outlier_sample_ids}" else ""
 
   parameter_meta {
     baf_metrics: {
@@ -124,7 +129,7 @@ task BAFTest {
     fi
 
     tabix -s1 -b2 -e2 local.BAF.txt.gz
-    svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key > ~{prefix}.metrics
+    svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key  ~{outlier_arg} > ~{prefix}.metrics
   
   >>>
   runtime {

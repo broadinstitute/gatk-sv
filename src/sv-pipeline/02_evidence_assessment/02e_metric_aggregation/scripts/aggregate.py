@@ -265,7 +265,7 @@ def main():
     parser.add_argument('-b', '--BAFtest')
     parser.add_argument('-s', '--SRtest')
     parser.add_argument('-p', '--PEtest')
-    parser.add_argument('-o', '--outlier-sample-ids')
+    parser.add_argument('-o', '--outlier-sample-ids', type=argparse.FileType('r'))
     parser.add_argument('--batch-list', type=argparse.FileType('r'))
     parser.add_argument('--segdups', required=True)
     parser.add_argument('--rmsk', required=True)
