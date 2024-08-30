@@ -190,7 +190,7 @@ task SRTest {
   }
 
   String common_arg = if common_model then "--common" else ""
-  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ${outlier_sample_ids}" else ""
+  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""
 
   parameter_meta {
     splitfile: {

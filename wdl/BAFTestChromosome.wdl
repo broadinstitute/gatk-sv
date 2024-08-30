@@ -79,7 +79,7 @@ task BAFTest {
     RuntimeAttr? runtime_attr_override
   }
 
-  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ${outlier_sample_ids}" else ""
+  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""
 
   parameter_meta {
     baf_metrics: {
