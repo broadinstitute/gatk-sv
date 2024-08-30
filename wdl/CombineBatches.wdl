@@ -402,8 +402,8 @@ task GroupedSVClusterTask {
       -O ~{output_prefix}.vcf.gz \
       --clustering-config ~{clustering_config} \
       --stratify-config ~{stratification_config} \
-      ~{sep=" --context-intervals " context_bed_files} \
-      ~{sep=" --context-name " context_names}
+      --context-intervals ~{sep=" --context-intervals " context_bed_files} \
+      --context-name ~{sep=" --context-name " context_names}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
