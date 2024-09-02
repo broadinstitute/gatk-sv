@@ -99,8 +99,8 @@ def main(argv):
     parser.add_argument('file', help='Compiled snp file')
     parser.add_argument('-b', '--batch',)
     parser.add_argument('--index', help='Tabix index for remote bed')
-    parser.add_argument('--outlier-sample-ids', type=argparse.FileType('r'), 
-                        default=None, help='Path to file containing outlier sample IDs')
+    parser.add_argument('--outlier-sample-ids', default=None, 
+                        help='Path to file containing outlier sample IDs')
     # help='Samples')
 
     # Print help if no arguments specified
