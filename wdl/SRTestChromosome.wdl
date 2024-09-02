@@ -190,7 +190,6 @@ task SRTest {
   }
 
   String common_arg = if common_model then "--common" else ""
-  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""
 
   parameter_meta {
     splitfile: {
@@ -236,7 +235,7 @@ task SRTest {
     fi
 
     tabix -s1 -b2 -e2 local.SR.txt.gz
-    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats ~{outlier_arg}
+    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

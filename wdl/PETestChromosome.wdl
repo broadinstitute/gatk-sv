@@ -189,7 +189,6 @@ task PETest {
 
   Int window = 1000
   String common_arg = if common_model then "--common" else ""
-  String outlier_arg = if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""
 
   parameter_meta {
     discfile: {
@@ -235,7 +234,7 @@ task PETest {
     fi
 
     tabix -s1 -b2 -e2 local.PE.txt.gz
-    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats ~{outlier_arg}
+    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
