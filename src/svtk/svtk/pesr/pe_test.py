@@ -128,7 +128,7 @@ class PETest(PESRTest):
 
 class PETestRunner(PESRTestRunner):
     def __init__(self, vcf, discfile, fout, n_background=160, common=False,
-                 window_in=50, window_out=500, whitelist=None, blacklist=None, 
+                 window_in=50, window_out=500, whitelist=None, blacklist=None,
                  medians=None, log=False, outlier_sample_ids=None):
         """
         vcf : pysam.VariantFile

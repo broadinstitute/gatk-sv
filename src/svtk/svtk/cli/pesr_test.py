@@ -51,7 +51,7 @@ def sr_test(argv):
                         'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
-    parser.add_argument('--outlier-sample-ids', default=None, 
+    parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
 
     # Print help if no arguments specified
@@ -133,7 +133,7 @@ def pe_test(argv):
                         'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
-    parser.add_argument('--outlier-sample-ids', default=None, 
+    parser.add_argument('--outlier-sample-ids', default=None,
                         help='Path to file containing outlier sample IDs.')
 
     if len(argv) == 0:
@@ -176,7 +176,7 @@ def pe_test(argv):
     if args.outlier_sample_ids:
         outlier_sample_ids = args.outlier_sample_ids
 
-    runner = PETestRunner(vcf, discfile, fout, args.background, args.common, args.window_in, args.window_out, 
+    runner = PETestRunner(vcf, discfile, fout, args.background, args.common, args.window_in, args.window_out,
                           whitelist, medians=medians, log=args.log, outlier_sample_ids=outlier_sample_ids)
 
     runner.run()
