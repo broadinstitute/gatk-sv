@@ -192,8 +192,7 @@ task RDTest {
       -m ~{medianfile} \
       -f ~{ped_file} \
       -w ~{include_list} \
-      ~{if defined(outlier_sample_ids) then "--outlier_sample_ids " + outlier_sample_ids else ""} \
-      ~{flags}
+      ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""} ~{flags}
   
   >>>
   runtime {
