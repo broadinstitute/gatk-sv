@@ -233,11 +233,7 @@ task PETest {
       tabix -0 -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    svtk pe-test \
-      -o ~{window} ~{common_arg} \
-      --medianfile ~{medianfile} \
-      --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats \
-      ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
+    svtk pe-test -o ~{window} ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.PE.txt.gz ~{prefix}.stats ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
