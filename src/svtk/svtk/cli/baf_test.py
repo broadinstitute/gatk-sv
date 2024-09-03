@@ -56,7 +56,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
     # return 0,0
     bafs = pd.DataFrame(bafs)
     if bafs.empty:
-        return bafs, bafs
+        return bafs, bafs, samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
 
     # Exclude outlier samples only if non-outlier samples exist
@@ -67,7 +67,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
 
     # print(bafs)
     if bafs.empty:
-        return bafs, bafs
+        return bafs, bafs, samples
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
     # print(bafqs)
@@ -87,7 +87,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
     # het_counts = het_counts.reset_index()[cols]
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
-    return het_counts, called_bafs
+    return het_counts, called_bafs, samples
 
 
 def main(argv):
@@ -154,7 +154,7 @@ def main(argv):
                 samplelist = samples.split(',')
                 type = dat[5]
                 try:
-                    het_counts, called_bafs = preprocess(
+                    het_counts, called_bafs, filtered_samples = preprocess(
                         chrom, start, end, tbx, samples=splist, outlier_sample_ids=outlier_samples
                     )
                 except ValueError:
@@ -162,15 +162,12 @@ def main(argv):
                     called_bafs = pd.DataFrame()
                 # Running BAF testing
                 if not het_counts.empty:
-                    filtered_samplelist = [s for s in samplelist if s not in outlier_samples]
-                    if (len(filtered_samplelist) > 0):
-                        samplelist = filtered_samplelist
-                    Del = DeletionTest(het_counts, samplelist,
+                    Del = DeletionTest(het_counts, filtered_samples,
                                        min(end - start, 1000000), random_state=random_state)
-                    KS = KS2sample(called_bafs, samplelist)
-                    ks, ksp = KS.test(samplelist)
-                    mean, delp = Del.Ttest(samplelist)
-                    statis = Del.stats(samplelist)
+                    KS = KS2sample(called_bafs, filtered_samples)
+                    ks, ksp = KS.test(filtered_samples)
+                    mean, delp = Del.Ttest(filtered_samples)
+                    statis = Del.stats(filtered_samples)
                     line = chrom + '\t' + str(start) + '\t' + str(end) + '\t' + id + '\t' + samples + '\t' + type + '\t' + str(
                         mean) + ',' + str(delp) + "\t" + str(ks) + ',' + str(ksp) + '\t' + statis
                 else:
