@@ -224,7 +224,6 @@ task SRTest {
 
     if [ -s region.merged.bed ]; then
       java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-        --skip-header \
         --sequence-dictionary ~{ref_dict} \
         --evidence-file ~{splitfile} \
         -L region.merged.bed \
@@ -232,10 +231,15 @@ task SRTest {
     else
       touch local.SR.txt
       bgzip local.SR.txt
+      tabix -0 -s1 -b2 -e2 local.SR.txt.gz
     fi
-
-    tabix -s1 -b2 -e2 local.SR.txt.gz
-    svtk sr-test -w 50 --log ~{common_arg} --medianfile ~{medianfile} --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
+    
+    svtk sr-test \
+      -w 50 \
+      --log ~{common_arg} \
+      --medianfile ~{medianfile} \
+      --samples ~{include_list} ~{vcf} local.SR.txt.gz ~{prefix}.stats \
+      ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
