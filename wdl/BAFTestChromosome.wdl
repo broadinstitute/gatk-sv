@@ -126,10 +126,7 @@ task BAFTest {
       tabix -0 -s1 -b2 -e2 local.BAF.txt.gz
     fi
     
-    svtk baf-test \
-      ~{bed} local.BAF.txt.gz \
-      --batch batch.key \
-      ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""} > ~{prefix}.metrics
+    svtk baf-test ~{bed} local.BAF.txt.gz --batch batch.key ~{if defined(outlier_sample_ids) then "--outlier-sample-ids ~{outlier_sample_ids}" else ""} > ~{prefix}.metrics
   
   >>>
   runtime {
