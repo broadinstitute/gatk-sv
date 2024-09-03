@@ -198,9 +198,10 @@ def process_metadata(variants, bed=False, batch_list=None, outlier_sample_ids=No
     # Flag variants specific to outlier samples
     metadata['is_outlier_specific'] = False
     if len(outlier_set) > 0:
-        for name, called in called_samples.items():
-            if called and called.issubset(outlier_set):
-                metadata.loc[metadata.name == name, 'is_outlier_specific'] = True
+        for variants in called_samples.values():
+            for name, called in variants.items():
+                if called and called.issubset(outlier_set):
+                    metadata.loc[metadata.name == name, 'is_outlier_specific'] = True
 
     for col in 'start end svsize'.split():
         metadata[col] = metadata[col].astype(int)
