@@ -440,11 +440,10 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     #Exclude outlier samples only if non-outlier samples exist
     if (!is.null(outlier_sample_ids)) {
       outlier_ids <- readLines(outlier_sample_ids)
-      non_outlier_columns <- !(names(cov1) %in% outlier_ids)
-      
-      if (sum(non_outlier_columns[-(1:3)]) > 0) {
-        cov1 <- cov1[, c(rep(TRUE, 3), non_outlier_columns[-(1:3)])]
-        allnorm <- allnorm[, non_outlier_columns[-(1:3)]]
+      non_outlier_samples <- setdiff(colnames(cov1)[4:ncol(cov1)], outlier_ids)
+      if (length(non_outlier_samples) > 0) {
+        cov1 <- cov1[, c(1:3, which(colnames(cov1) %in% non_outlier_samples))]
+        allnorm <- allnorm[, which(colnames(allnorm) %in% non_outlier_samples)]
       }
     }
 
@@ -505,7 +504,7 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
     columnswithsamp <- which(colnames(genotype_matrix) %in% unlist(strsplit(as.character(sampleIDs),split=","))) 
     if (length(columnswithsamp)==0) {
       ##"WARNING: No samples in coverage matrix for comparision check exclude/include lists"##
-      return ("No_Samples")
+      return (matrix("No_Samples", nrow=1, ncol=5))
     }
     
     ##create genotype matrix##
@@ -527,10 +526,14 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
     if (!is.null(outlier_sample_ids)) {
       outlier_ids <- readLines(outlier_sample_ids)
       non_outlier_samples <- setdiff(colnames(genotype_matrix)[5:ncol(genotype_matrix)], outlier_ids)
-      
       if (length(non_outlier_samples) > 0) {
         genotype_matrix <- genotype_matrix[, c(1:4, which(colnames(genotype_matrix) %in% non_outlier_samples))]
       }
+    }
+
+    #Return no samples if fewer than expected
+    if (ncol(genotype_matrix) < 5) {
+      return(matrix("No_Samples", nrow=1, ncol=5))
     }
 
     return(genotype_matrix)
@@ -1215,7 +1218,7 @@ runRdTest<-function(bed)
   ##Assign intial genotypes (del=1,dup=3,diploid=2)##
   genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype, opt$outlier_sample_ids)
   ##check if no samples are found in genotype matrix##
-  if (as.matrix(genotype_matrix)[1,1]=="No_Samples") {
+  if (is.character(genotype_matrix[1,1])) {
     return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis"))
   }
   

@@ -162,6 +162,9 @@ def main(argv):
                     called_bafs = pd.DataFrame()
                 # Running BAF testing
                 if not het_counts.empty:
+                    filtered_samplelist = [s for s in samplelist if s not in outlier_samples]
+                    if (len(filtered_samplelist) > 0):
+                        samplelist = filtered_samplelist
                     Del = DeletionTest(het_counts, samplelist,
                                        min(end - start, 1000000), random_state=random_state)
                     KS = KS2sample(called_bafs, samplelist)

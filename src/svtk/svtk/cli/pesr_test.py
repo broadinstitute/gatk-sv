@@ -133,8 +133,8 @@ def pe_test(argv):
                         'Same format as RdTest, one column per sample.')
     parser.add_argument('--log', action='store_true', default=False,
                         help='Print progress log to stderr.')
-    parser.add_argument('--outlier-sample-ids', type=argparse.FileType('r'), 
-                        default=None, help='Path to file containing outlier sample IDs.')
+    parser.add_argument('--outlier-sample-ids', default=None, 
+                        help='Path to file containing outlier sample IDs.')
 
     if len(argv) == 0:
         parser.print_help()
