@@ -495,7 +495,7 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
 
 #Loads specified sample set in genotyping matrix based on the specified cnv type (del=1,dup=3) and unspecified samples as cn=2
 #sampleIDs is comma specficed list of samples##
-specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype, outlier_sample_ids=NULL)
+specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype)
   {
     CNV <- matrix(c(cnvID, chr, start, end), nrow = 1)
     genotype_matrix <- cbind(CNV, t(matrix(seq(1, nrow(cnv_matrix)))))
@@ -504,7 +504,7 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
     columnswithsamp <- which(colnames(genotype_matrix) %in% unlist(strsplit(as.character(sampleIDs),split=","))) 
     if (length(columnswithsamp)==0) {
       ##"WARNING: No samples in coverage matrix for comparision check exclude/include lists"##
-      return (matrix("No_Samples", nrow=1, ncol=5))
+      return ("No_Samples")
     }
     
     ##create genotype matrix##
@@ -520,15 +520,6 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       ##make sure first four columns are not modified##
       columnswithsamp <- c(columnswithsamp, 1, 2, 3, 4)
       genotype_matrix[1,-columnswithsamp] = 2
-    }
-
-    #Exclude outlier samples if there are non-outlier samples left
-    if (!is.null(outlier_sample_ids)) {
-      outlier_ids <- readLines(outlier_sample_ids)
-      non_outlier_samples <- setdiff(colnames(genotype_matrix)[5:ncol(genotype_matrix)], outlier_ids)
-      if (length(non_outlier_samples) > 0) {
-        genotype_matrix <- genotype_matrix[, c(1:4, which(colnames(genotype_matrix) %in% non_outlier_samples))]
-      }
     }
 
     return(genotype_matrix)
@@ -1211,9 +1202,9 @@ runRdTest<-function(bed)
     }
   }
   ##Assign intial genotypes (del=1,dup=3,diploid=2)##
-  genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype, opt$outlierSampleIds)
+  genotype_matrix<-specified_cnv(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype)
   ##check if no samples are found in genotype matrix##
-  if (is.character(genotype_matrix[1,1])) {
+  if (as.matrix(genotype_matrix)[1,1]=="No_Samples") {
     return(c(chr,start,end,cnvID,sampleOrigIDs,cnvtypeOrigIDs,"No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis","No_samples_for_analysis"))
   }
   
@@ -1312,7 +1303,7 @@ runRdTest<-function(bed)
             as.matrix(cnv_matrix[rownames(cnv_matrix)  %in%  family[which(family[, 5] == 1), 2], ])
         }
         ##remove sample of interest from sample exclude list and make new genotype matrix##
-        genotype_matrix<-specified_cnv(cnv_matrix, sampleID1s, cnvID, chr, start, end, cnvtype, opt$outlierSampleIds)
+        genotype_matrix<-specified_cnv(cnv_matrix, sampleID1s, cnvID, chr, start, end, cnvtype)
         ##remove singlesample for exclusion list##
         p <-onesamplezscore.median(genotype_matrix,cnv_matrix,singlesample,cnvtype)
         ##write meteric for each family member
