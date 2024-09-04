@@ -184,6 +184,8 @@ task RDTest {
       tabix -p bed local.RD.txt.gz
     fi
 
+    gsutil cp local.RD.txt.gz outputs/
+
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
       -n ~{prefix} \

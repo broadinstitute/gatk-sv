@@ -531,11 +531,6 @@ specified_cnv <- function(cnv_matrix, sampleIDs, cnvID, chr, start, end, cnvtype
       }
     }
 
-    #Return no samples if fewer than expected
-    if (ncol(genotype_matrix) < 5) {
-      return(matrix("No_Samples", nrow=1, ncol=5))
-    }
-
     return(genotype_matrix)
   }
 
