@@ -113,7 +113,7 @@ task GetPotential{
     File rare = "~{name}.potentialmosaic.rare.bed.gz"
   }
 }
-# Run rdtest plot
+
 task RdTest {
   input{
     File bed
