@@ -633,8 +633,8 @@ task ReformatGenotypedVcf {
     File out_index = "~{output_prefix}.vcf.gz.tbi"
   }
   command <<<
-
-    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/cluster_batch_format.py" script} ~{vcf} \
+    set -euo pipefail
+    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/reformat_genotyped_vcf.py" script} ~{vcf} \
       | bgzip \
       > ~{output_prefix}.vcf.gz
     tabix ~{output_prefix}.vcf.gz
