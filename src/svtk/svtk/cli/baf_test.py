@@ -74,10 +74,8 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
     bafs.loc[bafs.pos <= start, 'region'] = 'before'
     bafs.loc[bafs.pos >= end, 'region'] = 'after'
     bafs.loc[(bafs.pos > start) & (bafs.pos < end), 'region'] = 'inside'
-    het_counts = bafs.groupby('sample region'.split()).size(
-    ).reset_index().rename(columns={0: 'count'})
-    het_counts = het_counts.pivot_table(
-        values='count', index='sample', columns='region', fill_value=0)
+    het_counts = bafs.groupby('sample region'.split()).size().reset_index().rename(columns={0: 'count'})
+    het_counts = het_counts.pivot_table(values='count', index='sample', columns='region', fill_value=0)
     het_counts = het_counts.reindex(samples).fillna(0).astype(int)
     cols = 'before inside after sample'.split()
     het_counts = het_counts.reset_index()
@@ -101,8 +99,7 @@ def main(argv):
     parser.add_argument('--index', help='Tabix index for remote bed')
     parser.add_argument('--outlier-sample-ids', default=None, 
                         help='Path to file containing outlier sample IDs')
-    # help='Samples')
-
+    
     # Print help if no arguments specified
     if len(argv) == 0:
         parser.print_help()
