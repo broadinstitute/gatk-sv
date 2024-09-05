@@ -41,7 +41,8 @@ def get_new_header(header):
         else:
             new_header_lines.append(line)
     new_header = pysam.VariantHeader()
-    new_header.add_samples(header.samples)
+    for s in header.samples:
+        new_header.add_sample(s)
     for line in new_header_lines:
         print(line)
         new_header.add_line(line)
@@ -52,17 +53,24 @@ def process_record(record):
     # Fix multi-allelic CNV alts (legacy)
     if record.alts[0].startswith('<CN'):
         record.alts = ('<CNV>',)
+        record.info['SVTYPE'] = 'CNV'
     # Remove MULTIALLELIC field (legacy)
     record.info.pop('MULTIALLELIC')
     # Since pysam messes with some of the formatting (i.e. END limitation) we parse the string and replace
     max_ev = len(EVIDENCE_LIST) - 1
     record_tokens = str(record).strip().split('\t')
     format_keys = record_tokens[8].split(':')
+    gt_index = format_keys.index('GT')
     ev_index = format_keys.index('EV')
     new_record_tokens = record_tokens[:9]
-    for gt in record_tokens[9:]:
-        gt_tokens = gt.split(':')
-        ev = gt.split(':')[ev_index]
+    for format in record_tokens[9:]:
+        format_tokens = format.split(':')
+        # Reset multiallelic CNV genotypes to ./.
+        if record.info['SVTYPE'] == 'CNV':
+            gt_tokens = format_tokens[gt_index].split('/')
+            format_tokens[gt_index] = "/".join(["." for _ in gt_tokens])
+        # Convert evidence as string list representation
+        ev = format.split(':')[ev_index]
         if ev == '.' or not ev:
             new_ev = '.'
         else:
@@ -70,8 +78,8 @@ def process_record(record):
             if ev_int < 0 or ev_int > max_ev:
                 raise ValueError(f"Invalid EV value {ev_int} in record {record.id}")
             new_ev = EVIDENCE_LIST[ev_int]
-        gt_tokens[ev_index] = new_ev
-        new_record_tokens.append(':'.join(gt_tokens))
+        format_tokens[ev_index] = new_ev
+        new_record_tokens.append(':'.join(format_tokens))
     return '\t'.join(new_record_tokens)
 
 

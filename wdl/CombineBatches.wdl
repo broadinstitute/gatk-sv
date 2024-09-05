@@ -110,7 +110,7 @@ workflow CombineBatches {
       call GenotypeTasks.ReformatGenotypedVcf {
         input:
           vcf = vcf,
-          output_prefix = basename(vcf, ".vcf.gz") + ".reformat_1",
+          output_prefix = basename(vcf, ".vcf.gz") + ".reformat_legacy",
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_attr_override = runtime_attr_reformat_1
       }
@@ -120,7 +120,7 @@ workflow CombineBatches {
       input:
         vcf=reformatted_vcf,
         ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix=basename(vcf, ".vcf.gz") + ".reformat_2",
+        output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_reformat_2
     }
