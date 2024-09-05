@@ -65,7 +65,6 @@ workflow GenotypeBatch {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_genotype_depths_concat_vcfs
     RuntimeAttr? runtime_attr_genotype_pesr_concat_vcfs
-    RuntimeAttr? runtime_attr_reformat
 
     # Master
     RuntimeAttr? runtime_attr_add_batch
@@ -208,8 +207,7 @@ workflow GenotypeBatch {
       runtime_attr_integrate_pesr_gq = runtime_attr_integrate_pesr_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_triple_stream_cat = runtime_attr_triple_stream_cat,
-      runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs,
-      runtime_attr_reformat = runtime_attr_reformat
+      runtime_attr_concat_vcfs = runtime_attr_genotype_pesr_concat_vcfs
   }
 
   if (!single_sample_mode) {
@@ -262,8 +260,7 @@ workflow GenotypeBatch {
       runtime_attr_integrate_depth_gq = runtime_attr_integrate_depth_gq,
       runtime_attr_add_genotypes = runtime_attr_add_genotypes,
       runtime_attr_concat_vcfs = runtime_attr_genotype_depths_concat_vcfs,
-      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med,
-      runtime_attr_reformat = runtime_attr_reformat
+      runtime_attr_merge_regeno_cov_med = runtime_attr_merge_regeno_cov_med
   }
 
   Boolean run_module_metrics_ = if defined(run_module_metrics) then select_first([run_module_metrics]) else true

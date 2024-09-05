@@ -48,7 +48,6 @@ workflow GenotypePESRPart2 {
     RuntimeAttr? runtime_attr_add_genotypes
     RuntimeAttr? runtime_attr_triple_stream_cat
     RuntimeAttr? runtime_attr_concat_vcfs
-    RuntimeAttr? runtime_attr_reformat
   }
 
   File bin_exclude_idx = bin_exclude + ".tbi"
@@ -424,25 +423,16 @@ workflow GenotypePESRPart2 {
       vcfs=flatten([AddGenotypesUnder5kb.genotyped_vcf, AddGenotypesOver5kb.genotyped_vcf, AddGenotypesBca.genotyped_vcf, AddGenotypesIns.genotyped_vcf]),
       vcfs_idx=flatten([AddGenotypesUnder5kb.genotyped_vcf_index, AddGenotypesOver5kb.genotyped_vcf_index, AddGenotypesBca.genotyped_vcf_index, AddGenotypesIns.genotyped_vcf_index]),
       allow_overlaps=true,
-      outfile_prefix="~{batch}.genotyped_pesr_concat",
+      outfile_prefix="~{batch}.genotyped_pesr",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_vcfs
-  }
-
-  call tasksgenotypebatch.ReformatGenotypedVcf {
-    input:
-      vcf = ConcatVcfs.concat_vcf,
-      output_prefix = "~{batch}.genotyped_pesr_reformatted",
-      script = reformat_script,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_attr_reformat
   }
 
   output {
     File bothside_pass = CatFilesPass.merged_file
     File background_fail = CatFilesFail.merged_file
-    File genotyped_vcf = ReformatGenotypedVcf.out
-    File genotyped_vcf_index = ReformatGenotypedVcf.out_index
+    File genotyped_vcf = ConcatVcfs.concat_vcf
+    File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx
   }
 }
 
