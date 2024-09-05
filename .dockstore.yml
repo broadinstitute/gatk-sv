@@ -1,7 +1,10 @@
-  - name: KN-gatk-sv
+version: 1.2
+workflows:
+
+  - name: Manta
     subclass: WDL
     primaryDescriptorPath: /wdl/Manta.wdl
 
-  - name: KN-gatk-sv
+  - name: MosaicDepth
     subclass: WDL
     primaryDescriptorPath: /wdl/MosaicDepth.wdl
