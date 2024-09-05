@@ -1,3 +1,7 @@
   - name: KN-gatk-sv
     subclass: WDL
     primaryDescriptorPath: /wdl/Manta.wdl
+
+  - name: KN-gatk-sv
+    subclass: WDL
+    primaryDescriptorPath: /wdl/MosaicDepth.wdl
