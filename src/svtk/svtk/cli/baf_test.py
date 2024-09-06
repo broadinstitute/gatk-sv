@@ -1,6 +1,7 @@
 #!usr/bin/env python
 from svtk.baf.BAFpysam import *
 import argparse
+from collections import deque
 import numpy as np
 import pandas as pd
 import pysam
