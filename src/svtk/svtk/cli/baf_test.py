@@ -9,7 +9,7 @@ import sys
 ##########
 
 
-def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=None):
+def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None, outlier_sample_ids=None):
     """
     Report normalized BAFs in a set of samples across a desired region.
 
@@ -33,44 +33,40 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
     called_bafs : pd.DataFrame
         BAF of each called SNP within CNV
     """
-
-    # Load and filter SNP sites
     if window is None:
         window = end - start
-    # records = tbx.fetch(chrom, start - window, end + window,parser=pysam.asTuple())
-    # sites = deque()
+    
     bafs = deque()
     if window < 1000000:
         for record in tbx.fetch(chrom, max(1, start - window), end + window, parser=pysam.asTuple()):
             bafs.append(np.array(record))
     else:
-
         for record in tbx.fetch(chrom, max(1, start - 1000000), start, parser=pysam.asTuple()):
             bafs.append(np.array(record))
         for record in tbx.fetch(chrom, (start + end) // 2 - 500000, (start + end) // 2 + 500000, parser=pysam.asTuple()):
             bafs.append(np.array(record))
         for record in tbx.fetch(chrom, end, end + 1000000, parser=pysam.asTuple()):
             bafs.append(np.array(record))
-    bafs = np.array(bafs)
-    # if bafs.shape[0] == 0:
-    # return 0,0
-    bafs = pd.DataFrame(bafs)
+    
+    bafs = pd.DataFrame(np.array(bafs))
     if bafs.empty:
-        return bafs, bafs, samples
+        return bafs, bafs, called_samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
 
     # Exclude outlier samples only if non-outlier samples exist
-    non_outlier_samples = [s for s in samples if s not in outlier_sample_ids]
-    if len(non_outlier_samples) > 0:
-        samples = non_outlier_samples
-    bafs = bafs[bafs['sample'].isin(samples)]
+    filtered_samples = []
+    retained_samples = called_samples
+    non_outlier_samples = [s for s in called_samples if s not in outlier_sample_ids]
+    if (non_outlier_samples):
+        filtered_samples = [s for s in called_samples if s in outlier_sample_ids]
+        retained_samples = non_outlier_samples
+    bafs = bafs[bafs['sample'].isin(samples) & ~bafs['sample'].isin(filtered_samples)]
 
-    # print(bafs)
     if bafs.empty:
-        return bafs, bafs, samples
+        return bafs, bafs, retained_samples
+    
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
-    # print(bafqs)
     bafs.loc[bafs.pos <= start, 'region'] = 'before'
     bafs.loc[bafs.pos >= end, 'region'] = 'after'
     bafs.loc[(bafs.pos > start) & (bafs.pos < end), 'region'] = 'inside'
@@ -82,10 +78,10 @@ def preprocess(chrom, start, end, tbx, samples, window=None, outlier_sample_ids=
     for colname in cols:
         if colname not in het_counts.columns:
             het_counts[colname] = 0
-    # het_counts = het_counts.reset_index()[cols]
+    
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
-    return het_counts, called_bafs, samples
+    return het_counts, called_bafs, retained_samples
 
 
 def main(argv):
@@ -97,19 +93,13 @@ def main(argv):
     parser.add_argument('file', help='Compiled snp file')
     parser.add_argument('-b', '--batch',)
     parser.add_argument('--index', help='Tabix index for remote bed')
-    parser.add_argument('--outlier-sample-ids', default=None, 
-                        help='Path to file containing outlier sample IDs')
-    
+    parser.add_argument('--outlier-sample-ids', help='Path to file containing outlier sample IDs')
+
     # Print help if no arguments specified
     if len(argv) == 0:
         parser.print_help()
         sys.exit(1)
     args = parser.parse_args(argv)
-
-    outlier_samples = set()
-    if args.outlier_sample_ids:
-        with open(args.outlier_sample_ids, 'r') as f:
-            outlier_samples = set([line.strip() for line in f])
 
     # fi = args.file
     # if args.vcf.startswith('s3://'):
@@ -135,6 +125,11 @@ def main(argv):
             raise Exception('Must provide tabix index with remote URL')
         tbx = pysam.TabixFile(args.file)
 
+    outlier_samples = set()
+    if args.outlier_sample_ids:
+        with open(args.outlier_sample_ids, 'r') as f:
+            outlier_samples = set(line.strip() for line in f)
+
     # this is necessary to avoid stochasticity in calculation of KS statistic
     np.random.seed(0)
     random_state = np.random.RandomState(0)
@@ -151,20 +146,27 @@ def main(argv):
                 samplelist = samples.split(',')
                 type = dat[5]
                 try:
-                    het_counts, called_bafs, filtered_samples = preprocess(
-                        chrom, start, end, tbx, samples=splist, outlier_sample_ids=outlier_samples
+                    het_counts, called_bafs, samplelist = preprocess(
+                        chrom, start, end, tbx, samples=splist, 
+                        outlier_sample_ids=outlier_samples, 
+                        called_samples=samplelist
                     )
                 except ValueError:
                     het_counts = pd.DataFrame()
                     called_bafs = pd.DataFrame()
                 # Running BAF testing
                 if not het_counts.empty:
-                    Del = DeletionTest(het_counts, filtered_samples,
+                    Del = DeletionTest(het_counts, samplelist,
                                        min(end - start, 1000000), random_state=random_state)
-                    KS = KS2sample(called_bafs, filtered_samples)
-                    ks, ksp = KS.test(filtered_samples)
-                    mean, delp = Del.Ttest(filtered_samples)
-                    statis = Del.stats(filtered_samples)
+                    KS = KS2sample(called_bafs, samplelist)
+                    ks, ksp = KS.test(samplelist)
+                    try:
+                        mean, delp = Del.Ttest(samplelist)
+                    except Exception:
+                        print(samplelist)
+                        print(het_counts)
+                        raise Exception
+                    statis = Del.stats(samplelist)
                     line = chrom + '\t' + str(start) + '\t' + str(end) + '\t' + id + '\t' + samples + '\t' + type + '\t' + str(
                         mean) + ',' + str(delp) + "\t" + str(ks) + ',' + str(ksp) + '\t' + statis
                 else:
