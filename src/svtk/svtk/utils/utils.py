@@ -116,8 +116,12 @@ def get_called_samples(record, include_null=False):
             samples.append(sample)
 
     if record.info.get('SVTYPE', None) == 'CNV':
-        for sample in record.samples.keys():
-            if record.samples[sample]['CN'] != 2:
+        for sample, gt in record.samples.items():
+            # Get CN, or RD_CN if it doesn't exist
+            cn = gt.get('CN', gt.get('RD_CN', None))
+            if cn is None:
+                raise ValueError(f"Genotype for {sample} in CNV record {record.id} has neither CN nor RD_CN assigned")
+            elif cn != 2:
                 samples.append(sample)
 
     return sorted(samples)
