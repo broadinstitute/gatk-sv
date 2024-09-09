@@ -278,7 +278,7 @@ workflow GatherSampleEvidence {
           runtime_attr_override = runtime_attr_localize_reads
       }
     }
-    Boolean is_dragen_3_7_8_ = (defined(CheckAligner.is_dragen_3_7_8) && CheckAligner.is_dragen_3_7_8 > 0)
+    Boolean is_dragen_3_7_8_ = (defined(CheckAligner.is_dragen_3_7_8) && select_first([CheckAligner.is_dragen_3_7_8]) > 0)
       || (!defined(CheckAligner.is_dragen_3_7_8) && select_first([is_dragen_3_7_8]))
 
     # Significant modulator of precision/sensitivity
