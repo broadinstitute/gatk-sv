@@ -121,7 +121,6 @@ workflow GATKSVPipelineSingleSample {
     Float? total_reads
 
     # Scramble inputs
-    File mei_bed
     Int? scramble_alignment_score_cutoff
     Int? scramble_percent_align_cutoff
     Float? scramble_min_clipped_reads_fraction
