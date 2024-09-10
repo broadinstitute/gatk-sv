@@ -158,9 +158,8 @@ task PESRBAF_QC {
     else
       touch ~{print_ev_output}
       bgzip ~{print_ev_output}
+      tabix -f -0 -s 1 -b 2 -e 2 ~{print_ev_output}
     fi
-
-    tabix -f -s 1 -b 2 -e 2 ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/nonRD_matrix_QC.sh \
       -d ~{distance} \
@@ -238,9 +237,8 @@ task RD_QC {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -f -p bed ~{print_ev_output}
     fi
-
-    tabix -f -p bed ~{print_ev_output}
 
     /opt/sv-pipeline/00_preprocessing/misc_scripts/RD_matrix_QC.sh \
       -d ~{distance} \
