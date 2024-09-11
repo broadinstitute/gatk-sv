@@ -45,6 +45,7 @@ task SVCluster {
         File reference_dict
 
         Float? java_mem_fraction
+        String? additional_args
         String? variant_prefix
 
         String gatk_docker
@@ -132,7 +133,8 @@ task SVCluster {
             ~{"--pesr-breakend-window " + pesr_breakend_window} \
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
-            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy}
+            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            ~{additional_args}
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])

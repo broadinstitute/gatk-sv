@@ -411,7 +411,8 @@ task GroupedSVClusterTask {
       --context-name ~{sep=" --context-name " context_names} \
       --stratify-overlap-fraction ~{context_overlap_frac} \
       --stratify-num-breakpoint-overlaps ~{context_num_breakpoint_overlaps} \
-      --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps}
+      --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps} \
+      ~{additional_args}
   >>>
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
