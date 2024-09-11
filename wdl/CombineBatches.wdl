@@ -131,12 +131,36 @@ workflow CombineBatches {
   scatter ( contig in contigs ) {
 
     # First round of clustering
-    call ClusterTasks.SVCluster {
+    call ClusterTasks.SVCluster as JoinVcfs {
       input:
         vcfs=FormatVcf.out,
         ploidy_table=CreatePloidyTableFromPed.out,
-        output_prefix="~{cohort_name}.combine_batches.~{contig}.svcluster",
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.join_vcfs",
         contig=contig,
+        fast_mode=false,
+        pesr_sample_overlap=0,
+        pesr_interval_overlap=1,
+        pesr_breakend_window=0,
+        depth_sample_overlap=0,
+        depth_interval_overlap=1,
+        depth_breakend_window=0,
+        mixed_sample_overlap=0,
+        mixed_interval_overlap=1,
+        mixed_breakend_window=0,
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        runtime_attr_override=runtime_attr_svcluster
+    }
+
+    # First round of clustering
+    call ClusterTasks.SVCluster as ClusterSites {
+      input:
+        vcfs=[JoinVcfs.out],
+        ploidy_table=CreatePloidyTableFromPed.out,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.cluster_sites",
         fast_mode=false,
         pesr_sample_overlap=0.5,
         pesr_interval_overlap=0.1,
@@ -161,7 +185,7 @@ workflow CombineBatches {
       input:
         vid_list=CombineSRBothsidePass.out,
         vid_col=2,
-        vcf=SVCluster.out,
+        vcf=ClusterSites.out,
         outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass.subset.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_bothside_pass
@@ -170,7 +194,7 @@ workflow CombineBatches {
       input:
         vid_list=CombineBackgroundFail.outfile,
         vid_col=1,
-        vcf=SVCluster.out,
+        vcf=ClusterSites.out,
         outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_background_fail.subset.list",
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_attr_override=runtime_override_subset_background_fail
@@ -179,7 +203,7 @@ workflow CombineBatches {
     #Update SR background fail & bothside pass files (1)
     call MiniTasks.UpdateSrList as UpdateBackgroundFail1 {
       input:
-        vcf=SVCluster.out,
+        vcf=ClusterSites.out,
         original_list=SubsetBothsidePass.filtered_vid_list,
         outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass1.list",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -187,7 +211,7 @@ workflow CombineBatches {
     }
     call MiniTasks.UpdateSrList as UpdateBothsidePass1 {
       input:
-        vcf=SVCluster.out,
+        vcf=ClusterSites.out,
         original_list=SubsetBackgroundFail.filtered_vid_list,
         outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail1.list",
         sv_pipeline_docker=sv_pipeline_docker,
@@ -197,7 +221,7 @@ workflow CombineBatches {
     # Second round of clustering
     call GroupedSVClusterTask as GroupedSVClusterPart1 {
       input:
-        vcf=SVCluster.out,
+        vcf=ClusterSites.out,
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.recluster_part_1",
         reference_fasta=reference_fasta,
