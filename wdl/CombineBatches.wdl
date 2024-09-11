@@ -59,7 +59,8 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_reformat_1
     RuntimeAttr? runtime_attr_reformat_2
-    RuntimeAttr? runtime_attr_svcluster
+    RuntimeAttr? runtime_attr_join_vcfs
+    RuntimeAttr? runtime_attr_cluster_sites
     RuntimeAttr? runtime_attr_recluster_part1
     RuntimeAttr? runtime_attr_recluster_part2
     RuntimeAttr? runtime_override_subset_bothside_pass
@@ -152,7 +153,7 @@ workflow CombineBatches {
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_svcluster
+        runtime_attr_override=runtime_attr_join_vcfs
     }
 
     # First round of clustering
@@ -177,7 +178,7 @@ workflow CombineBatches {
         java_mem_fraction=java_mem_fraction,
         variant_prefix="~{cohort_name}_~{contig}_",
         gatk_docker=gatk_docker,
-        runtime_attr_override=runtime_attr_svcluster
+        runtime_attr_override=runtime_attr_cluster_sites
     }
 
     #Subset bothside_pass & background_fail to chromosome of interest
