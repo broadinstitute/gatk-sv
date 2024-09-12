@@ -149,7 +149,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     input:
       vcfs=SubsetPacBioSamples.vcf_subset,
       vcfs_idx=SubsetPacBioSamples.vcf_subset_index,
-      naive=true,
+      naive=naive_concat,
       outfile_prefix="~{output_prefix_}.concat_pacbio_sample_vcfs",
       sv_base_mini_docker=sv_base_mini_docker
   }
