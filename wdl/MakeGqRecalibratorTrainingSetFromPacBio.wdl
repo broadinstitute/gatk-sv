@@ -13,6 +13,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     # This can be either a single whole-genome vcf or multiple vcf shards.
     # Assumes all vcfs have indexes, i.e. at {VCF_PATH}.tbi
     Array[File] vcfs
+    Boolean naive_concat = true
 
     File training_sample_ids  # Sample IDs with PacBio or array data
     String? output_prefix
@@ -81,7 +82,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     input:
       vcfs=SubsetTrainingSamples.vcf_subset,
       vcfs_idx=SubsetTrainingSamples.vcf_subset_index,
-      naive=true,
+      naive=naive_concat,
       outfile_prefix="~{output_prefix_}.concat_training_sample_vcfs",
       sv_base_mini_docker=sv_base_mini_docker
   }
