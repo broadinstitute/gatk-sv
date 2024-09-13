@@ -44,7 +44,7 @@ Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) for specificati
 IDs that do not meet these requirements may cause errors.
 
 #### `preprocessed_intervals`
-Piccard interval list.
+Picard interval list.
 
 #### `sd_locs_vcf`
 (`sd`: site depth) 
