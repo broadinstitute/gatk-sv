@@ -52,11 +52,9 @@ A VCF file containing allele counts at common SNP loci of the genome, which is u
 For human genome, you may use [`dbSNP`](https://www.ncbi.nlm.nih.gov/snp/) 
 that contains a complete list of common and clinical human single nucleotide variations, 
 microsatellites, and small-scale insertions and deletions. 
-You may download the file from the following link.
+You may find a link to the file in 
+[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
 
-```shell
-gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf
-```
 
 ## Outputs
 
