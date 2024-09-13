@@ -60,7 +60,7 @@ gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.
 
 ## Outputs
 
-- Caller VCFs (Manta, MELT, and/or Wham)
+- Caller VCFs (Manta, Scramble, Wham, and/or MELT)
 - Binned read counts file
 - Split reads (SR) file
 - Discordant read pairs (PE) file
