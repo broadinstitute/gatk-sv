@@ -71,7 +71,7 @@ A list of sample IDs.
 The order of IDs in this list should match the order of files in `count_files`.
 
 #### `count_files`
-A list of per-sample coverage counts determined in the [GatherSampleEvidence](./gse#outputs) workflow.
+A list of per-sample coverage counts generated in the [GatherSampleEvidence](./gse#outputs) workflow.
 
 #### `contig_ploidy_priors`
 A tabular file with ploidy prior probability per contig. 
