@@ -99,6 +99,9 @@ or upsetting normalized copy numbers for the batch.
 Enables or disables running optional QC tasks. 
 
 
+#### `gcnv_qs_cutoff`
+You may set the value of this input to `30`.
+
 #### cn.MOPS files
 The workflow needs the following cn.MOPS files.
 
@@ -134,10 +137,11 @@ The following inputs are configured based on the outputs generated in the [`Trai
 The workflow also enables setting a few optional arguments of gCNV.
 The arguments and their default values are as the following,
 and each argument is documented on 
-[this page](https://gatk.broadinstitute.org/hc/en-us/articles/360037593411-PostprocessGermlineCNVCalls).
+[this page](https://gatk.broadinstitute.org/hc/en-us/articles/360037593411-PostprocessGermlineCNVCalls)
+and
+[this page](https://gatk.broadinstitute.org/hc/en-us/articles/360047217671-GermlineCNVCaller).
 
 ```json
-"gcnv_qs_cutoff": 30,
 "gcnv_caller_internal_admixing_rate": 0.5,
 "gcnv_caller_update_convergence_threshold": 0.000001,
 "gcnv_cnv_coherence_length": 1000,
