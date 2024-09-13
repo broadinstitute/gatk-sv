@@ -58,18 +58,21 @@ You may find a link to the file in
 
 ## Outputs
 
-- Caller VCFs (Manta, Scramble, Wham, and/or MELT)
 - Binned read counts file
 - Split reads (SR) file
 - Discordant read pairs (PE) file
 
 #### `manta_vcf` {#manta-vcf}
+A VCF file containing variants called by Manta. 
 
 #### `melt_vcf` {#melt-vcf}
+A VCF file containing variants called by MELT. 
 
 #### `scramble_vcf` {#scramble-vcf}
+A VCF file containing variants called by Scramble. 
 
 #### `wham_vcf` {#wham-vcf}
+A VCF file containing variants called by Wham. 
 
 #### `coverage_counts` {#coverage-counts}
 
