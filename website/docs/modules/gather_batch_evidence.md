@@ -181,14 +181,16 @@ latest images from [this file](https://github.com/broadinstitute/gatk-sv/blob/ma
 
 #### Static inputs
 
-```json
-"primary_contigs_fai": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
-"cytoband": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
-"ref_dict": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-"mei_bed": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/mei_hg38.bed.gz",
-"genome_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
-"sd_locs_vcf": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf"
-```
+You may refer to [this reference file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json)
+for values of the following inputs.
+
+ - `primary_contigs_fai`;
+ - `cytoband`;
+ - `ref_dict`;
+ - `mei_bed`;
+ - `genome_file`;
+ - `sd_locs_vcf`.
+
 
 #### Optional Inputs
 The following is the list of a few optional inputs of the 
