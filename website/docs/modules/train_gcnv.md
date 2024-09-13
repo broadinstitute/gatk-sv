@@ -74,12 +74,10 @@ The order of IDs in this list should match the order of files in `count_files`.
 A list of per-sample coverage counts generated in the [GatherSampleEvidence](./gse#outputs) workflow.
 
 #### `contig_ploidy_priors`
-A tabular file with ploidy prior probability per contig. 
-You may use the following file as this input:
-    
-```
-gs://gatk-sv-resources-public/gcnv-exome/contig_ploidy_prior_hg38.tsv
-```
+A tabular file with ploidy prior probability per contig.
+You may find the link to this input from 
+[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
+
 
 <details>
   <summary>File description</summary>
@@ -110,13 +108,8 @@ gs://gatk-sv-resources-public/gcnv-exome/contig_ploidy_prior_hg38.tsv
 `reference_fasta`, `reference_index`, `reference_dict` are respectively the 
 reference genome sequence in the FASTA format, its index file, and a corresponding 
 [dictionary file](https://gatk.broadinstitute.org/hc/en-us/articles/360035531652-FASTA-Reference-genome-format).
-You may use the following files for these inputs.
-
-```json
-"reference_fasta": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-"reference_index": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-"reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"
-```
+You may find links to these files from 
+[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
 
 
 ## Outputs
