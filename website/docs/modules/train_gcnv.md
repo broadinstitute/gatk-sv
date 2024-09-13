@@ -68,7 +68,7 @@ of the tool for a description on these optional inputs.
 
 #### `samples`
 A list of sample IDs. 
-The order of IDs in this list, should match the order of files in `count_files .
+The order of IDs in this list should match the order of files in `count_files`.
 
 #### `count_files`
 A list of per-sample coverage counts determined in the [GatherSampleEvidence](./gse#outputs) workflow.
