@@ -122,13 +122,13 @@ task SetSampleId {
     output_name="~{sample_name}.~{file_type}.txt.gz"
 
     if [ ! -f "~{evidence_file}.tbi" ]; then
-        tabix -s1 -b2 -e2 ~{evidence_file}
+        tabix -0 -s1 -b2 -e2 ~{evidence_file}
     fi
 
     mkfifo $fifo_name
     /gatk/gatk --java-options "-Xmx2000m" PrintSVEvidence -F ~{evidence_file} --sequence-dictionary ~{reference_dict} -O $fifo_name &
     awk '{$~{sample_column}="~{sample_name}"}' < $fifo_name | bgzip -c > $output_name
-    tabix -s1 -b2 -e2 $output_name
+    tabix -0 -s1 -b2 -e2 $output_name
 
   >>>
   runtime {

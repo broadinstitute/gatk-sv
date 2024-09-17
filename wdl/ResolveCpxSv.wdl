@@ -345,7 +345,6 @@ task ResolvePrep {
 
         if [ -s regions.bed ]; then
           java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-                --skip-header \
                 --sequence-dictionary ~{ref_dict} \
                 --evidence-file $GS_PATH_TO_DISC_FILE \
                 -L regions.bed \
@@ -385,7 +384,7 @@ task ResolvePrep {
         > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
+    tabix -0 -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {
