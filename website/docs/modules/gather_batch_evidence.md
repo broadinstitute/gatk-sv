@@ -101,7 +101,8 @@ for an example value.
 #### cn.MOPS files
 The workflow needs the following cn.MOPS files.
 
-- `cnmops_chrom_file` and `cnmops_allo_file`: FASTA index files (`.fai`) for respectively non-sex chromosome (autosome) and chromosomes X and Y (allosomes). 
+- `cnmops_chrom_file` and `cnmops_allo_file`: FASTA index files (`.fai`) for respectively 
+  non-sex chromosomes (autosomes) and chromosomes X and Y (allosomes). 
   The content of the files may read as the following, 
   and the format is explained [on this page](https://www.htslib.org/doc/faidx.html).
 
