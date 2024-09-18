@@ -12,33 +12,7 @@ is a method for detecting rare germline copy number variants (CNVs)
 from short-read sequencing read-depth information.
 The [TrainGCNV](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGCNV.wdl)
 module trains a gCNV model for use in the [GatherBatchEvidence](./gbe) workflow. 
-The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram. 
-
-<br/>
-
-```mermaid
-
-stateDiagram
-  direction LR
-  
-  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
-  classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
-  classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
-
-  gse: GatherSampleEvidence
-  eqc: EvidenceQC
-  t: TrainGCNV
-  gse --> t
-  eqc --> t
-  gbe: GatherBatchEvidence
-  t --> gbe 
-  
-  class t thisModule
-  class gse, eqc inModules
-  class gbe outModules
-```
-
-<br/>
+The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
 
 
 The samples used for training should be homogeneous and similar 
@@ -55,6 +29,31 @@ A subset of 100 randomly selected samples from the batch is a reasonable
 input size for training the model; also, the `TrainGCNV` workflow can automatically select 
 a given number of random samples through the `n_samples_subsample` parameter.
 
+The following diagram illustrates the upstream and downstream workflows of the `TrainGCNV` workflow 
+in the recommended invocation order. You may refer to 
+[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
+for the overall recommended invocation order.
+
+```mermaid
+
+stateDiagram
+  direction LR
+  
+  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
+  classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
+
+  batching: Batching, sample QC, and sex assignment
+  t: TrainGCNV
+  gbe: GatherBatchEvidence
+  
+  batching --> t
+  t --> gbe 
+  
+  class t thisModule
+  class batching inModules
+  class gbe outModules
+```
 
 ## Inputs
 

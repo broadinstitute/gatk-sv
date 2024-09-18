@@ -19,8 +19,10 @@ for further guidance on creating batches.
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
-The upstream and downstream dependencies of the EvidenceQC workflow 
-are illustrated in the following diagram.
+The following diagram illustrates the upstream and downstream workflows of the `EvidenceQC` workflow 
+in the recommended invocation order. You may refer to 
+[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
+for the overall recommended invocation order.
 
 <br/>
 
@@ -34,16 +36,15 @@ stateDiagram
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
   gse: GatherSampleEvidence
-  gbe: GatherBatchEvidence
   eqc: EvidenceQC
-  t: TrainGCNV
+  batching: Batching, sample QC, and sex assignment
+  
   gse --> eqc
-  eqc --> t
-  eqc --> gbe
+  eqc --> batching
   
   class eqc thisModule
   class gse inModules
-  class t, gbe outModules
+  class batching outModules
 ```
 
 <br/>

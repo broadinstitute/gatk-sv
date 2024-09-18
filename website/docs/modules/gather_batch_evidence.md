@@ -8,6 +8,10 @@ slug: gbe
 Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), GATK gCNV) 
 and combines single-sample raw evidence into a batch.
 
+The following diagram illustrates the downstream workflows of the `GatherBatchEvidence` workflow 
+in the recommended invocation order. You may refer to 
+[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
+for the overall recommended invocation order.
 
 ```mermaid
 
@@ -18,19 +22,15 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  gse: GatherSampleEvidence
-  eqc: EvidenceQC
-  gcnv: TrainGCNV
   gbe: GatherBatchEvidence
-  cbe: ClusterBatch
-  gse --> gbe
-  eqc --> gbe
-  gcnv --> gbe
-  gbe --> cbe
+  t: TrainGCNV
+  cb: ClusterBatch
+  t --> gbe
+  gbe --> cb
   
   class gbe thisModule
-  class gse, eqc, gcnv inModules
-  class cbe outModules
+  class t inModules
+  class cb outModules
 ```
 
 ## Inputs
