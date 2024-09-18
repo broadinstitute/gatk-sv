@@ -5,7 +5,7 @@ sidebar_position: 4
 slug: gbe
 ---
 
-Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), GATK gCNV) 
+Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), GATK-gCNV) 
 and combines single-sample raw evidence into a batch.
 
 The following diagram illustrates the downstream workflows of the `GatherBatchEvidence` workflow 
@@ -77,22 +77,17 @@ Set to the [`GatherSampleEvidence.pesr_sd`](./gse#pesr-sd)
 
 
 #### `matrix_qc_distance`
-You may set it to `1000000`.
+You may refer to [this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl)
+for an example value. 
 
 
 #### `min_svsize`
-Sets the minimum size of SVs to include. 
-You may set it to `50`. 
+Sets the minimum size of SVs to include.
 
 
 #### `ped_file`
 A pedigree file describing the familial relationshipts between the samples in the cohort.
-The file needs to be in the 
-[PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).
-Updated with [EvidenceQC](./eqc) sex assignments, including 
-`sex = 0` for sex aneuploidies. Calls will not be made on sex chromosomes 
-when `sex = 0` in order to avoid generating many confusing calls 
-or upsetting normalized copy numbers for the batch.
+Please refer to [this section](./#ped_file) for details. 
 
 
 #### `run_matrix_qc`
@@ -100,7 +95,8 @@ Enables or disables running optional QC tasks.
 
 
 #### `gcnv_qs_cutoff`
-You may set the value of this input to `30`.
+You may refer to [this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl)
+for an example value. 
 
 #### cn.MOPS files
 The workflow needs the following cn.MOPS files.
@@ -135,33 +131,12 @@ The following inputs are configured based on the outputs generated in the [`Trai
 
 
 The workflow also enables setting a few optional arguments of gCNV.
-The arguments and their default values are as the following,
-and each argument is documented on 
+The arguments and their default values are provided 
+[here](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl) 
+as the following, and each argument is documented on 
 [this page](https://gatk.broadinstitute.org/hc/en-us/articles/360037593411-PostprocessGermlineCNVCalls)
 and
 [this page](https://gatk.broadinstitute.org/hc/en-us/articles/360047217671-GermlineCNVCaller).
-
-```json
-"gcnv_caller_internal_admixing_rate": 0.5,
-"gcnv_caller_update_convergence_threshold": 0.000001,
-"gcnv_cnv_coherence_length": 1000,
-"gcnv_convergence_snr_averaging_window": 100,
-"gcnv_convergence_snr_countdown_window": 10,
-"gcnv_convergence_snr_trigger_threshold": 0.2,
-"gcnv_copy_number_posterior_expectation_mode": "EXACT",
-"gcnv_depth_correction_tau": 10000,
-"gcnv_learning_rate": 0.03,
-"gcnv_log_emission_sampling_median_rel_error": 0.001,
-"gcnv_log_emission_sampling_rounds": 20,
-"gcnv_max_advi_iter_first_epoch": 1000,
-"gcnv_max_advi_iter_subsequent_epochs": 200,
-"gcnv_max_training_epochs": 5,
-"gcnv_min_training_epochs": 1,
-"gcnv_num_thermal_advi_iters": 250,
-"gcnv_p_alt": 0.000001,
-"gcnv_sample_psi_scale": 0.000001,
-"ref_copy_number_autosomal_contigs": 2
-```
 
 
 #### Docker images
