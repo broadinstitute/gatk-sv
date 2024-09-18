@@ -7,6 +7,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * [Citation](#citation)
 * [Acknowledgements](#acknowledgements)
 * [Quickstart](#quickstart)
+* [SVTK](#svtk)
 * [Pipeline Overview](#overview)
     * [Cohort mode](#cohort-mode)
     * [Single-sample mode](#single-sample-mode)
@@ -157,6 +158,13 @@ We recommend running the pipeline on a dedicated [Cromwell](https://github.com/b
 ```
 
 where `cromwell_config.json` is a Cromwell [workflow options file](https://cromwell.readthedocs.io/en/stable/wf_options/Overview/). Note users will need to re-populate batch/sample-specific parameters (e.g. BAMs and sample IDs).
+
+## <a name="svtk">SVTK</a>
+SVTK is a library bundled into the repository that provides command-line functionality for various Structural Variant analysis processes. 
+
+Once in the source directory, SVTK can be installed through a couple of different ways:
+* `pip install ./src/svtk`: Installs it into your Python environment.
+* `pip install -e ./src/svtk`: Installs it into your Python environment through edit mode, which allows for real-time changes to the library code to be reflected in its use. This is ideal if you plan to modify the source library itself.
 
 ## <a name="overview">Pipeline Overview</a>
 The pipeline consists of a series of modules that perform the following:
