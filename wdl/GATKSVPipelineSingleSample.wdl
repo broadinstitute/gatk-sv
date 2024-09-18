@@ -671,6 +671,7 @@ workflow GATKSVPipelineSingleSample {
       counts=[case_counts_file_],
       run_ploidy = false,
       wgd_scoring_mask=wgd_scoring_mask,
+      allosome_contigs=allosome_file,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,

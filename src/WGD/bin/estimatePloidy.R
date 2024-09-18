@@ -26,7 +26,7 @@ readMatrix <- function(INFILE){
 #############################################################
 #####Helper function to normalize contigs for a single sample
 #############################################################
-normalizeContigsPerSample <- function(mat, exclude=c("chrX", "chrY"), ploidy=2){
+normalizeContigsPerSample <- function(mat, exclude, ploidy=2){
   #Convert vals to numeric
   mat[, -c(1:3)] <- apply(mat[, -c(1:3)], 2, as.numeric)
 
@@ -53,7 +53,7 @@ normalizeContigsPerSample <- function(mat, exclude=c("chrX", "chrY"), ploidy=2){
 ###########################################################################
 #####Helper function to remove rows where >X% of samples have <=Y% coverage
 ###########################################################################
-filterZeroBins <- function(mat, exclude=c("chrX", "chrY"), minSamp=0.8, minCov=0.2){
+filterZeroBins <- function(mat, exclude, minSamp=0.8, minCov=0.2){
   #Convert vals to numeric
   mat[, -c(1:3)] <- apply(mat[, -c(1:3)], 2, as.numeric)
 
@@ -74,7 +74,7 @@ filterZeroBins <- function(mat, exclude=c("chrX", "chrY"), minSamp=0.8, minCov=0
 ##################################################
 #####Helper function to run PCA on a binCov matrix
 ##################################################
-binCovPCA <- function(dat, exclude=c("chrX", "chrY"), topPCs=10){
+binCovPCA <- function(dat, exclude, topPCs=10){
   #Runs PCA
   PCA <- prcomp(dat[which(!(dat[, 1] %in% exclude)), -c(1:3)], center=T, scale=T)
 
@@ -961,6 +961,9 @@ option_list <- list(
   make_option(c("--maxBatch"), type="integer", default=150, 
               help="maximum number of samples per batch (requires -k) [default: %default]", 
               metavar="integer")
+  make_option(c("--allosomes"), type="character", default=NULL,
+              help="file with allosome contigs, one per line",
+              metavar="character")
 )
 
 #Get command-line arguments & options
@@ -986,6 +989,7 @@ nPCs <- args$options$dimensions
 batch.ideal <- args$options$batchSize
 batch.min <- args$options$minBatch
 batch.max <- args$options$batchMax
+allosomes <- if (is.null(args$options$allosomes)) c("chrX", "chrY") else trimws(readLines(args$options$allosomes))
 
 # ##Jan 2020 dev parameters (on local machine)
 # # INFILE <- "/Users/rlc/scratch/1KGP_2504_sub_batch_10_ploidy_matrix.bed.gz"
@@ -1007,8 +1011,8 @@ if(!dir.exists(OUTDIR)){
 #####PART 1: DATA PROCESSING#####
 #Read, normalize, and clean coverage data
 dat <- readMatrix(INFILE)
-dat <- normalizeContigsPerSample(dat, exclude=c("chrX", "chrY"), ploidy=2)
-dat <- filterZeroBins(dat)
+dat <- normalizeContigsPerSample(dat, exclude=allosomes, ploidy=2)
+dat <- filterZeroBins(dat, exclude=allosomes)
 chr.dat <- medianPerContigPerSample(dat)
 # chr.dat.norm <- normalizeContigsPerMatrix(chr.dat, scale.exclude=c("X", "Y"))
 
@@ -1016,7 +1020,7 @@ chr.dat <- medianPerContigPerSample(dat)
 #Only run if kmeans is optioned
 if(kmeans==T){
   #Perform PCA on full matrix
-  PCs <- binCovPCA(dat, exclude=c("chrX", "chrY"), topPCs=nPCs)
+  PCs <- binCovPCA(dat, exclude=allosomes, topPCs=nPCs)
 
   #Cluster samples based on dosage PCA
   #Note: tries this with seeds 1-100 (iterated sequentially) until first success
@@ -1193,7 +1197,7 @@ binwise.dat <- data.frame(colnames(dat)[-c(1:3)],
 bin.IDs <- as.character(apply(dat[1:3], 1, paste, collapse="_", sep=""))
 bin.IDs <- as.character(sapply(bin.IDs, function(ID){gsub(" ", "", ID, fixed=T)}))
 colnames(binwise.dat) <- c("ID", bin.IDs)
-sapply(setdiff(unique(dat[, 1]), c("chrX", "chrY")), function(contig){
+sapply(setdiff(unique(dat[, 1]), allosomes), function(contig){
   png(paste(OUTDIR, "/estimated_CN_per_bin.all_samples.", contig, ".png", sep=""), 
       height=1250, width=2500, res=300)
   plot.dat <- binwise.dat[, c(1, which(dat[, 1]==contig)+1)]
@@ -1209,7 +1213,7 @@ colnames(binwise.dat.males) <- c("ID", bin.IDs)
 binwise.dat.females <- data.frame(chr.dat.females$ID, 
                                 t(dat[, which(colnames(dat) %in% chr.dat.females$ID)]))
 colnames(binwise.dat.females) <- c("ID", bin.IDs)
-sapply(intersect(unique(dat[, 1]), c("chrX", "chrY")), function(contig){
+sapply(intersect(unique(dat[, 1]), allosomes), function(contig){
   #Males
   png(paste(OUTDIR, "/estimated_CN_per_bin.chrX_lessThan_2copies.", contig, ".png", sep=""), 
       height=1250, width=2500, res=300)

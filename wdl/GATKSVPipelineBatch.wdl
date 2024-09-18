@@ -178,6 +178,7 @@ workflow GATKSVPipelineBatch {
       genome_file=genome_file,
       counts=counts_files_,
       run_ploidy = false,
+      allosome_contigs=allosome_file,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
