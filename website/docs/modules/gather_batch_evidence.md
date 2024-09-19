@@ -103,13 +103,7 @@ The workflow needs the following cn.MOPS files.
 
 - `cnmops_chrom_file` and `cnmops_allo_file`: FASTA index files (`.fai`) for respectively 
   non-sex chromosomes (autosomes) and chromosomes X and Y (allosomes). 
-  The content of the files may read as the following, 
-  and the format is explained [on this page](https://www.htslib.org/doc/faidx.html).
-
-  ```bash
-  chrX    156040895       2903754205      100     101
-  chrY    57227415        3061355656      100     101
-  ```
+  The file format is explained [on this page](https://www.htslib.org/doc/faidx.html).
 
   You may use the following files for these fields:
 
@@ -142,8 +136,8 @@ and
 
 #### Docker images
 
-The workflow needs the following Docker images, which you may find a link to their 
-latest images from [this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json).
+The workflow needs the following Docker images, the latest versions of which are in 
+[this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json).
 
   - `cnmops_docker`;
   - `condense_counts_docker`;

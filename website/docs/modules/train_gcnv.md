@@ -22,12 +22,12 @@ library preparation protocol, sequencer, sequencing center, and etc.
 
 For small, relatively homogeneous cohorts, a single gCNV model is usually sufficient. 
 However, for larger cohorts, especially those with multiple data sources, 
-it is necessary to train a separate model for each batch or group of batches 
-with a similar dosage score (WGD). 
+we recommend training a separate model for each batch or group of batches (see 
+[batching section](/docs/run/joint#batching) for details).
 The model can be trained on all or a subset of the samples to which it will be applied. 
-A subset of 100 randomly selected samples from the batch is a reasonable 
-input size for training the model; also, the `TrainGCNV` workflow can automatically select 
-a given number of random samples through the `n_samples_subsample` parameter.
+A subset of 100 randomly selected samples from the batch is a reasonable
+input size for training the model; when the `n_samples_subsample` input is provided, 
+the `TrainGCNV` workflow can automatically perform this random selection.
 
 The following diagram illustrates the upstream and downstream workflows of the `TrainGCNV` workflow 
 in the recommended invocation order. You may refer to 
@@ -75,32 +75,9 @@ A list of per-sample coverage counts generated in the [GatherSampleEvidence](./g
 #### `contig_ploidy_priors`
 A tabular file with ploidy prior probability per contig.
 You may find the link to this input from 
-[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
-
-
-<details>
-  <summary>File description</summary>
-  <p>
-    This is a tabular file with the following columns: 
-    <code>CONTIG_NAME</code>, <code>PLOIDY_PRIOR_0</code>, <code>PLOIDY_PRIOR_1</code>, 
-    <code>PLOIDY_PRIOR_2</code>, <code>PLOIDY_PRIOR_3</code>.
-  </p>
-  <p>
-    The <code>CONTIG_NAME</code> column lists contigs (e.g., <code>chr1</code>, <code>chrX</code>, 
-    <code>chrY</code>, or <code>chrM</code>). 
-    The <code>PLOIDY_PRIOR</code> columns refer to the copy number of the contig of interest 
-    and represent the prior probability that the contig takes on that copy number in any given sample. 
-    The values in each row should sum to one. 
-    This file primarily specifies the sex chromosomes and the expected counts of <code>chrX</code> and 
-    <code>chrY</code> for males and females. 
-    For humans, autosomes are most likely to have a ploidy of 2, 
-    though zero, one, or three copies are also possible but unlikely. 
-    For <code>chrX</code>, ploidy 1 or 2 are equally likely, meaning no assumptions are made about the sample's sex, 
-    and this tool often helps determine it. Please refer 
-    to <a href="https://gatk.broadinstitute.org/hc/en-us/community/posts/360074399831-What-is-contig-ploidy-priors-table-and-how-to-make-it">this page</a> for 
-    more details.
-  </p>
-</details>
+[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json)
+and a description to the file format 
+[here](https://gatk.broadinstitute.org/hc/en-us/articles/360037224772-DetermineGermlineContigPloidy).
 
 
 #### `reference_fasta`
