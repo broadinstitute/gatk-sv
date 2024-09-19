@@ -121,6 +121,7 @@ workflow CombineBatches {
       input:
         vcf=reformatted_vcf,
         ploidy_table=CreatePloidyTableFromPed.out,
+        args="--fix-end",
         output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_reformat_2

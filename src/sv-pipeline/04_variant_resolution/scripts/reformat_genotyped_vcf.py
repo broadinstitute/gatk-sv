@@ -61,7 +61,7 @@ def valid_coord(chrom, coord, ref_contig_length_dict):
 
 
 def get_startswith_match_in_list(substr, str_list):
-    matches = [t for t in str_list if t.startswith(substr)]
+    matches = [t.replace(substr, '') for t in str_list if t.startswith(substr)]
     if len(matches) == 0:
         return None
     elif len(matches) == 1:
@@ -77,7 +77,7 @@ def valid_record_coordinates(record_tokens, ref_contig_length_dict):
     chrom = record_tokens[0]
     pos = int(record_tokens[1])
     info_tokens = record_tokens[7].split(';')
-    end = get_startswith_match_in_list("CHR2=", info_tokens)
+    end = get_startswith_match_in_list("END=", info_tokens)
     if end is not None:
         end = int(end)
     chr2 = get_startswith_match_in_list("CHR2=", info_tokens)
@@ -115,6 +115,7 @@ def process_record(record, drop_invalid_coords, ref_contig_length_dict):
     record_tokens = str(record).strip().split('\t')
     if drop_invalid_coords:
         if not valid_record_coordinates(record_tokens=record_tokens, ref_contig_length_dict=ref_contig_length_dict):
+            logging.warning(f"Dropping record {record_tokens[2]}")
             return None
     format_keys = record_tokens[8].split(':')
     gt_index = format_keys.index('GT')
