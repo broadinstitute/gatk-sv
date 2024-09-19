@@ -1132,9 +1132,6 @@ runRdTest<-function(bed)
 
   }
 
-  cnv_matrix<-loadResult[["cnv_matrix"]]
-  raw_cov<-loadResult[["raw_cov"]]
-
   if (cnv_matrix[1]=="Failure") {
     ##assign genotype if no coverage##
     if (opt$rungenotype == TRUE && !is.null(opt$SampleIncludeList)) {
