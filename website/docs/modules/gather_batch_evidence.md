@@ -112,10 +112,9 @@ The workflow needs the following cn.MOPS files.
   "cnmops_allo_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai"
   ```
   
-- `cnmops_exclude_list`: You may use the following file for this field.
-  ```
-  gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed
-  ```
+- `cnmops_exclude_list`: 
+  You may use [this file](https://github.com/broadinstitute/gatk-sv/blob/d66f760865a89f30dbce456a3f720dec8b70705c/inputs/values/resources_hg38.json#L10)
+  for this field.
 
 #### GATK-gCNV inputs
 
