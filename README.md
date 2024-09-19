@@ -125,14 +125,6 @@ Example workflow inputs can be found in `/inputs`. Build using `scripts/inputs/b
 generates input jsons in `/inputs/build`. Except the MELT docker image, all required resources are available in public 
 Google buckets. 
 
-Some workflows require a Google Cloud Project ID to be defined in a cloud environment parameter group. Workspace builds 
-require a Terra billing project ID as well. An example is  provided at `/inputs/values/google_cloud.json` but should 
-not be used, as modifying this file will cause tracked changes in the repository. Instead, create a copy in the same 
-directory with the format `google_cloud.my_project.json` and modify as necessary.
-
-Note that these inputs are required only when certain data are located in requester pays buckets. If this does not 
-apply, users may use placeholder values for the cloud configuration and simply delete the inputs manually.
-
 #### MELT
 **Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
 
@@ -150,8 +142,7 @@ We recommend running the pipeline on a dedicated [Cromwell](https://github.com/b
 > cp $GATK_SV_ROOT/wdl/*.wdl .
 > zip dep.zip *.wdl
 > cd ..
-> echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT -c google_cloud.my_project
+> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT
 > cp $GATK_SV_ROOT/inputs/build/ref_panel_1kg/test/GATKSVPipelineBatch/GATKSVPipelineBatch.json GATKSVPipelineBatch.my_run.json
 > cromshell submit wdl/GATKSVPipelineBatch.wdl GATKSVPipelineBatch.my_run.json cromwell_config.json wdl/dep.zip
 ```
@@ -231,14 +222,12 @@ Here is an example of how to generate workflow input jsons from `GATKSVPipelineB
     --final-workflow-outputs-dir gs://my-outputs-bucket \
     metadata.json \
     > inputs/values/my_ref_panel.json
-> # Define your google project id (for Cromwell inputs) and Terra billing project (for workspace inputs)
-> echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-> # Build test files for batched workflows (google cloud project id required)
+> # Build test files for batched workflows
 > python scripts/inputs/build_inputs.py \
     inputs/values \
     inputs/templates/test \
     inputs/build/my_ref_panel/test \
-    -a '{ "test_batch" : "ref_panel_1kg", "cloud_env": "google_cloud.my_project" }'
+    -a '{ "test_batch" : "ref_panel_1kg" }'
 > # Build test files for the single-sample workflow
 > python scripts/inputs/build_inputs.py \
     inputs/values \
