@@ -164,6 +164,7 @@ workflow CombineBatches {
         ploidy_table=CreatePloidyTableFromPed.out,
         output_prefix="~{cohort_name}.combine_batches.~{contig}.cluster_sites",
         fast_mode=false,
+        breakpoint_summary_strategy="REPRESENTATIVE",
         pesr_sample_overlap=0.5,
         pesr_interval_overlap=0.1,
         pesr_breakend_window=300,
@@ -233,6 +234,7 @@ workflow CombineBatches {
         stratification_config=stratification_config_part1,
         context_bed_files=context_bed_files,
         context_names=context_names,
+        breakpoint_summary_strategy="REPRESENTATIVE",
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_recluster_part1
@@ -269,6 +271,7 @@ workflow CombineBatches {
         stratification_config=stratification_config_part2,
         context_bed_files=context_bed_files,
         context_names=context_names,
+        breakpoint_summary_strategy="REPRESENTATIVE",
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_recluster_part2
@@ -381,6 +384,7 @@ task GroupedSVClusterTask {
     Int context_num_breakpoint_overlaps = 1
     Int context_interchrom_num_breakpoint_overlaps = 1
 
+    String? breakpoint_summary_strategy
     String? contig
     String? additional_args
 
@@ -438,6 +442,7 @@ task GroupedSVClusterTask {
       --stratify-overlap-fraction ~{context_overlap_frac} \
       --stratify-num-breakpoint-overlaps ~{context_num_breakpoint_overlaps} \
       --stratify-num-breakpoint-overlaps-interchromosomal ~{context_interchrom_num_breakpoint_overlaps} \
+      ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
       ~{additional_args}
   >>>
   runtime {
