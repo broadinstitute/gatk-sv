@@ -17,6 +17,7 @@ workflow TinyResolve {
     String linux_docker
     RuntimeAttr? runtime_attr_resolve
     RuntimeAttr? runtime_attr_untar
+    RuntimeAttr? runtime_attr_concattars
   }
 
   scatter (disc in discfile) {
@@ -73,6 +74,7 @@ workflow TinyResolve {
       input:
         raw_vcfs=GetShardVcfs.shard_items,
         samples=GetShardSamples.shard_items,
+        shard_number = i,
         sv_pipeline_docker = sv_pipeline_docker,
         cytoband=cytoband,
         cytoband_idx=cytoband_idx,
@@ -83,9 +85,17 @@ workflow TinyResolve {
     }
   }
 
+  call ConcatTars {
+    input:
+      manta_tloc_tars=ResolveManta.manta_tloc_tar,
+      manta_unresolved_tars=ResolveManta.manta_unresolved_tar,
+      linux_docker=linux_docker,
+      runtime_attr_override=runtime_attr_concattars
+  }
+
   output {
-    Array[File] tloc_manta_vcf = flatten(ResolveManta.tloc_vcf)
-    Array[File] unresolved_manta_vcf = flatten(ResolveManta.unresolved_vcf)
+    File manta_tloc_tar = ConcatTars.manta_tloc_tar
+    File manta_unresolved_tar = ConcatTars.manta_unresolved_tar
   }
 }
 
@@ -95,6 +105,7 @@ task ResolveManta {
     Array[File] raw_vcfs
     Array[String] samples
     File cytoband_idx
+    Int shard_number
     Array[File] discfile
     Array[File] discfile_idx
     File cytoband
@@ -132,11 +143,15 @@ task ResolveManta {
       bgzip manta.unresolved.vcf
       mv manta.unresolved.vcf.gz ${sample_no}.${sample_id}.manta.unresolved.vcf.gz
     done
+    find . -type f -name '*.complex.vcf.gz' \
+      | tar --create --file='manta_tloc_~{shard_number}.tar' --files-from=-
+    find . -type f -name '*.unresolved.vcf.gz' \
+      | tar --create --file='manta_unresolved_~{shard_number}.tar' --files-from=-
   >>>
 
   output {
-    Array[File] tloc_vcf = glob("tloc_*complex.vcf.gz")
-    Array[File] unresolved_vcf = glob("*unresolved.vcf.gz")
+    File manta_tloc_tar = 'manta_tloc_${shard_number}.tar'
+    File manta_unresolved_tar = 'manta_unresolved_${shard_number}.tar'
   }
   
   runtime {
@@ -147,5 +162,58 @@ task ResolveManta {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task ConcatTars {
+  input {
+    Array[File] manta_tloc_tars
+    Array[File] manta_unresolved_tars
+    String linux_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.0,
+    disk_gb: ceil(3 * (size(manta_tloc_tars, "GB") + size(manta_unresolved_tars, "GB"))),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  
+  command <<<
+    set -o errexit
+    set -o pipefail
+    set -o nounset
+
+    mkdir manta_tloc
+    while read -r tl; do
+      tar --extract --file "${tl}" --directory manta_tloc
+    done < '~{write_lines(manta_tloc_tars)}'
+    tar --create --gzip --file manta_tloc.tar.gz manta_tloc
+    rm -rf manta_tloc
+
+    mkdir manta_unresolved
+    while read -r ur; do
+      tar --extract --file "${ur}" --directory manta_unresolved
+    done < '~{write_lines(manta_unresolved_tars)}'
+    tar --create --gzip --file manta_unresolved.tar.gz manta_unresolved
+  >>>
+
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: linux_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+
+  output {
+    File manta_tloc_tar = 'manta_tloc.tar.gz'
+    File manta_unresolved_tar = 'manta_unresolved.tar.gz'
   }
 }

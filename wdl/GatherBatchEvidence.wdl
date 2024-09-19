@@ -505,8 +505,8 @@ workflow GatherBatchEvidence {
     File? BAF_stats = MatrixQC.BAF_stats
     File? Matrix_QC_plot = MatrixQC.QC_plot
     
-    Array[File]? manta_tloc = TinyResolve.tloc_manta_vcf
-    Array[File]? manta_unresolved = TinyResolve.unresolved_manta_vcf
+    File? manta_tloc_tar = TinyResolve.tloc_manta_tar
+    File? manta_unresolved_tar = TinyResolve.unresolved_manta_tar
 
     File? metrics_file_batchevidence = GatherBatchEvidenceMetrics.metrics_file
   }
