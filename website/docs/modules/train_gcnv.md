@@ -15,7 +15,8 @@ module trains a gCNV model for use in the [GatherBatchEvidence](./gbe) workflow.
 The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
 
 
-The samples used for training should be homogeneous and similar 
+The samples used for training should be homogeneous (concerning sequencing platform, 
+coverage, library preparation, etc.) and similar 
 to the samples on which the model will be applied in terms of sample type, 
 library preparation protocol, sequencer, sequencing center, and etc.
 
