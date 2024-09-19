@@ -319,8 +319,7 @@ removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
 }
 
 loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargevariantsize,
-                     vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, 
-                     poorbincov=NULL, raw_cov=NULL)
+                     vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, poorbincov=NULL, raw_cov=NULL)
   {
     if (is.null(raw_cov)) {
       if (end - start > verylargevariantsize) {
