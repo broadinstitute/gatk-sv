@@ -57,12 +57,6 @@ task RdTest {
     RuntimeAttr? runtime_attr_override
   }
 
-  parameter_meta {
-    coveragefile: {
-      localization_optional: true
-    }
-  }
-
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
     mem_gb: 3.75,
@@ -111,12 +105,6 @@ task RemoteTabixRdMetrics {
     File sample_batch_list
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    coveragefile: {
-      localization_optional: true
-    }
   }
 
   RuntimeAttr default_attr = object {
@@ -169,12 +157,6 @@ task CollectRdMedian {
     File sample_batch_list
     String sv_pipeline_base_docker
     RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    coveragefile: {
-      localization_optional: true
-    }
   }
 
   RuntimeAttr default_attr = object {
