@@ -79,7 +79,7 @@ task RdTest {
 
     mkdir rd_Plots/
     tar zxvf ~{rd_metrics_folder}
-    Rscript ~{Rdtet_V2_script} \
+    Rscript ~{Rdtest_V2_script} \
       -b ~{rdtest_bed} \
       -m ~{rd_median_file} \
       -c rd_metrics_folder/ \
