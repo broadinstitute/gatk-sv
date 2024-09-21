@@ -1,8 +1,4 @@
-#this script is developed to fix false postiive inversions in gnomad v3 vcf that are >1Mb in size but have PE_GT=0
-#INVs with no passing samples have filter column revised from "PASS" to "UNRESOLVED"
-
-#developing workdir on erisone: /data/talkowski/xuefang/data/gnomad_V3/module08/step9_sm_depyh_only_dup_fix
-
+#script to generate rdplots across multiple batches
 version 1.0
 
 import "Structs.wdl"
@@ -11,6 +7,7 @@ workflow RdTestMultiBatches {
 
 	input{
 		File rdtest_bed
+		String prefix
 		File sample_batch_list
 		File Rdtest_V2_script
 		String sv_pipeline_base_docker
@@ -35,6 +32,7 @@ workflow RdTestMultiBatches {
 	call RdTest{
 		input:
 			rdtest_bed = rdtest_bed,
+ 			prefix = prefix,
 			rd_metrics_folder = RemoteTabixRdMetrics.rd_metrics_folder,
 			rd_median_file = CollectRdMedian.rd_median_file,
 			Rdtest_V2_script  = Rdtest_V2_script,
@@ -50,6 +48,7 @@ workflow RdTestMultiBatches {
 task RdTest {
   input {
     File rdtest_bed
+    String prefix
     File rd_metrics_folder
     File rd_median_file
     File Rdtest_V2_script
@@ -71,21 +70,21 @@ task RdTest {
   Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
   output {
-    File rd_Plots = "rd_Plots.tar.gz"
+    File rd_plots = "~{prefix}.tar.gz"
   }
   command <<<
 
     set -euo pipefail
 
-    mkdir rd_Plots/
+    mkdir rd_plots/
     tar zxvf ~{rd_metrics_folder}
     Rscript ~{Rdtest_V2_script} \
       -b ~{rdtest_bed} \
       -m ~{rd_median_file} \
       -c rd_metrics_folder/ \
       -p TRUE \
-      -o rd_Plots/
-    tar czvf rd_Plots.tar.gz rd_Plots
+      -o rd_plots/
+    tar czvf ~{prefix}.tar.gz rd_plots
 
    >>>
   runtime {
