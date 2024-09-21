@@ -130,9 +130,13 @@ task RemoteTabixRdMetrics {
 
     cut -f5 ~{rdtest_bed} | sed -e 's/,/\n/g' | sort | uniq > sample_list
     grep -wf sample_list ~{sample_batch_list} | cut -f2 | sort | uniq > batch_list
+    awk '{print $1, $2-100000, $3+100000}' ~{rdtest_bed} | sed -e 's/ /\t/g' | sort -k1,1 -k2,2n | bedtools merge -i - > rdtest.bed
     mkdir rd_metrics_folder/
+    
     #paste -d ' ' <(sed -e "s/^/    tabix -h -R /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') | sed -e 's/^/GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \ \\\n/' > remote_tabix.sh
-    paste -d ' ' <(sed -e "s/^/tabix -h -R /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') > remote_tabix.sh
+
+    paste -d ' ' <(sed -e "s/^/tabix -h -R rdtest.bed /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') > remote_tabix.sh
+
     bash remote_tabix.sh
     ls rd_metrics_folder/*gz | sed -e 's/^/tabix -e 2 -b 2 /' remote_tabix.sh > index_remote_tabix.sh
     bash index_remote_tabix.sh
