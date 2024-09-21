@@ -181,7 +181,7 @@ task CollectRdMedian {
     cut -f5 ~{rdtest_bed} | sed -e 's/,/\n/g' | sort | uniq > sample_list
     grep -wf sample_list ~{sample_batch_list} | cut -f3 | sort | uniq > batch_median_list
     mkdir rd_median_folder
-    sed -e 's/^/gsutil cp /' | sed -e 's/$/ .\/rd_median_folder\//' > download_batch_median_list.sh
+    sed -e 's/^/gsutil cp /' batch_median_list | sed -e 's/$/ .\/rd_median_folder\//' > download_batch_median_list.sh
     bash download_batch_median_list.sh
     paste rd_median_folder/* > rd_median.txt
  
