@@ -58,8 +58,8 @@ task RdTest {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1, 
-    mem_gb: 3.75,
-    disk_gb: 10,
+    mem_gb: ceil(3 + size(rd_metrics_folder, "GB") * 5),
+    disk_gb: ceil(10 + size(rd_metrics_folder, "GB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
@@ -83,7 +83,8 @@ task RdTest {
       -m ~{rd_median_file} \
       -c rd_metrics_folder/ \
       -p TRUE \
-      -o rd_plots/
+      -o rd_plots/ \
+      -s 10000000000
     tar czvf ~{prefix}.tar.gz rd_plots
 
    >>>
