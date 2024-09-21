@@ -14,11 +14,12 @@ workflow RdTestMultiBatchesWrapper {
 
 	scatter (i in range(length(rdtest_bed_list))){
 		call rdtest_multi_batches.RdTestMultiBatches{
-			rdtest_bed = rdtest_bed_list[i],
-			prefix = prefix_list[i],
-			sample_batch_list = sample_batch_list,
-			Rdtest_V2_script = Rdtest_V2_script,
-			sv_pipeline_base_docker = sv_pipeline_base_docker
+			input:
+				rdtest_bed = rdtest_bed_list[i],
+				prefix = prefix_list[i],
+				sample_batch_list = sample_batch_list,
+				Rdtest_V2_script = Rdtest_V2_script,
+				sv_pipeline_base_docker = sv_pipeline_base_docker
 		}
 	}
 
