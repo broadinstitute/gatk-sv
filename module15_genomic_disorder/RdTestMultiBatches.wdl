@@ -41,7 +41,7 @@ workflow RdTestMultiBatches {
 	}
 
   output{
-    File rd_plot_tarball = RdTest.rd_Plots
+    File rd_plot_tarball = RdTest.rd_plots
   }
 }
 
