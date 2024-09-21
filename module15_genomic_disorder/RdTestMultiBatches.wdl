@@ -135,7 +135,7 @@ task RemoteTabixRdMetrics {
     
     #paste -d ' ' <(sed -e "s/^/    tabix -h -R /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') | sed -e 's/^/GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \ \\\n/' > remote_tabix.sh
 
-    paste -d ' ' <(sed -e "s/^/tabix -h -R rdtest.bed /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') > remote_tabix.sh
+    paste -d ' ' <(sed -e "s/^/tabix -h -R rdtest.bed /" batch_list | sed -e 's/$/ | bgzip -c >/') <(sed -e 's/\//\t/g' batch_list | awk '{print $NF}' | sed -e 's/^/rd_metrics_folder\//') | sed -e 's/^/GCS_OAUTH_TOKEN=`gcloud auth application-default print-access-token` \ \\\n/' > remote_tabix.sh
 
     bash remote_tabix.sh
     ls rd_metrics_folder/*gz | sed -e 's/^/tabix -e 2 -b 2 /' remote_tabix.sh > index_remote_tabix.sh
