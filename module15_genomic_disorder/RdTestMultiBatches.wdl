@@ -47,6 +47,64 @@ workflow RdTestMultiBatches {
   }
 }
 
+task RdTest {
+  input {
+    File rdtest_bed
+    File rd_metrics_folder
+    File rd_median_file
+    File Rdtest_V2_script
+    String sv_pipeline_base_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    coveragefile: {
+      localization_optional: true
+    }
+  }
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1, 
+    mem_gb: 3.75,
+    disk_gb: 10,
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+
+  output {
+    File rd_Plots = "rd_Plots.tar.gz"
+  }
+  command <<<
+
+    set -euo pipefail
+
+    mkdir rd_Plots/
+    tar zxvf ~{rd_metrics_folder}
+    Rscript ~{Rdtet_V2_script} \
+      -b ~{rdtest_bed} \
+      -m ~{rd_median_file} \
+      -c rd_metrics_folder/ \
+      -p TRUE \
+      -o rd_Plots/
+    tar czvf rd_Plots.tar.gz rd_Plots
+
+   >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: mem_gb + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_pipeline_base_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
 task RemoteTabixRdMetrics {
   input {
     File rdtest_bed
@@ -153,64 +211,6 @@ task CollectRdMedian {
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
     docker: sv_pipeline_rdtest_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-task RdTest {
-  input {
-    File rdtest_bed
-    File rd_metrics_folder
-    File rd_median_file
-    File Rdtest_V2_script
-    String sv_pipeline_base_docker
-    RuntimeAttr? runtime_attr_override
-  }
-
-  parameter_meta {
-    coveragefile: {
-      localization_optional: true
-    }
-  }
-
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 3.75,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-  Float mem_gb = select_first([runtime_attr.mem_gb, default_attr.mem_gb])
-  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
-
-  output {
-    File rd_Plots = "rd_Plots.tar.gz"
-  }
-  command <<<
-
-    set -euo pipefail
-
-    mkdir rd_Plots/
-    tar zxvf ~{rd_metrics_folder}
-    Rscript ~{Rdtet_V2_script} \
-    	-b ~{rdtest_bed} \
-    	-m ~{rd_median_file} \
-    	-c rd_metrics_folder/ \
-    	-p TRUE \
-    	-o rd_Plots/
-    tar czvf rd_Plots.tar.gz rd_Plots
-
-   >>>
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: mem_gb + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_base_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
