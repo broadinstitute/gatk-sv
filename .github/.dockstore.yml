@@ -161,3 +161,12 @@ workflows:
         - main
       tags:
         - /.*/
+
+  - subclass: WDL
+    name: SingleSample
+    primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
