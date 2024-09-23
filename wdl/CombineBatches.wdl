@@ -55,7 +55,6 @@ workflow CombineBatches {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
-    RuntimeAttr? runtime_override_update_sr_list
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_reformat_1
     RuntimeAttr? runtime_attr_reformat_2
@@ -63,11 +62,10 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_cluster_sites
     RuntimeAttr? runtime_attr_recluster_part1
     RuntimeAttr? runtime_attr_recluster_part2
-    RuntimeAttr? runtime_override_subset_bothside_pass
-    RuntimeAttr? runtime_override_subset_background_fail
     RuntimeAttr? runtime_attr_get_non_ref_vids
     RuntimeAttr? runtime_attr_calculate_support_frac
     RuntimeAttr? runtime_override_clean_background_fail
+    RuntimeAttr? runtime_attr_extract_vids
     RuntimeAttr? runtime_override_concat
   }
 
@@ -123,6 +121,8 @@ workflow CombineBatches {
         ploidy_table=CreatePloidyTableFromPed.out,
         args="--fix-end",
         output_prefix=basename(vcf, ".vcf.gz") + ".reformat_gatk",
+        bothside_pass_list=CombineSRBothsidePass.out,
+        background_fail_list=CombineBackgroundFail.outfile,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_reformat_2
     }
@@ -183,44 +183,6 @@ workflow CombineBatches {
         runtime_attr_override=runtime_attr_cluster_sites
     }
 
-    #Subset bothside_pass & background_fail to chromosome of interest
-    call SubsetVariantList as SubsetBothsidePass {
-      input:
-        vid_list=CombineSRBothsidePass.out,
-        vid_col=2,
-        vcf=ClusterSites.out,
-        outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass.subset.list",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_subset_bothside_pass
-    }
-    call SubsetVariantList as SubsetBackgroundFail {
-      input:
-        vid_list=CombineBackgroundFail.outfile,
-        vid_col=1,
-        vcf=ClusterSites.out,
-        outfile_name="~{cohort_name}.combine_batches.~{contig}.sr_background_fail.subset.list",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_override_subset_background_fail
-    }
-
-    #Update SR background fail & bothside pass files (1)
-    call MiniTasks.UpdateSrList as UpdateBackgroundFail1 {
-      input:
-        vcf=ClusterSites.out,
-        original_list=SubsetBothsidePass.filtered_vid_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass1.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
-    }
-    call MiniTasks.UpdateSrList as UpdateBothsidePass1 {
-      input:
-        vcf=ClusterSites.out,
-        original_list=SubsetBackgroundFail.filtered_vid_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail1.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
-    }
-
     # Second round of clustering
     call GroupedSVClusterTask as GroupedSVClusterPart1 {
       input:
@@ -238,24 +200,6 @@ workflow CombineBatches {
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_recluster_part1
-    }
-
-    #Update SR background fail & bothside pass files (2)
-    call MiniTasks.UpdateSrList as UpdateBackgroundFail2 {
-      input:
-        vcf=GroupedSVClusterPart1.out,
-        original_list=UpdateBackgroundFail1.updated_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass2.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
-    }
-    call MiniTasks.UpdateSrList as UpdateBothsidePass2 {
-      input:
-        vcf=GroupedSVClusterPart1.out,
-        original_list=UpdateBothsidePass1.updated_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail2.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
     }
 
     # Third round of clustering
@@ -277,22 +221,13 @@ workflow CombineBatches {
         runtime_attr_override=runtime_attr_recluster_part2
     }
 
-    #Update SR background fail & bothside pass files (3)
-    call MiniTasks.UpdateSrList as UpdateBackgroundFail3 {
+    call ExtractSRVariantLists {
       input:
         vcf=GroupedSVClusterPart2.out,
-        original_list=UpdateBackgroundFail2.updated_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_bothside_pass3.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
-    }
-    call MiniTasks.UpdateSrList as UpdateBothsidePass3 {
-      input:
-        vcf=GroupedSVClusterPart2.out,
-        original_list=UpdateBothsidePass2.updated_list,
-        outfile="~{cohort_name}.combine_batches.~{contig}.sr_background_fail3.list",
-        sv_pipeline_docker=sv_pipeline_docker,
-        runtime_attr_override=runtime_override_update_sr_list
+        vcf_index=GroupedSVClusterPart2.out_index,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_attr_extract_vids
     }
   }
 
@@ -300,8 +235,8 @@ workflow CombineBatches {
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
       input:
-        vcfs=GroupedSVClusterPart2.out,
-        vcfs_idx=GroupedSVClusterPart2.out_index,
+        vcfs=ExtractSRVariantLists.vcf_out,
+        vcfs_idx=ExtractSRVariantLists.vcf_index_out,
         naive=true,
         outfile_prefix="~{cohort_name}.combine_batches.concat_all_contigs",
         sv_base_mini_docker=sv_base_mini_docker,
@@ -311,10 +246,10 @@ workflow CombineBatches {
 
   #Final outputs
   output {
-    Array[File] combined_vcfs = GroupedSVClusterPart2.out
-    Array[File] combined_vcf_indexes = GroupedSVClusterPart2.out_index
-    Array[File] cluster_background_fail_lists = UpdateBackgroundFail3.updated_list
-    Array[File] cluster_bothside_pass_lists = UpdateBothsidePass3.updated_list
+    Array[File] combined_vcfs = ExtractSRVariantLists.vcf_out
+    Array[File] combined_vcf_indexes = ExtractSRVariantLists.vcf_index_out
+    Array[File] cluster_background_fail_lists = ExtractSRVariantLists.high_sr_background_list
+    Array[File] cluster_bothside_pass_lists = ExtractSRVariantLists.bothsides_sr_support
     File? combine_batches_merged_vcf = ConcatVcfs.concat_vcf
     File? combine_batches_merged_vcf_index = ConcatVcfs.concat_vcf_idx
   }
@@ -322,12 +257,11 @@ workflow CombineBatches {
 
 
 # Find intersection of Variant IDs from vid_list with those present in vcf, return as filtered_vid_list
-task SubsetVariantList {
+task ExtractSRVariantLists {
   input {
-    File vid_list
-    Int vid_col
     File vcf
-    String outfile_name
+    File vcf_index
+    String output_prefix
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -336,7 +270,7 @@ task SubsetVariantList {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + size(vid_list, "GB") * 2.0 + size(vcf, "GB")),
+                                  disk_gb: ceil(10.0 + size(vcf, "GB") * 2.0),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -355,13 +289,18 @@ task SubsetVariantList {
 
   command <<<
     set -euo pipefail
-    bcftools query -f '[%MEMBERS\n]' ~{vcf} | tr ',' '\n' | sort -u > valid_vids.list
-    awk -F'\t' -v OFS='\t' 'ARGIND==1{inFileA[$1]; next} {if ($~{vid_col} in inFileA) print }' valid_vids.list ~{vid_list} \
-      > ~{outfile_name}
+    bcftools query -f '%ID\t%HIGH_SR_BACKGROUND\t%BOTHSIDES_SUPPORT\n' ~{vcf} > flags.txt
+    awk -F'\t' '($2 != "."){print $1}' flags.txt > ~{output_prefix}.high_sr_background.txt
+    awk -F'\t' '($3 != "."){print $1}' flags.txt > ~{output_prefix}.bothsides_sr_support.txt
+    bcftools annotate -x INFO/HIGH_SR_BACKGROUND,INFO/BOTHSIDES_SUPPORT ~{vcf} -Oz -o ~{output_prefix}.vcf.gz
+    tabix ~{output_prefix}.vcf.gz
   >>>
 
   output {
-    File filtered_vid_list = outfile_name
+    File high_sr_background_list = "~{output_prefix}.high_sr_background.txt"
+    File bothsides_sr_support = "~{output_prefix}.bothsides_sr_support.txt"
+    File vcf_out = "~{output_prefix}.vcf.gz"
+    File vcf_index_out = "~{output_prefix}.vcf.gz.tbi"
   }
 }
 

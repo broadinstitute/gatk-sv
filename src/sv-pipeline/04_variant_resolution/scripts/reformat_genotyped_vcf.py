@@ -23,6 +23,8 @@ EVIDENCE_LIST = [
     'RD,PE,SR'    # 7
 ]
 
+EV_FORMAT_HEADER = '##FORMAT=<ID=EV,Number=.,Type=String,Description="Classes of evidence supporting final genotype">'
+
 
 def get_new_header(header):
     header_list = str(header).split('\n')
@@ -30,7 +32,7 @@ def get_new_header(header):
     for line in header_list:
         if line.startswith('##FORMAT=<ID=EV,'):
             # Updates Number/Type
-            new_header_lines.append('##FORMAT=<ID=EV,Number=.,Type=String,Description="Classes of evidence supporting final genotype">')
+            new_header_lines.append(EV_FORMAT_HEADER)
         elif line.startswith('##INFO=<ID=MULTIALLELIC,'):
             # Remove MULTIALLELIC field (legacy)
             continue
@@ -42,11 +44,11 @@ def get_new_header(header):
             continue
         else:
             new_header_lines.append(line)
+    # Incorporate SR evidence flags
     new_header = pysam.VariantHeader()
     for s in header.samples:
         new_header.add_sample(s)
     for line in new_header_lines:
-        print(line)
         new_header.add_line(line)
     return new_header
 
@@ -158,7 +160,8 @@ def main():
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('vcf')
+    parser.add_argument("--vcf", type=str, required=True,
+                        help="Path to input VCF from GATK-SV GenotypeBatch module")
     parser.add_argument("--drop-invalid-coords", action='store_true',
                         help="Drop records with invalid coordinates, i.e. POS/END/END2 greater than chromosome length")
     parser.add_argument("--reference-fai", type=str, required=False,
@@ -168,6 +171,8 @@ def main():
 
     if args.drop_invalid_coords:
         ref_contig_length_dict = parse_reference_fai(args.reference_fai)
+    else:
+        ref_contig_length_dict = None
 
     with pysam.VariantFile(args.vcf) as vcf:
         new_header = get_new_header(vcf.header)

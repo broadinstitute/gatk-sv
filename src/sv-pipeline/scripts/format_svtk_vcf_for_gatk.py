@@ -5,7 +5,7 @@ import pysam
 import sys
 import gzip
 from math import floor
-from typing import Any, List, Text, Dict, Optional
+from typing import Any, List, Text, Dict, Optional, Set
 
 GQ_FIELDS = ["GQ", "PE_GQ", "SR_GQ", "RD_GQ"]
 
@@ -83,6 +83,8 @@ def update_header(header: pysam.VariantHeader) -> None:
     # Add these just in case (no effect if they exist)
     header.add_line('##INFO=<ID=END2,Number=1,Type=Integer,Description="Second position">')
     header.add_line('##INFO=<ID=CHR2,Number=1,Type=String,Description="Second contig">')
+    header.add_line('##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">')
+    header.add_line('##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">')
 
 
 def rescale_gq(record):
@@ -95,7 +97,9 @@ def rescale_gq(record):
 def convert(record: pysam.VariantRecord,
             bnd_end_dict: Optional[Dict[Text, int]],
             ploidy_dict: Dict[Text, Dict[Text, int]],
-            scale_down_gq: bool) -> pysam.VariantRecord:
+            scale_down_gq: bool,
+            bothside_pass_vid_set: Set[Text],
+            background_fail_vid_set: Set[Text]) -> pysam.VariantRecord:
     """
     Converts a record from svtk to gatk style. This includes updating END/END2 and adding
     necessary fields such as ECN.
@@ -110,6 +114,10 @@ def convert(record: pysam.VariantRecord,
         map from sample to contig to ploidy
     scale_down_gq: bool
         scale GQs to 0-99 range
+    bothside_pass_vid_set: Set[Text]
+        set of variant IDs with bothside SR pass flag
+    background_fail_vid_set: Set[Text]
+        set of variant Ids with background SR fail flag
 
     Returns
     -------
@@ -148,12 +156,24 @@ def convert(record: pysam.VariantRecord,
         val = record.info[k]
         if is_null(val) or (isinstance(val, tuple) and len(val) == 1 and is_null(val[0])):
             del record.info[k]
+    # Add SR flag to INFO field
+    if record.id in bothside_pass_vid_set:
+        record.info['BOTHSIDES_SUPPORT'] = True
+    if record.id in background_fail_vid_set:
+        record.info['HIGH_SR_BACKGROUND'] = True
     # copy FORMAT fields
     for sample, genotype in record.samples.items():
         genotype['ECN'] = ploidy_dict[sample][contig]
     if scale_down_gq:
         rescale_gq(record)
     return record
+
+
+def parse_vid_list(path):
+    if path is None:
+        return set()
+    with open(path) as f:
+        return set([line.strip() for line in f])
 
 
 def _process(vcf_in: pysam.VariantFile,
@@ -181,9 +201,14 @@ def _process(vcf_in: pysam.VariantFile,
         bnd_end_dict = None
     ploidy_dict = _parse_ploidy_table(arguments.ploidy_table)
 
+    bothside_pass_vid_set = parse_vid_list(arguments.bothside_pass_list)
+    background_fail_vid_set = parse_vid_list(arguments.background_fail_list)
+
     for record in vcf_in:
         out = convert(record=record, bnd_end_dict=bnd_end_dict,
-                      ploidy_dict=ploidy_dict, scale_down_gq=arguments.scale_down_gq)
+                      ploidy_dict=ploidy_dict, scale_down_gq=arguments.scale_down_gq,
+                      bothside_pass_vid_set=bothside_pass_vid_set,
+                      background_fail_vid_set=background_fail_vid_set)
         vcf_out.write(out)
 
 
@@ -206,6 +231,10 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Fix END tags and assign END2 to END")
     parser.add_argument("--scale-down-gq", action='store_true',
                         help="Scales all GQs down from [0-999] to [0-99]")
+    parser.add_argument("--bothside-pass-list", type=str,
+                        help="Path to bothside SR pass flag variant list")
+    parser.add_argument("--background-fail-list", type=str,
+                        help="Path to background SR fail flag variant list")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)

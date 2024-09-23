@@ -634,7 +634,7 @@ task ReformatGenotypedVcf {
   }
   command <<<
     set -euo pipefail
-    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/reformat_genotyped_vcf.py" script} ~{vcf} \
+    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/reformat_genotyped_vcf.py" script} --vcf ~{vcf} \
       | bgzip \
       > ~{output_prefix}.vcf.gz
     tabix ~{output_prefix}.vcf.gz
