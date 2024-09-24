@@ -1359,7 +1359,7 @@ intervals[, c(2:3)] <-
   })
 intervals <- data.frame(lapply(intervals, as.character), stringsAsFactors=FALSE)
 results<-alply(intervals,1,runRdTest)
-if(is.list(results)) {
+if(class(results)=="list") {
   results<-do.call(rbind,results)
 } else {
   results <- t(results)
