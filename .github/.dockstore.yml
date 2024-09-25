@@ -150,7 +150,6 @@ workflows:
     filters:
       branches: 
         - main
-        - kj/690_incorrect_mCNV_counts
       tags:
         - /.*/
 
