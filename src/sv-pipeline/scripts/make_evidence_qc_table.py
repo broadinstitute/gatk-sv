@@ -147,10 +147,10 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
         merged_dicts.update(counted)
     all_outliers = dict(merged_dicts)
     if len(all_outliers) == 0:
-        all_outliers_df = pd.DataFrame(columns=[ID_COL, outlier_type + "_overall_outliers"])
+        all_outliers_df = pd.DataFrame(columns=[ID_COL, "overall_" + outlier_type + "_outlier"])
     else:
         all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
-        all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
+        all_outliers_df.columns = [ID_COL, "overall_" + outlier_type + "_outlier"]
     return all_outliers_df
 
 

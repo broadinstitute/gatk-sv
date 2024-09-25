@@ -17,8 +17,6 @@ workflow MainVcfQc {
     File? ped_file
     File? list_of_samples_to_include
     File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
-    File? identify_duplicates_custom
-    File? merge_duplicates_custom
     Int max_trios = 1000
     String prefix
     Int sv_per_shard
@@ -286,7 +284,6 @@ workflow MainVcfQc {
         prefix=prefix,
         vcf=vcf,
         sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-        custom_script=identify_duplicates_custom,
         runtime_attr_override=runtime_override_identify_duplicates
     }
   }
@@ -298,7 +295,6 @@ workflow MainVcfQc {
       tsv_records=IdentifyDuplicates.duplicate_records,
       tsv_counts=IdentifyDuplicates.duplicate_counts,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
-      custom_script=merge_duplicates_custom,
       runtime_attr_override=runtime_override_merge_duplicates
   }
 
@@ -893,12 +889,8 @@ task IdentifyDuplicates {
     String prefix
     File vcf
     String sv_pipeline_qc_docker
-    File? custom_script
     RuntimeAttr? runtime_attr_override
   }
-
-  # File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
-  # File active_script = select_first([custom_script, default_script])
 
   String vcf_basename = basename(vcf, ".vcf.gz")
   String full_prefix = "~{prefix}.~{vcf_basename}"
@@ -928,7 +920,7 @@ task IdentifyDuplicates {
 
     echo "Processing ~{vcf} into ~{full_prefix}..."
 
-    python ~{custom_script} \
+    python opt/sv-pipeline/scripts/merge_duplicates.py \
       --vcf ~{vcf} \
       --fout ~{full_prefix}
 
@@ -949,12 +941,8 @@ task MergeDuplicates {
     Array[File] tsv_records
     Array[File] tsv_counts
     String sv_pipeline_qc_docker
-    File? custom_script
     RuntimeAttr? runtime_attr_override
   }
-
-  # File default_script = "/src/sv-pipeline/scripts/merge_duplicates.py"
-  # File active_script = select_first([custom_script, default_script])
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
@@ -981,7 +969,7 @@ task MergeDuplicates {
 
     echo "Merging all TSV files into one..."
 
-    python ~{custom_script} \
+    python opt/sv-pipeline/scripts/merge_duplicates.py \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
       --fout "~{prefix}.agg"

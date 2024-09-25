@@ -15,15 +15,6 @@ done
 WDL_FILENAME=$(basename "$WDL")
 WDL_NAME=${WDL_FILENAME%.*}
 
-CLOUD_ENV="$GATK_SV_ROOT/inputs/values/google_cloud.my_project.json"
-echo "CLOUD_ENV=$CLOUD_ENV"
-cat << EOF > "$CLOUD_ENV"
-{
-  "google_project_id": "broad-dsde-methods",
-  "terra_billing_project_id": "broad-dsde-methods"
-}
-EOF
-
 
 RUN_DIR="$GATK_SV_ROOT/runs/$WDL_NAME"
 DEPS_ZIP="$RUN_DIR/deps.zip"
@@ -34,10 +25,8 @@ zip "$DEPS_ZIP" *.wdl &> /dev/null
 cd "$GATK_SV_ROOT"
 "$GATK_SV_ROOT/scripts/inputs/build_default_inputs.sh" \
   -d "$GATK_SV_ROOT" \
-  -c google_cloud.my_project \
   > /dev/null
 
-rm -f $CLOUD_ENV
 
 echo "Available input jsons:"
 printf "%d\t%s\n" 0 "none (skip cromwell submit)"

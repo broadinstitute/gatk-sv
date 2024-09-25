@@ -5,6 +5,8 @@ sidebar_position: 2
 slug: eqc
 ---
 
+import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. 
 The results from this module can be used for QC and batching.
 
@@ -17,9 +19,36 @@ for further guidance on creating batches.
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
-### Prerequisites
+The following diagram illustrates the upstream and downstream workflows of the `EvidenceQC` workflow 
+in the recommended invocation order. You may refer to 
+[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
+for the overall recommended invocation order.
 
-- [Gather Sample Evidence](./gse)
+<br/>
+
+```mermaid
+
+stateDiagram
+  direction LR
+  
+  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
+  classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
+
+  gse: GatherSampleEvidence
+  eqc: EvidenceQC
+  batching: Batching, sample QC, and sex assignment
+  
+  gse --> eqc
+  eqc --> batching
+  
+  class eqc thisModule
+  class gse inModules
+  class batching outModules
+```
+
+<br/>
+
 
 ### Inputs
 

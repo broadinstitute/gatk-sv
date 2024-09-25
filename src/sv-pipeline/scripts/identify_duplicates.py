@@ -7,6 +7,7 @@ Identify and classify duplicated variants from an input VCF.
 
 from typing import List, Text, Optional
 from collections import defaultdict
+from itertools import groupby
 
 import argparse
 import sys
@@ -69,41 +70,42 @@ def process_duplicates(vcf, fout):
 
 def process_buffers(exact_buffer, ins_buffer, counts, f_records):
     # Process exact matches
-    exact_matches = defaultdict(list)
-    for key, record_id in exact_buffer:
-        exact_matches[key].append(record_id)
+    sorted_buffer = sorted(exact_buffer, key=lambda x: x[0])
+    exact_matches = {
+        key: [record for _, record in group] for key, group in groupby(sorted_buffer, key=lambda x: x[0])
+    }
 
     for records in exact_matches.values():
         if len(records) > 1:
             counts['Exact'] += 1
             f_records.write(f"Exact\t{','.join(sorted(records))}\n")
 
-    # Process INS matches
+    # Process insert matches
     for i in range(len(ins_buffer)):
         for j in range(i + 1, len(ins_buffer)):
             rec1, rec2 = ins_buffer[i], ins_buffer[j]
 
             # Size comparison
             if rec1[1] == rec2[1]:
-                counts['INS 100%'] += 1
-                f_records.write(f"INS 100%\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_size_similarity_100'] += 1
+                f_records.write(f"ins_size_similarity_100\t{rec1[0]},{rec2[0]}\n")
             elif abs(rec1[1] - rec2[1]) <= 0.5 * max(rec1[1], rec2[1]):
-                counts['INS 50%'] += 1
-                f_records.write(f"INS 50%\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_size_similarity_50'] += 1
+                f_records.write(f"ins_size_similarity_50\t{rec1[0]},{rec2[0]}\n")
             else:
-                counts['INS 0%'] += 1
-                f_records.write(f"INS 0%\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_size_similarity_0'] += 1
+                f_records.write(f"ins_size_similarity_0\t{rec1[0]},{rec2[0]}\n")
 
             # ALT comparison
             if rec1[2] == rec2[2]:
-                counts['INS ALT Identical'] += 1
-                f_records.write(f"INS ALT Identical\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_alt_identical'] += 1
+                f_records.write(f"ins_alt_identical\t{rec1[0]},{rec2[0]}\n")
             elif ('<INS>' in (rec1[2], rec2[2])) and ('<INS:' in (rec1[2] + rec2[2])):
-                counts['INS ALT Subtype'] += 1
-                f_records.write(f"INS ALT Subtype\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_alt_same_subtype'] += 1
+                f_records.write(f"ins_alt_same_subtype\t{rec1[0]},{rec2[0]}\n")
             elif rec1[2].startswith('<INS:') and rec2[2].startswith('<INS:') and rec1[2] != rec2[2]:
-                counts['INS ALT Different Subtype'] += 1
-                f_records.write(f"INS ALT Different Subtype\t{rec1[0]},{rec2[0]}\n")
+                counts['ins_alt_different_subtype'] += 1
+                f_records.write(f"ins_alt_different_subtype\t{rec1[0]},{rec2[0]}\n")
 
 
 def _parse_arguments(argv: List[Text]) -> argparse.Namespace:

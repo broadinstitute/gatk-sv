@@ -21,20 +21,10 @@ You may run the following commands to get these example inputs.
    git clone https://github.com/broadinstitute/gatk-sv && cd gatk-sv
     ```
 
-2. Create a JSON file containing the Terra billing project (for use on Terra) 
-   or the Google project ID (for use on Cromwell) that you will use to run 
-   the workflows with the test input. You may create this file by running
-   the following command and replacing `"my-google-project-id"` and 
-   `"my-terra-billing-project"` with your project and billing IDs. 
+2. Create test inputs.
 
     ```shell
-    echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-    ```
-
-3. Create test inputs.
-
-    ```shell
-    bash scripts/inputs/build_default_inputs.sh -d . -c google_cloud.my_project 
+    bash scripts/inputs/build_default_inputs.sh -d .
     ```
    
     Running this command generates test inputs in `gatk-sv/inputs/build` with the following structure. 
@@ -62,7 +52,7 @@ python scripts/inputs/build_inputs.py \
   inputs/values \
   inputs/templates/test/GATKSVPipelineSingleSample \
   inputs/build/NA19240/test \
-  -a '{ "test_batch" : "ref_panel_1kg", "cloud_env": "google_cloud.my_project" }'
+  -a '{ "test_batch" : "ref_panel_1kg" }'
 ```
 
 
@@ -98,24 +88,18 @@ Here is an example of how to generate workflow input jsons from `GATKSVPipelineB
       metadata.json \
       > inputs/values/my_ref_panel.json
    ```
-
-3. Define your google project id (for Cromwell inputs) and Terra billing project (for workspace inputs).
-
-   ```shell
-   echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-   ```
    
-4. Build test files for batched workflows (google cloud project id required).
+3. Build test files for batched workflows (google cloud project id required).
 
    ```shell
    python scripts/inputs/build_inputs.py \
       inputs/values \
       inputs/templates/test \
       inputs/build/my_ref_panel/test \
-      -a '{ "test_batch" : "ref_panel_1kg", "cloud_env": "google_cloud.my_project" }'
+      -a '{ "test_batch" : "ref_panel_1kg" }'
    ```
 
-5. Build test files for the single-sample workflow
+4. Build test files for the single-sample workflow
 
    ```shell
    python scripts/inputs/build_inputs.py \
@@ -125,7 +109,7 @@ Here is an example of how to generate workflow input jsons from `GATKSVPipelineB
        -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "my_ref_panel" }'
    ```
    
-6. Build files for a Terra workspace.
+5. Build files for a Terra workspace.
 
    ```shell 
    python scripts/inputs/build_inputs.py \
