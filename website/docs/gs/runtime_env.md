@@ -48,4 +48,4 @@ and share code on forked repositories. Here are a some considerations:
 - The GATK-SV pipeline takes advantage of the massive parallelization possible in the cloud. 
   Local backends may not have the resources to execute all of the workflows. 
   Workflows that use fewer resources or that are less parallelized may be more successful. 
-  For instance, some users have been able to run [GatherSampleEvidence](#gather-sample-evidence) on a SLURM cluster.
+  For instance, some users have been able to run [GatherSampleEvidence](../modules/gse) on a SLURM cluster.
