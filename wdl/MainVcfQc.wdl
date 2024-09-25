@@ -905,7 +905,7 @@ task IdentifyDuplicates {
 
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75,
-    disk_gb: 2 + ceil(size(vcf, "GiB")),
+    disk_gb: 10 + ceil(size(vcf, "GiB")),
     cpu_cores: 1,
     preemptible_tries: 1,
     max_retries: 1,
