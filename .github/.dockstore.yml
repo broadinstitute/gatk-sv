@@ -163,7 +163,7 @@ workflows:
         - /.*/
 
   - subclass: WDL
-    name: SingleSample
+    name: SingleSamplePipeline
     primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
     filters:
       branches:
