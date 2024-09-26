@@ -198,7 +198,6 @@ workflow MainVcfQc {
       }
     }
 
-
     # Merge all VID lists into single output directory and tar it
     call TarShardVidLists {
       input:
@@ -373,6 +372,7 @@ task PlotQcVcfWide {
     File plots_tarball = "~{prefix}.plotQC_vcfwide_output.tar.gz"
   }
 }
+
 
 # Task to merge VID lists across shards
 task TarShardVidLists {
