@@ -74,11 +74,10 @@ def process_buffers(exact_buffer, ins_buffer, counts, f_records):
     exact_matches = {
         key: [record for _, record in group] for key, group in groupby(sorted_buffer, key=lambda x: x[0])
     }
-
     for records in exact_matches.values():
         if len(records) > 1:
-            counts['Exact'] += 1
-            f_records.write(f"Exact\t{','.join(sorted(records))}\n")
+            counts['exact'] += 1
+            f_records.write(f"exact\t{','.join(sorted(records))}\n")
 
     # Process insert matches
     for i in range(len(ins_buffer)):
