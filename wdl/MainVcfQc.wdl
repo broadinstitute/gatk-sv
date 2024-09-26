@@ -198,6 +198,7 @@ workflow MainVcfQc {
       }
     }
 
+
     # Merge all VID lists into single output directory and tar it
     call TarShardVidLists {
       input:
