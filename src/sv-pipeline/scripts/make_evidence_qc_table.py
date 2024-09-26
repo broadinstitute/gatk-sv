@@ -39,6 +39,7 @@ def read_sex_assignments(filename: str) -> pd.DataFrame:
     df_ploidy = pd.read_csv(filename, sep="\t")
     df_assignments = pd.read_csv(filename, sep="\t")
     df_assignments = df_assignments[[ID_COL, "Assignment"]]
+    df_assignments.rename(columns={'Assignment': 'sex_assignment'}, inplace=True)
     return df_ploidy
 
 
@@ -211,7 +212,7 @@ def merge_evidence_qc_table(
         df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
-    output_df = output_df.replace([None, np.nan], 0)
+    output_df = output_df.replace([None, np.nan], 0.0)
     output_df.rename(columns={ID_COL: NEW_ID_COL}, inplace=True)
 
     # save the file
