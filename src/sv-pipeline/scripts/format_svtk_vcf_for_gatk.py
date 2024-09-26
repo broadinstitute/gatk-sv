@@ -169,11 +169,11 @@ def convert(record: pysam.VariantRecord,
     return record
 
 
-def parse_vid_list(path):
+def parse_last_column(path):
     if path is None:
         return set()
     with open(path) as f:
-        return set([line.strip() for line in f])
+        return set([line.strip().split('\t')[-1] for line in f])
 
 
 def _process(vcf_in: pysam.VariantFile,
@@ -201,8 +201,8 @@ def _process(vcf_in: pysam.VariantFile,
         bnd_end_dict = None
     ploidy_dict = _parse_ploidy_table(arguments.ploidy_table)
 
-    bothside_pass_vid_set = parse_vid_list(arguments.bothside_pass_list)
-    background_fail_vid_set = parse_vid_list(arguments.background_fail_list)
+    bothside_pass_vid_set = parse_last_column(arguments.bothside_pass_list)
+    background_fail_vid_set = parse_last_column(arguments.background_fail_list)
 
     for record in vcf_in:
         out = convert(record=record, bnd_end_dict=bnd_end_dict,
