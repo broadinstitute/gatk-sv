@@ -203,7 +203,7 @@ def merge_evidence_qc_table(
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # all data frames
-    dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid, 
+    dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
            df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
@@ -223,7 +223,7 @@ def main():
     parser.add_argument(
         "-y", "--estimated-copy-number-filename",
         help="Sets the filename containing estimated copy numbers per contig.")
-    
+
     parser.add_argument(
         "-x", "--sex-assignments-filename",
         help="Sets the filename containing copy number-based sex assignments.")
