@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 
 ID_COL = "#ID"
+NEW_ID_COL = "sample_id"
 EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 
 
@@ -24,6 +25,20 @@ def read_ploidy(filename: str) -> pd.DataFrame:
     df_ploidy = pd.read_csv(filename, sep="\t")
     df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
     df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
+    return df_ploidy
+
+
+def read_sex_assignments(filename: str) -> pd.DataFrame:
+    """
+    Args:
+        filename: A tab-delimited file containing estimated copy numbers.
+    Returns:
+        A pandas DataFrame containing the following columns:
+        [id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded].
+    """
+    df_ploidy = pd.read_csv(filename, sep="\t")
+    df_assignments = pd.read_csv(filename, sep="\t")
+    df_assignments = df_assignments[[ID_COL, "Assignment"]]
     return df_ploidy
 
 
@@ -156,6 +171,7 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
 
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
+        filename_sex_assignments: str,
         filename_mediancov: str,
         filename_wgd: str,
         filename_cnv_qvalues: str,
@@ -172,6 +188,7 @@ def merge_evidence_qc_table(
     serialized to the given output filename.
     """
     df_ploidy = read_ploidy(filename_estimated_cn)
+    df_sex_assignments = read_sex_assignments(filename_sex_assignments)
     df_bincov_median = read_bincov_median(filename_mediancov)
     df_wgd_scores = read_wgd_scores(filename_wgd)
     df_non_diploid = read_non_diploid(filename_cnv_qvalues)
@@ -186,14 +203,16 @@ def merge_evidence_qc_table(
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # all data frames
-    dfs = [df_ploidy, df_bincov_median, df_wgd_scores, df_non_diploid, df_manta_high_outlier,
-           df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
+    dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid, 
+           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
            df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
     for df in dfs:
         df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
+    output_df = output_df.replace([None, np.nan], 0)
+    output_df.rename(columns={ID_COL: NEW_ID_COL}, inplace=True)
 
     # save the file
     output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False, na_rep=np.nan)
@@ -204,6 +223,10 @@ def main():
     parser.add_argument(
         "-y", "--estimated-copy-number-filename",
         help="Sets the filename containing estimated copy numbers per contig.")
+    
+    parser.add_argument(
+        "-x", "--sex-assignments-filename",
+        help="Sets the filename containing copy number-based sex assignments.")
 
     parser.add_argument(
         "-d", "--median-cov-filename",
@@ -257,6 +280,7 @@ def main():
 
     merge_evidence_qc_table(
         args.estimated_copy_number_filename,
+        args.sex_assignments_filename,
         args.median_cov_filename,
         args.wgd_scores_filename,
         args.binwise_cnv_qvalues_filename,
