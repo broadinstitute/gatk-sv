@@ -126,6 +126,10 @@ workflow GatherBatchEvidence {
     # QC files
     Int matrix_qc_distance
 
+    # Allosomes
+    String? chr_x
+    String? chr_y
+
     # Module metrics parameters
     # Run module metrics workflow at the end - off by default for GatherBatchEvidence because of runtime/expense
     Boolean? run_module_metrics
@@ -206,6 +210,8 @@ workflow GatherBatchEvidence {
       input:
         bincov_matrix = merged_bincov_,
         batch = batch,
+        chr_x = chr_x,
+        chr_y = chr_y,
         sv_base_mini_docker = sv_base_mini_docker,
         sv_pipeline_qc_docker = sv_pipeline_qc_docker,
         runtime_attr_score = ploidy_score_runtime_attr,
