@@ -921,7 +921,7 @@ task IdentifyDuplicates {
 
     echo "Processing ~{vcf} into ~{full_prefix}..."
 
-    python opt/sv-pipeline/scripts/identify_duplicates.py \
+    python /opt/sv-pipeline/scripts/identify_duplicates.py \
       --vcf ~{vcf} \
       --fout ~{full_prefix}
 
@@ -970,7 +970,7 @@ task MergeDuplicates {
 
     echo "Merging all TSV files into one..."
 
-    python opt/sv-pipeline/scripts/merge_duplicates.py \
+    python /opt/sv-pipeline/scripts/merge_duplicates.py \
       --records ~{sep=' ' tsv_records} \
       --counts ~{sep=' ' tsv_counts} \
       --fout "~{prefix}.agg"
