@@ -176,7 +176,7 @@ task ConcatTars {
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
     mem_gb: 1.0,
-    disk_gb: ceil(3 * (size(manta_tloc_tars, "GB") + size(manta_unresolved_tars, "GB"))),
+    disk_gb: ceil(10 + 3 * (size(manta_tloc_tars, "GB") + size(manta_unresolved_tars, "GB"))),
     boot_disk_gb: 10,
     preemptible_tries: 3,
     max_retries: 1
