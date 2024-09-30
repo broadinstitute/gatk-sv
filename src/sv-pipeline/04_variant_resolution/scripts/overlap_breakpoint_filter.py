@@ -102,7 +102,7 @@ for bnd, ids in dup_bnds_to_ids.items():
 # Read bothside-pass/background-fail records
 sys.stderr.write("Reading SR files...\n")
 with open(BOTHSIDE_PASS_PATH) as f:
-    bothside_pass = {line.strip().split('\t')[-1]: float(line.strip().split('\t')[0]) for line in f}
+    bothside_pass = set([line.strip().split('\t')[-1] for line in f])
 
 with open(BACKGROUND_FAIL_PATH) as f:
     background_fail = set([line.strip().split('\t')[-1] for line in f])

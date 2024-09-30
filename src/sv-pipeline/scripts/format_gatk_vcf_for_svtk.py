@@ -150,7 +150,7 @@ def convert(record: pysam.VariantRecord,
         new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
     elif svtype == 'DEL':
         new_record.info['STRANDS'] = '+-'
-    elif svtype == 'DUP':
+    elif svtype == 'DUP' or svtype == 'CNV':
         new_record.info['STRANDS'] = '-+'
     elif svtype == 'INV':
         new_record.info['STRANDS'] = record.info.get('STRANDS', None)
