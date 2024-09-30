@@ -53,7 +53,7 @@ class RecordData:
         else:
             raise ValueError("Uninterpretable evidence: {}".format(ev))
         if record.id in bothside_pass:
-            self.both_end_support = bothside_pass[record.id]
+            self.both_end_support = 1
         else:
             self.both_end_support = 0
         self.sr_fail = record.id in background_fail
