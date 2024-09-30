@@ -5,16 +5,36 @@ import pysam
 import sys
 from typing import Optional, List, Text, Set
 
-_gt_sum_map = dict()
+_gt_map = dict()
+_cnv_gt_map = dict()
 
 
-def _cache_gt_sum(gt):
+def _cache_gt(gt):
     if gt is None:
-        return 0
-    s = _gt_sum_map.get(gt, None)
+        return 0, 0
+    s = _gt_map.get(gt, None)
     if s is None:
-        s = sum([1 for a in gt if a is not None and a > 0])
-        _gt_sum_map[gt] = s
+        x = sum([1 for a in gt if a is not None and a > 0])
+        if x == 0:
+            s = (0, 0)
+        elif x == 1:
+            s = (0, 1)
+        else:
+            s = (1, 1)
+        _gt_map[gt] = s
+    return s
+
+
+def _cache_cnv_gt(cn):
+    if cn is None:
+        return 0, 0
+    s = _cnv_gt_map.get(cn, None)
+    if s is None:
+        # Split copies evenly between alleles, giving one more copy to the second allele if odd
+        x = max(0, cn - 2)
+        alt1 = min(x // 2, 4)
+        alt2 = min(x - alt1, 4)
+        _cnv_gt_map[cn] = (alt1, alt2)
     return s
 
 
@@ -100,6 +120,9 @@ def convert(record: pysam.VariantRecord,
     if svtype == 'BND':
         # Ensure we aren't using breakend notation here, since it isn't supported in some modules
         alleles = ('N', '<BND>')
+    elif svtype == 'CNV':
+        # Prior to CleanVcf, all CNVs have <CNx> alleles
+        alleles = ('N', '<CN0>', '<CN1>', '<CN2>', '<CN3>')
     else:
         alleles = ('N', alleles[1])
     contig = record.contig
@@ -109,6 +132,9 @@ def convert(record: pysam.VariantRecord,
     for key in record.info:
         if key not in remove_infos:
             new_record.info[key] = record.info[key]
+    if svtype == 'CNV':
+        # Prior to CleanVcf, all mCNVs are DUP type
+        new_record.info['SVTYPE'] = 'DUP'
     # svtk generally expects all records to have CHR2 assigned
     chr2 = record.info.get('CHR2', None)
     if chr2 is None:
@@ -137,10 +163,10 @@ def convert(record: pysam.VariantRecord,
             if key not in remove_formats:
                 new_genotype[key] = genotype[key]
         # fix GT, always assuming diploid
-        if _cache_gt_sum(genotype.get('GT', None)) > 0:
-            new_genotype['GT'] = (0, 1)
+        if svtype == 'CNV':
+            new_genotype['GT'] = _cache_cnv_gt(genotype.get('CN', genotype['RD_CN']))
         else:
-            new_genotype['GT'] = (0, 0)
+            new_genotype['GT'] = _cache_gt(genotype.get('GT', None))
     return new_record
 
 

@@ -65,6 +65,7 @@ workflow CombineBatches {
     RuntimeAttr? runtime_attr_get_non_ref_vids
     RuntimeAttr? runtime_attr_calculate_support_frac
     RuntimeAttr? runtime_override_clean_background_fail
+    RuntimeAttr? runtime_attr_gatk_to_svtk_vcf
     RuntimeAttr? runtime_attr_extract_vids
     RuntimeAttr? runtime_override_concat
   }
@@ -221,6 +222,20 @@ workflow CombineBatches {
         runtime_attr_override=runtime_attr_recluster_part2
     }
 
+    # Use "depth" as source to match legacy headers
+    # AC/AF cause errors due to being lists instead of single values
+    call ClusterTasks.GatkToSvtkVcf {
+      input:
+        vcf=GroupedSVClusterPart2.out,
+        output_prefix="~{cohort_name}.combine_batches.~{contig}.svtk_formatted",
+        source="depth",
+        contig_list=contig_list,
+        remove_formats="CN",
+        remove_infos="END2,AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
+    }
+
     call ExtractSRVariantLists {
       input:
         vcf=GroupedSVClusterPart2.out,
@@ -235,8 +250,8 @@ workflow CombineBatches {
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
       input:
-        vcfs=ExtractSRVariantLists.vcf_out,
-        vcfs_idx=ExtractSRVariantLists.vcf_index_out,
+        vcfs=GatkToSvtkVcf.out,
+        vcfs_idx=GatkToSvtkVcf.out_index,
         naive=true,
         outfile_prefix="~{cohort_name}.combine_batches.concat_all_contigs",
         sv_base_mini_docker=sv_base_mini_docker,
@@ -246,8 +261,8 @@ workflow CombineBatches {
 
   #Final outputs
   output {
-    Array[File] combined_vcfs = ExtractSRVariantLists.vcf_out
-    Array[File] combined_vcf_indexes = ExtractSRVariantLists.vcf_index_out
+    Array[File] combined_vcfs = GatkToSvtkVcf.out
+    Array[File] combined_vcf_indexes = GatkToSvtkVcf.out_index
     Array[File] cluster_background_fail_lists = ExtractSRVariantLists.high_sr_background_list
     Array[File] cluster_bothside_pass_lists = ExtractSRVariantLists.bothsides_sr_support
     File? combine_batches_merged_vcf = ConcatVcfs.concat_vcf
@@ -270,7 +285,7 @@ task ExtractSRVariantLists {
   # be held in memory or disk while working, potentially in a form that takes up more space)
   RuntimeAttr runtime_default = object {
                                   mem_gb: 3.75,
-                                  disk_gb: ceil(10.0 + size(vcf, "GB") * 2.0),
+                                  disk_gb: ceil(10.0 + size(vcf, "GB")),
                                   cpu_cores: 1,
                                   preemptible_tries: 3,
                                   max_retries: 1,
@@ -292,15 +307,11 @@ task ExtractSRVariantLists {
     bcftools query -f '%ID\t%HIGH_SR_BACKGROUND\t%BOTHSIDES_SUPPORT\n' ~{vcf} > flags.txt
     awk -F'\t' '($2 != "."){print $1}' flags.txt > ~{output_prefix}.high_sr_background.txt
     awk -F'\t' '($3 != "."){print $1}' flags.txt > ~{output_prefix}.bothsides_sr_support.txt
-    bcftools annotate -x INFO/HIGH_SR_BACKGROUND,INFO/BOTHSIDES_SUPPORT ~{vcf} -Oz -o ~{output_prefix}.vcf.gz
-    tabix ~{output_prefix}.vcf.gz
   >>>
 
   output {
     File high_sr_background_list = "~{output_prefix}.high_sr_background.txt"
     File bothsides_sr_support = "~{output_prefix}.bothsides_sr_support.txt"
-    File vcf_out = "~{output_prefix}.vcf.gz"
-    File vcf_index_out = "~{output_prefix}.vcf.gz.tbi"
   }
 }
 
