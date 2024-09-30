@@ -31,10 +31,9 @@ def read_ploidy(filename: str) -> pd.DataFrame:
 def read_sex_assignments(filename: str) -> pd.DataFrame:
     """
     Args:
-        filename: A tab-delimited file containing estimated copy numbers.
+        filename: A tab-delimited file containing estimated sex assignments.
     Returns:
-        A pandas DataFrame containing the following columns:
-        [id, chr1_CopyNumber, ..., chr22_CopyNumber, chrX_CopyNumber, chrY_CopyNumber, chrX_CopyNumber_rounded].
+        A pandas DataFrame containing the estimated sex assignment for each sample.
     """
     df_ploidy = pd.read_csv(filename, sep="\t")
     df_assignments = pd.read_csv(filename, sep="\t")
@@ -203,6 +202,11 @@ def merge_evidence_qc_table(
     df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, "low")
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
+    # outlier column names
+    callers = ["wham", "melt", "manta", "overall"]
+    types = ["high", "low"]
+    outlier_cols = [get_col_name(caller, type) for caller in callers for type in types]
+
     # all data frames
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
            df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
@@ -212,7 +216,7 @@ def merge_evidence_qc_table(
         df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
-    output_df = output_df.replace([None, np.nan], 0.0)
+    output_df[outlier_cols] = output_df[outlier_cols].replace([None, np.nan], 0.0)
     output_df.rename(columns={ID_COL: NEW_ID_COL}, inplace=True)
 
     # save the file
