@@ -3,17 +3,17 @@
   "JoinRawCalls.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
   "JoinRawCalls.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
 
-  "JoinRawCalls.clustered_depth_vcfs" : "${this.clustered_depth_vcf}",
-  "JoinRawCalls.clustered_depth_vcf_indexes" : "${this.clustered_depth_vcf_index}",
+  "JoinRawCalls.clustered_depth_vcfs" : "${this.sample_sets.clustered_depth_vcf}",
+  "JoinRawCalls.clustered_depth_vcf_indexes" : "${this.sample_sets.clustered_depth_vcf_index}",
 
-  "JoinRawCalls.clustered_manta_vcfs" : "${this.clustered_manta_vcf}",
-  "JoinRawCalls.clustered_manta_vcf_indexes" : "${this.clustered_manta_vcf_index}",
+  "JoinRawCalls.clustered_manta_vcfs" : "${this.sample_sets.clustered_manta_vcf}",
+  "JoinRawCalls.clustered_manta_vcf_indexes" : "${this.sample_sets.clustered_manta_vcf_index}",
 
-  "JoinRawCalls.clustered_wham_vcfs" : "${this.clustered_wham_vcf}",
-  "JoinRawCalls.clustered_wham_vcf_indexes" : "${this.clustered_wham_vcf_index}",
+  "JoinRawCalls.clustered_wham_vcfs" : "${this.sample_sets.clustered_wham_vcf}",
+  "JoinRawCalls.clustered_wham_vcf_indexes" : "${this.sample_sets.clustered_wham_vcf_index}",
 
-  "JoinRawCalls.clustered_melt_vcfs" : "${this.clustered_melt_vcf}",
-  "JoinRawCalls.clustered_melt_vcf_indexes" : "${this.clustered_melt_vcf_index}",
+  "JoinRawCalls.clustered_scramble_vcfs" : "${this.sample_sets.clustered_scramble_vcf}",
+  "JoinRawCalls.clustered_scramble_vcf_indexes" : "${this.sample_sets.clustered_scramble_vcf_index}",
 
   "JoinRawCalls.FormatVcfForGatk.formatter_args": "--fix-end",
 
@@ -24,5 +24,5 @@
   "JoinRawCalls.reference_fasta_fai": "${workspace.reference_index}",
   "JoinRawCalls.reference_dict": "${workspace.reference_dict}",
 
-  "JoinRawCalls.prefix": "${this.sample_set_id}"
+  "JoinRawCalls.prefix": "${this.sample_set_set_id}"
 }

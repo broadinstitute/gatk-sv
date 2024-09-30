@@ -164,7 +164,7 @@ The pipeline consists of a series of modules that perform the following:
 * [JoinRawCalls](#join-raw-calls): Merges unfiltered calls across batches
 * [SVConcordance](#svconcordance): Calculates genotype concordance with raw calls
 * [FilterGenotypes](#filter-genotypes): Performs genotype filtering
-* [AnnotateVcf](#annotate-vcf): Annotations, including functional annotation, allele frequency (AF) annotation and AF annotation with external population callsets;
+* [AnnotateVcf](#annotate-vcf): Annotations, including functional annotation, allele frequency (AF) annotation and AF annotation with external population callsets
 * [Module 09](#module09): Visualization, including scripts that generates IGV screenshots and rd plots.
 * Additional modules to be added: de novo and mosaic scripts 
 
@@ -483,8 +483,8 @@ Merges raw unfiltered calls across batches. Concordance between these genotypes 
 * [ClusterBatch](#cluster-batch)
 
 #### Inputs:
-* Clustered Manta, Wham, Scramble, Melt, and/or depth VCF URIs ([ClusterBatch](#cluster-batch))
-* Ped file
+* Clustered Manta, Wham, depth, Scramble, and/or MELT VCF URIs ([ClusterBatch](#cluster-batch))
+* PED file
 * Reference sequence
 
 #### Outputs:
@@ -514,7 +514,7 @@ Performs genotype quality recalibration using a machine learning model based on 
 The ML model uses the following features:
 
 * Genotype properties:
-  * Allele frequency (AF), no-call counts
+  * Non-reference and no-call allele counts
   * Genotype quality (GQ) 
   * Supporting evidence types (EV) and respective genotype qualities (PE_GQ, SR_GQ, RD_GQ)
   * Raw call concordance (CONC_ST)
@@ -541,7 +541,7 @@ See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Qualit
 
 All valid genotypes are annotated with a "scaled logit" (SL) score, which is rescaled to non-negative adjusted GQs on [1, 99]. Note that the rescaled GQs should *not* be interpreted as probabilities. Original genotype qualities are retained in the OGQ field. 
 
-A more positive SL score indicates higher probability of correctness of the given genotype. Genotypes are therefore filtered using SL thresholds that depend on SV type and size. This workflow also generates QC plots using the [MainVcfQc](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQc.wdl) workflow to review call set quality (see below for recommended practices). 
+A more positive SL score indicates higher probability that the give genotype is not homozygous for the reference allele. Genotypes are therefore filtered using SL thresholds that depend on SV type and size. This workflow also generates QC plots using the [MainVcfQc](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQc.wdl) workflow to review call set quality (see below for recommended practices). 
 
 This workflow can be run in one of two modes:
 
@@ -586,10 +586,10 @@ These criteria can be assessed from the plots in the `main_vcf_qc_tarball` outpu
 * Either a set of SL cutoffs or truth labels
 
 #### Outputs:
-* The filtered VCF
+* Filtered VCF
 * Call set QC plots (optional)
 * Optimized SL cutoffs with filtering QC plots and data tables (if running mode [2] with truth labels)
-* A copy of the VCF with only SL annotation and GQ recalibration (before filtering)
+* VCF with only SL annotation and GQ recalibration (before filtering)
 
 ## <a name="annotate-vcf">AnnotateVcf</a>
 *Formerly Module08Annotation*
