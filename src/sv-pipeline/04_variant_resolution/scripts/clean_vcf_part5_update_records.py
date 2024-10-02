@@ -93,10 +93,10 @@ def main():
                     record = revised_lines_by_id[record.id]
                 if record.info.get('SVTYPE', None) == 'DEL':
                     if abs(record.stop - record.pos) >= 1000:
-                        sample_cn_map = {s: record.samples[s]['RD_CN'] for s in non_outlier_samples}
+                        sample_cn_map = {s: record.samples[s].get('RD_CN') for s in non_outlier_samples}
                         if len([s for s in sample_cn_map if (sample_cn_map[s] is not None and sample_cn_map[s] > 3)]) > vf_1:
                             multi_del = True
-                    gts = [record.samples[s]['GT'] for s in non_outlier_samples]
+                    gts = [record.samples[s].get('GT') for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
                         gt5kb_del = True
                     if abs(record.stop - record.pos) >= 5000:
@@ -105,7 +105,7 @@ def main():
 
                 if record.info.get('SVTYPE', None) == 'DUP':
                     if abs(record.stop - record.pos) >= 1000:
-                        sample_cn_map = {s: record.samples[s]['RD_CN'] for s in non_outlier_samples}
+                        sample_cn_map = {s: record.samples[s].get('RD_CN') for s in non_outlier_samples}
                         if sum(1 for s in sample_cn_map if sample_cn_map[s] is not None and sample_cn_map[s] > 4) > vf_1:
                             multi_dup = True
                         if sum(1 for x in Counter(sample_cn_map.values()) if x is not None and (x < 1 or x > 4)) > 4:
@@ -114,7 +114,7 @@ def main():
                                 (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
                                 gt4_copystate) > vf_1:
                             multi_dup = True
-                    gts = [record.samples[s]['GT'] for s in non_outlier_samples]
+                    gts = [record.samples[s].get('GT') for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
                         gt5kb_dup = True
                     if abs(record.stop - record.pos) >= 5000:
@@ -123,24 +123,24 @@ def main():
 
                 if gt5kb_del:
                     for sample_obj in record.samples.itervalues():
-                        if not sample_obj['GQ'] is None and \
-                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] >= 2):
+                        if not sample_obj.get('GQ') is None and \
+                                (sample_obj.get('RD_CN') is not None and sample_obj.get('RD_CN') >= 2):
                             sample_obj['GT'] = (0, 0)
-                        elif not sample_obj['GQ'] is None and \
-                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] == 1):
+                        elif not sample_obj.get('GQ') is None and \
+                                (sample_obj.get('RD_CN') is not None and sample_obj.get('RD_CN') == 1):
                             sample_obj['GT'] = (0, 1)
-                        elif not sample_obj['GQ'] is None:
+                        elif not sample_obj.get('GQ') is None:
                             sample_obj['GT'] = (1, 1)  # RD_CN 0 DEL
 
                 if gt5kb_dup:
                     for sample_obj in record.samples.itervalues():
-                        if not sample_obj['GQ'] is None and \
-                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] <= 2):
+                        if not sample_obj.get('GQ') is None and \
+                                (sample_obj.get('RD_CN') is not None and sample_obj.get('RD_CN') <= 2):
                             sample_obj['GT'] = (0, 0)
-                        elif not sample_obj['GQ'] is None and \
-                                (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] == 3):
+                        elif not sample_obj.get('GQ') is None and \
+                                (sample_obj.get('RD_CN') is not None and sample_obj.get('RD_CN') == 3):
                             sample_obj['GT'] = (0, 1)
-                        elif not sample_obj['GQ'] is None:
+                        elif not sample_obj.get('GQ') is None:
                             sample_obj['GT'] = (1, 1)  # RD_CN > 3 DUP
 
                 if record.id in multi_geno_ids:
@@ -148,11 +148,11 @@ def main():
 
                 if multi_del or multi_dup:
                     record.filter.add('MULTIALLELIC')
-                    for j, sample in enumerate(record.samples):
+                    for sample in record.samples:
                         record.samples[sample]['GT'] = None
                         record.samples[sample]['GQ'] = None
-                        record.samples[sample]['CN'] = record.samples[sample]['RD_CN']
-                        record.samples[sample]['CNQ'] = record.samples[sample]['RD_GQ']
+                        record.samples[sample]['CN'] = record.samples[sample].get('RD_CN')
+                        record.samples[sample]['CNQ'] = record.samples[sample].get('RD_GQ')
 
                 if len(record.filter) > 1 and 'PASS' in record.filter:
                     del record.filter['PASS']
@@ -164,7 +164,7 @@ def main():
                 if record.id in sexchr_revise:
                     for sample in record.samples:
                         if sample in male_samples:
-                            cn = record.samples[sample]['RD_CN']
+                            cn = record.samples[sample].get('RD_CN')
                             if cn is not None and int(cn) > 0:
                                 cn = int(cn)
                                 record.samples[sample]['RD_CN'] = cn - 1

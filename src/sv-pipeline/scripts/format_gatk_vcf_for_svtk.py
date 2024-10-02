@@ -172,7 +172,7 @@ def convert(record: pysam.VariantRecord,
                 new_genotype[key] = genotype[key]
         # fix GT, always assuming diploid
         if svtype == 'CNV':
-            new_genotype['GT'] = _cache_cnv_gt(genotype.get('CN', genotype['RD_CN']))
+            new_genotype['GT'] = _cache_cnv_gt(genotype.get('CN', genotype.get('RD_CN')))
         else:
             new_genotype['GT'] = _cache_gt(genotype.get('GT', None))
     return new_record
