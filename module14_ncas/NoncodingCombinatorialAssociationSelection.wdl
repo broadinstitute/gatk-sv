@@ -120,7 +120,7 @@ task ExtractSVSites{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 2*size(cram_file, "GiB"), 
+        mem_gb: 2*size(SV_vcf, "GiB"), 
         disk_gb: 15,
         boot_disk_gb: 10,
         preemptible_tries: 1,
@@ -168,7 +168,7 @@ task ExtractSVFunction{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 2*size(cram_file, "GiB"), 
+        mem_gb: 2*size(SV_vcf, "GiB"), 
         disk_gb: 15,
         boot_disk_gb: 10,
         preemptible_tries: 1,
