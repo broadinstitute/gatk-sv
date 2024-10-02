@@ -9,8 +9,7 @@ from functools import reduce
 from pathlib import Path
 import numpy as np
 
-ID_COL = "#ID"
-NEW_ID_COL = "sample_id"
+ID_COL = "sample_id"
 EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 
 
@@ -217,7 +216,6 @@ def merge_evidence_qc_table(
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
     output_df[outlier_cols] = output_df[outlier_cols].replace([None, np.nan], 0.0)
-    output_df.rename(columns={ID_COL: NEW_ID_COL}, inplace=True)
 
     # save the file
     output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False, na_rep=np.nan)

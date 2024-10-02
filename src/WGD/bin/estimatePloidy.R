@@ -1042,7 +1042,7 @@ if(kmeans==T){
   #Write out list of cluster assignments per sample
   clusterAssignments.out <- data.frame("ID"=names(clust.PCs$batch), 
                                        "batch"=as.vector(as.integer(clust.PCs$batch)))
-  colnames(clusterAssignments.out)[1] <- "#ID"
+  colnames(clusterAssignments.out)[1] <- "sample_id"
   write.table(clusterAssignments.out, 
               paste(OUTDIR, "/sample_batch_assignments.txt", sep=""), 
               col.names=T, row.names=F, sep="\t", quote=F)
@@ -1052,7 +1052,7 @@ if(kmeans==T){
 
   #Write out list of PCs per sample
   samplePCs.out <- PCs$top
-  colnames(samplePCs.out)[1] <- "#ID"
+  colnames(samplePCs.out)[1] <- "sample_id"
   write.table(samplePCs.out, paste(OUTDIR, "/sample_PCs.txt", sep=""), 
               col.names=T, row.names=F, sep="\t", quote=F)
   if(gzip==T){
@@ -1138,7 +1138,7 @@ dev.off()
 
 #Write table of sexes
 sexes <- sexes[match(colnames(dat)[-c(1:3)], sexes$ID), ]
-colnames(sexes)[1] <- "#ID"
+colnames(sexes)[1] <- "sample_id"
 write.table(sexes, paste(OUTDIR, "/sample_sex_assignments.txt", sep=""), 
             col.names=T, row.names=F, sep="\t", quote=F)
 if(gzip==T){
@@ -1158,13 +1158,13 @@ females.CN[, -1] <- apply(females.CN[, -1], 2, round, digits=2)
 #Merge male/female p-values and rounded CNs
 merged.p <- rbind(males.p, females.p)
 merged.p <- merged.p[match(colnames(dat)[-c(1:3)], merged.p$ID), ]
-colnames(merged.p) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_pValue", sep=""))
+colnames(merged.p) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_pValue", sep=""))
 merged.q <- rbind(males.q, females.q)
 merged.q <- merged.q[match(colnames(dat)[-c(1:3)], merged.q$ID), ]
-colnames(merged.q) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_qValue", sep=""))
+colnames(merged.q) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_qValue", sep=""))
 merged.CN <- rbind(males.CN, females.CN)
 merged.CN <- merged.CN[match(colnames(dat)[-c(1:3)], merged.CN$ID), ]
-colnames(merged.CN) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_CopyNumber", sep=""))
+colnames(merged.CN) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_CopyNumber", sep=""))
 
 #Write merged p-values
 write.table(merged.p, paste(OUTDIR, "/CNA_pValues.txt", sep=""), 
