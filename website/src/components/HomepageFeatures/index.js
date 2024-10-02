@@ -1,20 +1,36 @@
 import React from 'react';
 import clsx from 'clsx';
 import styles from './styles.module.css';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import Link from '@docusaurus/Link';
 
-const FeatureList = [
+/*
+Note that imageUrl used in the following is optional.
+*/
+
+const cloudNativeFeatures = [
   {
-    title: 'Cloud-Native',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
-    description: (
-      <>
-        Built and optimized for the Google Cloud Platform
-      </>
-    ),
+    imageUrl: 'img/placeholder.svg',
   },
   {
-    title: 'Scalable',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: <>Cloud-Native</>,
+    description: (
+      <>
+        Built from the ground up for large-scale analysis, optimized for
+        cloud-native execution on the Google Cloud Platform.
+      </>
+    ),
+    //imageUrl: 'img/....svg',
+    buttonLink: "/docs/gs/runtime-env",
+    buttonText: "Learn More"
+  },
+];
+
+const scalableFeatures = [
+  {
+    title: (
+      <>Built for Population-Scale Genomic Research</>
+    ),
     description: (
       <>
         Used to produce high-quality SV call sets for large
@@ -22,10 +38,20 @@ const FeatureList = [
         Aggregation Project (gnomAD)
       </>
     ),
+    buttonLink: "/docs/gs/overview",
+    buttonText: "Learn More"
   },
   {
-    title: 'Accurate',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    imageUrl: 'img/placeholder.svg',
+  }
+];
+
+const accurateFeatures = [
+  {
+    imageUrl: 'img/placeholder.svg',
+  },
+  {
+    title: <>Accurate</>,
     description: (
       <>
         Analyzes SV calls from multiple algorithms and evidence
@@ -35,15 +61,92 @@ const FeatureList = [
   },
 ];
 
-function Feature({Svg, title, description}) {
+const accessibleFeatures = [
+  {
+    title: <>Accessible</>,
+    description: (
+      <>
+        Leveraging the <a href="https://terra.bio" target="_blank" rel="noopener noreferrer">Terra platform </a>
+        for scalable execution, secure environment, and seamless collaboration.
+      </>
+    ),
+  },
+  {
+    imageUrl: 'img/placeholder.svg',
+  },
+];
+
+const featureList = [
+  {
+    title: 'Evidence Collection and QC',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        SV evidence is collected through multiple algorithms and passed through rigorous QC steps
+        to filter technical outliers and improve call quality.
+      </>
+    ),
+  },
+  {
+    title: 'SV Genotyping and Refinement',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        After SV discovery, the pipeline refines genotypes using a cohort-wide reference panel
+        to improve the accuracy of detected SVs. It supports re-genotyping of
+        copy-number variants (CNVs) for large-scale analyses.
+      </>
+    ),
+  },
+  {
+    title: 'Downstream Annotation and Visualization',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        The pipeline includes modules for downstream annotation and visualization,
+        making it easier to interpret the results in the context of population and medical genetics.
+      </>
+    ),
+  },
+];
+
+function WholeRowFeature({ imageUrl, title, description, buttonLink, buttonText }) {
+  const imgUrl = useBaseUrl(imageUrl);
+  return (
+    <div className={clsx('col col--6', styles.feature)}>
+      {imgUrl && (
+        <div className="text--center">
+          <img
+            className={styles.largeFeatureImage}
+            src={imgUrl}
+            alt={title || ''}
+          />
+        </div>
+      )}
+      {title && <h3 className="text--center">{title}</h3>}
+      {description && <p className="text--center">{description}</p>}
+      {buttonLink && buttonText && (
+        <div className="text--center" style={{ marginTop: '1rem' }}>
+          <Link className="button button--primary" to={buttonLink}>
+            {buttonText}
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Feature({ Svg, title, description }) {
   return (
     <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
-        <h3>{title}</h3>
-        <p>{description}</p>
+      {Svg && (
+        <div className="text--center">
+          <Svg className={styles.featureSvg} role="img" />
+        </div>
+      )}
+      <div className={clsx('text--center', 'padding-horiz--md')}>
+        {title && <h3>{title}</h3>}
+        {description && <p>{description}</p>}
       </div>
     </div>
   );
@@ -51,14 +154,64 @@ function Feature({Svg, title, description}) {
 
 export default function HomepageFeatures() {
   return (
-    <section className={styles.features}>
-      <div className="container">
-        <div className="row">
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
-          ))}
+    <>
+      {cloudNativeFeatures && cloudNativeFeatures.length > 0 && (
+        <section className={styles.features}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {cloudNativeFeatures.map((props, idx) => (
+                <WholeRowFeature key={idx} {...props} />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {scalableFeatures && scalableFeatures.length > 0 && (
+        <section className={clsx(styles.features, styles.featuresAlt)}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {scalableFeatures.map((props, idx) => (
+                <WholeRowFeature key={idx} {...props} />
+              ))}
+            </div>
+          </div>
+        </section>
+        )}
+
+      {accurateFeatures && accurateFeatures.length > 0 && (
+        <section className={clsx(styles.features)}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {accurateFeatures.map((props, idx) => (
+                <WholeRowFeature key={idx} {...props} />
+              ))}
+            </div>
+          </div>
+        </section>
+        )}
+
+      {accessibleFeatures && accessibleFeatures.length > 0 && (
+        <section className={clsx(styles.features, styles.featuresAlt)}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {accessibleFeatures.map((props, idx) => (
+                <WholeRowFeature key={idx} {...props} />
+              ))}
+            </div>
+          </div>
+        </section>
+        )}
+
+      <section className={clsx(styles.features)}>
+        <div className="container">
+          <div className="row">
+            {featureList.map((props, idx) => (
+              <Feature key={idx} {...props} />
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </>
   );
 }

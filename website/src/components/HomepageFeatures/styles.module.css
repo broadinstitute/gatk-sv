@@ -5,7 +5,24 @@
   width: 100%;
 }
 
+.featuresAlt {
+  background: var(--ifm-background-color-alt);
+  color: var(--ifm-color-text);
+  align-content: stretch;
+  text-align: left;
+  position: relative;
+  padding: 2rem 0;
+}
+
 .featureSvg {
   height: 200px;
   width: 200px;
+}
+
+.heroBanner {
+  text-align: center;
+}
+
+.buttons {
+  margin-top: 2rem;
 }
