@@ -5,7 +5,7 @@ import "SVvsConservative.wdl" as SVvsConservative
 
 workflow NoncodingCombinatorialAssociationSelection {
     input{
-        Int permutation_rounds
+        Array[Int] permutation_rounds
         File SV_vcf
         File SV_vcf_idx
         File SVID_genomic_context
@@ -46,7 +46,7 @@ workflow NoncodingCombinatorialAssociationSelection {
             sv_base_mini_docker = sv_base_mini_docker
     }
 
-    scatter(i in range(permutation_rounds)){
+    scatter(i in permutation_rounds){
         call GeneratePermutatedSVs{
             input:
                 permu = i, 
