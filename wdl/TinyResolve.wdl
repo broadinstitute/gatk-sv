@@ -192,14 +192,22 @@ task ConcatTars {
     while read -r tl; do
       tar --extract --file "${tl}" --directory manta_tloc
     done < '~{write_lines(manta_tloc_tars)}'
-    tar --create --gzip --file manta_tloc.tar.gz manta_tloc
+    pushd manta_tloc
+    find . -type f -name '*.vcf.gz' > manifest.list
+    popd
+    tar --create --gzip --file manta_tloc.tar.gz --directory manta_tloc \
+      --files-from manta_tloc/manifest.list
     rm -rf manta_tloc
 
     mkdir manta_unresolved
     while read -r ur; do
       tar --extract --file "${ur}" --directory manta_unresolved
     done < '~{write_lines(manta_unresolved_tars)}'
-    tar --create --gzip --file manta_unresolved.tar.gz manta_unresolved
+    pushd manta_unresolved
+    find . -type f -name '*.vcf.gz' > manifest.list
+    popd
+    tar --create --gzip --file manta_unresolved.tar.gz \
+      --directory manta_unresolved --files-from manta_unresolved/manifest.list
   >>>
 
   runtime {
