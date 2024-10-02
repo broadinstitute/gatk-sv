@@ -6,8 +6,8 @@ import "SVvsConservative.wdl" as SVvsConservative
 workflow NoncodingCombinatorialAssociationSelection {
     input{
         Int permutation_rounds
-        File SV_sites_file
-        File SV_function_file
+        File SV_vcf
+        File SV_vcf_idx
         File SVID_genomic_context
         File src_tar
         File ref_tar
@@ -21,12 +21,26 @@ workflow NoncodingCombinatorialAssociationSelection {
 
     }
 
+    call ExtractSVFunction{
+        input:
+            vcf = SV_vcf,
+            vcf_idx = SV_vcf_idx,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
+
+    call ExtractSVSites{
+        input:
+            vcf = SV_vcf,
+            vcf_idx = SV_vcf_idx,
+            sv_base_mini_docker = sv_base_mini_docker
+    }
+
     call CalculateAPS{
         input:
             ref_tar = ref_tar,
             src_tar = src_tar,
-            SV_sites_file = SV_sites_file,
-            SV_function_file = SV_function_file,
+            SV_sites_file = ExtractSVSites.SV_sites,
+            SV_function_file = ExtractSVFunction.SV_func,
             SVID_genomic_context = SVID_genomic_context,
             prefix = prefix,
             sv_base_mini_docker = sv_base_mini_docker
@@ -38,7 +52,7 @@ workflow NoncodingCombinatorialAssociationSelection {
                 permu = i, 
                 ref_tar = ref_tar,
                 src_tar = src_tar,
-                SV_sites_file = SV_sites_file,
+                SV_sites_file = ExtractSVSites.SV_sites,
                 sv_base_mini_docker = sv_base_mini_docker
         }
 
@@ -93,6 +107,117 @@ workflow NoncodingCombinatorialAssociationSelection {
     }
     output{
         Array[File] ncas_data_list = GenerateNcasMetrics.ncas_rdata
+    }
+}
+
+task ExtractSVSites{
+    input{
+        File SV_vcf
+        File SV_vcf_idx
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 2*size(cram_file, "GiB"), 
+        disk_gb: 15,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File SV_sites = "~{filebase}.sites.gz"
+        File SV_sites_idx = "~{filebase}.sites.gz.tbi"
+    }
+
+    String filebase = basename(SV_vcf,".vcf.gz")
+
+    command <<<
+        set -Eeuo pipefail
+
+        svtk vcf2bed -i SVTYPE -i SVLEN -i AC -i AF -i EVIDENCE -i ALGORITHMS --include-filters \
+            ~{SV_vcf} \
+            ~{filebase}.sites
+
+        awk '{if ($NF=="FILTER" || $NF=="PASS") print}' ~{filebase}.sites | cut -f1-5,7- | bgzip > ~{filebase}.sites.gz
+        tabix -b 2 -e 2 ~{filebase}.sites.gz
+    >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+    }
+}
+
+task ExtractSVFunction{
+    input{
+        File SV_vcf
+        File SV_vcf_idx
+        String sv_base_mini_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1, 
+        mem_gb: 2*size(cram_file, "GiB"), 
+        disk_gb: 15,
+        boot_disk_gb: 10,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    output{
+        File SV_func = "~{filebase}.func.gz"
+        File SV_func_idx = "~{filebase}.func.gz.tbi"
+    }
+
+    String filebase = basename(SV_vcf,".vcf.gz")
+
+    command <<<
+        set -Eeuo pipefail
+
+        svtk vcf2bed -i SVTYPE -i SVLEN \
+         -i PREDICTED_BREAKEND_EXONIC  \
+         -i PREDICTED_COPY_GAIN  \
+         -i PREDICTED_DUP_PARTIAL  \
+         -i PREDICTED_INTERGENIC  \
+         -i PREDICTED_INTRAGENIC_EXON_DUP  \
+         -i PREDICTED_INTRONIC  \
+         -i PREDICTED_INV_SPAN  \
+         -i PREDICTED_LOF  \
+         -i PREDICTED_MSV_EXON_OVERLAP  \
+         -i PREDICTED_NEAREST_TSS  \
+         -i PREDICTED_PARTIAL_EXON_DUP  \
+         -i PREDICTED_PROMOTER  \
+         -i PREDICTED_TSS_DUP  \
+         -i PREDICTED_UTR \ 
+         --include-filters \
+         ~{SV_vcf} \
+         ~{filebase}.func
+
+        awk '{if ($NF=="FILTER" || $NF=="PASS") print}' ~{filebase}.func | cut -f1-5,7- | bgzip > ~{filebase}.func.gz
+        tabix -b 2 -e 2 ~{filebase}.func.gz
+    >>>
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_base_mini_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
 
@@ -155,7 +280,6 @@ task CalculateAPS{
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
-    
 }
 
 task GeneratePermutatedSVs{
