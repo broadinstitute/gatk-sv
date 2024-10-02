@@ -187,24 +187,12 @@ task ExtractSVFunction{
     command <<<
         set -Eeuo pipefail
 
-        svtk vcf2bed -i SVTYPE -i SVLEN \
-         -i PREDICTED_BREAKEND_EXONIC  \
-         -i PREDICTED_COPY_GAIN  \
-         -i PREDICTED_DUP_PARTIAL  \
-         -i PREDICTED_INTERGENIC  \
-         -i PREDICTED_INTRAGENIC_EXON_DUP  \
-         -i PREDICTED_INTRONIC  \
-         -i PREDICTED_INV_SPAN  \
-         -i PREDICTED_LOF  \
-         -i PREDICTED_MSV_EXON_OVERLAP  \
-         -i PREDICTED_NEAREST_TSS  \
-         -i PREDICTED_PARTIAL_EXON_DUP  \
-         -i PREDICTED_PROMOTER  \
-         -i PREDICTED_TSS_DUP  \
-         -i PREDICTED_UTR \ 
-         --include-filters \
-         ~{SV_vcf} \
-         ~{filebase}.func
+        svtk vcf2bed -i SVTYPE -i SVLEN -i PREDICTED_BREAKEND_EXONIC -i PREDICTED_COPY_GAIN \
+         -i PREDICTED_DUP_PARTIAL -i PREDICTED_INTERGENIC -i PREDICTED_INTRAGENIC_EXON_DUP -i PREDICTED_INTRONIC \
+         -i PREDICTED_INV_SPAN -i PREDICTED_LOF -i PREDICTED_MSV_EXON_OVERLAP \
+         -i PREDICTED_NEAREST_TSS -i PREDICTED_PARTIAL_EXON_DUP -i PREDICTED_PROMOTER \
+         -i PREDICTED_TSS_DUP -i PREDICTED_UTR --include-filters \
+         ~{SV_vcf} ~{filebase}.func
 
         awk '{if ($NF=="FILTER" || $NF=="PASS") print}' ~{filebase}.func | cut -f1-5,7- | bgzip > ~{filebase}.func.gz
         tabix -b 2 -e 2 ~{filebase}.func.gz
@@ -256,7 +244,7 @@ task CalculateAPS{
         set -Eeuo pipefail
 
         gsutil cp ~{ref_tar} ./
-        tar zxvf ref_tar.tar.gz 
+        tar zxvf ref.tar.gz 
         gsutil cp ~{src_tar} ./
         tar zxvf src.tar.gz 
 
