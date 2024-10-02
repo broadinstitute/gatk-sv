@@ -251,6 +251,7 @@ task GatkToSvtkVcf {
         File contig_list
         String? remove_infos
         String? remove_formats
+        Boolean set_pass = false
         String output_prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -278,7 +279,8 @@ task GatkToSvtkVcf {
             --source ~{source} \
             --contigs ~{contig_list} \
             ~{"--remove-infos " + remove_infos} \
-            ~{"--remove-formats " + remove_formats}
+            ~{"--remove-formats " + remove_formats} \
+            ~{if set_pass then "--set-pass" else ""}
         tabix ~{output_prefix}.vcf.gz
     >>>
     runtime {

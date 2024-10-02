@@ -232,6 +232,7 @@ workflow CombineBatches {
         contig_list=contig_list,
         remove_formats="CN",
         remove_infos="END2,AC,AF,AN,HIGH_SR_BACKGROUND,BOTHSIDES_SUPPORT",
+        set_pass=true,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_attr_gatk_to_svtk_vcf
     }

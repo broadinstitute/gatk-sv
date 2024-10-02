@@ -91,7 +91,8 @@ def create_header(header_in: pysam.VariantHeader,
 def convert(record: pysam.VariantRecord,
             vcf_out: pysam.VariantFile,
             remove_infos: Set[Text],
-            remove_formats: Set[Text]) -> pysam.VariantRecord:
+            remove_formats: Set[Text],
+            set_pass: bool) -> pysam.VariantRecord:
     """
     Converts a record from gatk to svtk style. This includes updating all GT fields to diploid and reverting END
     tag values.
@@ -106,6 +107,8 @@ def convert(record: pysam.VariantRecord,
         info fields to remove
     remove_formats: Set[Text]
         format fields to remove
+    set_pass: bool
+        set empty FILTER statuses to PASS
 
     Returns
     -------
@@ -126,7 +129,12 @@ def convert(record: pysam.VariantRecord,
     else:
         alleles = ('N', alleles[1])
     contig = record.contig
-    new_record = vcf_out.new_record(contig=contig, start=record.start, stop=record.stop, alleles=alleles)
+    # Change filter to PASS if requested
+    if set_pass and len(record.filter) == 0:
+        filter = ('PASS',)
+    else:
+        filter = record.filter
+    new_record = vcf_out.new_record(contig=contig, start=record.start, stop=record.stop, alleles=alleles, filter=filter)
     new_record.id = record.id
     # copy INFO fields
     for key in record.info:
@@ -200,6 +208,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Comma-delimited list of FORMAT fields to remove")
     parser.add_argument("--remove-infos", type=str,
                         help="Comma-delimited list of INFO fields to remove")
+    parser.add_argument("--set-pass", default=False, action='store_true',
+                        help="Set empty FILTER fields (\".\") to PASS")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -233,7 +243,8 @@ def main(argv: Optional[List[Text]] = None):
                     record=record,
                     vcf_out=vcf_out,
                     remove_infos=remove_infos,
-                    remove_formats=remove_formats
+                    remove_formats=remove_formats,
+                    set_pass=arguments.set_pass
                 ))
 
 
