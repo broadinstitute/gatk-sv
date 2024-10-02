@@ -95,7 +95,7 @@ workflow NoncodingCombinatorialAssociationSelection {
             input:
                 src_tar = src_tar,
                 aps = CalculateAPS.svid_aps,
-                sv_file_real = SV_sites_file,
+                sv_file_real = ExtractSVSites.SV_sites,
                 sv_file_permu = GeneratePermutatedSVs.permutated_SV,
                 sv_vs_gencode = SVvsGencode.SV_vs_gencode,
                 sv_vs_conserve = SV_vs_Conservative.SV_vs_conserved,
