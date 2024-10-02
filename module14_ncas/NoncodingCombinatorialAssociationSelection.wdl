@@ -23,15 +23,15 @@ workflow NoncodingCombinatorialAssociationSelection {
 
     call ExtractSVFunction{
         input:
-            vcf = SV_vcf,
-            vcf_idx = SV_vcf_idx,
+            SV_vcf = SV_vcf,
+            SV_vcf_idx = SV_vcf_idx,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
     call ExtractSVSites{
         input:
-            vcf = SV_vcf,
-            vcf_idx = SV_vcf_idx,
+            SV_vcf = SV_vcf,
+            SV_vcf_idx = SV_vcf_idx,
             sv_base_mini_docker = sv_base_mini_docker
     }
 
