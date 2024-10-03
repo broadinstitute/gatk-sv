@@ -103,6 +103,14 @@ const config = {
               {
                 label: 'Talkowski lab',
                 to: 'https://talkowski.mgh.harvard.edu',
+              },
+              {
+                label: 'Broad Institute',
+                to: 'https://www.broadinstitute.org'
+              },
+              {
+                label: 'Center for Genomic Medicine',
+                to: 'https://www.massgeneral.org/research/cgm'
               }
             ],
           },
