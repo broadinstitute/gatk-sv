@@ -8,59 +8,6 @@ import Link from '@docusaurus/Link';
 Note that imageUrl used in the following is optional.
 */
 
-const cloudNativeFeatures = [
-  {
-    imageUrl: 'img/placeholder.svg',
-  },
-  {
-    title: <>Cloud-Native</>,
-    description: (
-      <>
-        Built from the ground up for large-scale analysis, optimized for
-        cloud-native execution on the Google Cloud Platform.
-      </>
-    ),
-    //imageUrl: 'img/....svg',
-    buttonLink: "/docs/gs/runtime-env",
-    buttonText: "Learn More"
-  },
-];
-
-const scalableFeatures = [
-  {
-    title: (
-      <>Built for Population-Scale Genomic Research</>
-    ),
-    description: (
-      <>
-        Used to produce high-quality SV call sets for large
-        scale sequencing initiatives such as the Genome
-        Aggregation Project (gnomAD)
-      </>
-    ),
-    buttonLink: "/docs/gs/overview",
-    buttonText: "Learn More"
-  },
-  {
-    imageUrl: 'img/placeholder.svg',
-  }
-];
-
-const accurateFeatures = [
-  {
-    imageUrl: 'img/placeholder.svg',
-  },
-  {
-    title: <>Accurate</>,
-    description: (
-      <>
-        Analyzes SV calls from multiple algorithms and evidence
-        signatures to achieve high sensitivity and precision
-      </>
-    ),
-  },
-];
-
 const accessibleFeatures = [
   {
     title: <>Accessible</>,
@@ -133,6 +80,39 @@ const organizations = {
     }
   ]
 };
+
+const characteristics = [
+  {
+    title: 'Built for Population-Scale Genomic Research',
+    description: (
+      <>
+        Used to produce high-quality SV call sets for large
+        scale sequencing initiatives such as the Genome
+        Aggregation Project (gnomAD)
+      </>
+    ),
+  },
+  {
+    title: 'Accurate',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        Built from the ground up for large-scale analysis, optimized for
+        cloud-native execution on the Google Cloud Platform.
+      </>
+    ),
+  },
+  {
+    title: 'Cloud-Native',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        The pipeline includes modules for downstream annotation and visualization,
+        making it easier to interpret the results in the context of population and medical genetics.
+      </>
+    ),
+  },
+];
 
 const featureList = [
   {
@@ -269,41 +249,15 @@ export default function HomepageFeatures() {
         </div>
       </section>
 
-      {cloudNativeFeatures && cloudNativeFeatures.length > 0 && (
-        <section className={styles.features}>
-          <div className="container">
-            <div className={clsx('row', 'single-feature-row')}>
-              {cloudNativeFeatures.map((props, idx) => (
-                <WholeRowFeature key={idx} {...props} />
-              ))}
-            </div>
+      <section className={clsx(styles.features, styles.featuresAlt)}>
+        <div className="container">
+          <div className="row">
+            {characteristics.map((props, idx) => (
+              <Feature key={idx} {...props} />
+            ))}
           </div>
-        </section>
-      )}
-
-      {scalableFeatures && scalableFeatures.length > 0 && (
-        <section className={clsx(styles.features, styles.featuresAlt)}>
-          <div className="container">
-            <div className={clsx('row', 'single-feature-row')}>
-              {scalableFeatures.map((props, idx) => (
-                <WholeRowFeature key={idx} {...props} />
-              ))}
-            </div>
-          </div>
-        </section>
-        )}
-
-      {accurateFeatures && accurateFeatures.length > 0 && (
-        <section className={clsx(styles.features)}>
-          <div className="container">
-            <div className={clsx('row', 'single-feature-row')}>
-              {accurateFeatures.map((props, idx) => (
-                <WholeRowFeature key={idx} {...props} />
-              ))}
-            </div>
-          </div>
-        </section>
-        )}
+        </div>
+      </section>
 
       <section className={clsx(styles.features)}>
         <div className="container">
