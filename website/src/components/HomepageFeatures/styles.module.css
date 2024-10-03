@@ -3,6 +3,8 @@
   align-items: center;
   padding: 2rem 0;
   width: 100%;
+  justify-content: space-between;
+  gap: 20px;
 }
 
 .featuresAlt {
@@ -25,4 +27,54 @@
 
 .buttons {
   margin-top: 2rem;
+}
+
+.featureContainer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  width: 100%;
+  padding: 1rem 0;
+}
+
+.featureContainer.alignLeft {
+  flex-direction: row;
+}
+
+.featureContainer.alignRight {
+  flex-direction: row-reverse;
+}
+
+.featureImage {
+  flex: 1;
+  text-align: center;
+}
+
+.largeFeatureImage {
+  max-height: 100px;
+  width: auto;
+}
+
+.featureContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+}
+
+.featureContent.alignRight {
+  text-align: right;
+}
+
+.buttonContainer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.buttonContainer.alignRight {
+  justify-content: flex-end;
 }

@@ -70,9 +70,19 @@ const accessibleFeatures = [
         for scalable execution, secure environment, and seamless collaboration.
       </>
     ),
+    buttons: [
+      {
+        buttonLink: 'https://app.terra.bio',
+        buttonText: 'Joint Calling Workspace'
+      },
+      {
+        buttonLink: 'https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample',
+        buttonText: 'Single-Sample Workspace'
+      }
+    ],
   },
   {
-    imageUrl: 'img/placeholder.svg',
+    imageUrl: 'img/terraLogo.png',
   },
 ];
 
@@ -110,12 +120,14 @@ const featureList = [
   },
 ];
 
-function WholeRowFeature({ imageUrl, title, description, buttonLink, buttonText }) {
+function WholeRowFeature({ imageUrl, title, description, buttons, contentAlignment, imageAlignment }) {
   const imgUrl = useBaseUrl(imageUrl);
+
   return (
-    <div className={clsx('col col--6', styles.feature)}>
+    <div className={clsx('col col--6', styles.featureContainer, imageAlignment === 'right' ? styles.alignRight : styles.alignLeft)}>
+      {/* Image Section */}
       {imgUrl && (
-        <div className="text--center">
+        <div className={styles.featureImage}>
           <img
             className={styles.largeFeatureImage}
             src={imgUrl}
@@ -123,18 +135,25 @@ function WholeRowFeature({ imageUrl, title, description, buttonLink, buttonText 
           />
         </div>
       )}
-      {title && <h3 className="text--center">{title}</h3>}
-      {description && <p className="text--center">{description}</p>}
-      {buttonLink && buttonText && (
-        <div className="text--center" style={{ marginTop: '1rem' }}>
-          <Link className="button button--primary" to={buttonLink}>
-            {buttonText}
-          </Link>
-        </div>
-      )}
+
+      {/* Content Section */}
+      <div className={clsx(styles.featureContent, contentAlignment === 'right' ? styles.alignRight : '')}>
+        {title && <h3>{title}</h3>}
+        {description && <p>{description}</p>}
+        {buttons && buttons.length > 0 && (
+          <div className={clsx(styles.buttonContainer, contentAlignment === 'right' ? styles.alignRight : '')}>
+            {buttons.map((button, index) => (
+              <Link key={index} className="button button--primary" to={button.buttonLink}>
+                {button.buttonText}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 function Feature({ Svg, title, description }) {
   return (
@@ -155,6 +174,23 @@ function Feature({ Svg, title, description }) {
 export default function HomepageFeatures() {
   return (
     <>
+      {accessibleFeatures && accessibleFeatures.length > 0 && (
+        <section className={clsx(styles.features)}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {accessibleFeatures.map((props, idx) => (
+                <WholeRowFeature
+                  key={idx}
+                  {...props}
+                  contentAlignment="right"
+                  imageAlignment="left"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {cloudNativeFeatures && cloudNativeFeatures.length > 0 && (
         <section className={styles.features}>
           <div className="container">
@@ -184,18 +220,6 @@ export default function HomepageFeatures() {
           <div className="container">
             <div className={clsx('row', 'single-feature-row')}>
               {accurateFeatures.map((props, idx) => (
-                <WholeRowFeature key={idx} {...props} />
-              ))}
-            </div>
-          </div>
-        </section>
-        )}
-
-      {accessibleFeatures && accessibleFeatures.length > 0 && (
-        <section className={clsx(styles.features, styles.featuresAlt)}>
-          <div className="container">
-            <div className={clsx('row', 'single-feature-row')}>
-              {accessibleFeatures.map((props, idx) => (
                 <WholeRowFeature key={idx} {...props} />
               ))}
             </div>
