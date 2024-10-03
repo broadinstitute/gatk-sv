@@ -3,10 +3,9 @@ import clsx from 'clsx';
 import styles from './styles.module.css';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import Link from '@docusaurus/Link';
-
-/*
-Note that imageUrl used in the following is optional.
-*/
+import FeatureGallery from './featureGallery.js';
+import WholeRowFeature from './wholeRowFeature.js';
+import Feature from './feature.js';
 
 const accessibleFeatures = [
   {
@@ -147,75 +146,6 @@ const featureList = [
     ),
   },
 ];
-
-function WholeRowFeature({ imageUrl, title, description, buttons, contentAlignment, imageAlignment }) {
-  const imgUrl = useBaseUrl(imageUrl);
-
-  return (
-    <div className={clsx('col col--6', styles.featureContainer, imageAlignment === 'right' ? styles.alignRight : styles.alignLeft)}>
-      {/* Image Section */}
-      {imgUrl && (
-        <div className={styles.featureImage}>
-          <img
-            className={styles.largeFeatureImage}
-            src={imgUrl}
-            alt={title || ''}
-          />
-        </div>
-      )}
-
-      {/* Content Section */}
-      <div className={clsx(styles.featureContent, contentAlignment === 'right' ? styles.alignRight : '')}>
-        {title && <h3>{title}</h3>}
-        {description && <p>{description}</p>}
-        {buttons && buttons.length > 0 && (
-          <div className={clsx(styles.buttonContainer, contentAlignment === 'right' ? styles.alignRight : '')}>
-            {buttons.map((button, index) => (
-              <Link key={index} className="button button--primary" to={button.buttonLink}>
-                {button.buttonText}
-              </Link>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-
-function Feature({ Svg, title, description }) {
-  return (
-    <div className={clsx('col col--4')}>
-      {Svg && (
-        <div className="text--center">
-          <Svg className={styles.featureSvg} role="img" />
-        </div>
-      )}
-      <div className={clsx('text--center', 'padding-horiz--md')}>
-        {title && <h3>{title}</h3>}
-        {description && <p>{description}</p>}
-      </div>
-    </div>
-  );
-}
-
-function FeatureGallery({ header, images, description }) {
-  return (
-    <div className={styles.featureGallery}>
-      <h2 className={styles.header}>{header}</h2>
-
-      <div className={styles.imageGallery}>
-        {images.map((image, index) => (
-          <a key={index} href={image.link} target="_blank" rel="noopener noreferrer">
-            <img className={styles.galleryImage} src={image.src} alt={image.alt || `Image ${index + 1}`} />
-          </a>
-        ))}
-      </div>
-
-      {description && <p className={styles.description}>{description}</p>}
-    </div>
-  );
-}
 
 export default function HomepageFeatures() {
   return (
