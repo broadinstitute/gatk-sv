@@ -5,15 +5,15 @@ import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 
 function WholeRowFeature({ imageUrl, title, description, buttons, contentAlignment, imageAlignment }) {
-  const imgUrl = useBaseUrl(imageUrl);
+  const resolvedImageUrl = useBaseUrl(imageUrl);
 
   return (
     <div className={clsx('col col--6', styles.featureContainer, imageAlignment === 'right' ? styles.alignRight : styles.alignLeft)}>
-      {imgUrl && (
+      {resolvedImageUrl && (
         <div className={styles.featureImage}>
           <img
             className={styles.largeFeatureImage}
-            src={imgUrl}
+            src={resolvedImageUrl}
             alt={title || ''}
           />
         </div>
