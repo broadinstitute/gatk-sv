@@ -60,7 +60,7 @@ if [ ${DISTANCE} -lt 1 ]; then
 fi
 
 #Write header for outfile
-echo -e "sample_id\tchromosome\tnonzero_bins_in_tail" > ${OUTFILE}
+echo -e "#ID\tchromosome\tnonzero_bins_in_tail" > ${OUTFILE}
 
 #Iterate over contigs & write results to outfile
 while read contig end; do
