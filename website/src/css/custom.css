@@ -18,7 +18,7 @@
 
   /*Background color of the banner and alternative rows */
   --ifm-background-color-banner: #222629;
-  --ifm-background-color-alt: var(--ifm-color-primary-lightest);
+  --ifm-background-color-alt: var(--ifm-color-primary-light);
 
   /*Text color for alternative rows*/
   --ifm-color-alt: #8f9f96
@@ -34,7 +34,7 @@
   --ifm-color-primary: #6db7fd;
   --ifm-color-primary-dark: #49a5fd;
   --ifm-color-primary-darker: #379dfc;
-  --ifm-color-primary-darkest: #033b52;
+  --ifm-color-primary-darkest: #16324f;
   --ifm-color-primary-light: #b4dafe;
   --ifm-color-primary-lighter: #d8ecfe;
   --ifm-color-primary-lightest: #fcfdff;
