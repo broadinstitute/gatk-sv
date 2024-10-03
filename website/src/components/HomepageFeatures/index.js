@@ -28,7 +28,7 @@ const accessibleFeatures = [
     ],
   },
   {
-    imageUrl: 'img/terraLogo.png',
+    imageUrl: 'img/logo/terra.png',
   },
 ];
 
@@ -36,22 +36,22 @@ const featuredProjects = {
   header: "Featured Projects",
   images: [
     {
-      src: 'img/gnomad.png',
+      src: 'img/logo/gnomad.png',
       link: 'https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/',
       alt: 'gnomAD'
     },
     {
-      src: 'img/allOfUs.png',
+      src: 'img/logo/allOfUs.png',
       link: 'https://support.researchallofus.org/hc/en-us/articles/27496716922900-All-of-Us-Short-Read-Structural-Variant-Quality-Report',
       alt: 'all-of-us'
     },
     {
-      src: 'img/hgsvc.png',
+      src: 'img/logo/hgsvc.png',
       link: 'https://www.hgsvc.org/',
       alt: 'HGSVC'
     },
     {
-      src: 'img/1kgp.png',
+      src: 'img/logo/1kgp.png',
       link: 'https://www.internationalgenome.org/data-portal/data-collection/30x-grch38',
       alt: '1000-genomes-project'
     }
@@ -63,17 +63,17 @@ const organizations = {
   header: "Organizations",
   images: [
     {
-      src: "img/broad.png",
+      src: "img/logo/broad.png",
       link: "https://www.broadinstitute.org/",
       alt: "Broad Institute"
     },
     {
-      src: "img/talkowskiLab.png",
+      src: "img/logo/talkowskiLab.png",
       link: "https://talkowski.mgh.harvard.edu/",
       alt: "Talkowski Lab"
     },
     {
-      src: "img/cgm.png",
+      src: "img/logo/cgm.png",
       link: "https://cgm.massgeneral.org/",
       alt: "Center for Genomic Medicine"
     }
