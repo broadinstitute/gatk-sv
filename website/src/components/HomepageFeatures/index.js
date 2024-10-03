@@ -113,6 +113,27 @@ const featuredProjects = {
   //description: "..."
 };
 
+const organizations = {
+  header: "Organizations",
+  images: [
+    {
+      src: "img/broad.png",
+      link: "https://www.broadinstitute.org/",
+      alt: "Broad Institute"
+    },
+    {
+      src: "img/talkowskiLab.png",
+      link: "https://talkowski.mgh.harvard.edu/",
+      alt: "Talkowski Lab"
+    },
+    {
+      src: "img/cgm.png",
+      link: "https://cgm.massgeneral.org/",
+      alt: "Center for Genomic Medicine"
+    }
+  ]
+};
+
 const featureList = [
   {
     title: 'Evidence Collection and QC',
@@ -239,6 +260,12 @@ export default function HomepageFeatures() {
       <section className={clsx(styles.features, styles.featuresAlt)}>
         <div className="container">
           <FeatureGallery {...featuredProjects} />
+        </div>
+      </section>
+
+      <section className={clsx(styles.features)}>
+        <div className="container">
+          <FeatureGallery {...organizations} />
         </div>
       </section>
 
