@@ -78,3 +78,40 @@
 .buttonContainer.alignRight {
   justify-content: flex-end;
 }
+
+.featureGallery {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.header {
+  font-size: 2rem;
+  margin-bottom: 2rem;
+}
+
+.imageGallery {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-bottom: 2rem;
+}
+
+.galleryImage {
+  max-height: 100px;
+  width: auto;
+  object-fit: cover;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+}
+
+.galleryImage:hover {
+  transform: scale(1.1);
+}
+
+.description {
+  font-size: 1.2rem;
+  color: #666;
+  margin-top: 1rem;
+}
+
+

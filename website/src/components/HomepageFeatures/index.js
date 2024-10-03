@@ -86,6 +86,33 @@ const accessibleFeatures = [
   },
 ];
 
+const featuredProjects = {
+  header: "Featured Projects",
+  images: [
+    {
+      src: 'img/gnomad.png',
+      link: 'https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/',
+      alt: 'gnomAD'
+    },
+    {
+      src: 'img/allOfUs.png',
+      link: 'https://support.researchallofus.org/hc/en-us/articles/27496716922900-All-of-Us-Short-Read-Structural-Variant-Quality-Report',
+      alt: 'all-of-us'
+    },
+    {
+      src: 'img/hgsvc.png',
+      link: 'https://www.hgsvc.org/',
+      alt: 'HGSVC'
+    },
+    {
+      src: 'img/1kgp.png',
+      link: 'https://www.internationalgenome.org/data-portal/data-collection/30x-grch38',
+      alt: '1000-genomes-project'
+    }
+  ],
+  //description: "..."
+};
+
 const featureList = [
   {
     title: 'Evidence Collection and QC',
@@ -171,6 +198,24 @@ function Feature({ Svg, title, description }) {
   );
 }
 
+function FeatureGallery({ header, images, description }) {
+  return (
+    <div className={styles.featureGallery}>
+      <h2 className={styles.header}>{header}</h2>
+
+      <div className={styles.imageGallery}>
+        {images.map((image, index) => (
+          <a key={index} href={image.link} target="_blank" rel="noopener noreferrer">
+            <img className={styles.galleryImage} src={image.src} alt={image.alt || `Image ${index + 1}`} />
+          </a>
+        ))}
+      </div>
+
+      {description && <p className={styles.description}>{description}</p>}
+    </div>
+  );
+}
+
 export default function HomepageFeatures() {
   return (
     <>
@@ -190,6 +235,12 @@ export default function HomepageFeatures() {
           </div>
         </section>
       )}
+
+      <section className={clsx(styles.features, styles.featuresAlt)}>
+        <div className="container">
+          <FeatureGallery {...featuredProjects} />
+        </div>
+      </section>
 
       {cloudNativeFeatures && cloudNativeFeatures.length > 0 && (
         <section className={styles.features}>
