@@ -9,7 +9,7 @@ import Feature from './feature.js';
 
 const accessibleFeatures = [
   {
-    title: <>Accessible</>,
+    title: <>Terra integration</>,
     description: (
       <>
         Leveraging the <a href="https://terra.bio" target="_blank" rel="noopener noreferrer">Terra platform </a>
