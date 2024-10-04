@@ -12,7 +12,8 @@ const accessibleFeatures = [
     title: <>Terra integration</>,
     description: (
       <>
-        Run your data with pre-configured workspaces on the secure <a href="https://terra.bio" target="_blank" rel="noopener noreferrer">Terra platform </a>.
+        Run your data with pre-configured workspaces on the secure
+        <a href="https://terra.bio" target="_blank" rel="noopener noreferrer"> Terra platform </a>
       </>
     ),
     buttons: [
@@ -157,8 +158,8 @@ export default function HomepageFeatures() {
                 <WholeRowFeature
                   key={idx}
                   {...props}
-                  contentAlignment="right"
-                  imageAlignment="left"
+                  contentAlignment="center"
+                  imageAlignment="center"
                 />
               ))}
             </div>

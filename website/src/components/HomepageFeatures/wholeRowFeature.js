@@ -7,10 +7,20 @@ import Link from '@docusaurus/Link';
 function WholeRowFeature({ imageUrl, title, description, buttons, contentAlignment, imageAlignment }) {
   const resolvedImageUrl = useBaseUrl(imageUrl);
 
+  const imageAlignmentClass =
+    imageAlignment === 'right' ? styles.alignRight :
+    imageAlignment === 'center' ? styles.alignCenter :
+    styles.alignLeft;
+
+  const contentAlignmentClass =
+    contentAlignment === 'right' ? styles.alignRight :
+    contentAlignment === 'center' ? styles.alignCenter :
+    styles.alignLeft;
+
   return (
-    <div className={clsx('col col--6', styles.featureContainer, imageAlignment === 'right' ? styles.alignRight : styles.alignLeft)}>
+    <div className={clsx('col col--6', styles.featureContainer)}>
       {resolvedImageUrl && (
-        <div className={styles.featureImage}>
+        <div className={clsx(styles.featureImage, imageAlignmentClass)}>
           <img
             className={styles.largeFeatureImage}
             src={resolvedImageUrl}
@@ -19,11 +29,11 @@ function WholeRowFeature({ imageUrl, title, description, buttons, contentAlignme
         </div>
       )}
 
-      <div className={clsx(styles.featureContent, contentAlignment === 'right' ? styles.alignRight : '')}>
+      <div className={clsx(styles.featureContent, contentAlignmentClass)}>
         {title && <h3>{title}</h3>}
         {description && <p>{description}</p>}
         {buttons && buttons.length > 0 && (
-          <div className={clsx(styles.buttonContainer, contentAlignment === 'right' ? styles.alignRight : '')}>
+          <div className={clsx(styles.buttonContainer, contentAlignmentClass)}>
             {buttons.map((button, index) => (
               <Link key={index} className="button button--primary" to={button.buttonLink}>
                 {button.buttonText}
