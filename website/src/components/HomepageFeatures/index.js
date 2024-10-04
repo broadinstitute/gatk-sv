@@ -12,8 +12,7 @@ const accessibleFeatures = [
     title: <>Terra integration</>,
     description: (
       <>
-        Leveraging the <a href="https://terra.bio" target="_blank" rel="noopener noreferrer">Terra platform </a>
-        for scalable execution, secure environment, and seamless collaboration.
+        Run your data with pre-configured workspaces on the secure <a href="https://terra.bio" target="_blank" rel="noopener noreferrer">Terra platform </a>.
       </>
     ),
     buttons: [
