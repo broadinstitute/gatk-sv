@@ -82,22 +82,21 @@ const organizations = {
 
 const characteristics = [
   {
-    title: 'Built for Population-Scale Genomic Research',
+    title: 'Population-scale capabilities',
     description: (
       <>
-        Used to produce high-quality SV call sets for large
-        scale sequencing initiatives such as the Genome
-        Aggregation Project (gnomAD)
+        Used for SV discovery in flagship research studies including the
+        Genome Aggregation Project (gnomAD) and All of Us.
       </>
     ),
   },
   {
-    title: 'Accurate',
+    title: 'Sensitive and accurate',
     //Svg: require('@site/static/img/....svg').default,
     description: (
       <>
-        Built from the ground up for large-scale analysis, optimized for
-        cloud-native execution on the Google Cloud Platform.
+        Ensemble calling with multiple SV discovery tools combined with joint genotyping maximize power,
+        and ML-based variant adjudication filters poor quality variants.
       </>
     ),
   },
@@ -106,8 +105,8 @@ const characteristics = [
     //Svg: require('@site/static/img/....svg').default,
     description: (
       <>
-        The pipeline includes modules for downstream annotation and visualization,
-        making it easier to interpret the results in the context of population and medical genetics.
+        Built for the Terra genomics platform, enabling scalability, collaboration,
+        and reproducibility in a secure environment.
       </>
     ),
   },
