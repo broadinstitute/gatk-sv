@@ -133,6 +133,9 @@ def main():
                             sample_obj['GT'] = (1, 1)  # RD_CN 0 DEL
 
                 if gt5kb_dup:
+                    # Convert to bi-allelic
+                    if '<CN0>' in record.alts:
+                        record.alts = ('<DUP>',)
                     for sample_obj in record.samples.itervalues():
                         if not sample_obj.get('GQ') is None and \
                                 (sample_obj.get('RD_CN') is not None and sample_obj.get('RD_CN') <= 2):
