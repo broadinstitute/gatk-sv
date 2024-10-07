@@ -5,7 +5,7 @@ import "Structs.wdl"
 workflow MakeBincovMatrix {
   input {
     Array[String] samples
-    Array[File] count_files
+    Array[File] coverage_counts
     Array[String]? bincov_matrix_samples
     File? bincov_matrix
     String batch
@@ -30,7 +30,7 @@ workflow MakeBincovMatrix {
   }
 
   Array[String]+ all_samples = flatten([samples, select_all([bincov_matrix_header])])
-  Array[File]+ all_count_files = flatten([count_files, select_all([bincov_matrix])])
+  Array[File]+ all_count_files = flatten([coverage_counts, select_all([bincov_matrix])])
 
   scatter(i in range(length(all_count_files))) {
     call MakeBincovMatrixColumns {

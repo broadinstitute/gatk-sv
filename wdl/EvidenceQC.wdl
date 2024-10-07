@@ -21,11 +21,8 @@ workflow EvidenceQC {
     # Optional QC tasks
     Boolean run_vcf_qc
 
-    # Global files
-    File genome_file
-
     # Coverage files
-    Array[File] counts
+    Array[File] coverage_counts
 
     # SV tool calls
     Array[File]? manta_vcfs        # Manta VCF
@@ -65,7 +62,7 @@ workflow EvidenceQC {
   call mbm.MakeBincovMatrix as MakeBincovMatrix {
     input:
       samples = samples,
-      count_files = counts,
+      coverage_counts = coverage_counts,
       batch = batch,
       disk_overhead_gb = disk_overhead_bincov_gb,
       sv_base_mini_docker = sv_base_mini_docker,
