@@ -100,41 +100,6 @@ const characteristics = [
   }
 ];
 
-
-const featureList = [
-  {
-    title: 'Evidence Collection and QC',
-    //Svg: require('@site/static/img/....svg').default,
-    description: (
-      <>
-        SV evidence is collected through multiple algorithms and passed through rigorous QC steps
-        to filter technical outliers and improve call quality.
-      </>
-    ),
-  },
-  {
-    title: 'SV Genotyping and Refinement',
-    //Svg: require('@site/static/img/....svg').default,
-    description: (
-      <>
-        After SV discovery, the pipeline refines genotypes using a cohort-wide reference panel
-        to improve the accuracy of detected SVs. It supports re-genotyping of
-        copy-number variants (CNVs) for large-scale analyses.
-      </>
-    ),
-  },
-  {
-    title: 'Downstream Annotation and Visualization',
-    //Svg: require('@site/static/img/....svg').default,
-    description: (
-      <>
-        The pipeline includes modules for downstream annotation and visualization,
-        making it easier to interpret the results in the context of population and medical genetics.
-      </>
-    ),
-  },
-];
-
 export default function HomepageFeatures() {
   return (
     <>
@@ -157,18 +122,6 @@ export default function HomepageFeatures() {
 
       <section className={clsx(styles.features, styles.featuresAlt)}>
         <div className="container">
-          <FeatureGallery {...featuredProjects} />
-        </div>
-      </section>
-
-      <section className={clsx(styles.features)}>
-        <div className="container">
-          <FeatureGallery {...organizations} />
-        </div>
-      </section>
-
-      <section className={clsx(styles.features, styles.featuresAlt)}>
-        <div className="container">
           <div className="row">
             {characteristics.map((props, idx) => (
               <Feature key={idx} {...props} />
@@ -177,13 +130,15 @@ export default function HomepageFeatures() {
         </div>
       </section>
 
-      <section className={clsx(styles.features)}>
+      <section className={clsx(styles.features, styles.features)}>
         <div className="container">
-          <div className="row">
-            {featureList.map((props, idx) => (
-              <Feature key={idx} {...props} />
-            ))}
-          </div>
+          <FeatureGallery {...featuredProjects} />
+        </div>
+      </section>
+
+      <section className={clsx(styles.featuresAlt)}>
+        <div className="container">
+          <FeatureGallery {...organizations} />
         </div>
       </section>
     </>
