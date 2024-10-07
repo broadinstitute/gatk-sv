@@ -30,6 +30,7 @@ workflow CleanVcfChromosome {
     String chr_y
 
     File? svtk_to_gatk_script  # For debugging
+    File? make_clean_gq_script
 
     Boolean use_hail
     String? gcs_project
@@ -236,6 +237,7 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.clean_vcf_5",
       records_per_shard=clean_vcf5_records_per_shard,
       threads_per_task=clean_vcf5_threads_per_task,
+      make_clean_gq_script=make_clean_gq_script,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
