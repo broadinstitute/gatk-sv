@@ -15,6 +15,7 @@ workflow TinyResolve {
     Int samples_per_shard = 25
     String sv_pipeline_docker
     String linux_docker
+    Boolean rm_cpx_type = true
     RuntimeAttr? runtime_attr_resolve
     RuntimeAttr? runtime_attr_untar
     RuntimeAttr? runtime_attr_concattars
@@ -78,6 +79,7 @@ workflow TinyResolve {
         sv_pipeline_docker = sv_pipeline_docker,
         cytoband=cytoband,
         cytoband_idx=cytoband_idx,
+        rm_cpx_type = rm_cpx_type,
         discfile=GetShardDiscfiles.shard_items,
         discfile_idx=GetShardDiscfileIndexes.shard_items,
         mei_bed=mei_bed,
@@ -111,6 +113,7 @@ task ResolveManta {
     File cytoband
     File mei_bed
     String sv_pipeline_docker
+    Boolean rm_cpx_type
     RuntimeAttr? runtime_attr_override
   }
 
@@ -139,9 +142,24 @@ task ResolveManta {
       pe=${discfiles[$i]}
       sample_no=`printf %03d $i`
       bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $pe ${sample_id} ~{mei_bed} ~{cytoband}
-      mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz
-      bgzip manta.unresolved.vcf
-      mv manta.unresolved.vcf.gz ${sample_no}.${sample_id}.manta.unresolved.vcf.gz
+      if [[ ~{true='true' false='false' rm_cpx_type} = 'true' ]]; then
+        bcftools annotate --include 'INFO/SVTYPE != "CPX"' --keep-sites \
+          --remove 'INFO/CPX_TYPE' \
+          --output "tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz" \
+          --output-type z \
+          "${sample_id}.manta.complex.vcf.gz"
+        rm "${sample_id}.manta.complex.vcf.gz"
+        bcftools annotate --include 'INFO/SVTYPE != "CPX"' --keep-sites \
+          --remove 'INFO/CPX_TYPE' \
+          --output "${sample_no}.${sample_id}.manta.unresolved.vcf.gz" \
+          --output-type z \
+          manta.unresolved.vcf
+        rm manta.unresolved.vcf
+      else
+        mv ${sample_id}.manta.complex.vcf.gz tloc_${sample_no}.${sample_id}.manta.complex.vcf.gz
+        bgzip manta.unresolved.vcf
+        mv manta.unresolved.vcf.gz ${sample_no}.${sample_id}.manta.unresolved.vcf.gz
+      fi
     done
     find . -type f -name '*.complex.vcf.gz' \
       | tar --create --file='manta_tloc_~{shard_number}.tar' --files-from=-
