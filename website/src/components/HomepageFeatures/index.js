@@ -26,10 +26,8 @@ const accessibleFeatures = [
         buttonText: 'Single-Sample Workspace'
       }
     ],
-  },
-  {
-    imageUrl: 'img/logo/terra.png',
-  },
+    colSize: "col--12",
+  }
 ];
 
 const featuredProjects = {
