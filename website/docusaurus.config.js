@@ -29,8 +29,6 @@ const config = {
       ({
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
-          // Please change this to your repo.
-          // Remove this to remove the "edit this page" links.
           editUrl:
             'https://github.com/broadinstitute/gatk-sv/tree/master/website',
         },
@@ -105,6 +103,14 @@ const config = {
               {
                 label: 'Talkowski lab',
                 to: 'https://talkowski.mgh.harvard.edu',
+              },
+              {
+                label: 'Broad Institute',
+                to: 'https://www.broadinstitute.org'
+              },
+              {
+                label: 'Center for Genomic Medicine',
+                to: 'https://www.massgeneral.org/research/cgm'
               }
             ],
           },
