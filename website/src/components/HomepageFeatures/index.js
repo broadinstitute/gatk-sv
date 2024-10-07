@@ -80,24 +80,35 @@ const organizations = {
 
 const characteristics = [
   {
+    title: 'Population-scale capabilities',
+    //Svg: require('@site/static/img/....svg').default,
     description: (
       <>
-        <ul>
-          <li>
-            <strong>Population-scale capabilities:</strong> used for SV discovery in flagship research studies including the Genome Aggregation Project (gnomAD) and All of Us.
-          </li>
-          <li>
-            <strong>Sensitive and accurate:</strong> ensemble calling with multiple SV discovery tools combined with joint genotyping maximize power, and ML-based variant adjudication filters poor quality variants.
-          </li>
-          <li>
-            <strong>Cloud-native:</strong> built for the Terra genomics platform, enabling scalability, collaboration, and reproducibility in a secure environment.
-          </li>
-        </ul>
+        Used for SV discovery in flagship research studies including
+        the Genome Aggregation Project (gnomAD) and All of Us.
       </>
     ),
-    colSize: "col--12",
-    contentAlignment: "left"
-  }
+  },
+  {
+    title: 'Sensitive and accurate',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        Ensemble calling with multiple SV discovery tools combined with
+        joint genotyping maximize power, and ML-based variant adjudication filters poor quality variants.
+      </>
+    ),
+  },
+  {
+    title: 'Cloud-native',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        Built for the Terra genomics platform, enabling scalability, collaboration,
+        and reproducibility in a secure environment.
+      </>
+    ),
+  },
 ];
 
 export default function HomepageFeatures() {
@@ -120,7 +131,7 @@ export default function HomepageFeatures() {
         </section>
       )}
 
-      <section className={clsx(styles.features, styles.featuresAlt)}>
+      <section className={clsx(styles.featuresAlt)}>
         <div className="container">
           <div className="row">
             {characteristics.map((props, idx) => (
