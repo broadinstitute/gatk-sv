@@ -151,6 +151,10 @@ def convert(record: pysam.VariantRecord,
     if svtype == 'INS':
         new_record.info['SVLEN'] = record.info.get('SVLEN', -1)
         new_record.info['STRANDS'] = '+-'
+        # END information is lost when setting POS=END, so we need to set it to SR2POS if it's available
+        # Note that the END position is only important following SR breakpoint refinement in FilterBatch
+        if record.info.get('SR2POS') is not None:
+            new_record.stop = record.info['SR2POS']
     elif svtype == 'BND' or svtype == 'CTX':
         new_record.stop = record.info['END2']
         new_record.info['SVLEN'] = -1
@@ -208,6 +212,8 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Comma-delimited list of FORMAT fields to remove")
     parser.add_argument("--remove-infos", type=str,
                         help="Comma-delimited list of INFO fields to remove")
+    parser.add_argument("--intervaled-ins", default=False, action='store_true',
+                        help="Set INS record END to POS+SVLEN")
     parser.add_argument("--set-pass", default=False, action='store_true',
                         help="Set empty FILTER fields (\".\") to PASS")
     if len(argv) <= 1:

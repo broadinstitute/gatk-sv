@@ -70,7 +70,8 @@ def _parse_ploidy_table(path: Text) -> Dict[Text, Dict[Text, int]]:
     return ploidy_dict
 
 
-def update_header(header: pysam.VariantHeader) -> None:
+def update_header(header: pysam.VariantHeader,
+                  add_sr_pos: bool) -> None:
     """
     Ingests the given header, removes specified fields, and adds necessary fields.
 
@@ -78,6 +79,8 @@ def update_header(header: pysam.VariantHeader) -> None:
     ----------
     header: pysam.VariantHeader
         input header
+    add_sr_pos: bool
+        add SR1POS and SR2POS INFO fields
     """
     header.add_line('##FORMAT=<ID=ECN,Number=1,Type=Integer,Description="Expected copy number for ref genotype">')
     # Add these just in case (no effect if they exist)
@@ -85,6 +88,9 @@ def update_header(header: pysam.VariantHeader) -> None:
     header.add_line('##INFO=<ID=CHR2,Number=1,Type=String,Description="Second contig">')
     header.add_line('##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">')
     header.add_line('##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">')
+    if add_sr_pos:
+        header.add_line('##INFO=<ID=SR1POS,Number=1,Type=Integer,Description="Split read position at start">')
+        header.add_line('##INFO=<ID=SR2POS,Number=1,Type=Integer,Description="Split read position at end">')
 
 
 def rescale_gq(record):
@@ -99,7 +105,8 @@ def convert(record: pysam.VariantRecord,
             ploidy_dict: Dict[Text, Dict[Text, int]],
             scale_down_gq: bool,
             bothside_pass_vid_set: Set[Text],
-            background_fail_vid_set: Set[Text]) -> pysam.VariantRecord:
+            background_fail_vid_set: Set[Text],
+            add_sr_pos: bool) -> pysam.VariantRecord:
     """
     Converts a record from svtk to gatk style. This includes updating END/END2 and adding
     necessary fields such as ECN.
@@ -118,6 +125,8 @@ def convert(record: pysam.VariantRecord,
         set of variant IDs with bothside SR pass flag
     background_fail_vid_set: Set[Text]
         set of variant Ids with background SR fail flag
+    add_sr_pos: bool
+        add SR1POS and SR2POS INFO fields
 
     Returns
     -------
@@ -138,6 +147,13 @@ def convert(record: pysam.VariantRecord,
     if svtype == 'BND' or svtype == 'CTX':
         record.info['END2'] = bnd_end_dict[record.id] if bnd_end_dict is not None \
             else record.info.get('END2', record.stop)
+    # Add SR1POS/SR2POS, CPX not supported
+    if add_sr_pos and svtype != 'CPX':
+        record.info['SR1POS'] = record.pos
+        if svtype == 'BND' or svtype == 'CTX':
+            record.info['SR2POS'] = record.info['END2']
+        else:
+            record.info['SR2POS'] = record.stop
     # Fix this weird edge case (may be from CPX review workflow)
     if svtype == 'INV' and '<CPX>' in record.alleles[1]:
         svtype = 'CPX'
@@ -208,7 +224,8 @@ def _process(vcf_in: pysam.VariantFile,
         out = convert(record=record, bnd_end_dict=bnd_end_dict,
                       ploidy_dict=ploidy_dict, scale_down_gq=arguments.scale_down_gq,
                       bothside_pass_vid_set=bothside_pass_vid_set,
-                      background_fail_vid_set=background_fail_vid_set)
+                      background_fail_vid_set=background_fail_vid_set,
+                      add_sr_pos=arguments.add_sr_pos)
         vcf_out.write(out)
 
 
@@ -235,6 +252,8 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Path to bothside SR pass flag variant list")
     parser.add_argument("--background-fail-list", type=str,
                         help="Path to background SR fail flag variant list")
+    parser.add_argument("--add-sr-pos", action='store_true',
+                        help="Add SR1POS and SR2POS INFO fields")
     if len(argv) <= 1:
         parser.parse_args(["--help"])
         sys.exit(0)
@@ -250,7 +269,8 @@ def main(argv: Optional[List[Text]] = None):
     # convert vcf header and records
     with pysam.VariantFile(arguments.vcf) as vcf_in:
         update_header(
-            header=vcf_in.header
+            header=vcf_in.header,
+            add_sr_pos=arguments.add_sr_pos
         )
         with pysam.VariantFile(arguments.out, mode='w', header=vcf_in.header) as vcf_out:
             _process(vcf_in, vcf_out, arguments)
