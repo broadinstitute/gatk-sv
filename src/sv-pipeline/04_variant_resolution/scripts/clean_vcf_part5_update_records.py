@@ -160,7 +160,7 @@ def main():
                 if len(record.filter) > 1 and 'PASS' in record.filter:
                     del record.filter['PASS']
 
-                if 'MULTIALLELIC' in record.filter and ('<DUP>' in record.alts or '<DEL>' in record.alts):
+                if 'MULTIALLELIC' in record.filter and ('<DUP>' in record.alts or '<DEL>' in record.alts or '<CN0>' in record.alts):
                     record.alts = ('<CNV>',)
                     record.info['SVTYPE'] = 'CNV'
 
