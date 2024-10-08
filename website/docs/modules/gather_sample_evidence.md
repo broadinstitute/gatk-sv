@@ -6,8 +6,8 @@ slug: gse
 ---
 
 Runs raw evidence collection on each sample with the following SV callers: 
-Manta, Wham, Scramble, and/or MELT. For guidance on pre-filtering prior to GatherSampleEvidence, 
-refer to the Sample Exclusion section.
+Manta, Wham, Scramble, and/or MELT, and collects raw SV evidence (PE/SR/RD/SD). For guidance on pre-filtering prior 
+to GatherSampleEvidence, refer to the Sample Exclusion section.
 
 The following diagram illustrates the downstream workflows of the `GatherSampleEvidence` workflow 
 in the recommended invocation order. You may refer to 
@@ -33,50 +33,76 @@ stateDiagram
 ```
 
 
-## Inputs
+### Required inputs
 
 #### `bam_or_cram_file`
-A BAM or CRAM file aligned to hg38. Index file (.bai) must be provided if using BAM.
+An indexed BAM or CRAM file aligned to hg38. See [Input data requirements](/docs/gs/inputs).
 
 #### `sample_id`
 Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) for specifications of allowable sample IDs. 
-IDs that do not meet these requirements may cause errors.
+IDs that do not meet these requirements may lead to errors.
 
-#### `preprocessed_intervals`
-Picard interval list.
+### Optional inputs
 
-#### `sd_locs_vcf`
-(`sd`: site depth) 
-A VCF file containing allele counts at common SNP loci of the genome, which is used for calculating BAF.  
-For human genome, you may use [`dbSNP`](https://www.ncbi.nlm.nih.gov/snp/) 
-that contains a complete list of common and clinical human single nucleotide variations, 
-microsatellites, and small-scale insertions and deletions. 
-You may find a link to the file in 
-[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
+#### `collect_coverage`
+Default: `true`. Collect read depth.
 
+#### `collect_pesr`
+Default: `true`. Collect paired-end and split-read evidence.
 
-## Outputs
+#### `manta_docker`
+If provided, runs the Manta tool.
 
-- Binned read counts file
-- Split reads (SR) file
-- Discordant read pairs (PE) file
+#### `melt_docker`
+If provided, runs the MELT tool.
+
+#### `scramble_docker`
+If provided, runs the Scramble tool.
+
+#### `wham_docker`
+If provided, runs the Wham tool.
+
+#### `run_localize_reads`
+Default: `false`. Copy input alignment files to the execution bucket before localizing to subsequent tasks. This 
+may be desirable when BAM/CRAM files are stored in a requester-pays bucket or in another region to avoid egress charges.
+
+:::warning
+Enabling `run_localize_reads` can incur high storage costs. If using, make sure to clean up execution directories from 
+failed runs.
+:::
+
+#### `run_module_metrics`
+Default: `true`. Calculate QC metrics for the sample. If true, `primary_contigs_fai` must also be provided, and 
+optionally the `baseline_*_vcf` inputs to run comparisons. 
+
+#### `run_localize_reads`
+Default: `false`. Copy input alignment files to the execution bucket before localizing to subsequent tasks.
+
+### Outputs
 
 #### `manta_vcf` {#manta-vcf}
-A VCF file containing variants called by Manta. 
+VCF containing variants called by Manta
 
 #### `melt_vcf` {#melt-vcf}
-A VCF file containing variants called by MELT. 
+VCF containing variants called by MELT
 
 #### `scramble_vcf` {#scramble-vcf}
-A VCF file containing variants called by Scramble. 
+VCF containing variants called by Scramble
 
 #### `wham_vcf` {#wham-vcf}
-A VCF file containing variants called by Wham. 
+VCF containing variants called by Wham
 
 #### `coverage_counts` {#coverage-counts}
+Binned read counts collected by `GATK-CollectReadCounts` (`.counts.tsv.gz`)
 
 #### `pesr_disc` {#pesr-disc}
+Discordant read pairs collected by `GATK-CollectSVEvidence` (`.pe.txt.gz`)
 
 #### `pesr_split` {#pesr-split}
+Split read positions collected by `GATK-CollectSVEvidence` (`.sr.txt.gz`)
 
 #### `pesr_sd` {#pesr-sd}
+Site depth counts collected by `GATK-CollectSVEvidence` (`.sd.txt.gz`)
+
+#### `sample_metrics_files`
+(Optional) Sample metrics for QC. Enable by setting `run_module_metrics = true`.

@@ -4,11 +4,16 @@ description: Overview of the constituting components
 sidebar_position: 0
 ---
 
-The pipeline is written in [Workflow Description Language (WDL)](https://openwdl.org),
-consisting of multiple modules to be executed in the following order. 
+The pipeline is written in [Workflow Description Language (WDL)](https://openwdl.org) and consists of multiple modules 
+to be executed in the following order for joint calling. Note that while the single-sample mode calls many of these 
+modules, it is implemented as a separate runnable workflow.
+
+Below is a summary of the core modules in GATK-SV. Detailed information is documented in the following sections.
+For details on running these modules for joint calling in Terra, refer to the 
+[Workflow instructions](/docs/execution/joint#instructions) section.
 
 - **GatherSampleEvidence** SV evidence collection, including calls from a configurable set of 
-  algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), 
+  algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (SR), 
   and discordant pair positions (PE).
 
 - **EvidenceQC** Dosage bias scoring and ploidy estimation.
@@ -17,37 +22,15 @@ consisting of multiple modules to be executed in the following order.
   `cn.MOPS` and `GATK gCNV`; B-allele frequency (BAF) generation; 
    call and evidence aggregation.
 
-- **ClusterBatch** Variant clustering
+- **ClusterBatch** Intra-batch variant clustering
 
 - **GenerateBatchMetrics** Variant filtering metric generation
 
 - **FilterBatch** Variant filtering; outlier exclusion
 
-- **GenotypeBatch** Genotyping
+- **GenotypeBatch** Joint genotyping
 
-- **MakeCohortVcf** Cross-batch integration; complex variant resolution and re-genotyping; vcf cleanup
-
-- **Module 07 (in development)** Downstream filtering, including minGQ, batch effect check, 
-  outlier samples removal and final recalibration;
+- **MakeCohortVcf** Cross-batch clustering; complex variant resolution and re-genotyping; VCF cleanup
 
 - **AnnotateVCF** Annotations, including functional annotation, 
-  allele frequency (AF) annotation and AF annotation with external population callsets;
-
-- **Module 09 (in development)** Visualization, including scripts that generates IGV screenshots and rd plots.
-
-- Additional modules to be added: de novo and mosaic scripts
-
-
-## Pipeline Parameters
-
-Several inputs are shared across different modules of the pipeline, which are explained in this section.
-
-#### `ped_file`
-
-A pedigree file describing the familial relationships between the samples in the cohort.
-The file needs to be in the 
-[PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).
-Updated with [EvidenceQC](./eqc) sex assignments, including 
-`sex = 0` for sex aneuploidies; 
-genotypes on chrX and chrY for samples with `sex = 0` in the PED file will be set to 
-`./.` and these samples will be excluded from sex-specific training steps.
+  allele frequency (AF) annotation and AF annotation with external population callsets

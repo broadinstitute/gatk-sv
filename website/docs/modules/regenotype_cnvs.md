@@ -1,5 +1,5 @@
 ---
-title: ReGenotypeCNVs
+title: RegenotypeCNVs
 description: Regenotype CNVs
 sidebar_position: 10
 slug: rgcnvs
@@ -21,4 +21,4 @@ Re-genotypes probable mosaic variants across multiple batches.
 
 ### Outputs
 
-- Re-genotyped depth VCFs.
+- Re-genotyped depth VCFs

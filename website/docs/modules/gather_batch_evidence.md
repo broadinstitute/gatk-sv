@@ -5,7 +5,7 @@ sidebar_position: 4
 slug: gbe
 ---
 
-Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), GATK-gCNV) 
+Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), [GATK-gCNV](https://github.com/broadinstitute/gatk)) 
 and combines single-sample raw evidence into a batch.
 
 The following diagram illustrates the downstream workflows of the `GatherBatchEvidence` workflow 

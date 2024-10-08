@@ -27,7 +27,7 @@ Setup** step 2:
 |Input Type|Input Name|Description|
 |---------|--------|--------------|
 |`String`|`sample_id`|Case sample identifier*|
-|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file. If using BAM files, an index `.bam.bai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`. If using CRAM files, an index `.cram.crai` file must either be present in the same directory, or the path must be provided with the input `bam_or_cram_index`.|
+|`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file.|
 
 *See **Sample ID requirements** below for specifications.
 
