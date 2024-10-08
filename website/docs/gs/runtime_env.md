@@ -1,24 +1,30 @@
 ---
-title: Runtime Environments
+title: Runtime environments
 description: Describes the supported runtime environments.
-sidebar_position: 7
+sidebar_position: 5
 slug: ./runtime-env
 ---
 
-The GATK-SV pipeline consists of _workflows_ and _reference data_ that
-orchestrates the analysis flow of input data. Hence, a successful
-execution requires running the _workflows_ on _reference_ and input data.
+The GATK-SV pipeline consists of workflows implemented in the Workflow Description Language 
+([WDL](https://openwdl.org/)) and is built for use on the Google Cloud Platform ([GCP](https://cloud.google.com/)). 
 
-:::info Currently supported backends: GCP
-GATK-SV has been tested only on the Google Cloud Platform (GCP); 
-therefore, we are unable to provide specific guidance or support 
-for other execution platforms including HPC clusters and AWS.
-:::
+### Terra (recommended)
+To facilitate easy-of-use, security, and collaboration, GATK-SV is available on the [Terra](https://app.terra.bio/) 
+platform. Users should clone pre-configured Terra workspaces as a starting point for running GATK-SV:
 
-## Alternative backends
+- [Single-sample workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample)
+- Joint calling workspace (TODO)
 
-Contributions from the community to improve portability between backends 
-will be considered on a case-by-case-basis. We ask contributors to 
+These workspaces are actively maintained by the development team and will be updated with critical fixes and major releases.
+
+### Cromwell (advanced)
+Advanced users and developers who wish to run GATK-SV on a dedicated Cromwell server using GCP as a backend should refer 
+to the [Advanced Guides](/docs/category/advanced-guides) section.
+
+### Alternative backends (not supported)
+
+Use of other backends (e.g. AWS or on-prem HPC clusters) is not currently supported. However, contributions from the 
+community to improve portability between backends will be considered on a case-by-case-basis. We ask contributors to 
 please adhere to the following guidelines when submitting issues and pull requests:
 
 1. Code changes must be functionally equivalent on GCP backends, i.e. not result in changed output

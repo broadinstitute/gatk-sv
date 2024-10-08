@@ -7,40 +7,34 @@ slug: gcnv
 
 import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
 
+[WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGCNV.wdl)
+
 [GATK-gCNV](https://www.nature.com/articles/s41588-023-01449-0)
 is a method for detecting rare germline copy number variants (CNVs)
 from short-read sequencing read-depth information.
-The [TrainGCNV](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGCNV.wdl)
-module trains a gCNV model for use in the [GatherBatchEvidence](./gbe) workflow. 
+The `TrainGCNV` module trains a gCNV model for use in the [GatherBatchEvidence](./gbe) workflow. 
 The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
 
-
 The samples used for training should be homogeneous (concerning sequencing platform, 
-coverage, library preparation, etc.) and similar 
-to the samples on which the model will be applied in terms of sample type, 
-library preparation protocol, sequencer, sequencing center, and etc.
-
+coverage, library preparation, etc.) and similar to the samples on which the model will be applied.
 
 For small, relatively homogeneous cohorts, a single gCNV model is usually sufficient. 
 However, for larger cohorts, especially those with multiple data sources, 
 we recommend training a separate model for each batch or group of batches (see 
-[batching section](/docs/run/joint#batching) for details).
+[batching section](/docs/execution/joint#batching) for details).
 The model can be trained on all or a subset of the samples to which it will be applied. 
 A subset of 100 randomly selected samples from the batch is a reasonable
 input size for training the model; when the `n_samples_subsample` input is provided, 
 the `TrainGCNV` workflow can automatically perform this random selection.
 
-The following diagram illustrates the upstream and downstream workflows of the `TrainGCNV` workflow 
-in the recommended invocation order. You may refer to 
-[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
-for the overall recommended invocation order.
+The following diagram illustrates the recommended invocation order:
 
 ```mermaid
 
 stateDiagram
   direction LR
   
-  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef inModules stroke-width:0px,fill:#caf0f8,color:#00509d
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
@@ -58,49 +52,57 @@ stateDiagram
 
 ## Inputs
 
-This section provides a brief description on the _required_ inputs of the TrainGCNV workflow.
-For a description on the _optional_ inputs and their default values, you may refer to the 
-[source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/TrainGCNV.wdl) of the TrainGCNV workflow.
-Additionally, the majority of the optional inputs of the workflow map to the optional arguments of the 
-tool the workflow uses, `GATK GermlineCNVCaller`; hence, you may refer to the 
+The majority of the optional inputs of the workflow map to the optional arguments of the 
+tool the workflow uses, `GATK-GermlineCNVCaller`; hence, you may refer to the 
 [documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360040097712-GermlineCNVCaller) 
-of the tool for a description on these optional inputs. 
+of the tool for a description on these optional inputs.  We recommend that most users use the defaults.
+
+All array inputs of sample data must match in order. For example, the order of the `samples` array should match that 
+of the `count_files` array.
 
 #### `samples`
-A list of sample IDs. 
-The order of IDs in this list should match the order of files in `count_files`.
+Sample IDs
 
 #### `count_files`
-A list of per-sample coverage counts generated in the [GatherSampleEvidence](./gse#outputs) workflow.
+Per-sample binned read counts (`*.rd.txt.gz`) generated in the [GatherSampleEvidence](./gse#outputs) workflow.
 
-#### `contig_ploidy_priors`
-A tabular file with ploidy prior probability per contig.
-You may find the link to this input from 
-[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json)
-and a description to the file format 
-[here](https://gatk.broadinstitute.org/hc/en-us/articles/360037224772-DetermineGermlineContigPloidy).
-
-
-#### `reference_fasta`
-`reference_fasta`, `reference_index`, `reference_dict` are respectively the 
-reference genome sequence in the FASTA format, its index file, and a corresponding 
-[dictionary file](https://gatk.broadinstitute.org/hc/en-us/articles/360035531652-FASTA-Reference-genome-format).
-You may find links to these files from 
-[this reference](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json).
-
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `n_samples_subsample`, `sample_ids_training_subset`
+Provide one of these inputs to subset the input batch. `n_samples_subsample` will randomly subset, while 
+`sample_ids_training_subset` is for defining a predetermined subset. These options are provided for convenience in Terra.
 
 ## Outputs
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `annotated_intervals` {#annotated-intervals}
+#### `cohort_contig_ploidy_model_tar`
+Contig ploidy model tarball.
 
+#### `cohort_gcnv_model_tars`
+CNV model tarballs scattered across genomic intervals.
+
+#### `cohort_contig_ploidy_calls_tar`
+Contig ploidy calls for the submitted batch.
+
+#### `cohort_gcnv_calls_tars`
+CNV call tarballs scattered by sample and genomic region prior to segmentation.
+
+#### `cohort_genotyped_segments_vcfs`
+Single-sample VCFs of CNV calls for the submitted batch.
+
+#### `cohort_gcnv_tracking_tars`
+Convergence tracking logs.
+
+#### `cohort_genotyped_intervals_vcfs`
+Single-sample VCFs for the submitted batch containing per-interval genotypes prior to segmentation.
+
+#### `cohort_denoised_copy_ratios`
+TSV files containing denoised copy ratios in each sample.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `annotated_intervals` 
 The count files from [GatherSampleEvidence](./gse) with adjacent intervals combined into 
 locus-sorted `DepthEvidence` files using `GATK CondenseDepthEvidence` tool, which are
 annotated with GC content, mappability, and segmental-duplication content using 
-[`GATK AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals)
-tool. This output is generated if the optional input `do_explicit_gc_correction` is set to `True`.
+[`GATK-AnnotateIntervals`](https://gatk.broadinstitute.org/hc/en-us/articles/360041416652-AnnotateIntervals)
+tool. This output is generated if `do_explicit_gc_correction` is set to `True`. Disabled by default.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `filtered_intervals_cnv` {#filtered-intervals-cnv}
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `cohort_contig_ploidy_model_tar` {#contig-ploidy-model-tarball}
-
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `cohort_gcnv_model_tars` {#model-tarballs}
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `filtered_intervals_cnv`, `filtered_intervals_ploidy`
+Intervals of read count bins to be used for CNV and ploidy calling after filtering for problematic regions (e.g. 
+high GC content). This output is generated if `filter_intervals` is set to `True`. Enabled by default.
