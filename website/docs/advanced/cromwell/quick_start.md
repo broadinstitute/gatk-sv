@@ -1,18 +1,16 @@
 ---
-title: Quick Start
-description: Run the pipeline on demo data.
+title: Run
+description: Running GATK-SV on Cromwell
 sidebar_position: 1
 slug: ./qs
 ---
-
-This page provides steps for running the pipeline using demo data.
 
 # Quick Start on Cromwell
 
 This section walks you through the steps of running pipeline using 
 demo data on a managed Cromwell server.
 
-### Setup Environment
+### Environment Setup
 
 - A running instance of a Cromwell server.
 

@@ -7,31 +7,28 @@ slug: eqc
 
 import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
 
+[WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/EvidenceQC.wdl)
+
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. 
 The results from this module can be used for QC and batching.
 
 For large cohorts, this workflow can be run on arbitrary cohort 
-partitions of up to about 500 samples. Afterwards, we recommend 
+partitions of up to about 500 samples. Afterward, we recommend 
 using the results to divide samples into smaller batches (~100-500 samples) 
-with ~1:1 male:female ratio. Refer to the [Batching](/docs/run/joint#batching) section 
+with ~1:1 male:female ratio. Refer to the [Batching](/docs/execution/joint#batching) section 
 for further guidance on creating batches.
 
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
 
-The following diagram illustrates the upstream and downstream workflows of the `EvidenceQC` workflow 
-in the recommended invocation order. You may refer to 
-[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
-for the overall recommended invocation order.
-
-<br/>
+The following diagram illustrates the recommended invocation order:
 
 ```mermaid
 
 stateDiagram
   direction LR
   
-  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef inModules stroke-width:0px,fill:#caf0f8,color:#00509d
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
@@ -47,20 +44,53 @@ stateDiagram
   class batching outModules
 ```
 
-<br/>
-
 
 ### Inputs
 
-- Read count files (GatherSampleEvidence)
-- (Optional) SV call VCFs (GatherSampleEvidence)
+All array inputs of sample data must match in order. For example, the order of the `samples` array should match that 
+of the `counts` array.
+
+#### `batch`
+A name for the batch of samples being run. Can be alphanumeric with underscores.
+
+#### `samples`
+Sample IDs. Must match those used in [GatherSampleEvidence](./gse#outputs).
+
+#### `counts`
+Binned read counts (`.counts.tsv.gz`) from [GatherSampleEvidence](./gse#outputs)
+
+#### `*_vcfs`
+Raw SV call VCFs (`.vcf.gz`) from [GatherSampleEvidence](./gse#outputs). May be omitted in case a caller was not run.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_vcf_qc`
+Default: `false`. Run raw call VCF QC analysis.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_ploidy`
+Default: `true`. Run ploidy estimation.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `melt_insert_size`
+Mean insert size for each sample. Produces QC tables and plots if available.
+
 
 ### Outputs
 
-- Per-sample dosage scores with plots
-- Median coverage per sample
-- Ploidy estimates, sex assignments, with plots
-- (Optional) Outlier samples detected by call counts
+#### `WGD_*`
+Per-sample whole-genome dosage scores with plots
+
+#### `bincov_median`
+Median coverage per sample
+
+#### `bincov_matrix`
+Binned read depth matrix for the submitted batch
+
+#### `ploidy_*`
+Ploidy estimates, sex assignments, with plots
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `*_qc_low`, `*_qc_high`
+Outlier samples detected by call counts.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `qc_table`
+QC summary table. Enable with [run_ploidy](#run_ploidy).
 
 ## Preliminary Sample QC
 
