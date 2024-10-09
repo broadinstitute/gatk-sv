@@ -36,9 +36,11 @@ workflow GATKSVPipelineSingleSample {
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
     Boolean use_manta = true
-    Boolean use_melt = true
-    Boolean use_scramble = false
+    Boolean use_melt = false
+    Boolean use_scramble = true
     Boolean use_wham = true
+
+    Boolean? is_dragen_3_7_8
 
     # If GatherSampleEvidence outputs already prepared
     File? case_manta_vcf
@@ -118,8 +120,27 @@ workflow GATKSVPipelineSingleSample {
     Float? pct_chimeras
     Float? total_reads
 
+    # Scramble inputs
+    Int? scramble_alignment_score_cutoff
+    Int? scramble_percent_align_cutoff
+    Float? scramble_min_clipped_reads_fraction
+    Int? scramble_part2_threads
+    File? scramble_vcf_script
+
+    # Required if running Scramble but not running Manta
+    File? manta_vcf_input
+    File? manta_vcf_index_input
+
     # Wham inputs
     File wham_include_list_bed_file
+
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
 
     # Run GatherSampleEvidence metrics - default is off for single sample pipeline
     Boolean? run_sampleevidence_metrics = false
@@ -612,7 +633,14 @@ workflow GATKSVPipelineSingleSample {
         sample_id=sample_id,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
+        is_dragen_3_7_8 = is_dragen_3_7_8,
         primary_contigs_list=primary_contigs_list,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
@@ -632,6 +660,14 @@ workflow GATKSVPipelineSingleSample {
         pf_reads_improper_pairs=pf_reads_improper_pairs,
         pct_chimeras=pct_chimeras,
         total_reads=total_reads,
+        mei_bed=mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        manta_vcf_input = manta_vcf_input,
+        manta_vcf_index_input = manta_vcf_index_input,
         wham_include_list_bed_file=wham_include_list_bed_file,
         run_module_metrics = run_sampleevidence_metrics,
         sv_pipeline_docker=sv_pipeline_docker,

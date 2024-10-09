@@ -1,9 +1,4 @@
 {
-  "GATKSVPipelineBatch.use_manta": "true",
-  "GATKSVPipelineBatch.use_wham": "true",
-  "GATKSVPipelineBatch.use_melt": "true",
-  "GATKSVPipelineBatch.use_scramble": "false",
-
   "GATKSVPipelineBatch.name": {{ test_batch.name | tojson }},
   "GATKSVPipelineBatch.ped_file": {{ test_batch.ped_file | tojson }},
   "GATKSVPipelineBatch.samples": {{ test_batch.samples | tojson }},
@@ -54,6 +49,14 @@
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.melt_standard_vcf_header": {{ reference_resources.melt_std_vcf_header | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.wham_include_list_bed_file": {{ reference_resources.wham_include_list_bed_file | tojson }},
   "GATKSVPipelineBatch.GatherSampleEvidenceBatch.preprocessed_intervals": {{ reference_resources.preprocessed_intervals | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.mei_bed": {{ reference_resources.mei_bed | tojson }},
+
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_alt": {{ reference_resources.reference_bwa_alt | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_amb": {{ reference_resources.reference_bwa_amb | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_ann": {{ reference_resources.reference_bwa_ann | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_bwt": {{ reference_resources.reference_bwa_bwt | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_pac": {{ reference_resources.reference_bwa_pac | tojson }},
+  "GATKSVPipelineBatch.GatherSampleEvidenceBatch.reference_bwa_sa": {{ reference_resources.reference_bwa_sa | tojson }},
 
   "GATKSVPipelineBatch.EvidenceQC.wgd_scoring_mask": {{ reference_resources.wgd_scoring_mask | tojson }},
   "GATKSVPipelineBatch.EvidenceQC.run_vcf_qc": "false",
