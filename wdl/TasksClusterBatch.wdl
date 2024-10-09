@@ -11,6 +11,7 @@ task SVCluster {
         File ploidy_table
         String output_prefix
 
+        String? vcf_grep_expression
         String? contig
 
         Boolean? fast_mode
@@ -44,6 +45,7 @@ task SVCluster {
         File reference_dict
 
         Float? java_mem_fraction
+        String? additional_args
         String? variant_prefix
 
         String gatk_docker
@@ -71,7 +73,7 @@ task SVCluster {
         File out_index = "~{output_prefix}.vcf.gz.tbi"
     }
     command <<<
-        set -euo pipefail
+        set -euxo pipefail
 
         function getJavaMem() {
             # get JVM memory in MiB by getting total memory from /proc/meminfo
@@ -97,8 +99,14 @@ task SVCluster {
             exit 1
         fi
 
+        if ~{defined(vcf_grep_expression)}; then
+            fgrep ~{vcf_grep_expression} arguments.txt
+        else
+            cat arguments.txt
+        fi > arguments.grep.txt
+
         gatk --java-options "-Xmx${JVM_MAX_MEM}" SVCluster \
-            --arguments_file arguments.txt \
+            --arguments_file arguments.grep.txt \
             --output ~{output_prefix}.vcf.gz \
             --ploidy-table ~{ploidy_table} \
             --reference ~{reference_fasta} \
@@ -125,7 +133,8 @@ task SVCluster {
             ~{"--pesr-breakend-window " + pesr_breakend_window} \
             ~{"--insertion-length-summary-strategy " + insertion_length_summary_strategy} \
             ~{"--breakpoint-summary-strategy " + breakpoint_summary_strategy} \
-            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy}
+            ~{"--alt-allele-summary-strategy " + alt_allele_summary_strategy} \
+            ~{additional_args}
     >>>
     runtime {
         cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
@@ -242,6 +251,7 @@ task GatkToSvtkVcf {
         File contig_list
         String? remove_infos
         String? remove_formats
+        Boolean set_pass = false
         String output_prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -269,7 +279,8 @@ task GatkToSvtkVcf {
             --source ~{source} \
             --contigs ~{contig_list} \
             ~{"--remove-infos " + remove_infos} \
-            ~{"--remove-formats " + remove_formats}
+            ~{"--remove-formats " + remove_formats} \
+            ~{if set_pass then "--set-pass" else ""}
         tabix ~{output_prefix}.vcf.gz
     >>>
     runtime {
