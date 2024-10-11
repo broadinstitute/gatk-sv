@@ -142,6 +142,8 @@ task ResolveManta {
       pe=${discfiles[$i]}
       sample_no=`printf %03d $i`
       bash /opt/sv-pipeline/00_preprocessing/scripts/mantatloccheck.sh $vcf $pe ${sample_id} ~{mei_bed} ~{cytoband}
+      bcftools sort --output manta.unresolved.vcf.tmp --output-type v manta.unresolved.vcf
+      mv manta.unresolved.vcf.tmp manta.unresolved.vcf
       if [[ ~{true='true' false='false' rm_cpx_type} = 'true' ]]; then
         bcftools annotate --include 'INFO/SVTYPE != "CPX"' --keep-sites \
           --remove 'INFO/CPX_TYPE' \
