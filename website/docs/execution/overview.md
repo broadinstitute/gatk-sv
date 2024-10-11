@@ -9,7 +9,7 @@ GATK-SV uses [Manta](https://github.com/Illumina/manta), [WHAM](https://github.c
 [Scramble](https://github.com/GeneDx/scramble), [GATK gCNV](https://github.com/broadinstitute/gatk), 
 and [cn.MOPS](https://bioconductor.org/packages/release/bioc/html/cn.mops.html)
 as raw calling algorithms, and then integrates, filters, refines, and annotates
-the calls from these tools to produce a final output. 
+the calls from these tools to produce a final call set. 
 
 :::info
 Please note that most large published joint call sets produced by

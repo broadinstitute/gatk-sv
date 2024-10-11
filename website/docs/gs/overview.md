@@ -11,4 +11,6 @@ on Illumina short-read whole-genome sequencing (WGS) data.
 The pipeline genotypes structural variations using Docker-based tools, modularized in 
 different components, and deployed on Terra.
 
-Please refer to the documentation on [this page](/docs/execution/overview) for running the pipeline.  
+We highly recommend that users new to SV calling also review the [Best Practices Guide](/docs/best_practices).
+
+Please refer to the documentation in the [Execution section](/docs/execution/overview) for guidance running the pipeline.

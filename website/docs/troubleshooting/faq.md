@@ -3,6 +3,11 @@ title: FAQ
 slug: faq
 ---
 
+Please see the following articles for additional troubleshooting guides:
+
+- [Troubleshooting GATK-SV](https://gatk.broadinstitute.org/hc/en-us/articles/5334566940699-Troubleshooting-GATK-SV)
+- [Troubleshooting GATK-SV Error Messages on Terra](https://www.youtube.com/watch?v=3UVV03H9p1w)
+
 ### VM runs out of memory or disk
 
 - Default pipeline settings are tuned for batches of 100 samples. 
