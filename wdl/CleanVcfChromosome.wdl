@@ -25,6 +25,9 @@ workflow CleanVcfChromosome {
     File? outlier_samples_list
     Int? max_samples_per_shard_step3
 
+    File HERVK_reference
+    File LINE1_reference
+
     File ploidy_table
     String chr_x
     String chr_y
@@ -49,6 +52,7 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
+    RuntimeAttr? runtime_override_rescue_me_dels
 
     # Clean vcf 1b
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
@@ -244,9 +248,19 @@ workflow CleanVcfChromosome {
       runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
   }
 
+  call RescueMobileElementDeletions {
+    input:
+      vcf = CleanVcf5.polished,
+      prefix = "~{prefix}.~{contig}.rescue_me_dels",
+      LINE1 = LINE1_reference,
+      HERVK = HERVK_reference,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_override_rescue_me_dels
+  }
+
   call DropRedundantCnvs {
     input:
-      vcf=CleanVcf5.polished,
+      vcf=RescueMobileElementDeletions.out,
       prefix="~{prefix}.drop_redundant_cnvs",
       contig=contig,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -592,6 +606,101 @@ task CleanVcf4 {
   output {
     File out="~{prefix}.revise_vcf_lines.txt.gz"
     File multi_ids="~{prefix}.multi_geno_ids.txt.gz"
+  }
+}
+
+task RescueMobileElementDeletions {
+  input {
+    File vcf
+    String prefix
+    File LINE1
+    File HERVK
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  Float input_size = size(vcf, "GiB")
+  # disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
+  # in tests on large VCFs, memory usage is ~1.0 * input VCF size
+  # the biggest disk usage is at the end of the task, with input + output VCF on disk
+  Int cpu_cores = 2 # speed up compression / decompression of VCFs
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75 + input_size * 1.5,
+    disk_gb: ceil(100.0 + input_size * 3.0),
+    cpu_cores: cpu_cores,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    python <<CODE
+import os
+import pysam
+fin=pysam.VariantFile("~{vcf}")
+fo=pysam.VariantFile("~{prefix}.bnd_del.vcf.gz", 'w', header = fin.header)
+for record in fin:
+    if record.info['SVTYPE'] in ['BND'] and record.info['STRANDS']=="+-" and record.chrom == record.info['CHR2'] and record.info['END2'] - record.start < 10000:
+        record.info['SVLEN'] = record.info['END2'] - record.start
+        fo.write(record)
+fin.close()
+fo.close()
+CODE
+
+    tabix -p vcf ~{prefix}.bnd_del.vcf.gz
+
+    svtk vcf2bed ~{prefix}.bnd_del.vcf.gz -i ALL --include-filters ~{prefix}.bnd_del.bed
+    bgzip ~{prefix}.bnd_del.bed
+
+    bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{LINE1} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_LINE1/' > manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
+    bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{HERVK} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_HERVK/' >> manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
+
+    python <<CODE
+import pysam
+def SVID_MEI_DEL_readin(MEI_DEL_reset):
+    out={}
+    fin=open(MEI_DEL_reset)
+    for line in fin:
+        pin=line.strip().split()
+        if not pin[0] in out.keys():
+            out[pin[0]] = pin[3]
+    fin.close()
+    return out
+
+hash_MEI_DEL_reset = SVID_MEI_DEL_readin("manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv")
+fin=pysam.VariantFile("~{vcf}")
+fo=pysam.VariantFile("~{prefix}.vcf.gz", 'w', header = fin.header)
+for record in fin:
+    if record.id in hash_MEI_DEL_reset.keys():
+        del record.filter['UNRESOLVED']
+        record.info['SVTYPE'] = 'DEL'
+        record.info['SVLEN'] = record.info['END2'] - record.start
+        record.stop = record.info['END2']
+        record.info.pop("CHR2")
+        record.info.pop("END2")
+        if hash_MEI_DEL_reset[record.id] == 'overlap_LINE1':
+            record.alts = ('<DEL:ME:LINE1>',)
+        if hash_MEI_DEL_reset[record.id] == 'overlap_HERVK':
+            record.alts = ('<DEL:ME:HERVK>',)
+fin.close()
+fo.close()
+CODE
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
   }
 }
 
