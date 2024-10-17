@@ -196,7 +196,7 @@ def is_interchromosomal(pin, header_pos):
       if seg2[0] != chrom:
           return True
    elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
-      seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
+      seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
       if seg2[0] != chrom:
          return True
    elif pin[header_pos['CPX_TYPE']] in ['CTX_PQ/QP', 'CTX_PP/QQ'] or pin[header_pos['SVTYPE']] in ['CTX']:
@@ -248,7 +248,7 @@ def cpx_SV_readin(input_bed, header_pos, unresolved):
           ref_alt = cpx_info[1]
           breakpoints = cpx_info[0]
         elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
-          segments = pin[header_pos['CPX_INTERVALS']].split(',')
+          segments = pin[header_pos['SOURCE']].split(',')
           cpx_info = extract_bp_list_for_ins_idel(pin[:3], segments, small_sv_size_threshold)
           ref_alt = cpx_info[1]
           breakpoints = cpx_info[0]
@@ -292,7 +292,7 @@ def cpx_inter_chromo_SV_readin(input_bed, header_pos):
               ref_alt = ['a_b', 'a_ba']
         elif pin[header_pos['CPX_TYPE']] in ['INS_iDEL']:
           seg1 = pin[:3]
-          seg2 = [i for i in pin[header_pos['CPX_INTERVALS']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
+          seg2 = [i for i in pin[header_pos['SOURCE']].split(',') if 'INS_' in i][0].split('_')[1].split(':')
           seg2 = [seg2[0]]+seg2[1].split('-')
           if chr_list.index(seg1[0]) < chr_list.index(seg2[0]):
             bp = [[seg1[0]]+[int(i) for i in seg1[1:]], [seg2[0]]+[int(i) for i in seg2[1:]]]
