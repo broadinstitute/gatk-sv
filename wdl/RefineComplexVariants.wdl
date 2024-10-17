@@ -17,11 +17,10 @@ workflow RefineComplexVariants {
         Array[File] PE_metrics_idxes
         Array[File] Depth_DEL_beds
         Array[File] Depth_DUP_beds
+        Array[File] batch_sample_lists
 
         String prefix
         Int n_per_split
-        File sample_PE_metrics
-        File sample_depth_calls
         File? script_generate_cpx_review_script
 
         Boolean use_hail = false
@@ -31,6 +30,7 @@ workflow RefineComplexVariants {
         String sv_pipeline_docker
         String linux_docker
 
+        RuntimeAttr? runtime_attr_sample_batch
         RuntimeAttr? runtime_attr_vcf2bed
         RuntimeAttr? runtime_attr_collect_pe
         RuntimeAttr? runtime_attr_scatter_vcf
@@ -53,6 +53,14 @@ workflow RefineComplexVariants {
         RuntimeAttr? runtime_attr_calcu_cpx_evidences
     }
 
+    call GetSampleBatchPEMap {
+        input:
+            batch_name_list = batch_name_list,
+            batch_sample_lists = batch_sample_lists,
+            batch_pe_files = write_lines(PE_metrics),
+            sv_pipeline_docker = sv_pipeline_docker,
+            runtime_attr_override = runtime_attr_sample_batch
+    }
 
     call MiniTasks.ScatterVcf {
         input:
@@ -85,7 +93,7 @@ workflow RefineComplexVariants {
                 cpx_ctx_bed = SplitCpxCtx.cpx_ctx_bed,
                 prefix = "~{prefix}.~{i}",
 
-                sample_depth_calls = sample_depth_calls,
+                sample_batch_pe_map = GetSampleBatchPEMap.sample_batch_pe_map,
                 batch_name_list = batch_name_list,
                 Depth_DEL_beds = Depth_DEL_beds,
                 Depth_DUP_beds = Depth_DUP_beds,
@@ -103,7 +111,7 @@ workflow RefineComplexVariants {
         call GenerateCpxReviewScript {
             input:
                 bed = SplitCpxCtx.cpx_ctx_bed,
-                sample_PE_metrics = sample_PE_metrics,
+                sample_batch_pe_map = GetSampleBatchPEMap.sample_batch_pe_map,
                 script = script_generate_cpx_review_script,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_generate_cpx_review_script
@@ -196,6 +204,67 @@ workflow RefineComplexVariants {
         File revised_output_vcf = reviewed_vcf
         File revised_output_vcf_idx = reviewed_vcf_idx
         File cpx_evidences = ConcatHeaderedTextFiles.out
+    }
+}
+
+
+task GetSampleBatchPEMap {
+    input {
+        Array[File] batch_sample_lists
+        Array[String] batch_name_list
+        File batch_pe_files
+        String prefix
+        String sv_pipeline_docker
+        RuntimeAttr? runtime_attr_override
+    }
+
+    RuntimeAttr default_attr = object {
+        cpu_cores: 1,
+        mem_gb: 5,
+        disk_gb: 10 + 2*ceil(size(flatten([batch_sample_lists]), "GB")),
+        boot_disk_gb: 30,
+        preemptible_tries: 1,
+        max_retries: 1
+    }
+
+    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+    command <<<
+        set -euo pipefail
+
+        python <<CODE
+import os
+batch_sample_lists = ["~{sep='", "' batch_sample_lists}"]
+batch_name_list = ["~{sep='", "' batch_name_list}"]
+batch_pe_files = []
+with open("~{batch_pe_files}", 'r') as pe:
+    for line in pe:
+        local_file = os.path.basename(line.strip())
+        batch_pe_files.append(local_file)
+with open("~{prefix}.sample_batch_pe_map.tsv", 'w') as out:
+    for i in range(len(batch_name_list)):
+        with open(batch_sample_lists[i], 'r') as inp:
+            for line in inp:
+                sample = line.strip()
+                batch = batch_name_list[i]
+                pe_file = batch_pe_files[i]
+                out.write(f"{sample}\t{batch}\t{pe_file}\n")
+CODE
+
+    >>>
+
+    output {
+        File sample_batch_pe_map = "~{prefix}.sample_batch_pe_map.tsv"
+    }
+
+    runtime {
+        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+        docker: sv_pipeline_docker
+        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }
 }
 
@@ -444,7 +513,7 @@ task SplitCpxCtx {
 task GenerateCpxReviewScript {
     input {
         File bed
-        File sample_PE_metrics
+        File sample_batch_pe_map
         File? script
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -466,9 +535,11 @@ task GenerateCpxReviewScript {
     command <<<
         set -euo pipefail
 
+        cut -f1,3 ~{sample_batch_pe_map} > sample_PE_metrics.tsv
+
         python ~{default="/opt/sv-pipeline/scripts/reformat_CPX_bed_and_generate_script.py" script} \
         -i ~{bed} \
-        -s ~{sample_PE_metrics} \
+        -s sample_PE_metrics.tsv \
         -p CPX_CTX_disINS.PASS.PE_evidences \
         -c collect_PE_evidences.CPX_CTX_disINS.PASS.sh \
         -r ~{prefix}.svelter \
@@ -480,109 +551,6 @@ task GenerateCpxReviewScript {
         File pe_evidence_collection_script = "collect_PE_evidences.CPX_CTX_disINS.PASS.sh"
         File svelter = "~{prefix}.svelter"
         File unresolved_svids = "~{prefix}.unresolved_svids.txt"
-    }
-
-    runtime {
-        cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-        memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-        disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-        bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_pipeline_docker
-        preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-        maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-    }
-}
-
-task GenerateCnvSegmentFromCpx {
-    input {
-        File bed
-        File sample_depth_calls
-        String sv_pipeline_docker
-        RuntimeAttr? runtime_attr_override
-    }
-
-    RuntimeAttr default_attr = object {
-        cpu_cores: 1,
-        mem_gb: 5,
-        disk_gb: 10,
-        boot_disk_gb: 30,
-        preemptible_tries: 1,
-        max_retries: 1
-    }
-
-    RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
-
-    String prefix  = basename(bed, ".bed.gz")
-
-    command <<<
-        set -euo pipefail
-
-        python <<CODE
-
-        import os
-        import sys
-        def split_cpx_interval(info):
-            #eg of info: DUP_chrY:3125606-3125667
-            out = [info.split('_')[0], info.split('_')[1].split(':')[0]] +  [int(i) for i in info.split('_')[1].split(':')[1].split('-')]
-            return out[1:4]+[out[0]]
-
-        def sample_depth_calls_readin(sample_depth):
-            out = {}
-            fin=open(sample_depth)
-            for line in fin:
-                pin=line.strip().split()
-                out[pin[0]] = pin[1:]
-            fin.close()
-            return out
-
-        def readin_cpx_cnv(bed_input,sample_depth_hash):
-            CPX_CNV = []
-            f_bed = os.popen(r'''zcat %s'''%(bed_input))
-            for line in f_bed:
-                pin=line.strip().split('\t')
-                if pin[0][0]=='#':
-                    pos_CPX_TYPE = pin.index('CPX_TYPE')
-                    pos_CPX_INTERVALS = pin.index('CPX_INTERVALS')
-                    pos_SOURCE = pin.index('SOURCE')
-                else:
-                    interval = []
-                    if 'DEL_' in pin[pos_CPX_INTERVALS] or 'DUP_' in pin[pos_CPX_INTERVALS]:
-                        interval += [split_cpx_interval(i)+[pin[3]] for i in pin[pos_CPX_INTERVALS].split(",") if "DEL_" in i or "DUP_" in i]
-                    if 'DEL_' in pin[pos_SOURCE] or 'DUP_' in pin[pos_SOURCE]:
-                        interval += [split_cpx_interval(i)+[pin[3]] for i in pin[pos_SOURCE].split(",") if "DEL_" in i or "DUP_" in i]
-                    if len(interval)>0:
-                        for i in interval:
-                            if i[2]-i[1]>4999:
-                                sample_names = pin[5].split(',')
-                                if i[3]=="DEL":
-                                    for j in sample_names:
-                                        CPX_CNV.append(i+[j, sample_depth_hash[j][0]])
-                                if i[3]=="DUP":
-                                    for j in sample_names:
-                                        CPX_CNV.append(i+[j, sample_depth_hash[j][1]])
-            f_bed.close()
-            return CPX_CNV
-
-        def write_cpx_cnv(CPX_CNV, fileout):
-            fo=open(fileout, 'w')
-            for info in CPX_CNV:
-                print('\t'.join(info), file=fo)
-            fo.close()
-
-        bed_input = "~{bed}"
-        fileout = "~{prefix}.lg_CNV.bed"
-
-        sample_depth_hash = sample_depth_calls_readin(sample_depth)
-        CPX_CNV = readin_cpx_cnv(bed_input, sample_depth_hash)
-        write_cpx_cnv(CPX_CNV, fileout)
-        CODE
-
-        bgzip "~{prefix}.lg_CNV.bed"
-    >>>
-
-    output {
-        File cpx_lg_cnv = "~{prefix}.lg_CNV.bed.gz"
     }
 
     runtime {
