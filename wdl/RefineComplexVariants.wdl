@@ -197,12 +197,9 @@ workflow RefineComplexVariants {
 
     }
 
-    File reviewed_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
-    File reviewed_vcf_idx = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
-
     output {
-        File revised_output_vcf = reviewed_vcf
-        File revised_output_vcf_idx = reviewed_vcf_idx
+        File cpx_refined_vcf = select_first([ConcatVcfs.concat_vcf, HailMerge.merged_vcf])
+        File cpx_refined_vcf_index = select_first([ConcatVcfs.concat_vcf_idx, HailMerge.merged_vcf_index])
         File cpx_evidences = ConcatHeaderedTextFiles.out
     }
 }
