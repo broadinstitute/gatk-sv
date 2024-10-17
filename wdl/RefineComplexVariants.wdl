@@ -10,16 +10,15 @@ import "Utils.wdl" as util
 workflow RefineComplexVariants {
     input {
         File vcf
-        File vcf_idx
+        String prefix
 
         Array[String] batch_name_list
+        Array[File] batch_sample_lists
         Array[File] PE_metrics
-        Array[File] PE_metrics_idxes
+        Array[File] PE_metrics_indexes
         Array[File] Depth_DEL_beds
         Array[File] Depth_DUP_beds
-        Array[File] batch_sample_lists
 
-        String prefix
         Int n_per_split
         File? script_generate_cpx_review_script
 
@@ -58,6 +57,7 @@ workflow RefineComplexVariants {
             batch_name_list = batch_name_list,
             batch_sample_lists = batch_sample_lists,
             batch_pe_files = write_lines(PE_metrics),
+            prefix = prefix,
             sv_pipeline_docker = sv_pipeline_docker,
             runtime_attr_override = runtime_attr_sample_batch
     }
@@ -121,7 +121,7 @@ workflow RefineComplexVariants {
             input:
                 batch_name_list = batch_name_list,
                 PE_metrics = PE_metrics,
-                PE_metrics_idxes = PE_metrics_idxes,
+                PE_metrics_idxes = PE_metrics_indexes,
                 PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
                 prefix = "~{prefix}.~{i}",
                 n_per_split = n_per_split,
