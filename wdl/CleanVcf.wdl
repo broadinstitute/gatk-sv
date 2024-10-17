@@ -24,6 +24,9 @@ workflow CleanVcf {
     Int clean_vcf1b_records_per_shard
     Int clean_vcf5_records_per_shard
 
+    File HERVK_reference
+    File LINE1_reference
+
     String chr_x
     String chr_y
 
@@ -67,6 +70,7 @@ workflow CleanVcf {
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
     RuntimeAttr? runtime_attr_format
+    RuntimeAttr? runtime_override_rescue_me_dels
 
     # Clean vcf 1b
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
@@ -133,6 +137,8 @@ workflow CleanVcf {
         clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
         clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
         ploidy_table=CreatePloidyTableFromPed.out,
+        HERVK_reference=HERVK_reference,
+        LINE1_reference=LINE1_reference,
         chr_x=chr_x,
         chr_y=chr_y,
         linux_docker=linux_docker,
@@ -170,6 +176,7 @@ workflow CleanVcf {
         runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
         runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
         runtime_attr_format=runtime_attr_format,
+        runtime_override_rescue_me_dels=runtime_override_rescue_me_dels
     }
   }
 
