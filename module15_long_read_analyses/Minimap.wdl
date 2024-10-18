@@ -7,7 +7,8 @@ workflow CallMinimap {
         File reads
         String map_preset
         String prefix
-        File ref_map_file
+
+        String long_read_align_docker
         RuntimeAttr? runtime_attr_minimap2
 
     }
@@ -24,6 +25,7 @@ workflow CallMinimap {
             ref_fasta = ref_map['fasta'],
             map_preset = map_preset,
             prefix = prefix,
+            long_read_align_docker = long_read_align_docker,
             runtime_attr_override = runtime_attr_minimap2
     }
 

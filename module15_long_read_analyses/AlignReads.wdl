@@ -7,10 +7,9 @@ task Minimap2 {
     input {
         File reads
         File ref_fasta
-
         String map_preset
-
         String prefix = "out"
+        String long_read_align_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -56,9 +55,9 @@ task Minimap2 {
         disk_gb:            disk_size,
         boot_disk_gb:       10,
         preemptible_tries:  3,
-        max_retries:        2,
-        docker:             "us.gcr.io/broad-dsp-lrma/lr-align:0.1.28"
+        max_retries:        2
     }
+
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
         cpu:                    select_first([runtime_attr.cpu_cores,         default_attr.cpu_cores])
@@ -67,8 +66,9 @@ task Minimap2 {
         bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
         preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
-        docker:                 select_first([runtime_attr.docker,            default_attr.docker])
+        docker:                 long_read_align_docker
     }
+
 }
 
 task Minimap2_simple {
@@ -79,6 +79,7 @@ task Minimap2_simple {
         String map_preset
 
         String prefix = "out"
+        String long_read_align_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -113,8 +114,7 @@ task Minimap2_simple {
         disk_gb:            disk_size,
         boot_disk_gb:       10,
         preemptible_tries:  3,
-        max_retries:        2,
-        docker:             "us.gcr.io/broad-dsp-lrma/lr-align:0.1.28"
+        max_retries:        2
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
@@ -124,7 +124,7 @@ task Minimap2_simple {
         bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
         preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
-        docker:                 select_first([runtime_attr.docker,            default_attr.docker])
+        docker:                 long_read_align_docker
     }
 }
 
@@ -135,6 +135,7 @@ task SAMtoPAF {
         File? index
 
         RuntimeAttr? runtime_attr_override
+        String long_read_align_docker
     }
 
     parameter_meta {
@@ -182,8 +183,7 @@ task SAMtoPAF {
         disk_gb:            "~{disk_size}",
         boot_disk_gb:       10,
         preemptible_tries:  1,
-        max_retries:        0,
-        docker:             "us.gcr.io/broad-dsp-lrma/lr-align:0.1.26"
+        max_retries:        1
     }
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
     runtime {
@@ -193,6 +193,6 @@ task SAMtoPAF {
         bootDiskSizeGb:         select_first([runtime_attr.boot_disk_gb,      default_attr.boot_disk_gb])
         preemptible:            select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries:             select_first([runtime_attr.max_retries,       default_attr.max_retries])
-        docker:                 select_first([runtime_attr.docker,            default_attr.docker])
+        docker:                 long_read_align_docker
     }
 }
