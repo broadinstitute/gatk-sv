@@ -248,19 +248,9 @@ workflow CleanVcfChromosome {
       runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
   }
 
-  call RescueMobileElementDeletions {
-    input:
-      vcf = CleanVcf5.polished,
-      prefix = "~{prefix}.~{contig}.rescue_me_dels",
-      LINE1 = LINE1_reference,
-      HERVK = HERVK_reference,
-      sv_pipeline_docker = sv_pipeline_docker,
-      runtime_attr_override = runtime_override_rescue_me_dels
-  }
-
   call DropRedundantCnvs {
     input:
-      vcf=RescueMobileElementDeletions.out,
+      vcf=CleanVcf5.polished,
       prefix="~{prefix}.drop_redundant_cnvs",
       contig=contig,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -299,9 +289,19 @@ workflow CleanVcfChromosome {
       runtime_attr_override=runtime_override_stitch_fragmented_cnvs
   }
 
+  call RescueMobileElementDeletions {
+    input:
+      vcf = StitchFragmentedCnvs.stitched_vcf_shard,
+      prefix = "~{prefix}.~{contig}.rescue_me_dels",
+      LINE1 = LINE1_reference,
+      HERVK = HERVK_reference,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_override_rescue_me_dels
+  }
+
   call FinalCleanup {
     input:
-      vcf=StitchFragmentedCnvs.stitched_vcf_shard,
+      vcf=RescueMobileElementDeletions.out,
       contig=contig,
       prefix="~{prefix}.final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker,
