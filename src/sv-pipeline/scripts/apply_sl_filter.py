@@ -133,6 +133,8 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
     record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
     if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
         record.filter.add(_HIGH_NCR_FILTER)
+    if len(record.filter) == 0:
+        record.filter.add('PASS')
     n_sl = len(sl_list)
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
     record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
