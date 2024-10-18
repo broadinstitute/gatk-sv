@@ -430,7 +430,7 @@ unresolved_svids = unresolved_readin("~{unresolved_svids}")
 hash_CPX_manual =  CPX_manual_readin("~{CPX_manual}")
 hash_CTX_manual = CTX_manual_readin("~{CTX_manual}")
 print(len(hash_CPX_manual.keys()))
-revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual, unresolved_svids)
+revise_vcf("~{vcf_file}", "~{prefix}.Manual_Revised.vcf.gz", hash_CPX_manual, unresolved_svids, hash_CTX_manual)
 
 CODE
 
