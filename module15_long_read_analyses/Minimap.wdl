@@ -5,9 +5,9 @@ import "AlignReads.wdl" as AR
 workflow CallMinimap {
     input {
         File reads
+        File ref_map_file
         String map_preset
         String prefix
-
         String long_read_align_docker
         RuntimeAttr? runtime_attr_minimap2
 
