@@ -4,6 +4,7 @@ import argparse
 import sys
 import pysam
 import math
+from numpy import median
 from typing import List, Text, Dict, Optional
 
 _gt_no_call_map = dict()
