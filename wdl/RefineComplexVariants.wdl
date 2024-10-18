@@ -167,7 +167,7 @@ workflow RefineComplexVariants {
         call hail.HailMerge {
             input:
                 vcfs=ReviseVcf.revised_vcf,
-                prefix="~{prefix}.cpx_filtered",
+                prefix="~{prefix}.cpx_refined",
                 gcs_project=gcs_project,
                 sv_base_mini_docker=sv_base_mini_docker,
                 sv_pipeline_docker=sv_pipeline_docker,
@@ -183,7 +183,7 @@ workflow RefineComplexVariants {
                 vcfs=ReviseVcf.revised_vcf,
                 vcfs_idx=ReviseVcf.revised_vcf_idx,
                 allow_overlaps=true,
-                outfile_prefix="~{prefix}.cpx_filtered",
+                outfile_prefix="~{prefix}.cpx_refined",
                 sv_base_mini_docker=sv_base_mini_docker,
                 runtime_attr_override=runtime_attr_concat
         }
@@ -292,23 +292,6 @@ task ReviseVcf {
 
         python <<CODE
 
-def recal_qual_score(record):
-    """
-    Recalibrate quality score for a single variant
-    """
-    quals = []
-    for s in [s for s in record.samples]:
-        GT = record.samples[s]['GT']
-        if GT in NULL_and_REF_GTs:
-            continue
-        elif GT in HET_GTs:
-            quals.append(record.samples[s]['GQ'])
-        else:
-            quals.append(99)
-
-    if len(quals) > 0:
-        return int(median(quals))
-
 def CPX_manual_readin(CPX_manual):
     out={}
     fin=open(CPX_manual)
@@ -319,6 +302,7 @@ def CPX_manual_readin(CPX_manual):
         out[pin[0]][pin[1]] = pin[2:]
     fin.close()
     return out
+
 
 def CTX_manual_readin(CTX_manual):
     fin=open(CTX_manual)
@@ -380,20 +364,8 @@ def revise_vcf(vcf_input, vcf_output, hash_CPX_manual, unresolved_svids, hash_CT
             else:
                 for sample in hash_CTX_manual[record.id].keys():
                     if sample in record.samples.keys():
-                        if hash_CTX_manual[record.id][sample][1] == 'Not_Enough_PE_Pairs':
+                        if hash_CTX_manual[record.id][sample][0] in ['no_PE', 'low_PE', 'partial_PE']:
                             record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'PARTIAL_PE':
-                            record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'unbalanced_paternal_transmission_of_tloc,2nd_junction_is_missing':
-                            record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'NON_SPECIFIC':
-                            record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'Not_Enough_Coordinate_Span':
-                            record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'Interrupted_PE_Patterns_when_sorted_on_2nd_breakpoint':
-                            record.samples[sample]['GT'] = [None,None]
-                        elif hash_CTX_manual[record.id][sample][1] == 'CTX_with_DEL':
-                            record.stop = int(hash_CTX_manual[record.id][sample][0].split(':')[1].split('-')[1])
         # revisions to insertion-type complex events
         if record.info['SVTYPE']=="CPX" and record.info['CPX_TYPE'] in ['dDUP','dDUP_iDEL','INS_iDEL']:
             if record.info['CPX_TYPE']=='INS_iDEL':
@@ -414,17 +386,7 @@ def revise_vcf(vcf_input, vcf_output, hash_CPX_manual, unresolved_svids, hash_CT
     fin.close()
     fo.close()
 
-import os
-import sys
-from numpy import median
 import pysam
-import argparse
-
-#Define global variables
-NULL_GTs = [(None, None), (None, )]
-REF_GTs = [(0, 0), (0, ), (None, 2)]
-NULL_and_REF_GTs = NULL_GTs + REF_GTs
-HET_GTs = [(0, 1), (None, 1), (None, 3)]
 
 unresolved_svids = unresolved_readin("~{unresolved_svids}")
 hash_CPX_manual =  CPX_manual_readin("~{CPX_manual}")
