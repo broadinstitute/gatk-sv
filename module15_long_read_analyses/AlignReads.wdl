@@ -28,7 +28,7 @@ task Minimap2 {
         mem=$(grep '^MemTotal' /proc/meminfo | awk '{ print int($2/1000000) }')
         cpus=$(grep -c '^processor' /proc/cpuinfo | awk '{ print $1 }')
 
-        MAP_PARAMS="-ayYL --MD -x ~{map_preset} -t $cpus ~{ref_fasta}"
+        MAP_PARAMS="-ayL --MD -x ~{map_preset} -t $cpus ~{ref_fasta}"
         SORT_PARAMS="-@ $cpus -m ${mem}G --no-PG -o ~{prefix}.bam"
 
         if [[ "~{reads}" =~ \.bam$ ]]; then
