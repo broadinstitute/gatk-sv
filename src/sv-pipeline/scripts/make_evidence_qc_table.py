@@ -210,7 +210,7 @@ def merge_evidence_qc_table(
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # outlier column names
-    callers = ["wham", "melt", "manta", "overall"]
+    callers = ["wham", "melt", "manta", "scramble", "overall"]
     types = ["high", "low"]
     outlier_cols = [get_col_name(caller, type) for caller in callers for type in types]
 
