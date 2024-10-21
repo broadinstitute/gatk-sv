@@ -92,6 +92,9 @@
   "GATKSVPipelineSingleSample.clean_vcf_random_seed": 0,
   "GATKSVPipelineSingleSample.run_vcf_qc" : false,
 
+  "GATKSVPipelineSingleSample.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
+  "GATKSVPipelineSingleSample.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+
   "GATKSVPipelineSingleSample.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "GATKSVPipelineSingleSample.noncoding_bed" :       {{ reference_resources.noncoding_bed | tojson }},
   "GATKSVPipelineSingleSample.external_af_ref_bed" :       {{ reference_resources.external_af_ref_bed | tojson }},

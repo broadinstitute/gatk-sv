@@ -24,6 +24,7 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [GenotypeBatch](#genotype-batch) - Genotyping
     * [RegenotypeCNVs](#regenotype-cnvs) - Genotype refinement (optional)
     * [MakeCohortVcf](#make-cohort-vcf) - Cross-batch integration, complex event resolution, and VCF cleanup
+    * [RefineComplexVariants](#refine-complex) - Filtering and refinement for complex SVs and translocations
     * [JoinRawCalls](#join-raw-calls) - Merges unfiltered calls across batches
     * [SVConcordance](#svconcordance) - Calculates genotype concordance with raw calls
     * [FilterGenotypes](#filter-genotypes) - Performs genotype filtering
@@ -474,6 +475,24 @@ Combines variants across multiple batches, resolves complex variants, re-genotyp
 
 #### Outputs:
 * Finalized "cleaned" VCF and QC plots
+
+## <a name="refine-complex">RefineComplexVariants</a>
+
+Refines complex SVs and translocations and filters based on discordant read pair and read depth evidence reassessment.
+
+#### Prerequisites:
+* [MakeCohortVcf](#make-cohort-vcf)
+
+#### Inputs:
+* Cleaned VCF ([MakeCohortVcf](#make-cohort-vcf))
+* Batch names and sample lists ([FilterBatch](#filter-batch))
+* Batch PE files ([GatherBatchEvidence](#gather-batch-evidence))
+* Batch raw depth CNV calls ([GatherBatchEvidence](#gather-batch-evidence))
+
+#### Outputs:
+* VCF with refined CPX and CTX SVs
+* PE evidence supporting CPX calls
+
 
 ## <a name="join-raw-calls">JoinRawCalls</a>
 
