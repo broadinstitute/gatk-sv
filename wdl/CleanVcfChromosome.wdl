@@ -292,7 +292,7 @@ workflow CleanVcfChromosome {
   call RescueMobileElementDeletions {
     input:
       vcf = StitchFragmentedCnvs.stitched_vcf_shard,
-      prefix = "~{prefix}.~{contig}.rescue_me_dels",
+      prefix = "~{prefix}.rescue_me_dels",
       LINE1 = LINE1_reference,
       HERVK = HERVK_reference,
       sv_pipeline_docker = sv_pipeline_docker,
@@ -694,6 +694,7 @@ for record in fin:
             record.alts = ('<DEL:ME:LINE1>',)
         if hash_MEI_DEL_reset[record.id] == 'overlap_HERVK':
             record.alts = ('<DEL:ME:HERVK>',)
+    fo.write(record)
 fin.close()
 fo.close()
 CODE
