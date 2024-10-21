@@ -185,7 +185,7 @@ awk -v FS="\t" -v OFS="\t" -v nsamp=${nsamp} '{
  for(i=10;i<=NF;i++) {
   split($i,a,":");
     if (a[CN]==2) {homref++}
-    else if (a[CN]==0) {homalt++}
+    else if (a[CN]==0 || a[CN]>=4) {homalt++}
     else {het++} };
   AC=(2*homalt)+het; AN=2*(nsamp-(unknown+other)); AF=AC/AN;
   print $3, nsamp-unknown, homref, het, homalt, other, unknown, AC, AN, AF }' >> \

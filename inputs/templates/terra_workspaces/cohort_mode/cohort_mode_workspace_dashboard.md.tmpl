@@ -61,13 +61,16 @@ The following workflows are included in this workspace, to be executed in this o
 13. `13-ResolveComplexVariants`: Complex variant resolution
 14. `14-GenotypeComplexVariants`: Complex variant re-genotyping
 15. `15-CleanVcf`: VCF cleanup
-16. `16-MainVcfQc`: Generates VCF QC reports
-17. `17-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets
+16. `16-JoinRawCalls`: Combines unfiltered calls (from step 5) across batches
+17. `17-SVConcordance`: Annotates variants with genotype concordance against raw calls
+18. `18-FilterGenotypes`: Performs genotype filtering to improve precision and generates QC plots
+19. `19-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets
 
-Additional downstream modules, such as those for filtering and visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
+Additional downstream modules, such as those for visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
-* `PlotSVCountsPerSample: Plot SV counts per sample per SV type
+* `MainVcfQc`: Generates VCF QC reports (is run during 18-FilterGenotypes by default)
+* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type
 * `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run `PlotSVCountsPerSample` beforehand (configured with the single VCF you want to filter) to enable IQR cutoff choice.
 
 For detailed instructions on running the pipeline in Terra, see **Step-by-step instructions** below.
@@ -166,7 +169,7 @@ Read the full EvidenceQC documentation [here](https://github.com/broadinstitute/
 
 Read the full TrainGCNV documentation [here](https://github.com/broadinstitute/gatk-sv#gcnv-training-1).
 * Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline based on sample coverage, WGD score (from `02-EvidenceQC`), and PCR status. These will likely not be the same as the batches you used for `02-EvidenceQC`.
-* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. If your `sample_set` contains fewer than 100 samples (not recommended), you will need to edit the `n_samples_subsample` parameter to be less than or equal to the number of samples.
+* By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that set to create a gCNV model for each batch. To modify this behavior, you can set the `n_samples_subsample` parameter to the number of samples to use for training.
 
 #### 04-GatherBatchEvidence
 
@@ -190,7 +193,10 @@ These two workflows make up FilterBatch; they are subdivided in this workspace t
 #### 09-MergeBatchSites
 
 Read the full MergeBatchSites documentation [here](https://github.com/broadinstitute/gatk-sv#merge-batch-sites).
-* `09-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. You can create this `sample_set_set` while you are launching the `09-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `08-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**.
+* `09-MergeBatchSites` is a cohort-level workflow, so it is run on a `sample_set_set` containing all of the batches in the cohort. Navigate to the Data tab of your workspace. If there is no `sample_set_set` data table, you will need to create it. To do this, select the `sample_set` data table, then select (with the check boxes) all of the batches (`sample_set`) in your cohort. These should be the `sample_sets` that you used to run steps `03-TrainGCNV` through `08-FilterBatchSamples`. Then click the "Edit" icon above the table and choose "Save selection as set." Enter a name that follows the **Sample ID requirements**. This will create a new `sample_set_set` containing all of the `sample_sets` in your cohort. When you launch MergeBatchSites, you can now select this `sample_set_set`.
+
+<img alt="selecting batches" title="Selecting sample_sets in the data table" src="https://i.imgur.com/E5x3qqk.png" width="400">              <img alt="creating a new set" title="Creating a new sample_set_set" src="https://i.imgur.com/pizOtX9.png" width="400">
+* If there is already a `sample_set_set` data table in your workspace, you can create this `sample_set_set` while you are launching the `09-MergeBatchSites` workflow: click "Select Data", choose "Create new sample_set_set [...]", check all the batches to include (all of the ones used in `03-TrainGCNV` through `08-FilterBatchSamples`), and give it a name that follows the **Sample ID requirements**.
 
 <img alt="creating a cohort sample_set_set" title="How to create a cohort sample_set_set" src="https://i.imgur.com/zKEtSbe.png" width="500">
 
@@ -199,11 +205,11 @@ Read the full MergeBatchSites documentation [here](https://github.com/broadinsti
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `08-FilterBatchSamples`.
 
-#### 11-RegenotypeCNVs, 12-CombineBatches, 13-ResolveComplexVariants, 14-GenotypeComplexVariants, 15-CleanVcf, 16-MainVcfQc, and 17-AnnotateVcf
+#### 11-RegenotypeCNVs, 12-CombineBatches, 13-ResolveComplexVariants, 14-GenotypeComplexVariants, 15-CleanVcf, 16-JoinRawCalls, 17-SVConcordance, 18-FilterGenotypes, and 19-AnnotateVcf
 
-Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`, `MainVcfQc`), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
+Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`), [`JoinRawCalls`](https://github.com/broadinstitute/gatk-sv#join-raw-calls), [`SVConcordance`](https://github.com/broadinstitute/gatk-sv#svconcordance), [`FilterGenotypes`](https://github.com/broadinstitute/gatk-sv#filter-genotypes), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
 * Use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.
 
 #### Downstream steps
 
-Additional downstream steps are under development. Read about some of them on the README [here](https://github.com/broadinstitute/gatk-sv#module07). Please note that the VCF produced by `15-CleanVcf` (and annotated by `17-AnnotateVcf`) prioritizes sensitivity, but additional downstream filtration is recommended to improve specificity. Filtration methods are under active development by the GATK-SV team; stay tuned for updates.
+Additional downstream steps are under development.

@@ -36,3 +36,18 @@ consisting of multiple modules to be executed in the following order.
 - **Module 09 (in development)** Visualization, including scripts that generates IGV screenshots and rd plots.
 
 - Additional modules to be added: de novo and mosaic scripts
+
+
+## Pipeline Parameters
+
+Several inputs are shared across different modules of the pipeline, which are explained in this section.
+
+#### `ped_file`
+
+A pedigree file describing the familial relationships between the samples in the cohort.
+The file needs to be in the 
+[PED format](https://gatk.broadinstitute.org/hc/en-us/articles/360035531972-PED-Pedigree-format).
+Updated with [EvidenceQC](./eqc) sex assignments, including 
+`sex = 0` for sex aneuploidies; 
+genotypes on chrX and chrY for samples with `sex = 0` in the PED file will be set to 
+`./.` and these samples will be excluded from sex-specific training steps.

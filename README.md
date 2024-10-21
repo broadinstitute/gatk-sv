@@ -24,8 +24,10 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
     * [GenotypeBatch](#genotype-batch) - Genotyping
     * [RegenotypeCNVs](#regenotype-cnvs) - Genotype refinement (optional)
     * [MakeCohortVcf](#make-cohort-vcf) - Cross-batch integration, complex event resolution, and VCF cleanup
-    * [Module 07](#module07) - Downstream Filtering
-    * [AnnotateVcf](#annotate-vcf) - Annotation
+    * [JoinRawCalls](#join-raw-calls) - Merges unfiltered calls across batches
+    * [SVConcordance](#svconcordance) - Calculates genotype concordance with raw calls
+    * [FilterGenotypes](#filter-genotypes) - Performs genotype filtering
+    * [AnnotateVcf](#annotate-vcf) - Functional and allele frequency annotation
     * [Module 09](#module09) - QC and Visualization
     * Additional modules - Mosaic and de novo
 * [CI/CD](#cicd)
@@ -90,7 +92,7 @@ Sample IDs should not:
 
 The same requirements apply to family IDs in the PED file, as well as batch IDs and the cohort ID provided as workflow inputs.
 
-Sample IDs are provided to [GatherSampleEvidence](#gather-sample-evidence) directly and need not match sample names from the BAM/CRAM headers. `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [GatherBatchEvidence](#gather-batch-evidence). 
+Sample IDs are provided to [GatherSampleEvidence](#gather-sample-evidence) directly and need not match sample names from the BAM/CRAM headers.  `GetSampleID.wdl` can be used to fetch BAM sample IDs and also generates a set of alternate IDs that are considered safe for this pipeline; alternatively, [this script](https://github.com/talkowski-lab/gnomad_sv_v3/blob/master/sample_id/convert_sample_ids.py) transforms a list of sample IDs to fit these requirements. Currently, sample IDs can be replaced again in [GatherBatchEvidence](#gather-batch-evidence) - to do so, set the parameter `rename_samples = True` and provide updated sample IDs via the `samples` parameter.
 
 The following inputs will need to be updated with the transformed sample IDs:
 * Sample ID list for [GatherSampleEvidence](#gather-sample-evidence) or [GatherBatchEvidence](#gather-batch-evidence)
@@ -125,14 +127,6 @@ Example workflow inputs can be found in `/inputs`. Build using `scripts/inputs/b
 generates input jsons in `/inputs/build`. Except the MELT docker image, all required resources are available in public 
 Google buckets. 
 
-Some workflows require a Google Cloud Project ID to be defined in a cloud environment parameter group. Workspace builds 
-require a Terra billing project ID as well. An example is  provided at `/inputs/values/google_cloud.json` but should 
-not be used, as modifying this file will cause tracked changes in the repository. Instead, create a copy in the same 
-directory with the format `google_cloud.my_project.json` and modify as necessary.
-
-Note that these inputs are required only when certain data are located in requester pays buckets. If this does not 
-apply, users may use placeholder values for the cloud configuration and simply delete the inputs manually.
-
 #### MELT
 **Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
 
@@ -150,8 +144,7 @@ We recommend running the pipeline on a dedicated [Cromwell](https://github.com/b
 > cp $GATK_SV_ROOT/wdl/*.wdl .
 > zip dep.zip *.wdl
 > cd ..
-> echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT -c google_cloud.my_project
+> bash scripts/inputs/build_default_inputs.sh -d $GATK_SV_ROOT
 > cp $GATK_SV_ROOT/inputs/build/ref_panel_1kg/test/GATKSVPipelineBatch/GATKSVPipelineBatch.json GATKSVPipelineBatch.my_run.json
 > cromshell submit wdl/GATKSVPipelineBatch.wdl GATKSVPipelineBatch.my_run.json cromwell_config.json wdl/dep.zip
 ```
@@ -168,8 +161,10 @@ The pipeline consists of a series of modules that perform the following:
 * [FilterBatch](#filter-batch): Variant filtering; outlier exclusion
 * [GenotypeBatch](#genotype-batch): Genotyping
 * [MakeCohortVcf](#make-cohort-vcf): Cross-batch integration; complex variant resolution and re-genotyping; vcf cleanup
-* [Module 07](#module07): Downstream filtering, including minGQ, batch effect check, outlier samples removal and final recalibration;
-* [AnnotateVcf](#annotate-vcf): Annotations, including functional annotation, allele frequency (AF) annotation and AF annotation with external population callsets;
+* [JoinRawCalls](#join-raw-calls): Merges unfiltered calls across batches
+* [SVConcordance](#svconcordance): Calculates genotype concordance with raw calls
+* [FilterGenotypes](#filter-genotypes): Performs genotype filtering
+* [AnnotateVcf](#annotate-vcf): Annotations, including functional annotation, allele frequency (AF) annotation and AF annotation with external population callsets
 * [Module 09](#module09): Visualization, including scripts that generates IGV screenshots and rd plots.
 * Additional modules to be added: de novo and mosaic scripts 
 
@@ -231,14 +226,12 @@ Here is an example of how to generate workflow input jsons from `GATKSVPipelineB
     --final-workflow-outputs-dir gs://my-outputs-bucket \
     metadata.json \
     > inputs/values/my_ref_panel.json
-> # Define your google project id (for Cromwell inputs) and Terra billing project (for workspace inputs)
-> echo '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' > inputs/values/google_cloud.my_project.json
-> # Build test files for batched workflows (google cloud project id required)
+> # Build test files for batched workflows
 > python scripts/inputs/build_inputs.py \
     inputs/values \
     inputs/templates/test \
     inputs/build/my_ref_panel/test \
-    -a '{ "test_batch" : "ref_panel_1kg", "cloud_env": "google_cloud.my_project" }'
+    -a '{ "test_batch" : "ref_panel_1kg" }'
 > # Build test files for the single-sample workflow
 > python scripts/inputs/build_inputs.py \
     inputs/values \
@@ -482,23 +475,123 @@ Combines variants across multiple batches, resolves complex variants, re-genotyp
 #### Outputs:
 * Finalized "cleaned" VCF and QC plots
 
-## <a name="module07">Module 07</a> (in development)
-Apply downstream filtering steps to the cleaned VCF to further control the false discovery rate; all steps are optional and users should decide based on the specific purpose of their projects.
+## <a name="join-raw-calls">JoinRawCalls</a>
 
-Filtering methods include:
-* minGQ - remove variants based on the genotype quality across populations.
-Note: Trio families are required to build the minGQ filtering model in this step. We provide tables pre-trained with the 1000 genomes samples at different FDR thresholds for projects that lack family structures, and they can be found at the paths below.  These tables assume that GQ has a scale of [0,999], so they will not work with newer VCFs where GQ has a scale of [0,99].
+Merges raw unfiltered calls across batches. Concordance between these genotypes and the joint call set usually can be indicative of variant quality and is used downstream for genotype filtering.
+
+#### Prerequisites:
+* [ClusterBatch](#cluster-batch)
+
+#### Inputs:
+* Clustered Manta, Wham, depth, Scramble, and/or MELT VCF URIs ([ClusterBatch](#cluster-batch))
+* PED file
+* Reference sequence
+
+#### Outputs:
+* VCF of clustered raw calls
+* Ploidy table
+
+## <a name="svconcordance">SVConcordance</a>
+
+Computes genotype concordance metrics between all variants in the joint call set and raw calls.
+
+#### Prerequisites:
+* [MakeCohortVcf](#make-cohort-vcf)
+* [JoinRawCalls](#join-raw-calls)
+
+#### Inputs:
+* Cleaned ("eval") VCF URI ([MakeCohortVcf](#make-cohort-vcf))
+* Joined raw call ("truth") VCF URI ([JoinRawCalls](#join-raw-calls))
+* Reference dictionary URI
+
+#### Outputs:
+* VCF with concordance annotations
+
+## <a name="filter-genotypes">FilterGenotypes</a>
+
+Performs genotype quality recalibration using a machine learning model based on [xgboost](https://github.com/dmlc/xgboost), and filters genotypes. 
+
+The ML model uses the following features:
+
+* Genotype properties:
+  * Non-reference and no-call allele counts
+  * Genotype quality (GQ) 
+  * Supporting evidence types (EV) and respective genotype qualities (PE_GQ, SR_GQ, RD_GQ)
+  * Raw call concordance (CONC_ST)
+* Variant properties:
+  * Variant type (SVTYPE) and size (SVLEN)
+  * FILTER status
+  * Calling algorithms (ALGORITHMS)
+  * Supporting evidence types (EVIDENCE)
+  * Two-sided SR support flag (BOTHSIDES_SUPPORT)
+  * Evidence overdispersion flag (PESR_GT_OVERDISPERSION)
+  * SR noise flag (HIGH_SR_BACKGROUND)
+  * Raw call concordance (STATUS, NON_REF_GENOTYPE_CONCORDANCE, VAR_PPV, VAR_SENSITIVITY, TRUTH_AF)
+* Reference context with respect to UCSC Genome Browser tracks:
+  * RepeatMasker
+  * Segmental duplications
+  * Simple repeats
+  * K-mer mappability (umap_s100 and umap_s24)
+
+For ease of use, we provide a model pre-trained on high-quality data with truth data derived from long-read calls:
 ```
-gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.10perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
-gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.1perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
-gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/mingq/1KGP_2504_and_698_with_GIAB.5perc_fdr.PCRMINUS.minGQ.filter_lookup_table.txt
+gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model
 ```
+See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7) for further details on model training.
 
-* BatchEffect - remove variants that show significant discrepancies in allele frequencies across batches
-* FilterOutlierSamplesPostMinGQ - remove outlier samples with unusually high or low number of SVs
-* FilterCleanupQualRecalibration - sanitize filter columns and recalibrate variant QUAL scores for easier interpretation
+All valid genotypes are annotated with a "scaled logit" (SL) score, which is rescaled to non-negative adjusted GQs on [1, 99]. Note that the rescaled GQs should *not* be interpreted as probabilities. Original genotype qualities are retained in the OGQ field. 
 
-## <a name="annotate-vcf">AnnotateVcf</a> (in development)
+A more positive SL score indicates higher probability that the given genotype is not homozygous for the reference allele. Genotypes are therefore filtered using SL thresholds that depend on SV type and size. This workflow also generates QC plots using the [MainVcfQc](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQc.wdl) workflow to review call set quality (see below for recommended practices). 
+
+This workflow can be run in one of two modes:
+
+1. (Recommended) The user explicitly provides a set of SL cutoffs through the `sl_filter_args` parameter, e.g.
+    ```
+    "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19"
+    ```
+    Genotypes with SL scores less than the cutoffs are set to no-call (`./.`). The above values were taken directly from Appendix N of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7 ](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7). Users should adjust the thresholds depending on data quality and desired accuracy. Please see the arguments in [this script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) for all available options.
+
+2. (Advanced) The user provides truth labels for a subset of non-reference calls, and SL cutoffs are automatically optimized. These truth labels should be provided as a json file in the following format:
+    ```
+    {
+      "sample_1": {
+        "good_variant_ids": ["variant_1", "variant_3"], 
+        "bad_variant_ids": ["variant_5", "variant_10"]
+      },
+      "sample_2": {
+        "good_variant_ids": ["variant_2", "variant_13"], 
+        "bad_variant_ids": ["variant_8", "variant_11"]
+      }
+    }
+    ```
+    where "good_variant_ids" and "bad_variant_ids" are lists of variant IDs corresponding to non-reference (i.e. het or hom-var) sample genotypes that are true positives and false positives, respectively. SL cutoffs are optimized by maximizing the [F-score](https://en.wikipedia.org/wiki/F-score) with "beta" parameter `fmax_beta`, which modulates the weight given to precision over recall (lower values give higher precision).
+
+In both modes, the workflow additionally filters variants based on the "no-call rate", the proportion of genotypes that were filtered in a given variant. Variants exceeding the `no_call_rate_cutoff` are assigned a `HIGH_NCR` filter status.
+
+We recommend users observe the following basic criteria to assess the overall quality of the filtered call set:
+
+* Number of PASS variants (excluding BND) between 7,000 and 11,000.
+* At least 75% of variants in Hardy-Weinberg equilibrium (HWE). Note that this could be lower, depending on how how closely the cohort adheres to the assumptions of the Hardy-Weinberg model. However, HWE is expected to at least improve after filtering.
+* Low *de novo* inheritance rate (if applicable), typically 5-10%.
+
+These criteria can be assessed from the plots in the `main_vcf_qc_tarball` output, which is generated by default.
+
+#### Prerequisites:
+* [SVConcordance](#svconcordance)
+
+#### Inputs:
+* VCF with genotype concordance annotations URI ([SVConcordance](#svconcordance))
+* Ploidy table URI ([JoinRawCalls](#join-raw-calls))
+* GQRecalibrator model URI
+* Either a set of SL cutoffs or truth labels
+
+#### Outputs:
+* Filtered VCF
+* Call set QC plots (optional)
+* Optimized SL cutoffs with filtering QC plots and data tables (if running mode [2] with truth labels)
+* VCF with only SL annotation and GQ recalibration (before filtering)
+
+## <a name="annotate-vcf">AnnotateVcf</a>
 *Formerly Module08Annotation*
 
 Add annotations, such as the inferred function and allele frequencies of variants, to final VCF.
