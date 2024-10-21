@@ -82,7 +82,7 @@ binCovPCA <- function(dat, exclude=c("X", "Y"), topPCs=10){
   PCs <- as.data.frame(PCA$rotation[, 1:topPCs])
 
   #Formats & returns PC data frame
-  out.df <- data.frame("ID"=names(dat[, -c(1:3)]))
+  out.df <- data.frame("sample_id"=names(dat[, -c(1:3)]))
   out.df <- cbind(out.df, PCs)
   rownames(out.df) <- 1:nrow(out.df)
   return(list("full"=PCA, "top"=out.df))
@@ -109,7 +109,7 @@ medianPerContigPerSample <- function(dat){
   })
 
   #Compose output data frame
-  out.df <- data.frame("ID"=names(dat[, -c(1:3)]))
+  out.df <- data.frame("sample_id"=names(dat[, -c(1:3)]))
   out.df <- cbind(out.df, allMedians)
 }
 
@@ -619,28 +619,28 @@ assignSex <- function(dat, sexChr=24:25,
   dat.mod.rounded[, -1] <- apply(dat.mod[, -1], 2, round, digits=0)
 
   #Create output data frame with sex assignments
-  sexes <- as.data.frame(t(unlist(sapply(unique(dat[, 1]), function(ID){
+  sexes <- as.data.frame(t(unlist(sapply(unique(dat[, 1]), function(sample_id){
     #Iterate over all IDs
-    if(ID %in% dat.mod[, 1]){
+    if(sample_id %in% dat.mod[, 1]){
       #Get rounded CNs
-      CN.X <- round(dat.mod.rounded[which(dat.mod.rounded$ID==ID), 2], 0)
-      CN.Y <- round(dat.mod.rounded[which(dat.mod.rounded$ID==ID), 3], 0)
+      CN.X <- round(dat.mod.rounded[which(dat.mod.rounded$sample_id==sample_id), 2], 0)
+      CN.Y <- round(dat.mod.rounded[which(dat.mod.rounded$sample_id==sample_id), 3], 0)
 
       #Assign to existing sex copy-type, or "OTHER"
       if(length(which(sexAssign.df$CN.X==CN.X & sexAssign.df$CN.Y==CN.Y))==1){
-        return(as.vector(c(ID, CN.X, CN.Y, 
+        return(as.vector(c(sample_id, CN.X, CN.Y, 
                            sexAssign.df[which(sexAssign.df$CN.X==CN.X & sexAssign.df$CN.Y==CN.Y), 3])))
       }else{
-        return(as.vector(c(ID, CN.X, CN.Y, "OTHER")))
+        return(as.vector(c(sample_id, CN.X, CN.Y, "OTHER")))
       }
     }else{
-      return(as.vector(c(ID, 
-                         dat[which(dat$ID==ID), sexChr[1]], 
-                         dat[which(dat$ID==ID), sexChr[2]], 
+      return(as.vector(c(sample_id, 
+                         dat[which(dat$sample_id==sample_id), sexChr[1]], 
+                         dat[which(dat$sample_id==sample_id), sexChr[2]], 
                          NA)))
     }
   }))))
-  colnames(sexes) <- c("ID", "chrX.CN", "chrY.CN", "Assignment")
+  colnames(sexes) <- c("sample_id", "chrX.CN", "chrY.CN", "Assignment")
   rownames(sexes) <- 1:nrow(sexes)
 
   #Gather sd of X and Y assignments from males
@@ -659,8 +659,8 @@ assignSex <- function(dat, sexChr=24:25,
       pMos.Y <- NA
     }else{
       #Get raw CNs
-      CN.X <- dat.mod[which(dat.mod.rounded$ID==vals[1]), 2]
-      CN.Y <- dat.mod[which(dat.mod.rounded$ID==vals[1]), 3]
+      CN.X <- dat.mod[which(dat.mod.rounded$sample_id==vals[1]), 2]
+      CN.Y <- dat.mod[which(dat.mod.rounded$sample_id==vals[1]), 3]
 
       #Calculate p-value for chrX mosaicism
       if(CN.X>as.numeric(vals[2])){
@@ -1040,9 +1040,9 @@ if(kmeans==T){
   }
 
   #Write out list of cluster assignments per sample
-  clusterAssignments.out <- data.frame("ID"=names(clust.PCs$batch), 
+  clusterAssignments.out <- data.frame("sample_id"=names(clust.PCs$batch), 
                                        "batch"=as.vector(as.integer(clust.PCs$batch)))
-  colnames(clusterAssignments.out)[1] <- "#ID"
+  colnames(clusterAssignments.out)[1] <- "sample_id"
   write.table(clusterAssignments.out, 
               paste(OUTDIR, "/sample_batch_assignments.txt", sep=""), 
               col.names=T, row.names=F, sep="\t", quote=F)
@@ -1052,7 +1052,7 @@ if(kmeans==T){
 
   #Write out list of PCs per sample
   samplePCs.out <- PCs$top
-  colnames(samplePCs.out)[1] <- "#ID"
+  colnames(samplePCs.out)[1] <- "sample_id"
   write.table(samplePCs.out, paste(OUTDIR, "/sample_PCs.txt", sep=""), 
               col.names=T, row.names=F, sep="\t", quote=F)
   if(gzip==T){
@@ -1137,8 +1137,8 @@ boxplotsPerContig(chr.dat, exclude=NA, contig.ploidy=c(rep(2, 22), 2, 0), connec
 dev.off()
 
 #Write table of sexes
-sexes <- sexes[match(colnames(dat)[-c(1:3)], sexes$ID), ]
-colnames(sexes)[1] <- "#ID"
+sexes <- sexes[match(colnames(dat)[-c(1:3)], sexes$sample_id), ]
+colnames(sexes)[1] <- "sample_id"
 write.table(sexes, paste(OUTDIR, "/sample_sex_assignments.txt", sep=""), 
             col.names=T, row.names=F, sep="\t", quote=F)
 if(gzip==T){
@@ -1157,14 +1157,14 @@ females.CN[, -1] <- apply(females.CN[, -1], 2, round, digits=2)
 
 #Merge male/female p-values and rounded CNs
 merged.p <- rbind(males.p, females.p)
-merged.p <- merged.p[match(colnames(dat)[-c(1:3)], merged.p$ID), ]
-colnames(merged.p) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_pValue", sep=""))
+merged.p <- merged.p[match(colnames(dat)[-c(1:3)], merged.p$sample_id), ]
+colnames(merged.p) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_pValue", sep=""))
 merged.q <- rbind(males.q, females.q)
-merged.q <- merged.q[match(colnames(dat)[-c(1:3)], merged.q$ID), ]
-colnames(merged.q) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_qValue", sep=""))
+merged.q <- merged.q[match(colnames(dat)[-c(1:3)], merged.q$sample_id), ]
+colnames(merged.q) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_qValue", sep=""))
 merged.CN <- rbind(males.CN, females.CN)
-merged.CN <- merged.CN[match(colnames(dat)[-c(1:3)], merged.CN$ID), ]
-colnames(merged.CN) <- c("#ID", paste("chr", c(1:22, "X", "Y"), "_CopyNumber", sep=""))
+merged.CN <- merged.CN[match(colnames(dat)[-c(1:3)], merged.CN$sample_id), ]
+colnames(merged.CN) <- c("sample_id", paste("chr", c(1:22, "X", "Y"), "_CopyNumber", sep=""))
 
 #Write merged p-values
 write.table(merged.p, paste(OUTDIR, "/CNA_pValues.txt", sep=""), 
@@ -1192,7 +1192,7 @@ binwise.dat <- data.frame(colnames(dat)[-c(1:3)],
                           t(dat[, -c(1:3)]))
 bin.IDs <- as.character(apply(dat[1:3], 1, paste, collapse="_", sep=""))
 bin.IDs <- as.character(sapply(bin.IDs, function(ID){gsub(" ", "", ID, fixed=T)}))
-colnames(binwise.dat) <- c("ID", bin.IDs)
+colnames(binwise.dat) <- c("sample_id", bin.IDs)
 sapply(setdiff(unique(dat[, 1]), c("X", "Y")), function(contig){
   png(paste(OUTDIR, "/estimated_CN_per_bin.all_samples.", contig, ".png", sep=""), 
       height=1250, width=2500, res=300)
@@ -1203,12 +1203,12 @@ sapply(setdiff(unique(dat[, 1]), c("X", "Y")), function(contig){
 })
 
 #Plot binwise CN estimates per sex chromosome -- all samples
-binwise.dat.males <- data.frame(chr.dat.males$ID, 
-                                t(dat[, which(colnames(dat) %in% chr.dat.males$ID)]))
-colnames(binwise.dat.males) <- c("ID", bin.IDs)
-binwise.dat.females <- data.frame(chr.dat.females$ID, 
-                                t(dat[, which(colnames(dat) %in% chr.dat.females$ID)]))
-colnames(binwise.dat.females) <- c("ID", bin.IDs)
+binwise.dat.males <- data.frame(chr.dat.males$sample_id, 
+                                t(dat[, which(colnames(dat) %in% chr.dat.males$sample_id)]))
+colnames(binwise.dat.males) <- c("sample_id", bin.IDs)
+binwise.dat.females <- data.frame(chr.dat.females$sample_id, 
+                                t(dat[, which(colnames(dat) %in% chr.dat.females$sample_id)]))
+colnames(binwise.dat.females) <- c("sample_id", bin.IDs)
 sapply(intersect(unique(dat[, 1]), c("X", "Y")), function(contig){
   #Males
   png(paste(OUTDIR, "/estimated_CN_per_bin.chrX_lessThan_2copies.", contig, ".png", sep=""), 
@@ -1238,17 +1238,17 @@ females.binwise.CN[, -1] <- apply(females.binwise.CN[, -1], 2, round, digits=2)
 
 #Merge male/female p-values and rounded CNs
 merged.p <- rbind(males.binwise.p, females.binwise.p)
-merged.p <- merged.p[match(colnames(dat)[-c(1:3)], merged.p$ID), ]
+merged.p <- merged.p[match(colnames(dat)[-c(1:3)], merged.p$sample_id), ]
 merged.p <- t(merged.p)
 merged.p <- cbind(dat[, 1:3], merged.p[-1, ])
 colnames(merged.p)[1] <- c("#Chr")
 merged.q <- rbind(males.binwise.q, females.binwise.q)
-merged.q <- merged.q[match(colnames(dat)[-c(1:3)], merged.q$ID), ]
+merged.q <- merged.q[match(colnames(dat)[-c(1:3)], merged.q$sample_id), ]
 merged.q <- t(merged.q)
 merged.q <- cbind(dat[, 1:3], merged.q[-1, ])
 colnames(merged.q)[1] <- c("#Chr")
 merged.CN <- rbind(males.binwise.CN, females.binwise.CN)
-merged.CN <- merged.CN[match(colnames(dat)[-c(1:3)], merged.CN$ID), ]
+merged.CN <- merged.CN[match(colnames(dat)[-c(1:3)], merged.CN$sample_id), ]
 merged.CN <- t(merged.CN)
 merged.CN <- cbind(dat[, 1:3], merged.CN[-1, ])
 colnames(merged.CN)[1] <- c("#Chr")
