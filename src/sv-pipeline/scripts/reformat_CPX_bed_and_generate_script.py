@@ -468,8 +468,8 @@ def main():
 
     # Parse command line arguments and options
     parser = argparse.ArgumentParser(
-                    description=__doc__,
-                    formatter_class=argparse.RawDescriptionHelpFormatter)
+                description=__doc__,
+                formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('-i', '--input', required=True, help='input file of CPX events in bed format')
     parser.add_argument('-s', '--sample_pe', required=True, help='2 column file with sample ID and PE metrics information')
     parser.add_argument('-p', '--pe_evidence', required=True, help='name of file to store collected PE metrics')

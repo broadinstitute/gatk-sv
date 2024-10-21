@@ -45,7 +45,6 @@ workflow RefineComplexVariants {
         RuntimeAttr? runtime_attr_generate_cpx_review_script
         RuntimeAttr? runtime_attr_generate_cnv_segments_from_cpx
         RuntimeAttr? runtime_attr_get_vcf_header_with_members_info_line
-        RuntimeAttr? runtime_attr_generate_cnv_segments_from_cpx
         RuntimeAttr? runtime_attr_extract_cpx_lg_cnv_by_batch
         RuntimeAttr? runtime_attr_seek_depth_supp_for_cpx
         RuntimeAttr? runtime_attr_concat_bed_Step1
