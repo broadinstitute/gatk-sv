@@ -541,7 +541,7 @@ See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Qualit
 
 All valid genotypes are annotated with a "scaled logit" (SL) score, which is rescaled to non-negative adjusted GQs on [1, 99]. Note that the rescaled GQs should *not* be interpreted as probabilities. Original genotype qualities are retained in the OGQ field. 
 
-A more positive SL score indicates higher probability that the give genotype is not homozygous for the reference allele. Genotypes are therefore filtered using SL thresholds that depend on SV type and size. This workflow also generates QC plots using the [MainVcfQc](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQc.wdl) workflow to review call set quality (see below for recommended practices). 
+A more positive SL score indicates higher probability that the given genotype is not homozygous for the reference allele. Genotypes are therefore filtered using SL thresholds that depend on SV type and size. This workflow also generates QC plots using the [MainVcfQc](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQc.wdl) workflow to review call set quality (see below for recommended practices). 
 
 This workflow can be run in one of two modes:
 
