@@ -276,7 +276,7 @@ def main():
         help="Sets the filename containing Wham QC outlier low.")
 
     parser.add_argument(
-        "-x", "--scramble-qc-outlier-low-filename",
+        "-c", "--scramble-qc-outlier-low-filename",
         help="Sets the filename containing Scramble QC outlier low.")
 
     parser.add_argument(
