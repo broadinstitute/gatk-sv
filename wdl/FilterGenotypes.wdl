@@ -346,7 +346,6 @@ task SanitizeHeader {
       -e ^"##source=depth" \
       -e ^"##source=cleanvcf" \
       -e ^"##ALT=<ID=UNR" \
-      -e "assembly=38" \
       | sed 's/Split read genotype quality/Split-read genotype quality/g' \
       | sed 's/##ALT=<ID=BND,Description="Translocation">/##ALT=<ID=BND,Description="Breakend">/g' > newheader.vcf
 
