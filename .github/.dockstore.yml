@@ -15,7 +15,6 @@ workflows:
     filters:
       branches: 
         - main
-        - kv_scramble_qc_table
       tags:
         - /.*/
 
