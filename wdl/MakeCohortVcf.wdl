@@ -44,6 +44,8 @@ workflow MakeCohortVcf {
     File pe_exclude_list
     File depth_exclude_list
     File ref_dict
+    File HERVK_reference
+    File LINE1_reference
     Int max_shard_size_resolve
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
@@ -378,6 +380,8 @@ workflow MakeCohortVcf {
       allosome_fai=allosome_fai,
       chr_x=chr_x,
       chr_y=chr_y,
+      HERVK_reference=HERVK_reference,
+      LINE1_reference=LINE1_reference,
       max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,

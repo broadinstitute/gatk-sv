@@ -61,10 +61,11 @@ The following workflows are included in this workspace, to be executed in this o
 13. `13-ResolveComplexVariants`: Complex variant resolution
 14. `14-GenotypeComplexVariants`: Complex variant re-genotyping
 15. `15-CleanVcf`: VCF cleanup
-16. `16-JoinRawCalls`: Combines unfiltered calls (from step 5) across batches
-17. `17-SVConcordance`: Annotates variants with genotype concordance against raw calls
-18. `18-FilterGenotypes`: Performs genotype filtering to improve precision and generates QC plots
-19. `19-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets
+16. `16-RefineComplexVariants`: Complex variant and translocation refinement
+17. `17-JoinRawCalls`: Combines unfiltered calls (from step 5) across batches
+18. `18-SVConcordance`: Annotates variants with genotype concordance against raw calls
+19. `19-FilterGenotypes`: Performs genotype filtering to improve precision and generates QC plots
+20. `20-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and AF annotation with external population callsets
 
 Additional downstream modules, such as those for visualization, are under development. They are not included in this workspace at this time, but the source code can be found in the [GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv). See **Downstream steps** towards the bottom of this page for more information.
 
@@ -205,9 +206,9 @@ Read the full MergeBatchSites documentation [here](https://github.com/broadinsti
 Read the full GenotypeBatch documentation [here](https://github.com/broadinstitute/gatk-sv#genotype-batch).
 * Use the same `sample_set` definitions you used for `03-TrainGCNV` through `08-FilterBatchSamples`.
 
-#### 11-RegenotypeCNVs, 12-CombineBatches, 13-ResolveComplexVariants, 14-GenotypeComplexVariants, 15-CleanVcf, 16-JoinRawCalls, 17-SVConcordance, 18-FilterGenotypes, and 19-AnnotateVcf
+#### 11-RegenotypeCNVs, 12-CombineBatches, 13-ResolveComplexVariants, 14-GenotypeComplexVariants, 15-CleanVcf, 16-RefineComplexVariants, 17-JoinRawCalls, 18-SVConcordance, 19-FilterGenotypes, and 20-AnnotateVcf
 
-Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`), [`JoinRawCalls`](https://github.com/broadinstitute/gatk-sv#join-raw-calls), [`SVConcordance`](https://github.com/broadinstitute/gatk-sv#svconcordance), [`FilterGenotypes`](https://github.com/broadinstitute/gatk-sv#filter-genotypes), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
+Read the full documentation for [RegenotypeCNVs](https://github.com/broadinstitute/gatk-sv#regenotype-cnvs), [MakeCohortVcf](https://github.com/broadinstitute/gatk-sv#make-cohort-vcf) (which includes `CombineBatches`, `ResolveComplexVariants`, `GenotypeComplexVariants`, `CleanVcf`), [`RefineComplexVariants`](https://github.com/broadinstitute/gatk-sv#refine-complex), [`JoinRawCalls`](https://github.com/broadinstitute/gatk-sv#join-raw-calls), [`SVConcordance`](https://github.com/broadinstitute/gatk-sv#svconcordance), [`FilterGenotypes`](https://github.com/broadinstitute/gatk-sv#filter-genotypes), and [AnnotateVcf](https://github.com/broadinstitute/gatk-sv#annotate-vcf) on the README.
 * Use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.
 
 #### Downstream steps
