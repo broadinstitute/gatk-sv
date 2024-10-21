@@ -20,7 +20,8 @@ workflow RefineComplexVariants {
         Array[File] Depth_DUP_beds
 
         Int n_per_split
-        File? script_generate_cpx_review_script
+        Int min_pe_cpx = 3
+        Int min_pe_ctx = 3
 
         Boolean use_hail = false
         String? gcs_project  # required if use_hail = true
@@ -112,7 +113,6 @@ workflow RefineComplexVariants {
             input:
                 bed = SplitCpxCtx.cpx_ctx_bed,
                 sample_batch_pe_map = GetSampleBatchPEMap.sample_batch_pe_map,
-                script = script_generate_cpx_review_script,
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_generate_cpx_review_script
         }
@@ -138,6 +138,7 @@ workflow RefineComplexVariants {
                 PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
                 PE_supp = CollectPEMetricsForCPX.evi_stat,
                 depth_supp = CollectLargeCNVSupportForCPX.lg_cnv_depth_supp,
+                min_pe_cpx = min_pe_cpx,
                 prefix = "~{prefix}.~{i}",
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_calcu_cpx_evidences
@@ -147,6 +148,7 @@ workflow RefineComplexVariants {
             input:
                 PE_collect_script = GenerateCpxReviewScript.pe_evidence_collection_script,
                 PE_supp = CollectPEMetricsForCPX.evi_stat,
+                min_pe_ctx = min_pe_ctx,
                 prefix = "~{prefix}.~{i}",
                 sv_pipeline_docker = sv_pipeline_docker,
                 runtime_attr_override = runtime_attr_calcu_cpx_evidences
@@ -528,6 +530,7 @@ task CalculateCpxEvidences {
         File PE_collect_script
         File PE_supp
         File depth_supp
+        Int min_pe_cpx
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -610,7 +613,7 @@ task CalculateCpxEvidences {
                                 pe_supp = 'partial_PE'
                             if PE_supp[svid][sample][0][0]>0 and PE_supp[svid][sample][1][0]>0:
                                 pe_supp = 'low_PE'
-                            if PE_supp[svid][sample][0][0]>1 and PE_supp[svid][sample][1][0]>1:
+                            if PE_supp[svid][sample][0][0]>=~{min_pe_cpx} and PE_supp[svid][sample][1][0]>=~{min_pe_cpx}:
                                 pe_supp = 'high_PE'
                             out[svid][sample] = [pe_supp]
                         else:
@@ -681,6 +684,7 @@ task CalculateCtxEvidences {
     input {
         File PE_collect_script
         File PE_supp
+        Int min_pe_ctx
         String prefix
         String sv_pipeline_docker
         RuntimeAttr? runtime_attr_override
@@ -753,7 +757,7 @@ task CalculateCtxEvidences {
                                 pe_supp = 'partial_PE'
                             if PE_supp[svid][sample][0][0]>0 and PE_supp[svid][sample][1][0]>0:
                                 pe_supp = 'low_PE'
-                            if PE_supp[svid][sample][0][0]>2 and PE_supp[svid][sample][1][0]>2:
+                            if PE_supp[svid][sample][0][0]>=~{min_pe_ctx} and PE_supp[svid][sample][1][0]>=~{min_pe_ctx}:
                                 pe_supp = 'high_PE'
                             out[svid][sample] = [pe_supp]
                         else:
