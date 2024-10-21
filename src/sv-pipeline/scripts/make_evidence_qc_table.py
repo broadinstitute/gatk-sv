@@ -34,11 +34,10 @@ def read_sex_assignments(filename: str) -> pd.DataFrame:
     Returns:
         A pandas DataFrame containing the estimated sex assignment for each sample.
     """
-    df_ploidy = pd.read_csv(filename, sep="\t")
     df_assignments = pd.read_csv(filename, sep="\t")
     df_assignments = df_assignments[[ID_COL, "Assignment"]]
     df_assignments.rename(columns={'Assignment': 'sex_assignment'}, inplace=True)
-    return df_ploidy
+    return df_assignments
 
 
 def read_bincov_median(filename: str) -> pd.DataFrame:
@@ -52,7 +51,7 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
     df_median = pd.read_csv(filename, sep="\t").T
     df_median = df_median.rename_axis(ID_COL).reset_index()
     df_median.columns = [ID_COL, "median_coverage"]
-    df_median = df_median.reset_index(drop=True)
+    df_median = df_median.iloc[1:].reset_index(drop=True)
     return df_median
 
 
