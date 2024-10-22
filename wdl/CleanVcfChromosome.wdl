@@ -620,14 +620,10 @@ task RescueMobileElementDeletions {
   }
 
   Float input_size = size(vcf, "GiB")
-  # disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
-  # in tests on large VCFs, memory usage is ~1.0 * input VCF size
-  # the biggest disk usage is at the end of the task, with input + output VCF on disk
-  Int cpu_cores = 2 # speed up compression / decompression of VCFs
   RuntimeAttr runtime_default = object {
     mem_gb: 3.75 + input_size * 1.5,
     disk_gb: ceil(100.0 + input_size * 3.0),
-    cpu_cores: cpu_cores,
+    cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
     boot_disk_gb: 10
