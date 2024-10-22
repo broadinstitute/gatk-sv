@@ -189,9 +189,9 @@ task GenerateCnvSegmentFromCpx {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 5,
+        mem_gb: 3.75,
         disk_gb: 10,
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
