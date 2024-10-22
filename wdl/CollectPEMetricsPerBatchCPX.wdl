@@ -66,7 +66,7 @@ task CollectPEMetrics {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 5,
+    mem_gb: 3.75,
     disk_gb: ceil(30.0 + size(PE_metric, "GiB") * 3),
     boot_disk_gb: 10,
     preemptible_tries: 3,
@@ -123,7 +123,7 @@ task ConcatEvidences {
 
   RuntimeAttr default_attr = object {
     cpu_cores: 1,
-    mem_gb: 5,
+    mem_gb: 3.75,
     disk_gb: 10,
     boot_disk_gb: 10,
     preemptible_tries: 3,

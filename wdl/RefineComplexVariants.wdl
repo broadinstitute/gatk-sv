@@ -218,9 +218,9 @@ task GetSampleBatchPEMap {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 5,
+        mem_gb: 3.75,
         disk_gb: 10 + 2*ceil(size(flatten([batch_sample_lists]), "GB")),
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -280,9 +280,9 @@ task ReviseVcf {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 7.5,
+        mem_gb: 3.75,
         disk_gb: ceil(5.0 +  size(vcf_file, "GB")*3),
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -425,9 +425,9 @@ task SplitCpxCtx {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 7.5,
+        mem_gb: 3.75,
         disk_gb: 10,
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -481,9 +481,9 @@ task GenerateCpxReviewScript {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 5,
+        mem_gb: 3.75,
         disk_gb: 10,
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -537,9 +537,9 @@ task CalculateCpxEvidences {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 5,
+        mem_gb: 3.75,
         disk_gb: 10,
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
@@ -691,9 +691,9 @@ task CalculateCtxEvidences {
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1,
-        mem_gb: 5,
+        mem_gb: 3.75,
         disk_gb: 10,
-        boot_disk_gb: 30,
+        boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
     }
