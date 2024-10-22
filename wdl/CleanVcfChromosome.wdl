@@ -690,6 +690,7 @@ for record in fin:
         record.stop = record.info['END2']
         record.info.pop("CHR2")
         record.info.pop("END2")
+        record.info.pop("UNRESOLVED_TYPE")
         if hash_MEI_DEL_reset[record.id] == 'overlap_LINE1':
             record.alts = ('<DEL:ME:LINE1>',)
         if hash_MEI_DEL_reset[record.id] == 'overlap_HERVK':
