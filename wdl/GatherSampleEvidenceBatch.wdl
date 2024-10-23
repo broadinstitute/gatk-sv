@@ -15,6 +15,8 @@ workflow GatherSampleEvidenceBatch {
     Boolean collect_coverage = true
     Boolean collect_pesr = true
 
+    Boolean? is_dragen_3_7_8
+
     # Localize reads parameters
     # set to true on default, skips localize_reads if set to false
     Boolean run_localize_reads = true
@@ -25,6 +27,14 @@ workflow GatherSampleEvidenceBatch {
     File reference_index    # Index (.fai), must be in same dir as fasta
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     String? reference_version   # Either "38" or "19"
+
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
 
     # Coverage collection inputs
     File preprocessed_intervals
@@ -52,7 +62,16 @@ workflow GatherSampleEvidenceBatch {
     Array[Int]? pf_reads_improper_pairs
 
     # Scramble inputs
+    File mei_bed
+    Int? scramble_alignment_score_cutoff
+    Int? scramble_percent_align_cutoff
+    Float? scramble_min_clipped_reads_fraction
     Int? scramble_part2_threads
+    File? scramble_vcf_script
+
+    # Required if running Scramble but not running Manta
+    Array[File]? manta_vcf_input
+    Array[File]? manta_vcf_index_input
 
     # Wham inputs
     File wham_include_list_bed_file
@@ -108,8 +127,15 @@ workflow GatherSampleEvidenceBatch {
         sample_id = sample_ids[i],
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
+        is_dragen_3_7_8 = is_dragen_3_7_8,
         primary_contigs_list = primary_contigs_list,
         primary_contigs_fai = primary_contigs_fai,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
         reference_dict = reference_dict,
@@ -131,7 +157,14 @@ workflow GatherSampleEvidenceBatch {
         pct_chimeras = if defined(pct_chimeras) then select_first([pct_chimeras])[i] else NONE_FLOAT_,
         total_reads = if defined(total_reads) then select_first([total_reads])[i] else NONE_FLOAT_,
         pf_reads_improper_pairs = if defined(pf_reads_improper_pairs) then select_first([pf_reads_improper_pairs])[i] else NONE_INT_,
-        scramble_part2_threads=scramble_part2_threads,
+        mei_bed = mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        manta_vcf_input = if defined(manta_vcf_input) then select_first([manta_vcf_input])[i] else NONE_FILE_,
+        manta_vcf_index_input = if defined(manta_vcf_index_input) then select_first([manta_vcf_index_input])[i] else NONE_FILE_,
         wham_include_list_bed_file = wham_include_list_bed_file,
         run_module_metrics = run_module_metrics_,
         baseline_manta_vcf = baseline_manta_vcf,
