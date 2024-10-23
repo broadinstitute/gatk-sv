@@ -17,6 +17,9 @@ workflow ResolveComplexVariants {
     Array[File] disc_files
     Array[File] rf_cutoff_files
 
+    Array[String]? background_fail_columns
+    Array[String]? bothsides_pass_columns
+
     File contig_list
     Int max_shard_size
     File cytobands
@@ -194,6 +197,7 @@ workflow ResolveComplexVariants {
         vcf=RenameVariants.renamed_vcf,
         original_list=cluster_bothside_pass_lists[i],
         outfile="~{cohort_name}.~{contig}.sr_bothside_pass.updated3.txt",
+        header_columns=select_first([bothsides_pass_columns, ["1", "2", "3", "4"]]),
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list_pass
     }
@@ -204,6 +208,7 @@ workflow ResolveComplexVariants {
         vcf=RenameVariants.renamed_vcf,
         original_list=cluster_background_fail_lists[i],
         outfile="~{cohort_name}.~{contig}.sr_background_fail.updated3.txt",
+        header_columns=select_first([background_fail_columns, ["1", "2", "3", "4"]]),
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_attr_override=runtime_override_update_sr_list_fail
     }
