@@ -52,7 +52,7 @@ An identifier for the batch. Should match the name used in [GatherBatchEvidence]
 Standardized VCF tarballs from [GatherBatchEvidence](./gbe#std__vcf_tar)
 
 #### `del_bed`, `dup_bed`
-Merged CNV call files (`.bed.gz`) from [GatherBatchEvidence](./gbe#merged_dels-merged_dels)
+Merged CNV call files (`.bed.gz`) from [GatherBatchEvidence](./gbe#merged_dels-merged_dups)
 
 #### `ped_file`
 Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format).

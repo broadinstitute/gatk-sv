@@ -22,7 +22,7 @@ pipeline through [FilterGenotypes](./fg).
 
 The tarball output has the following directory structure:
 
-- `/plots/main_plots` : main QC plots, described in detail [below](#main-qc-plots).
+- `/plots/main_plots` : main QC plots, described in detail [below](#plots-description).
 - `/plots/supplementary_plots` : comprehensive set of QC plots with greater detail, some of which are used as panels 
   in `main_plots`.
 - `/data` : various datafiles from the QC process such as family structures, a list of the samples

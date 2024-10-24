@@ -71,10 +71,10 @@ Raw caller VCFs generated in [GatherSampleEvidence](./gse#outputs). Callers may 
 Enables running QC tasks.
 
 #### `contig_ploidy_model_tar`
-Contig ploidy model tarball generated in [TrainGCNV](./gcnv#contig-ploidy-model-tarball).
+Contig ploidy model tarball generated in [TrainGCNV](./gcnv#cohort_contig_ploidy_model_tar).
 
 #### `gcnv_model_tars`
-CNV model tarball generated in [TrainGCNV](./gcnv#model-tarballs).
+CNV model tarball generated in [TrainGCNV](./gcnv#cohort_gcnv_model_tars).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `rename_samples`
 Default: `false`. Overwrite sample IDs with the [samples](#samples) input.
