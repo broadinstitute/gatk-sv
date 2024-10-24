@@ -10,8 +10,12 @@ import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GatherSampleEvidence.wdl)
 
 Runs raw evidence collection on each sample with the following SV callers: 
-Manta, Wham, Scramble, and/or MELT, and collects raw SV evidence (PE/SR/RD/SD). For guidance on pre-filtering prior 
-to GatherSampleEvidence, refer to the Sample Exclusion section.
+Manta, Wham, and Scramble, and collects raw SV evidence (PE/SR/RD/SD). For guidance on pre-filtering prior 
+to GatherSampleEvidence, refer to the [Input data](/docs/gs/inputs) section.
+
+:::note
+MELT is no longer supported as a raw caller. Please see [SV/CNV callers](/docs/gs/sv_callers) for more information.
+:::
 
 The following diagram illustrates the recommended invocation order:
 
