@@ -114,4 +114,4 @@ Split read positions collected by `GATK-CollectSVEvidence` (`*.sr.txt.gz`)
 Site depth counts collected by `GATK-CollectSVEvidence` (`*.sd.txt.gz`)
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sample_metrics_files`
-Sample metrics for QC. Enabled with [run_module_metrics](#run-module-metrics).
+Sample metrics for QC. Enabled with [run_module_metrics](#optional-run_module_metrics).

@@ -10,6 +10,6 @@ This material covers basic concepts of structural variant calling, specifics of 
 advanced troubleshooting that also apply to the joint calling mode as well. This guide is intended to supplement 
 documentation found here.
 
-Users should also review the [Getting Started](/docs/getting-started/overview) section before attempting to perform SV calling.
+Users should also review the [Getting Started](/docs/gs/overview) section before attempting to perform SV calling.
 
 Recommendations for assessing the quality of completed call sets can be found on the [MainVcfQc module page](/docs/modules/mvqc).

@@ -90,7 +90,7 @@ Ploidy estimates, sex assignments, with plots
 Outlier samples detected by call counts.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `qc_table`
-QC summary table. Enable with [run_ploidy](#run_ploidy).
+QC summary table. Enable with [run_ploidy](#optional-run_ploidy).
 
 ## Preliminary Sample QC
 

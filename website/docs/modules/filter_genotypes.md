@@ -139,11 +139,11 @@ Default: `0.4`. If providing a truth set, defines the beta parameter for F-score
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `truth_json`
 Truth labels for input variants. If provided, the workflow will attempt to optimize filtering cutoffs automatically 
-using the F-score. If provided, [sl_filter_args](#sl_filter_args) is ignored.
+using the F-score. If provided, [sl_filter_args](#optional-sl_filter_args) is ignored.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sl_filter_args`
 Arguments for the [SL filtering script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py). 
-This should be used to set `SL` cutoffs for filtering (refer to description above). Overridden by [truth_json](#truth_json).
+This should be used to set `SL` cutoffs for filtering (refer to description above). Overridden by [truth_json](#optional-truth_json).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_qc`
 Default: `true`. Enable running [MainVcfQc](./mvqc) automatically. By default, filtered variants will be excluded from
@@ -164,10 +164,10 @@ Filtered VCF.
 QC plots generated with [MainVcfQc](./mvqc). Only generated if using [run_qc](#optional-run_qc).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `vcf_optimization_table`
-Table of cutoff optimization metrics. Only generated if [truth_json](##optional-truth_json) is provided.
+Table of cutoff optimization metrics. Only generated if [truth_json](#optional-truth_json) is provided.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sl_cutoff_qc_tarball`
-Cutoff optimization and QC plots. Only generated if [truth_json](##optional-truth_json) is provided.
+Cutoff optimization and QC plots. Only generated if [truth_json](#optional-truth_json) is provided.
 
 #### `unfiltered_recalibrated_vcf`
 Supplemental output of the VCF after assigning `SL` genotype scores but before applying filtering.

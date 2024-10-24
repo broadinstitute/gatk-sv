@@ -75,7 +75,7 @@ Array of median coverage tables for all batches from [GatherBatchEvidence](./gbe
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
 Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the
-[gcs_project](#gcs_project) must also be provided. Does not work on Terra.
+[gcs_project](#optional-gcs_project) must also be provided. Does not work on Terra.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `gcs_project`
 Google Cloud project ID. Required only if enabling [use_hail](#optional-use_hail).
