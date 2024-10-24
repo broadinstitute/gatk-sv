@@ -35,7 +35,7 @@ workflow FilterGenotypes {
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
     Boolean run_qc = true
-    String qc_bcftools_preprocessing_options = "-e 'FILTER~\"UNRESOLVED\" || FILTER~\"HIGH_NCR\"'"
+    String qc_bcftools_preprocessing_options = "-i 'FILTER=\"PASS\"'"
     Int qc_sv_per_shard = 2500
     Int qc_samples_per_shard = 600
     RuntimeAttr? runtime_override_plot_qc_per_family
