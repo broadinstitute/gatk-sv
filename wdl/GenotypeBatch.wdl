@@ -28,7 +28,7 @@ workflow GenotypeBatch {
     File? pesr_exclude_list  # Required unless skipping training
     File splitfile
     File? splitfile_index
-    String? reference_build  #hg19 or hg38, Required unless skipping training
+    String? reference_build  # Must be hg38, Required unless skipping training
     File bin_exclude
     File ref_dict
     # If all specified, training will be skipped (for single sample pipeline)

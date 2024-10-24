@@ -1,6 +1,6 @@
 {
-  "label": "Docker Images",
-  "position": 7,
+  "label": "Docker builds",
+  "position": 2,
   "link": {
     "type": "generated-index"
   }
