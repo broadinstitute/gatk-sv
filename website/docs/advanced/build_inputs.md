@@ -1,7 +1,7 @@
 ---
 title: Building inputs
 description: Building work input json files
-sidebar_position: 1
+sidebar_position: 3
 slug: build_inputs
 ---
 
