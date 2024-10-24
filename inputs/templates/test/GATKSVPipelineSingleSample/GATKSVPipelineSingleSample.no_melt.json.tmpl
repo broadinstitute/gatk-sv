@@ -83,6 +83,9 @@
   "GATKSVPipelineSingleSample.depth_interval_overlap": "0.8",
   "GATKSVPipelineSingleSample.depth_clustering_algorithm": "SINGLE_LINKAGE",
 
+  "GATKSVPipelineSingleSample.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
+  "GATKSVPipelineSingleSample.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
+
   "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : {{ reference_resources.copy_number_autosomal_contigs | tojson }},
   "GATKSVPipelineSingleSample.clean_vcf_min_sr_background_fail_batches": 0.5,
   "GATKSVPipelineSingleSample.max_shard_size_resolve" : 500,
