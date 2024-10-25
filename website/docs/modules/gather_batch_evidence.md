@@ -5,20 +5,21 @@ sidebar_position: 4
 slug: gbe
 ---
 
-Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), GATK-gCNV) 
-and combines single-sample raw evidence into a batch.
+import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
 
-The following diagram illustrates the downstream workflows of the `GatherBatchEvidence` workflow 
-in the recommended invocation order. You may refer to 
-[this diagram](https://github.com/broadinstitute/gatk-sv/blob/main/terra_pipeline_diagram.jpg) 
-for the overall recommended invocation order.
+[WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GatherBatchEvidence.wdl)
+
+Runs CNV callers ([cn.MOPS](https://academic.oup.com/nar/article/40/9/e69/1136601), [GATK-gCNV](https://github.com/broadinstitute/gatk)) 
+and combines single-sample raw evidence into batched files.
+
+The following diagram illustrates the recommended invocation order:
 
 ```mermaid
 
 stateDiagram
   direction LR
   
-  classDef inModules stroke-width:0px,fill:#00509d,color:#caf0f8
+  classDef inModules stroke-width:0px,fill:#caf0f8,color:#00509d
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
@@ -34,148 +35,86 @@ stateDiagram
 ```
 
 ## Inputs
-This workflow takes as input the read counts, BAF, PE, SD, SR, and per-caller VCF files 
-produced in the GatherSampleEvidence workflow, and contig ploidy and gCNV models from 
-the TrainGCNV workflow.
-The following is the list of the inputs the GatherBatchEvidence workflow takes.
 
+:::info
+All array inputs of sample data must match in order. For example, the order of the `samples` array should match that of
+`counts`, `PE_files`, etc.
+:::
 
 #### `batch`
-An identifier for the batch.
-
+An identifier for the batch; may only be alphanumeric with underscores.
 
 #### `samples`
-Sets the list of sample IDs. 
-
-
-#### `counts`
-Set to the [`GatherSampleEvidence.coverage_counts`](./gse#coverage-counts) output.
-
-
-#### Raw calls
-
-The following inputs set the per-caller raw SV calls, and should be set 
-if the caller was run in the [`GatherSampleEvidence`](./gse) workflow.
-You may set each of the following inputs to the linked output from 
-the GatherSampleEvidence workflow.
-
-
-- `manta_vcfs`: [`GatherSampleEvidence.manta_vcf`](./gse#manta-vcf);
-- `melt_vcfs`: [`GatherSampleEvidence.melt_vcf`](./gse#melt-vcf);
-- `scramble_vcfs`: [`GatherSampleEvidence.scramble_vcf`](./gse#scramble-vcf);
-- `wham_vcfs`: [`GatherSampleEvidence.wham_vcf`](./gse#wham-vcf).
-
-#### `PE_files`
-Set to the [`GatherSampleEvidence.pesr_disc`](./gse#pesr-disc) output.
-
-#### `SR_files`
-Set to the [`GatherSampleEvidence.pesr_split`](./gse#pesr-split)
-
-
-#### `SD_files`
-Set to the [`GatherSampleEvidence.pesr_sd`](./gse#pesr-sd)
-
-
-#### `matrix_qc_distance`
-You may refer to [this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl)
-for an example value. 
-
-
-#### `min_svsize`
-Sets the minimum size of SVs to include.
-
+Sample IDs. Must match the sample IDs used in [GatherSampleEvidence](./gse#sample_id) unless `rename_samples` is enabled, in 
+which case sample IDs will be overwritten. See [sample ID requirements](/docs/gs/inputs#sampleids) for specifications 
+of allowable sample IDs.
 
 #### `ped_file`
-A pedigree file describing the familial relationshipts between the samples in the cohort.
-Please refer to [this section](./#ped_file) for details. 
+Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PED file format](/docs/gs/inputs#ped-format).
 
+#### `counts`
+Binned read count files (`*.rd.txt.gz`) generated in [GatherSampleEvidence](./gse#coverage-counts).
+
+#### `PE_files`
+Discordant pair evidence files (`*.pe.txt.gz`) generated in [GatherSampleEvidence](./gse#pesr-disc).
+
+#### `SR_files`
+Split read evidence files (`*.sr.txt.gz`) generated in [GatherSampleEvidence](./gse#pesr-split).
+
+#### `SD_files`
+Site depth files (`*.sd.txt.gz`) generated in [GatherSampleEvidence](./gse#pesr-sd).
+
+#### `*_vcfs`
+Raw caller VCFs generated in [GatherSampleEvidence](./gse#outputs). Callers may be omitted if they were not run.
 
 #### `run_matrix_qc`
-Enables or disables running optional QC tasks. 
+Enables running QC tasks.
 
+#### `contig_ploidy_model_tar`
+Contig ploidy model tarball generated in [TrainGCNV](./gcnv#cohort_contig_ploidy_model_tar).
 
-#### `gcnv_qs_cutoff`
-You may refer to [this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl)
-for an example value. 
+#### `gcnv_model_tars`
+CNV model tarball generated in [TrainGCNV](./gcnv#cohort_gcnv_model_tars).
 
-#### cn.MOPS files
-The workflow needs the following cn.MOPS files.
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `rename_samples`
+Default: `false`. Overwrite sample IDs with the [samples](#samples) input.
 
-- `cnmops_chrom_file` and `cnmops_allo_file`: FASTA index files (`.fai`) for respectively 
-  non-sex chromosomes (autosomes) and chromosomes X and Y (allosomes). 
-  The file format is explained [on this page](https://www.htslib.org/doc/faidx.html).
-
-  You may use the following files for these fields:
-
-  ```json
-  "cnmops_chrom_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai"
-  "cnmops_allo_file": "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai"
-  ```
-  
-- `cnmops_exclude_list`: 
-  You may use [this file](https://github.com/broadinstitute/gatk-sv/blob/d66f760865a89f30dbce456a3f720dec8b70705c/inputs/values/resources_hg38.json#L10)
-  for this field.
-
-#### GATK-gCNV inputs
-
-The following inputs are configured based on the outputs generated in the [`TrainGCNV`](./gcnv) workflow.
-
-- `contig_ploidy_model_tar`: [`TrainGCNV.cohort_contig_ploidy_model_tar`](./gcnv#contig-ploidy-model-tarball)
-- `gcnv_model_tars`: [`TrainGCNV.cohort_gcnv_model_tars`](./gcnv#model-tarballs)
-
-
-The workflow also enables setting a few optional arguments of gCNV.
-The arguments and their default values are provided 
-[here](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/workflow_configurations/GatherBatchEvidence.json.tmpl) 
-as the following, and each argument is documented on 
-[this page](https://gatk.broadinstitute.org/hc/en-us/articles/360037593411-PostprocessGermlineCNVCalls)
-and
-[this page](https://gatk.broadinstitute.org/hc/en-us/articles/360047217671-GermlineCNVCaller).
-
-
-#### Docker images
-
-The workflow needs the following Docker images, the latest versions of which are in 
-[this file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/dockers.json).
-
-  - `cnmops_docker`;
-  - `condense_counts_docker`;
-  - `linux_docker`;
-  - `sv_base_docker`;
-  - `sv_base_mini_docker`;
-  - `sv_pipeline_docker`;
-  - `sv_pipeline_qc_docker`;
-  - `gcnv_gatk_docker`;
-  - `gatk_docker`.
-
-#### Static inputs
-
-You may refer to [this reference file](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/values/resources_hg38.json)
-for values of the following inputs.
-
- - `primary_contigs_fai`;
- - `cytoband`;
- - `ref_dict`;
- - `mei_bed`;
- - `genome_file`;
- - `sd_locs_vcf`.
-
-
-#### Optional Inputs
-The following is the list of a few optional inputs of the 
-workflow, with an example of possible values. 
-
-- `"allosomal_contigs": [["chrX", "chrY"]]`
-- `"ploidy_sample_psi_scale": 0.001`
-
-
-
-
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `run_ploidy`
+Default: `false`. Runs ploidy estimation. Note this calls the same method used in [EvidenceQc](./eqc).
 
 ## Outputs
 
-- Combined read count matrix, SR, PE, and BAF files
-- Standardized call VCFs
-- Depth-only (DEL/DUP) calls
-- Per-sample median coverage estimates
-- (Optional) Evidence QC plots
+#### `merged_BAF`
+Batch B-allele frequencies file (`.baf.txt.gz`) derived from site depth evidence.
+
+#### `merged_SR`
+Batch split read evidence file (`.sr.txt.gz`).
+
+#### `merged_PE`
+Batch paired-end evidence file (`.pe.txt.gz`).
+
+#### `merged_bincov`
+Batch binned read counts file (`.rd.txt.gz`).
+
+#### `merged_dels`, `merged_dups`
+Batch CNV calls (`.bed.gz`).
+
+#### `median_cov`
+Median coverage table.
+
+#### `std_*_vcf_tar`
+Tarballs containing per-sample raw caller VCFs in standardized formats. This will be ommitted for any callers not 
+provided in the inputs.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `batch_ploidy_*`
+Ploidy analysis files. Enabled with [run_ploidy](#optional-run_ploidy).
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `*_stats`, `Matrix_QC_plot`
+QC files. Enabled with [run_matrix_qc](#run_matrix_qc).
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `manta_tloc`
+Supplemental evidence for translocation variants. These records are hard filtered from the main call set but may be of 
+interest to users investigating reciprocal translocations and other complex events.
+
+
+
