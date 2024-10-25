@@ -111,8 +111,7 @@ def main():
                         if sum(1 for x in Counter(sample_cn_map.values()) if x is not None and (x < 1 or x > 4)) > 4:
                             gt4_copystate = True
                         if sum(1 for s in sample_cn_map if sample_cn_map[s] is not None and
-                                                           (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
-                                                           gt4_copystate) > vf_1:
+                                (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and gt4_copystate) > vf_1:
                             multi_dup = True
                     gts = [record.samples[s]['GT'] for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
