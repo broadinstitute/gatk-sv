@@ -105,7 +105,7 @@ genotype quality. This plot is only generated if the cohort contains trios defin
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> Call set benchmarking
 
-This plot will be ggenerated for each external call set provided. The left-hand panels show distributions of overlapping 
+This plot will be generated for each external call set provided. The left-hand panels show distributions of overlapping 
 variants in the input VCF by SV class, size, and frequency. Colors depict proportions of variants meeting each overlap 
 criterion. The right-hand panels show distributions among variants overlapping between the input and external call sets 
 by SV class, size, and frequency. 
