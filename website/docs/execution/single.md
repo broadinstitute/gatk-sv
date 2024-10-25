@@ -8,8 +8,8 @@ slug: single
 ## Introduction
 
 **Extending SV detection to small datasets**
-The Single Sample pipeline 
-is designed to facilitate running the methods developed for the cohort-mode GATK-SV pipeline on small data sets or in
+
+The Single Sample pipeline is designed to facilitate running the methods developed for the cohort-mode GATK-SV pipeline on small data sets or in
 clinical contexts where batching large numbers of samples is not an option. To do so, it uses precomputed data, SV calls,
 and model parameters computed by the cohort pipeline on a reference panel composed of similar samples. The pipeline integrates this
 precomputed information with signals extracted from the input CRAM file to produce a call set similar in quality to results

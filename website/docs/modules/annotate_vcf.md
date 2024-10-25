@@ -72,7 +72,7 @@ Family structures and sex assignments determined in [EvidenceQC](./eqc). See [PE
 If provided, sex-specific allele frequencies will be annotated.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `par_bed`
-Psuedo-autosomal region (PAR) bed file. If provided, variants overlapping PARs will be annotated with the `PAR` field.
+Pseudo-autosomal region (PAR) bed file. If provided, variants overlapping PARs will be annotated with the `PAR` field.
 
 #### `sv_per_shard`
 Shard sized for parallel processing. Decreasing this may help if the workflow is running too slowly.
@@ -85,7 +85,8 @@ from the reference population.
 External `AF` annotation prefix. Required if providing [external_af_ref_bed](#optional-external_af_ref_bed).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `external_af_population`
-External population names, e.g. "ALL", "AFR", "AMR", "EAS", "EUR". Required if providing [external_af_ref_bed](#optional-external_af_ref_bed).
+Population names in the external SV reference set, e.g. "ALL", "AFR", "AMR", "EAS", "EUR". Required if providing 
+[external_af_ref_bed](#optional-external_af_ref_bed) and must match the populations in the bed file.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `use_hail`
 Default: `false`. Use Hail for VCF concatenation. This should only be used for projects with over 50k samples. If enabled, the

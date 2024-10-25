@@ -42,7 +42,7 @@ Some inputs of batch data must match in order. Specifically, the order of the `d
 :::
 
 #### `cohort_name`
-Cohort name. May be alphanumeric with underscores.
+Cohort name. The guidelines outlined in the [sample ID requirements](/docs/gs/inputs#sampleids) section apply here.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `merge_vcfs`
 Default: `false`. If true, merge contig-sharded VCFs into one genome-wide VCF. This may be used for convenience but cannot be used with

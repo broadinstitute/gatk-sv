@@ -13,7 +13,6 @@ import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.
 is a method for detecting rare germline copy number variants (CNVs)
 from short-read sequencing read-depth information.
 The `TrainGCNV` module trains a gCNV model for use in the [GatherBatchEvidence](./gbe) workflow. 
-The upstream and downstream dependencies of the TrainGCNV module are illustrated in the following diagram.
 
 The samples used for training should be homogeneous (concerning sequencing platform, 
 coverage, library preparation, etc.) and similar to the samples on which the model will be applied.
@@ -57,8 +56,10 @@ tool the workflow uses, `GATK-GermlineCNVCaller`; hence, you may refer to the
 [documentation](https://gatk.broadinstitute.org/hc/en-us/articles/360040097712-GermlineCNVCaller) 
 of the tool for a description on these optional inputs.  We recommend that most users use the defaults.
 
+:::info
 All array inputs of sample data must match in order. For example, the order of the `samples` array should match that 
 of the `count_files` array.
+:::
 
 #### `samples`
 Sample IDs

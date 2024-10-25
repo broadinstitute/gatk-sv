@@ -8,7 +8,7 @@ GATK-SV utilizes a set of [Docker](https://www.docker.com/) images for execution
 
 ### Publishing and availability
 
-Dockers are automatically build and pushed to the `us.gcr.io/broad-dsde-methods/gatk-sv` repository under two different conditions:
+Dockers are automatically built and pushed to the `us.gcr.io/broad-dsde-methods/gatk-sv` repository under two different conditions:
 1. **Release**: upon releasing a new version of GATK-SV. These Dockers are made permanently available.
 2. **Commit**: upon merging a new commit to the development branch. These Dockers are ephemeral and may be periodically 
 deleted. Any users needing to preserve access to these Docker images should copy them to their own repository. Also
@@ -41,9 +41,7 @@ Failure to localize Docker images to your region will incur significant egress c
 ### Versioning
 
 All Docker images are tagged with a date and version number that must be run with the corresponding version of the 
-WDLs. For example, `sv-pipeline:2024-09-25-v0.29-beta-f064b2d7` must be run with the WDLs from the 
-[v0.29-beta release](https://github.com/broadinstitute/gatk-sv/releases/tag/v0.29-beta). Conversely, the Docker images 
-built with a particular version can be determined from the `dockers.json` file by checking out
+WDLs. The Docker images built with a particular version can be determined from the `dockers.json` file by checking out
 the commit or release of interest and examining `dockers.json`, e.g.
 [v0.29-beta](https://github.com/broadinstitute/gatk-sv/blob/v0.29-beta/inputs/values/dockers.json).
 

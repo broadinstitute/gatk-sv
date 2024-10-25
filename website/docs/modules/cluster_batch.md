@@ -30,6 +30,7 @@ stateDiagram
   cb: ClusterBatch
   gbm: GenerateBatchMetrics
   jrc: JoinRawCalls
+  
   gbe --> cb
   cb --> gbm
   cb --> jrc
@@ -40,8 +41,10 @@ stateDiagram
   class jrc outModules
 ```
 
-Note that [GenerateBatchMetrics](./gbm) is the primary downstream module batch processing. [JoinRawCalls](./jrc) is 
-required for genotype filtering but does not need to be run until later in the pipeline. 
+:::note
+[GenerateBatchMetrics](./gbm) is the primary downstream module in batch processing. [JoinRawCalls](./jrc) is 
+required for genotype filtering but does not need to be run until later in the pipeline.
+:::
 
 ## Inputs
 

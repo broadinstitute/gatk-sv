@@ -64,8 +64,8 @@ Common variant metrics table [GenerateBatchMetrics](./gbm#metrics_common)
 
 #### `outlier_cutoff_nIQR`
 Defines outlier sample cutoffs based on variant counts. Samples deviating from the batch median count by more than 
-the given multiple of the interquartile range are hard filtered from the VCF. Recommended range is between 3 and 9
-depending on desired sensitivity (higher is less stringent), or disable with 999.
+the given multiple of the interquartile range are hard filtered from the VCF. Recommended range is between `3` and `9`
+depending on desired sensitivity (higher is less stringent), or disable with `10000`.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `outlier_cutoff_table`
 A cutoff table to set permissible nIQR ranges for each SVTYPE. If provided, overrides `outlier_cutoff_nIQR`. Expected 

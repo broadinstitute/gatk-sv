@@ -10,7 +10,7 @@ slug: gbm
 Analyzes variants for RD, BAF, PE, and SR evidence and creates a table of metrics containing raw and statistical 
 metrics. These results are used to assess variant quality in `FilterBatch` and for SR-based breakpoint refinement.
 
-Modified tests are applied to common variants (carrier frequency at least 50%), and results emitted in a separate table.
+Modified tests are applied to common variants (carrier frequency at least 50%) and results are emitted in a separate table.
 
 The following diagram illustrates the recommended invocation order:
 

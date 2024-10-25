@@ -52,7 +52,8 @@ stateDiagram
 ### Inputs
 
 #### `cohort`
-An identifier for the cohort. May only be alphanumeric with underscores.
+An identifier for the cohort. The guidelines outlined in the [sample ID requirements](/docs/gs/inputs#sampleids) 
+section apply here.
 
 #### `depth_vcfs`
 Array of filtered depth VCFs across batches generated in [FilterBatch](./fb#filtered_depth_vcf).

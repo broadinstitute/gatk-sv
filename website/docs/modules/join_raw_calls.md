@@ -36,7 +36,8 @@ stateDiagram
 ### Inputs
 
 #### `prefix`
-Prefix for the output VCF, such as the cohort name. May be alphanumeric with underscores.
+Prefix for the output VCF, such as the cohort name. The guidelines outlined in the 
+[sample ID requirements](/docs/gs/inputs#sampleids) section apply here.
 
 #### `clustered_*_vcfs`
 Array of clustered VCFs for all batches, generated in [ClusterBatch](./cb#clustered__vcf).

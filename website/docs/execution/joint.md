@@ -76,14 +76,20 @@ cutoff for outlier filtration in `08-FilterBatchSamples`
 13. `13-ResolveComplexVariants`: Complex variant resolution
 14. `14-GenotypeComplexVariants`: Complex variant re-genotyping
 15. `15-CleanVcf`: VCF cleanup
-16. `16-MainVcfQc`: Generates VCF QC reports
-17. `17-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
+16. `16-RefineComplexVariants`: Complex variant filtering and refinement
+17. `17-ApplyManualVariantFilter`: Hard filtering high-FP SV classes
+18. `18-JoinRawCalls`: Raw call aggregation
+19. `19-SVConcordance`: Annotate genotype concordance with raw calls
+20. `20-FilterGenotypes`: Genotype filtering
+21. `21-AnnotateVcf`: Cohort VCF annotations, including functional annotation, allele frequency (AF) annotation, and 
 AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
-* `PlotSVCountsPerSample: Plot SV counts per sample per SV type
+* `MainVcfQc`: Generate detailed call set QC plots
+* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type
 * `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run 
 * `PlotSVCountsPerSample` beforehand (configured with the single VCF you want to filter) to enable IQR cutoff choice.
+* `VisualizeCnvs`: Plot multi-sample depth profiles for CNVs
 
 For detailed instructions on running the pipeline in Terra, see [workflow instructions](#instructions) below.
 

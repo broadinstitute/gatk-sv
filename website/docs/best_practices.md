@@ -12,4 +12,7 @@ documentation found here.
 
 Users should also review the [Getting Started](/docs/gs/overview) section before attempting to perform SV calling.
 
-Recommendations for assessing the quality of completed call sets can be found on the [MainVcfQc module page](/docs/modules/mvqc).
+The following sections also contain recommendations pertaining to data and call set QC:
+
+- Preliminary sample QC in the [EvidenceQc module](/docs/modules/eqc#preliminary-sample-qc).
+- Assessment of completed call sets can be found on the [MainVcfQc module page](/docs/modules/mvqc).

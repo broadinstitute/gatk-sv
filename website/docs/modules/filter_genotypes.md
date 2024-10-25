@@ -47,7 +47,7 @@ The model uses the following features:
 * Genotype properties:
     * Non-reference and no-call allele counts
     * Genotype quality (`GQ`)
-    * Supporting evidence types (EV) and respective genotype qualities (`PE_GQ`, `SR_GQ`, `RD_GQ`)
+    * Supporting evidence types (`EV`) and respective genotype qualities (`PE_GQ`, `SR_GQ`, `RD_GQ`)
     * Raw call concordance (`CONC_ST`)
 * Variant properties:
     * Variant type (`SVTYPE`) and size (`SVLEN`)
@@ -69,7 +69,7 @@ For ease of use, we provide a model pre-trained on high-quality data with truth 
 ```
 gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model
 ```
-See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7) for further details on model training.
+See the SV "Genotype Filter" section on page 34 of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7) for further details on model training. The generation and release of this model was made possible by the All of Us program (see [here](/docs/acknowledgements)).
 
 ### SL scores
 
@@ -88,13 +88,15 @@ This workflow can be run in one of two modes:
    Genotypes with `SL` scores less than the cutoffs are set to no-call (`./.`). The above values were taken directly from Appendix N of the [All of Us Genomic Quality Report C2022Q4R9 CDR v7 ](https://support.researchallofus.org/hc/en-us/articles/4617899955092-All-of-Us-Genomic-Quality-Report-ARCHIVED-C2022Q4R9-CDR-v7). Users should adjust the thresholds depending on data quality and desired accuracy. Please see the arguments in [this script](https://github.com/broadinstitute/gatk-sv/blob/main/src/sv-pipeline/scripts/apply_sl_filter.py) for all available options.
 
 2. (Advanced) The user provides truth labels for a subset of non-reference calls, and `SL` cutoffs are automatically optimized. These truth labels should be provided as a json file in the following format:
-    ```
+   ```json
     {
-      "sample_1": {
+      "sample_1": 
+      {
         "good_variant_ids": ["variant_1", "variant_3"], 
         "bad_variant_ids": ["variant_5", "variant_10"]
       },
-      "sample_2": {
+      "sample_2": 
+      {
         "good_variant_ids": ["variant_2", "variant_13"], 
         "bad_variant_ids": ["variant_8", "variant_11"]
       }

@@ -44,6 +44,39 @@ stateDiagram
   class batching outModules
 ```
 
+### Preliminary Sample QC
+
+The purpose of sample filtering at this stage after EvidenceQC is to
+prevent very poor quality samples from interfering with the results for
+the rest of the callset. In general, samples that are borderline are
+okay to leave in, but you should choose filtering thresholds to suit
+the needs of your cohort and study. There will be future opportunities
+(as part of [FilterBatch](/docs/modules/fb)) for filtering before the joint genotyping
+stage if necessary. Here are a few of the basic QC checks that we recommend:
+
+- Chromosome X and Y ploidy plots: check that sex assignments
+  match your expectations. If there are discrepancies, check for
+  sample swaps and update your PED file before proceeding.
+
+- Whole-genome dosage score (WGD): examine distribution and check that
+  it is centered around 0 (the distribution of WGD for PCR-
+  samples is expected to be slightly lower than 0, and the distribution
+  of WGD for PCR+ samples is expected to be slightly greater than 0.
+  Refer to the gnomAD-SV paper for more information on WGD score).
+  Optionally filter outliers.
+
+- Low outliers for each SV caller: these are samples with
+  much lower than typical numbers of SV calls per contig for
+  each caller. An empty low outlier file means there were
+  no outliers below the median and no filtering is necessary.
+  Check that no samples had zero calls.
+
+- High outliers for each SV caller: optionally
+  filter outliers; samples with many more SV calls than average may be poor quality.
+
+- Remove samples with autosomal aneuploidies based on
+  the per-batch binned coverage plots of each chromosome.
+
 
 ### Inputs
 
@@ -91,36 +124,3 @@ Outlier samples detected by call counts.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `qc_table`
 QC summary table. Enable with [run_ploidy](#optional-run_ploidy).
-
-## Preliminary Sample QC
-
-The purpose of sample filtering at this stage after EvidenceQC is to 
-prevent very poor quality samples from interfering with the results for 
-the rest of the callset. In general, samples that are borderline are 
-okay to leave in, but you should choose filtering thresholds to suit 
-the needs of your cohort and study. There will be future opportunities 
-(as part of FilterBatch) for filtering before the joint genotyping 
-stage if necessary. Here are a few of the basic QC checks that we recommend:
-
-- Look at the X and Y ploidy plots, and check that sex assignments 
-  match your expectations. If there are discrepancies, check for 
-  sample swaps and update your PED file before proceeding.
-
-- Look at the dosage score (WGD) distribution and check that 
-  it is centered around 0 (the distribution of WGD for PCR- 
-  samples is expected to be slightly lower than 0, and the distribution 
-  of WGD for PCR+ samples is expected to be slightly greater than 0. 
-  Refer to the gnomAD-SV paper for more information on WGD score). 
-  Optionally filter outliers.
-
-- Look at the low outliers for each SV caller (samples with 
-  much lower than typical numbers of SV calls per contig for 
-  each caller). An empty low outlier file means there were 
-  no outliers below the median and no filtering is necessary. 
-  Check that no samples had zero calls.
-
-- Look at the high outliers for each SV caller and optionally 
-  filter outliers; samples with many more SV calls than average may be poor quality.
-
-- Remove samples with autosomal aneuploidies based on 
-  the per-batch binned coverage plots of each chromosome.

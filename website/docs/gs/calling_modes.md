@@ -19,7 +19,7 @@ use cases:
 - Studies with rolling data delivery, i.e. in small batches over time
 
 Users should also consider that the single-sample mode is provided as a single workflow and is therefore considerably 
-simpler to run than joint calling . However, it also has higher compute costs on a per-sample basis and will not be as sensitive 
+simpler to run than joint calling. However, it also has higher compute costs on a per-sample basis and will not be as sensitive 
 as joint calling with larger cohorts.
 
 ## Joint calling mode

@@ -42,7 +42,7 @@ All array inputs of batch data must match in order. For example, the order of th
 :::
 
 #### `cohort_name`
-Cohort name. May be alphanumeric with underscores.
+Cohort name. The guidelines outlined in the [sample ID requirements](/docs/gs/inputs#sampleids) section apply here.
 
 #### `batches`
 Array of batch identifiers. Should match the name used in [GatherBatchEvidence](./gbe#batch). Order must match that of [depth_vcfs](#depth_vcfs).

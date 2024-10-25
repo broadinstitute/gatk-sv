@@ -9,9 +9,9 @@ import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GatherSampleEvidence.wdl)
 
-Runs raw evidence collection on each sample with the following SV callers: 
-Manta, Wham, and Scramble, and collects raw SV evidence (PE/SR/RD/SD). For guidance on pre-filtering prior 
-to GatherSampleEvidence, refer to the [Input data](/docs/gs/inputs) section.
+Runs raw evidence collection (PE/SR/RD/SD) on each sample and performs SV discovery with the following callers: 
+Manta, Wham, and Scramble. For guidance on pre-filtering prior to GatherSampleEvidence, refer to the 
+[Input data](/docs/gs/inputs) section.
 
 :::note
 MELT is no longer supported as a raw caller. Please see [SV/CNV callers](/docs/gs/sv_callers) for more information.
@@ -42,25 +42,25 @@ stateDiagram
 An indexed BAM or CRAM file aligned to hg38. See [input data requirements](/docs/gs/inputs).
 
 #### `sample_id`
-Identifier string for the sample. Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) for specifications of allowable sample IDs. 
-IDs that do not meet these requirements may lead to errors.
+Identifier string for the sample. Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) 
+for specifications of allowable sample IDs. IDs that do not meet these requirements may lead to errors.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_coverage`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_coverage` {#collect-coverage}
 Default: `true`. Collect read depth.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_pesr`
-Default: `true`. Collect paired-end and split-read evidence.
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_pesr` {#collect-pesr}
+Default: `true`. Collect paired-end (PE) split-read (SR), and site depth (SD) evidence.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `manta_docker`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `manta_docker` {#manta-docker}
 Manta docker image. If provided, runs the Manta tool.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `melt_docker`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `melt_docker` {#melt-docker}
 MELT docker image. If provided, runs the MELT tool.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_docker`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_docker` {#scramble-docker}
 Scramble docker image. If provided, runs the Scramble tool.
 
-#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `wham_docker`
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `wham_docker` {#wham-docker}
 Wham docker image. If provided, runs the Wham tool.
 
 ### Advanced parameters
@@ -89,29 +89,29 @@ input data.
 
 ### Outputs
 
-#### `manta_vcf` {#manta-vcf}
-VCF containing variants called by Manta
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `manta_vcf` {#manta-vcf}
+VCF containing variants called by Manta. Enabled by providing [manta_docker](#manta-docker).
 
-#### `melt_vcf` {#melt-vcf}
-VCF containing variants called by MELT
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `melt_vcf` {#melt-vcf}
+VCF containing variants called by MELT. Enabled by providing [melt_docker](#melt-docker).
 
-#### `scramble_vcf` {#scramble-vcf}
-VCF containing variants called by Scramble
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_vcf` {#scramble-vcf}
+VCF containing variants called by Scramble. Enabled by providing [scramble_docker](#scramble-docker).
 
-#### `wham_vcf` {#wham-vcf}
-VCF containing variants called by Wham
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `wham_vcf` {#wham-vcf}
+VCF containing variants called by Wham. Enabled by providing [wham_docker](#wham-docker).
 
-#### `coverage_counts` {#coverage-counts}
-Binned read counts collected by `GATK-CollectReadCounts` (`*.counts.tsv.gz`)
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `coverage_counts` {#coverage-counts}
+Binned read counts collected by `GATK-CollectReadCounts` (`*.counts.tsv.gz`). Enabled with [collect_coverage](#collect-coverage).
 
-#### `pesr_disc` {#pesr-disc}
-Discordant read pairs collected by `GATK-CollectSVEvidence` (`*.pe.txt.gz`)
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `pesr_disc` {#pesr-disc}
+Discordant read pairs collected by `GATK-CollectSVEvidence` (`*.pe.txt.gz`). Enabled with [collect_pesr](#collect-pesr).
 
-#### `pesr_split` {#pesr-split}
-Split read positions collected by `GATK-CollectSVEvidence` (`*.sr.txt.gz`)
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `pesr_split` {#pesr-split}
+Split read positions collected by `GATK-CollectSVEvidence` (`*.sr.txt.gz`). Enabled with [collect_pesr](#collect-pesr).
 
-#### `pesr_sd` {#pesr-sd}
-Site depth counts collected by `GATK-CollectSVEvidence` (`*.sd.txt.gz`)
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `pesr_sd` {#pesr-sd}
+Site depth counts collected by `GATK-CollectSVEvidence` (`*.sd.txt.gz`). Enabled with [collect_pesr](#collect-pesr).
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `sample_metrics_files`
 Sample metrics for QC. Enabled with [run_module_metrics](#optional-run_module_metrics).

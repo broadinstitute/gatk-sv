@@ -41,7 +41,7 @@ Some inputs of batch data must match in order. Specifically, the order of the `b
 :::
 
 #### `cohort_name`
-Cohort name. May be alphanumeric with underscores.
+Cohort name. The guidelines outlined in the [sample ID requirements](/docs/gs/inputs#sampleids) section apply here.
 
 #### `batches`
 Array of batch identifiers. Should match the name used in [GatherBatchEvidence](./gbe#batch).

@@ -44,7 +44,7 @@ stateDiagram
 ### Inputs
 
 #### `cohort_name`
-Cohort name. May be alphanumeric with underscores.
+Cohort name. The guidelines outlined in the [sample ID requirements](/docs/gs/inputs#sampleids) section apply here.
 
 #### `complex_genotype_vcfs`
 Array of contig-sharded VCFs containing genotyped complex variants, generated in [GenotypeComplexVariants](./gcv#complex_genotype_vcfs).

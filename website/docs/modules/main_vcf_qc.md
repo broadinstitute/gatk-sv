@@ -14,6 +14,8 @@ Creates plots for call set analysis and quality control (QC). This module is run
 or cohort-level (i.e. multi-sample) SV VCF, including outputs from [ClusterBatch](./cb) and onward.
 
 Users can optionally provide external benchmarking datasets with the 
+[site_level_comparison_datasets](#optional-site_level_comparison_datasets) and 
+[sample_level_comparison_datasets](#optional-sample_level_comparison_datasets) parameters.
 
 The following sections provide guidance on interpreting these plots for VCFs that have been run with the recommended 
 pipeline through [FilterGenotypes](./fg).
@@ -33,7 +35,7 @@ The tarball output has the following directory structure:
 This section summarizes the most important plots used for overall call set QC found in the `/plots/main_plots` 
 directory. 
 
-Example plots are provided from a high-quality dataset consisting of 161 samples from the 1000 Genome Project aligned 
+Example plots are provided from a high-quality dataset consisting of 161 samples from the 1000 Genomes Project aligned 
 with DRAGEN v3.7.8. Note that QC metrics and distributions will vary among data sets, particularly as sample size 
 increases, and these examples are intended to provide a simple baseline for acceptable call set quality. Please see 
 the [Recommendations](#recommendations) section for prescribed quality criteria.
@@ -46,7 +48,7 @@ When running `MainVcfQc` as a standalone workflow, users may set the
 [bcftools_preprocessing_options](#optional--bcftools_preprocessing_options) argument to limit plotted variants based on `FILTER` status.
 For example, to limit to `PASS` variants for a VCF generated from [FilterGenotypes](./fg) use:
 ```
-"bcftools_preprocessing_options": "-e 'FILTER~\"UNRESOLVED\" || FILTER~\"HIGH_NCR\"'"
+"bcftools_preprocessing_options": "-i 'FILTER~\"PASS\""
 ```
 :::
 
@@ -72,7 +74,8 @@ The left panel plots carrier frequency against allele frequency and can be used 
 plot, the rolling mean should not lie on the lower or upper extremes (all het. or all hom.).
 
 The middle panel plots the Hardy-Weinberg (HW) distribution of the cohort and provides estimates for the proportions of 
-variants in HW (or nominally in HW before a multiple testing correction). The right-hand plots stratify HW by SV size.
+variants in HW equilibrium (or nominally in HW equilibrium before a multiple testing correction). The right-hand 
+plots stratify HW by SV size.
 
 :::note
 The horizontal line bisecting the vertical axis in the AF vs. carrier frequency plot was fixed in.

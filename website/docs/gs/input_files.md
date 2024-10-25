@@ -69,4 +69,4 @@ The PED file format is described [here](https://gatk.broadinstitute.org/hc/en-us
 * All family, individual, and parental IDs must conform to the [sample ID requirements](/docs/gs/inputs#sampleids).
 * Missing parental IDs should be entered as 0.
 * Header lines are allowed if they begin with a # character.
-  To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -p pedigree.ped -s samples.list`.
+* To validate the PED file, you may use `src/sv-pipeline/scripts/validate_ped.py -p pedigree.ped -s samples.list`.
