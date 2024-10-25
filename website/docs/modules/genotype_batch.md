@@ -7,8 +7,8 @@ slug: gb
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/GenotypeBatch.wdl)
 
-Genotypes a batch of samples across all variants in the cohort. Note that while the preceding step, 
-[MergeBatchSites](./msites), is a "cohort-level", genotyping is performed on one batch of samples at a time.
+Genotypes a batch of samples across all variants in the cohort. Note that while the preceding step 
+[MergeBatchSites](./msites) is a "cohort-level" module, genotyping is performed on one batch of samples at a time.
 
 In brief, genotyping is performed by first training variant metric cutoffs on sites with clear evidence signatures, 
 and then genotypes and genotype qualities are assigned based on parametric models tuned with these cutoffs. This is 

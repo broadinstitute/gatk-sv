@@ -86,9 +86,9 @@ AF annotation with external population callsets
 
 Extra workflows (Not part of canonical pipeline, but included for your convenience. May require manual configuration):
 * `MainVcfQc`: Generate detailed call set QC plots
-* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type
-* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF. Recommended to run 
-* `PlotSVCountsPerSample` beforehand (configured with the single VCF you want to filter) to enable IQR cutoff choice.
+* `PlotSVCountsPerSample`: Plot SV counts per sample per SV type. Recommended to run before `FilterOutlierSamples` 
+  (configured with the single VCF you want to filter) to enable IQR cutoff choice.
+* `FilterOutlierSamples`: Filter outlier samples (in terms of SV counts) from a single VCF.
 * `VisualizeCnvs`: Plot multi-sample depth profiles for CNVs
 
 For detailed instructions on running the pipeline in Terra, see [workflow instructions](#instructions) below.
