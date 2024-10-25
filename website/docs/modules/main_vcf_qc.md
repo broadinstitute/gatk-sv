@@ -56,13 +56,13 @@ Shows per-genome SV count distributions broken down by SV type. The top row is a
 the bottom row provides counts of individual alleles. Distributions of genotype quality (`GQ`), SV size, and 
 frequency are also shown.
 
-![SV counts](/img/qc/VCF_QC.SV_per_genome.png)
+![SV counts](/img/qc/VcfQcSvPerGenome.png)
 
 #### SV counts
 
 Summarizes total variant counts by type, frequency, and size.
 
-![SV counts](/img/qc/VCF_QC.SV_counts.merged.png)
+![SV counts](/img/qc/VcfQcSvCountsMerged.png)
 
 #### Genotype distributions
 
@@ -79,26 +79,26 @@ The horizontal line bisecting the vertical axis in the AF vs. carrier frequency 
 [#625](https://github.com/broadinstitute/gatk-sv/pull/625)).
 :::
 
-![SV counts](/img/qc/VCF_QC.genotype_distributions.png)
+![SV counts](/img/qc/VcfQcGenotypeDistributions.png)
 
 #### Size distributions
 
 Contains plots of SV length stratified by class and frequency.
 
-![SV counts](/img/qc/VCF_QC.size_distributions.merged.png)
+![SV counts](/img/qc/VcfQcSizeDistributionsMerged.png)
 
 #### Frequency distributions
 
 Contains plots of allele frequency stratified by class and size.
 
-![SV counts](/img/qc/VCF_QC.freq_distributions.merged.png)
+![SV counts](/img/qc/VcfQqFreqDistributionsMerged.png)
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> SV trio inheritance
 
 Inheritance analysis of sites and alleles, including *de novo* rate distributions by SV class, size, frequency, and 
 genotype quality. This plot is only generated if the cohort contains trios defined in the [PED file](#optional-ped_file).
 
-![SV counts](/img/qc/VCF_QC.SV_trio_inheritance.png)
+![SV counts](/img/qc/VcfQcSvTrioInheritance.png)
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> Call set benchmarking
 
@@ -112,7 +112,7 @@ Note the horizontal line bisecting the vertical axis in the AF vs. AF plot has b
 [#625](https://github.com/broadinstitute/gatk-sv/pull/625)).
 :::
 
-![SV counts](/img/qc/VCF_QC.gnomAD_v2_Collins.SV.ALL.callset_benchmarking.png)
+![SV counts](/img/qc/VcfQcGnomADv2CollinsSVAllCallsetBenchmarking.png)
 
 
 ### Recommendations
