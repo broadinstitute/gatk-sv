@@ -130,7 +130,7 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
         gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
         if fails_filter:
             gt['GT'] = _filter_gt(gt['GT'], allele)
-        if _is_no_call('GT'):
+        if _is_no_call(gt['GT']):
             n_no_call += 1
     # Annotate metrics
     record.info['NCN'] = n_no_call
