@@ -42,7 +42,6 @@ A structural variation discovery pipeline for Illumina short-read whole-genome s
 * A workflow execution system supporting the [Workflow Description Language](https://openwdl.org/) (WDL), either:
   * [Cromwell](https://github.com/broadinstitute/cromwell) (v36 or higher). A dedicated server is highly recommended.
   * or [Terra](https://terra.bio/) (note preconfigured GATK-SV workflows are not yet available for this platform)
-* Recommended: [MELT](https://melt.igs.umaryland.edu/). Due to licensing restrictions, we cannot provide a public docker image or reference panel VCFs for this algorithm.
 * Recommended: [cromshell](https://github.com/broadinstitute/cromshell) for interacting with a dedicated Cromwell server.
 * Recommended: [WOMtool](https://cromwell.readthedocs.io/en/stable/WOMtool/) for validating WDL/json files.
 
@@ -124,16 +123,18 @@ There are two scripts for running the full pipeline:
 
 #### Building inputs
 Example workflow inputs can be found in `/inputs`. Build using `scripts/inputs/build_default_inputs.sh`, which 
-generates input jsons in `/inputs/build`. Except the MELT docker image, all required resources are available in public 
+generates input jsons in `/inputs/build`. All required resources are available in public 
 Google buckets. 
 
 #### MELT
-**Important**: The example input files contain MELT inputs that are NOT public (see [Requirements](#requirements)). These include:
+**Important**: MELT has been replaced with [Scramble](https://github.com/GeneDx/scramble) for mobile element calling. While it is still possible to run GATK-SV with MELT, we no longer support it as a caller. It will be fully deprecated in the future.
+
+Due to licensing restrictions, we cannot redistribute MELT binaries or input files, including the docker image. Some default input files contain MELT inputs that are NOT public (see [Requirements](#requirements)) including:
 
 * `GATKSVPipelineSingleSample.melt_docker` and `GATKSVPipelineBatch.melt_docker` - MELT docker URI (see [Docker readme](https://github.com/talkowski-lab/gatk-sv-v1/blob/master/dockerfiles/README.md))
 * `GATKSVPipelineSingleSample.ref_std_melt_vcfs` - Standardized MELT VCFs ([GatherBatchEvidence](#gather-batch-evidence))
 
-The input values are provided only as an example and are not publicly accessible. In order to include MELT, these values must be provided by the user. MELT can be disabled by deleting these inputs and setting `GATKSVPipelineBatch.use_melt` to `false`.
+The input values are provided only as placeholders. In some workflows, MELT must be enabled with appropriate settings, by providing optional MELT inputs and/or with an explicit option e.g. `GATKSVPipelineBatch.use_melt` to `true`. We do not recommend running both Scramble and MELT together.
 
 #### Execution
 We recommend running the pipeline on a dedicated [Cromwell](https://github.com/broadinstitute/cromwell) server with a [cromshell](https://github.com/broadinstitute/cromshell) client. A batch run can be started with the following commands:
@@ -153,7 +154,7 @@ where `cromwell_config.json` is a Cromwell [workflow options file](https://cromw
 
 ## <a name="overview">Pipeline Overview</a>
 The pipeline consists of a series of modules that perform the following:
-* [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
+* [GatherSampleEvidence](#gather-sample-evidence): SV evidence collection, including calls from a configurable set of algorithms (Manta, Scramble, and Wham), read depth (RD), split read positions (SR), and discordant pair positions (PE).
 * [EvidenceQC](#evidence-qc): Dosage bias scoring and ploidy estimation
 * [GatherBatchEvidence](#gather-batch-evidence): Copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) generation; call and evidence aggregation
 * [ClusterBatch](#cluster-batch): Variant clustering
@@ -253,7 +254,9 @@ The following sections briefly describe each module and highlights inter-depende
 ## <a name="gather-sample-evidence">GatherSampleEvidence</a>
 *Formerly Module00a*
 
-Runs raw evidence collection on each sample with the following SV callers: [Manta](https://github.com/Illumina/manta), [Wham](https://github.com/zeeev/wham), and/or [MELT](https://melt.igs.umaryland.edu/). For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
+Runs raw evidence collection on each sample with the following SV callers: [Manta](https://github.com/Illumina/manta), [Wham](https://github.com/zeeev/wham), [Scramble](https://github.com/GeneDx/scramble), and/or [MELT](https://melt.igs.umaryland.edu/). For guidance on pre-filtering prior to `GatherSampleEvidence`, refer to the [Sample Exclusion](#sample-exclusion) section.
+
+The `scramble_clusters` and `scramble_table` are generated as outputs for troubleshooting purposes but not consumed by any downstream workflows.
 
 Note: a list of sample IDs must be provided. Refer to the [sample ID requirements](#sampleids) for specifications of allowable sample IDs. IDs that do not meet these requirements may cause errors.
 
@@ -261,10 +264,11 @@ Note: a list of sample IDs must be provided. Refer to the [sample ID requirement
 * Per-sample BAM or CRAM files aligned to hg38. Index files (`.bai`) must be provided if using BAMs.
 
 #### Outputs:
-* Caller VCFs (Manta, MELT, and/or Wham)
+* Caller VCFs (Manta, Scramble, MELT, and/or Wham)
 * Binned read counts file
 * Split reads (SR) file
 * Discordant read pairs (PE) file
+* Scramble intermediate clusters file and table (not needed downstream)
 
 ## <a name="evidence-qc">EvidenceQC</a>
 *Formerly Module00b*

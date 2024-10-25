@@ -62,13 +62,19 @@ class RecordData:
         self.called_samples = [sample_id_to_idx[s] for s in svu.get_called_samples(record)]
         self.freq = len(self.called_samples)
         self.length = record.info['SVLEN']
+        self.cnv_gt_5kbp = (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and self.length >= 5000
         self.gt_50bp = self.length >= 50
-        self.is_mei = 'melt' in record.info['ALGORITHMS'] or 'scramble' in record.info['ALGORITHMS']
+        self.is_melt = 'melt' in record.info['ALGORITHMS']
+        self.is_scramble = 'scramble' in record.info['ALGORITHMS']
+        self.is_manta = 'manta' in record.info['ALGORITHMS']
+        self.svtype = record.info['SVTYPE']
+        self.is_mei = self.is_melt or self.is_scramble
 
     def __str__(self):
         return ",".join(str(x) for x in
-                        (self.is_bnd, self.level_of_support, self.is_mei, self.both_end_support,
-                         self.sr_fail, self.vargq, self.freq, self.gt_50bp, self.length, self.id))
+                        (self.is_bnd, self.level_of_support, self.is_melt, self.both_end_support,
+                         self.sr_fail, self.cnv_gt_5kbp, self.is_scramble, self.vargq, self.freq, self.gt_50bp,
+                         self.length, self.id))
 
 
 vcf = pysam.VariantFile(VCF_PATH)
@@ -78,7 +84,11 @@ sample_id_to_idx = {s: i for i, s in enumerate(vcf.header.samples)}
 sys.stderr.write("Gathering breakends...\n")
 bnds_to_ids = defaultdict(list)
 for record in vcf:
-    if (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') and record.info['SVLEN'] >= 5000:
+    # Filter depth-only CNVs
+    # Note that in some cases CNVs are incorrectly missing an SR evidence annotation but usually have PE at least
+    if ('SR' not in record.info['EVIDENCE'] and 'PE' not in record.info['EVIDENCE']) \
+            and (record.info['SVTYPE'] == 'DEL' or record.info['SVTYPE'] == 'DUP') \
+            and record.info['SVLEN'] >= 5000:
         continue
     strands = record.info['STRANDS']
     bnd1 = "{}_{}_{}".format(record.chrom, record.pos, strands[0])
@@ -130,9 +140,11 @@ del bnds_to_data
 sort_spec = [
     ('is_bnd', False),
     ('level_of_support', False),
-    ('is_mei', True),
+    ('is_melt', True),
     ('both_end_support', True),
     ('sr_fail', False),
+    ('cnv_gt_5kbp', True),
+    ('is_scramble', False),
     ('vargq', True),
     ('freq', True),
     ('gt_50bp', False),
@@ -145,14 +157,21 @@ ids_to_remove_dict = dict()
 if DEBUG_OUTPUT_PATH is not None:
     debug = open(DEBUG_OUTPUT_PATH, 'w')
     debug.write("#record_kept\trecord_dropped\n")
-for data_list in pairwise_record_data:
+for first, second in pairwise_record_data:
     # Check for 50% sample overlap
-    sample_intersection = set(data_list[0].called_samples).intersection(data_list[1].called_samples)
-    max_freq = max(data_list[0].freq, data_list[1].freq)
+    sample_intersection = set(first.called_samples).intersection(second.called_samples)
+    max_freq = max(first.freq, second.freq)
     if len(sample_intersection) < 0.50 * max_freq:
         continue
     # Determine which to filter
-    sorted_data_list = multisort(list(data_list), sort_spec)
+    # Special case if one is a Manta insertion and the other is MEI, keep the MEI
+    if first.is_manta and first.svtype == "INS" and second.is_mei:
+        sorted_data_list = [second, first]
+    elif second.is_manta and second.svtype == "INS" and first.is_mei:
+        sorted_data_list = [first, second]
+    else:
+        # Otherwise use sorting spec
+        sorted_data_list = multisort([first, second], sort_spec)
     ids_to_remove_dict[sorted_data_list[1].id] = sorted_data_list[0].id
     if DEBUG_OUTPUT_PATH is not None:
         debug.write("\t".join(str(x) for x in sorted_data_list) + "\n")
