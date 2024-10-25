@@ -45,6 +45,12 @@ An indexed BAM or CRAM file aligned to hg38. See [input data requirements](/docs
 Identifier string for the sample. Refer to the [sample ID requirements](/docs/gs/inputs#sampleids) 
 for specifications of allowable sample IDs. IDs that do not meet these requirements may lead to errors.
 
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `is_dragen_3_7_8`
+Default: detect automtically from BAM/CRAM header. The header check can be skippped by setting this parameter when it 
+is known whether the BAM/CRAM is aligned with Dragen v3.7.8. If this is true and Scramble is configured to run then 
+soft-clipped reads at sites called by Scramble in the original alignments will be realigned with BWA for re-calling with 
+Scramble.
+
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `collect_coverage` {#collect-coverage}
 Default: `true`. Collect read depth.
 
@@ -62,6 +68,22 @@ Scramble docker image. If provided, runs the Scramble tool.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `wham_docker` {#wham-docker}
 Wham docker image. If provided, runs the Wham tool.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `reference_bwa_*`
+BWA-mem index files. Required only if running Scramble and the input reads are aligned to Dragen v3.7.8
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_alignment_score_cutoff`
+Default: `60` for Dragen v3.7.8 and `90` otherwise. Minimum alignment score for consensus sequences again the MEI reference 
+in the Scramble tool. The default value is set automatically depending on aligner. Can be overridden to tune 
+sensitivity.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_percent_align_cutoff`
+Default: `70`. Minimum alignment percent for consensus sequences again the MEI reference in the Scramble tool. Can be 
+overridden to tune sensitivity.
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg> `scramble_min_clipped_reads_fraction`
+Default: `0.22`. Minimum number of soft-clipped reads required for site cluster identification in the Scramble tool, 
+as a fraction of average read depth. Can be overridden to tune sensitivity.
 
 ### Advanced parameters
 
