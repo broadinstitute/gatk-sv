@@ -221,7 +221,7 @@ re-running the failed workflow, so that it will call-cache.
 Read the full EvidenceQC documentation [here](/docs/modules/eqc).
 * `02-EvidenceQC` is run on arbitrary cohort partitions of up to 500 samples.
 * The outputs from `02-EvidenceQC` can be used for 
-[preliminary sample QC](/docs/gs/inputs#sample-exclusion) and 
+[preliminary sample QC](/docs/modules/eqc#preliminary-sample-qc) and 
 [batching](#batching) before moving on to [TrainGCNV](#traingcnv).
 
 
