@@ -1856,7 +1856,7 @@
     "genotyped_pesr_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-ConcatGenotypedVcfs/cacheCopy/ref_panel_1kg.pesr.vcf.gz",
     "genotype_filtered_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.filter_genotypes.sanitized.vcf.gz",
     "genotype_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.filter_genotypes.sanitized.vcf.gz.tbi",
-    "genotype_filtered_qc_tarball": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/1kgp/ref_panel_1kg.filter_genotypes_SV_VCF_QC_output.tar.gz",
+    "genotype_filtered_qc_tarball": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.filter_genotypes_SV_VCF_QC_output.tar.gz",
     "joined_raw_calls_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz",
     "joined_raw_calls_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz.tbi",
     "manta_vcfs": [
