@@ -140,7 +140,7 @@ class PESRTestRunner:
     def choose_background(self, record, whitelist=None, blacklist=None):
         # Select called and background samples
         called = svu.get_called_samples(record)
-        background = [s for s in self.samples if s not in called]
+        background = [s for s in self.samples if s not in called and s not in self.outlier_sample_ids]
 
         # Exclude outlier samples only if non-outlier samples exist
         non_outlier_called = [s for s in called if s not in self.outlier_sample_ids]

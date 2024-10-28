@@ -1183,12 +1183,11 @@ runRdTest<-function(bed)
   #Exclude outlier samples only if non-outlier samples exist
   if (!is.null(opt$outlierSampleIds)) {
     outlier_ids <- readLines(opt$outlierSampleIds)
-    outlier_samples <- intersect(sampleIDs, outlier_ids)
     non_outlier_samples <- setdiff(sampleIDs, outlier_ids)
-    if (length(outlier_samples) > 0 && length(non_outlier_samples) > 0) {
+    if (length(non_outlier_samples) > 0) {
       sampleIDs <- non_outlier_samples
-      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_samples), , drop = FALSE]
     }
+    cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_ids), , drop = FALSE]
   }
   samplesPrior <-unlist(strsplit(as.character(sampleIDs),split=","))
 
