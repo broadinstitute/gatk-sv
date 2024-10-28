@@ -1166,8 +1166,8 @@
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-make-cohort-vcf-templates/ResolveComplexVariants/breakpoint-overlap-dropped-record-vcfs/ref_panel_1kg.chrX.breakpoint_overlap.dropped_records.vcf.gz.tbi",
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-make-cohort-vcf-templates/ResolveComplexVariants/breakpoint-overlap-dropped-record-vcfs/ref_panel_1kg.chrY.breakpoint_overlap.dropped_records.vcf.gz.tbi"
     ],
-    "clean_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.cleaned.vcf.gz",
-    "clean_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.cleaned.vcf.gz.tbi",
+    "clean_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.cleaned.vcf.gz",
+    "clean_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.cleaned.vcf.gz.tbi",
     "clean_vcf_gatk_formatter_args": "",
     "cluster_background_fail_lists": [
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-make-cohort-vcf-templates/CombineBatches/cluster-background-fail-lists/ref_panel_1kg.chr1.sr_background_fail.updated2.txt",
@@ -1329,6 +1329,8 @@
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.chrX.regenotyped.vcf.gz.tbi",
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.chrY.regenotyped.vcf.gz.tbi"
     ],
+    "complex_refined_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.cpx_refined.vcf.gz",
+    "complex_refined_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.cpx_refined.vcf.gz",
     "complex_resolve_bothside_pass_list": "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.all.sr_bothside_pass.updated3.txt",
     "complex_resolve_background_fail_list": "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.all.sr_background_fail.updated3.txt",
     "complex_resolve_vcfs": [
@@ -1383,8 +1385,8 @@
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.reshard_vcf.chrX.resharded.vcf.gz.tbi",
         "gs://gatk-sv-ref-panel-1kg/outputs/mw-vcf-reshard/ref_panel_1kg.reshard_vcf.chrY.resharded.vcf.gz.tbi"
     ],
-    "concordance_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.concordance.vcf.gz",
-    "concordance_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.concordance.vcf.gz.tbi",
+    "concordance_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.concordance.vcf.gz",
+    "concordance_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.concordance.vcf.gz.tbi",
     "contig_ploidy_model_tar": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/gcnv/ref_panel_1kg_v2-contig-ploidy-model.tar.gz",
     "counts": [
         "gs://gatk-sv-ref-panel-1kg/outputs/tws-no-cram-conversion/GatherSampleEvidenceBatch/HG00096.counts.tsv.gz",
@@ -1852,8 +1854,8 @@
     "genotype_pesr_pesr_sepcutoff": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart1/GenotypePESRPart1/40ec6d76-dd1c-432d-bfab-bc4426d0b1ec/call-TrainRDGenotyping/TrainRDGenotyping/e5540a96-9072-4719-bcfb-afccdfec15c6/call-UpdateCutoff/cacheCopy/ref_panel_1kg.pesr.pesr_sepcutoff.txt",
     "genotyped_depth_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypeDepthPart2/GenotypeDepthPart2/0aafd752-e606-4196-86ac-41c1c3ce1eb2/call-ConcatGenotypedVcfs/cacheCopy/ref_panel_1kg.depth.vcf.gz",
     "genotyped_pesr_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/GATKSVPipelineBatch/38c65ca4-2a07-4805-86b6-214696075fef/call-GenotypeBatch/GenotypeBatch/ad17f522-0950-4f0a-9148-a13f689082ed/call-GenotypePESRPart2/GenotypePESRPart2/ce1f4075-1a3e-44b5-9cfe-bfb701327616/call-ConcatGenotypedVcfs/cacheCopy/ref_panel_1kg.pesr.vcf.gz",
-    "genotype_filtered_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/1kgp/ref_panel_1kg.filter_genotypes.vcf.gz",
-    "genotype_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/1kgp/ref_panel_1kg.filter_genotypes.vcf.gz.tbi",
+    "genotype_filtered_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.filter_genotypes.sanitized.vcf.gz",
+    "genotype_filtered_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/eph-refine-cpx/ref_panel_1kg.filter_genotypes.sanitized.vcf.gz.tbi",
     "genotype_filtered_qc_tarball": "gs://gatk-sv-ref-panel-1kg/outputs/mw-filter-genotypes/1kgp/ref_panel_1kg.filter_genotypes_SV_VCF_QC_output.tar.gz",
     "joined_raw_calls_vcf": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz",
     "joined_raw_calls_vcf_index": "gs://gatk-sv-ref-panel-1kg/outputs/mw_sv_concordance_update/ref_panel_1kg.join_raw_calls.vcf.gz.tbi",

@@ -114,8 +114,6 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
         n_samples += 1
         sl = gt.get('SL', None)
         if sl is None:
-            if record.info['SVTYPE'] != 'CNV' and _is_no_call(gt['GT']):
-                n_no_call += 1
             continue
         gt_is_ref = _is_hom_ref(gt['GT'])
         # SL metrics are over non-ref / no-call samples
@@ -130,7 +128,7 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
         gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
         if fails_filter:
             gt['GT'] = _filter_gt(gt['GT'], allele)
-        if _is_no_call(gt['GT']):
+        if record.info['SVTYPE'] != 'CNV' and _is_no_call(gt['GT']):
             n_no_call += 1
     # Annotate metrics
     record.info['NCN'] = n_no_call
