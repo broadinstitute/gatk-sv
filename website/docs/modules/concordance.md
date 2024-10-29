@@ -25,16 +25,16 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  amvf: ApplyManualVariantFilter
+  refcv: RefineComplexVariants
   jrc: JoinRawCalls
   svc: SVConcordance
   fg: FilterGenotypes
-  amvf --> svc
+  refcv --> svc
   jrc --> svc
   svc --> fg
   
   class svc thisModule
-  class amvf inModules
+  class refcv inModules
   class jrc inModules
   class fg outModules
 ```
