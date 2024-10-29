@@ -6,7 +6,13 @@
 
   "FilterGenotypes.primary_contigs_fai": {{ reference_resources.primary_contigs_fai | tojson }},
   "FilterGenotypes.gq_recalibrator_model_file": {{ reference_resources.aou_recalibrate_gq_model_file | tojson }},
-  "FilterGenotypes.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+  "FilterGenotypes.genome_tracks": [
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
+  ],
   "FilterGenotypes.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",
