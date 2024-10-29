@@ -10,7 +10,7 @@ implemented as a single runnable workflow.
 
 The following diagram illustrates the overall module ordering:
 
-<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/0d4d44516bbd565e40e4b5b59ffef51e0b8c3c94/terra_pipeline_diagram.jpg" width="1000" />
+<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/v0.29-beta/terra_pipeline_diagram.jpg" width="1000" />
 
 Each module is implemented in the [Workflow Description Language (WDL)](https://openwdl.org). The Terra workspaces come 
 pre-configured with default values for all required parameters and set up to run the pipeline for most use cases. 

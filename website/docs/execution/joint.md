@@ -11,9 +11,8 @@ which is configured with a demo sample set.
 Refer to the following sections for instructions on how to run the pipeline on your data using this workspace.
 
 ### Default data
-The demonstration data in this workspace is 312 publicly-available 1000 Genomes Project samples from the 
-[NYGC/AnVIL high coverage data set](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019), 
-divided into two equally-sized batches.
+The demonstration data in this workspace is 156 publicly-available 1000 Genomes Project samples from the 
+[NYGC/AnVIL high coverage data set](https://app.terra.bio/#workspaces/anvil-datastorage/1000G-high-coverage-2019).
 
 ## Pipeline Expectations
 ### What does it do?
@@ -21,15 +20,15 @@ This pipeline performs structural variation discovery from CRAMs, joint genotypi
 of samples.
 
 ### Required inputs
+Refer to the [Input Data section](/docs/gs/inputs) for details on file formats, sample QC, and sample ID restrictions.
+
 The following inputs must be provided for each sample in the cohort, via the sample table described in **Workspace 
 Setup** step 2:
 
 |Input Type|Input Name|Description|
 |---------|--------|--------------|
-|`String`|`sample_id`|Case sample identifier*|
+|`String`|`sample_id`|Case sample identifier|
 |`File`|`bam_or_cram_file`|Path to the GCS location of the input CRAM or BAM file.|
-
-*See **Sample ID requirements** below for specifications.
 
 The following cohort-level or batch-level inputs are also required:
 
@@ -116,9 +115,6 @@ with average costs ranging between $2-$3 per sample. For instance, PCR+ samples 
 of improperly paired reads have been observed to cost more. Consider 
 [excluding low-quality samples](/docs/gs/inputs#sample-exclusion) prior to processing to keep costs low.
 
-### Sample ID format
-
-Refer to [the sample ID requirements section](/docs/gs/inputs#sampleids) of the documentation.
 
 ### Workspace setup
 
@@ -135,7 +131,7 @@ Refer to [the sample ID requirements section](/docs/gs/inputs#sampleids) of the 
    per sample, as well as a header (first) line. It should contain the columns `entity:sample_id` (first column) and 
    `bam_or_cram_file` at minimum. See the **Required inputs** section above for more information on these inputs. For 
    an example sample data table, refer to the sample data table for the 1000 Genomes samples in this workspace 
-   [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/samples_1kgp.tsv.tmpl). 
+   [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/samples_1kgp_156.tsv.tmpl). 
    To upload the TSV file, navigate to the *Data* tab of the workspace, click the `Import Data` button on the top left, 
    and select "Upload TSV".
    <img alt="uploading a TSV data table" title="How to upload a TSV data table" src="https://i.imgur.com/1ZtwseH.png" width="300" />
@@ -152,8 +148,8 @@ To create batches manually, the easiest way is to upload a tab-separated sample 
 This file should have one line per sample, plus a header (first) line. The first column should be 
 `membership:sample_set_id` (containing the `sample_set_id` for the sample in question), and the second should be 
 `sample` (containing the sample IDs). Recall that batch IDs (`sample_set_id`) should follow the 
-[sample ID requirements](/docs/gs/inputs#sampleids). For an example sample membership file, refer to the one for the 
-1000 Genomes samples in this workspace [here in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/master/input_templates/terra_workspaces/cohort_mode/sample_set_membership_1kgp.tsv.tmpl).
+[sample ID requirements](/docs/gs/inputs#sampleids). For an example sample set membership file, refer to
+[this one in the GATK-SV GitHub repository](https://github.com/broadinstitute/gatk-sv/blob/main/inputs/templates/terra_workspaces/cohort_mode/sample_set_membership_1kgp.tsv.tmpl).
 
 ## Workflow instructions {#instructions}
 
@@ -200,7 +196,7 @@ partitions. Make sure to try just one sample first though!
 * Refer to the [Input Data section](/docs/gs/inputs) for details on file formats, sample QC, and sample ID restrictions.
 * It is normal for a few samples in a cohort to run out of memory during Wham SV calling, so we recommend enabling 
 auto-retry for out-of-memory errors for `01-GatherSampleEvidence` only. Before you launch the workflow, click the 
-checkbox reading "Retry with more memory" and set the memory retry factor to 1.8. This action must be performed each 
+checkbox reading "Retry with more memory" and set the memory retry factor to 2. This action must be performed each 
 time you launch a `01-GatherSampleEvidence` job.
 * If you enable "Delete intermediate outputs" whenever you launch this workflow (recommended), BAM files will be 
 deleted for successful runs; but BAM files will not be deleted if the run fails or if intermediate file deletion is 
@@ -223,17 +219,16 @@ The notebook will produce a table of passing samples to use for [batching](#batc
 
 
 ### Batching (notebook) {#batching}
-Read the documentation on batching [here](/docs/modules/eqc#preliminary-sample-qc).
+Read the documentation on batching [here](/docs/modules/eqc#batching).
 If necessary, follow the `Batching.ipynb` notebook step-by-step to divide samples into batches
-and create corresponding `sample_sets` for use in [`03-TrainGCNV`](#traingcnv) and beyond.
+and create corresponding `sample_sets` for use in `03-TrainGCNV` and beyond.
 
 
 ### 03-TrainGCNV {#traingcnv}
 
 Read the full TrainGCNV documentation [here](/docs/modules/gcnv).
-* Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline based 
-on sample coverage, WGD score (from `02-EvidenceQC`), and PCR status. These will likely not be the same as the batches 
-you used for `02-EvidenceQC`.
+* Before running this workflow, create the batches (~100-500 samples) you will use for the rest of the pipeline according 
+to the [batching](#batching) instructions. These will likely not be the same as the batches you used for `02-EvidenceQC`.
 * By default, `03-TrainGCNV` is configured to be run once per `sample_set` on 100 randomly-chosen samples from that 
 set to create a gCNV model for each batch. To modify this behavior, you can set the `n_samples_subsample` parameter 
 to the number of samples to use for training.
@@ -294,8 +289,8 @@ Read the full GenotypeBatch documentation [here](/docs/modules/gb).
 
 ### Steps 11-20
 
-Read the full documentation for [RegenotypeCNVs](/docs/modules/rgcnvs), [`CombineBatches`](/docs/modules/cmb), 
-[`ResolveComplexVariants`](/docs/modules/rcv), [`GenotypeComplexVariants`](/docs/modules/gcv), [`CleanVcf`](/docs/modules/cvcf), 
-[`RefineComplexVariants`](/docs/modules/refcv), [`JoinRawCalls`](/docs/modules/jrc), [`SVConcordance`](/docs/modules/svc), 
-[`FilterGenotypes`](/docs/modules/fg), and [AnnotateVcf](/docs/modules/av).
+Read the full documentation for [RegenotypeCNVs](/docs/modules/rgcnvs), [CombineBatches](/docs/modules/cmb), 
+[ResolveComplexVariants](/docs/modules/rcv), [GenotypeComplexVariants](/docs/modules/gcv), [CleanVcf](/docs/modules/cvcf), 
+[RefineComplexVariants](/docs/modules/refcv), [JoinRawCalls](/docs/modules/jrc), [SVConcordance](/docs/modules/svc), 
+[FilterGenotypes](/docs/modules/fg), and [AnnotateVcf](/docs/modules/av).
 * Use the same cohort `sample_set_set` you created and used for `09-MergeBatchSites`.

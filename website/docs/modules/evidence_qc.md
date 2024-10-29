@@ -84,9 +84,9 @@ You may also wish to batch samples based on other characteristics that could
 impact SV calling, such as mean insert size or PCR status.
 An example batching process is outlined below:
 
-1. Divide the cohort by chromosome X ploidy (<2 and >=2) based on copy ratio
-   estimates from EvidenceQC. In this way, males and females will be batched
-   separately before being merged back together for batches with equal sex balance
+1. Divide the cohort by chromosome X ploidy (less than 2, greater than or equal to 2)
+   based on copy ratio estimates from EvidenceQC. In this way, males and females will be
+   batched separately before being merged back together for batches with equal sex balance
 2. Partition the samples by median coverage from EvidenceQC,
    grouping samples with similar median coverage together
 3. Partition the samples further by dosage score (WGD) from

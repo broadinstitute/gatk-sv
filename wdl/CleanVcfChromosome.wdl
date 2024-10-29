@@ -854,8 +854,6 @@ for record in fin:
 fin.close()
 fo.close()
 CODE
-
-    tabix -p vcf ~{prefix}.filters_added.vcf.gz
   >>>
 
   output {

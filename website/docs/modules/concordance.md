@@ -45,7 +45,7 @@ stateDiagram
 Prefix for the output VCF, such as the cohort name. May be alphanumeric with underscores.
 
 #### `eval_vcf`
-VCF to annotate. In the recommended pipeline, this is generated in [ApplyManualVariantFilter](./amvf).
+VCF to annotate. In the recommended pipeline, this is generated in [RefineComplexVariants](./refcv).
 
 #### `truth_vcf`
 VCF to compare against. This should contain the same samples as `eval_vcf`. In the recommended pipeline, this is 
