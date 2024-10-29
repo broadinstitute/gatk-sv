@@ -52,11 +52,8 @@ workflow CleanVcfChromosome {
     RuntimeAttr? runtime_override_clean_vcf_5_polish
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
-<<<<<<< HEAD
     RuntimeAttr? runtime_override_rescue_me_dels
-=======
     RuntimeAttr? runtime_attr_add_high_fp_rate_filters
->>>>>>> filter wham-only del & scramble-only svas; docs updates
 
     # Clean vcf 1b
     RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
