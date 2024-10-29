@@ -15,7 +15,7 @@ workflow ShardedAnnotateVcf {
     String prefix
     String contig
 
-    File protein_coding_gtf
+    File? protein_coding_gtf
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
@@ -111,24 +111,29 @@ workflow ShardedAnnotateVcf {
         sv_base_mini_docker = sv_base_mini_docker
     }
 
-    call func.AnnotateFunctionalConsequences {
-      input:
-        vcf = SyncVcfAndIdx.output_vcf,
-        vcf_index = SyncVcfAndIdx.output_vcf_idx,
-        prefix = "~{prefix}.~{i}",
-        protein_coding_gtf = protein_coding_gtf,
-        noncoding_bed = noncoding_bed,
-        promoter_window = promoter_window,
-        max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        additional_args = svannotate_additional_args,
-        gatk_docker = gatk_docker,
-        runtime_attr_svannotate = runtime_attr_svannotate
+    if (defined(protein_coding_gtf)){
+        call func.AnnotateFunctionalConsequences {
+          input:
+            vcf = SyncVcfAndIdx.output_vcf,
+            vcf_index = SyncVcfAndIdx.output_vcf_idx,
+            prefix = "~{prefix}.~{i}",
+            protein_coding_gtf = protein_coding_gtf,
+            noncoding_bed = noncoding_bed,
+            promoter_window = promoter_window,
+            max_breakend_as_cnv_length = max_breakend_as_cnv_length,
+            additional_args = svannotate_additional_args,
+            gatk_docker = gatk_docker,
+            runtime_attr_svannotate = runtime_attr_svannotate
+        }
     }
+
+    File anno_vcf = select_first([AnnotateFunctionalConsequences.annotated_vcf, SyncVcfAndIdx.output_vcf])
+    File anno_vcf_idx = select_first([AnnotateFunctionalConsequences.annotated_vcf_index, SyncVcfAndIdx.output_vcf_idx])
 
     call pav.PruneAndAddVafs as PruneAndAddVafs {
       input:
-        vcf                    = AnnotateFunctionalConsequences.annotated_vcf,
-        vcf_idx                = AnnotateFunctionalConsequences.annotated_vcf_index,
+        vcf                    = anno_vcf,
+        vcf_idx                = anno_vcf_idx,
         prefix                 = prefix,
         contig                 = contig,
         ped_file               = ped_file,

@@ -13,7 +13,7 @@ workflow ReAnnotateVcfForRelease4_1{
         Array[File] vcf_idx_list
         Array[String] contig_list
         Array[String] prefix_list
-        File protein_coding_gtf
+        File? protein_coding_gtf
         File? noncoding_bed
         Int? promoter_window
         Int? max_breakend_as_cnv_length
