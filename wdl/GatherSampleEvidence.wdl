@@ -20,6 +20,8 @@ workflow GatherSampleEvidence {
     # Note: raw and "safe" CRAM/BAM IDs can be generated with GetSampleID
     String sample_id
 
+    Boolean? is_dragen_3_7_8
+
     # Evidence collection flags
     Boolean collect_coverage = true
     Boolean collect_pesr = true
@@ -48,6 +50,14 @@ workflow GatherSampleEvidence {
     File reference_dict     # Dictionary (.dict), must be in same dir as fasta
     String? reference_version   # Either "38" or "19"
 
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
+
     # Coverage collection inputs
     File preprocessed_intervals
     Float? mem_gb_for_collect_counts
@@ -74,7 +84,16 @@ workflow GatherSampleEvidence {
     Int? pf_reads_improper_pairs
 
     # Scramble inputs
+    File mei_bed
+    Int? scramble_alignment_score_cutoff
+    Int? scramble_percent_align_cutoff
+    Float? scramble_min_clipped_reads_fraction
     Int? scramble_part2_threads
+    File? scramble_vcf_script
+
+    # Required if running Scramble but not running Manta
+    File? manta_vcf_input
+    File? manta_vcf_index_input
 
     # Wham inputs
     File wham_include_list_bed_file
@@ -112,6 +131,11 @@ workflow GatherSampleEvidence {
     RuntimeAttr? runtime_attr_melt
     RuntimeAttr? runtime_attr_scramble_part1
     RuntimeAttr? runtime_attr_scramble_part2
+    RuntimeAttr? runtime_attr_scramble_make_vcf
+    RuntimeAttr? runtime_attr_realign_soft_clips
+    RuntimeAttr? runtime_attr_scramble_part1_realigned
+    RuntimeAttr? runtime_attr_scramble_part2_realigned
+    RuntimeAttr? runtime_attr_scramble_make_vcf_realigned
     RuntimeAttr? runtime_attr_pesr
     RuntimeAttr? runtime_attr_wham
 
@@ -141,7 +165,6 @@ workflow GatherSampleEvidence {
     }
   }
 
-
   if (revise_base) {
     call rb.CramToBamReviseBase {
       input:
@@ -158,9 +181,9 @@ workflow GatherSampleEvidence {
   }
 
   File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file, bam_or_cram_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index, bam_or_cram_index])
+  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index, bam_or_cram_index_])
 
-  if (collect_coverage || run_melt) {
+  if (collect_coverage || run_melt || run_scramble) {
     call cov.CollectCounts {
       input:
         intervals = preprocessed_intervals,
@@ -241,18 +264,95 @@ workflow GatherSampleEvidence {
   }
 
   if (run_scramble) {
+    if (!defined(is_dragen_3_7_8)) {
+      # check if the reads were aligned with dragen 3.7.8
+      call CheckAligner {
+        input:
+          reads_path = reads_file_,
+          reads_index = reads_index_,
+          reference_fasta = if is_bam_ then NONE_FILE_ else reference_fasta,
+          reference_index = if is_bam_ then NONE_FILE_ else reference_index,
+          reference_dict = if is_bam_ then NONE_FILE_ else reference_dict,
+          sample_id = sample_id,
+          gatk_docker = gatk_docker,
+          runtime_attr_override = runtime_attr_localize_reads
+      }
+    }
+    Boolean is_dragen_3_7_8_ = (defined(CheckAligner.is_dragen_3_7_8) && select_first([CheckAligner.is_dragen_3_7_8]) > 0)
+      || (!defined(CheckAligner.is_dragen_3_7_8) && select_first([is_dragen_3_7_8]))
+
+    # Significant modulator of precision/sensitivity
+    Int auto_alignment_score_cutoff = if is_dragen_3_7_8_ then 60 else 90
+    Int scramble_alignment_score_cutoff_ = select_first([scramble_alignment_score_cutoff, auto_alignment_score_cutoff])
+
     call scramble.Scramble {
       input:
         bam_or_cram_file = reads_file_,
         bam_or_cram_index = reads_index_,
+        original_bam_or_cram_file = reads_file_,
+        original_bam_or_cram_index = reads_index_,
+        counts_file = select_first([CollectCounts.counts]),
+        manta_vcf = select_first([Manta.vcf, manta_vcf_input]),
         sample_name = sample_id,
         reference_fasta = reference_fasta,
         reference_index = reference_index,
+        mei_bed = mei_bed,
         regions_list = primary_contigs_list,
+        alignment_score_cutoff = scramble_alignment_score_cutoff_,
+        percent_align_cutoff = scramble_percent_align_cutoff,
+        min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
         part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
         scramble_docker = select_first([scramble_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_scramble_part1 = runtime_attr_scramble_part1,
-        runtime_attr_scramble_part2 = runtime_attr_scramble_part2
+        runtime_attr_scramble_part2 = runtime_attr_scramble_part2,
+        runtime_attr_scramble_make_vcf = runtime_attr_scramble_make_vcf
+    }
+    if (is_dragen_3_7_8_) {
+      # addresses bug in dragmap where some reads are incorrectly soft-clipped
+      call RealignSoftClippedReads {
+        input:
+          reads_path = reads_file_,
+          reads_index = reads_index_,
+          scramble_table = Scramble.table,
+          is_bam = is_bam_,
+          sample_id = sample_id,
+          reference_fasta = reference_fasta,
+          reference_index = reference_index,
+          reference_bwa_alt = select_first([reference_bwa_alt]),
+          reference_bwa_amb = select_first([reference_bwa_amb]),
+          reference_bwa_ann = select_first([reference_bwa_ann]),
+          reference_bwa_bwt = select_first([reference_bwa_bwt]),
+          reference_bwa_pac = select_first([reference_bwa_pac]),
+          reference_bwa_sa = select_first([reference_bwa_sa]),
+          sv_base_mini_docker = sv_base_mini_docker,
+          runtime_attr_override = runtime_attr_realign_soft_clips
+      }
+      call scramble.Scramble as ScrambleRealigned {
+        input:
+          bam_or_cram_file = RealignSoftClippedReads.out,
+          bam_or_cram_index = RealignSoftClippedReads.out_index,
+          original_bam_or_cram_file = reads_file_,
+          original_bam_or_cram_index = reads_index_,
+          counts_file = select_first([CollectCounts.counts]),
+          manta_vcf = select_first([Manta.vcf, manta_vcf_input]),
+          sample_name = sample_id,
+          reference_fasta = reference_fasta,
+          reference_index = reference_index,
+          mei_bed = mei_bed,
+          regions_list = primary_contigs_list,
+          alignment_score_cutoff = scramble_alignment_score_cutoff_,
+          percent_align_cutoff = scramble_percent_align_cutoff,
+          min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+          part2_threads = scramble_part2_threads,
+          scramble_vcf_script = scramble_vcf_script,
+          scramble_docker = select_first([scramble_docker]),
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_scramble_part1 = runtime_attr_scramble_part1_realigned,
+          runtime_attr_scramble_part2 = runtime_attr_scramble_part2_realigned,
+          runtime_attr_scramble_make_vcf = runtime_attr_scramble_make_vcf_realigned
+      }
     }
   }
 
@@ -295,8 +395,8 @@ workflow GatherSampleEvidence {
   output {
     File? coverage_counts = CollectCounts.counts
 
-    File? manta_vcf = Manta.vcf
-    File? manta_index = Manta.index
+    File? manta_vcf = if run_manta then select_first([Manta.vcf]) else manta_vcf_input
+    File? manta_index = if run_manta then select_first([Manta.index]) else manta_vcf_index_input
 
     File? melt_vcf = MELT.vcf
     File? melt_index = MELT.index
@@ -304,8 +404,10 @@ workflow GatherSampleEvidence {
     Int? melt_read_length = MELT.read_length_out
     Float? melt_insert_size = MELT.insert_size_out
 
-    File? scramble_vcf = Scramble.vcf
-    File? scramble_index = Scramble.index
+    File? scramble_vcf = if run_scramble then select_first([ScrambleRealigned.vcf, Scramble.vcf]) else NONE_FILE_
+    File? scramble_index = if run_scramble then select_first([ScrambleRealigned.index, Scramble.index]) else NONE_FILE_
+    File? scramble_clusters = if run_scramble then select_first([ScrambleRealigned.clusters, Scramble.clusters]) else NONE_FILE_
+    File? scramble_table = if run_scramble then select_first([ScrambleRealigned.table, Scramble.table]) else NONE_FILE_
 
     File? pesr_disc = CollectSVEvidence.disc_out
     File? pesr_disc_index = CollectSVEvidence.disc_out_index
@@ -375,5 +477,143 @@ task LocalizeReads {
   output {
     File output_file = basename(reads_path)
     File output_index = basename(reads_index)
+  }
+}
+
+
+task CheckAligner {
+  input {
+    File reads_path
+    File reads_index
+    File? reference_fasta
+    File? reference_index
+    File? reference_dict
+    String sample_id
+
+    String gatk_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  parameter_meta {
+    reads_path: {
+                 localization_optional: true
+               }
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 1,
+                               mem_gb: 1.0,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
+  output {
+    File header = "~{sample_id}.header.sam"
+    Int is_dragen_3_7_8 = read_int("is_dragen_3_7_8.txt")
+  }
+  command <<<
+    set -euo pipefail
+
+    gatk PrintReadsHeader \
+      -I ~{reads_path} \
+      --read-index ~{reads_index} \
+      -O ~{sample_id}.header.sam \
+      ~{"-R " + reference_fasta}
+
+    awk '$0~"@PG" && $0~"ID: DRAGEN SW build" && $0~"VN: 05.021.604.3.7.8"' ~{sample_id}.header.sam \
+      | wc -l \
+      > is_dragen_3_7_8.txt
+  >>>
+  runtime {
+    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: gatk_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task RealignSoftClippedReads {
+  input {
+    File reads_path
+    File reads_index
+
+    File scramble_table
+
+    Boolean is_bam
+    String sample_id
+    File reference_fasta
+    File reference_index
+
+    File reference_bwa_alt
+    File reference_bwa_amb
+    File reference_bwa_ann
+    File reference_bwa_bwt
+    File reference_bwa_pac
+    File reference_bwa_sa
+
+    String sv_base_mini_docker
+    Boolean use_ssd = true
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr default_attr = object {
+                               cpu_cores: 4,
+                               mem_gb: 20,
+                               disk_gb: ceil(10 + size(reads_path, "GB") * 2 + size([reference_bwa_bwt, reference_bwa_pac, reference_bwa_sa], "GB")),
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+  Int n_cpu = select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
+  String disk_type = if use_ssd then "SSD" else "HDD"
+
+  output {
+    File out = "~{sample_id}.realign_soft_clipped_reads.bam"
+    File out_index = "~{sample_id}.realign_soft_clipped_reads.bam.bai"
+  }
+  command <<<
+    set -exuo pipefail
+    # Get insertion intervals
+    zcat ~{scramble_table} \
+      | sed 1d \
+      | cut -f1 \
+      | tr ':' '\t' \
+      | awk -F'\t' -v OFS='\t' '{print $1,$2,$2+1}' \
+      | sort -k1,1V -k2,2n \
+      | bedtools slop -i - -g ~{reference_index} -b 150 \
+      | bedtools merge \
+      > intervals.bed
+    mkdir tmp/
+    samtools view --header-only ~{reads_path} > header.sam
+    N_CORES=$(nproc)
+    time samtools view --no-header \
+      -T ~{reference_fasta} \
+      -ML intervals.bed \
+      ~{reads_path} \
+      | awk -F'\t' -v OFS='\t' '$6~"S"' \
+      | sort -u \
+      | cat header.sam - \
+      | samtools fastq \
+      > reads.fastq
+    bwa mem -H header.sam -K 100000000 -v 3 -t ${N_CORES} -Y ~{reference_fasta} reads.fastq \
+      | samtools sort -T tmp \
+      | samtools view -1 -h -O BAM -o ~{sample_id}.realign_soft_clipped_reads.bam
+    samtools index -@${N_CORES} ~{sample_id}.realign_soft_clipped_reads.bam
+  >>>
+  runtime {
+    cpu: n_cpu
+    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
+    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " " + disk_type
+    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
+    docker: sv_base_mini_docker
+    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
+    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
 }

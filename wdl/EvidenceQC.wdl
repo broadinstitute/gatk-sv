@@ -245,15 +245,18 @@ task MakeQcTable {
 
     python /opt/sv-pipeline/scripts/make_evidence_qc_table.py \
       ~{"--estimated-copy-number-filename " + "./ploidy_est/estimated_copy_numbers.txt.gz"} \
+      ~{"--sex-assignments-filename " + "./ploidy_est/sample_sex_assignments.txt.gz"} \
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
       ~{"--binwise-cnv-qvalues-filename " + "./ploidy_est/binwise_CNV_qValues.bed.gz"} \
       ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
       ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \
       ~{"--wham-qc-outlier-high-filename " + wham_qc_high} \
+      ~{"--scramble-qc-outlier-high-filename " + scramble_qc_high} \
       ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
+      ~{"--scramble-qc-outlier-low-filename " + scramble_qc_low} \
       ~{if (length(melt_insert_size) > 0) then "--melt-insert-size mean_insert_size.tsv" else ""} \
       ~{"--output-prefix " + output_prefix}
   >>>

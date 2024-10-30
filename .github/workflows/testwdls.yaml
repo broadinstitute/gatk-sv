@@ -54,10 +54,7 @@ jobs:
           # Setup for running womtool
           pip install jinja2==3.1.2
           wget -O womtool.jar https://github.com/broadinstitute/cromwell/releases/download/84/womtool-84.jar
-          echo \
-            '{ "google_project_id": "my-google-project-id", "terra_billing_project_id": "my-terra-billing-project" }' \
-            > inputs/values/google_cloud.my_project.json
-          scripts/inputs/build_default_inputs.sh -d . -c google_cloud.my_project
+          scripts/inputs/build_default_inputs.sh -d .
 
       - name: Test with Miniwdl
         run: |

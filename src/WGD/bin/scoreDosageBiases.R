@@ -360,7 +360,7 @@ WGD.bins <- merge(WGD.bins,cov[,1:3],by=1:3)
 scores <- scoreSamples(cov,WGD.bins)
 
 #Write scores to file
-colnames(scores)[1] <- "#ID"
+colnames(scores)[1] <- "sample_id"
 write.table(scores,
             paste(OUTDIR,"/WGD_scores.txt",sep=""),
             col.names=T,row.names=F,sep="\t",quote=F)

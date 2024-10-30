@@ -4,7 +4,7 @@ workflows:
     name: GatherSampleEvidence
     primaryDescriptorPath: /wdl/GatherSampleEvidence.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -13,7 +13,7 @@ workflows:
     name: EvidenceQC
     primaryDescriptorPath: /wdl/EvidenceQC.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -22,7 +22,7 @@ workflows:
     name: TrainGCNV
     primaryDescriptorPath: /wdl/TrainGCNV.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -31,7 +31,7 @@ workflows:
     name: GatherBatchEvidence
     primaryDescriptorPath: /wdl/GatherBatchEvidence.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -40,7 +40,7 @@ workflows:
     name: ClusterBatch
     primaryDescriptorPath: /wdl/ClusterBatch.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -49,7 +49,7 @@ workflows:
     name: GenerateBatchMetrics
     primaryDescriptorPath: /wdl/GenerateBatchMetrics.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -58,7 +58,7 @@ workflows:
     name: FilterBatchSites
     primaryDescriptorPath: /wdl/FilterBatchSites.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -67,7 +67,7 @@ workflows:
     name: PlotSVCountsPerSample
     primaryDescriptorPath: /wdl/PlotSVCountsPerSample.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -76,7 +76,7 @@ workflows:
     name: FilterBatchSamples
     primaryDescriptorPath: /wdl/FilterBatchSamples.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -85,7 +85,7 @@ workflows:
     name: MergeBatchSites
     primaryDescriptorPath: /wdl/MergeBatchSites.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -94,7 +94,7 @@ workflows:
     name: GenotypeBatch
     primaryDescriptorPath: /wdl/GenotypeBatch.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -103,7 +103,7 @@ workflows:
     name: RegenotypeCNVs
     primaryDescriptorPath: /wdl/RegenotypeCNVs.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -112,7 +112,7 @@ workflows:
     name: CombineBatches
     primaryDescriptorPath: /wdl/CombineBatches.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -121,7 +121,7 @@ workflows:
     name: ResolveComplexVariants
     primaryDescriptorPath: /wdl/ResolveComplexVariants.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -130,7 +130,7 @@ workflows:
     name: GenotypeComplexVariants
     primaryDescriptorPath: /wdl/GenotypeComplexVariants.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -139,7 +139,43 @@ workflows:
     name: CleanVcf
     primaryDescriptorPath: /wdl/CleanVcf.wdl
     filters:
-      branches: 
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: RefineComplexVariants
+    primaryDescriptorPath: /wdl/RefineComplexVariants.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: JoinRawCalls
+    primaryDescriptorPath: /wdl/JoinRawCalls.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SVConcordance
+    primaryDescriptorPath: /wdl/SVConcordance.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: FilterGenotypes
+    primaryDescriptorPath: /wdl/FilterGenotypes.wdl
+    filters:
+      branches:
         - main
       tags:
         - /.*/
@@ -148,7 +184,7 @@ workflows:
     name: MainVcfQc
     primaryDescriptorPath: /wdl/MainVcfQc.wdl
     filters:
-      branches: 
+      branches:
         - main
       tags:
         - /.*/
@@ -157,7 +193,16 @@ workflows:
     name: AnnotateVcf
     primaryDescriptorPath: /wdl/AnnotateVcf.wdl
     filters:
-      branches: 
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SingleSamplePipeline
+    primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
+    filters:
+      branches:
         - main
       tags:
         - /.*/
