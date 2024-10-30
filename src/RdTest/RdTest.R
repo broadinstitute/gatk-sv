@@ -58,8 +58,8 @@ list <- structure(NA, class = "result")
 option_list <- list(
   make_option(c("-b", "--bed"), type="character", default=NULL,
               help="Bed file of CNVs to check. No header. Locus ID as fourth column. SampleIDs of interest comma delimited as fifth column. CNVtype (DEL,DUP) as the sixth column", metavar="character"),
-  make_option(c("-c", "--coveragefile"), type="character", default=NULL,
-              help="Full path to 1kb or 100bp binned coverage matrix for entire cohort", metavar="character"),
+  make_option(c("-c", "--coveragepath"), type="character", default=NULL,
+              help="Full path to 1kb or 100bp binned coverage matrix or directory containing matrix files", metavar="character"),
   make_option(c("-m", "--medianfile"), type="character", default=NULL,
               help="Full path to median intensity file with values for entire cohort", metavar="character"),
   make_option(c("-f", "--famfile"), type="character", default=NULL,
@@ -96,8 +96,8 @@ option_list <- list(
               help="Optional:Plot JPG visualization of copy state (requires -j TRUE if want to plot kmeans) . Default:FALSE", metavar="logical"),
   make_option(c("-s", "--sizefilter"), type="numeric", default=1000000,
               help="Optional:Restrict to large CNV to inner specified size Default:1000000", metavar="numeric"),
-  make_option(c("-x", "--verylargevariantsize"), type="numeric", default=2500000,
-              help="Optional:For CNVs over this size load entire coverage range with median window strategy Default:2500000", metavar="numeric"),
+  make_option(c("-x", "--verylargevariantsize"), type="numeric", default=1000000,
+              help="Optional:For CNVs over this size load entire coverage range with median window strategy Default:1000000", metavar="numeric"),
   make_option("--verylargevariantpoints", type="numeric", default=500,
               help="Optional:Number of windows to use for very large variant genotyping Default:500", metavar="numeric"),
   make_option("--verylargevariantwindows", type="numeric", default=2000,
@@ -109,13 +109,22 @@ option_list <- list(
   make_option(c("-l", "--SampleExcludeList"), type="character", default=NULL,
               help="Optional:Single column file with list of samples to exclude", metavar="character"),
   make_option(c("-w", "--SampleIncludeList"), type="character", default=NULL,
-              help="Optional:Single column file with list of samples to include", metavar="character")
+              help="Optional:Single column file with list of samples to include", metavar="character"),
+  make_option(c("--genomename"), type="character", default="hg38",
+              help="Name of genome reference for plots", metavar="character")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
 
 ##QC check, see file inputs exist and are formated correctly and edit if neccessary##
+
+##make sure bed and file coverage exist##
+if (is.null(opt$bed) || is.null(opt$coveragepath)) {
+  print_help(opt_parser)
+  stop("At least two arguments must be supplied (input bed and coverage path).",
+       call. = FALSE)
+}
 
 ##If bed file is blank just output header##
 bedlinecount=tryCatch(read.table(opt$bed, sep="\t"), error=function(e) NULL)
@@ -134,13 +143,6 @@ if ( is.null(bedlinecount)) {
     } 
   }
   quit()
-}
-
-##make sure bed and file coverage exist##
-if (is.null(opt$bed) || is.null(opt$coveragefile)) {
-  print_help(opt_parser)
-  stop("At least two arguments must be supplied (input bed and coverage file).",
-       call. = FALSE)
 }
 
 ##Add slash to output folder if necessary##
@@ -171,15 +173,25 @@ if (length(which(intervals[,3]-intervals[,2]<0 ))>0) {
   stop("INPUT ERROR: Improper input coordinates. End must be greater than start.")
 }
 
-#Make sure cov bed is linked to gzipped file and tabix ready##
-if (length(grep ("gz$",opt$coveragefile))<1)
-{
-  stop("Error cov file is not gzipped")
-}
+if (file_test("-f", opt$coveragepat)) {
+  #Make sure cov bed is linked to gzipped file and tabix ready##
+  if (length(grep ("gz$",opt$coveragepath))<1)
+  {
+    stop("Error cov file is not gzipped")
+  }
 
-if (length(paste(opt$coveragefile,".tbi",sep=""))<1)
-{
-  stop("Error cov file is missing tabix index")
+  if (! file_test("-f", (paste(opt$coveragepath,".tbi",sep=""))))
+  {
+    stop("Error cov file is missing tabix index")
+  }
+} else if (file_test("-d", opt$coveragepath)) {
+  for (i in list.files(opt$coveragepath)) {
+    if (length(grep ("gz$",i))<1 & length(grep ("tbi$",i))<1) {
+      stop(paste0("Directory contains file of unknown format: ", i))
+    }
+  }
+} else {
+  stop("Cov file is missing, not a file or directory")
 }
 
 
@@ -316,7 +328,49 @@ removeExcludedBinCovBins <- function(chr, cov1, end, poorbincov, start) {
   return(cov1)
 }
 
-loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargevariantsize,
+readCovFileWithPointFileCommand <- function(coveragepath, pointfile) {
+  return(paste("bedtools merge -i ", pointfile,
+        " | tabix -h ",coveragepath," -R - | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = ""))
+}
+
+readCovFilePlainCommand <- function(coveragepath, chr, start, end) {
+  return(paste("tabix -h ",coveragepath," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = ""))
+}
+
+readCovFile <- function(coveragepath, commandFunction, ...) {
+    if (file_test("-f", coveragepath)) {
+      cov1 <- tryCatch(
+        read.table(pipe(commandFunction(coveragepath, ...)),sep = "\t", header = TRUE, check.names = FALSE))
+      return(cov1)
+    } else if (file_test("-d", coveragepath)) {
+      coveragefile_list <- list.files(coveragepath, pattern = '.gz$')
+      coveragefile <- coveragefile_list[1]
+      print(paste0("reading ", coveragefile))
+      cov1 <-read.table(pipe(commandFunction(file.path(coveragepath, coveragefile), ...)),sep = "\t", header = TRUE, check.names = FALSE)
+      if(length(coveragefile_list)>1){
+        for(coveragefile in coveragefile_list){
+          if(coveragefile!=coveragefile_list[1]){
+            print(paste0("reading ", coveragefile))
+            cov2 <- read.table(pipe(commandFunction(file.path(coveragepath, coveragefile), ...)),sep = "\t", header = TRUE, check.names = FALSE)
+            cov1 <- cbind(cov1, cov2[,c(4:ncol(cov2))])
+          }
+        }
+      }
+      return(cov1)
+    } else {
+      return(NULL)
+    }
+}
+
+readMedians <- function(medianFile) {
+  sampleNames <- scan(medianFile, nlines = 1, what = character())
+  medians <- scan(medianFile, skip = 1, what = numeric())
+  m <- as.data.frame(matrix(medians, nrow=1))
+  names(m) <- sampleNames
+  return(m)
+}
+
+loadData <- function(chr, start, end, coveragepath, medianfile, bins, verylargevariantsize,
                      vlRegionPoints, vlWindow, SampleExcludeList, SampleIncludeList, poorbincov=NULL, raw_cov=NULL)
   {
     if (is.null(raw_cov)) {
@@ -330,10 +384,7 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
         #pointFile <- tempfile(pattern=cnvID)
         pointFile <- "regions.bed"
         write.table(pointBed, file=pointFile, quote=FALSE, sep="\t", row.names=FALSE, col.names=FALSE)
-        cov1 <- tryCatch(
-          read.table(pipe(
-            paste("bedtools merge -i ", pointFile,
-                  " | tabix -h ",coveragefile," -R - | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE), error=function(e) NULL)
+        cov1 <- readCovFile(coveragepath, readCovFileWithPointFileCommand, pointfile=pointFile)
 
 
         cov1 <- removeExcludedBinCovBins(chr, cov1, end, poorbincov, start)
@@ -351,7 +402,8 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
 
       } else {
         #Take the coverage matrix header and tabix query the region in the .gz coverage matrix
-        cov1 <-read.table(pipe(paste("tabix -h ",coveragefile," ", chr, ":", start, "-", end, " | sed 's/^#//'|sed 's/Start/start/g'|sed 's/Chr/chr/g'|sed 's/End/end/g'", sep = "")),sep = "\t", header = TRUE, check.names = FALSE)
+        cov1 <- readCovFile(coveragepath, readCovFilePlainCommand, chr=chr, start=start, end=end)
+        
         ##remove when start or end pull in extra tabix line##
         cov1<-cov1[cov1$start!=end,]
         cov1<-cov1[cov1$end!=start,]
@@ -377,7 +429,7 @@ loadData <- function(chr, start, end, coveragefile, medianfile, bins, verylargev
     }
 
     #Load plotting values if median coverage file generated by bincov##
-    allnorm <- read.table(medianfile, header = TRUE, check.names = FALSE)
+    allnorm <- readMedians(medianfile)
 
 
     #Round down the number of used bins events for smaller events (e.g at 100 bp bins can't have 10 bins if event is less than 1kb)
@@ -784,7 +836,7 @@ samprank_sep <- function(genotype_matrix,cnv_matrix,cnvtype,sample=NULL)
 }
 
 ##Plot of intensities across cohorts## 
-plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder)
+plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily,famfile,outFolder,genomeName)
 {
   samplesPrior <- unlist(strsplit(as.character(sampleIDs),","))
   samplenames<-colnames(genotype_matrix)
@@ -802,7 +854,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Limits number of sample Ids due to size limiations for readablity
   if(nchar(as.character(sampleIDs))>44){sampleIDsToDisplay<-paste(substr(sampleIDs,1,44),"...",sep="")}else{sampleIDsToDisplay<-sampleIDs}
   ##Title line 1##
-  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
+  main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (", genomeName, ")",sep="")
   
   ###Add proper size abbr. for larger events
   size=end-start
@@ -837,7 +889,7 @@ plotJPG <- function(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,out
   ##Blue if Dup; Red if Del
   if ( plotK == TRUE ) {
     #keep plot_colormatrix
-    main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (hg19)",sep="")
+    main1=paste(chr,":",prettyNum(start,big.mark=","),"-",prettyNum(end,big.mark=",")," (", genomeName, ")",sep="")
     mainText = paste(main1, "\n", "Copy Estimate"," ", mysize, sep = "")  
     plot_linematrix[,5:ncol(plot_linematrix)]<-"0.5"
   } else if (toupper(cnvtype) == "DEL") {
@@ -1076,7 +1128,7 @@ if(!file.exists(paste(outFolder,outputname,".geno",sep=""))) {
    ##plotting expect copy state >1 than predicted because kmeans code, this is corrected in final plot##
    plot_matrix<-matrix(c(cnvID,chr, start, end,copystate+1),nrow=1)
    colnames(plot_matrix)<-colnames(genotype_matrix)
-   plotJPG(plot_matrix,plot_cnvmatrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=TRUE,plotfamily=FALSE,famfile,outFolder)
+   plotJPG(plot_matrix,plot_cnvmatrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=TRUE,plotfamily=FALSE,famfile,outFolder,opt$genomename)
  }
  
 }
@@ -1116,13 +1168,13 @@ runRdTest<-function(bed)
   
   ##Get Intesity Data##
   if (exists("poorbincov")) {
-    loadResult <-loadData(chr, start, end, coveragefile,medianfile,bins,
+    loadResult <-loadData(chr, start, end, coveragepath,medianfile,bins,
                           verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                           opt$SampleIncludeList,poorbincov)
     cnv_matrix <- loadResult[["cnv_matrix"]]
     raw_cov <- loadResult[["raw_cov"]]
   } else {
-    loadResult<-loadData(chr, start, end, coveragefile,medianfile,bins,
+    loadResult<-loadData(chr, start, end, coveragepath,medianfile,bins,
                          verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                          opt$SampleIncludeList)
     cnv_matrix <- loadResult[["cnv_matrix"]]
@@ -1182,7 +1234,7 @@ runRdTest<-function(bed)
   if (opt$runKmeans == TRUE) {
     k_matrix<-kMeans(cnv_matrix,chr,start,end,cnvID,Kinterval,Kintervalstart,Kintervalend,outFolder,outputname)
     if (opt$plotK==TRUE) {
-      plotJPG(k_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily=FALSE,famfile,outFolder)
+      plotJPG(k_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK,plotfamily=FALSE,famfile,outFolder,opt$genomename)
     }
   }
   ##Assign intial genotypes (del=1,dup=3,diploid=2)##
@@ -1195,7 +1247,7 @@ runRdTest<-function(bed)
   ##genotype and write to file##
   if (opt$rungenotype == TRUE) {
     ##Compress x-axis to 10 bins so it is easier to view###
-    plot_cnvmatrix<-loadData(chr, start, end, coveragefile, medianfile,
+    plot_cnvmatrix<-loadData(chr, start, end, coveragepath, medianfile,
                              verylargevariantsize, verylargevariantpoints, verylargevariantwindows, opt$SampleExcludeList,
                              opt$SampleIncludeList,bins=10,raw_cov=raw_cov)[["cnv_matrix"]]
     genotype(cnv_matrix,genotype_matrix,refgeno,chr,start,end,cnvID,sampleIDs,cnvtype,outFolder,outputname,plot_cnvmatrix)
@@ -1211,7 +1263,7 @@ runRdTest<-function(bed)
   } 
   ##Plot JPG##
   if (opt$plot == TRUE){
-    plotJPG(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder)
+    plotJPG(genotype_matrix,cnv_matrix,chr,start,end,cnvID,sampleIDs,outputname,cnvtype,plotK=FALSE,plotfamily=FALSE,famfile,outFolder,opt$genomename)
   }
   ##De Novo Module##
   if (opt$denovo == TRUE) {
@@ -1290,7 +1342,7 @@ runRdTest<-function(bed)
       affecteded_fam[count]<-paste(unique(grep(i,unlist(strsplit(as.character(sampleIDs),split=",")),value=TRUE)),collapse=",")
       if (opt$plotfamily==TRUE) {
         sampleID2s<-paste(unique(grep(i,unlist(strsplit(as.character(sampleIDs),split=",")),value=TRUE)),collapse=",")
-        plotJPG(original_genotype_matrix,original_cnv_matrix,chr,start,end,cnvID,sampleIDs=sampleID2s,outputname=paste(outputname,"_",i,sep=""),cnvtype,plotK=FALSE,plotfamily,famfile,outFolder)
+        plotJPG(original_genotype_matrix,original_cnv_matrix,chr,start,end,cnvID,sampleIDs=sampleID2s,outputname=paste(outputname,"_",i,sep=""),cnvtype,plotK=FALSE,plotfamily,famfile,outFolder,opt$genomename)
       }
     }
     if (opt$quartetDenovo==TRUE) {
@@ -1301,7 +1353,6 @@ runRdTest<-function(bed)
       } else { denovo_output<-fam_denovo.matrix[2:nrow(fam_denovo.matrix),] }
     return(denovo_output)
   } 
-  
   ##Flip samples and cnvtype to that with the lowest frequency##
   if(dipcount<cnvcount){
     cnvtype=ifelse(toupper(cnvtype)=="DEL","DUP","DEL")
