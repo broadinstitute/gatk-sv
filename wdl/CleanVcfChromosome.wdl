@@ -300,17 +300,17 @@ workflow CleanVcfChromosome {
       runtime_attr_override = runtime_override_rescue_me_dels
   }
 
-  call AddHighFPRateFilters {
+  call AddHighFDRFilters {
     input:
       vcf=RescueMobileElementDeletions.out,
-      prefix="~{prefix}.high_fp_filtered",
+      prefix="~{prefix}.high_fdr_filtered",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_add_high_fp_rate_filters
   }
 
   call FinalCleanup {
     input:
-      vcf=AddHighFPRateFilters.out,
+      vcf=AddHighFDRFilters.out,
       contig=contig,
       prefix="~{prefix}.final_cleanup",
       sv_pipeline_docker=sv_pipeline_docker,
@@ -809,7 +809,7 @@ task StitchFragmentedCnvs {
 }
 
 # Add FILTER status for pockets of variants with high FP rate: wham-only DELs and Scramble-only SVAs with HIGH_SR_BACKGROUND
-task AddHighFPRateFilters {
+task AddHighFDRFilters {
   input {
     File vcf
     String prefix
@@ -819,8 +819,8 @@ task AddHighFPRateFilters {
 
   Float input_size = size(vcf, "GiB")
   RuntimeAttr runtime_default = object {
-    mem_gb: 3.75 + input_size * 1.5,
-    disk_gb: ceil(100.0 + input_size * 3.0),
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + input_size * 3.0),
     cpu_cores: 1,
     preemptible_tries: 3,
     max_retries: 1,
@@ -842,17 +842,15 @@ task AddHighFPRateFilters {
 
     python <<CODE
 import pysam
-fin = pysam.VariantFile("~{vcf}")
-header = fin.header
-header.add_line("##FILTER=<ID=HIGH_ALGORITHM_FP_RATE,Description=\"Categories of variants with low specificity including Wham-only deletions and certain Scramble SVAs\">")
-fo = pysam.VariantFile("~{prefix}.vcf.gz", 'w', header=header)
-for record in fin:
-    if (record.info['ALGORITHMS'] == ('wham',) and record.info['SVTYPE'] == 'DEL') or \
-      (record.info['ALGORITHMS'] == ('scramble',) and record.info['HIGH_SR_BACKGROUND'] and record.alts == ('<INS:ME:SVA>',)):
-        record.filter.add('HIGH_ALGORITHM_FP_RATE')
-    fo.write(record)
-fin.close()
-fo.close()
+with pysam.VariantFile("~{vcf}", 'r') as fin:
+  header = fin.header
+  header.add_line("##FILTER=<ID=HIGH_ALGORITHM_FDR,Description=\"Categories of variants with low precision including Wham-only deletions and certain Scramble SVAs\">")
+  with pysam.VariantFile("~{prefix}.vcf.gz", 'w', header=header) as fo:
+    for record in fin:
+        if (record.info['ALGORITHMS'] == ('wham',) and record.info['SVTYPE'] == 'DEL') or \
+          (record.info['ALGORITHMS'] == ('scramble',) and record.info['HIGH_SR_BACKGROUND'] and record.alts == ('<INS:ME:SVA>',)):
+            record.filter.add('HIGH_ALGORITHM_FDR')
+        fo.write(record)
 CODE
   >>>
 
