@@ -1,7 +1,7 @@
 ---
 title: Building inputs
 description: Building work input json files
-sidebar_position: 1
+sidebar_position: 3
 slug: build_inputs
 ---
 
@@ -43,8 +43,6 @@ You may run the following commands to get these example inputs.
        └── test
    ```
 
-## Building inputs for specific use-cases (Advanced)
-
 ### Build for batched workflows
 
 ```shell
@@ -55,69 +53,3 @@ python scripts/inputs/build_inputs.py \
   -a '{ "test_batch" : "ref_panel_1kg" }'
 ```
 
-
-### Generating a reference panel
-
-This section only applies to the single-sample mode. 
-New reference panels can be generated from a single run of the 
-`GATKSVPipelineBatch` workflow. 
-If using a Cromwell server, we recommend copying the outputs to a 
-permanent location by adding the following option to the 
-[workflow configuration](https://cromwell.readthedocs.io/en/latest/wf_options/Overview/) 
-file:
-
-```json
-"final_workflow_outputs_dir" : "gs://my-outputs-bucket",
-"use_relative_output_paths": false,
-```
-
-Here is an example of how to generate workflow input jsons from `GATKSVPipelineBatch` workflow metadata:
-
-1. Get metadata from Cromwshell.
-
-   ```shell
-   cromshell -t60 metadata 38c65ca4-2a07-4805-86b6-214696075fef > metadata.json
-   ```
-
-2. Run the script. 
-
-   ```shell
-   python scripts/inputs/create_test_batch.py \
-      --execution-bucket gs://my-exec-bucket \
-      --final-workflow-outputs-dir gs://my-outputs-bucket \
-      metadata.json \
-      > inputs/values/my_ref_panel.json
-   ```
-   
-3. Build test files for batched workflows (google cloud project id required).
-
-   ```shell
-   python scripts/inputs/build_inputs.py \
-      inputs/values \
-      inputs/templates/test \
-      inputs/build/my_ref_panel/test \
-      -a '{ "test_batch" : "ref_panel_1kg" }'
-   ```
-
-4. Build test files for the single-sample workflow
-
-   ```shell
-   python scripts/inputs/build_inputs.py \
-       inputs/values \
-       inputs/templates/test/GATKSVPipelineSingleSample \
-       inputs/build/NA19240/test_my_ref_panel \
-       -a '{ "single_sample" : "test_single_sample_NA19240", "ref_panel" : "my_ref_panel" }'
-   ```
-   
-5. Build files for a Terra workspace.
-
-   ```shell 
-   python scripts/inputs/build_inputs.py \
-      inputs/values \
-      inputs/templates/terra_workspaces/single_sample \
-      inputs/build/NA12878/terra_my_ref_panel \
-      -a '{ "single_sample" : "test_single_sample_NA12878", "ref_panel" : "my_ref_panel" }'
-   ```
-   
-Note that the inputs to `GATKSVPipelineBatch` may be used as resources 
-for the reference panel and therefore should also be in a permanent location.

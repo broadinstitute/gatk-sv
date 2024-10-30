@@ -37,7 +37,7 @@ workflow GATKSVPipelineBatch {
 
     # Enable different callers
     Boolean use_manta = true
-    Boolean use_melt = true
+    Boolean use_melt = false
     Boolean use_scramble = true
     Boolean use_wham = true
 

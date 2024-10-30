@@ -25,6 +25,9 @@ workflow FilterGenotypes {
     Int optimize_vcf_records_per_shard = 50000
     Int filter_vcf_records_per_shard = 20000
 
+    # For SanitizeHeader - bcftools annotate -x ~{header_drop_fields}
+    String header_drop_fields = "FILTER/LOW_QUALITY,FORMAT/TRUTH_CN_EQUAL,FORMAT/GT_FILTER,FORMAT/CONC_ST,INFO/STATUS,INFO/TRUTH_AC,INFO/TRUTH_AN,INFO/TRUTH_AF,INFO/TRUTH_VID,INFO/CNV_CONCORDANCE,INFO/GENOTYPE_CONCORDANCE,INFO/HET_PPV,INFO/HET_SENSITIVITY,INFO/HOMVAR_PPV,INFO/HOMVAR_SENSITIVITY,INFO/MINSL,INFO/NON_REF_GENOTYPE_CONCORDANCE,INFO/SL_MAX,INFO/SL_MEAN,INFO/VAR_PPV,INFO/VAR_SENSITIVITY,INFO/VAR_SPECIFICITY"
+
     # For MainVcfQc
     File primary_contigs_fai
     File? ped_file
@@ -32,7 +35,7 @@ workflow FilterGenotypes {
     Array[Array[String]]? sample_level_comparison_datasets  # Array of two-element arrays, one per dataset, each of format [prefix, gs:// path to per-sample tarballs]
     File? sample_renaming_tsv # File with mapping to rename per-sample benchmark sample IDs for compatibility with cohort
     Boolean run_qc = true
-    String qc_bcftools_preprocessing_options = "-e 'FILTER~\"UNRESOLVED\" || FILTER~\"HIGH_NCR\"'"
+    String qc_bcftools_preprocessing_options = "-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'"
     Int qc_sv_per_shard = 2500
     Int qc_samples_per_shard = 600
     RuntimeAttr? runtime_override_plot_qc_per_family
@@ -120,10 +123,19 @@ workflow FilterGenotypes {
       sv_base_mini_docker=sv_base_mini_docker
   }
 
+  call SanitizeHeader {
+    input:
+      vcf = ConcatVcfs.concat_vcf,
+      vcf_index = ConcatVcfs.concat_vcf_idx,
+      drop_fields = header_drop_fields,
+      prefix = "~{output_prefix_}.filter_genotypes.sanitized",
+      sv_pipeline_docker = sv_pipeline_docker
+  }
+
   if (run_qc) {
     call qc.MainVcfQc {
       input:
-        vcfs=[ConcatVcfs.concat_vcf],
+        vcfs=[SanitizeHeader.out],
         prefix="~{output_prefix_}.filter_genotypes",
         ped_file=ped_file,
         bcftools_preprocessing_options=qc_bcftools_preprocessing_options,
@@ -142,8 +154,8 @@ workflow FilterGenotypes {
   }
 
   output {
-    File filtered_vcf = ConcatVcfs.concat_vcf
-    File filtered_vcf_index = ConcatVcfs.concat_vcf_idx
+    File filtered_vcf = SanitizeHeader.out
+    File filtered_vcf_index = SanitizeHeader.out_index
     File? main_vcf_qc_tarball = MainVcfQc.sv_vcf_qc_output
 
     # For optional analysis
@@ -293,5 +305,61 @@ task FilterVcf {
     docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
+  }
+}
+
+task SanitizeHeader {
+  input {
+    File vcf
+    File vcf_index
+    String prefix
+    String drop_fields
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
+
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 3.75,
+                                  disk_gb: ceil(10.0 + size(vcf, "GiB") * 2.0),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GiB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
+
+  command <<<
+    set -euo pipefail
+
+    bcftools view --no-version -h ~{vcf} > header.vcf
+
+    grep -v -e ^"##bcftools" header.vcf \
+      -e ^"##source=depth" \
+      -e ^"##source=cleanvcf" \
+      -e ^"##ALT=<ID=UNR" \
+      | sed 's/Split read genotype quality/Split-read genotype quality/g' \
+      | sed 's/##ALT=<ID=BND,Description="Translocation">/##ALT=<ID=BND,Description="Breakend">/g' > newheader.vcf
+
+    bcftools reheader -h newheader.vcf ~{vcf} \
+      | bcftools annotate -x ~{drop_fields} \
+        --no-version \
+        -O z \
+        -o ~{prefix}.vcf.gz
+
+    tabix ~{prefix}.vcf.gz
+  >>>
+
+  output {
+    File out = "~{prefix}.vcf.gz"
+    File out_index = "~{prefix}.vcf.gz.tbi"
   }
 }
