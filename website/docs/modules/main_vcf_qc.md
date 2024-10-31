@@ -41,14 +41,14 @@ increases, and these examples are intended to provide a simple baseline for acce
 the [Recommendations](#recommendations) section for prescribed quality criteria.
 
 :::note
-The following plots are of variants passing all filters (i.e. with the `FILTER` status set to `PASS`). This is the 
+The following plots are of variants passing all filters (i.e. with the `FILTER` status set to `PASS` or `MULTIALLELIC`). This is the 
 default behavior of the QC plots generated in [FilterGenotypes](./fg). 
 
 When running `MainVcfQc` as a standalone workflow, users may set the 
 [bcftools_preprocessing_options](#optional--bcftools_preprocessing_options) argument to limit plotted variants based on `FILTER` status.
-For example, to limit to `PASS` variants for a VCF generated from [FilterGenotypes](./fg) use:
+For example, to limit to `PASS` and `MULTIALLELIC` variants for a VCF generated from [FilterGenotypes](./fg) use:
 ```
-"bcftools_preprocessing_options": "-i 'FILTER~\"PASS\""
+"bcftools_preprocessing_options": "-i 'FILTER=\"PASS\" || FILTER=\"MULTIALLELIC\"'"
 ```
 :::
 

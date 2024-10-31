@@ -29,7 +29,7 @@ Google Cloud Platform (GCP).
 
 # Cromwell Server
 
-There are two option to communicate with a running Cromwell server: 
+There are two options to communicate with a running Cromwell server: 
 [REST API](https://cromwell.readthedocs.io/en/stable/tutorials/ServerMode/), and
 [Cromshell](https://github.com/broadinstitute/cromshell) which is a command line tool
 to interface with a Cromwell server. We recommend using Cromshell due to its simplicity 
