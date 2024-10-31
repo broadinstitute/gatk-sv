@@ -53,7 +53,7 @@ The following are the main pipeline outputs. For more information on the outputs
 
 ### Pipeline overview
 
-<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v0.29-beta/terra_pipeline_diagram.jpg" width="1000" />
+<img alt="pipeline_diagram" title="Pipeline diagram" src="https://media.githubusercontent.com/media/broadinstitute/gatk-sv/refs/tags/v1.0/terra_pipeline_diagram.jpg" width="1000" />
 
 The following workflows and Jupyter notebooks are included in this workspace, to be executed in this order:
 

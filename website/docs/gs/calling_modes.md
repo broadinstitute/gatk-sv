@@ -21,7 +21,7 @@ use cases:
 Users should also consider that the single-sample mode is provided as a single workflow and is therefore considerably 
 simpler to run than joint calling. However, it also has higher compute costs on a per-sample basis and will not be as sensitive 
 as joint calling with larger cohorts. Additionally, SV quality will be best when the case sample closely resembles the samples
-in the reference panel.
+in the reference panel in terms of sequencing depth, sample quality, and library preparation.
 
 ## Joint calling mode
 
