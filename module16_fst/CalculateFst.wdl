@@ -12,35 +12,34 @@ workflow CalculateFst {
         String sv_base_mini_docker
     }
 
-  	if (variant_type=="SV"){
-	    call CalcuFstSv{
-	        input:
-	        	vcf = vcf,
-	        	vcf_idx = vcf_idx,
-	        	samp_pop = samp_pop,
-	        	src_tar = src_tar,
-	        	sv_base_mini_docker = sv_base_mini_docker
-	    }
-    }
+    if (variant_type=="SV"){
+        call CalcuFstSv{
+            input:
+                vcf = vcf,
+                vcf_idx = vcf_idx,
+                samp_pop = samp_pop,
+                src_tar = src_tar,
+                sv_base_mini_docker = sv_base_mini_docker
+            }
+        }
 
-  	if (variant_type=="SNV"){
-	    call CalcuFstSnv{
-	        input:
-	        	vcf = vcf,
-	        	vcf_idx = vcf_idx,
-	        	samp_pop = samp_pop,
-	        	src_tar = src.tar.gz,
-	        	sv_base_mini_docker = sv_base_mini_docker
-	    }
-  	}
+    if (variant_type=="SNV"){
+        call CalcuFstSnv{
+            input:
+                vcf = vcf,
+                vcf_idx = vcf_idx,
+                samp_pop = samp_pop,
+                src_tar = src_tar,
+                sv_base_mini_docker = sv_base_mini_docker
+            }
+        }
 
     output {
         File? Fst_SV_sites = CalcuFstSv.Fst_sv_sites
         File? Fst_SV_pop = CalcuFstSv.Fst_sv_pop
         File? Fst_SNV_sites = CalcuFstSnv.Fst_snv_sites
         File? Fst_SNV_pop = CalcuFstSnv.Fst_snv_pop
-    }
-
+        }
     }
 
 
@@ -78,10 +77,10 @@ task CalcuFstSv{
         gsutil cp ~{src_tar} ./
         tar zxvf ~{src_tar}
         python src/Calcu_Fst_table.SV.py \
-        	-v ~{vcf} \
-        	-s ~{samp_pop} \
-        	-o ~{filenase}.Fst.sites \
-        	-p ~{filenase}.Fst.pop
+            -v ~{vcf} \
+            -s ~{samp_pop} \
+            -o ~{filenase}.Fst.sites \
+            -p ~{filenase}.Fst.pop
    >>>
 
     runtime {
@@ -129,10 +128,10 @@ task CalcuFstSnv{
         gsutil cp ~{src_tar} ./
         tar zxvf ~{src_tar}
         python src/Calcu_Fst_table.SNV_Indels.py \
-        	-v ~{vcf} \
-        	-s ~{samp_pop} \
-        	-o ~{filenase}.Fst.sites \
-        	-p ~{filenase}.Fst.pop
+            -v ~{vcf} \
+            -s ~{samp_pop} \
+            -o ~{filenase}.Fst.sites \
+            -p ~{filenase}.Fst.pop
    >>>
 
     runtime {
