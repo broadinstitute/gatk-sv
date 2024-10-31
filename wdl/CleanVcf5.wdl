@@ -8,7 +8,6 @@ workflow CleanVcf5 {
         File normal_revise_vcf
         File revise_vcf_lines
         File ped_file
-        File sex_chr_revise
         File multi_ids
         File? outlier_samples_list
 
@@ -44,7 +43,6 @@ workflow CleanVcf5 {
                 revise_vcf_lines=revise_vcf_lines,
                 normal_revise_vcf=ScatterVcf.shards[i],
                 ped_file=ped_file,
-                sex_chr_revise=sex_chr_revise,
                 multi_ids=multi_ids,
                 outlier_samples_list=outlier_samples_list,
                 make_clean_gq_script=make_clean_gq_script,
@@ -83,7 +81,6 @@ task MakeCleanGQ {
         File revise_vcf_lines
         File normal_revise_vcf
         File ped_file
-        File sex_chr_revise
         File multi_ids
         File? outlier_samples_list
         File? make_clean_gq_script
@@ -96,7 +93,7 @@ task MakeCleanGQ {
     # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
     # generally assume working memory is ~3 * inputs
     Float input_size = size(
-                       select_all([revise_vcf_lines, normal_revise_vcf, ped_file, sex_chr_revise, multi_ids, outlier_samples_list]),
+                       select_all([revise_vcf_lines, normal_revise_vcf, ped_file, multi_ids, outlier_samples_list]),
                        "GB")
     Float base_disk_gb = 10.0
 
@@ -133,7 +130,6 @@ task MakeCleanGQ {
             revise.vcf.lines.vcf.gz \
             ~{normal_revise_vcf} \
             ~{ped_file} \
-            ~{sex_chr_revise} \
             ~{multi_ids} \
             outliers.txt \
             ~{prefix}

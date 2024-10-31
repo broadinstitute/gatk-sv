@@ -141,6 +141,7 @@ workflow CleanVcf {
         LINE1_reference=LINE1_reference,
         chr_x=chr_x,
         chr_y=chr_y,
+        gatk_docker="docker.io/broadinstitute/gatk:3eb5c3d38d6c8c65e71f29abe9346c98bfbb1cbe",
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -167,14 +168,6 @@ workflow CleanVcf {
         runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
         runtime_override_fix_header_drc=runtime_override_fix_header_drc,
         runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
-        runtime_attr_override_subset_large_cnvs_1b=runtime_attr_override_subset_large_cnvs_1b,
-        runtime_attr_override_sort_bed_1b=runtime_attr_override_sort_bed_1b,
-        runtime_attr_override_intersect_bed_1b=runtime_attr_override_intersect_bed_1b,
-        runtime_attr_override_build_dict_1b=runtime_attr_override_build_dict_1b,
-        runtime_attr_override_scatter_1b=runtime_attr_override_scatter_1b,
-        runtime_attr_override_filter_vcf_1b=runtime_attr_override_filter_vcf_1b,
-        runtime_override_concat_vcfs_1b=runtime_override_concat_vcfs_1b,
-        runtime_override_cat_multi_cnvs_1b=runtime_override_cat_multi_cnvs_1b,
         runtime_attr_format=runtime_attr_format,
         runtime_override_rescue_me_dels=runtime_override_rescue_me_dels
     }
