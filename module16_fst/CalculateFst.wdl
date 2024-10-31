@@ -21,6 +21,7 @@ workflow CalculateFst {
 	        	src_tar = src_tar,
 	        	sv_base_mini_docker
 	    }
+    }
 
   	if (variant_type=="SNV"){
 	    call CalcuFstSnv{
@@ -31,8 +32,18 @@ workflow CalculateFst {
 	        	src_tar = src.tar.gz,
 	        	sv_base_mini_docker
 	    }
-
   	}
+
+    output {
+        File? Fst_SV_sites = CalcuFstSv.Fst_sv_sites
+        File? Fst_SV_pop = CalcuFstSv.Fst_sv_pop
+        File Fst_SNV_sites = CalcuFstSnv.Fst_snv_sites
+        File Fst_SNV_pop = CalcuFstSnv.Fst_snv_pop
+    }
+
+
+    }
+
 
 task CalcuFstSv{
     input{
@@ -56,8 +67,8 @@ task CalcuFstSv{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File Fst_sites = "~{filenase}.Fst.sites"
-        File Fst_pop = "~{filenase}.Fst.sites"
+        File Fst_sv_sites = "~{filenase}.Fst.sites"
+        File Fst_sv_pop = "~{filenase}.Fst.sites"
     }
 
     String filebase = basename(vcf,".vcf.gz")
@@ -107,8 +118,8 @@ task CalcuFstSnv{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File Fst_sites = "~{filenase}.Fst.sites"
-        File Fst_pop = "~{filenase}.Fst.sites"
+        File Fst_snv_sites = "~{filenase}.Fst.sites"
+        File Fst_snv_pop = "~{filenase}.Fst.sites"
     }
 
     String filebase = basename(vcf,".vcf.gz")
