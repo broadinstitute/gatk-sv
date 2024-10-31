@@ -37,8 +37,8 @@ workflow CalculateFst {
     output {
         File? Fst_SV_sites = CalcuFstSv.Fst_sv_sites
         File? Fst_SV_pop = CalcuFstSv.Fst_sv_pop
-        File Fst_SNV_sites = CalcuFstSnv.Fst_snv_sites
-        File Fst_SNV_pop = CalcuFstSnv.Fst_snv_pop
+        File? Fst_SNV_sites = CalcuFstSnv.Fst_snv_sites
+        File? Fst_SNV_pop = CalcuFstSnv.Fst_snv_pop
     }
 
     }
