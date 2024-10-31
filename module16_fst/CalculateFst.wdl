@@ -65,8 +65,8 @@ task CalcuFstSv{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File Fst_sv_sites = "~{filenase}.Fst.sites"
-        File Fst_sv_pop = "~{filenase}.Fst.sites"
+        File Fst_sv_sites = "~{filebase}.Fst.sites"
+        File Fst_sv_pop = "~{filebase}.Fst.sites"
     }
 
     String filebase = basename(vcf,".vcf.gz")
@@ -79,8 +79,8 @@ task CalcuFstSv{
         python src/Calcu_Fst_table.SV.py \
             -v ~{vcf} \
             -s ~{samp_pop} \
-            -o ~{filenase}.Fst.sites \
-            -p ~{filenase}.Fst.pop
+            -o ~{filebase}.Fst.sites \
+            -p ~{filebase}.Fst.pop
    >>>
 
     runtime {
@@ -116,8 +116,8 @@ task CalcuFstSnv{
     RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
     output{
-        File Fst_snv_sites = "~{filenase}.Fst.sites"
-        File Fst_snv_pop = "~{filenase}.Fst.sites"
+        File Fst_snv_sites = "~{filebase}.Fst.sites"
+        File Fst_snv_pop = "~{filebase}.Fst.sites"
     }
 
     String filebase = basename(vcf,".vcf.gz")
@@ -130,8 +130,8 @@ task CalcuFstSnv{
         python src/Calcu_Fst_table.SNV_Indels.py \
             -v ~{vcf} \
             -s ~{samp_pop} \
-            -o ~{filenase}.Fst.sites \
-            -p ~{filenase}.Fst.pop
+            -o ~{filebase}.Fst.sites \
+            -p ~{filebase}.Fst.pop
    >>>
 
     runtime {
