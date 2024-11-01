@@ -6,7 +6,7 @@ slug: joint
 ---
 
 ## Terra workspace
-Users should clone the Terra joint calling workspace (TODO)
+Users should clone the [Terra joint calling workspace](https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/GATK-Structural-Variants-Joint-Calling)
 which is configured with a demo sample set. 
 Refer to the following sections for instructions on how to run the pipeline on your data using this workspace.
 

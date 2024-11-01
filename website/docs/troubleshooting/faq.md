@@ -1,6 +1,7 @@
 ---
 title: FAQ
 slug: faq
+sidebar_position: 0
 ---
 
 Please consult the following resources for additional troubleshooting guides:
