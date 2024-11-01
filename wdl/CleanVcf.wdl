@@ -127,6 +127,7 @@ workflow CleanVcf {
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
+        runtime_override_clean_vcf_1b=runtime_override_clean_vcf_1b,
         runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
         runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
         runtime_override_clean_vcf_4=runtime_override_clean_vcf_4,
