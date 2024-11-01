@@ -200,6 +200,15 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: VisualizeCnvs
+    primaryDescriptorPath: /wdl/VisualizeCnvs.wdl
+    filters:
+      branches:
+        - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: SingleSamplePipeline
     primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
     filters:

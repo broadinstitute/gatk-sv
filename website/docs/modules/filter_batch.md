@@ -11,16 +11,14 @@ import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.
 
 Filters poor quality variants and outlier samples. 
 This workflow can be run all at once with the top-level WDL, 
-or it can be run in three steps to enable tuning of outlier 
-filtration cutoffs. The three subworkflows are:
+or it can be run in two steps to enable tuning of outlier 
+filtration cutoffs. The two subworkflows are:
 
-1. [FilterBatchSites](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterBatchSites.wdl): Per-batch variant filtration
+1. [FilterBatchSites](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterBatchSites.wdl): Per-batch variant filtration. 
+    Visualize filtered SV counts per sample per type to help choose an IQR cutoff for outlier sample filtering, and preview
+    outlier samples for a given cutoff.
 
-2. [PlotSVCountsPerSample](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/PlotSVCountsPerSample.wdl): Visualize SV counts per 
-   sample per type to help choose an IQR cutoff for 
-   outlier filtering, and preview outlier samples for a given cutoff
-
-3. [FilterBatchSamples](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterBatchSamples.wdl): Per-batch outlier sample filtration; 
+2. [FilterBatchSamples](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterBatchSamples.wdl): Per-batch outlier sample filtration; 
    provide an appropriate [outlier_cutoff_nIQR](#outlier_cutoff_niqr) based on the 
    SV count plots and outlier previews from step 2. Note 
    that not removing high outliers can result in increased 

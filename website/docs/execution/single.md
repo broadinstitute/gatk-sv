@@ -103,7 +103,9 @@ inputs beyond their defaults.
 
 If you would like to run this workflow on your own samples (which must be medium-to-high coverage WGS data):
 
-- Clone the [workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample) into a Terra project you have access to
+- Clone the [workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample) into a Terra project you have access to.
+  Select `us-central1` for the region. If you must use a different region, you will need to copy all GATK-SV docker images to the other region
+  before running the pipeline. See the [docker images section](/docs/gs/dockers#regions-important) for details.
 - In the cloned workspace, upload rows to the Sample and (optionally) the Participant Data Table that describe your samples.
   Ensure that the rows you add to the Sample table contain the columns `sample_id` and `bam_or_cram_file` are populated appropriately.
 - There is no need to modify values in the workspace data or method configuration. If you are interested in modifying the reference
