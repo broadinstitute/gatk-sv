@@ -339,7 +339,7 @@ task CleanVcf1a {
 		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
 	}
 
-	Int java_mem_mb = ceil(runtime_override.mem_gb * 1000 * 0.7)
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 	String output_vcf = "~{prefix}.vcf.gz"
 	String output_samples_list = "~{prefix}.includelist.txt"
 
@@ -396,7 +396,7 @@ task CleanVcf1b {
 	}
 
 	String output_vcf = "~{prefix}.vcf.gz"
-	Int java_mem_mb = ceil(runtime_override.mem_gb * 1000 * 0.7)
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 
 	command <<<
 		set -euo pipefail
@@ -448,7 +448,7 @@ task CleanVcf2 {
 	}
 
 	String output_revised_list = "~{prefix}.txt"
-	Int java_mem_mb = ceil(runtime_override.mem_gb * 1000 * 0.7)
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 
 	command <<<
 		set -euo pipefail
@@ -542,7 +542,7 @@ task CleanVcf4 {
 	}
 
 	String output_vcf = "~{prefix}.vcf.gz"
-	Int java_mem_mb = ceil(runtime_override.mem_gb * 1000 * 0.7)
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 
 	command <<<
 		set -euo pipefail
@@ -594,7 +594,7 @@ task CleanVcf5 {
 	}
 
 	String output_vcf = "~{prefix}.vcf.gz"
-	Int java_mem_mb = ceil(runtime_override.mem_gb * 1000 * 0.7)
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 
 	command <<<
 		set -euo pipefail
