@@ -6,10 +6,9 @@ workflow CalculateFst {
     input{
         File vcf
         File vcf_idx
-        File src_tar
         File samp_pop
         String variant_type 
-        String sv_base_mini_docker
+        String sv_fst_docker
     }
 
     if (variant_type=="SV"){
@@ -18,8 +17,7 @@ workflow CalculateFst {
                 vcf = vcf,
                 vcf_idx = vcf_idx,
                 samp_pop = samp_pop,
-                src_tar = src_tar,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_fst_docker = sv_fst_docker
             }
         }
 
@@ -29,8 +27,7 @@ workflow CalculateFst {
                 vcf = vcf,
                 vcf_idx = vcf_idx,
                 samp_pop = samp_pop,
-                src_tar = src_tar,
-                sv_base_mini_docker = sv_base_mini_docker
+                sv_fst_docker = sv_fst_docker
             }
         }
 
@@ -48,8 +45,7 @@ task CalcuFstSv{
         File vcf
         File vcf_idx
         File samp_pop
-        File src_tar
-        String sv_base_mini_docker
+        String sv_fst_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -74,9 +70,7 @@ task CalcuFstSv{
     command <<<
         set -Eeuo pipefail
 
-        gsutil cp ~{src_tar} ./
-        tar zxvf ~{src_tar}
-        python src/Calcu_Fst_table.SV.py \
+        python /src/Calcu_Fst_table.SV.py \
             -v ~{vcf} \
             -s ~{samp_pop} \
             -o ~{filebase}.Fst.sites \
@@ -88,7 +82,7 @@ task CalcuFstSv{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_fst_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }    
@@ -99,8 +93,7 @@ task CalcuFstSnv{
         File vcf
         File vcf_idx
         File samp_pop
-        File src_tar
-        String sv_base_mini_docker
+        String sv_fst_docker
         RuntimeAttr? runtime_attr_override
     }
 
@@ -125,9 +118,7 @@ task CalcuFstSnv{
     command <<<
         set -Eeuo pipefail
 
-        gsutil cp ~{src_tar} ./
-        tar zxvf ~{src_tar}
-        python src/Calcu_Fst_table.SNV_Indels.py \
+        python /src/Calcu_Fst_table.SNV_Indels.py \
             -v ~{vcf} \
             -s ~{samp_pop} \
             -o ~{filebase}.Fst.sites \
@@ -139,7 +130,7 @@ task CalcuFstSnv{
         memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
         disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
         bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-        docker: sv_base_mini_docker
+        docker: sv_fst_docker
         preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
         maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
     }    
