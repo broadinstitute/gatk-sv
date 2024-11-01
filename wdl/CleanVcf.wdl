@@ -21,8 +21,6 @@ workflow CleanVcf {
     Int min_records_per_shard_step1
     Int samples_per_step2_shard
     Int? max_samples_per_shard_step3
-    Int clean_vcf1b_records_per_shard
-    Int clean_vcf5_records_per_shard
 
     File HERVK_reference
     File LINE1_reference
@@ -119,8 +117,6 @@ workflow CleanVcf {
         outlier_samples_list=outlier_samples_list,
         use_hail=use_hail,
         gcs_project=gcs_project,
-        clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
-        clean_vcf5_records_per_shard=clean_vcf5_records_per_shard,
         ploidy_table=CreatePloidyTableFromPed.out,
         HERVK_reference=HERVK_reference,
         LINE1_reference=LINE1_reference,
