@@ -17,8 +17,6 @@ workflow CleanVcfChromosome {
 		File bothsides_pass_list
 		Int min_records_per_shard_step1
 		Int samples_per_step2_shard
-		Int clean_vcf5_records_per_shard
-		Int? clean_vcf5_threads_per_task
 		File? outlier_samples_list
 		Int? max_samples_per_shard_step3
 
@@ -49,29 +47,7 @@ workflow CleanVcfChromosome {
 		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
 		RuntimeAttr? runtime_override_final_cleanup
 		RuntimeAttr? runtime_override_rescue_me_dels
-    # overrides for local tasks
-    RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_2
-    RuntimeAttr? runtime_override_clean_vcf_3
-    RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5_scatter
-    RuntimeAttr? runtime_override_clean_vcf_5_make_cleangq
-    RuntimeAttr? runtime_override_clean_vcf_5_find_redundant_multiallelics
-    RuntimeAttr? runtime_override_clean_vcf_5_polish
-    RuntimeAttr? runtime_override_stitch_fragmented_cnvs
-    RuntimeAttr? runtime_override_final_cleanup
-    RuntimeAttr? runtime_override_rescue_me_dels
-    RuntimeAttr? runtime_attr_add_high_fp_rate_filters
-
-    # Clean vcf 1b
-    RuntimeAttr? runtime_attr_override_subset_large_cnvs_1b
-    RuntimeAttr? runtime_attr_override_sort_bed_1b
-    RuntimeAttr? runtime_attr_override_intersect_bed_1b
-    RuntimeAttr? runtime_attr_override_build_dict_1b
-    RuntimeAttr? runtime_attr_override_scatter_1b
-    RuntimeAttr? runtime_attr_override_filter_vcf_1b
-    RuntimeAttr? runtime_override_concat_vcfs_1b
-    RuntimeAttr? runtime_override_cat_multi_cnvs_1b
+		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
 
 		RuntimeAttr? runtime_override_preconcat_step1
 		RuntimeAttr? runtime_override_hail_merge_step1
@@ -285,18 +261,18 @@ workflow CleanVcfChromosome {
 	}
 
 	call RescueMobileElementDeletions {
-		input:
-			vcf = StitchFragmentedCnvs.stitched_vcf_shard,
-			prefix = "~{prefix}.rescue_me_dels",
-			LINE1 = LINE1_reference,
-			HERVK = HERVK_reference,
-			sv_pipeline_docker = sv_pipeline_docker,
-			runtime_attr_override = runtime_override_rescue_me_dels
-	}
+    input:
+      vcf = StitchFragmentedCnvs.stitched_vcf_shard,
+      prefix = "~{prefix}.rescue_me_dels",
+      LINE1 = LINE1_reference,
+      HERVK = HERVK_reference,
+      sv_pipeline_docker = sv_pipeline_docker,
+      runtime_attr_override = runtime_override_rescue_me_dels
+  }
 
-	call AddHighFDRFilters {
-		input:
-			vcf=RescueMobileElementDeletions.out,
+  call AddHighFDRFilters {
+    input:
+      vcf=RescueMobileElementDeletions.out,
       prefix="~{prefix}.high_fdr_filtered",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_add_high_fp_rate_filters
@@ -305,22 +281,22 @@ workflow CleanVcfChromosome {
   call FinalCleanup {
     input:
       vcf=AddHighFDRFilters.out,
-			contig=contig,
-			prefix="~{prefix}.final_cleanup",
-			sv_pipeline_docker=sv_pipeline_docker,
-			runtime_attr_override=runtime_override_final_cleanup
-	}
+      contig=contig,
+      prefix="~{prefix}.final_cleanup",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_final_cleanup
+  }
 
-	call fvcf.FormatVcf as FormatVcfToOutput {
-		input:
-			vcf=FinalCleanup.final_cleaned_shard,
-			ploidy_table=ploidy_table,
-			args="--scale-down-gq",
-			output_prefix="~{prefix}.final_format",
-			script=svtk_to_gatk_script,
-			sv_pipeline_docker=sv_pipeline_docker,
-			runtime_attr_override=runtime_attr_format
-	}
+  call fvcf.FormatVcf as FormatVcfToOutput {
+    input:
+      vcf=FinalCleanup.final_cleaned_shard,
+      ploidy_table=ploidy_table,
+      args="--scale-down-gq",
+      output_prefix="~{prefix}.final_format",
+      script=svtk_to_gatk_script,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_attr_format
+  }
 	
 	output {
 		File out = FormatVcfToOutput.out
