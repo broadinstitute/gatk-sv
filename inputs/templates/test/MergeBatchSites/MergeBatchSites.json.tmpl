@@ -1,6 +1,14 @@
 {
   "MergeBatchSites.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
+  "MergeBatchSites.gatk_docker": {{ dockers.gatk_docker | tojson }},
+
   "MergeBatchSites.pesr_vcfs": [{{ test_batch.filtered_pesr_vcf | tojson }}],
   "MergeBatchSites.depth_vcfs": [{{ test_batch.filtered_depth_vcf | tojson }}],
-  "MergeBatchSites.cohort": {{ test_batch.name | tojson }}
+  "MergeBatchSites.cohort": {{ test_batch.name | tojson }},
+  "MergeBatchSites.ped_file": {{ test_batch.ped_file | tojson }},
+
+  "MergeBatchSites.contig_list": {{ reference_resources.primary_contigs_list | tojson }},
+  "MergeBatchSites.reference_fasta": {{ reference_resources.reference_fasta | tojson }},
+  "MergeBatchSites.reference_fasta_fai": {{ reference_resources.reference_index | tojson }},
+  "MergeBatchSites.reference_dict": {{ reference_resources.reference_dict | tojson }}
 }

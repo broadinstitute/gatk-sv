@@ -16,31 +16,24 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('batch_vcf')
     parser.add_argument('cohort_vcf')
-    parser.add_argument('fout', type=argparse.FileType('w'))
+    parser.add_argument('fout')
     args = parser.parse_args()
 
     # VCFs from other batches
-    batch_vcf = pysam.VariantFile(args.batch_vcf)
-    cohort_vcf = pysam.VariantFile(args.cohort_vcf)
-
-    # Copy header of cohort VCF EXCEPT for samples line
-    header_lines = str(cohort_vcf.header).strip().split('\n')
-    for line in header_lines[:-1]:
-        args.fout.write(line + '\n')
-
-    # Copy samples line of batch vcf
-    header_lines = str(batch_vcf.header).strip().split('\n')
-    args.fout.write(header_lines[-1] + '\n')
-
-    n_samples = len(batch_vcf.header.samples)
-
-    # Write out null records for dedupped variants
-    for record in cohort_vcf:
-        base = '\t'.join(str(record).split('\t')[:9])
-        null_gts = '\t'.join(['0/0' for i in range(n_samples - 1)])
-        args.fout.write(base + '\t0/1\t' + null_gts + '\n')
-
-    args.fout.close()
+    with pysam.VariantFile(args.batch_vcf) as batch_vcf, pysam.VariantFile(args.cohort_vcf) as cohort_vcf:
+        # Get samples from batch vcf and add to header
+        samples = [s for s in batch_vcf.header.samples]
+        header = cohort_vcf.header
+        for s in samples:
+            header.add_sample(s)
+        gts = ['0/0' for _ in samples]
+        gts[0] = '0/1'
+        gt_string = '\tGT\t' + '\t'.join(gts) + '\n'
+        # Write out null records for deduplicated variants
+        with open(args.fout, mode='w') as fout:
+            fout.write(str(header))
+            for record in cohort_vcf:
+                fout.write(str(record).strip() + gt_string)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,8 @@ sidebar_position: 8
 slug: msites
 ---
 
+import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MergeBatchSites.wdl)
 
 Merges variants across batches. Variants are merged only if the following attributes match exactly:
@@ -60,6 +62,14 @@ Array of filtered depth VCFs across batches generated in [FilterBatch](./fb#filt
 
 #### `pesr_vcfs`
 Array of filtered PE/SR VCFs across batches generated in [FilterBatch](./fb#filtered_pesr_vcf).
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `ref_pop_depth_vcfs`
+External depth-only variants to add. This VCF must contain the same `INFO` fields as [depth_vcfs](#depth_vcfs) and 
+[pesr_vcfs](#pesr_vcfs) (e.g. `SVTYPE`, `ALGORITHMS`, `EVIDENCE`, etc.), and all `FILTER` fields should be empty (`.`).
+
+#### <HighlightOptionalArg>Optional</HighlightOptionalArg>  `ref_pop_pesr_vcfs`
+External PE/SR variants to add. The same formatting requirements as [ref_pop_depth_vcfs](#optional--ref_pop_depth_vcfs) 
+apply.
 
 ### Outputs
 

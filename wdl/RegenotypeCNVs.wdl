@@ -250,8 +250,8 @@ task ClusterMergedDepthBeds {
   command <<<
     set -euo pipefail
     svtk vcf2bed ~{cohort_depth_vcf} merged_depth.bed   # vcf2bed merge_vcfs, non_duplicated
-    # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED
-    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print > "del.bed" } else if ($5 == "DUP") { print > "dup.bed" } }' merged_depth.bed 
+    # split DELs and DUPs into separate, non-duplicated BED files. SVTYPE is 5th column of BED. Add "." as sample placeholder.
+    awk -F "\t" -v OFS="\t" '{ if ($5 == "DEL") { print $0"." > "del.bed" } else if ($5 == "DUP") { print $0"." > "dup.bed" } }' merged_depth.bed
     svtk bedcluster del.bed | cut -f1-7 | awk '{print $0","}' > del.cluster.bed #cluster non_duplicated del
     svtk bedcluster dup.bed | cut -f1-7 | awk '{print $0","}' > dup.cluster.bed #cluster non_duplicated dup
     cat del.cluster.bed dup.cluster.bed | sort -k1,1V -k2,2n -k3,3n | fgrep -v "#" > ~{cohort}.regeno.merged_depth_clustered.bed #combine clusterd non-duplicated
