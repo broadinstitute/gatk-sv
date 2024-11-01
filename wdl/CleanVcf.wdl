@@ -148,7 +148,7 @@ workflow CleanVcf {
         runtime_override_fix_header_drc=runtime_override_fix_header_drc,
         runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
         runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
-        runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs
+        runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
         runtime_attr_format=runtime_attr_format,
         runtime_override_rescue_me_dels=runtime_override_rescue_me_dels
     }
