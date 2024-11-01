@@ -87,6 +87,7 @@ workflows:
     filters:
       branches:
         - main
+        - mw_ref_pop_genotyping
       tags:
         - /.*/
 
