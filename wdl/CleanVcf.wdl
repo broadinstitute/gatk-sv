@@ -45,6 +45,7 @@ workflow CleanVcf {
     File? resolve_complex_merged_vcf
     File? genotype_complex_merged_vcf
 
+    String gatk_docker
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
@@ -122,7 +123,7 @@ workflow CleanVcf {
         LINE1_reference=LINE1_reference,
         chr_x=chr_x,
         chr_y=chr_y,
-        gatk_docker="docker.io/broadinstitute/gatk:3eb5c3d38d6c8c65e71f29abe9346c98bfbb1cbe",
+        gatk_docker=gatk_docker,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
