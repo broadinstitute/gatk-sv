@@ -24,14 +24,14 @@ stateDiagram
 
   cvcf: CleanVcf
   refcv: RefineComplexVariants
-  amvf: ApplyManualVariantFilter
+  svc: SVConcordance
   
   cvcf --> refcv
-  refcv --> amvf
+  refcv --> svc
   
   class refcv thisModule
   class cvcf inModules
-  class amvf outModules
+  class svc outModules
 ```
 
 ### Inputs

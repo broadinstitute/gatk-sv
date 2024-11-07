@@ -18,7 +18,7 @@ const accessibleFeatures = [
     ),
     buttons: [
       {
-        buttonLink: 'https://app.terra.bio',
+        buttonLink: 'https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/GATK-Structural-Variants-Joint-Calling',
         buttonText: 'Joint Calling Workspace'
       },
       {
