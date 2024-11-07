@@ -62,8 +62,7 @@ covPerSample <- function(cov,downsample=1000000,mad=F){
                       "MAD_withoutZeros"=withoutzeros.mad)
   }else{
     res <- data.frame("ID"=paste("Sample",1:(ncol(cov)-3),sep=""),
-                      "Med_withZeros"=withzeros,
-                      "Med_withoutZeros"=withoutzeros)
+                      "median"=withzeros)
   }
   # Replace sample IDs if input matrix has header
   if(opts$header==T){
@@ -108,8 +107,7 @@ covPerBin <- function(cov,downsample=500,mad=F){
                       "MAD_withoutZeros"=sds[,2])
   }else{
     res <- data.frame("#chr"=cov[,1],"start"=cov[,2],"end"=cov[,3],
-                      "Med_withZeros"=meds[,1],
-                      "Med_withoutZeros"=meds[,2])
+                      "median"=meds[,1])
   }
   # Return output df
   return(res)
