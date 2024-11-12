@@ -51,7 +51,7 @@ def read_bincov_median(filename: str) -> pd.DataFrame:
     df_median = pd.read_csv(filename, sep="\t").T
     df_median = df_median.rename_axis(ID_COL).reset_index()
     df_median.columns = [ID_COL, "median_coverage"]
-    df_median = df_median.iloc[1:].reset_index(drop=True)
+    df_median = df_median.reset_index(drop=True)
     return df_median
 
 

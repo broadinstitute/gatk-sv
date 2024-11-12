@@ -122,6 +122,6 @@ if(opts$binwise==TRUE){
   write.table(res,args$args[2], sep="\t", col.names=T, row.names=F, quote=F)
 }else{
   res <- covPerSample(cov,mad=opts$mad)
-  names(res)[1] <- "sample_id"
+  names(res)[1] <- "#sample_id"
   write.table(res,args$args[2], sep="\t", col.names=T, row.names=F, quote=F)
 }
