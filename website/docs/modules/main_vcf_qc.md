@@ -5,7 +5,7 @@ sidebar_position: 21
 slug: mvqc
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/MainVcfQC.wdl)
 
