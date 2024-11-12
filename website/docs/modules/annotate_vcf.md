@@ -5,7 +5,7 @@ sidebar_position: 20
 slug: av
 ---
 
-import { Highlight, HighlightOptionalArg } from "/src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 Adds annotations, such as the inferred function and allele frequencies of variants, to a VCF.
 
