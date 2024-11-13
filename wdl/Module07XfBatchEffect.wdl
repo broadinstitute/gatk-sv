@@ -20,17 +20,16 @@ workflow XfBatchEffect {
     File contiglist
     File? par_bed
     Int variants_per_shard
-    Int? pairwise_cutoff=2
     Int? onevsall_cutoff=2
     String prefix
-    File af_pcrmins_premingq
+    File? af_pcrmins_premingq
     String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_merge_labeled_vcfs
   }
-    Array[String] batches = read_lines(batches_list)
-    Array[Array[String]] contigs = read_tsv(contiglist)
-    
+  Array[String] batches = read_lines(batches_list)
+  Array[Array[String]] contigs = read_tsv(contiglist)
+
   # Shard VCF per batch, compute pops-specific AFs, and convert to table of VID & AF stats
   scatter ( batch in batches ) {
     # Get list of samples to include & exclude per batch
@@ -43,7 +42,7 @@ workflow XfBatchEffect {
         probands_list=excludesamples_list,
         sv_pipeline_docker=sv_pipeline_docker
     }
-    # Prune VCF to samples 
+    # Prune VCF to samples
     call calcAF.prune_and_add_vafs as getAFs {
       input:
         vcf=vcf,
@@ -86,12 +85,14 @@ workflow XfBatchEffect {
 
   # Compare frequencies before and after minGQ, and generate list of variants
   # that are significantly different between the steps
-  call CompareFreqsPrePostMinGQPcrminus {
-    input:
-      af_pcrmins_premingq=af_pcrmins_premingq,
-      AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
+  if (defined(af_pcrmins_premingq)) {
+    call CompareFreqsPrePostMinGQPcrminus {
+      input:
+        af_pcrmins_premingq=select_first([af_pcrmins_premingq]),
+        AF_postMinGQ_table=MergeFreqTables_allPops.merged_table,
+        prefix=prefix,
+        sv_pipeline_docker=sv_pipeline_docker
+    }
   }
 
   # Generate matrix of correlation coefficients for all batches, by population & SVTYPE
@@ -105,35 +106,6 @@ workflow XfBatchEffect {
   #      sv_pipeline_docker=sv_pipeline_docker
   #  }
   #}
-
-  # Make list of nonredundant pairs of batches to be evaluated
-  call MakeBatchPairsList {
-    input:
-      batches_list=batches_list,
-      prefix=prefix,
-      sv_pipeline_docker=sv_pipeline_docker
-  }
-  Array[Array[String]] batch_pairs = read_tsv(MakeBatchPairsList.batch_pairs_list)
-
-  # Compute AF stats per pair of batches & determine variants with batch effects
-  scatter ( pair in batch_pairs ) {
-    call helper.check_batch_effects as check_batch_effects {
-      input:
-        freq_table=MergeFreqTables.merged_table,
-        batch1=pair[0],
-        batch2=pair[1],
-        prefix=prefix,
-        variants_per_shard=variants_per_shard,
-        sv_pipeline_docker=sv_pipeline_docker
-    }
-  }
-  # Collect results from pairwise batch effect detection
-  call MergeVariantFailureLists as merge_pairwise_checks {
-    input:
-      fail_variant_lists=check_batch_effects.batch_effect_variants,
-      prefix="~{prefix}.pairwise_comparisons",
-      sv_pipeline_docker=sv_pipeline_docker
-  }
 
   # Perform one-vs-all comparison of AFs per batch to find batch-specific sites
   scatter ( batch in batches ) {
@@ -159,10 +131,8 @@ workflow XfBatchEffect {
   call MakeReclassificationTable {
     input:
       freq_table=MergeFreqTables.merged_table,
-      pairwise_fails=merge_pairwise_checks.fails_per_variant_all,
       onevsall_fails=merge_one_vs_all_checks.fails_per_variant_all,
       prefix=prefix,
-      pairwise_cutoff = pairwise_cutoff,
       onevsall_cutoff = onevsall_cutoff,
       sv_pipeline_docker=sv_pipeline_docker
   }
@@ -209,13 +179,13 @@ task GetBatchSamplesList {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 4,
+                               disk_gb: 50,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
@@ -261,49 +231,49 @@ task GetFreqTable {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 6,
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 6,
+                               disk_gb: 50,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
     #Run vcf2bed
     svtk vcf2bed \
-      --info ALL \
-      --no-samples \
-      ~{vcf} "~{prefix}.vcf2bed.bed"
+    --info ALL \
+    --no-samples \
+    ~{vcf} "~{prefix}.vcf2bed.bed"
     ### Create table of freqs by ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
-            | sed 's/\t/\n/g' \
-            | awk -v OFS="\t" '{ print $1, NR }' \
-            | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
-            | fgrep -v "OTH" \
-            | cut -f2 \
-            | paste -s -d\, || true )
+    | sed 's/\t/\n/g' \
+    | awk -v OFS="\t" '{ print $1, NR }' \
+    | grep -e 'name\|SVLEN\|SVTYPE\|_AC\|_AN\|_CN_NONREF_COUNT\|_CN_NUMBER' \
+    | fgrep -v "OTH" \
+    | cut -f2 \
+    | paste -s -d\, || true )
     cut -f"$idxs" "~{prefix}.vcf2bed.bed" \
     | sed 's/^name/\#VID/g' \
     | gzip -c \
     > "~{prefix}.frequencies.preclean.txt.gz"
     #Clean frequencies (note that this script automatically gzips the output file taken as the last argument)
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/clean_frequencies_table.R \
-      "~{prefix}.frequencies.preclean.txt.gz" \
-      "~{sample_pop_assignments}" \
-      "~{prefix}.frequencies.txt"
+    "~{prefix}.frequencies.preclean.txt.gz" \
+    "~{sample_pop_assignments}" \
+    "~{prefix}.frequencies.txt"
     ### Create table of freqs, irrespective of ancestry
     #Cut to necessary columns
     idxs=$( sed -n '1p' "~{prefix}.vcf2bed.bed" \
-            | sed 's/\t/\n/g' \
-            | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
-            | paste -s -d\, || true )
+    | sed 's/\t/\n/g' \
+    | awk -v OFS="\t" '{ if ($1=="name" || $1=="SVLEN" || $1=="SVTYPE" || $1=="AC" || $1=="AN" || $1=="CN_NUMBER" || $1=="CN_NONREF_COUNT") print NR }' \
+    | paste -s -d\, || true )
     cut -f"$idxs" "~{prefix}.vcf2bed.bed" > minfreq.subset.bed
     svtype_idx=$( sed -n '1p' minfreq.subset.bed \
-                  | sed 's/\t/\n/g' \
-                  | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
+    | sed 's/\t/\n/g' \
+    | awk -v OFS="\t" '{ if ($1=="SVTYPE") print NR }' || true )
     awk -v OFS="\t" -v sidx="$svtype_idx" '{ if ($sidx=="CNV" || $sidx=="MCNV") print $1, $2, $3, $6, $7; else print $1, $2, $3, $4, $5 }' minfreq.subset.bed \
     | sed 's/^name/\#VID/g' \
     | gzip -c \
@@ -337,63 +307,63 @@ task MergeFreqTables {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 16,
-    disk_gb: 100,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 16,
+                               disk_gb: 100,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
 
     #Get list of batch IDs and batch table paths
     while read batch; do
-      echo "$batch"
-      find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
+    echo "$batch"
+    find ./ -name "$batch.frequencies*txt.gz" | sed -n '1p'
     done < ~{batches_list} | paste - - \
     > input.list
 
     #Make sure all input files have the same number of lines
     while read batch file; do
-      zcat "$file" | wc -l
+    zcat "$file" | wc -l
     done < input.list > nlines.list
     nlines=$( sort nlines.list | uniq | wc -l )
     if [ "$nlines" -gt 1 ]; then
-      echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
-      exit 0
+    echo "AT LEAST ONE INPUT FILE HAS A DIFFERENT NUMBER OF LINES"
+    exit 0
     fi
 
     #Prep files for paste joining
     echo "PREPPING FILES FOR MERGING"
     while read batch file; do
-        #Header
-        zcat "$file" | sed -n '1p' | cut -f1-3
-        #Body
-        zcat "$file" | sed '1d' \
-        | sort -Vk1,1 \
-        | cut -f1-3
+    #Header
+    zcat "$file" | sed -n '1p' | cut -f1-3
+    #Body
+    zcat "$file" | sed '1d' \
+    | sort -Vk1,1 \
+    | cut -f1-3
     done < <( sed -n '1p' input.list ) \
     > header.txt
     while read batch file; do
-      for wrapper in 1; do
-        #Header
-        zcat "$file" | sed -n '1p' \
-        | cut -f4- | sed 's/\t/\n/g' \
-        | awk -v batch="$batch" '{ print $1"."batch }' \
-        | paste -s
-        #Body
-        zcat "$file" | sed '1d' \
-        | sort -Vk1,1 \
-        | cut -f4-
-      done > "$batch.prepped.txt" 
+    for wrapper in 1; do
+    #Header
+    zcat "$file" | sed -n '1p' \
+    | cut -f4- | sed 's/\t/\n/g' \
+    | awk -v batch="$batch" '{ print $1"."batch }' \
+    | paste -s
+    #Body
+    zcat "$file" | sed '1d' \
+    | sort -Vk1,1 \
+    | cut -f4-
+    done > "$batch.prepped.txt"
     done < input.list
 
     #Join files with simple paste
     paste \
-      header.txt \
-      $( awk -v ORS=" " '{ print $1".prepped.txt" }' input.list ) \
+    header.txt \
+    $( awk -v ORS=" " '{ print $1".prepped.txt" }' input.list ) \
     | gzip -c \
     > "~{prefix}.merged_AF_table.txt.gz"
   >>>
@@ -414,31 +384,31 @@ task MergeFreqTables {
 }
 
 
-# Compare 
+# Compare
 task CompareFreqsPrePostMinGQPcrminus {
   input{
-  File af_pcrmins_premingq
-  File AF_postMinGQ_table
-  String prefix
-  String sv_pipeline_docker
-  RuntimeAttr? runtime_attr_override
+    File af_pcrmins_premingq
+    File AF_postMinGQ_table
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 30,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 8,
+                               disk_gb: 30,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/compare_freqs_pre_post_minGQ.PCRMinus_only.R \
-      ~{af_pcrmins_premingq} \
-      ~{AF_postMinGQ_table} \
-      ./ \
-      "~{prefix}."
+    ~{af_pcrmins_premingq} \
+    ~{AF_postMinGQ_table} \
+    ./ \
+    "~{prefix}."
   >>>
 
   output {
@@ -467,24 +437,24 @@ task MakeCorrelationMatrices {
     File batches_list
     String prefix
     String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override  
+    RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 50,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 8,
+                               disk_gb: 50,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/correlate_batches_singlePop.R \
-      ~{batches_list} \
-      ~{freq_table} \
-      "~{pop}" \
-      "~{prefix}.~{pop}"
+    ~{batches_list} \
+    ~{freq_table} \
+    "~{pop}" \
+    "~{prefix}.~{pop}"
   >>>
   output {
     Array[File] corr_matrixes = glob("~{prefix}.~{pop}.*.R2_matrix.txt")
@@ -502,47 +472,6 @@ task MakeCorrelationMatrices {
   }
 }
 
-
-# Generate list of all pairs of batches to be compared
-task MakeBatchPairsList {
-  input{
-    File batches_list
-    String prefix
-    String sv_pipeline_docker
-    RuntimeAttr? runtime_attr_override
-  }
-  RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-  command <<<
-    set -euo pipefail
-    /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/make_batch_pairs_list.R \
-      ~{batches_list} \
-      "~{prefix}.nonredundant_batch_pairs.txt"
-  >>>
-
-  output {
-    File batch_pairs_list = "~{prefix}.nonredundant_batch_pairs.txt"
-  }
-
-  runtime {
-    cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
-    memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
-    disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
-    bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_docker
-    preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
-    maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
-  }
-}
-
-
 # Merge lists of batch effect checks and count total number of times each variant failed
 task MergeVariantFailureLists {
   input{
@@ -552,13 +481,13 @@ task MergeVariantFailureLists {
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 4,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 4,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
@@ -594,32 +523,28 @@ task MergeVariantFailureLists {
 task MakeReclassificationTable {
   input{
     File freq_table
-    File pairwise_fails
     File onevsall_fails
     String prefix
-    Int? pairwise_cutoff
     Int? onevsall_cutoff
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
-    cpu_cores: 1, 
-    mem_gb: 8,
-    disk_gb: 10,
-    boot_disk_gb: 10,
-    preemptible_tries: 3,
-    max_retries: 1
-  }
+                               cpu_cores: 1,
+                               mem_gb: 8,
+                               disk_gb: 10,
+                               boot_disk_gb: 10,
+                               preemptible_tries: 3,
+                               max_retries: 1
+                             }
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
     /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/make_batch_effect_reclassification_table.PCRMinus_only.R \
-      ~{freq_table} \
-      ~{pairwise_fails} \
-      ~{onevsall_fails} \
-      "~{prefix}.batch_effect_reclassification_table.txt" \
-      ~{pairwise_cutoff} \
-      ~{onevsall_cutoff}
+    ~{freq_table} \
+    ~{onevsall_fails} \
+    "~{prefix}.batch_effect_reclassification_table.txt" \
+    ~{onevsall_cutoff}
   >>>
 
   output {
@@ -645,7 +570,7 @@ task ApplyBatchEffectLabels {
     File vcf_idx
     String contig
     File reclassification_table
-    File mingq_prePost_pcrminus_fails
+    File? mingq_prePost_pcrminus_fails
     String prefix
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
@@ -658,12 +583,13 @@ task ApplyBatchEffectLabels {
     preemptible_tries: 3,
     max_retries: 1
   }
+
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
   command <<<
     set -euo pipefail
     tabix -h ~{vcf} ~{contig} \
     | /opt/sv-pipeline/scripts/downstream_analysis_and_filtering/label_batch_effects.PCRMinus_only.py \
-        --unstable-af-pcrminus ~{mingq_prePost_pcrminus_fails} \
+        ~{"--unstable-af-pcrminus " + mingq_prePost_pcrminus_fails} \
         stdin \
         ~{reclassification_table} \
         stdout \
