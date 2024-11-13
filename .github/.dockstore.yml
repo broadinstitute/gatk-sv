@@ -141,7 +141,6 @@ workflows:
     filters:
       branches:
         - main
-        - kj_fix_retained_multiallelic_genos
       tags:
         - /.*/
 
@@ -214,5 +213,15 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: CleanVcf5
+    primaryDescriptorPath: /wdl/CleanVcf5.wdl
+    filters:
+      branches:
+        - main
+        - kj_fix_retained_multiallelic_genos
       tags:
         - /.*/
