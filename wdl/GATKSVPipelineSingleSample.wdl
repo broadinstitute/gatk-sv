@@ -36,9 +36,11 @@ workflow GATKSVPipelineSingleSample {
     # Define raw callers to use
     # Overrides presence of case_*_vcf parameters below
     Boolean use_manta = true
-    Boolean use_melt = true
-    Boolean use_scramble = false
+    Boolean use_melt = false
+    Boolean use_scramble = true
     Boolean use_wham = true
+
+    Boolean? is_dragen_3_7_8
 
     # If GatherSampleEvidence outputs already prepared
     File? case_manta_vcf
@@ -66,10 +68,6 @@ workflow GATKSVPipelineSingleSample {
     String sv_base_mini_docker
     String sv_base_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
-    String sv_pipeline_rdtest_docker
-    String sv_pipeline_base_docker
     String sv_pipeline_qc_docker
     String linux_docker
     String cnmops_docker
@@ -104,7 +102,7 @@ workflow GATKSVPipelineSingleSample {
 
     # Manta inputs
     File manta_region_bed
-    File? manta_region_bed_index
+    File manta_region_bed_index
     Float? manta_jobs_per_cpu
     Int? manta_mem_gb_per_job
 
@@ -122,8 +120,27 @@ workflow GATKSVPipelineSingleSample {
     Float? pct_chimeras
     Float? total_reads
 
+    # Scramble inputs
+    Int? scramble_alignment_score_cutoff
+    Int? scramble_percent_align_cutoff
+    Float? scramble_min_clipped_reads_fraction
+    Int? scramble_part2_threads
+    File? scramble_vcf_script
+
+    # Required if running Scramble but not running Manta
+    File? manta_vcf_input
+    File? manta_vcf_index_input
+
     # Wham inputs
     File wham_include_list_bed_file
+
+    # Reference bwa index files, only required for alignments with Dragen 3.7.8
+    File? reference_bwa_alt
+    File? reference_bwa_amb
+    File? reference_bwa_ann
+    File? reference_bwa_bwt
+    File? reference_bwa_pac
+    File? reference_bwa_sa
 
     # Run GatherSampleEvidence metrics - default is off for single sample pipeline
     Boolean? run_sampleevidence_metrics = false
@@ -444,6 +461,8 @@ workflow GATKSVPipelineSingleSample {
     RuntimeAttr? runtime_override_update_sr_list_fail
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_concat_resolve
+    RuntimeAttr? runtime_override_concat_bothside_pass
+    RuntimeAttr? runtime_override_concat_background_fail
 
     RuntimeAttr? runtime_override_get_se_cutoff
     RuntimeAttr? runtime_override_shard_vcf_cpx
@@ -614,7 +633,14 @@ workflow GATKSVPipelineSingleSample {
         sample_id=sample_id,
         collect_coverage = collect_coverage,
         collect_pesr = collect_pesr,
+        is_dragen_3_7_8 = is_dragen_3_7_8,
         primary_contigs_list=primary_contigs_list,
+        reference_bwa_alt=reference_bwa_alt,
+        reference_bwa_amb=reference_bwa_amb,
+        reference_bwa_ann=reference_bwa_ann,
+        reference_bwa_bwt=reference_bwa_bwt,
+        reference_bwa_pac=reference_bwa_pac,
+        reference_bwa_sa=reference_bwa_sa,
         reference_fasta=reference_fasta,
         reference_index=reference_index,
         reference_dict=reference_dict,
@@ -634,6 +660,14 @@ workflow GATKSVPipelineSingleSample {
         pf_reads_improper_pairs=pf_reads_improper_pairs,
         pct_chimeras=pct_chimeras,
         total_reads=total_reads,
+        mei_bed=mei_bed,
+        scramble_alignment_score_cutoff = scramble_alignment_score_cutoff,
+        scramble_percent_align_cutoff = scramble_percent_align_cutoff,
+        scramble_min_clipped_reads_fraction = scramble_min_clipped_reads_fraction,
+        scramble_part2_threads = scramble_part2_threads,
+        scramble_vcf_script = scramble_vcf_script,
+        manta_vcf_input = manta_vcf_input,
+        manta_vcf_index_input = manta_vcf_index_input,
         wham_include_list_bed_file=wham_include_list_bed_file,
         run_module_metrics = run_sampleevidence_metrics,
         sv_pipeline_docker=sv_pipeline_docker,
@@ -891,7 +925,6 @@ workflow GATKSVPipelineSingleSample {
       pesr_clustering_algorithm=pesr_clustering_algorithm,
       run_module_metrics=run_clusterbatch_metrics,
       linux_docker=linux_docker,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
       baseline_depth_vcf=baseline_depth_vcf_cluster_batch,
       baseline_manta_vcf=baseline_manta_vcf_cluster_batch,
       baseline_wham_vcf=baseline_wham_vcf_cluster_batch,
@@ -1080,7 +1113,6 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics = run_genotypebatch_metrics,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       linux_docker=linux_docker,
       runtime_attr_split_vcf=runtime_attr_split_vcf_genotypebatch,
       runtime_attr_merge_counts=runtime_attr_merge_counts,
@@ -1158,13 +1190,9 @@ workflow GATKSVPipelineSingleSample {
       run_module_metrics = run_makecohortvcf_metrics,
 
       primary_contigs_list=primary_contigs_list,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
 
       linux_docker=linux_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker,
 
@@ -1202,6 +1230,8 @@ workflow GATKSVPipelineSingleSample {
       runtime_override_update_sr_list_fail=runtime_override_update_sr_list_fail,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat_resolve=runtime_override_concat_resolve,
+      runtime_override_concat_bothside_pass=runtime_override_concat_bothside_pass,
+      runtime_override_concat_background_fail=runtime_override_concat_background_fail,
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
       runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
       runtime_override_shard_vids_resolve=runtime_override_shard_vids_resolve,
@@ -1342,7 +1372,7 @@ workflow GATKSVPipelineSingleSample {
       sample_counts = case_counts_file_,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call utils.RunQC as SampleFilterQC {
@@ -1350,14 +1380,14 @@ workflow GATKSVPipelineSingleSample {
       name=batch,
       metrics=SampleFilterMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_base_docker=sv_pipeline_base_docker
+      sv_pipeline_docker=sv_pipeline_docker
   }
 
   call SingleSampleFiltering.SampleQC as FilterSample {
     input:
       vcf=FilterVcfWithReferencePanelCalls.out,
       sample_filtering_qc_file=SampleFilterQC.out,
-      sv_pipeline_base_docker=sv_pipeline_base_docker,
+      sv_pipeline_docker=sv_pipeline_docker,
   }
 
   call annotate.AnnotateVcf {
@@ -1369,9 +1399,9 @@ workflow GATKSVPipelineSingleSample {
         noncoding_bed = noncoding_bed,
         promoter_window = promoter_window,
         max_breakend_as_cnv_length = max_breakend_as_cnv_length,
-        ref_bed = external_af_ref_bed,
-        ref_prefix = external_af_ref_bed_prefix,
-        population = external_af_population,
+        external_af_ref_bed = external_af_ref_bed,
+        external_af_ref_prefix = external_af_ref_bed_prefix,
+        external_af_population = external_af_population,
         use_hail = false,
         sv_per_shard = annotation_sv_per_shard,
         sv_base_mini_docker = sv_base_mini_docker,
@@ -1413,7 +1443,7 @@ workflow GATKSVPipelineSingleSample {
       non_genotyped_unique_depth_calls_vcf = GetUniqueNonGenotypedDepthCalls.out,
       contig_list = primary_contigs_list,
       linux_docker = linux_docker,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   call utils.RunQC as SingleSampleQC {
@@ -1421,7 +1451,7 @@ workflow GATKSVPipelineSingleSample {
       name = batch,
       metrics = SingleSampleMetrics.metrics_file,
       qc_definitions = qc_definitions,
-      sv_pipeline_base_docker = sv_pipeline_base_docker
+      sv_pipeline_docker = sv_pipeline_docker
   }
 
   output {

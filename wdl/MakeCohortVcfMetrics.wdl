@@ -20,7 +20,7 @@ workflow MakeCohortVcfMetrics {
 
     File contig_list
     String linux_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     String? sv_base_mini_docker  # required if not providing samples array
 
     RuntimeAttr? runtime_attr_sample_ids_from_vcf
@@ -49,7 +49,7 @@ workflow MakeCohortVcfMetrics {
         prefix = "cluster",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
@@ -63,7 +63,7 @@ workflow MakeCohortVcfMetrics {
         prefix = "cpx_resolve",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
@@ -77,7 +77,7 @@ workflow MakeCohortVcfMetrics {
         prefix = "cpx_genotype",
         types = "DEL,DUP,INS,INV,CTX,CPX,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_metrics
     }
   }
@@ -90,7 +90,7 @@ workflow MakeCohortVcfMetrics {
       prefix = "cleaned",
       types = "DEL,DUP,INS,INV,CTX,CPX,BND,CNV",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_vcf_metrics
   }
 

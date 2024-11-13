@@ -1,5 +1,6 @@
 version 1.0
 
+import "ReshardVcf.wdl" as Reshard
 import "ResolveCpxSv.wdl" as ResolveComplexContig
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
@@ -28,7 +29,6 @@ workflow ResolveComplexVariants {
 
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
 
     # overrides for local tasks
     RuntimeAttr? runtime_override_update_sr_list_pass
@@ -38,6 +38,8 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_breakpoint_overlap_filter
     RuntimeAttr? runtime_override_subset_inversions
     RuntimeAttr? runtime_override_concat
+    RuntimeAttr? runtime_override_concat_bothside_pass
+    RuntimeAttr? runtime_override_concat_background_fail
 
     # overrides for ResolveComplexContig
     RuntimeAttr? runtime_override_get_se_cutoff
@@ -63,6 +65,9 @@ workflow ResolveComplexVariants {
     RuntimeAttr? runtime_override_preconcat_inv
     RuntimeAttr? runtime_override_hail_merge_inv
     RuntimeAttr? runtime_override_fix_header_inv
+
+    # overrides for ReshardVcf
+    RuntimeAttr? runtime_override_reshard
   }
 
   #Scatter per chromosome
@@ -101,7 +106,6 @@ workflow ResolveComplexVariants {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff_inv,
         runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx_inv,
@@ -147,7 +151,6 @@ workflow ResolveComplexVariants {
         use_hail=use_hail,
         gcs_project=gcs_project,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=sv_pipeline_hail_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
         runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
@@ -206,6 +209,33 @@ workflow ResolveComplexVariants {
     }
   }
 
+  call Reshard.ReshardVcf {
+    input:
+      vcfs=RenameVariants.renamed_vcf,
+      contig_list=contig_list,
+      prefix="~{cohort_name}.reshard_vcf",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_override_reshard=runtime_override_reshard
+  }
+
+  # Due to vcf resharding, these contig-sharded lists are no longer valid
+  # Here we combine variant list arrays into single genome-wide lists
+  # This is faster than reshuffling and shouldn't have much performance impact in CleanVcf1a
+  call MiniTasks.CatUncompressedFiles as ConcatBothsidePass {
+    input:
+      shards=UpdateBothsidePass.updated_list,
+      outfile_name="~{cohort_name}.all.sr_bothside_pass.updated3.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_bothside_pass
+  }
+  call MiniTasks.CatUncompressedFiles as ConcatBackgroundFail {
+    input:
+      shards=UpdateBackgroundFail.updated_list,
+      outfile_name="~{cohort_name}.all.sr_background_fail.updated3.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_concat_background_fail
+  }
+
   #Merge resolved vcfs for QC
   if (merge_vcfs) {
     call MiniTasks.ConcatVcfs {
@@ -221,10 +251,10 @@ workflow ResolveComplexVariants {
 
   #Final outputs
   output {
-    Array[File] complex_resolve_vcfs = RenameVariants.renamed_vcf
-    Array[File] complex_resolve_vcf_indexes = RenameVariants.renamed_vcf_index
-    Array[File] complex_resolve_bothside_pass_lists = UpdateBothsidePass.updated_list
-    Array[File] complex_resolve_background_fail_lists = UpdateBackgroundFail.updated_list
+    Array[File] complex_resolve_vcfs = ReshardVcf.resharded_vcfs
+    Array[File] complex_resolve_vcf_indexes = ReshardVcf.resharded_vcf_indexes
+    File complex_resolve_bothside_pass_list = ConcatBothsidePass.outfile
+    File complex_resolve_background_fail_list = ConcatBackgroundFail.outfile
     Array[File] breakpoint_overlap_dropped_record_vcfs = BreakpointOverlap.dropped_record_vcf
     Array[File] breakpoint_overlap_dropped_record_vcf_indexes = BreakpointOverlap.dropped_record_vcf_index
     File? complex_resolve_merged_vcf = ConcatVcfs.concat_vcf

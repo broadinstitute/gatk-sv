@@ -28,22 +28,12 @@ task SplitVariants {
     Array[File] ins_beds = glob("ins.*")
   }
   command <<<
-
     set -euo pipefail
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2>=5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - gt5kb.
-    svtk vcf2bed ~{vcf} stdout \
-      | awk -v OFS="\t" '(($5=="DEL" || $5=="DUP") && $3-$2<5000) {print $1, $2, $3, $4, $6, $5}' \
-      | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - lt5kb.
-    if [ ~{generate_bca} == "true" ]; then
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5!="DEL" && $5!="DUP" && $5!="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - bca.
-      svtk vcf2bed ~{vcf} stdout \
-        | awk -v OFS="\t" '($5=="INS") {print $1, $2, $3, $4, $6, $5}' \
-        | split --additional-suffix ".bed" -l ~{n_per_split} -a 6 - ins.
-    fi
+    svtk vcf2bed ~{vcf} bed_file.bed
+    python /opt/sv-pipeline/04_variant_resolution/scripts/split_variants.py \
+      --bed bed_file.bed \
+      ~{"--n " + n_per_split} \
+      ~{if generate_bca then "--bca" else ""}
 
   >>>
   runtime {
@@ -307,7 +297,7 @@ task RDTestGenotype {
     Int n_bins
     String prefix
     Boolean generate_melted_genotypes
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
 
@@ -354,9 +344,8 @@ task RDTestGenotype {
     else
       touch local.RD.txt
       bgzip local.RD.txt
+      tabix -p bed local.RD.txt.gz
     fi
-
-    tabix -p bed local.RD.txt.gz
 
     Rscript /opt/RdTest/RdTest.R \
       -b ~{bed} \
@@ -382,7 +371,7 @@ task RDTestGenotype {
     memory: mem_gb + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }
@@ -445,9 +434,9 @@ task CountPE {
     else
       touch local.PE.txt
       bgzip local.PE.txt
+      tabix -0 -s1 -b2 -e2 local.PE.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.PE.txt.gz
     svtk count-pe -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.PE.txt.gz ~{prefix}.pe_counts.txt
     gzip ~{prefix}.pe_counts.txt
 
@@ -521,9 +510,9 @@ task CountSR {
     else
       touch local.SR.txt
       bgzip local.SR.txt
+      tabix -0 -s1 -b2 -e2 local.SR.txt.gz
     fi
 
-    tabix -s1 -b2 -e2 local.SR.txt.gz
     svtk count-sr -s ~{write_lines(samples)} --medianfile ~{medianfile} ~{vcf} local.SR.txt.gz ~{prefix}.sr_counts.txt
     /opt/sv-pipeline/04_variant_resolution/scripts/sum_SR.sh ~{prefix}.sr_counts.txt ~{prefix}.sr_sum.txt.gz
     gzip ~{prefix}.sr_counts.txt

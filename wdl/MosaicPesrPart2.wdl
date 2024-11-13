@@ -14,7 +14,6 @@ workflow Mosaic{
     File fam_file
     File median_file
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
   }
   call GetPotential{
     input:
@@ -33,7 +32,7 @@ workflow Mosaic{
       median_file=median_file,
       fam_file=fam_file,
       prefix=name,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker
+      sv_pipeline_docker=sv_pipeline_docker
   }
   output{
     File potentialmosaic = GetPotential.rare
@@ -97,7 +96,7 @@ task rdtest {
     File median_file
     File fam_file
     String prefix
-    String sv_pipeline_rdtest_docker
+    String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
   RuntimeAttr default_attr = object {
@@ -138,7 +137,7 @@ task rdtest {
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
     disks: "local-disk " + select_first([runtime_attr.disk_gb, default_attr.disk_gb]) + " HDD"
     bootDiskSizeGb: select_first([runtime_attr.boot_disk_gb, default_attr.boot_disk_gb])
-    docker: sv_pipeline_rdtest_docker
+    docker: sv_pipeline_docker
     preemptible: select_first([runtime_attr.preemptible_tries, default_attr.preemptible_tries])
     maxRetries: select_first([runtime_attr.max_retries, default_attr.max_retries])
   }

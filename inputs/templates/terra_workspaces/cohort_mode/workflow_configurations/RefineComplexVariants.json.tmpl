@@ -1,0 +1,17 @@
+{
+  "RefineComplexVariants.vcf": "${this.cleaned_vcf}",
+  "RefineComplexVariants.prefix": "${this.sample_set_set_id}",
+
+  "RefineComplexVariants.batch_name_list": "${this.sample_sets.sample_set_id}",
+  "RefineComplexVariants.batch_sample_lists": "${this.sample_sets.filtered_batch_samples_file}",
+  "RefineComplexVariants.PE_metrics": "${this.sample_sets.merged_PE}",
+  "RefineComplexVariants.PE_metrics_indexes": "${this.sample_sets.merged_PE_index}",
+  "RefineComplexVariants.Depth_DEL_beds": "${this.sample_sets.merged_dels}",
+  "RefineComplexVariants.Depth_DUP_beds": "${this.sample_sets.merged_dups}",
+
+  "RefineComplexVariants.n_per_split": "15000",
+
+  "RefineComplexVariants.sv_base_mini_docker": "${workspace.sv_base_mini_docker}",
+  "RefineComplexVariants.sv_pipeline_docker": "${workspace.sv_pipeline_docker}",
+  "RefineComplexVariants.linux_docker": "${workspace.linux_docker}"
+}

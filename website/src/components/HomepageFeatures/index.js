@@ -1,64 +1,157 @@
 import React from 'react';
 import clsx from 'clsx';
 import styles from './styles.module.css';
+import useBaseUrl from '@docusaurus/useBaseUrl';
+import Link from '@docusaurus/Link';
+import FeatureGallery from './featureGallery.js';
+import WholeRowFeature from './wholeRowFeature.js';
+import Feature from './feature.js';
 
-const FeatureList = [
+const accessibleFeatures = [
   {
-    title: 'Cloud-Native',
-    Svg: require('@site/static/img/undraw_docusaurus_mountain.svg').default,
+    title: <>Terra integration</>,
     description: (
       <>
-        Built and optimized for the Google Cloud Platform
+        Run your data with pre-configured workspaces on the secure
+        <a href="https://terra.bio" target="_blank" rel="noopener noreferrer"> Terra platform </a>
+      </>
+    ),
+    buttons: [
+      {
+        buttonLink: 'https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/GATK-Structural-Variants-Joint-Calling',
+        buttonText: 'Joint Calling Workspace'
+      },
+      {
+        buttonLink: 'https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample',
+        buttonText: 'Single-Sample Workspace'
+      }
+    ],
+    colSize: "col--12",
+  }
+];
+
+const featuredProjects = {
+  header: "Featured Projects",
+  images: [
+    {
+      src: 'img/logo/gnomad.png',
+      link: 'https://gnomad.broadinstitute.org/news/2023-11-v4-structural-variants/',
+      alt: 'gnomAD'
+    },
+    {
+      src: 'img/logo/allOfUs.png',
+      link: 'https://support.researchallofus.org/hc/en-us/articles/27496716922900-All-of-Us-Short-Read-Structural-Variant-Quality-Report',
+      alt: 'all-of-us'
+    },
+    {
+      src: 'img/logo/hgsvc.png',
+      link: 'https://www.hgsvc.org/',
+      alt: 'HGSVC'
+    },
+    {
+      src: 'img/logo/1kgp.png',
+      link: 'https://www.internationalgenome.org/data-portal/data-collection/30x-grch38',
+      alt: '1000-genomes-project'
+    }
+  ],
+  //description: "..."
+};
+
+const organizations = {
+  header: "Organizations",
+  images: [
+    {
+      src: "img/logo/broad.png",
+      link: "https://www.broadinstitute.org/",
+      alt: "Broad Institute"
+    },
+    {
+      src: "img/logo/talkowskiLab.png",
+      link: "https://talkowski.mgh.harvard.edu/",
+      alt: "Talkowski Lab"
+    },
+    {
+      src: "img/logo/cgm.png",
+      link: "https://cgm.massgeneral.org/",
+      alt: "Center for Genomic Medicine"
+    }
+  ]
+};
+
+const characteristics = [
+  {
+    title: 'Population-scale capabilities',
+    //Svg: require('@site/static/img/....svg').default,
+    description: (
+      <>
+        Used for SV discovery in flagship research studies including
+        the Genome Aggregation Project (gnomAD) and All of Us.
       </>
     ),
   },
   {
-    title: 'Scalable',
-    Svg: require('@site/static/img/undraw_docusaurus_tree.svg').default,
+    title: 'Sensitive and accurate',
+    //Svg: require('@site/static/img/....svg').default,
     description: (
       <>
-        Used to produce high-quality SV call sets for large
-        scale sequencing initiatives such as the Genome
-        Aggregation Project (gnomAD)
+        Ensemble calling with multiple SV discovery tools combined with
+        joint genotyping maximize power, and ML-based variant adjudication filters poor quality variants.
       </>
     ),
   },
   {
-    title: 'Accurate',
-    Svg: require('@site/static/img/undraw_docusaurus_react.svg').default,
+    title: 'Cloud-native',
+    //Svg: require('@site/static/img/....svg').default,
     description: (
       <>
-        Analyzes SV calls from multiple algorithms and evidence
-        signatures to achieve high sensitivity and precision
+        Built for the Terra genomics platform, enabling scalability, collaboration,
+        and reproducibility in a secure environment.
       </>
     ),
   },
 ];
 
-function Feature({Svg, title, description}) {
-  return (
-    <div className={clsx('col col--4')}>
-      <div className="text--center">
-        <Svg className={styles.featureSvg} role="img" />
-      </div>
-      <div className="text--center padding-horiz--md">
-        <h3>{title}</h3>
-        <p>{description}</p>
-      </div>
-    </div>
-  );
-}
-
 export default function HomepageFeatures() {
   return (
-    <section className={styles.features}>
-      <div className="container">
-        <div className="row">
-          {FeatureList.map((props, idx) => (
-            <Feature key={idx} {...props} />
-          ))}
+    <>
+      {accessibleFeatures && accessibleFeatures.length > 0 && (
+        <section className={clsx(styles.features)}>
+          <div className="container">
+            <div className={clsx('row', 'single-feature-row')}>
+              {accessibleFeatures.map((props, idx) => (
+                <WholeRowFeature
+                  key={idx}
+                  {...props}
+                  contentAlignment="center"
+                  imageAlignment="center"
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className={clsx(styles.featuresAlt)}>
+        <div className="container">
+          <div className="row">
+            {characteristics.map((props, idx) => (
+              <Feature key={idx} {...props} />
+            ))}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section className={clsx(styles.features, styles.features)}>
+        <div className="container">
+          <FeatureGallery {...featuredProjects} />
+        </div>
+      </section>
+
+      <section className={clsx(styles.featuresAlt)}>
+        <div className="container">
+          <FeatureGallery {...organizations} />
+        </div>
+      </section>
+    </>
   );
 }

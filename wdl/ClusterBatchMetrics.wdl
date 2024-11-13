@@ -22,7 +22,7 @@ workflow ClusterBatchMetrics {
 
     File contig_list
     String? sv_base_mini_docker  # required if not providing samples array
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
     String linux_docker
 
     RuntimeAttr? runtime_attr_sample_ids_from_vcf
@@ -51,7 +51,7 @@ workflow ClusterBatchMetrics {
       prefix = "depth_clustered",
       types = "DEL,DUP",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_depth_metrics
   }
   if (defined(manta_vcf)) {
@@ -63,7 +63,7 @@ workflow ClusterBatchMetrics {
         prefix = "manta_clustered",
         types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_manta_metrics
     }
   }
@@ -76,7 +76,7 @@ workflow ClusterBatchMetrics {
         prefix = "melt_clustered",
         types = "INS",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_melt_metrics
     }
   }
@@ -89,7 +89,7 @@ workflow ClusterBatchMetrics {
         prefix = "scramble_clustered",
         types = "INS",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_scramble_metrics
     }
   }
@@ -102,7 +102,7 @@ workflow ClusterBatchMetrics {
         prefix = "wham_clustered",
         types = "DEL,DUP",
         contig_list = contig_list,
-        sv_pipeline_base_docker = sv_pipeline_base_docker,
+        sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_wham_metrics
     }
   }

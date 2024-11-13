@@ -129,7 +129,6 @@ workflow GatherBatchEvidence {
     # Module metrics parameters
     # Run module metrics workflow at the end - off by default for GatherBatchEvidence because of runtime/expense
     Boolean? run_module_metrics
-    String? sv_pipeline_base_docker  # required if run_module_metrics = true
     File? primary_contigs_list  # required if run_module_metrics = true
 
     # baseline files are optional for metrics workflow
@@ -460,7 +459,7 @@ workflow GatherBatchEvidence {
         baseline_merged_dups = baseline_merged_dups,
         baseline_median_cov = baseline_median_cov,
         contig_list = select_first([primary_contigs_list]),
-        sv_pipeline_base_docker = select_first([sv_pipeline_base_docker]),
+        sv_pipeline_docker = sv_pipeline_docker,
         linux_docker = linux_docker
     }
   }

@@ -25,15 +25,14 @@ workflow AnnotateVcf {
     File? allosomes_list
     Int   sv_per_shard
 
-    File? ref_bed              # File with external allele frequencies
-    String? ref_prefix         # prefix name for external AF call set (required if ref_bed set)
-    Array[String]? population  # populations to annotate external AF for (required if ref_bed set)
+    File? external_af_ref_bed              # File with external allele frequencies
+    String? external_af_ref_prefix         # prefix name for external AF call set (required if ref_bed set)
+    Array[String]? external_af_population  # populations to annotate external AF for (required if ref_bed set)
 
     Boolean use_hail
     String? gcs_project
 
     String sv_pipeline_docker
-    String? sv_pipeline_hail_docker
     String sv_base_mini_docker
     String gatk_docker
 
@@ -74,9 +73,9 @@ workflow AnnotateVcf {
         sv_per_shard = sv_per_shard,
         allosomes_list = allosomes_list,
 
-        ref_bed = ref_bed,
-        ref_prefix = ref_prefix,
-        population = population,
+        ref_bed = external_af_ref_bed,
+        ref_prefix = external_af_ref_prefix,
+        population = external_af_population,
 
         use_hail = use_hail,
         gcs_project = gcs_project,
@@ -84,7 +83,6 @@ workflow AnnotateVcf {
         gatk_docker = gatk_docker,
         sv_pipeline_docker = sv_pipeline_docker,
         sv_base_mini_docker = sv_base_mini_docker,
-        sv_pipeline_hail_docker = sv_pipeline_hail_docker,
 
         runtime_attr_svannotate = runtime_attr_svannotate,
         runtime_attr_scatter_vcf = runtime_attr_scatter_vcf,
@@ -110,7 +108,6 @@ workflow AnnotateVcf {
         gcs_project=gcs_project,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        sv_pipeline_hail_docker=select_first([sv_pipeline_hail_docker]),
         runtime_override_preconcat=runtime_attr_preconcat,
         runtime_override_hail_merge=runtime_attr_hail_merge,
         runtime_override_fix_header=runtime_attr_fix_header

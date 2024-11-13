@@ -21,7 +21,7 @@ workflow GenotypeBatchMetrics {
 
     File contig_list
     String linux_docker
-    String sv_pipeline_base_docker
+    String sv_pipeline_docker
 
     RuntimeAttr? runtime_attr_pesr_metrics
     RuntimeAttr? runtime_attr_depth_metrics
@@ -38,7 +38,7 @@ workflow GenotypeBatchMetrics {
       prefix = "genotyped_pesr",
       types = "DEL,DUP,INS,INV,BND",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_pesr_metrics
   }
 
@@ -50,7 +50,7 @@ workflow GenotypeBatchMetrics {
       prefix = "genotyped_depth",
       types = "DEL,DUP",
       contig_list = contig_list,
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_depth_metrics
   }
 
@@ -58,7 +58,7 @@ workflow GenotypeBatchMetrics {
     input:
       cutoffs = cutoffs_pesr_pesr,
       name = "pesr_pesr",
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_metrics
   }
 
@@ -66,7 +66,7 @@ workflow GenotypeBatchMetrics {
     input:
       cutoffs = cutoffs_pesr_depth,
       name = "pesr_depth",
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_metrics
   }
 
@@ -74,7 +74,7 @@ workflow GenotypeBatchMetrics {
     input:
       cutoffs = cutoffs_depth_pesr,
       name = "depth_pesr",
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_metrics
   }
 
@@ -82,7 +82,7 @@ workflow GenotypeBatchMetrics {
     input:
       cutoffs = cutoffs_depth_depth,
       name = "depth_depth",
-      sv_pipeline_base_docker = sv_pipeline_base_docker,
+      sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_override = runtime_attr_cutoff_metrics
   }
 

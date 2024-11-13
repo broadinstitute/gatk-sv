@@ -82,7 +82,7 @@ class SRTest(PESRTest):
         # Clean up columns
         results['name'] = record.id
         results['bg_frac'] = results.called / \
-            (results.background + results.called)
+                             (results.background + results.called)
         results['bg_frac'] = results.bg_frac.fillna(0)
         cols = 'name coord pos log_pval called background bg_frac'.split()
 
@@ -120,7 +120,8 @@ class SRTest(PESRTest):
         """Load pandas DataFrame from tabixfile"""
 
         if pos > 0:
-            region = '{0}:{1}-{1}'.format(chrom, pos)
+            # Add 1 because evidence is stored/indexed with 0-based coordinates
+            region = '{0}:{1}-{1}'.format(chrom, pos + 1)
             try:
                 lines = self.countfile.fetch(region)
             except ValueError:

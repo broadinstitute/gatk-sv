@@ -78,9 +78,9 @@ def reformat(bed_in, bed_out, contig, sample_to_extract):
                                  fields[columns["name"]], svtype_write]) + "\n")
 
     if not found_contig:
-        raise ValueError(f"Could not find any records for contig {contig} in the provided BED file")
+        logging.warning(f"Could not find any records for contig {contig} in the provided BED file")
     if sample_to_extract is not None and "samples" in columns and not found_sample:
-        raise ValueError(f"Could not find any records for sample {sample_to_extract} in the provided BED file")
+        logging.warning(f"Could not find any records for sample {sample_to_extract} in the provided BED file")
 
 
 def main():
