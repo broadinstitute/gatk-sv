@@ -141,6 +141,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_fix_retained_multiallelic_genos
       tags:
         - /.*/
 
