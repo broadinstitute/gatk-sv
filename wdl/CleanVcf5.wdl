@@ -247,7 +247,7 @@ task Polish {
                 --exclude 'ID=@ids_to_remove.list' \
                 --output-type z -o polished.need_reheader.vcf.gz --threads ~{threads}
 
-        # replace multiallelic genotypes for CNVs with a homref call
+        # replace multiallelic genotypes for CNVs with homref
         bcftools +setGT polished.need_reheader.vcf.gz \
             -- -t . \
             -n '1/1' \
