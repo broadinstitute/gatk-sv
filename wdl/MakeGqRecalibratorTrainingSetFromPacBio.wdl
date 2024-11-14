@@ -12,6 +12,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     # SVConcordance should be run first if the training set is a proper subset of the cohort
     # This can be either a single whole-genome vcf or multiple vcf shards.
     # Assumes all vcfs have indexes, i.e. at {VCF_PATH}.tbi
+    # Test comment
     Array[File] vcfs
 
     File training_sample_ids  # Sample IDs with PacBio or array data
