@@ -249,9 +249,9 @@ task Polish {
 
         # replace multiallelic genotypes for CNVs with homref
         bcftools +setGT polished.need_reheader.vcf.gz -- \
-            --target-gt q \
-            --new-gt c:'1/1' \
-            --include '(INFO/SVTYPE="DEL" || INFO/SVTYPE="DUP") && (GT~"[2-9]" || GT~"[1-9][0-9]+") && FMT/RD_CN>3' > polished.need_reheader.regenotyped.vcf
+            -t q \
+            -n c:'1/1' \
+            -i '(INFO/SVTYPE="DEL" | INFO/SVTYPE="DUP") & (FMT/GT~"[2-9]" | FMT/GT~"[1-9][0-9]+") & FMT/RD_CN>3' > polished.need_reheader.regenotyped.vcf
         
         bgzip polished.need_reheader.regenotyped.vcf
         
