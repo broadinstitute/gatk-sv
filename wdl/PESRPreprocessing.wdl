@@ -10,6 +10,7 @@ workflow PreprocessPESR {
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
+    Array[File]? dragen_vcfs       # Dragen VCF
     File contigs          # .fai file of included contigs
     Int min_svsize        # Minimum SV length to include
     String batch
@@ -17,8 +18,8 @@ workflow PreprocessPESR {
     RuntimeAttr? runtime_attr
   }
 
-  Array[String] algorithms = ["manta", "melt", "scramble", "wham"]
-  Array[Array[File]?] vcfs = [manta_vcfs, melt_vcfs, scramble_vcfs, wham_vcfs]
+  Array[String] algorithms = ["manta", "melt", "scramble", "wham", "dragen"]
+  Array[Array[File]?] vcfs = [manta_vcfs, melt_vcfs, scramble_vcfs, wham_vcfs, dragen_vcfs]
 
   scatter (i in range(length(algorithms))) {
     if (defined(vcfs[i]) && (length(select_first([vcfs[i]])) > 0)) {
@@ -41,6 +42,7 @@ workflow PreprocessPESR {
     File? std_melt_vcf_tar = StandardizeVCFs.out[1]
     File? std_scramble_vcf_tar = StandardizeVCFs.out[2]
     File? std_wham_vcf_tar = StandardizeVCFs.out[3]
+    File? std_dragen_vcf_tar = StandardizeVCFs.out[4]
   }
 }
 

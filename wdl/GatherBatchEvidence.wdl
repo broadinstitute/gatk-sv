@@ -112,6 +112,7 @@ workflow GatherBatchEvidence {
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
+    Array[File]? dragen_vcfs         # Dragen VCF
     Int min_svsize                  # Minimum SV length to include
 
     # CNMops files
@@ -401,6 +402,7 @@ workflow GatherBatchEvidence {
       melt_vcfs = melt_vcfs,
       scramble_vcfs = scramble_vcfs,
       wham_vcfs = wham_vcfs,
+      dragen_vcfs = dragen_vcfs,
       contigs = primary_contigs_fai,
       min_svsize = min_svsize,
       batch = batch,

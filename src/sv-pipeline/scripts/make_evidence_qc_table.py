@@ -130,13 +130,15 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     return outlier_df
 
 
-def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_scramble_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
+def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, 
+                     outlier_scramble_df: pd.DataFrame, outlier_dragen_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
     Args:
         outlier_manta_df: Outliers determined in EvidenceQC for Manta.
         outlier_melt_df: Outliers determined in EvidenceQC for MELT.
         outlier_wham_df: Outliers determined in EvidenceQC for Wham.
-        outlier_scramble_df: Outliers determined in EvidenceQC for Scramble
+        outlier_scramble_df: Outliers determined in EvidenceQC for Scramble.
+        outlier_dragen_df: Outliers determined in EvidenceQC for Dragen.
         outlier_type: high or low. Determined in EvidenceQC for each of the three callers.
     Returns:
         The total number of times that a sample appears as an outlier
@@ -158,8 +160,12 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     col_name = get_col_name("scramble", outlier_type)
     dict_scramble = dict(zip(outlier_scramble_df[ID_COL], outlier_scramble_df[col_name]))
 
+    # Dragen:
+    col_name = get_col_name("dragen", outlier_type)
+    dict_dragen = dict(zip(outlier_dragen_df[ID_COL], outlier_dragen_df[col_name]))
+
     # merging all the dictionaries
-    outlier_dicts = [dict_manta, dict_melt, dict_wham, dict_scramble]
+    outlier_dicts = [dict_manta, dict_melt, dict_wham, dict_scramble, dict_dragen]
     merged_dicts = Counter()
     for counted in outlier_dicts:
         merged_dicts.update(counted)
@@ -182,10 +188,12 @@ def merge_evidence_qc_table(
         filename_high_melt: str,
         filename_high_wham: str,
         filename_high_scramble: str,
+        filename_high_dragen: str,
         filename_low_manta: str,
         filename_low_melt: str,
         filename_low_wham: str,
         filename_low_scramble: str,
+        filename_low_dragen: str,
         filename_melt_insert_size: str,
         output_prefix: str) -> None:
     """
@@ -201,12 +209,16 @@ def merge_evidence_qc_table(
     df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
     df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
     df_scramble_high_outlier = read_outlier(filename_high_scramble, get_col_name("scramble", "high"))
-    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, "high")
+    df_dragen_high_outlier = read_outlier(filename_high_dragen, get_col_name("dragen", "high"))
+    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, 
+                                              df_scramble_high_outlier, df_dragen_high_outlier, "high")
     df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_scramble_low_outlier = read_outlier(filename_low_scramble, get_col_name("scramble", "low"))
-    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, "low")
+    df_dragen_low_outlier = read_outlier(filename_low_dragen, get_col_name("dragen", "low"))
+    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, 
+                                             df_scramble_low_outlier, df_dragen_low_outlier, "low")
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
     # outlier column names
@@ -216,8 +228,9 @@ def merge_evidence_qc_table(
 
     # all data frames
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
-           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_total_high_outliers,
-           df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_total_low_outliers,
+           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, 
+           df_dragen_high_outlier, df_total_high_outliers, df_manta_low_outlier, df_melt_low_outlier, 
+           df_wham_low_outlier, df_scramble_low_outlier, df_dragen_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
     for df in dfs:
         df[ID_COL] = df[ID_COL].astype(object)
@@ -262,6 +275,14 @@ def main():
     parser.add_argument(
         "-w", "--wham-qc-outlier-high-filename",
         help="Sets the filename containing Wham QC outlier high.")
+    
+    parser.add_argument(
+        "-t", "--scramble-qc-outlier-high-filename",
+        help="Sets the filename containing Scramble QC outlier high.")
+    
+    parser.add_argument(
+        "-i", "--dragen-qc-outlier-high-filename",
+        help="Sets the filename containing Dragen QC outlier high.")
 
     parser.add_argument(
         "-a", "--manta-qc-outlier-low-filename",
@@ -278,10 +299,10 @@ def main():
     parser.add_argument(
         "-c", "--scramble-qc-outlier-low-filename",
         help="Sets the filename containing Scramble QC outlier low.")
-
+    
     parser.add_argument(
-        "-t", "--scramble-qc-outlier-high-filename",
-        help="Sets the filename containing Scramble QC outlier high.")
+        "-j", "--dragen-qc-outlier-low-filename",
+        help="Sets the filename containing Dragen QC outlier low.")
 
     parser.add_argument(
         "-m", "--melt-insert-size-filename",
@@ -307,10 +328,12 @@ def main():
         args.melt_qc_outlier_high_filename,
         args.wham_qc_outlier_high_filename,
         args.scramble_qc_outlier_high_filename,
+        args.dragen_qc_outlier_high_filename,
         args.manta_qc_outlier_low_filename,
         args.melt_qc_outlier_low_filename,
         args.wham_qc_outlier_low_filename,
         args.scramble_qc_outlier_low_filename,
+        args.dragen_qc_outlier_low_filename,
         args.melt_insert_size_filename,
         args.output_prefix)
 
