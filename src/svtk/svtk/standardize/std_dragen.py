@@ -7,7 +7,6 @@ Standardize a Dragen record.
 """
 
 
-from collections import deque
 from svtk.utils import is_smaller_chrom, parse_bnd_pos, parse_bnd_strands
 from .standardize import VCFStandardizer
 

@@ -130,7 +130,7 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     return outlier_df
 
 
-def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, 
+def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame,
                      outlier_scramble_df: pd.DataFrame, outlier_dragen_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
     Args:
@@ -210,14 +210,14 @@ def merge_evidence_qc_table(
     df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
     df_scramble_high_outlier = read_outlier(filename_high_scramble, get_col_name("scramble", "high"))
     df_dragen_high_outlier = read_outlier(filename_high_dragen, get_col_name("dragen", "high"))
-    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, 
+    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier,
                                               df_scramble_high_outlier, df_dragen_high_outlier, "high")
     df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
     df_scramble_low_outlier = read_outlier(filename_low_scramble, get_col_name("scramble", "low"))
     df_dragen_low_outlier = read_outlier(filename_low_dragen, get_col_name("dragen", "low"))
-    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, 
+    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier,
                                              df_scramble_low_outlier, df_dragen_low_outlier, "low")
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
@@ -228,8 +228,8 @@ def merge_evidence_qc_table(
 
     # all data frames
     dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
-           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, 
-           df_dragen_high_outlier, df_total_high_outliers, df_manta_low_outlier, df_melt_low_outlier, 
+           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier,
+           df_dragen_high_outlier, df_total_high_outliers, df_manta_low_outlier, df_melt_low_outlier,
            df_wham_low_outlier, df_scramble_low_outlier, df_dragen_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
     for df in dfs:
@@ -275,11 +275,11 @@ def main():
     parser.add_argument(
         "-w", "--wham-qc-outlier-high-filename",
         help="Sets the filename containing Wham QC outlier high.")
-    
+
     parser.add_argument(
         "-t", "--scramble-qc-outlier-high-filename",
         help="Sets the filename containing Scramble QC outlier high.")
-    
+
     parser.add_argument(
         "-i", "--dragen-qc-outlier-high-filename",
         help="Sets the filename containing Dragen QC outlier high.")
@@ -299,7 +299,7 @@ def main():
     parser.add_argument(
         "-c", "--scramble-qc-outlier-low-filename",
         help="Sets the filename containing Scramble QC outlier low.")
-    
+
     parser.add_argument(
         "-j", "--dragen-qc-outlier-low-filename",
         help="Sets the filename containing Dragen QC outlier low.")
