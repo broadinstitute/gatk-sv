@@ -41,13 +41,11 @@ class DragenStandardizer(VCFStandardizer):
 
         # Strand parsing
         if svtype == 'BND':
-            # Need to parse BND ALT
             strands = parse_bnd_strands(raw_rec.alts[0])
             chr2, end = parse_bnd_pos(raw_rec.alts[0])
             std_rec.info['CHR2'] = chr2
             std_rec.stop = end
             if not is_smaller_chrom(std_rec.chrom, chr2):
-                # Swap chrom and pos
                 std_rec.chrom, std_rec.info['CHR2'] = chr2, std_rec.chrom
                 std_rec.pos, std_rec.stop = end, std_rec.pos
         elif svtype == 'DEL':
@@ -55,22 +53,20 @@ class DragenStandardizer(VCFStandardizer):
         elif svtype == 'DUP':
             strands = '-+'
         elif svtype == 'INS':
-            # Treat 'DUPSVLEN' as DUP rather than INS
-            if 'DUPSVLEN' in raw_rec.info:
+            if 'DUPSVLEN' in raw_rec.info: # Treat 'DUPSVLEN' as DUP
                 svtype = 'DUP'
                 std_rec.info['SVTYPE'] = svtype
                 strands = '-+'
             else:
                 strands = '+-'
-        else:
-            # Default strands
+        else: # Default strands
             strands = '+-'
 
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
         std_rec.info['STRANDS'] = strands
 
-        # SVLEN
+        # SVLEN parsing
         if 'SVLEN' in raw_rec.info:
             svlen = raw_rec.info['SVLEN']
             if isinstance(svlen, list):
@@ -106,7 +102,6 @@ class DragenStandardizer(VCFStandardizer):
             std_rec.alts = (simple_alt, )
 
         # Set reference to 'N' for non-BND variants
-        # BNDs aren't symbolic so setting `ref` will reset `stop`
         stop = std_rec.stop
         std_rec.ref = 'N'
         std_rec.stop = stop
