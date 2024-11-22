@@ -5,7 +5,7 @@ sidebar_position: 7
 slug: fb
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterBatch.wdl)
 

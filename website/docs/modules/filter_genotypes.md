@@ -5,7 +5,7 @@ sidebar_position: 19
 slug: fg
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/FilterGenotypes.wdl)
 
