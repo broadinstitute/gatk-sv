@@ -684,7 +684,6 @@ task UpdateSrList {
     File vcf
     File original_list
     String outfile
-    Array[String]? header_columns
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -711,10 +710,6 @@ task UpdateSrList {
 
   command <<<
     set -euxo pipefail
-
-    if [[ ! -z "~{sep=' ' header_columns}" ]]; then
-      echo -e "~{sep='\t' header_columns}" > ~{outfile}
-    fi
 
     # append new ids to original list
     svtk vcf2bed ~{vcf} int.bed -i MEMBERS --no-samples --no-header

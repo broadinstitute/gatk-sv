@@ -11,8 +11,6 @@ UNRESOLVED = 'UNRESOLVED'
 HIGH_SR_BACKGROUND = 'HIGH_SR_BACKGROUND'
 BOTHSIDES_SUPPORT = 'BOTHSIDES_SUPPORT'
 REVISED_EVENT = 'REVISED_EVENT'
-
-# List of possible EV values
 EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']    
 
 def read_last_column(file_path):
@@ -32,11 +30,11 @@ def add_header_lines(header):
 
 def process_record(record, fail_set, pass_set):
     record = process_EV(record)
-    record = process_VarGQ(record)
-    record = process_Multiallelic(record)
-    record = process_Unresolved(record)
-    record = process_NoisyEvents(record, fail_set)
-    record = process_BothsidesSupportEvents(record, pass_set)
+    record = process_varGQ(record)
+    record = process_multiallelic(record)
+    record = process_unresolved(record)
+    record = process_noisy(record, fail_set)
+    record = process_bothsides_support(record, pass_set)
     return record
 
 def process_EV(record):
@@ -49,10 +47,10 @@ def process_EV(record):
                 if 0 <= ev_index < len(EV_VALUES):
                     genotype[EV] = EV_VALUES[ev_index]
             except ValueError:
-                pass  # If it's not an integer, do nothing
+                pass
     return record
 
-def process_VarGQ(record):
+def process_varGQ(record):
     if VAR_GQ in record.info:
         var_gq = record.info[VAR_GQ]
         if isinstance(var_gq, list):
@@ -61,23 +59,23 @@ def process_VarGQ(record):
         record.qual = var_gq
     return record
 
-def process_Multiallelic(record):
+def process_multiallelic(record):
     if MULTIALLELIC in record.info:
         del record.info[MULTIALLELIC]
     return record
 
-def process_Unresolved(record):
+def process_unresolved(record):
     if UNRESOLVED in record.info:
         del record.info[UNRESOLVED]
         record.filter.add(UNRESOLVED)
     return record
 
-def process_NoisyEvents(record, fail_set):
+def process_noisy(record, fail_set):
     if record.id in fail_set:
         record.info[HIGH_SR_BACKGROUND] = True
     return record
 
-def process_BothsidesSupportEvents(record, pass_set):
+def process_bothsides_support(record, pass_set):
     if record.id in pass_set:
         record.info[BOTHSIDES_SUPPORT] = True
     return record
@@ -88,12 +86,11 @@ if __name__ == '__main__':
     parser.add_argument('--chr-Y', dest='chrY', default='chrY', help='chrY column name')
     parser.add_argument('--fail-list', required=True, help='File with variants failing the background test')
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
-    parser.add_argument('--output-samples-list', required=True, help='Output file with samples')
     parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF name')
     parser.add_argument('input_vcf', help='Input VCF file')
     args = parser.parse_args()
 
-    # Read failList and passList into sets
+    # Read noisy and bothsides support events into sets
     fail_set = read_last_column(args.fail_list)
     pass_set = read_last_column(args.pass_list)
 
@@ -107,12 +104,7 @@ if __name__ == '__main__':
     # Open output VCF
     vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=header)
 
-    # Write samples list
-    with open(args.output_samples_list, 'w') as samples_writer:
-        for sample in header.samples:
-            samples_writer.write(sample + '\n')
-
-    # Process variants
+    # Process and write variants
     for record in vcf_in:
         record = process_record(record, fail_set, pass_set)
         vcf_out.write(record)
