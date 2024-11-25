@@ -1,7 +1,6 @@
 version 1.0
 
 import "Structs.wdl"
-import "CleanVcf5.wdl" as cleanvcf5
 import "TasksMakeCohortVcf.wdl" as tmc
 
 workflow CalcAF {
