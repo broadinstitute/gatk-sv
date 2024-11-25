@@ -724,7 +724,7 @@ task UpdateSrList {
         else print $0,$NF; \
       }' int.bed ~{original_list} \
       | sort -k1,1n \
-      >> ~{outfile}
+      > ~{outfile}
   >>>
 
   output {
