@@ -11,6 +11,7 @@ UNR = 'UNR'
 FILTER_VCF_INFO_LINES = {'BND_DEPTH', 'BND_MATEID', 'SPLIT_READS', 'PAIRED_END_READS', 'CLUSTER_MEMBER_IDS'}
 FILTER_VCF_LINES = {'ID=UNR', 'ID=BND_DEPTH', 'ID=BND_MATEID', 'ID=CLUSTER_MEMBER_IDS', 'ID=PAIRED_END_READS', 'ID=SPLIT_READS'}
 
+
 def modify_header(header):
     new_header = pysam.VariantHeader()
 
@@ -37,16 +38,19 @@ def modify_header(header):
 
     return new_header
 
+
 def process_record(record):
     record = cleanse_info_fields(record)
     record = process_svtype(record)
     return record
+
 
 def cleanse_info_fields(record):
     for field in FILTER_VCF_INFO_LINES:
         if field in record.info:
             del record.info[field]
     return record
+
 
 def process_svtype(record):
     svtype = record.info.get(SVTYPE, None)
@@ -85,6 +89,7 @@ def process_svtype(record):
             genotype['GT'] = (1, 1)
 
     return record
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Clean VCF post-processing.')

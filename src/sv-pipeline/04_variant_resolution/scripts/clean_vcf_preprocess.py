@@ -11,7 +11,8 @@ UNRESOLVED = 'UNRESOLVED'
 HIGH_SR_BACKGROUND = 'HIGH_SR_BACKGROUND'
 BOTHSIDES_SUPPORT = 'BOTHSIDES_SUPPORT'
 REVISED_EVENT = 'REVISED_EVENT'
-EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']    
+EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
+
 
 def read_last_column(file_path):
     result_set = set()
@@ -22,11 +23,13 @@ def read_last_column(file_path):
                 result_set.add(columns[-1])
     return result_set
 
+
 def add_header_lines(header):
     header.add_line('##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">')
     header.add_line('##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">')
     header.add_line('##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">')
     header.add_line('##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">')
+
 
 def process_record(record, fail_set, pass_set):
     record = process_EV(record)
@@ -36,6 +39,7 @@ def process_record(record, fail_set, pass_set):
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
     return record
+
 
 def process_EV(record):
     for sample in record.samples:
@@ -50,6 +54,7 @@ def process_EV(record):
                 pass
     return record
 
+
 def process_varGQ(record):
     if VAR_GQ in record.info:
         var_gq = record.info[VAR_GQ]
@@ -59,10 +64,12 @@ def process_varGQ(record):
         record.qual = var_gq
     return record
 
+
 def process_multiallelic(record):
     if MULTIALLELIC in record.info:
         del record.info[MULTIALLELIC]
     return record
+
 
 def process_unresolved(record):
     if UNRESOLVED in record.info:
@@ -70,15 +77,18 @@ def process_unresolved(record):
         record.filter.add(UNRESOLVED)
     return record
 
+
 def process_noisy(record, fail_set):
     if record.id in fail_set:
         record.info[HIGH_SR_BACKGROUND] = True
     return record
 
+
 def process_bothsides_support(record, pass_set):
     if record.id in pass_set:
         record.info[BOTHSIDES_SUPPORT] = True
     return record
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process VCF variants.')
