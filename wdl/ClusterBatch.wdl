@@ -11,6 +11,7 @@ workflow ClusterBatch {
   input {
     String batch
 
+    File? dragen_vcf_tar
     File? manta_vcf_tar
     File? wham_vcf_tar
     File? melt_vcf_tar
@@ -57,6 +58,7 @@ workflow ClusterBatch {
     Boolean? run_module_metrics
     String? linux_docker  # required if run_module_metrics = true
     File? baseline_depth_vcf  # baseline files are optional for metrics workflow
+    File? baseline_dragen_vcf
     File? baseline_manta_vcf
     File? baseline_wham_vcf
     File? baseline_melt_vcf
@@ -71,6 +73,7 @@ workflow ClusterBatch {
     RuntimeAttr? runtime_attr_ids_from_vcf_list
     RuntimeAttr? runtime_attr_create_ploidy
     RuntimeAttr? runtime_attr_prepare_pesr_vcfs
+    RuntimeAttr? runtime_attr_svcluster_dragen
     RuntimeAttr? runtime_attr_svcluster_manta
     RuntimeAttr? runtime_attr_svcluster_melt
     RuntimeAttr? runtime_attr_svcluster_scramble
@@ -91,7 +94,7 @@ workflow ClusterBatch {
 
   call util.GetSampleIdsFromVcfTar {
     input:
-      vcf_tar=select_first([manta_vcf_tar, melt_vcf_tar, wham_vcf_tar]),
+      vcf_tar=select_first([dragen_vcf_tar, manta_vcf_tar, melt_vcf_tar, wham_vcf_tar]),
       prefix="~{batch}.samples",
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_ids_from_vcf_list
@@ -109,6 +112,37 @@ workflow ClusterBatch {
       output_prefix="~{batch}.ploidy",
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_attr_override=runtime_attr_create_ploidy
+  }
+
+  if (defined(dragen_vcf_tar)) {
+    call pesr.ClusterPESR as ClusterPESR_dragen {
+      input:
+        vcf_tar=select_first([dragen_vcf_tar]),
+        ploidy_table=CreatePloidyTableFromPed.out,
+        batch=batch,
+        caller="dragen",
+        min_size=select_first([pesr_min_size, 50]),
+        svtk_to_gatk_script=svtk_to_gatk_script,
+        gatk_to_svtk_script=gatk_to_svtk_script,
+        exclude_intervals=pesr_exclude_intervals,
+        contig_list=contig_list,
+        contig_subset_list=contig_subset_list,
+        pesr_interval_overlap=pesr_interval_overlap,
+        pesr_breakend_window=pesr_breakend_window,
+        clustering_algorithm=pesr_clustering_algorithm,
+        reference_fasta=reference_fasta,
+        reference_fasta_fai=reference_fasta_fai,
+        reference_dict=reference_dict,
+        java_mem_fraction=java_mem_fraction,
+        gatk_docker=gatk_docker,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_prepare_pesr_vcfs=runtime_attr_prepare_pesr_vcfs,
+        runtime_attr_svcluster=runtime_attr_svcluster_dragen,
+        runtime_override_concat_vcfs_pesr=runtime_override_concat_vcfs_pesr,
+        runtime_attr_gatk_to_svtk_vcf=runtime_attr_gatk_to_svtk_vcf_pesr,
+        runtime_attr_exclude_intervals_pesr=runtime_attr_exclude_intervals_pesr
+    }
   }
 
   if (defined(manta_vcf_tar)) {
@@ -272,11 +306,13 @@ workflow ClusterBatch {
       input:
         name = batch,
         depth_vcf = ClusterDepth.clustered_vcf,
+        dragen_vcf = ClusterPESR_dragen.clustered_vcf,
         manta_vcf = ClusterPESR_manta.clustered_vcf,
         wham_vcf = ClusterPESR_wham.clustered_vcf,
         melt_vcf = ClusterPESR_melt.clustered_vcf,
         scramble_vcf = ClusterPESR_scramble.clustered_vcf,
         baseline_depth_vcf = baseline_depth_vcf,
+        baseline_dragen_vcf = baseline_dragen_vcf,
         baseline_manta_vcf = baseline_manta_vcf,
         baseline_wham_vcf = baseline_wham_vcf,
         baseline_scramble_vcf = baseline_scramble_vcf,
@@ -292,7 +328,7 @@ workflow ClusterBatch {
     call sv_counts.PlotSVCountsPerSample {
     input:
       prefix = batch,
-      vcfs = [ClusterDepth.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf],
+      vcfs = [ClusterDepth.clustered_vcf, ClusterPESR_dragen.clustered_vcf, ClusterPESR_manta.clustered_vcf, ClusterPESR_wham.clustered_vcf, ClusterPESR_melt.clustered_vcf, ClusterPESR_scramble.clustered_vcf],
       N_IQR_cutoff = select_first([N_IQR_cutoff_plotting]),
       sv_pipeline_docker = sv_pipeline_docker,
       runtime_attr_count_svs = runtime_attr_count_svs,
@@ -304,6 +340,8 @@ workflow ClusterBatch {
   output {
     File clustered_depth_vcf = ClusterDepth.clustered_vcf
     File clustered_depth_vcf_index = ClusterDepth.clustered_vcf_index
+    File? clustered_dragen_vcf = ClusterPESR_dragen.clustered_vcf
+    File? clustered_dragen_vcf_index = ClusterPESR_dragen.clustered_vcf_index
     File? clustered_manta_vcf = ClusterPESR_manta.clustered_vcf
     File? clustered_manta_vcf_index = ClusterPESR_manta.clustered_vcf_index
     File? clustered_wham_vcf = ClusterPESR_wham.clustered_vcf

@@ -6,11 +6,12 @@ import "PlotSVCountsPerSample.wdl" as sv_counts
 workflow FilterBatchSites {
   input {
     String batch
+    File? depth_vcf
+    File? dragen_vcf
     File? manta_vcf
-    File? wham_vcf
     File? melt_vcf
     File? scramble_vcf
-    File? depth_vcf
+    File? wham_vcf
     File evidence_metrics
     File evidence_metrics_common
     String sv_pipeline_docker
@@ -28,8 +29,8 @@ workflow FilterBatchSites {
 
   }
 
-  Array[String] algorithms = ["manta", "wham", "melt", "scramble", "depth"]
-  Array[File?] vcfs_array = [manta_vcf, wham_vcf, melt_vcf, scramble_vcf, depth_vcf]
+  Array[String] algorithms = ["depth", "dragen", "manta", "melt", "scramble", "wham"]
+  Array[File?] vcfs_array = [depth_vcf, dragen_vcf, manta_vcf, melt_vcf, scramble_vcf, wham_vcf]
   Int num_algorithms = length(algorithms)
 
   call AdjudicateSV {
@@ -77,11 +78,12 @@ workflow FilterBatchSites {
   }
 
   output {
-    File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[0]
-    File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[1]
-    File? sites_filtered_melt_vcf = FilterAnnotateVcf.annotated_vcf[2]
-    File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[3]
-    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[4]
+    File? sites_filtered_depth_vcf = FilterAnnotateVcf.annotated_vcf[0]
+    File? sites_filtered_dragen_vcf = FilterAnnotateVcf.annotated_vcf[1]
+    File? sites_filtered_manta_vcf = FilterAnnotateVcf.annotated_vcf[2]
+    File? sites_filtered_melt_vcf = FilterAnnotateVcf.annotated_vcf[3]
+    File? sites_filtered_scramble_vcf = FilterAnnotateVcf.annotated_vcf[4]
+    File? sites_filtered_wham_vcf = FilterAnnotateVcf.annotated_vcf[5]
     File cutoffs = AdjudicateSV.cutoffs
     File scores = RewriteScores.updated_scores
     File RF_intermediate_files = AdjudicateSV.RF_intermediate_files

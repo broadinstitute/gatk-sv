@@ -28,11 +28,11 @@ workflow EvidenceQC {
     Array[File] counts
 
     # SV tool calls
+    Array[File]? dragen_vcfs       # Dragen VCF
     Array[File]? manta_vcfs        # Manta VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? wham_vcfs         # Wham VCF
     Array[File]? scramble_vcfs     # Scramble VCF
-    Array[File]? dragen_vcfs       # Dragen VCF
 
     # WGD files
     File wgd_scoring_mask
@@ -107,6 +107,17 @@ workflow EvidenceQC {
   }
 
   if (run_vcf_qc) {
+    if (defined(dragen_vcfs) && (length(select_first([dragen_vcfs])) > 0)) {
+      call vcfqc.RawVcfQC as RawVcfQC_Dragen {
+        input:
+          vcfs = select_first([dragen_vcfs]),
+          prefix = batch,
+          caller = "Dragen",
+          runtime_attr_qc = runtime_attr_qc,
+          sv_pipeline_docker = sv_pipeline_docker,
+          runtime_attr_outlier = runtime_attr_qc_outlier
+      }
+    }
     if (defined(manta_vcfs) && (length(select_first([manta_vcfs])) > 0)) {
       call vcfqc.RawVcfQC as RawVcfQC_Manta {
         input:
@@ -151,17 +162,6 @@ workflow EvidenceQC {
           runtime_attr_outlier = runtime_attr_qc_outlier
       }
     }
-    if (defined(dragen_vcfs) && (length(select_first([dragen_vcfs])) > 0)) {
-      call vcfqc.RawVcfQC as RawVcfQC_Dragen {
-        input:
-          vcfs = select_first([dragen_vcfs]),
-          prefix = batch,
-          caller = "Dragen",
-          runtime_attr_qc = runtime_attr_qc,
-          sv_pipeline_docker = sv_pipeline_docker,
-          runtime_attr_outlier = runtime_attr_qc_outlier
-      }
-    }
   }
   if (run_ploidy) {
       call MakeQcTable {
@@ -173,6 +173,8 @@ workflow EvidenceQC {
           WGD_scores = WGD.WGD_scores,
           melt_insert_size = select_first([melt_insert_size, []]),
 
+          dragen_qc_low = RawVcfQC_Dragen.low,
+          dragen_qc_high = RawVcfQC_Dragen.high,
           manta_qc_low = RawVcfQC_Manta.low,
           manta_qc_high = RawVcfQC_Manta.high,
           melt_qc_low = RawVcfQC_Melt.low,
@@ -181,8 +183,6 @@ workflow EvidenceQC {
           wham_qc_high = RawVcfQC_Wham.high,
           scramble_qc_low = RawVcfQC_Scramble.low,
           scramble_qc_high = RawVcfQC_Scramble.high,
-          dragen_qc_low = RawVcfQC_Dragen.low,
-          dragen_qc_high = RawVcfQC_Dragen.high,
 
           sv_pipeline_docker = sv_pipeline_docker,
           runtime_override = runtime_attr_make_qc_table
@@ -190,6 +190,8 @@ workflow EvidenceQC {
   }
 
   output {
+    File? dragen_qc_low = RawVcfQC_Dragen.low
+    File? dragen_qc_high = RawVcfQC_Dragen.high
     File? manta_qc_low = RawVcfQC_Manta.low
     File? manta_qc_high = RawVcfQC_Manta.high
     File? melt_qc_low = RawVcfQC_Melt.low
@@ -198,8 +200,6 @@ workflow EvidenceQC {
     File? wham_qc_high = RawVcfQC_Wham.high
     File? scramble_qc_low = RawVcfQC_Scramble.low
     File? scramble_qc_high = RawVcfQC_Scramble.high
-    File? dragen_qc_low = RawVcfQC_Dragen.low
-    File? dragen_qc_high = RawVcfQC_Dragen.high
 
     File? ploidy_matrix = Ploidy.ploidy_matrix
     File? ploidy_plots = Ploidy.ploidy_plots
@@ -226,6 +226,8 @@ task MakeQcTable {
     Array[String] samples
 
 
+    File? dragen_qc_low
+    File? dragen_qc_high
     File? manta_qc_low
     File? manta_qc_high
     File? melt_qc_low
@@ -234,8 +236,6 @@ task MakeQcTable {
     File? wham_qc_high
     File? scramble_qc_low
     File? scramble_qc_high
-    File? dragen_qc_low
-    File? dragen_qc_high
 
     String sv_pipeline_docker
     String output_prefix
@@ -262,16 +262,16 @@ task MakeQcTable {
       ~{"--median-cov-filename " + bincov_median} \
       ~{"--wgd-scores-filename " + WGD_scores} \
       ~{"--binwise-cnv-qvalues-filename " + "./ploidy_est/binwise_CNV_qValues.bed.gz"} \
+      ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
       ~{"--manta-qc-outlier-high-filename " + manta_qc_high} \
       ~{"--melt-qc-outlier-high-filename " + melt_qc_high} \
       ~{"--wham-qc-outlier-high-filename " + wham_qc_high} \
       ~{"--scramble-qc-outlier-high-filename " + scramble_qc_high} \
-      ~{"--dragen-qc-outlier-high-filename " + dragen_qc_high} \
+      ~{"--dragen-qc-outlier-low-filename " + dragen_qc_low} \
       ~{"--manta-qc-outlier-low-filename " + manta_qc_low} \
       ~{"--melt-qc-outlier-low-filename " + melt_qc_low} \
       ~{"--wham-qc-outlier-low-filename " + wham_qc_low} \
       ~{"--scramble-qc-outlier-low-filename " + scramble_qc_low} \
-      ~{"--dragen-qc-outlier-low-filename " + dragen_qc_low} \
       ~{if (length(melt_insert_size) > 0) then "--melt-insert-size mean_insert_size.tsv" else ""} \
       ~{"--output-prefix " + output_prefix}
   >>>
