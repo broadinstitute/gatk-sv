@@ -73,14 +73,14 @@ class DragenStandardizer(VCFStandardizer):
             strands = '+-'
         elif svtype == 'DUP':
             strands = '-+'
-        elif svtype == 'INS': # Treat DUPSVLEN as DUP
+        elif svtype == 'INS':  # Treat DUPSVLEN as DUP
             if 'DUPSVLEN' in raw_rec.info:
                 svtype = 'DUP'
                 std_rec.info['SVTYPE'] = svtype
                 strands = '-+'
             else:
                 strands = '+-'
-        else: # Default
+        else:  # Default
             strands = '+-'
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
