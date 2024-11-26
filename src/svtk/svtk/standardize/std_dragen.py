@@ -57,27 +57,14 @@ class DragenStandardizer(VCFStandardizer):
                 chrA, chrB = chrB, chrA
                 std_rec.chrom = chrA
                 std_rec.pos = posA
-            if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
-                print((chrA, posA))
-                print((chrB, posB))
         elif svtype == 'INS':
             chrB = raw_rec.chrom
             posB = raw_rec.pos + 1
         else:
             chrB = raw_rec.chrom
             posB = raw_rec.stop
-        
-        if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
-            print("\nBefore modification...")
-            print((std_rec.chrom, std_rec.start))
-            print((std_rec.info.get('CHR2', "N/A"), std_rec.info.get('END', std_rec.stop)))
         std_rec.info['CHR2'] = chrB
         std_rec.stop = posB
-        if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
-            print("\nAfter modification...")
-            print((std_rec.chrom, std_rec.start))
-            print((std_rec.info.get('CHR2', "N/A"), std_rec.info.get('END', std_rec.stop)))
-            
 
         # Update STRANDS
         if svtype == 'BND':
