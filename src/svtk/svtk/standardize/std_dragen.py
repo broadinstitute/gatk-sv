@@ -7,81 +7,107 @@ Standardize a Dragen record.
 """
 
 
+from collections import deque
 from svtk.utils import is_smaller_chrom, parse_bnd_pos, parse_bnd_strands
 from .standardize import VCFStandardizer
 
 
 @VCFStandardizer.register('dragen')
 class DragenStandardizer(VCFStandardizer):
+    def standardize_records(self):
+        """
+        Filter Manta VCF.
+
+        Skip mated events that are not marked with SECONDARY tag.
+        """
+
+        mate_IDs = deque()
+        for record in self.filter_raw_vcf():
+            if 'MATEID' in record.info:
+                mate_ID = record.info['MATEID']
+                if mate_ID in mate_IDs:
+                    continue
+                mate_IDs.append(record.id)
+            yield self.standardize_record(record)
+
     def standardize_info(self, std_rec, raw_rec):
         """
         Standardize Dragen record.
 
-        1. Replace colons in ID with underscores
-        2. Define CHR2 and END
-        3. Add strandedness
-        4. Add SVLEN
+        1. Replace colons in ID with underscores.
+        2. Define CHR2 and END.
+        3. Define strandedness.
+        4. Define SVLEN.
+        5. Define ALGORITHMS.
         """
 
-        # Replace colons in the ID
+        # Update ID
         std_rec.id = std_rec.id.replace(':', '_')
 
+        # Update SVTYPE
         svtype = raw_rec.info['SVTYPE']
         std_rec.info['SVTYPE'] = svtype
 
-        # Define CHR2 and END
-        if 'END' in raw_rec.info:
-            end = raw_rec.info['END']
+        # Update CHR2 and END
+        if svtype == 'BND':
+            chrA, posA = raw_rec.chrom, raw_rec.pos
+            chrB, posB = parse_bnd_pos(raw_rec.alts[0])
+            if not is_smaller_chrom(chrA, chrB):
+                posA, posB = posB, posA
+                chrA, chrB = chrB, chrA
+                std_rec.chrom = chrA
+                std_rec.pos = posA
+            if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
+                print((chrA, posA))
+                print((chrB, posB))
+        elif svtype == 'INS':
+            chrB = raw_rec.chrom
+            posB = raw_rec.pos + 1
         else:
-            end = raw_rec.stop
+            chrB = raw_rec.chrom
+            posB = raw_rec.stop
+        
+        if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
+            print("\nBefore modification...")
+            print((std_rec.chrom, std_rec.start))
+            print((std_rec.info.get('CHR2', "N/A"), std_rec.info.get('END', std_rec.stop)))
+        std_rec.info['CHR2'] = chrB
+        std_rec.stop = posB
+        if raw_rec.info['SVTYPE'] == 'BND' and parse_bnd_pos(raw_rec.alts[0]) == ("chr22", 19448419):
+            print("\nAfter modification...")
+            print((std_rec.chrom, std_rec.start))
+            print((std_rec.info.get('CHR2', "N/A"), std_rec.info.get('END', std_rec.stop)))
+            
 
-        std_rec.stop = end
-        chr2 = raw_rec.chrom
-        std_rec.info['CHR2'] = chr2
-
-        # Strand parsing
+        # Update STRANDS
         if svtype == 'BND':
             strands = parse_bnd_strands(raw_rec.alts[0])
-            chr2, end = parse_bnd_pos(raw_rec.alts[0])
-            std_rec.info['CHR2'] = chr2
-            std_rec.stop = end
-            if not is_smaller_chrom(std_rec.chrom, chr2):
-                std_rec.chrom, std_rec.info['CHR2'] = chr2, std_rec.chrom
-                std_rec.pos, std_rec.stop = end, std_rec.pos
         elif svtype == 'DEL':
             strands = '+-'
         elif svtype == 'DUP':
             strands = '-+'
-        elif svtype == 'INS':
-            # Treat 'DUPSVLEN' as DUP
+        elif svtype == 'INS': # Treat DUPSVLEN as DUP
             if 'DUPSVLEN' in raw_rec.info:
                 svtype = 'DUP'
                 std_rec.info['SVTYPE'] = svtype
                 strands = '-+'
             else:
                 strands = '+-'
-        # Default strands
-        else:
+        else: # Default
             strands = '+-'
-
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
         std_rec.info['STRANDS'] = strands
 
-        # SVLEN parsing
-        if 'SVLEN' in raw_rec.info:
-            svlen = raw_rec.info['SVLEN']
-            if isinstance(svlen, list):
-                svlen = svlen[0]
-            std_rec.info['SVLEN'] = svlen
+        # Update SVLEN
+        if svtype == 'BND' and std_rec.chrom != std_rec.info['CHR2']:
+            std_rec.info['SVLEN'] = -1
+        elif svtype == 'INS':
+            std_rec.info['SVLEN'] = raw_rec.info.get('SVLEN', -1)
         else:
-            if svtype == 'BND' and std_rec.chrom != std_rec.info['CHR2']:
-                std_rec.info['SVLEN'] = -1
-            elif svtype == 'INS':
-                std_rec.info['SVLEN'] = -1
-            else:
-                std_rec.info['SVLEN'] = std_rec.stop - std_rec.pos
+            std_rec.info['SVLEN'] = std_rec.stop - std_rec.pos
 
+        # Update ALGORITHMS
         std_rec.info['ALGORITHMS'] = ['dragen']
 
         return std_rec
@@ -91,7 +117,7 @@ class DragenStandardizer(VCFStandardizer):
         Standardize ALT.
 
         When the full ref/alt sequence is specified for deletions or
-        insertions, replace with N and <SVTYPE>
+        insertions, replace with N and <SVTYPE>.
         """
 
         # Format BND ALT
@@ -103,7 +129,7 @@ class DragenStandardizer(VCFStandardizer):
         if svtype != 'BND':
             std_rec.alts = (simple_alt, )
 
-        # Set reference to 'N' for non-BND variants
+        # Set reference to null for non-BND variants
         stop = std_rec.stop
         std_rec.ref = 'N'
         std_rec.stop = stop
