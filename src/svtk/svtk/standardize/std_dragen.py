@@ -16,7 +16,7 @@ from .standardize import VCFStandardizer
 class DragenStandardizer(VCFStandardizer):
     def standardize_records(self):
         """
-        Filter Manta VCF.
+        Filter Dragen VCF.
 
         Skip mated events that are not marked with SECONDARY tag.
         """
@@ -24,7 +24,7 @@ class DragenStandardizer(VCFStandardizer):
         mate_IDs = deque()
         for record in self.filter_raw_vcf():
             if 'MATEID' in record.info:
-                mate_ID = record.info['MATEID']
+                mate_ID = record.info['MATEID'][0]
                 if mate_ID in mate_IDs:
                     continue
                 mate_IDs.append(record.id)
@@ -101,7 +101,7 @@ class DragenStandardizer(VCFStandardizer):
 
     def standardize_alts(self, std_rec, raw_rec):
         """
-        Standardize ALT.
+        Standardize Dragen ALT field.
 
         When the full ref/alt sequence is specified for deletions or
         insertions, replace with N and <SVTYPE>.
