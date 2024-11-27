@@ -14,17 +14,18 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     # Assumes all vcfs have indexes, i.e. at {VCF_PATH}.tbi
     Array[File] vcfs
 
-    File training_sample_ids  # Sample IDs with PacBio or array data
-    String? output_prefix
-    File ploidy_table
-
-    Array[String] pacbio_sample_ids  # Corresponding to files below (must be a subset of training_sample_ids)
     Array[File]? vapor_files
     Array[File]? pbsv_vcfs
     Array[File]? pav_vcfs
     Array[File]? sniffles_vcfs
     Array[File]? hifi_cnv_vcfs
     Array[File]? hapdiff_vcfs
+    
+    File training_sample_ids  # Sample IDs with PacBio or array data
+    Array[String] pacbio_sample_ids  # Corresponding to files below (must be a subset of training_sample_ids)
+    
+    String? output_prefix
+    File ploidy_table
 
     # Optional: array intensity ratio files
     Array[File]? irs_sample_batches
