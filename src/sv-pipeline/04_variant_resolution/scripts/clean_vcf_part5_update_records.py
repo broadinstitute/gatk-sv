@@ -136,7 +136,7 @@ def main():
 
                 if gt5kb_dup:
                     for sample_obj in record.samples.itervalues():
-                        # Leave no-calls
+                        # Leave no-calls - also causes bug that skips multiallelic genotypes for a biallelic variant
                         if sample_obj['GT'] == (None, None):
                             continue
                         if not sample_obj['GQ'] is None and \
