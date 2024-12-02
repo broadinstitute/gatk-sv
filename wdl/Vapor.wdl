@@ -14,8 +14,6 @@ workflow Vapor {
     Boolean save_plots  # Control whether plots are final output
 
     File ref_fasta
-    File ref_fai
-    File ref_dict
     File contigs
 
     String vapor_docker
@@ -52,7 +50,6 @@ workflow Vapor {
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
         ref_fasta = ref_fasta,
-        ref_fai = ref_fai,
         ref_dict = ref_dict,
         vapor_docker = vapor_docker,
         runtime_attr_override = runtime_attr_vapor
@@ -82,8 +79,6 @@ task RunVaporWithCram {
     String bam_or_cram_index
     File bed
     File ref_fasta
-    File ref_fai
-    File ref_dict
     String vapor_docker
     RuntimeAttr? runtime_attr_override
   }
