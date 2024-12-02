@@ -141,6 +141,7 @@ workflows:
     filters:
       branches:
         - main
+        - kj_fix_multiallelic_low_cn_gt
       tags:
         - /.*/
 
