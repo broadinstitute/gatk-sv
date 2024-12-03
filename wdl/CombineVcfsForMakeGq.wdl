@@ -8,6 +8,7 @@ workflow CombineVcfsForMakeGq {
 			File ploidy_table                   # Path to the ploidy table file
 			File contigs_fai                    # Path to the contigs FASTA index file
 			File ref_fasta                      # Path to the reference FASTA file
+			File ref_fasta_fai                  # Path to the reference FASTA index file
 			Int min_size               					# Minimum size for standardization
 
 			String sv_pipeline_docker           # Docker image path for GATK-SV
@@ -47,6 +48,7 @@ workflow CombineVcfsForMakeGq {
 			formatted_vcfs  = formatted_vcfs,
 			ploidy_table    = ploidy_table,
 			ref_fasta       = ref_fasta,
+			ref_fasta_fai   = ref_fasta_fai,
 			gatk_docker     = gatk_docker
 	}
 
@@ -148,6 +150,7 @@ task SVCluster {
 		Array[File] formatted_vcfs
 		File ploidy_table
 		File ref_fasta
+		File ref_fasta_fai
 		String gatk_docker
 	}
 
