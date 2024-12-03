@@ -34,7 +34,7 @@ workflow PreprocessVcfForVapor {
 	}
 
 	output {
-		File vcf2bed_vapor = Vcf2Bed.vcf2bed_vapor
+		File dragen_sr_bed = Vcf2Bed.vcf2bed_vapor
 	}
 }
 
@@ -49,6 +49,8 @@ task StandardizeVcf {
 
 	command <<<
 		set -eu -o pipefail
+
+		export GCS_OAUTH_TOKEN=gcloud auth application-default print-access-token
 
 		svtk standardize \
 			--sample-names ~{sample_id} \
@@ -105,6 +107,7 @@ task Vcf2Bed {
 
 	command <<<
 		set -eu -o pipefail
+
 		svtk vcf2bed --info SVTYPE --info SVLEN ~{vcf_path} - | awk '$7 != "BND"' > ~{sample_id}.bed
 	>>>
 
