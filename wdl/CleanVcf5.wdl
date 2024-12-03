@@ -251,7 +251,7 @@ task Polish {
         bcftools +setGT polished.need_reheader.vcf.gz -- \
             -t q \
             -n c:'1/1' \
-            -i '(INFO/SVTYPE="DEL" | INFO/SVTYPE="DUP") & (FMT/GT~"[2-9]" | FMT/GT~"[1-9][0-9]+") & FMT/RD_CN>3' > polished.need_reheader.regenotyped.vcf
+            -i '(INFO/SVTYPE="DEL" | INFO/SVTYPE="DUP") & (FMT/GT~"[2-9]" | FMT/GT~"[1-9][0-9]+")' > polished.need_reheader.regenotyped.vcf
         
         bgzip polished.need_reheader.regenotyped.vcf
         
