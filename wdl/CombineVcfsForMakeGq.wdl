@@ -66,7 +66,7 @@ task StandardizeVcf {
 
 	command <<<
 			set -eu -o pipefail
-			
+
 			svtk standardize \
 					--sample-names ~{sample_id} \
 					--contigs ~{contigs_fai} \
@@ -124,7 +124,7 @@ task FormatVcfForGatk {
 	command <<<
 		set -eu -o pipefail
 
-		python /opt/src/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+		python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
 			--vcf ~{vcf_path} \
 			--out ~{sample_id}.formatted.vcf.gz \
 			--ploidy-table ~{ploidy_table} \
