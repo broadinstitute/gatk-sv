@@ -10,19 +10,18 @@ workflow CombineVcfsForMakeGq {
 			File ref_fasta                      # Path to the reference FASTA file
 			Int min_size               					# Minimum size for standardization
 
-			String sv_pipeline_docker           # Docker image path for GATK-SV and related tools
-			String svtk_docker                  # Docker image path for svtk
+			String sv_pipeline_docker           # Docker image path for GATK-SV
 			String gatk_docker                  # Docker image path for GATK
 	}
 
 	scatter (idx in range(length(sample_ids))) {
 		call StandardizeVcf {
 			input:
-				sample_id      = sample_ids[idx],
-				vcf_path       = vcf_paths[idx],
-				contigs_file   = contigs_fai,
-				min_size       = min_size,
-				svtk_docker    = svtk_docker
+				sample_id 						= sample_ids[idx],
+				vcf_path       				= vcf_paths[idx],
+				contigs_fai   				= contigs_fai,
+				min_size      				= min_size,
+				sv_pipeline_docker  	= sv_pipeline_docker
 		}
 
 		call SortVcf {
@@ -35,9 +34,9 @@ workflow CombineVcfsForMakeGq {
 		call FormatVcfForGatk {
 			input:
 				sample_id       = sample_ids[idx],
-				vcf_path      	= SortVcf.sorted_vcf,
+				vcf_path        = SortVcf.sorted_vcf,
 				ploidy_table    = ploidy_table,
-				sv_pipeline_docker = sv_pipeline_docker
+				sv_pipeline_docker  = sv_pipeline_docker
 		}
 	}
 
@@ -58,21 +57,19 @@ workflow CombineVcfsForMakeGq {
 
 task StandardizeVcf {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path               # Path to the input VCF file
-		File contigs_file          	# Path to the contigs file (FAI index)
-		Int min_size                # Minimum size for standardization
-		String svtk_docker          # Docker image path for svtk
+		String sample_id
+		File vcf_path
+		File contigs_fai
+		Int min_size
+		String sv_pipeline_docker
 	}
 
 	command <<<
 			set -eu -o pipefail
-
-			export GCS_OAUTH_TOKEN=$(gcloud auth application-default print-access-token)
-
+			
 			svtk standardize \
 					--sample-names ~{sample_id} \
-					--contigs ~{contigs_file} \
+					--contigs ~{contigs_fai} \
 					--min-size ~{min_size} \
 					~{vcf_path} \
 					~{sample_id}.std_dragen.vcf.gz \
@@ -87,15 +84,15 @@ task StandardizeVcf {
 		cpu: 1
 		memory: "2 GiB"
 		disks: "local-disk 2 HDD"
-		docker: svtk_docker
+		docker: sv_pipeline_docker
 	}
 }
 
 task SortVcf {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path               # Path to the standardized VCF file
-		String sv_pipeline_docker   # Docker image path for GATK-SV
+		String sample_id
+		File vcf_path
+		String sv_pipeline_docker
 	}
 
 	command <<<
@@ -118,10 +115,10 @@ task SortVcf {
 
 task FormatVcfForGatk {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path               # Path to the sorted VCF file
-		File ploidy_table           # Path to the ploidy table
-		String sv_pipeline_docker   # Docker image path for GATK-SV
+		String sample_id
+		File vcf_path
+		File ploidy_table
+		String sv_pipeline_docker
 	}
 
 	command <<<
@@ -148,10 +145,10 @@ task FormatVcfForGatk {
 
 task SVCluster {
 	input {
-		Array[File] formatted_vcfs  # Array of formatted VCF files
-		File ploidy_table           # Path to the ploidy table
-		File ref_fasta              # Path to the reference FASTA file
-		String gatk_docker          # Docker image path for GATK
+		Array[File] formatted_vcfs
+		File ploidy_table
+		File ref_fasta
+		String gatk_docker
 	}
 
 	command <<<

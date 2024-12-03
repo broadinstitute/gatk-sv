@@ -5,20 +5,19 @@ workflow PreprocessVcfForVapor {
 		String sample_id            # Sample identifier
 		File vcf_path             	# Path to the input VCF file
 
-		File contigs_file          	# Path to the contigs file
+		File contigs_fai          	# Path to the contigs file
 		Int min_size               	# Minimum size for standardization
 
 		String sv_pipeline_docker   # Docker image path for GATK-SV
-		String svtk_docker          # Docker image path for svtk
 	}
 
 	call StandardizeVcf {
 		input:
 			sample_id = sample_id,
 			vcf_path = vcf_path,
-			contigs_file = contigs_file,
+			contigs_fai = contigs_fai,
 			min_size = min_size,
-			svtk_docker = svtk_docker
+			sv_pipeline_docker = sv_pipeline_docker
 	}
 
 	call SortVcf {
@@ -42,11 +41,11 @@ workflow PreprocessVcfForVapor {
 
 task StandardizeVcf {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path             # Path to the input VCF file
-		File contigs_file           # Path to the contigs file
-		Int min_size                # Minimum size for standardization
-		String svtk_docker          # Docker image path for svtk
+		String sample_id
+		File vcf_path
+		File contigs_fai
+		Int min_size
+		String sv_pipeline_docker
 	}
 
 	command <<<
@@ -54,7 +53,7 @@ task StandardizeVcf {
 		
 		svtk standardize \
 			--sample-names ~{sample_id} \
-			--contigs ~{contigs_file} \
+			--contigs ~{contigs_fai} \
 			--min-size ~{min_size} \
 			~{vcf_path} \
 			~{sample_id}.std_dragen.vcf.gz \
@@ -69,15 +68,15 @@ task StandardizeVcf {
 		cpu: 1
 		memory: "2 GiB"
 		disks: "local-disk 2 HDD"
-		docker: svtk_docker
+		docker: sv_pipeline_docker
 	}
 }
 
 task SortVcf {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path               # Path to the standardized VCF file
-		String sv_pipeline_docker   # Docker image path for GATK-SV
+		String sample_id
+		File vcf_path
+		String sv_pipeline_docker
 	}
 
 	command <<<
@@ -100,9 +99,9 @@ task SortVcf {
 
 task Vcf2Bed {
 	input {
-		String sample_id            # Sample identifier
-		File vcf_path             	# Path to the sorted VCF file
-		String sv_pipeline_docker   # Docker image path for GATK-SV
+		String sample_id
+		File vcf_path
+		String sv_pipeline_docker
 	}
 
 	command <<<
