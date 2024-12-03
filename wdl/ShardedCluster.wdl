@@ -29,7 +29,6 @@ workflow ShardedCluster {
     String? gcs_project
 
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for local tasks
@@ -150,7 +149,6 @@ workflow ShardedCluster {
           gcs_project=gcs_project,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
           runtime_override_preconcat=runtime_override_preconcat_sharded_cluster,
           runtime_override_hail_merge=runtime_override_hail_merge_sharded_cluster,
           runtime_override_fix_header=runtime_override_fix_header_sharded_cluster

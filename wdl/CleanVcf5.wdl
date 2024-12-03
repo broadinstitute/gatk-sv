@@ -247,8 +247,16 @@ task Polish {
                 --exclude 'ID=@ids_to_remove.list' \
                 --output-type z -o polished.need_reheader.vcf.gz --threads ~{threads}
 
+        # replace multiallelic genotypes for CNVs with homref
+        bcftools +setGT polished.need_reheader.vcf.gz -- \
+            -t q \
+            -n c:'1/1' \
+            -i '(INFO/SVTYPE="DEL" | INFO/SVTYPE="DUP") & (FMT/GT~"[2-9]" | FMT/GT~"[1-9][0-9]+")' > polished.need_reheader.regenotyped.vcf
+        
+        bgzip polished.need_reheader.regenotyped.vcf
+        
         # do the last bit of header cleanup
-        bcftools view -h polished.need_reheader.vcf.gz > original_header.vcf
+        bcftools view -h polished.need_reheader.regenotyped.vcf.gz > original_header.vcf
         cat original_header.vcf | fgrep '##fileformat' > new_header.vcf
         cat original_header.vcf \
             | egrep -v "CIPOS|CIEND|RMSSTD|EVENT|INFO=<ID=UNRESOLVED,|source|varGQ|bcftools|ALT=<ID=UNR|INFO=<ID=MULTIALLELIC|GATKCommandLine|#CHROM|##contig|##fileformat" \
@@ -256,7 +264,7 @@ task Polish {
         # Don't sort contigs lexicographically, which would result in incorrect chr1, chr10, chr11, ... ordering
         cat original_header.vcf | fgrep '##contig' >> new_header.vcf
         cat original_header.vcf | fgrep '#CHROM' >> new_header.vcf
-        bcftools reheader polished.need_reheader.vcf.gz -h new_header.vcf -o ~{prefix}.vcf.gz
+        bcftools reheader polished.need_reheader.regenotyped.vcf.gz -h new_header.vcf -o ~{prefix}.vcf.gz
     >>>
 
     output {

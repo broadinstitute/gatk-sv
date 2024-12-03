@@ -1,14 +1,20 @@
 ---
 title: FAQ
 slug: faq
+sidebar_position: 0
 ---
+
+Please consult the following resources for additional troubleshooting guides:
+
+- [Troubleshooting GATK-SV (article)](https://gatk.broadinstitute.org/hc/en-us/articles/5334566940699-Troubleshooting-GATK-SV)
+- [Troubleshooting GATK-SV Error Messages on Terra (video)](https://www.youtube.com/watch?v=3UVV03H9p1w)
 
 ### VM runs out of memory or disk
 
-- Default pipeline settings are tuned for batches of 100 samples. 
+- Default pipeline settings are tuned for batches of 150 samples. 
   Larger batches or cohorts may require additional VM resources. 
   Most runtime attributes can be modified through 
-  the RuntimeAttr inputs. These are formatted like this in the json:
+  the `RuntimeAttr` inputs. These can be formatted like this in an input json:
 
   ```json
   "MyWorkflow.runtime_attr_override": {
@@ -18,7 +24,7 @@ slug: faq
   ```
   
   Note that a subset of the struct attributes can be specified. 
-  See `wdl/Structs.wdl` for available attributes.
+  See [wdl/Structs.wdl](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/Structs.wdl) for available attributes.
 
 ### Calculated read length causes error in MELT workflow
 

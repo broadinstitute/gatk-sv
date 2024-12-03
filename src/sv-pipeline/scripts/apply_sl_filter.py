@@ -4,6 +4,7 @@ import argparse
 import sys
 import pysam
 import math
+from numpy import median
 from typing import List, Text, Dict, Optional
 
 _gt_no_call_map = dict()
@@ -78,6 +79,24 @@ def _fails_filter(sl, gt_is_ref, cutoff):
     return sl < cutoff
 
 
+def recal_qual_score(record):
+    """
+    Recalibrate quality score for a single variant
+    """
+    quals = []
+    for s in [s for s in record.samples]:
+        gt = record.samples[s]['GT']
+        if _is_hom_ref(gt) or _is_no_call(gt):
+            continue
+        elif _is_hom_var(gt):
+            quals.append(99)
+        else:
+            quals.append(record.samples[s]['GQ'])
+
+    if len(quals) > 0:
+        return int(median(quals))
+
+
 def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshold,
                   keep_gq, gq_scale_factor, upper_sl_cap, lower_sl_cap, sl_shift, max_gq):
     record.info['MINSL'] = sl_threshold
@@ -109,15 +128,19 @@ def _apply_filter(record, sl_threshold, ploidy_dict, apply_hom_ref, ncr_threshol
         gt['GT_FILTER'] = _gt_to_filter_status(gt['GT'], fails_filter)
         if fails_filter:
             gt['GT'] = _filter_gt(gt['GT'], allele)
+        if record.info['SVTYPE'] != 'CNV' and _is_no_call(gt['GT']):
             n_no_call += 1
     # Annotate metrics
     record.info['NCN'] = n_no_call
     record.info['NCR'] = n_no_call / n_samples if n_samples > 0 else None
     if ncr_threshold is not None and record.info['NCR'] is not None and record.info['NCR'] >= ncr_threshold:
         record.filter.add(_HIGH_NCR_FILTER)
+    if len(record.filter) == 0:
+        record.filter.add('PASS')
     n_sl = len(sl_list)
     record.info['SL_MEAN'] = sum(sl_list) / n_sl if n_sl > 0 else None
     record.info['SL_MAX'] = max(sl_list) if n_sl > 0 else None
+    record.qual = recal_qual_score(record)
     # Clean out AF metrics since they're no longer valid
     for field in ['AC', 'AF']:
         if field in record.info:

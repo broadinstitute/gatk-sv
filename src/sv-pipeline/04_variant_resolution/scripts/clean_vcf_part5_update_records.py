@@ -111,8 +111,7 @@ def main():
                         if sum(1 for x in Counter(sample_cn_map.values()) if x is not None and (x < 1 or x > 4)) > 4:
                             gt4_copystate = True
                         if sum(1 for s in sample_cn_map if sample_cn_map[s] is not None and
-                                (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and
-                                gt4_copystate) > vf_1:
+                                (sample_cn_map[s] < 1 or sample_cn_map[s] > 4) and gt4_copystate) > vf_1:
                             multi_dup = True
                     gts = [record.samples[s]['GT'] for s in non_outlier_samples]
                     if any(gt not in biallelic_gts for gt in gts):
@@ -123,6 +122,9 @@ def main():
 
                 if gt5kb_del:
                     for sample_obj in record.samples.itervalues():
+                        # Leave no-calls
+                        if sample_obj['GT'] == (None, None):
+                            continue
                         if not sample_obj['GQ'] is None and \
                                 (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] >= 2):
                             sample_obj['GT'] = (0, 0)
@@ -134,6 +136,9 @@ def main():
 
                 if gt5kb_dup:
                     for sample_obj in record.samples.itervalues():
+                        # Leave no-calls - also causes bug that skips multiallelic genotypes for a biallelic variant
+                        if sample_obj['GT'] == (None, None):
+                            continue
                         if not sample_obj['GQ'] is None and \
                                 (sample_obj['RD_CN'] is not None and sample_obj['RD_CN'] <= 2):
                             sample_obj['GT'] = (0, 0)

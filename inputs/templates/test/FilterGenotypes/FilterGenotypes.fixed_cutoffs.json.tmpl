@@ -5,7 +5,13 @@
   "FilterGenotypes.gq_recalibrator_model_file": {{ reference_resources.aou_recalibrate_gq_model_file | tojson }},
   "FilterGenotypes.sl_filter_args": "--small-del-threshold 93 --medium-del-threshold 150 --small-dup-threshold -51 --medium-dup-threshold -4 --ins-threshold -13 --inv-threshold -19",
 
-  "FilterGenotypes.genome_tracks": {{ reference_resources.recalibrate_gq_genome_tracks | tojson }},
+  "FilterGenotypes.genome_tracks": [
+    {{ reference_resources.recalibrate_gq_genome_track_repeatmasker | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_segdup | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_simple_repeats | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap100 | tojson }},
+    {{ reference_resources.recalibrate_gq_genome_track_umap24 | tojson }}
+  ],
   "FilterGenotypes.recalibrate_gq_args": [
     "--keep-homvar false",
     "--keep-homref true",
@@ -22,10 +28,6 @@
     {{ reference_resources.hgsv_byrska_bishop_site_level_benchmarking_dataset | tojson }},
     {{ reference_resources.thousand_genomes_site_level_benchmarking_dataset | tojson }}
   ],
-  "FilterGenotypes.sample_level_comparison_datasets": [
-    {{ reference_resources.hgsv_byrska_bishop_sample_level_benchmarking_dataset | tojson }}
-  ],
-  "FilterGenotypes.sample_renaming_tsv": {{ reference_resources.hgsv_byrska_bishop_sample_renaming_tsv | tojson }},
   "FilterGenotypes.runtime_override_per_sample_benchmark_plot": {
     "mem_gb": 30,
     "disk_gb": 50

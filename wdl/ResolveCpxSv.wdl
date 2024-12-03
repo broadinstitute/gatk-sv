@@ -27,7 +27,6 @@ workflow ResolveComplexSv {
     String? gcs_project
 
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
     String sv_base_mini_docker
 
     # overrides for local tasks
@@ -146,7 +145,6 @@ workflow ResolveComplexSv {
           gcs_project=gcs_project,
           sv_base_mini_docker=sv_base_mini_docker,
           sv_pipeline_docker=sv_pipeline_docker,
-          sv_pipeline_hail_docker=sv_pipeline_hail_docker,
           runtime_override_preconcat=runtime_override_preconcat,
           runtime_override_hail_merge=runtime_override_hail_merge,
           runtime_override_fix_header=runtime_override_fix_header
@@ -347,7 +345,6 @@ task ResolvePrep {
 
         if [ -s regions.bed ]; then
           java -Xmx~{java_mem_mb}M -jar ${GATK_JAR} PrintSVEvidence \
-                --skip-header \
                 --sequence-dictionary ~{ref_dict} \
                 --evidence-file $GS_PATH_TO_DISC_FILE \
                 -L regions.bed \
@@ -387,7 +384,7 @@ task ResolvePrep {
         > discfile.PE.txt.gz
     fi
 
-    tabix -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
+    tabix -0 -s 1 -b 2 -e 2 -f discfile.PE.txt.gz
   >>>
 
   output {

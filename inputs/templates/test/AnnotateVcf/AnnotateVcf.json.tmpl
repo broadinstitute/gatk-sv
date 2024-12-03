@@ -3,10 +3,11 @@
 
   "AnnotateVcf.protein_coding_gtf" : {{ reference_resources.protein_coding_gtf | tojson }},
   "AnnotateVcf.noncoding_bed" :       {{ reference_resources.noncoding_bed | tojson }},
-  "AnnotateVcf.ref_bed" :       {{ reference_resources.external_af_ref_bed | tojson }},
-  "AnnotateVcf.ref_prefix" :       {{ reference_resources.external_af_ref_bed_prefix | tojson }},
-  "AnnotateVcf.population" :      {{ reference_resources.external_af_population | tojson }},
-
+  "AnnotateVcf.external_af_ref_bed" :       {{ reference_resources.external_af_ref_bed | tojson }},
+  "AnnotateVcf.external_af_ref_prefix" :       {{ reference_resources.external_af_ref_bed_prefix | tojson }},
+  "AnnotateVcf.external_af_population" :      {{ reference_resources.external_af_population | tojson }},
+  "AnnotateVcf.par_bed": {{ reference_resources.par_bed | tojson }},
+  "AnnotateVcf.sample_pop_assignments": {{ test_batch.sample_pop_assignments | tojson }},
 
   "AnnotateVcf.contig_list" :  {{ reference_resources.primary_contigs_list | tojson }},
   "AnnotateVcf.ped_file":      {{ test_batch.ped_file | tojson }},

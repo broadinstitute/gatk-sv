@@ -3,12 +3,11 @@ version 1.0
 import "Structs.wdl"
 import "TasksMakeCohortVcf.wdl" as MiniTasks
 
-# Consumes a contig-sharded vcf where some shards may contain a small proportion of records from other
-#  contigs and moves them to their correct shards.
+# Consumes a set of vcfs and distributes them into contig shards
 
 workflow ReshardVcf {
   input {
-    Array[File] vcfs  # Must be sorted and indexed
+    Array[File] vcfs  # Order does not matter but must be sorted and indexed
     File contig_list
     String prefix
     Boolean? use_ssd
@@ -16,7 +15,7 @@ workflow ReshardVcf {
     RuntimeAttr? runtime_override_reshard
   }
 
-  Array[String] contigs = read_lines(contig_list)
+  Array[String] contigs = transpose(read_tsv(contig_list))[0]
 
   scatter (i in range(length(vcfs))) {
     File vcf_indexes = vcfs[i] + ".tbi"

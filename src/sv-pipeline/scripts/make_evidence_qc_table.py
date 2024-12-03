@@ -9,7 +9,7 @@ from functools import reduce
 from pathlib import Path
 import numpy as np
 
-ID_COL = "#ID"
+ID_COL = "sample_id"
 EMPTY_OUTLIERS = "EMPTY_ROWS_DROP"
 
 
@@ -25,6 +25,19 @@ def read_ploidy(filename: str) -> pd.DataFrame:
     df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) < 2, "chrX_CopyNumber_rounded"] = 1
     df_ploidy.loc[round(df_ploidy["chrX_CopyNumber"]) >= 2, "chrX_CopyNumber_rounded"] = 2
     return df_ploidy
+
+
+def read_sex_assignments(filename: str) -> pd.DataFrame:
+    """
+    Args:
+        filename: A tab-delimited file containing estimated sex assignments.
+    Returns:
+        A pandas DataFrame containing the estimated sex assignment for each sample.
+    """
+    df_assignments = pd.read_csv(filename, sep="\t")
+    df_assignments = df_assignments[[ID_COL, "Assignment"]]
+    df_assignments.rename(columns={'Assignment': 'sex_assignment'}, inplace=True)
+    return df_assignments
 
 
 def read_bincov_median(filename: str) -> pd.DataFrame:
@@ -117,12 +130,13 @@ def read_outlier(filename: str, outlier_col_label: str) -> pd.DataFrame:
     return outlier_df
 
 
-def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
+def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFrame, outlier_wham_df: pd.DataFrame, outlier_scramble_df: pd.DataFrame, outlier_type: str) -> pd.DataFrame:
     """
     Args:
         outlier_manta_df: Outliers determined in EvidenceQC for Manta.
         outlier_melt_df: Outliers determined in EvidenceQC for MELT.
         outlier_wham_df: Outliers determined in EvidenceQC for Wham.
+        outlier_scramble_df: Outliers determined in EvidenceQC for Scramble
         outlier_type: high or low. Determined in EvidenceQC for each of the three callers.
     Returns:
         The total number of times that a sample appears as an outlier
@@ -140,28 +154,38 @@ def read_all_outlier(outlier_manta_df: pd.DataFrame, outlier_melt_df: pd.DataFra
     col_name = get_col_name("wham", outlier_type)
     dict_wham = dict(zip(outlier_wham_df[ID_COL], outlier_wham_df[col_name]))
 
+    # Scramble:
+    col_name = get_col_name("scramble", outlier_type)
+    dict_scramble = dict(zip(outlier_scramble_df[ID_COL], outlier_scramble_df[col_name]))
+
     # merging all the dictionaries
-    outlier_dicts = [dict_manta, dict_melt, dict_wham]
+    outlier_dicts = [dict_manta, dict_melt, dict_wham, dict_scramble]
     merged_dicts = Counter()
     for counted in outlier_dicts:
         merged_dicts.update(counted)
     all_outliers = dict(merged_dicts)
-    all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
-    all_outliers_df.columns = [ID_COL, outlier_type + "_overall_outliers"]
+    if len(all_outliers) == 0:
+        all_outliers_df = pd.DataFrame(columns=[ID_COL, "overall_" + outlier_type + "_outlier"])
+    else:
+        all_outliers_df = pd.DataFrame.from_dict(all_outliers, orient="index").reset_index()
+        all_outliers_df.columns = [ID_COL, "overall_" + outlier_type + "_outlier"]
     return all_outliers_df
 
 
 def merge_evidence_qc_table(
         filename_estimated_cn: str,
+        filename_sex_assignments: str,
         filename_mediancov: str,
         filename_wgd: str,
         filename_cnv_qvalues: str,
         filename_high_manta: str,
         filename_high_melt: str,
         filename_high_wham: str,
+        filename_high_scramble: str,
         filename_low_manta: str,
         filename_low_melt: str,
         filename_low_wham: str,
+        filename_low_scramble: str,
         filename_melt_insert_size: str,
         output_prefix: str) -> None:
     """
@@ -169,26 +193,37 @@ def merge_evidence_qc_table(
     serialized to the given output filename.
     """
     df_ploidy = read_ploidy(filename_estimated_cn)
+    df_sex_assignments = read_sex_assignments(filename_sex_assignments)
     df_bincov_median = read_bincov_median(filename_mediancov)
     df_wgd_scores = read_wgd_scores(filename_wgd)
     df_non_diploid = read_non_diploid(filename_cnv_qvalues)
     df_manta_high_outlier = read_outlier(filename_high_manta, get_col_name("manta", "high"))
     df_melt_high_outlier = read_outlier(filename_high_melt, get_col_name("melt", "high"))
     df_wham_high_outlier = read_outlier(filename_high_wham, get_col_name("wham", "high"))
-    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, "high")
+    df_scramble_high_outlier = read_outlier(filename_high_scramble, get_col_name("scramble", "high"))
+    df_total_high_outliers = read_all_outlier(df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, "high")
     df_manta_low_outlier = read_outlier(filename_low_manta, get_col_name("manta", "low"))
     df_melt_low_outlier = read_outlier(filename_low_melt, get_col_name("melt", "low"))
     df_wham_low_outlier = read_outlier(filename_low_wham, get_col_name("wham", "low"))
-    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, "low")
+    df_scramble_low_outlier = read_outlier(filename_low_scramble, get_col_name("scramble", "low"))
+    df_total_low_outliers = read_all_outlier(df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, "low")
     df_melt_insert_size = read_melt_insert_size(filename_melt_insert_size)
 
+    # outlier column names
+    callers = ["wham", "melt", "manta", "scramble", "overall"]
+    types = ["high", "low"]
+    outlier_cols = [get_col_name(caller, type) for caller in callers for type in types]
+
     # all data frames
-    dfs = [df_ploidy, df_bincov_median, df_wgd_scores, df_non_diploid, df_manta_high_outlier,
-           df_melt_high_outlier, df_wham_high_outlier, df_total_high_outliers,
-           df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_total_low_outliers,
+    dfs = [df_ploidy, df_sex_assignments, df_bincov_median, df_wgd_scores, df_non_diploid,
+           df_manta_high_outlier, df_melt_high_outlier, df_wham_high_outlier, df_scramble_high_outlier, df_total_high_outliers,
+           df_manta_low_outlier, df_melt_low_outlier, df_wham_low_outlier, df_scramble_low_outlier, df_total_low_outliers,
            df_melt_insert_size]
+    for df in dfs:
+        df[ID_COL] = df[ID_COL].astype(object)
     output_df = reduce(lambda left, right: pd.merge(left, right, on=ID_COL, how="outer"), dfs)
     output_df = output_df[output_df[ID_COL] != EMPTY_OUTLIERS]
+    output_df[outlier_cols] = output_df[outlier_cols].replace([None, np.nan], 0.0)
 
     # save the file
     output_df.to_csv(f"{output_prefix}.evidence_qc_table.tsv", sep="\t", header=True, index=False, na_rep=np.nan)
@@ -199,6 +234,10 @@ def main():
     parser.add_argument(
         "-y", "--estimated-copy-number-filename",
         help="Sets the filename containing estimated copy numbers per contig.")
+
+    parser.add_argument(
+        "-x", "--sex-assignments-filename",
+        help="Sets the filename containing copy number-based sex assignments.")
 
     parser.add_argument(
         "-d", "--median-cov-filename",
@@ -237,6 +276,14 @@ def main():
         help="Sets the filename containing Wham QC outlier low.")
 
     parser.add_argument(
+        "-c", "--scramble-qc-outlier-low-filename",
+        help="Sets the filename containing Scramble QC outlier low.")
+
+    parser.add_argument(
+        "-t", "--scramble-qc-outlier-high-filename",
+        help="Sets the filename containing Scramble QC outlier high.")
+
+    parser.add_argument(
         "-m", "--melt-insert-size-filename",
         help="Sets the filename containing Melt insert size. "
              "This file is expected to have two columns, containing "
@@ -252,15 +299,18 @@ def main():
 
     merge_evidence_qc_table(
         args.estimated_copy_number_filename,
+        args.sex_assignments_filename,
         args.median_cov_filename,
         args.wgd_scores_filename,
         args.binwise_cnv_qvalues_filename,
         args.manta_qc_outlier_high_filename,
         args.melt_qc_outlier_high_filename,
         args.wham_qc_outlier_high_filename,
+        args.scramble_qc_outlier_high_filename,
         args.manta_qc_outlier_low_filename,
         args.melt_qc_outlier_low_filename,
         args.wham_qc_outlier_low_filename,
+        args.scramble_qc_outlier_low_filename,
         args.melt_insert_size_filename,
         args.output_prefix)
 

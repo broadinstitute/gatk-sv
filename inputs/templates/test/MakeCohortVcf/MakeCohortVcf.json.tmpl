@@ -8,6 +8,8 @@
   "MakeCohortVcf.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
   "MakeCohortVcf.empty_file" : {{ reference_resources.empty_file | tojson }},
   "MakeCohortVcf.ref_dict": {{ reference_resources.reference_dict | tojson }},
+  "MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
+  "MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
 
   "MakeCohortVcf.site_level_comparison_datasets": [
     {{ reference_resources.ccdg_abel_site_level_benchmarking_dataset | tojson }},
@@ -32,10 +34,7 @@
 
   "MakeCohortVcf.linux_docker": {{ dockers.linux_docker | tojson }},
   "MakeCohortVcf.sv_pipeline_docker": {{ dockers.sv_pipeline_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_hail_docker": {{ dockers.sv_pipeline_hail_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_updates_docker": {{ dockers.sv_pipeline_updates_docker | tojson }},
   "MakeCohortVcf.sv_base_mini_docker":{{ dockers.sv_base_mini_docker | tojson }},
-  "MakeCohortVcf.sv_pipeline_rdtest_docker": {{ dockers.sv_pipeline_rdtest_docker | tojson }},
   "MakeCohortVcf.sv_pipeline_qc_docker": {{ dockers.sv_pipeline_qc_docker | tojson }},
 
   "MakeCohortVcf.cohort_name": {{ test_batch.name | tojson }},

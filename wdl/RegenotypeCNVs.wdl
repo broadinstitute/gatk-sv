@@ -8,7 +8,6 @@ workflow RegenotypeCNVs {
   input {
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_rdtest_docker
     Array[File] depth_vcfs
     File cohort_depth_vcf
     Array[File] batch_depth_vcfs
@@ -181,7 +180,6 @@ workflow RegenotypeCNVs {
           samples_list=GetSampleIdsFromVcf.out_file[i],
           sv_pipeline_docker=sv_pipeline_docker,
           sv_base_mini_docker=sv_base_mini_docker,
-          sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
           runtime_attr_add_batch_samples = runtime_attr_add_batch_samples,
           runtime_attr_get_regeno_g2 = runtime_attr_get_regeno_g2,
           runtime_attr_split_beds = runtime_attr_split_beds,

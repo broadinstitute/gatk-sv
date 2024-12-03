@@ -44,6 +44,8 @@ workflow MakeCohortVcf {
     File pe_exclude_list
     File depth_exclude_list
     File ref_dict
+    File HERVK_reference
+    File LINE1_reference
     Int max_shard_size_resolve
     Int max_shards_per_chrom_clean_vcf_step1
     Int min_records_per_shard_clean_vcf_step1
@@ -78,9 +80,6 @@ workflow MakeCohortVcf {
     String linux_docker
     String sv_base_mini_docker
     String sv_pipeline_docker
-    String sv_pipeline_hail_docker
-    String sv_pipeline_updates_docker
-    String sv_pipeline_rdtest_docker
     String sv_pipeline_qc_docker
 
     # overrides for local tasks
@@ -125,6 +124,8 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_update_sr_list_pass
     RuntimeAttr? runtime_override_update_sr_list_fail
     RuntimeAttr? runtime_override_concat_resolve
+    RuntimeAttr? runtime_override_concat_bothside_pass
+    RuntimeAttr? runtime_override_concat_background_fail
 
     RuntimeAttr? runtime_override_get_se_cutoff
     RuntimeAttr? runtime_override_shard_vcf_cpx
@@ -148,6 +149,9 @@ workflow MakeCohortVcf {
     RuntimeAttr? runtime_override_preconcat_resolve_inv
     RuntimeAttr? runtime_override_hail_merge_resolve_inv
     RuntimeAttr? runtime_override_fix_header_resolve_inv
+
+    # overrides for ReshardVcf
+    RuntimeAttr? runtime_override_reshard
 
     # overrides for GenotypeComplexContig
     RuntimeAttr? runtime_override_ids_from_median
@@ -252,7 +256,6 @@ workflow MakeCohortVcf {
       empty_file=empty_file,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       runtime_override_update_sr_list=runtime_override_update_sr_list_cluster,
@@ -294,7 +297,6 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       use_hail=use_hail,
       gcs_project=gcs_project,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       max_shard_size=max_shard_size_resolve,
       sv_base_mini_docker=sv_base_mini_docker,
       sv_pipeline_docker=sv_pipeline_docker,
@@ -305,6 +307,8 @@ workflow MakeCohortVcf {
       runtime_override_breakpoint_overlap_filter=runtime_override_breakpoint_overlap_filter,
       runtime_override_subset_inversions=runtime_override_subset_inversions,
       runtime_override_concat=runtime_override_concat_resolve,
+      runtime_override_concat_bothside_pass=runtime_override_concat_bothside_pass,
+      runtime_override_concat_background_fail=runtime_override_concat_background_fail,
 
       runtime_override_get_se_cutoff=runtime_override_get_se_cutoff,
       runtime_override_shard_vcf_cpx=runtime_override_shard_vcf_cpx,
@@ -348,10 +352,7 @@ workflow MakeCohortVcf {
       ref_dict=ref_dict,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
-      sv_pipeline_rdtest_docker=sv_pipeline_rdtest_docker,
       runtime_override_ids_from_median=runtime_override_ids_from_median,
       runtime_override_split_vcf_to_genotype=runtime_override_split_vcf_to_genotype,
       runtime_override_concat_cpx_cnv_vcfs=runtime_override_concat_cpx_cnv_vcfs,
@@ -372,13 +373,15 @@ workflow MakeCohortVcf {
     input:
       cohort_name=cohort_name,
       complex_genotype_vcfs=GenotypeComplexVariants.complex_genotype_vcfs,
-      complex_resolve_bothside_pass_lists=ResolveComplexVariants.complex_resolve_bothside_pass_lists,
-      complex_resolve_background_fail_lists=ResolveComplexVariants.complex_resolve_background_fail_lists,
+      complex_resolve_bothside_pass_list=ResolveComplexVariants.complex_resolve_bothside_pass_list,
+      complex_resolve_background_fail_list=ResolveComplexVariants.complex_resolve_background_fail_list,
       ped_file=ped_file,
       contig_list=contig_list,
       allosome_fai=allosome_fai,
       chr_x=chr_x,
       chr_y=chr_y,
+      HERVK_reference=HERVK_reference,
+      LINE1_reference=LINE1_reference,
       max_shards_per_chrom_step1=max_shards_per_chrom_clean_vcf_step1,
       min_records_per_shard_step1=min_records_per_shard_clean_vcf_step1,
       clean_vcf1b_records_per_shard=clean_vcf1b_records_per_shard,
@@ -399,9 +402,7 @@ workflow MakeCohortVcf {
       run_module_metrics=run_module_metrics,
       linux_docker=linux_docker,
       sv_base_mini_docker=sv_base_mini_docker,
-      sv_pipeline_hail_docker=sv_pipeline_hail_docker,
       sv_pipeline_docker=sv_pipeline_docker,
-      sv_pipeline_updates_docker=sv_pipeline_updates_docker,
       runtime_override_preconcat_clean_final=runtime_override_preconcat_clean_final,
       runtime_override_hail_merge_clean_final=runtime_override_hail_merge_clean_final,
       runtime_override_fix_header_clean_final=runtime_override_fix_header_clean_final,
@@ -505,8 +506,8 @@ workflow MakeCohortVcf {
     # ResolveComplexVariants
     Array[File] complex_resolve_vcfs = ResolveComplexVariants.complex_resolve_vcfs
     Array[File] complex_resolve_vcf_indexes = ResolveComplexVariants.complex_resolve_vcf_indexes
-    Array[File] complex_resolve_bothside_pass_lists = ResolveComplexVariants.complex_resolve_bothside_pass_lists
-    Array[File] complex_resolve_background_fail_lists = ResolveComplexVariants.complex_resolve_background_fail_lists
+    File complex_resolve_bothside_pass_list = ResolveComplexVariants.complex_resolve_bothside_pass_list
+    File complex_resolve_background_fail_list = ResolveComplexVariants.complex_resolve_background_fail_list
     Array[File] breakpoint_overlap_dropped_record_vcfs = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcfs
     Array[File] breakpoint_overlap_dropped_record_vcf_indexes = ResolveComplexVariants.breakpoint_overlap_dropped_record_vcf_indexes
 
