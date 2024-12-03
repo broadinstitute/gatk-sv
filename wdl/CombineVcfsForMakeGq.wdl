@@ -35,7 +35,7 @@ workflow CombineVcfsForMakeGq {
 		call FormatVcfForGatk {
 			input:
 				sample_id       = sample_ids[idx],
-				sorted_vcf      = SortVcf.sorted_vcf,
+				vcf_path      	= SortVcf.sorted_vcf,
 				ploidy_table    = ploidy_table,
 				sv_pipeline_docker = sv_pipeline_docker
 		}
@@ -119,7 +119,7 @@ task SortVcf {
 task FormatVcfForGatk {
 	input {
 		String sample_id            # Sample identifier
-		File sorted_vcf             # Path to the sorted VCF file
+		File vcf_path               # Path to the sorted VCF file
 		File ploidy_table           # Path to the ploidy table
 		String sv_pipeline_docker   # Docker image path for GATK-SV
 	}
@@ -128,10 +128,10 @@ task FormatVcfForGatk {
 		set -eu -o pipefail
 
 		python /opt/src/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
-				--vcf ~{sorted_vcf} \
-				--out ~{sample_id}.formatted.vcf.gz \
-				--ploidy-table ~{ploidy_table} \
-				--fix-end
+			--vcf ~{vcf_path} \
+			--out ~{sample_id}.formatted.vcf.gz \
+			--ploidy-table ~{ploidy_table} \
+			--fix-end
 	>>>
 
 	output {
@@ -157,15 +157,17 @@ task SVCluster {
 	command <<<
 		set -eu -o pipefail
 
+		awk '{print "-V "$0}' ~{write_lines(formatted_vcfs)} > arguments.txt
+
 		gatk SVCluster \
-				~{"-V " + formatted_vcfs.join(" -V ")} \
-				--output clustered.vcf.gz \
-				--ploidy-table ~{ploidy_table} \
-				--reference ~{ref_fasta} \
-				--algorithm SINGLE_LINKAGE \
-				--depth-interval-overlap 1 --depth-breakend-window 0 \
-				--mixed-interval-overlap 1 --mixed-breakend-window 0 \
-				--pesr-interval-overlap 1 --pesr-breakend-window 0
+			--arguments_file arguments.txt \
+			--output clustered.vcf.gz \
+			--ploidy-table ~{ploidy_table} \
+			--reference ~{ref_fasta} \
+			--algorithm SINGLE_LINKAGE \
+			--depth-interval-overlap 1 --depth-breakend-window 0 \
+			--mixed-interval-overlap 1 --mixed-breakend-window 0 \
+			--pesr-interval-overlap 1 --pesr-breakend-window 0
 	>>>
 
 	output {
