@@ -1,6 +1,6 @@
 version 1.0
 
-workflow PreprocessDragenVcf {
+workflow PreprocessVcfForVapor {
 	input {
 		String sample_id            # Sample identifier
 		String vcf_path             # Path to the input VCF file

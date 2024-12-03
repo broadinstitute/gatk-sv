@@ -50,7 +50,6 @@ workflow Vapor {
         bam_or_cram_index = bam_or_cram_index,
         bed = PreprocessBedForVapor.contig_bed,
         ref_fasta = ref_fasta,
-        ref_dict = ref_dict,
         vapor_docker = vapor_docker,
         runtime_attr_override = runtime_attr_vapor
     }
