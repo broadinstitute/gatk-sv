@@ -3,11 +3,13 @@ version 1.0
 workflow PreprocessVcfForVapor {
 	input {
 		String sample_id            # Sample identifier
-		String vcf_path             # Path to the input VCF file
-		String sv_pipeline_docker   # Docker image path for GATK-SV
-		String svtk_docker          # Docker image path for svtk
+		File vcf_path             	# Path to the input VCF file
+
 		File contigs_file          	# Path to the contigs file
 		Int min_size               	# Minimum size for standardization
+
+		String sv_pipeline_docker   # Docker image path for GATK-SV
+		String svtk_docker          # Docker image path for svtk
 	}
 
 	call StandardizeVcf {
@@ -41,7 +43,7 @@ workflow PreprocessVcfForVapor {
 task StandardizeVcf {
 	input {
 		String sample_id            # Sample identifier
-		String vcf_path             # Path to the input VCF file
+		File vcf_path             # Path to the input VCF file
 		File contigs_file           # Path to the contigs file
 		Int min_size                # Minimum size for standardization
 		String svtk_docker          # Docker image path for svtk
@@ -49,9 +51,7 @@ task StandardizeVcf {
 
 	command <<<
 		set -eu -o pipefail
-
-		export GCS_OAUTH_TOKEN=gcloud auth application-default print-access-token
-
+		
 		svtk standardize \
 			--sample-names ~{sample_id} \
 			--contigs ~{contigs_file} \
