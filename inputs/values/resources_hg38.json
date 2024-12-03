@@ -1,90 +1,90 @@
 {
-  "name" : "resources_hg38",
-  "allosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai",
-  "allosomal_contigs" : ["chrX", "chrY"],
-  "chr_x" : "chrX",
-  "chr_y" : "chrY",
-  "autosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
-  "bin_exclude" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz",
-  "bin_exclude_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz.tbi",
-  "cnmops_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
-  "contig_ploidy_priors" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.contig_ploidy_priors_homo_sapiens.tsv",
-  "copy_number_autosomal_contigs" : 2,
-  "cytobands" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz",
-  "cytobands_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz.tbi",
-  "sd_locs_vcf" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf",
-  "depth_exclude_list" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz",
-  "depth_exclude_list_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz.tbi",
-  "empty_file" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file",
-  "exclude_intervals_for_gcnv_filter_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed",
-  "external_af_population" : ["ALL", "AFR", "AMR", "EAS", "EUR"],
-  "external_af_ref_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/gnomad_AF/gnomad_v2.1_sv.sites.GRCh38.bed.gz",
-  "external_af_ref_bed_prefix" : "gnomad_v2.1_sv",
-  "genome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome",
-  "hervk_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HERVK.sorted.bed.gz",
-  "line1_reference": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/LINE1.sorted.bed.gz",
-  "manta_region_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz",
-  "manta_region_bed_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz.tbi",
-  "mei_bed" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz",
-  "melt_std_vcf_header" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/melt_standard_vcf_header.txt",
-  "noncoding_bed" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed",
-  "par_bed": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.par.bed",
-  "pesr_exclude_list" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz",
-  "pesr_exclude_list_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz.tbi",
-  "preprocessed_intervals" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list",
-  "primary_contigs_fai" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai",
-  "primary_contigs_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list",
-  "contigs_header": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_contigs_header.vcf",
-  "protein_coding_gtf" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/MANE.GRCh38.v1.2.ensembl_genomic.gtf",
-  "reference_build" : "hg38",
-  "reference_bwa_alt": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.alt",
-  "reference_bwa_amb": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.amb",
-  "reference_bwa_ann": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.ann",
-  "reference_bwa_bwt": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.bwt",
-  "reference_bwa_pac": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.pac",
-  "reference_bwa_sa": "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.sa",
-  "reference_dict" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict",
-  "reference_fasta" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta",
-  "reference_index" : "gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai",
-  "reference_version" : "38",
-  "rmsk" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz",
-  "rmsk_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz.tbi",
-  "segdups" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz",
-  "segdups_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz.tbi",
-  "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
-  "single_sample_qc_definitions": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv",
-  "wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
-  "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
+"  ""name"" : ""resources_hg38"","
+"  ""allosome_file"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/allosome.fai"","
+"  ""allosomal_contigs"" : [""chrX"", ""chrY""],"
+"  ""chr_x"" : ""chrX"","
+"  ""chr_y"" : ""chrY"","
+"  ""autosome_file"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai"","
+"  ""bin_exclude"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz"","
+"  ""bin_exclude_index"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz.tbi"","
+"  ""cnmops_exclude_list"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed"","
+"  ""contig_ploidy_priors"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.contig_ploidy_priors_homo_sapiens.tsv"","
+"  ""copy_number_autosomal_contigs"" : 2,"
+"  ""cytobands"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz"","
+"  ""cytobands_index"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/cytobands_hg38.bed.gz.tbi"","
+"  ""sd_locs_vcf"" : ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dbsnp138.vcf"","
+"  ""depth_exclude_list"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz"","
+"  ""depth_exclude_list_index"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/depth_blacklist.sorted.bed.gz.tbi"","
+"  ""empty_file"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/empty.file"","
+"  ""exclude_intervals_for_gcnv_filter_intervals"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.wgs.blacklist.wPAR.bed"","
+"  ""external_af_population"" :[""ALL"", ""AFR"", ""AMR"", ""EAS"", ""EUR"", ""MID"", ""FIN"", ""ASJ"", ""RMI"", ""SAS"", ""AMI""],"
+"  ""external_af_ref_bed"" : ""gs://gatk-sv-resources-public/gnomad_AF/gnomad_v4_SV.Freq.tsv.gz"","
+"  ""external_af_ref_bed_prefix"" : ""gnomad_v4.1_sv"","
+"  ""genome_file"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.genome"","
+"  ""hervk_reference"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HERVK.sorted.bed.gz"","
+"  ""line1_reference"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/LINE1.sorted.bed.gz"","
+"  ""manta_region_bed"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz"","
+"  ""manta_region_bed_index"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs_plus_mito.bed.gz.tbi"","
+"  ""mei_bed"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.repeatmasker.mei.with_SVA.pad_50_merged.bed.gz"","
+"  ""melt_std_vcf_header"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/melt_standard_vcf_header.txt"","
+"  ""noncoding_bed"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/noncoding.sort.hg38.bed"","
+"  ""par_bed"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.par.bed"","
+"  ""pesr_exclude_list"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz"","
+"  ""pesr_exclude_list_index"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/PESR.encode.peri_all.repeats.delly.hg38.blacklist.sorted.bed.gz.tbi"","
+"  ""preprocessed_intervals"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/preprocessed_intervals.interval_list"","
+"  ""primary_contigs_fai"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/contig.fai"","
+"  ""primary_contigs_list"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/primary_contigs.list"","
+"  ""contigs_header"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38_contigs_header.vcf"","
+"  ""protein_coding_gtf"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/MANE.GRCh38.v1.2.ensembl_genomic.gtf"","
+"  ""reference_build"" : ""hg38"","
+"  ""reference_bwa_alt"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.alt"","
+"  ""reference_bwa_amb"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.amb"","
+"  ""reference_bwa_ann"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.ann"","
+"  ""reference_bwa_bwt"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.bwt"","
+"  ""reference_bwa_pac"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.pac"","
+"  ""reference_bwa_sa"": ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.64.sa"","
+"  ""reference_dict"" : ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.dict"","
+"  ""reference_fasta"" : ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta"","
+"  ""reference_index"" : ""gs://gcp-public-data--broad-references/hg38/v0/Homo_sapiens_assembly38.fasta.fai"","
+"  ""reference_version"" : ""38"","
+"  ""rmsk"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz"","
+"  ""rmsk_index"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.randomForest_blacklist.withRepMask.bed.gz.tbi"","
+"  ""segdups"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz"","
+"  ""segdups_index"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz.tbi"","
+"  ""seed_cutoffs"" : ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt"","
+"  ""single_sample_qc_definitions"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv"","
+"  ""wgd_scoring_mask"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed"","
+"  ""wham_include_list_bed_file"" : ""gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed"","
 
-  "aou_recalibrate_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model",
-  "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
+"  ""aou_recalibrate_gq_model_file"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model"","
+"  ""hgdp_recalibrate_gq_model_file"": ""gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model"","
 
-  "recalibrate_gq_genome_track_repeatmasker": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
-  "recalibrate_gq_genome_track_repeatmasker_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz.tbi",
-  "recalibrate_gq_genome_track_segdup": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz",
-  "recalibrate_gq_genome_track_segdup_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz.tbi",
-  "recalibrate_gq_genome_track_simple_repeats": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz",
-  "recalibrate_gq_genome_track_simple_repeats_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz.tbi",
-  "recalibrate_gq_genome_track_umap100": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz",
-  "recalibrate_gq_genome_track_umap100_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz.tbi",
-  "recalibrate_gq_genome_track_umap24": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz",
-  "recalibrate_gq_genome_track_umap24_index": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi",
+"  ""recalibrate_gq_genome_track_repeatmasker"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz"","
+"  ""recalibrate_gq_genome_track_repeatmasker_index"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz.tbi"","
+"  ""recalibrate_gq_genome_track_segdup"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz"","
+"  ""recalibrate_gq_genome_track_segdup_index"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Segmental-Dups.bed.gz.tbi"","
+"  ""recalibrate_gq_genome_track_simple_repeats"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz"","
+"  ""recalibrate_gq_genome_track_simple_repeats_index"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-Simple-Repeats.bed.gz.tbi"","
+"  ""recalibrate_gq_genome_track_umap100"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz"","
+"  ""recalibrate_gq_genome_track_umap100_index"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s100.bed.gz.tbi"","
+"  ""recalibrate_gq_genome_track_umap24"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz"","
+"  ""recalibrate_gq_genome_track_umap24_index"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38_umap_s24.bed.gz.tbi"","
 
-  "ccdg_abel_site_level_benchmarking_dataset" : ["CCDG_abel", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel"],
-  "gnomad_v2_collins_sample_level_benchmarking_dataset": ["gnomAD_v2_Collins", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/gnomAD_v2_Collins_perSample.tar.gz"],
-  "gnomad_v2_collins_site_level_benchmarking_dataset" : ["gnomAD_v2_Collins", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins"],
-  "hgsv_byrska_bishop_sample_level_benchmarking_dataset": ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz"],
-  "hgsv_byrska_bishop_sample_renaming_tsv": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/rename_sample_ids_HGSV_ByrskaBishop.tsv",
-  "hgsv_byrska_bishop_site_level_benchmarking_dataset" : ["HGSV_ByrskaBishop", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV"],
-  "hgsv_ebert_sample_level_benchmarking_dataset": ["HGSV_Ebert", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_Ebert_perSample.tar.gz"],
-  "ssc_belyeu_sample_level_benchmarking_dataset": ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu_perSample.tar.gz"],
-  "ssc_belyeu_site_level_benchmarking_dataset" : ["SSC_Belyeu", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu"],
-  "ssc_sanders_sample_level_benchmarking_dataset": ["SSC_Sanders", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Sanders_perSample.v2.tar.gz"],
-  "thousand_genomes_site_level_benchmarking_dataset" : ["1000G_Sudmant", "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant"],
+"  ""ccdg_abel_site_level_benchmarking_dataset"" : [""CCDG_abel"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/CCDG_Abel""],"
+"  ""gnomad_v2_collins_sample_level_benchmarking_dataset"": [""gnomAD_v2_Collins"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/gnomAD_v2_Collins_perSample.tar.gz""],"
+"  ""gnomad_v2_collins_site_level_benchmarking_dataset"" : [""gnomAD_v2_Collins"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gnomAD_v2_Collins""],"
+"  ""hgsv_byrska_bishop_sample_level_benchmarking_dataset"": [""HGSV_ByrskaBishop"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV_perSample.tar.gz""],"
+"  ""hgsv_byrska_bishop_sample_renaming_tsv"": ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/rename_sample_ids_HGSV_ByrskaBishop.tsv"","
+"  ""hgsv_byrska_bishop_site_level_benchmarking_dataset"" : [""HGSV_ByrskaBishop"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_ByrskaBishop_GATKSV""],"
+"  ""hgsv_ebert_sample_level_benchmarking_dataset"": [""HGSV_Ebert"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/HGSV_Ebert_perSample.tar.gz""],"
+"  ""ssc_belyeu_sample_level_benchmarking_dataset"": [""SSC_Belyeu"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu_perSample.tar.gz""],"
+"  ""ssc_belyeu_site_level_benchmarking_dataset"" : [""SSC_Belyeu"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Belyeu""],"
+"  ""ssc_sanders_sample_level_benchmarking_dataset"": [""SSC_Sanders"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/SSC_Sanders_perSample.v2.tar.gz""],"
+"  ""thousand_genomes_site_level_benchmarking_dataset"" : [""1000G_Sudmant"", ""gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/1000G_Sudmant""],"
 
-  "asc_site_level_benchmarking_dataset" : ["ASC_Werling","gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling"],
-  "hgsv_site_level_benchmarking_dataset" : ["HGSV_Chaisson", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson"],
-  "collins_2017_sample_level_benchmarking_dataset" : ["Collins_2017", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Collins_2017_hg38.tar.gz"],
-  "sanders_2015_sample_level_benchmarking_dataset" : ["Sanders_2015", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Sanders_2015_hg38.tar.gz"],
-  "werling_2018_sample_level_benchmarking_dataset" : ["Werling_2018", "gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Werling_2018_hg38.tar.gz"]
+"  ""asc_site_level_benchmarking_dataset"" : [""ASC_Werling"",""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/ASC_Werling""],"
+"  ""hgsv_site_level_benchmarking_dataset"" : [""HGSV_Chaisson"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/HGSV_Chaisson""],"
+"  ""collins_2017_sample_level_benchmarking_dataset"" : [""Collins_2017"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Collins_2017_hg38.tar.gz""],"
+"  ""sanders_2015_sample_level_benchmarking_dataset"" : [""Sanders_2015"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Sanders_2015_hg38.tar.gz""],"
+"  ""werling_2018_sample_level_benchmarking_dataset"" : [""Werling_2018"", ""gs://gatk-sv-resources-secure/resources/hg38_benchmarking/Werling_2018_hg38.tar.gz""]"
 }
