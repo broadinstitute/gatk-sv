@@ -89,8 +89,9 @@
   "GATKSVPipelineSingleSample.stratification_config_part1" : "${workspace.clustering_config_part1}",
   "GATKSVPipelineSingleSample.clustering_config_part2" : "${workspace.clustering_config_part2}",
   "GATKSVPipelineSingleSample.stratification_config_part2" : "${workspace.stratification_config_part2}",
-  "GATKSVPipelineSingleSample.clustering_track_names" : "${workspace.clustering_track_names}",
-  "GATKSVPipelineSingleSample.clustering_track_bed_files" : "${workspace.clustering_track_bed_files}",
+
+  "GATKSVPipelineSingleSample.clustering_track_names" : {{ reference_resources.clustering_track_names | tojson }},
+  "GATKSVPipelineSingleSample.clustering_track_bed_files" : {{ reference_resources.clustering_tracks | tojson }},
 
   "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : 2,
   "GATKSVPipelineSingleSample.clean_vcf_min_sr_background_fail_batches": 0.5,

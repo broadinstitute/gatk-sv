@@ -5,8 +5,8 @@
   "CombineBatches.stratification_config_part1" : "${workspace.clustering_config_part1}",
   "CombineBatches.clustering_config_part2" : "${workspace.clustering_config_part2}",
   "CombineBatches.stratification_config_part2" : "${workspace.stratification_config_part2}",
-  "CombineBatches.track_names" : "${workspace.clustering_track_names}",
-  "CombineBatches.track_bed_files" : "${workspace.clustering_track_bed_files}",
+  "CombineBatches.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "CombineBatches.track_names": {{ reference_resources.clustering_track_names | tojson }},
 
   "CombineBatches.min_sr_background_fail_batches": 0.5,
   "CombineBatches.gatk_docker": "${workspace.gatk_docker}",
