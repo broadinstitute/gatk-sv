@@ -8,7 +8,7 @@ workflow CombineVcfsForMakeGq {
 			File ploidy_table                   # Path to the ploidy table file
 			File contigs_fai                    # Path to the contigs FASTA index file
 			File ref_fasta                      # Path to the reference FASTA file
-			Int min_size               	# Minimum size for standardization
+			Int min_size               					# Minimum size for standardization
 
 			String sv_pipeline_docker           # Docker image path for GATK-SV and related tools
 			String svtk_docker                  # Docker image path for svtk
@@ -60,7 +60,7 @@ task StandardizeVcf {
 	input {
 		String sample_id            # Sample identifier
 		File vcf_path               # Path to the input VCF file
-		File contigs_file          # Path to the contigs file (FAI index)
+		File contigs_file          	# Path to the contigs file (FAI index)
 		Int min_size                # Minimum size for standardization
 		String svtk_docker          # Docker image path for svtk
 	}
@@ -116,7 +116,6 @@ task SortVcf {
 	}
 }
 
-# Task to Format VCF for GATK using a Python script
 task FormatVcfForGatk {
 	input {
 		String sample_id            # Sample identifier
@@ -147,7 +146,6 @@ task FormatVcfForGatk {
 	}
 }
 
-# Task to Cluster VCFs using GATK SVCluster
 task SVCluster {
 	input {
 		Array[File] formatted_vcfs  # Array of formatted VCF files
@@ -160,7 +158,7 @@ task SVCluster {
 		set -eu -o pipefail
 
 		gatk SVCluster \
-				$(for vcf in ~{formatted_vcfs} ; do echo "-V $vcf "; done) \
+				~{"-V " + formatted_vcfs.join(" -V ")} \
 				--output clustered.vcf.gz \
 				--ploidy-table ~{ploidy_table} \
 				--reference ~{ref_fasta} \
