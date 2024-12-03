@@ -2,18 +2,18 @@ version 1.0
 
 workflow CombineVcfsForMakeGq {
 	input {
-			Array[String] sample_ids            # Array of sample identifiers
-			Array[File] vcf_paths               # Array of input VCF file paths (same order as sample_ids)
+		Array[String] sample_ids            # Array of sample identifiers
+		Array[File] vcf_paths               # Array of input VCF file paths (same order as sample_ids)
 
-			File ploidy_table                   # Path to the ploidy table file
-			File contigs_fai                    # Path to the contigs FASTA index file
-			File ref_fasta                      # Path to the reference FASTA file
-			File ref_fasta_fai                  # Path to the reference FASTA index file
-			File ref_dict                       # Path to the reference dictionary
-			Int min_size               					# Minimum size for standardization
+		File ploidy_table                   # Path to the ploidy table file
+		File contigs_fai                    # Path to the contigs FASTA index file
+		File ref_fasta                      # Path to the reference FASTA file
+		File ref_fasta_fai                  # Path to the reference FASTA index file
+		File ref_dict                       # Path to the reference dictionary
+		Int min_size               					# Minimum size for standardization
 
-			String sv_pipeline_docker           # Docker image path for GATK-SV
-			String gatk_docker                  # Docker image path for GATK
+		String sv_pipeline_docker           # Docker image path for GATK-SV
+		String gatk_docker                  # Docker image path for GATK
 	}
 
 	scatter (idx in range(length(sample_ids))) {
@@ -43,15 +43,17 @@ workflow CombineVcfsForMakeGq {
 	}
 
 	Array[File] formatted_vcfs = FormatVcfForGatk.formatted_vcf
+	Array[File] formatted_vcf_indices = FormatVcfForGatk.formatted_vcf_index
 	
 	call SVCluster {
 		input:
-			formatted_vcfs  = formatted_vcfs,
-			ploidy_table    = ploidy_table,
-			ref_fasta       = ref_fasta,
-			ref_fasta_fai   = ref_fasta_fai,
-			ref_dict        = ref_dict,
-			gatk_docker     = gatk_docker
+			formatted_vcfs  			= formatted_vcfs,
+			formatted_vcf_indices = formatted_vcf_indices,
+			ploidy_table   				= ploidy_table,
+			ref_fasta      				= ref_fasta,
+			ref_fasta_fai  				= ref_fasta_fai,
+			ref_dict       				= ref_dict,
+			gatk_docker    				= gatk_docker
 	}
 
 	output {
@@ -69,15 +71,15 @@ task StandardizeVcf {
 	}
 
 	command <<<
-			set -eu -o pipefail
+		set -eu -o pipefail
 
-			svtk standardize \
-					--sample-names ~{sample_id} \
-					--contigs ~{contigs_fai} \
-					--min-size ~{min_size} \
-					~{vcf_path} \
-					~{sample_id}.std_dragen.vcf.gz \
-					dragen
+		svtk standardize \
+			--sample-names ~{sample_id} \
+			--contigs ~{contigs_fai} \
+			--min-size ~{min_size} \
+			~{vcf_path} \
+			~{sample_id}.std_dragen.vcf.gz \
+			dragen
 	>>>
 
 	output {
@@ -133,10 +135,13 @@ task FormatVcfForGatk {
 			--out ~{sample_id}.formatted.vcf.gz \
 			--ploidy-table ~{ploidy_table} \
 			--fix-end
+
+		tabix -p vcf ~{sample_id}.formatted.vcf.gz
 	>>>
 
 	output {
 		File formatted_vcf = "~{sample_id}.formatted.vcf.gz"
+		File formatted_vcf_index = "~{sample_id}.formatted.vcf.gz.tbi"
 	}
 
 	runtime {
@@ -150,6 +155,7 @@ task FormatVcfForGatk {
 task SVCluster {
 	input {
 		Array[File] formatted_vcfs
+		Array[File] formatted_vcf_indices
 		File ploidy_table
 		File ref_fasta
 		File ref_fasta_fai
