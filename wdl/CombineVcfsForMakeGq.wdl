@@ -173,7 +173,6 @@ task SVCluster {
 			--output clustered.vcf.gz \
 			--ploidy-table ~{ploidy_table} \
 			--reference ~{ref_fasta} \
-			--algorithm SINGLE_LINKAGE \
 			--depth-interval-overlap 1 --depth-breakend-window 0 \
 			--mixed-interval-overlap 1 --mixed-breakend-window 0 \
 			--pesr-interval-overlap 1 --pesr-breakend-window 0
