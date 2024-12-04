@@ -372,7 +372,7 @@ task PrepSampleVcf {
 
   RuntimeAttr default_attr = object {
                                cpu_cores: 1,
-                               mem_gb: 3.75,
+                               mem_gb: 8,
                                disk_gb: ceil(50 + size(vcf, "GB")),
                                boot_disk_gb: 10,
                                preemptible_tries: 1,
@@ -390,7 +390,8 @@ task PrepSampleVcf {
     # Subset to DEL/DUP/INS and convert DUP to INS
     bcftools view -s "~{sample_id}" ~{vcf} | bcftools view --no-update --min-ac 1 -Oz -o tmp1.vcf.gz
     python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" script} tmp1.vcf.gz \
-      | bcftools sort -Oz -o ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
+      | bcftools sort -Oz -o tmp2.vcf.gz
+    bgzip -c tmp2.vcf.gz > ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
     tabix ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
   >>>
   runtime {
