@@ -62,7 +62,7 @@ task CalcuFstSv{
 
     output{
         File Fst_sv_sites = "~{filebase}.Fst.sites"
-        File Fst_sv_pop = "~{filebase}.Fst.sites"
+        File Fst_sv_pop = "~{filebase}.Fst.pop"
     }
 
     String filebase = basename(vcf,".vcf.gz")
@@ -110,7 +110,7 @@ task CalcuFstSnv{
 
     output{
         File Fst_snv_sites = "~{filebase}.Fst.sites"
-        File Fst_snv_pop = "~{filebase}.Fst.sites"
+        File Fst_snv_pop = "~{filebase}.Fst.pop"
     }
 
     String filebase = basename(vcf,".vcf.gz")
