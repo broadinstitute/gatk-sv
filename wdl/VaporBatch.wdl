@@ -11,6 +11,8 @@ workflow VaporBatch {
     File bed_file  # Multi-sample bed file, generated with svtk vcf2bed (e.g. as in MainVcfQc)
 
     File ref_fasta
+    File ref_fai
+    File ref_dict
     File contigs
 
     String vapor_docker
@@ -35,6 +37,8 @@ workflow VaporBatch {
         bed_file = bed_file,
         sample_id = samples[i],
         ref_fasta = ref_fasta,
+        ref_fai = ref_fai,
+        ref_dict = ref_dict,
         contigs = contigs,
         save_plots = save_plots,
         vapor_docker = vapor_docker,
