@@ -99,14 +99,6 @@ task SVConcordanceTask {
   }
   command <<<
     set -euo pipefail
-
-    if [[ ! -f "~{eval_vcf}.tbi" ]]; then
-        tabix "~{eval_vcf}"
-    fi
-
-    if [[ ! -f "~{truth_vcf}.tbi" ]]; then
-        tabix "~{truth_vcf}"
-    fi
     
     function getJavaMem() {
     # get JVM memory in MiB by getting total memory from /proc/meminfo
