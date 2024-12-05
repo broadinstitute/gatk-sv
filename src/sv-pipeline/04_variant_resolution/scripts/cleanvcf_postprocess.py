@@ -92,9 +92,9 @@ def process_svtype(record):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Clean VCF post-processing.')
-    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF name')
-    parser.add_argument('input_vcf', help='Input VCF file')
+    parser = argparse.ArgumentParser(description='CleanVcf postprocessing.')
+    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
+    parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
     args = parser.parse_args()
 
     # Open input VCF

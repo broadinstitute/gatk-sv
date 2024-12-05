@@ -91,13 +91,11 @@ def process_bothsides_support(record, pass_set):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Process VCF variants.')
-    parser.add_argument('--chr-X', dest='chrX', default='chrX', help='chrX column name')
-    parser.add_argument('--chr-Y', dest='chrY', default='chrY', help='chrY column name')
+    parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
+    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
+    parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
     parser.add_argument('--fail-list', required=True, help='File with variants failing the background test')
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
-    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF name')
-    parser.add_argument('input_vcf', help='Input VCF file')
     args = parser.parse_args()
 
     # Read noisy and bothsides support events into sets
