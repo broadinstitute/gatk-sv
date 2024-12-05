@@ -67,6 +67,7 @@
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
   "aou_recalibrate_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.aou_phase_1.v1.model",
+  "hgsvc_release3_gq_model_file": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/gatk-sv-recalibrator.hgsvc_release3.v1.model",
   "hgdp_recalibrate_gq_model_file": "gs://gatk-sv-hgdp/mw-sv-concordance-update/hgdp.gq_recalibrator.model",
 
   "recalibrate_gq_genome_track_repeatmasker": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/ucsc-genome-tracks/hg38-RepeatMasker.bed.gz",
