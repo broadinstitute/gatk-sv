@@ -50,43 +50,17 @@ def check_multiallelic(records):
     records : list of pysam.VariantRecord
     """
     for record in records:
-        if record.alts[0] == '<CN0>':
+        if record.alts[0] in ['<CNV>', '<CN0>']:
             return True
-        #  for sample in record.samples:
-            #  GT = record.samples[sample]['GT']
-            #  if GT[0] > 1 or GT[1] > 1:
-            #  return True
-
     return False
 
 
 def make_multiallelic_alts(records):
     """
-    Make list of alts corresponding to record with highest observed copy number
-
-    Parameters
-    ----------
-    records : list of pysam.VariantRecord
-
-    Returns
-    -------
-    alts : tuple of str
+    Sets simple symbolic alt for multi-allelic records
     """
-
-    max_CN = 2
-
-    is_bca = records[0].info['SVTYPE'] not in 'DEL DUP'.split()
-
     for record in records:
-        if record.alts[0] == '<CN0>':
-            CN = int(record.alts[-1].strip('<CN>'))
-            if CN > max_CN:
-                max_CN = CN
-
-    if is_bca:
-        return tuple(['<CN1>'] + ['<CN%d>' % i for i in range(1, max_CN + 1)])
-    else:
-        return tuple(['<CN0>'] + ['<CN%d>' % i for i in range(1, max_CN + 1)])
+        record.alts = ('<CNV>',)
 
 
 def update_best_genotypes(new_record, records, preserve_multiallelic=False):
@@ -113,7 +87,7 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
         is_multiallelic = False
 
     if is_multiallelic:
-        new_record.alts = make_multiallelic_alts(records)
+        make_multiallelic_alts(records)
 
     new_record_formats = new_record.header.formats.keys()
     for sample in new_record.samples:
@@ -123,17 +97,12 @@ def update_best_genotypes(new_record, records, preserve_multiallelic=False):
                 # If any record is multiallelic, replace non-multiallelic
                 # genotypes with multiallelic equivalents
                 if key == 'GT':
-                    GT = best_record.samples[sample][key]
+                    gt = best_record.samples[sample][key]
                     if is_multiallelic:
-                        if GT == (0, 1):
-                            new_record.samples[sample][key] = (0, 2)
-                        elif GT == (1, 1):
-                            new_record.samples[sample][key] = (2, 2)
-                        else:
-                            new_record.samples[sample][key] = GT
+                        # No genotypes for multi-allelic records since they can't always be determined
+                        new_record.samples[sample][key] = (None, None)
                     else:
-                        GT = tuple([x if x is None else min(x, 1) for x in GT])
-                        new_record.samples[sample][key] = GT
+                        new_record.samples[sample][key] = tuple([x if x is None else min(x, 1) for x in gt])
                 elif key == 'EV':
                     ev_values = [r.samples[sample][key] for r in records]
                     ev_values = [_str_to_tuple(v) for v in ev_values]

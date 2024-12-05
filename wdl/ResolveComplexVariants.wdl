@@ -318,6 +318,7 @@ task BreakpointOverlap {
     File bothside_pass_list
     File background_fail_list
     String prefix
+    File? script
     String sv_pipeline_docker
     RuntimeAttr? runtime_attr_override
   }
@@ -346,7 +347,7 @@ task BreakpointOverlap {
 
   command <<<
     set -euo pipefail
-    python /opt/sv-pipeline/04_variant_resolution/scripts/overlap_breakpoint_filter.py \
+    python ~{default="/opt/sv-pipeline/04_variant_resolution/scripts/overlap_breakpoint_filter.py" script} \
       ~{vcf} \
       ~{bothside_pass_list} \
       ~{background_fail_list} \
