@@ -23,7 +23,22 @@ def _parse_arguments(argv: List[Text]) -> argparse.Namespace:
     return parsed_arguments
 
 
+def add_header_lines(header: pysam.VariantHeader) -> pysam.VariantHeader:
+    """
+    Ingests the given header, removes specified fields, and adds necessary fields.
+
+    Parameters
+    ----------
+    header: pysam.VariantHeader
+        input header
+    """
+    # new fields
+    header.add_line('##INFO=<ID=ORIGINAL_SVTYPE,Number=1,Type=String,Description="Original type of structural variant">')
+    header.add_line('##INFO=<ID=ORIGINAL_ALT,Number=1,Type=String,Description="Original ALT allele">')
+
+
 def process(vcf: pysam.VariantFile) -> None:
+    add_header_lines(vcf.header)
     sys.stdout.write(str(vcf.header))
     allowed_svtypes = set(['DEL', 'DUP', 'INS', 'INV'])
     for record in vcf:
@@ -33,13 +48,15 @@ def process(vcf: pysam.VariantFile) -> None:
         svlen = record.info.get('SVLEN', record.stop - record.pos)
         if svlen > 5000:
             continue
+        record.info['ORIGINAL_SVTYPE'] = svtype
+        record.info['ORIGINAL_ALT'] = record.alts[0]
         if svtype != 'DUP':
             sys.stdout.write(str(record))
         else:
             record.info['SVLEN'] = record.stop - record.pos
             record.info['SVTYPE'] = 'INS'
             record.stop = record.pos + 1
-            sys.stdout.write(str(record).replace("<DUP>", "<INS>"))
+            sys.stdout.write(str(record).replace("\t<DUP>", "\t<INS>"))
 
 
 def main(argv: Optional[List[Text]] = None):
