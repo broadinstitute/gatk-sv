@@ -9,6 +9,7 @@ workflow CalculateFst {
         File samp_pop
         String variant_type 
         String sv_fst_docker
+        RuntimeAttr? runtime_attr_fst
     }
 
     if (variant_type=="SV"){
@@ -17,7 +18,8 @@ workflow CalculateFst {
                 vcf = vcf,
                 vcf_idx = vcf_idx,
                 samp_pop = samp_pop,
-                sv_fst_docker = sv_fst_docker
+                sv_fst_docker = sv_fst_docker,
+                runtime_attr_override = runtime_attr_fst
             }
         }
 
@@ -27,7 +29,8 @@ workflow CalculateFst {
                 vcf = vcf,
                 vcf_idx = vcf_idx,
                 samp_pop = samp_pop,
-                sv_fst_docker = sv_fst_docker
+                sv_fst_docker = sv_fst_docker,
+                runtime_attr_override = runtime_attr_fst
             }
         }
 
