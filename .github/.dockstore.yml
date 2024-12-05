@@ -219,5 +219,6 @@ workflows:
     filters:
       branches:
         - main
+        - mw_gatk_combine_batches
       tags:
         - /.*/
