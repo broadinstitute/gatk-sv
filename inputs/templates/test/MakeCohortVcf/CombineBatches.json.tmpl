@@ -25,9 +25,7 @@
   "CombineBatches.pesr_vcfs": [
     {{ test_batch.genotyped_pesr_vcf| tojson }}
   ],
-  "CombineBatches.depth_vcfs": [
-    {{ test_batch.regenotyped_depth_vcf | tojson }}
-  ],
+  "CombineBatches.depth_vcfs": {{ test_batch.regenotyped_depth_vcf | tojson }},
   "CombineBatches.raw_sr_bothside_pass_files": [
     {{ test_batch.raw_sr_bothside_pass_file | tojson }}
   ],

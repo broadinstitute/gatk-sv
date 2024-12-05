@@ -217,6 +217,16 @@ workflows:
         - /.*/
 
   - subclass: WDL
+    name: MakeGqRecalibratorTrainingSetFromPacBio
+    primaryDescriptorPath: /wdl/MakeGqRecalibratorTrainingSetFromPacBio.wdl
+    filters:
+      branches:
+        - main
+        - mw_ss_mode_v1
+      tags:
+        - /.*/
+
+  - subclass: WDL
     name: SingleSamplePipeline
     primaryDescriptorPath: /wdl/GATKSVPipelineSingleSample.wdl
     filters:
@@ -231,5 +241,14 @@ workflows:
     filters:
       branches:
         - main
+      tags:
+        - /.*/
+
+  - subclass: WDL
+    name: SingleSamplePipelinePart2
+    primaryDescriptorPath: /wdl/GATKSVPipelineSingleSamplePart2.wdl
+    filters:
+      branches:
+        - mw_ss_mode_v1
       tags:
         - /.*/
