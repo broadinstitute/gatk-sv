@@ -57,6 +57,16 @@ RUN export APT_TRANSIENT_PACKAGES=$(diff_of_lists.sh "$BUILD_DEPS" $APT_REQUIRED
            /usr/share/man/?? \
            /usr/share/man/??_*
 
+# Install DuckDB
+# bgzip, tabix, and bcftools should be installed
+ARG DUCKDB_VERSION="1.1.3"
+ARG DUCKDB_URI="https://github.com/duckdb/duckdb/releases/download/v${DUCKDB_VERSION}/duckdb_cli-linux-amd64.zip"
+RUN curl -L -o duckdb_cli-linux-amd64.zip "${DUCKDB_URI}" \
+  && unzip duckdb_cli-linux-amd64.zip -d /usr/local/bin \
+  && rm duckdb_cli-linux-amd64.zip
+RUN pip install --no-cache-dir "duckdb==${DUCKDB_VERSION}"
+
+
 # test that the installed packages run
 RUN svtk -h
 RUN svtest -h
