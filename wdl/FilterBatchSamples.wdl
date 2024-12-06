@@ -103,9 +103,9 @@ workflow FilterBatchSamples {
       runtime_attr_override = runtime_attr_filter_samples
   }
 
-  Array[Int] defined_indices_no_depth = range(length(vcfs)).filter { i => defined(vcfs[i]) && vcfs[i] != depth_vcf }
-  Array[File] pesr_vcfs_no_outliers = select_all([SubsetVcfBySamplesList.vcf_subset[i] for i in defined_indices_no_depth])
-  Array[File] pesr_vcfs_no_outliers_index = select_all([SubsetVcfBySamplesList.vcf_subset_index[i] for i in defined_indices_no_depth])
+  Int depth_index = select_first([indexOf(algorithms, "depth")])
+  Array[File] pesr_vcfs_no_outliers = select_all([SubsetVcfBySamplesList.vcf_subset[i] for i in range(num_algorithms) if i != depth_index])
+  Array[File] pesr_vcfs_no_outliers_index = select_all([SubsetVcfBySamplesList.vcf_subset_index[i] for i in range(num_algorithms) if i != depth_index])
   call tasks_mcv.ConcatVcfs as MergePesrVcfs {
     input:
       vcfs=pesr_vcfs_no_outliers,
