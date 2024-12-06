@@ -32,10 +32,13 @@ workflow CleanVcfChromosome {
 		String sv_pipeline_docker
 
 		# overrides for local tasks
+		RuntimeAttr? runtime_attr_preprocess
 		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
+		RuntimeAttr? runtime_attr_postprocess
+
 		RuntimeAttr? runtime_override_clean_vcf_1a
 		RuntimeAttr? runtime_override_clean_vcf_1b
 		RuntimeAttr? runtime_override_clean_vcf_2
@@ -103,6 +106,7 @@ workflow CleanVcfChromosome {
 	call CleanVcfReviseAbnormalAllosomes {
 		input:
 			vcf=CleanVcfReviseLargeCnvs.out,
+			outlier_samples_list=outlier_samples_list,
 			prefix="~{prefix}.revise_abnormal_allosomes",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_abnormal_allosomes
@@ -121,7 +125,7 @@ workflow CleanVcfChromosome {
 			vcf=CleanVcfReviseMultiallelicCnvs.out,
 			prefix="~{prefix}.postprocess",
 			gatk_docker=gatk_docker,
-			runtime_attr_override=runtime_attr_revise_multiallelics
+			runtime_attr_override=runtime_attr_postprocess
 	}
 
 	call DropRedundantCnvs {
@@ -313,6 +317,7 @@ task CleanVcfReviseOverlappingCnvs {
 task CleanVcfReviseLargeCnvs {
 	input {
 		File vcf
+		File? outlier_samples_list
 		String prefix
 		String gatk_docker
 		RuntimeAttr? runtime_attr_override
@@ -349,7 +354,8 @@ task CleanVcfReviseLargeCnvs {
 		
 		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseLargeCnvs \
 			-V ~{vcf} \
-			-O ~{output_vcf}
+			-O ~{output_vcf} \
+			~{if defined(outlier_samples_list) then "--outlier-samples ~{outlier_samples_list}" else "" }
 	>>>
 
 	output {
