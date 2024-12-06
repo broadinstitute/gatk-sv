@@ -177,8 +177,6 @@ task SVCluster {
 			--depth-interval-overlap 1 --depth-breakend-window 0 \
 			--mixed-interval-overlap 1 --mixed-breakend-window 0 \
 			--pesr-interval-overlap 1 --pesr-breakend-window 0
-
-		tabix -p vcf clustered.vcf.gz
 	>>>
 
 	output {
