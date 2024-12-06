@@ -3,7 +3,6 @@ version 1.0
 import "Structs.wdl"
 import "CollectCoverage.wdl" as cov
 import "CollectSVEvidence.wdl" as coev
-import "CramToBam.ReviseBase.wdl" as rb
 import "Manta.wdl" as manta
 import "MELT.wdl" as melt
 import "Scramble.wdl" as scramble
@@ -34,10 +33,6 @@ workflow GatherSampleEvidence {
     # However, when run on shared file systems (e.g., HPC), it will, by default, create a copy of the
     # input files, and all subsequent operations will run on the deep copy of the input file.
     Boolean move_bam_or_cram_files = false
-
-    # Convert ambiguous bases (e.g. K, S, Y, etc.) to N
-    # Only use if encountering errors (expensive!)
-    Boolean revise_base = false
 
     # Localize reads parameters
     # set to true on default, skips localize_reads if set to false
@@ -123,7 +118,6 @@ workflow GatherSampleEvidence {
     # Runtime configuration overrides
     RuntimeAttr? runtime_attr_localize_reads
     RuntimeAttr? runtime_attr_split_cram
-    RuntimeAttr? runtime_attr_revise_base
     RuntimeAttr? runtime_attr_concat_bam
     RuntimeAttr? runtime_attr_manta
     RuntimeAttr? runtime_attr_melt_coverage
@@ -165,23 +159,8 @@ workflow GatherSampleEvidence {
     }
   }
 
-  if (revise_base) {
-    call rb.CramToBamReviseBase {
-      input:
-        cram_file = select_first([LocalizeReads.output_file, bam_or_cram_file]),
-        cram_index = select_first([LocalizeReads.output_index, bam_or_cram_index]),
-        reference_fasta = reference_fasta,
-        reference_index = reference_index,
-        contiglist = select_first([primary_contigs_fai]),
-        samtools_cloud_docker = samtools_cloud_docker,
-        runtime_attr_split_cram = runtime_attr_split_cram,
-        runtime_attr_revise_base = runtime_attr_revise_base,
-        runtime_attr_concat_bam = runtime_attr_concat_bam
-    }
-  }
-
-  File reads_file_ = select_first([CramToBamReviseBase.bam_file, LocalizeReads.output_file, bam_or_cram_file])
-  File reads_index_ = select_first([CramToBamReviseBase.bam_index, LocalizeReads.output_index, bam_or_cram_index_])
+  File reads_file_ = select_first([LocalizeReads.output_file, bam_or_cram_file])
+  File reads_index_ = select_first([LocalizeReads.output_index, bam_or_cram_index_])
 
   if (collect_coverage || run_melt || run_scramble) {
     call cov.CollectCounts {
