@@ -108,11 +108,12 @@ workflow GatherBatchEvidence {
     Float? defragment_max_dist
 
     # SV tool calls
+    Array[File]? dragen_vcfs       # Dragen VCF
     Array[File]? manta_vcfs        # Manta VCF
     Array[File]? melt_vcfs         # Melt VCF
     Array[File]? scramble_vcfs     # Scramble VCF
     Array[File]? wham_vcfs         # Wham VCF
-    Int min_svsize                  # Minimum SV length to include
+    Int min_svsize                 # Minimum SV length to include
 
     # CNMops files
     File cnmops_chrom_file
@@ -397,6 +398,7 @@ workflow GatherBatchEvidence {
   call pp.PreprocessPESR as PreprocessPESR {
     input:
       samples = samples,
+      dragen_vcfs = dragen_vcfs,
       manta_vcfs = manta_vcfs,
       melt_vcfs = melt_vcfs,
       scramble_vcfs = scramble_vcfs,
@@ -494,6 +496,7 @@ workflow GatherBatchEvidence {
 
     File median_cov = MedianCov.medianCov
 
+    File? std_dragen_vcf_tar = PreprocessPESR.std_dragen_vcf_tar
     File? std_manta_vcf_tar = PreprocessPESR.std_manta_vcf_tar
     File? std_melt_vcf_tar = PreprocessPESR.std_melt_vcf_tar
     File? std_scramble_vcf_tar = PreprocessPESR.std_scramble_vcf_tar
