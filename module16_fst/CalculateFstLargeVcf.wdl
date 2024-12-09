@@ -49,7 +49,7 @@ workflow CalculateFstLargeVcf {
         }
     }
 
-    if ~{defined(region_bed)}{
+    if (!defined(region_bed)){
         call calculate_fst.CalculateFst as Calculate_fst{
             input:
                 vcf = vcf,
