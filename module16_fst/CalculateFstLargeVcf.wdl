@@ -162,7 +162,7 @@ task ConcatBeds {
     set -o pipefail
 
     while read SPLIT; do
-      zcat $SPLIT
+      cat $SPLIT
     done < ~{write_lines(shard_bed_files)} \
       | (tail -n+2 || printf "") \
       | cat header.txt - \
