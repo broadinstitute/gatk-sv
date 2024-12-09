@@ -17,7 +17,9 @@ workflow CalculateFstLargeVcf {
     }
 
     if (defined(region_bed)){
-        Array[Array[String]] regions = read_tsv(region_bed)
+
+        Array[Array[String]] regions = read_tsv(select_first([region_bed]))
+
         scatter(region in regions){
             call TabixVcf{
                 input:
