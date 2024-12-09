@@ -35,7 +35,7 @@ workflow CalculateFst {
         }
 
     File Fst_sites = select_first([CalcuFstSv.Fst_sv_sites, CalcuFstSnv.Fst_snv_sites])
-    File Fst_pop = select_first([CalcuFstSv.Fst_sv_pop, CalcuFstSv.Fst_snv_pop])
+    File Fst_pop = select_first([CalcuFstSv.Fst_sv_pop, CalcuFstSnv.Fst_snv_pop])
 
     output {
         File output_fst_sites = Fst_sites
