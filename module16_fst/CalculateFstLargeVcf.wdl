@@ -62,7 +62,7 @@ workflow CalculateFstLargeVcf {
     }
 
 
-    Fst_sites = select_first([ConcatBeds.merged_file, Calculate_fst.output_fst_sites])
+    File Fst_sites = select_first([ConcatBeds.merged_file, Calculate_fst.output_fst_sites])
 
     output{
         File output_Fst_sites = Fst_sites
