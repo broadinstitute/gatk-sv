@@ -12,6 +12,7 @@ workflow CalculateFstWholeGenomeAoU {
         String prefix
         String variant_type 
         String sv_fst_docker
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_fst
     }
 
