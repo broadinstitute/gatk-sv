@@ -34,11 +34,12 @@ workflow CalculateFst {
             }
         }
 
+    Fst_sites = select_first([CalcuFstSv.Fst_sv_sites, CalcuFstSnv.Fst_snv_sites])
+    Fst_pop = select_first([CalcuFstSv.Fst_sv_pop, CalcuFstSv.Fst_snv_pop])
+
     output {
-        File? Fst_SV_sites = CalcuFstSv.Fst_sv_sites
-        File? Fst_SV_pop = CalcuFstSv.Fst_sv_pop
-        File? Fst_SNV_sites = CalcuFstSnv.Fst_snv_sites
-        File? Fst_SNV_pop = CalcuFstSnv.Fst_snv_pop
+        File output_fst_sites = Fst_sites
+        File output_fst_pop = Fst_pop
         }
     }
 
