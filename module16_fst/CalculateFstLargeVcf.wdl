@@ -25,7 +25,7 @@ workflow CalculateFstLargeVcf {
                 input:
                     vcf = vcf,
                     vcf_idx = vcf_idx, 
-                    region = region,
+                    region = region[0],
                     sv_base_mini_docker = sv_base_mini_docker,
                     runtime_attr_override = runtime_tabix_vcf
             }
