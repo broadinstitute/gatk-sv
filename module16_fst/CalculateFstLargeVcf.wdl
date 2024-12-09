@@ -127,7 +127,7 @@ task ConcatBeds {
   }
 
   Boolean call_tabix = select_first([index_output, true])
-  String output_file="~{prefix}.pop"
+  String output_file="~{prefix}.sites"
 
   # when filtering/sorting/etc, memory usage will likely go up (much of the data will have to
   # be held in memory or disk while working, potentially in a form that takes up more space)
