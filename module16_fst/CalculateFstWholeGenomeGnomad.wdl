@@ -15,7 +15,7 @@ workflow CalculateFstWholeGenomeGnomad {
         RuntimeAttr? runtime_attr_fst
     }
 
-    scatter(i in range(len(vcf_list))){
+    scatter(i in range(length(vcf_list))){
         call calculate_fst.CalculateFst{
             input:
                 vcf = vcf_list[i],

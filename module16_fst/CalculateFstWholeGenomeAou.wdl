@@ -15,7 +15,7 @@ workflow CalculateFstWholeGenomeAoU {
         RuntimeAttr? runtime_attr_fst
     }
 
-    scatter(i in range(len(vcf_list))){
+    scatter(i in range(length(vcf_list))){
         call calculate_fst.CalculateFstAou as CalculateFst{
             input:
                 vcf = vcf_list[i],
