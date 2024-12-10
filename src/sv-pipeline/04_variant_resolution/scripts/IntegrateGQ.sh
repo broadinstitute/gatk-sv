@@ -194,7 +194,6 @@ rm PESRall.combined.files.txt.gz
  |awk '{if (($5=="DEL") && $3-$2>=5000 ) print $4}' \
  >gt5kbcnv.del.ids.txt
 
-
 { fgrep -wvf <(zcat RDall.combined.files.txt.gz \
    |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
  |awk -F'\t' '{if (($5=="DUP" ) && $3-$2>=5000 ) print $4}'\
@@ -307,7 +306,7 @@ fi
 
 ###CNV <1kb and removing any CNV with no depth genotype####
 { fgrep -wvf <(zcat RDall.combined.files.txt.gz \
-    |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
+      |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
   |awk -F'\t' '{if (($5=="DUP" || $5=="DEL") && $3-$2<1000 ) print $4}' \
   >lt1kbcnv.ids.txt
 
