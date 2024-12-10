@@ -20,6 +20,8 @@ workflow GenotypeDepthPart2 {
     File coveragefile
     File? coveragefile_index
 
+    File? reformat_script
+
     String sv_pipeline_docker
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_split_variants
@@ -156,6 +158,7 @@ workflow GenotypeDepthPart2 {
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override=runtime_attr_concat_vcfs
   }
+
   output {
     File genotyped_vcf = ConcatVcfs.concat_vcf
     File genotyped_vcf_index = ConcatVcfs.concat_vcf_idx

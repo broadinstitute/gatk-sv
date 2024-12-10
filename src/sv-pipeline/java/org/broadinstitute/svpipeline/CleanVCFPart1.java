@@ -116,10 +116,10 @@ public class CleanVCFPart1 {
                     }
                 }
 
-                // move the SVTYPE to the ALT field (except for MEs)
+                // move the SVTYPE to the ALT field (except for MEs and multi-allelic DUPs)
                 final InfoField info = record.getInfo();
                 final ByteSequence svType = info.get(SVTYPE_KEY);
-                if ( !record.getAlt().contains(ME_VALUE) ) {
+                if ( !record.getAlt().contains(ME_VALUE) && !DUP_VALUE.equals(svType) ) {
                     if ( svType != null ) {
                         record.setAlt(new ByteSequence(LT_VALUE, svType, GT_VALUE));
                     }

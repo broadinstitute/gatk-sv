@@ -30,21 +30,7 @@ def rename(vcf, fout, chrom=None, prefix='SV_pipeline'):
         record.id = fmt.format(**locals())
 
         # Clean metadata
-        end = record.stop
         record.ref = 'N'
-        # if not record.alts[0].startswith('<'):
-        #     record.alts = ('<{0}>'.format(record.info['SVTYPE']), )
-        record.stop = end
-
-        # for key in record.format.keys():
-        #     if key != 'GT':
-        #         for sample in record.samples.keys():
-        #             record.samples[sample].pop(key)
-        #         del record.format[key]
-
-        for info in 'CIPOS CIEND RMSSTD MULTIALLELIC_TYPE'.split():
-            if info in record.info.keys():
-                record.info.pop(info)
 
         # Clean metadata for CNVs sucked into complex resolution
         # and not appropriately cleaned
