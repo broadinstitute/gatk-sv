@@ -76,10 +76,10 @@ fi
 
 ##All PE/SR .'s for samples missing RD##
 ##Add max PE/SR to use for future GQ integration##
-join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 1.3 1.4 1.5 2.4 2.5 2.6  \
+join -j 1 -a 1 -e "." -o 1.1 1.2 1.3 1.4 1.5 2.4 2.5 2.6  \
   <(zcat rd_indiv_geno.txt.gz) <(zcat pe_indiv_geno.txt.gz) \
   |tr ' ' '\t' \
-  |join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 2.4 2.5 2.6 - <(zcat sr_indiv_geno.txt.gz) \
+  |join -j 1 -e "." -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 2.4 2.5 2.6 - <(zcat sr_indiv_geno.txt.gz) \
   |tr ' ' '\t' \
   | awk '{if ($6==$9 && $8>=$11) print $0 "\t" $6 "\t" $7 "\t" $8 ; \
   else if ($6==$9 && $8<$11) print $0 "\t" $9 "\t" $10 "\t" $11 ; \
@@ -91,15 +91,15 @@ join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 1.3 1.4 1.5 2.4 2.5 2.6  \
   >RDall.combined.files.txt.gz
 
 ##variant combine##
-join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fgrep -v variant_gq|sort -k1,1 ) \
+join -j 1 -a 1 -e "." -o 1.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fgrep -v variant_gq|sort -k1,1 ) \
   <(zcat $pegeno_variants_file|sort -k1,1 ) \
-  |join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1) \
+  |join -j 1 -a 1 -e "." -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1) \
   |tr ' ' '\t' \
   |gzip \
   >RDall.variants.combined.files.txt.gz
 
 ##All RD NA's for samples missing RD##
-join -j 1 -a 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.txt.gz|sort -k1,1) \
+join -j 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.txt.gz|sort -k1,1) \
    <(zcat pe_indiv_geno.txt.gz|sort -k1,1) \
    |tr ' ' '\t' \
    |join -a 1 -a 2 -e "." -j 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 2.4 2.6 - <(zcat sr_indiv_geno.txt.gz|sort -k1,1) \
@@ -110,7 +110,7 @@ join -j 1 -a 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.
 ##variant combine##
 join -j 1 -a 1 -a 2 -e "." -o 2.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fgrep -v variant_gq|sort -k1,1) \
   <(zcat $pegeno_variants_file|sort -k1,1 ) \
-  |join -j 1 -a 1 -a 2 -e "." -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1 ) \
+  |join -j 1 -a 2 -e "." -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1 ) \
   |tr ' ' '\t' \
   |gzip \
   >PESRall.variants.combined.files.txt.gz
