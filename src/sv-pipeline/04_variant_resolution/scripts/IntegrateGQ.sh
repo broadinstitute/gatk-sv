@@ -33,14 +33,14 @@ zcat $RD_melted_genotypes \
 ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
 ##PE##
 zcat $pegeno_indiv_file \
-  |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
+  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; } \
   |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
   |awk '!seen[$1"@"$2]++' \
   >pe_indiv_geno.txt
     
 ##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
 zcat $pegeno_indiv_file \
-  |fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true \
+  | fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true \
   |awk '{if ($4>0) print $1"@"$2,$1,$2,$4,$4+2,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
   |awk '!seen[$1"@"$2]++' \
   >>pe_indiv_geno.txt
@@ -50,7 +50,7 @@ rm pe_indiv_geno.txt
 
 ##SR##
 zcat $srgeno_indiv_file \
-  |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
+  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; } \
   |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
   |awk '!seen[$1"@"$2]++' \
   >sr_indiv_geno.txt
@@ -99,7 +99,7 @@ join -j 1 -a 1 -e "." -o 1.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fg
   >RDall.variants.combined.files.txt.gz
 
 ##All RD NA's for samples missing RD##
-join -j 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6 <(zcat rd_indiv_geno.txt.gz|sort -k1,1) \
+join -j 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.txt.gz|sort -k1,1) \
    <(zcat pe_indiv_geno.txt.gz|sort -k1,1) \
    |tr ' ' '\t' \
    |join -j 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 2.4 2.6 - <(zcat sr_indiv_geno.txt.gz|sort -k1,1) \
@@ -189,13 +189,14 @@ rm PESRall.combined.files.txt.gz
 ##CNV##
 ##Recode RD to match PE/SR##
 ##CNV >5kb and removing any CNV with no depth genotype###
-fgrep -wvf <(zcat RDall.combined.files.txt.gz  \
-    |awk -F'\t' '{if ($4==".") print $2}') int.bed || true \
+{ fgrep -wvf <(zcat RDall.combined.files.txt.gz  \
+    |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
  |awk '{if (($5=="DEL") && $3-$2>=5000 ) print $4}' \
  >gt5kbcnv.del.ids.txt
 
-fgrep -wvf <(zcat RDall.combined.files.txt.gz \
-   |awk -F'\t' '{if ($4==".") print $2}') int.bed || true \
+
+{ fgrep -wvf <(zcat RDall.combined.files.txt.gz \
+   |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
  |awk -F'\t' '{if (($5=="DUP" ) && $3-$2>=5000 ) print $4}'\
  >gt5kbcnv.dup.ids.txt
 
@@ -265,8 +266,8 @@ then
 fi
 
 ##CNV 1-5kb and removing any CNV with no depth genotype###
-fgrep -wvf <(zcat RDall.combined.files.txt.gz \
-     |awk -F'\t' '{if ($4==".") print $2}') int.bed || true \
+{ fgrep -wvf <(zcat RDall.combined.files.txt.gz \
+     |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
   |awk -F'\t' '{if (($5=="DUP" || $5=="DEL") && $3-$2<5000 && $3-$2>=1000 ) print $4}' \
   >gt1_5kbcnv.ids.txt
 
@@ -305,8 +306,8 @@ then
 fi
 
 ###CNV <1kb and removing any CNV with no depth genotype####
-fgrep -wvf <(zcat RDall.combined.files.txt.gz \
-     |awk -F'\t' '{if ($4==".") print $2}') int.bed || true \
+{ fgrep -wvf <(zcat RDall.combined.files.txt.gz \
+    |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
   |awk -F'\t' '{if (($5=="DUP" || $5=="DEL") && $3-$2<1000 ) print $4}' \
   >lt1kbcnv.ids.txt
 
