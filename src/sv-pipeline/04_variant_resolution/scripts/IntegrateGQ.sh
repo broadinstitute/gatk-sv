@@ -108,9 +108,9 @@ join -j 1 -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.txt.gz|sort -k1,1
    >PESRall.combined.files.txt.gz
 
 ##variant combine##
-join -j 1 -a 2 -e "." -o 2.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fgrep -v variant_gq|sort -k1,1) \
+join -j 1 -o 2.1 1.2 2.2 <(cut -f4- $RD_melted_variants_gentoypes|fgrep -v variant_gq|sort -k1,1) \
   <(zcat $pegeno_variants_file|sort -k1,1 ) \
-  |join -j 1 -a 2 -e "." -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1 ) \
+  |join -j 1 -o 1.1 1.2 1.3 2.2 - <(zcat $srgeno_variants_file|sort -k1,1 ) \
   |tr ' ' '\t' \
   |gzip \
   >PESRall.variants.combined.files.txt.gz
