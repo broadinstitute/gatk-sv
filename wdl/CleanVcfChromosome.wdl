@@ -33,7 +33,8 @@ workflow CleanVcfChromosome {
 
 		# overrides for local tasks
 		RuntimeAttr? runtime_attr_preprocess
-		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
+		RuntimeAttr? runtime_attr_revise_overlapping_cnv_gts
+		RuntimeAttr? runtime_attr_revise_overlapping_cnv_cns
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
@@ -83,21 +84,30 @@ workflow CleanVcfChromosome {
 			background_list=background_list,
 			bothsides_pass_list=bothsides_pass_list,
 			prefix="~{prefix}.preprocess",
-			gatk_docker=gatk_docker,
+			sv_pipeline_docker=sv_pipeline_docker,
 			runtime_attr_override=runtime_attr_preprocess
 	}
 
-	call CleanVcfReviseOverlappingCnvs {
+	call CleanVcfReviseOverlappingCnvGts {
 		input:
 			vcf=CleanVcfPreprocess.out,
-			prefix="~{prefix}.revise_overlapping_cnvs",
+			prefix="~{prefix}.revise_overlapping_cnv_gts",
 			gatk_docker=gatk_docker,
-			runtime_attr_override=runtime_attr_revise_overlapping_cnvs
+			runtime_attr_override=runtime_attr_revise_overlapping_cnv_gts
+	}
+
+	call CleanVcfReviseOverlappingCnvCns {
+		input:
+			vcf=CleanVcfReviseOverlappingCnvGts.out,
+			prefix="~{prefix}.revise_overlapping_cnv_cns",
+			gatk_docker=gatk_docker,
+			runtime_attr_override=runtime_attr_revise_overlapping_cnv_cns
 	}
 
 	call CleanVcfReviseLargeCnvs {
 		input:
-			vcf=CleanVcfReviseOverlappingCnvs.out,
+			vcf=CleanVcfReviseOverlappingCnvGts.out,
+			outlier_samples_list=outlier_samples_list,
 			prefix="~{prefix}.revise_large_cnvs",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_large_cnvs
@@ -106,7 +116,6 @@ workflow CleanVcfChromosome {
 	call CleanVcfReviseAbnormalAllosomes {
 		input:
 			vcf=CleanVcfReviseLargeCnvs.out,
-			outlier_samples_list=outlier_samples_list,
 			prefix="~{prefix}.revise_abnormal_allosomes",
 			gatk_docker=gatk_docker,
 			runtime_attr_override=runtime_attr_revise_abnormal_allosomes
@@ -124,7 +133,7 @@ workflow CleanVcfChromosome {
 		input:
 			vcf=CleanVcfReviseMultiallelicCnvs.out,
 			prefix="~{prefix}.postprocess",
-			gatk_docker=gatk_docker,
+			sv_pipeline_docker=sv_pipeline_docker,
 			runtime_attr_override=runtime_attr_postprocess
 	}
 
@@ -218,7 +227,7 @@ task CleanVcfPreprocess {
 		File background_list
 		File bothsides_pass_list
 		String prefix
-		String gatk_docker
+		String sv_pipeline_docker
 		RuntimeAttr? runtime_attr_override
 	}
 
@@ -237,7 +246,7 @@ task CleanVcfPreprocess {
 		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
 		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
 		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: gatk_docker
+		docker: sv_pipeline_docker
 		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
 	}
 
@@ -266,7 +275,7 @@ task CleanVcfPreprocess {
 	}
 }
 
-task CleanVcfReviseOverlappingCnvs {
+task CleanVcfReviseOverlappingCnvGts {
 	input {
 		File vcf
 		String prefix
@@ -303,7 +312,55 @@ task CleanVcfReviseOverlappingCnvs {
 			tabix -p vcf ~{vcf}
 		fi
 		
-		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvs \
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvGts \
+			-V ~{vcf} \
+			-O ~{output_vcf}
+	>>>
+
+	output {
+		File out="~{output_vcf}"
+		File out_idx="~{output_vcf}.tbi"
+	}
+}
+
+task CleanVcfReviseOverlappingCnvCns {
+	input {
+		File vcf
+		String prefix
+		String gatk_docker
+		RuntimeAttr? runtime_attr_override
+	}
+
+	RuntimeAttr runtime_default = object {
+																	mem_gb: 3.75,
+																	disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
+																	cpu_cores: 1,
+																	preemptible_tries: 3,
+																	max_retries: 1,
+																	boot_disk_gb: 10
+																}						
+	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+	runtime {
+		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+		docker: gatk_docker
+		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+	}
+
+	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
+	String output_vcf = "~{prefix}.vcf.gz"
+
+	command <<<
+		set -euo pipefail
+
+		if [ ! -f "~{vcf}.tbi" ]; then
+			tabix -p vcf ~{vcf}
+		fi
+		
+		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvCns \
 			-V ~{vcf} \
 			-O ~{output_vcf}
 	>>>
@@ -464,7 +521,7 @@ task CleanVcfPostprocess {
 	input {
 		File vcf
 		String prefix
-		String gatk_docker
+		String sv_pipeline_docker
 		RuntimeAttr? runtime_attr_override
 	}
 
@@ -483,7 +540,7 @@ task CleanVcfPostprocess {
 		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
 		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
 		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: gatk_docker
+		docker: sv_pipeline_docker
 		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
 	}
 
