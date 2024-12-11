@@ -32,11 +32,12 @@ zcat $RD_melted_genotypes \
 
 ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
 ##PE##
-zcat $pegeno_indiv_file \
-  |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >pe_indiv_geno.txt
+(
+  zcat $pegeno_indiv_file \
+    |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
+    |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
+    |awk '!seen[$1"@"$2]++'
+) >pe_indiv_geno.txt
     
 ##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
 zcat $pegeno_indiv_file \
@@ -49,11 +50,12 @@ sort -k1,1 pe_indiv_geno.txt|gzip>pe_indiv_geno.txt.gz
 rm pe_indiv_geno.txt
 
 ##SR##
-zcat $srgeno_indiv_file \
-  |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >sr_indiv_geno.txt
+(
+  zcat $srgeno_indiv_file \
+    |fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true \
+    |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
+    |awk '!seen[$1"@"$2]++'
+) >sr_indiv_geno.txt
     
 ##Duplications and other events, need to PE-SR genotysrs to match RD (2==ref)##
 zcat $srgeno_indiv_file \
