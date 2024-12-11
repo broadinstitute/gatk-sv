@@ -14,7 +14,7 @@ workflow CalcuFstPopFromSites {
         input:
             Fst_sites = Fst_sites,
             sv_fst_docker = sv_fst_docker,
-            runtime_attr_fst_pop_from_sites = runtime_attr_fst_pop_from_sites
+            runtime_attr_override = runtime_attr_fst_pop_from_sites
     }
 
     output{
@@ -27,7 +27,8 @@ task CalcuFstPop{
     input{
         File Fst_sites
         String sv_fst_docker
-        RuntimeAttr? runtime_attr_fst_pop_from_sites
+        RuntimeAttr? runtime_attr_override
+
     }
 
     RuntimeAttr default_attr = object {
