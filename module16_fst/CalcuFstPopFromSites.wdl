@@ -18,7 +18,7 @@ workflow CalcuFstPopFromSites {
     }
 
     output{
-        File Fst_pop =  = CalcuFstPop.fst_pop
+        File Fst_pop =  CalcuFstPop.fst_pop
     }
 }
 
