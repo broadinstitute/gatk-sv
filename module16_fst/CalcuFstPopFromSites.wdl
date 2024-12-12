@@ -33,8 +33,8 @@ task CalcuFstPop{
 
     RuntimeAttr default_attr = object {
         cpu_cores: 1, 
-        mem_gb: 5, 
-        disk_gb: 10,
+        mem_gb: 10, 
+        disk_gb: 20,
         boot_disk_gb: 10,
         preemptible_tries: 1,
         max_retries: 1
@@ -55,9 +55,9 @@ task CalcuFstPop{
 
         set -o pipefail
 
-        grep -v _num ~{Fst_sites}  >> temp.sites
+        grep -v "_num" ~{Fst_sites}  >> temp.sites
 
-        python /src/Calcu_Fst_pop_from_sites.py -i ~{Fst_sites} -p ~{filebase}.pop
+        python /src/Calcu_Fst_pop_from_sites.py -i temp.sites -p ~{filebase}.pop
    >>>
 
     runtime {
