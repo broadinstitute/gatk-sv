@@ -4,6 +4,7 @@ import argparse
 import pysam
 import gzip
 
+
 VAR_GQ = 'VAR_GQ'
 MULTIALLELIC = 'MULTIALLELIC'
 UNRESOLVED = 'UNRESOLVED'
@@ -22,6 +23,7 @@ def read_last_column(file_path):
                 result_set.add(columns[-1])
     return result_set
 
+
 def process_record(record, fail_set, pass_set):
     record = process_varGQ(record)
     record = process_multiallelic(record)
@@ -29,6 +31,7 @@ def process_record(record, fail_set, pass_set):
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
     return record
+
 
 def process_varGQ(record):
     if VAR_GQ in record.info:
@@ -39,10 +42,12 @@ def process_varGQ(record):
         record.qual = var_gq
     return record
 
+
 def process_multiallelic(record):
     if MULTIALLELIC in record.info:
         del record.info[MULTIALLELIC]
     return record
+
 
 def process_unresolved(record):
     if UNRESOLVED in record.info:
@@ -50,15 +55,18 @@ def process_unresolved(record):
         record.filter.add(UNRESOLVED)
     return record
 
+
 def process_noisy(record, fail_set):
     if record.id in fail_set:
         record.info[HIGH_SR_BACKGROUND] = True
     return record
 
+
 def process_bothsides_support(record, pass_set):
     if record.id in pass_set:
         record.info[BOTHSIDES_SUPPORT] = True
     return record
+
 
 if __name__ == '__main__':
     # Parse arguments
