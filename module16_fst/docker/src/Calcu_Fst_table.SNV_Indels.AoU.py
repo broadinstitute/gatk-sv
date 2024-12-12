@@ -74,6 +74,7 @@ def calculate_fst_table(vcf,sample_pop):
         den_cols = [col for col in fst_data.columns if 'den' in col]
         fst_data['sum_num'] = fst_data[num_cols].sum(axis=1)
         fst_data['sum_den'] = fst_data[den_cols].sum(axis=1)
+        fst_data = fst_data[fst_data['sum_den'] != 0]
         fst_data['fst'] = fst_data['sum_num']/fst_data['sum_den']
         return fst_data
 

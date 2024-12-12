@@ -61,8 +61,8 @@ def calculate_fst_table(vcf,sample_pop):
             # Calculate num and den for each population pair
                     for (pop1, pop2) in pop_pairs:
                         # Calculate allele counts for each population
-                        ac1 = [record.info['AN_'+pop1], record.info['AC_'+pop1][0]]
-                        ac2 = [record.info['AN_'+pop2], record.info['AC_'+pop2][0]]
+                        ac1 = [record.info[pop1+'_AN'], record.info[pop1+'_AC'][0]]
+                        ac2 = [record.info[pop2+'_AN'], record.info[pop2+'_AC'][0]]
                         # Calculate Hudson's Fst numerator and denominator
                         num, den = hudson_fst(ac1, ac2)
                         # Store in the row with appropriate column names
@@ -75,6 +75,7 @@ def calculate_fst_table(vcf,sample_pop):
         den_cols = [col for col in fst_data.columns if 'den' in col]
         fst_data['sum_num'] = fst_data[num_cols].sum(axis=1)
         fst_data['sum_den'] = fst_data[den_cols].sum(axis=1)
+        fst_data = fst_data[fst_data['sum_den'] != 0]
         fst_data['fst'] = fst_data['sum_num']/fst_data['sum_den']
         return fst_data
 

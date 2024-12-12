@@ -29,9 +29,8 @@ def filter_common_variants(record, pop_indices, min_af=0.01, min_samples=1000):
     return True
 
 #function to calculate fst table for each pair of populations for each loci
-def calculate_fst_table(vcf,sample_pop):
+def calculate_fst_table(vcf_file,sample_pop):
         # File paths
-        vcf_file = vcf
         pop_file = sample_pop  # Replace with your population file path
         # Load the population data
         pop_data = pd.read_csv(pop_file, sep='\t', header=None)
@@ -57,7 +56,7 @@ def calculate_fst_table(vcf,sample_pop):
             row = {'ID': record.chrom+'_'+str(record.pos)}
             if filter_common_variants(record, pop_indices,0.01):
                     print(record.chrom+'_'+str(record.pos))
-            # Calculate num and den for each population pair
+                    # Calculate num and den for each population pair
                     for (pop1, pop2) in pop_pairs:
                         # Calculate allele counts for each population
                         ac1 = [record.info['AN_'+pop1], record.info['AC_'+pop1][0]]
@@ -74,6 +73,7 @@ def calculate_fst_table(vcf,sample_pop):
         den_cols = [col for col in fst_data.columns if 'den' in col]
         fst_data['sum_num'] = fst_data[num_cols].sum(axis=1)
         fst_data['sum_den'] = fst_data[den_cols].sum(axis=1)
+        fst_data = fst_data[fst_data['sum_den'] != 0]
         fst_data['fst'] = fst_data['sum_num']/fst_data['sum_den']
         return fst_data
 
@@ -131,3 +131,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+

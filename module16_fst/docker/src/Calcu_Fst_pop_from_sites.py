@@ -113,19 +113,13 @@ def integrate_fst_across_sites(fst_data):
 def main():
     # Set up argument parsing
     parser = argparse.ArgumentParser(description="Process a CSV file and calculate ratios")
-    parser.add_argument("-v", "--vcf", required=False, help="input vcf that include variant sites and allele frequency annotations")
-    parser.add_argument("-s", "--sample_pop", required=False, help="input file including sample ID and populations deliminated by tab")
-    parser.add_argument("-o", "--output", required=False, help="output file that include per-site Fst information")
+    parser.add_argument("-i", "--input_fst", required=False, help="output file that include per-site Fst information")
     parser.add_argument("-p", "--population_output", required=False, help="output file that include Fst for each pair of populations")
 
     # Parse arguments
     args = parser.parse_args()
 
-    fst_data = calculate_fst_table(args.vcf, args.sample_pop)
-
-    # Save per-site Fst components (num and den) to CSV
-    fst_data.to_csv(args.output, index=False, sep='\t')
-
+    fst_data = pd.read_csv(args.input_fst, sep='\t')
     #calculate and save Fst of per pair of populations
     fst_aggregated_df = integrate_fst_across_sites(fst_data)
     fst_aggregated_df.to_csv(args.population_output, index=False)
