@@ -2,9 +2,8 @@
 
 import argparse
 import pysam
+import gzip
 
-# Constants
-EV = 'EV'
 VAR_GQ = 'VAR_GQ'
 MULTIALLELIC = 'MULTIALLELIC'
 UNRESOLVED = 'UNRESOLVED'
@@ -23,37 +22,13 @@ def read_last_column(file_path):
                 result_set.add(columns[-1])
     return result_set
 
-
-def add_header_lines(header):
-    header.add_line('##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">')
-    header.add_line('##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">')
-    header.add_line('##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">')
-    header.add_line('##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">')
-
-
 def process_record(record, fail_set, pass_set):
-    record = process_EV(record)
     record = process_varGQ(record)
     record = process_multiallelic(record)
     record = process_unresolved(record)
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
     return record
-
-
-def process_EV(record):
-    for sample in record.samples:
-        genotype = record.samples[sample]
-        if EV in genotype and genotype[EV] is not None:
-            ev_attribute = genotype[EV]
-            try:
-                ev_index = int(ev_attribute)
-                if 0 <= ev_index < len(EV_VALUES):
-                    genotype[EV] = EV_VALUES[ev_index]
-            except ValueError:
-                pass
-    return record
-
 
 def process_varGQ(record):
     if VAR_GQ in record.info:
@@ -64,12 +39,10 @@ def process_varGQ(record):
         record.qual = var_gq
     return record
 
-
 def process_multiallelic(record):
     if MULTIALLELIC in record.info:
         del record.info[MULTIALLELIC]
     return record
-
 
 def process_unresolved(record):
     if UNRESOLVED in record.info:
@@ -77,46 +50,44 @@ def process_unresolved(record):
         record.filter.add(UNRESOLVED)
     return record
 
-
 def process_noisy(record, fail_set):
     if record.id in fail_set:
         record.info[HIGH_SR_BACKGROUND] = True
     return record
-
 
 def process_bothsides_support(record, pass_set):
     if record.id in pass_set:
         record.info[BOTHSIDES_SUPPORT] = True
     return record
 
-
 if __name__ == '__main__':
+    # Parse arguments
     parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
-    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
     parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
+    parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
     parser.add_argument('--fail-list', required=True, help='File with variants failing the background test')
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
     args = parser.parse_args()
 
-    # Read noisy and bothsides support events into sets
+    # Read input files
     fail_set = read_last_column(args.fail_list)
     pass_set = read_last_column(args.pass_list)
+    if args.input_vcf.endswith('.gz'):
+        vcf_in = pysam.VariantFile(gzip.open(args.input_vcf, 'rt'))
+    else:
+        vcf_in = pysam.VariantFile(args.input_vcf)
+    
+    # Open output file
+    if args.output_vcf.endswith('.gz'):
+        vcf_out = pysam.VariantFile(args.output_vcf, 'wz', header=vcf_in.header)
+    else:
+        vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=vcf_in.header.copy())
 
-    # Open input VCF
-    vcf_in = pysam.VariantFile(args.input_vcf)
-
-    # Modify header
-    header = vcf_in.header.copy()
-    add_header_lines(header)
-
-    # Open output VCF
-    vcf_out = pysam.VariantFile(args.output_vcf, 'w', header=header)
-
-    # Process and write variants
+    # Process records
     for record in vcf_in:
         record = process_record(record, fail_set, pass_set)
         vcf_out.write(record)
-
+    
     # Close files
     vcf_in.close()
     vcf_out.close()

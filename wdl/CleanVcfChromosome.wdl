@@ -259,9 +259,28 @@ task CleanVcfPreprocess {
 		if [ ! -f "~{vcf}.tbi" ]; then
 			tabix -p vcf ~{vcf}
 		fi
+
+		python /opt/sv-pipeline/04_variant_resolution/scripts/replace_ev_numeric_code_with_string.py \
+			~{vcf} \
+			processed.vcf.gz
+
+		zgrep '^##' processed.vcf.gz > header.txt
+
+		cat <<EOF >> header.txt
+		##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">
+		##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">
+		##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">
+		##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">
+		EOF
+
+		zgrep '^#CHROM' processed.vcf.gz >> header.txt
+
+		bcftools view processed.vcf.gz | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
+
+		rm header.txt
 		
 		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
-			-V ~{vcf} \
+			-V processed.reheader.vcf.gz \
 			-O ~{output_vcf} \
 			--fail-list ~{background_list} \
 			--pass-list ~{bothsides_pass_list}
