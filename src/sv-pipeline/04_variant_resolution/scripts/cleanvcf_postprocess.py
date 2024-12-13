@@ -11,11 +11,14 @@ ME = 'ME'
 UNR = 'UNR'
 FILTER_VCF_INFO_LINES = {
     'BND_DEPTH', 'BND_MATEID', 'SPLIT_READS', 'PAIRED_END_READS', 
-    'CLUSTER_MEMBER_IDS', 'MULTIALLELIC', 'UNRESOLVED'
+    'CLUSTER_MEMBER_IDS', 'MULTIALLELIC', 'UNRESOLVED', 'VARGQ', 
+    'EVENT', 'REVISED_EVENT', 'MULTI_CNV'
 }
 FILTER_VCF_TEXT_LINES = {
     'CIPOS', 'CIEND', 'RMSSTD', 'source', 'bcftools', 'GATKCommandLine', 'fileformat'
 }
+
+# TODO: Remove INFO fields in advance of script: 'MULTI_CNV', 'VARGQ', 'REVISED_EVENT'
 
 def cleanse_header(header):
     new_header = pysam.VariantHeader()
