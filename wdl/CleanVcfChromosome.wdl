@@ -268,7 +268,7 @@ task CleanVcfPreprocess {
 
 		cat <<EOF >> header.txt
 		##FILTER=<ID=UNRESOLVED,Description="Variant is unresolved">
-		##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="High number of SR splits in background samples indicating messy region">
+		##INFO=<ID=HIGH_SR_BACKGROUND,Number=0,Type=Flag,Description="Variant has high number of SR splits in background samples">
 		##INFO=<ID=BOTHSIDES_SUPPORT,Number=0,Type=Flag,Description="Variant has read-level support for both sides of breakpoint">
 		##INFO=<ID=REVISED_EVENT,Number=0,Type=Flag,Description="Variant has been revised due to a copy number mismatch">
 		EOF
@@ -572,10 +572,12 @@ task CleanVcfPostprocess {
 		if [ ! -f "~{vcf}.tbi" ]; then
 			tabix -p vcf ~{vcf}
 		fi
-		
-		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_postprocess.py \
-			-V ~{vcf} \
-			-O ~{output_vcf}
+
+		bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ ~{vcf} -o processed.vcf.gz -O z
+
+		bcftools view -h processed.vcf.gz | grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > header.txt
+
+		bcftools reheader -h header.txt processed.vcf.gz -o ~{output_vcf}
 
 		tabix -p vcf ~{output_vcf}
 	>>>
