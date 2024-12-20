@@ -33,6 +33,7 @@ workflow CleanVcfChromosome {
     String chr_y
 
     File? svtk_to_gatk_script  # For debugging
+    File? make_clean_gq_script
 
     Boolean use_hail
     String? gcs_project
@@ -241,6 +242,7 @@ workflow CleanVcfChromosome {
       prefix="~{prefix}.clean_vcf_5",
       records_per_shard=clean_vcf5_records_per_shard,
       threads_per_task=clean_vcf5_threads_per_task,
+      make_clean_gq_script=make_clean_gq_script,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_base_mini_docker=sv_base_mini_docker,
       runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
@@ -584,18 +586,18 @@ task CleanVcf4 {
       for sid in record.samples:
         s = record.samples[sid]
         # Pick best GT
-        if s['PE_GT'] is None:
+        if s.get('PE_GT') is None:
           continue
-        elif s['SR_GT'] is None:
-          gt = s['PE_GT']
-        elif s['PE_GT'] > 0 and s['SR_GT'] == 0:
-          gt = s['PE_GT']
-        elif s['PE_GT'] == 0:
-          gt = s['SR_GT']
-        elif s['PE_GQ'] >= s['SR_GQ']:
-          gt = s['PE_GT']
+        elif s.get('SR_GT') is None:
+          gt = s.get('PE_GT')
+        elif s.get('PE_GT') > 0 and s.get('SR_GT') == 0:
+          gt = s.get('PE_GT')
+        elif s.get('PE_GT') == 0:
+          gt = s.get('SR_GT')
+        elif s.get('PE_GQ') >= s.get('SR_GQ'):
+          gt = s.get('PE_GT')
         else:
-          gt = s['SR_GT']
+          gt = s.get('SR_GT')
         if gt > 2:
           num_gt_over_2 += 1
       if num_gt_over_2 > max_vf:

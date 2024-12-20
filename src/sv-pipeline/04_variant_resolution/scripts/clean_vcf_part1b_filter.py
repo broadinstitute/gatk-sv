@@ -43,13 +43,13 @@ def modify_variants(dict_file_gz, vcf, multi_cnvs):
                     for sample_id in geno_normal_revise_dict[variant.id]:
                         o = variant.samples[sample_id]
                         o.update({"GT": (0, 1)})
-                        o.update({"GQ": o["RD_GQ"]})
+                        o.update({"GQ": o.get("RD_GQ")})
 
                 if variant.stop - variant.start >= 1000:
                     if variant.info[SVTYPE] in [SVType.DEL, SVType.DUP]:
                         is_del = variant.info[SVTYPE] == SVType.DEL
                         for k, v in variant.samples.items():
-                            rd_cn = v[VariantFormatTypes.RD_CN]
+                            rd_cn = v.get(VariantFormatTypes.RD_CN)
                             if rd_cn is None:
                                 continue
                             if (is_del and rd_cn > 3) or \

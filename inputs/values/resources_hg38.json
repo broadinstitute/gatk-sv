@@ -7,6 +7,14 @@
   "autosome_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/autosome.fai",
   "bin_exclude" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz",
   "bin_exclude_index" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/bin_exclude.hg38.gatkcov.bed.gz.tbi",
+  "clustering_config_part1" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/clustering_config.part_one.tsv",
+  "clustering_config_part2" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/clustering_config.part_two.tsv",
+  "clustering_tracks" : [
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.SimpRep.sorted.pad_100.merged.bed",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.SegDup.sorted.merged.bed",
+    "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.RM.sorted.merged.bed"
+  ],
+  "clustering_track_names" : ["SR", "SD", "RM"],
   "cnmops_exclude_list" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/GRCh38_Nmask.bed",
   "contig_ploidy_priors" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/hg38.contig_ploidy_priors_homo_sapiens.tsv",
   "copy_number_autosomal_contigs" : 2,
@@ -53,6 +61,8 @@
   "segdups_index" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/hg38.SD_gaps_Cen_Tel_Heter_Satellite_lumpy.blacklist.sorted.merged.bed.gz.tbi",
   "seed_cutoffs" : "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/seed_cutoff.txt",
   "single_sample_qc_definitions": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/ref-panel/1KG/v2/single_sample.qc_definitions.tsv",
+  "stratification_config_part1": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/stratify_config.part_one.tsv",
+  "stratification_config_part2": "gs://gatk-sv-resources-public/hg38/v0/sv-resources/resources/v1/stratify_config.part_two.tsv",
   "wgd_scoring_mask" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wgd_scoring_mask.hg38.gnomad_v3.bed",
   "wham_include_list_bed_file" : "gs://gcp-public-data--broad-references/hg38/v0/sv-resources/resources/v1/wham_whitelist.bed",
 
