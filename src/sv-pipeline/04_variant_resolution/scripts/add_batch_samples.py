@@ -24,7 +24,8 @@ def main():
         # Get samples from batch vcf and add to header
         samples = [s for s in batch_vcf.header.samples]
         header = cohort_vcf.header
-        header.add_samples(samples)
+        for s in samples:
+            header.add_sample(s)
         gts = ['0/0' for _ in samples]
         gts[0] = '0/1'
         gt_string = '\tGT\t' + '\t'.join(gts) + '\n'
