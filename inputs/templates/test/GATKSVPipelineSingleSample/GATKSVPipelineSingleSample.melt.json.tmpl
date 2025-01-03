@@ -45,7 +45,6 @@
   "GATKSVPipelineSingleSample.autosome_file" : {{ reference_resources.autosome_file | tojson }},
   "GATKSVPipelineSingleSample.primary_contigs_list" : {{ reference_resources.primary_contigs_list | tojson }},
   "GATKSVPipelineSingleSample.primary_contigs_fai" : {{ reference_resources.primary_contigs_fai | tojson }},
-  "GATKSVPipelineSingleSample.empty_file" : {{ reference_resources.empty_file | tojson }},
   "GATKSVPipelineSingleSample.genome_file" : {{ reference_resources.genome_file | tojson }},
   "GATKSVPipelineSingleSample.max_ref_panel_carrier_freq": 0.03,
   "GATKSVPipelineSingleSample.manta_region_bed" : {{ reference_resources.manta_region_bed | tojson }},
@@ -88,6 +87,13 @@
   "GATKSVPipelineSingleSample.depth_exclude_overlap_fraction": "0.5",
   "GATKSVPipelineSingleSample.depth_interval_overlap": "0.8",
   "GATKSVPipelineSingleSample.depth_clustering_algorithm": "SINGLE_LINKAGE",
+
+  "GATKSVPipelineSingleSample.clustering_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineSingleSample.stratification_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineSingleSample.clustering_config_part2" : {{ reference_resources.clustering_config_part2 | tojson }},
+  "GATKSVPipelineSingleSample.stratification_config_part2" : {{ reference_resources.stratification_config_part2 | tojson }},
+  "GATKSVPipelineSingleSample.clustering_track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "GATKSVPipelineSingleSample.clustering_track_names": {{ reference_resources.clustering_track_names | tojson }},
 
   "GATKSVPipelineSingleSample.ref_copy_number_autosomal_contigs" : 2,
 

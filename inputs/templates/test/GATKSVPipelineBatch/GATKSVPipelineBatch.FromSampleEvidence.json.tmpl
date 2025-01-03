@@ -123,7 +123,6 @@
   "GATKSVPipelineBatch.RegenotypeCNVs.n_per_split": "5000",
 
   "GATKSVPipelineBatch.MakeCohortVcf.bin_exclude": {{ reference_resources.bin_exclude | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.empty_file" : {{ reference_resources.empty_file | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.site_level_comparison_datasets": [
     {{ reference_resources.ccdg_abel_site_level_benchmarking_dataset | tojson }},
     {{ reference_resources.gnomad_v2_collins_site_level_benchmarking_dataset | tojson }},
@@ -133,7 +132,6 @@
   "GATKSVPipelineBatch.MakeCohortVcf.cytobands": {{ reference_resources.cytobands | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.mei_bed": {{ reference_resources.mei_bed | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.pe_exclude_list": {{ reference_resources.pesr_exclude_list | tojson }},
-  "GATKSVPipelineBatch.MakeCohortVcf.depth_exclude_list": {{ reference_resources.depth_exclude_list | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.HERVK_reference": {{ reference_resources.hervk_reference | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.LINE1_reference": {{ reference_resources.line1_reference | tojson }},
   "GATKSVPipelineBatch.MakeCohortVcf.min_sr_background_fail_batches": 0.5,
@@ -143,5 +141,11 @@
   "GATKSVPipelineBatch.MakeCohortVcf.samples_per_clean_vcf_step2_shard": 100,
   "GATKSVPipelineBatch.MakeCohortVcf.clean_vcf5_records_per_shard": 5000,
   "GATKSVPipelineBatch.MakeCohortVcf.random_seed": 0,
-  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500
+  "GATKSVPipelineBatch.MakeCohortVcf.max_shard_size_resolve": 500,
+  "GATKSVPipelineBatch.MakeCohortVcf.clustering_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.stratification_config_part1" : {{ reference_resources.clustering_config_part1 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.clustering_config_part2" : {{ reference_resources.clustering_config_part2 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.stratification_config_part2" : {{ reference_resources.stratification_config_part2 | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.track_bed_files": {{ reference_resources.clustering_tracks | tojson }},
+  "GATKSVPipelineBatch.MakeCohortVcf.track_names": {{ reference_resources.clustering_track_names | tojson }}
 }
