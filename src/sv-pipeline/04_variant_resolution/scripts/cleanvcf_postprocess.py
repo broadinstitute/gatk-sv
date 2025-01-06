@@ -11,9 +11,8 @@ def process_record(record):
 
 
 def process_svtype(record):
-    if record.info.get('SVTYPE') == 'DUP':
-        if not any(':ME' in alt for alt in record.alts):
-            record.alts = ('<DUP>',)
+    if not any(':ME' in alt for alt in record.alts):
+        record.alts = ('<' + record.info.get('SVTYPE') + '>',)
     return record
 
 

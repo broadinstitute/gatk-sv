@@ -579,8 +579,15 @@ task CleanVcfPostprocess {
 
 		bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ processed.vcf.gz -o processed.annotated.vcf.gz -O z
 
-		bcftools view -h processed.annotated.vcf.gz | grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > header.txt
+		bcftools view -h processed.annotated.vcf.gz | grep "^##" | \
+			grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > temp_header.txt
+		echo '##INFO=<ID=UNRESOLVED_TYPE,Number=1,Type=String,Description="Class of unresolved variant.">' >> temp_header.txt
+		echo '##ALT=<ID=CNV,Description="Copy Number Polymorphism">' >> temp_header.txt
 
+		bcftools view -h processed.annotated.vcf.gz | grep "^#CHROM" > chrom_header.txt
+
+		cat temp_header.txt chrom_header.txt > header.txt
+		
 		bcftools reheader -h header.txt processed.annotated.vcf.gz -o ~{output_vcf}
 		
 		tabix -p vcf ~{output_vcf}
