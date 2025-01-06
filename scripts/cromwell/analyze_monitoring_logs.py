@@ -26,9 +26,9 @@ TIME_FORMAT = "%a %b %d %H:%M:%S %Z %Y"
 ALL_HEADER = '#job\ttask\thr\tmem_total\tmem_gb_max\tmem_pct_max\tdisk_total\tdisk_gb_max\tdisk_pct_max\tmem_gb_hr\tdisk_gb_hr\tmax_mem_gb_hr\tmax_disk_gb_hr\tcost_mem\tcost_mem_dyn\tcost_disk\tcost_disk_dyn\n'
 GROUP_HEADER = '#task\thr\tmem_avg\tmem_gb_max\tmem_pct_max\tdisk_avg\tdisk_gb_max\tdisk_pct_max\tmem_gb_hr\tdisk_gb_hr\tmax_mem_gb_hr\tmax_disk_gb_hr\tcost_mem\tcost_mem_static\tcost_mem_dyn\tcost_disk\tcost_disk_static\tcost_disk_dyn\n'
 
-COST_PER_GB_MEM_HR = 0.000892
-COST_CPU_HR = 0.006655
-COST_PER_GB_DISK_HR = 0.00005555555
+COST_PER_GB_MEM_HR = 0.001072
+COST_CPU_HR = 0.00836
+COST_PER_GB_DISK_HR = 0.0000548
 
 MIN_CPU = 1
 MIN_MEM_GB = 0.9

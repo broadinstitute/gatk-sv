@@ -29,9 +29,9 @@ import logging
 # Author: Emma Pierce-Hoffman (epierceh@broadinstitute.org)
 # Modified from analyze_monitoring_logs.py by Mark Walker
 
-COST_PER_GB_MEM_HR = 0.000892
-COST_CPU_HR = 0.006655
-COST_PER_GB_DISK_HR = 0.00005555555
+COST_PER_GB_MEM_HR = 0.001072
+COST_CPU_HR = 0.00836
+COST_PER_GB_DISK_HR = 0.0000548
 
 MIN_CPU = 1
 MIN_MEM_GB = 0.9
