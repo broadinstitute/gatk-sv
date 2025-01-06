@@ -23,11 +23,17 @@ class DragenStandardizer(VCFStandardizer):
 
         mate_IDs = deque()
         for record in self.filter_raw_vcf():
+            # Filter unmarked SECONDARY on same chromosome
             if 'MATEID' in record.info:
                 mate_ID = record.info['MATEID'][0]
+
+                # Skip records with an observed mate
                 if mate_ID in mate_IDs:
                     continue
+
+                # Track IDs of observed records
                 mate_IDs.append(record.id)
+                
             yield self.standardize_record(record)
 
     def standardize_info(self, std_rec, raw_rec):
