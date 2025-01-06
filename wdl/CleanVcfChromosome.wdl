@@ -106,7 +106,7 @@ workflow CleanVcfChromosome {
 
 	call CleanVcfReviseLargeCnvs {
 		input:
-			vcf=CleanVcfReviseOverlappingCnvGts.out,
+			vcf=CleanVcfReviseOverlappingCnvCns.out,
 			outlier_samples_list=outlier_samples_list,
 			prefix="~{prefix}.revise_large_cnvs",
 			gatk_docker=gatk_docker,
