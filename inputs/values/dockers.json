@@ -12,8 +12,8 @@
   "samtools_cloud_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/samtools-cloud:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base:2024-10-25-v0.29-beta-5ea22a52",
   "sv_base_mini_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-base-mini:2024-10-25-v0.29-beta-5ea22a52",
-  "sv_pipeline_docker": "us-central1-docker.pkg.dev/talkowski-training/kj-development/sv-pipeline:kj-clean-vcf-170ec7c38b004f02639b5f82270113b74162fe79",
-  "sv_pipeline_qc_docker": "us-central1-docker.pkg.dev/talkowski-training/kj-development/sv-pipeline:kj-clean-vcf-170ec7c38b004f02639b5f82270113b74162fe79",
+  "sv_pipeline_docker": "us-central1-docker.pkg.dev/talkowski-training/kj-development/sv-pipeline:kj-clean-vcf-c75c86a03011a1a29cd1b1445c6ec8df91aeee11",
+  "sv_pipeline_qc_docker": "us-central1-docker.pkg.dev/talkowski-training/kj-development/sv-pipeline:kj-clean-vcf-c75c86a03011a1a29cd1b1445c6ec8df91aeee11",
   "wham_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/wham:2024-10-25-v0.29-beta-5ea22a52",
   "igv_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/igv:mw-xz-fixes-2-b1be6a9",
   "duphold_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/duphold:mw-xz-fixes-2-b1be6a9",
@@ -28,5 +28,5 @@
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2024-10-25-v0.29-beta-5ea22a52",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
-  "denovo": "us-central1-docker.pkg.dev/talkowski-training/kj-development/denovo:kj-clean-vcf-170ec7c38b004f02639b5f82270113b74162fe79"
+  "denovo": "us-central1-docker.pkg.dev/talkowski-training/kj-development/denovo:kj-clean-vcf-c75c86a03011a1a29cd1b1445c6ec8df91aeee11"
 }

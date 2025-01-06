@@ -573,15 +573,15 @@ task CleanVcfPostprocess {
 			tabix -p vcf ~{vcf}
 		fi
 
-		bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ ~{vcf} -o processed.vcf.gz -O z
-
-		bcftools view -h processed.vcf.gz | grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > header.txt
-
-		bcftools reheader -h header.txt processed.vcf.gz -o processed.reheader.vcf.gz
-
 		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_postprocess.py \
-			-V processed.reheader.vcf.gz \
-			-O ~{output_vcf}
+			-V ~{vcf} \
+			-O processed.vcf.gz
+
+		bcftools annotate -x INFO/MULTIALLELIC,INFO/UNRESOLVED,INFO/EVENT,INFO/REVISED_EVENT,INFO/MULTI_CNV,INFO/varGQ processed.vcf.gz -o processed.annotated.vcf.gz -O z
+
+		bcftools view -h processed.annotated.vcf.gz | grep -v -E "CIPOS|CIEND|RMSSTD|source|bcftools|GATKCommandLine|##FORMAT=<ID=EV>|##ALT=<ID=UNR>|##INFO=<ID=(MULTIALLELIC|UNRESOLVED|EVENT|REVISED_EVENT|MULTI_CNV|varGQ)" > header.txt
+
+		bcftools reheader -h header.txt processed.annotated.vcf.gz -o ~{output_vcf}
 		
 		tabix -p vcf ~{output_vcf}
 	>>>
