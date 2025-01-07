@@ -58,12 +58,13 @@ workflow CleanVcf {
     RuntimeAttr? runtime_attr_create_ploidy
 
     # overrides for CleanVcfContig
-    RuntimeAttr? runtime_override_clean_vcf_1a
-    RuntimeAttr? runtime_override_clean_vcf_1b
-    RuntimeAttr? runtime_override_clean_vcf_2
-    RuntimeAttr? runtime_override_clean_vcf_3
-    RuntimeAttr? runtime_override_clean_vcf_4
-    RuntimeAttr? runtime_override_clean_vcf_5
+    RuntimeAttr? runtime_attr_preprocess
+		RuntimeAttr? runtime_attr_revise_overlapping_cnv_gts
+		RuntimeAttr? runtime_attr_revise_overlapping_cnv_cns
+		RuntimeAttr? runtime_attr_revise_large_cnvs
+		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
+		RuntimeAttr? runtime_attr_revise_multiallelics
+		RuntimeAttr? runtime_attr_postprocess
     RuntimeAttr? runtime_override_stitch_fragmented_cnvs
     RuntimeAttr? runtime_override_final_cleanup
     RuntimeAttr? runtime_attr_format
@@ -106,33 +107,35 @@ workflow CleanVcf {
       input:
         vcf=complex_genotype_vcfs[i],
         contig=contig,
-        background_list=complex_resolve_background_fail_list,
-        ped_file=ped_file,
-        bothsides_pass_list=complex_resolve_bothside_pass_list,
-        allosome_fai=allosome_fai,
+        chr_x=chr_x,
+        chr_y=chr_y,
         prefix="~{cohort_name}.~{contig}",
-        max_shards_per_chrom_step1=max_shards_per_chrom_step1,
-        min_records_per_shard_step1=min_records_per_shard_step1,
-        samples_per_step2_shard=samples_per_step2_shard,
-        max_samples_per_shard_step3=max_samples_per_shard_step3,
+
+        background_list=complex_resolve_background_fail_list,
+        bothsides_pass_list=complex_resolve_bothside_pass_list,
         outlier_samples_list=outlier_samples_list,
+        ped_file=ped_file,
+        allosome_fai=allosome_fai,
+
+        HERVK_reference=HERVK_reference,
+        LINE1_reference=LINE1_reference,
+
         use_hail=use_hail,
         gcs_project=gcs_project,
         ploidy_table=CreatePloidyTableFromPed.out,
-        HERVK_reference=HERVK_reference,
-        LINE1_reference=LINE1_reference,
-        chr_x=chr_x,
-        chr_y=chr_y,
+
         gatk_docker=gatk_docker,
         linux_docker=linux_docker,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
-        runtime_override_clean_vcf_1a=runtime_override_clean_vcf_1a,
-        runtime_override_clean_vcf_1b=runtime_override_clean_vcf_1b,
-        runtime_override_clean_vcf_2=runtime_override_clean_vcf_2,
-        runtime_override_clean_vcf_3=runtime_override_clean_vcf_3,
-        runtime_override_clean_vcf_4=runtime_override_clean_vcf_4,
-        runtime_override_clean_vcf_5=runtime_override_clean_vcf_5,
+        
+        runtime_attr_preprocess=runtime_attr_preprocess,
+        runtime_attr_revise_overlapping_cnv_gts=runtime_attr_revise_overlapping_cnv_gts,
+        runtime_attr_revise_overlapping_cnv_cns=runtime_attr_revise_overlapping_cnv_cns,
+        runtime_attr_revise_large_cnvs=runtime_attr_revise_large_cnvs,
+        runtime_attr_revise_abnormal_allosomes=runtime_attr_revise_abnormal_allosomes,
+        runtime_attr_revise_multiallelics=runtime_attr_revise_multiallelics,
+        runtime_attr_postprocess=runtime_attr_postprocess,
         runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
         runtime_override_final_cleanup=runtime_override_final_cleanup,
         runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,

@@ -9,19 +9,19 @@ workflow CleanVcfChromosome {
 	input {
 		File vcf
 		String contig
+		String chr_x
+		String chr_y
+		String prefix
+
 		File background_list
 		File bothsides_pass_list
 		File? outlier_samples_list
 		File ped_file
+		File ploidy_table
 		File allosome_fai
-		String prefix
 		
 		File HERVK_reference
 		File LINE1_reference
-
-		File ploidy_table
-		String chr_x
-		String chr_y
 
 		Boolean use_hail
 		String? gcs_project
@@ -39,13 +39,6 @@ workflow CleanVcfChromosome {
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
 		RuntimeAttr? runtime_attr_postprocess
-
-		RuntimeAttr? runtime_override_clean_vcf_1a
-		RuntimeAttr? runtime_override_clean_vcf_1b
-		RuntimeAttr? runtime_override_clean_vcf_2
-		RuntimeAttr? runtime_override_clean_vcf_3
-		RuntimeAttr? runtime_override_clean_vcf_4
-		RuntimeAttr? runtime_override_clean_vcf_5
 		RuntimeAttr? runtime_override_stitch_fragmented_cnvs
 		RuntimeAttr? runtime_override_final_cleanup
 		RuntimeAttr? runtime_override_rescue_me_dels
