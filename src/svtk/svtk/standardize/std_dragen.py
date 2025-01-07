@@ -11,6 +11,7 @@ from collections import deque
 from svtk.utils import is_smaller_chrom, parse_bnd_pos, parse_bnd_strands
 from .standardize import VCFStandardizer
 
+
 def checkInversion(record):
     isInv3 = False
     isInv5 = False
@@ -24,7 +25,7 @@ def checkInversion(record):
         mateChr = ":".join(mateInfo[:-1])
         matePos = int(matePos)
         return mateChr, matePos
-    
+
     if record.alts[0].startswith('['):
         mateChr, matePos = getMateInfo('[')
         if mateChr == record.chrom:
@@ -35,6 +36,7 @@ def checkInversion(record):
             isInv3 = True
 
     return isInv3, isInv5, matePos
+
 
 @VCFStandardizer.register('dragen')
 class DragenStandardizer(VCFStandardizer):
@@ -57,7 +59,7 @@ class DragenStandardizer(VCFStandardizer):
 
                 # Track IDs of observed records
                 mate_IDs.append(record.id)
-                
+
             yield self.standardize_record(record)
 
     def standardize_info(self, std_rec, raw_rec):
@@ -126,7 +128,7 @@ class DragenStandardizer(VCFStandardizer):
 
         # Update ALGORITHMS
         std_rec.info['ALGORITHMS'] = ['dragen']
-        
+
         # Update INV
         isInv3, isInv5, matePos = checkInversion(raw_rec)
         if isInv3 or isInv5:
