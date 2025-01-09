@@ -195,7 +195,6 @@ workflows:
     filters:
       branches:
         - main
-        - eph_disable_func_anno
       tags:
         - /.*/
 
