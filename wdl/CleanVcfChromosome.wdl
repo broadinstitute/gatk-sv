@@ -44,20 +44,11 @@ workflow CleanVcfChromosome {
 		RuntimeAttr? runtime_override_rescue_me_dels
 		RuntimeAttr? runtime_attr_add_high_fp_rate_filters
 
-		RuntimeAttr? runtime_override_preconcat_step1
-		RuntimeAttr? runtime_override_hail_merge_step1
-		RuntimeAttr? runtime_override_fix_header_step1
-
 		RuntimeAttr? runtime_override_preconcat_drc
 		RuntimeAttr? runtime_override_hail_merge_drc
 		RuntimeAttr? runtime_override_fix_header_drc
 
-		# overrides for MiniTasks
-		RuntimeAttr? runtime_override_split_vcf_to_clean
-		RuntimeAttr? runtime_override_split_include_list
-		RuntimeAttr? runtime_override_combine_clean_vcf_2
 		RuntimeAttr? runtime_override_drop_redundant_cnvs
-		RuntimeAttr? runtime_override_combine_step_1_vcfs
 		RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
 		RuntimeAttr? runtime_attr_format
 	}
