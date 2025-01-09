@@ -98,8 +98,20 @@ class DragenStandardizer(VCFStandardizer):
         std_rec.info['CHR2'] = chrB
         std_rec.stop = posB
 
+        # Update INV
+        isInv3, isInv5, matePos = checkInversion(raw_rec)
+        if isInv3 or isInv5:
+            std_rec.stop = matePos
+            std_rec.info['SVTYPE'] = 'INV'
+            std_rec.info['SVLEN'] = matePos - std_rec.pos
+
         # Update STRANDS
-        if svtype == 'BND':
+        if svtype == 'INV':
+            if isInv3:
+                strands = '++'
+            else:
+                strands = '--'
+        elif svtype == 'BND':
             strands = parse_bnd_strands(raw_rec.alts[0])
         elif svtype == 'DEL':
             strands = '+-'
@@ -128,13 +140,6 @@ class DragenStandardizer(VCFStandardizer):
 
         # Update ALGORITHMS
         std_rec.info['ALGORITHMS'] = ['dragen']
-
-        # Update INV
-        isInv3, isInv5, matePos = checkInversion(raw_rec)
-        if isInv3 or isInv5:
-            std_rec.stop = matePos
-            std_rec.info['SVTYPE'] = 'INV'
-            std_rec.info['SVLEN'] = matePos - std_rec.pos
 
         return std_rec
 
