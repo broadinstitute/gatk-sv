@@ -779,8 +779,8 @@ task SubsetVcfByContig{
   >>>
 
   output {
-    File vcf_subset_by_contig = ~{prefix}.~{contig}.vcf.gz
-    File vcf_subset_by_contig_index = ~{prefix}.~{contig}.vcf.gz.tbi
+    File vcf_subset_by_contig = "~{prefix}.~{contig}.vcf.gz"
+    File vcf_subset_by_contig_index = "~{prefix}.~{contig}.vcf.gz.tbi"
   }
 
   runtime {
