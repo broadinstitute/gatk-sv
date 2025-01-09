@@ -772,7 +772,7 @@ task SubsetVcfByContig{
 
     set -euo pipefail
 
-    bcftools view bcftools view -Oz -r ~{contig} ~{vcf} > ~{prefix}.~{contig}.vcf.gz
+    bcftools view -Oz -r ~{contig} ~{vcf} > ~{prefix}.~{contig}.vcf.gz
 
     tabix -f -p vcf ~{prefix}.~{contig}.vcf.gz
     
