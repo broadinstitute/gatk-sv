@@ -1,5 +1,4 @@
 version 1.0
-import "SubsetVcfBySamples.wdl" as subset_vcf_by_samples
 import "Structs.wdl"
 import "Utils.wdl" as util
 

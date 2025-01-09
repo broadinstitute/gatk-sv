@@ -29,7 +29,7 @@ workflow SubsetVcfBySamples {
   }
 
   output {
-    File vcf_subset = SubsetVcfBySamplesList.vcf_subset
-    File vcf_subset_index = SubsetVcfBySamplesList.vcf_subset_index
+    File vcf_subset = SubsetVcfBySamplesList.vcf_subset_by_sample
+    File vcf_subset_index = SubsetVcfBySamplesList.vcf_subset_by_sample_index
   }
 }
