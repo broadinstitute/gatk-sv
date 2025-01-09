@@ -704,7 +704,7 @@ task SubsetVcfBySamplesList {
     mem_gb: 3.75,
     disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -762,7 +762,7 @@ task SubsetVcfByContig{
     mem_gb: 3.75,
     disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
@@ -815,7 +815,7 @@ task ConcatVcfs {
     mem_gb: 3.75,
     disk_gb: ceil(10 + size(vcfs, "GB") * 2),
     cpu_cores: 1,
-    preemptible_tries: 3,
+    preemptible_tries: 1,
     max_retries: 1,
     boot_disk_gb: 10
   }
