@@ -1,4 +1,3 @@
-
 version 1.0
 
 import "Structs.wdl"
@@ -759,7 +758,7 @@ task SubsetVcfByContig{
   # Disk must be scaled proportionally to the size of the VCF
   Float input_size = size(vcf, "GiB")
   RuntimeAttr default_attr = object {
-    mem_gb: 3.75,
+    mem_gb: 7.5,
     disk_gb: ceil(10.0 + (input_size * 2)),
     cpu_cores: 1,
     preemptible_tries: 1,
