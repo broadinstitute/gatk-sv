@@ -64,7 +64,7 @@ workflow ClusterBatchMetrics {
         baseline_vcf = baseline_dragen_vcf,
         samples = select_first([samples, GetSampleIdsFromVcf.out_array]),
         prefix = "dragen_clustered",
-        types = "DEL,DUP,INS,BND",
+        types = "DEL,DUP,INS,INV,BND",
         contig_list = contig_list,
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_dragen_metrics
