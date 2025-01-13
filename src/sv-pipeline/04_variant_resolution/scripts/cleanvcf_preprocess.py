@@ -12,6 +12,7 @@ HIGH_SR_BACKGROUND = 'HIGH_SR_BACKGROUND'
 BOTHSIDES_SUPPORT = 'BOTHSIDES_SUPPORT'
 REVISED_EVENT = 'REVISED_EVENT'
 EV_VALUES = ['SR', 'PE', 'SR,PE', 'RD', 'BAF', 'RD,BAF']
+MIN_ALLOSOME_EVENT_SIZE = 50
 
 
 def read_last_column(file_path):
@@ -24,12 +25,13 @@ def read_last_column(file_path):
     return result_set
 
 
-def process_record(record, fail_set, pass_set):
+def process_record(record, chrX, chrY, fail_set, pass_set):
     record = process_varGQ(record)
     record = process_multiallelic(record)
     record = process_unresolved(record)
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
+    record = process_allosomes(record, chrX, chrY)
     return record
 
 
@@ -68,16 +70,104 @@ def process_bothsides_support(record, pass_set):
     return record
 
 
+def process_allosomes(record, chrX, chrY):
+    chromosome = record.chrom
+    if chromosome not in (chrX, chrY):
+        return record
+
+    updated_samples = []
+    sv_type = record.info.get('SVTYPE', '')
+    sv_len = record.info.get('SVLEN', 0)
+
+    if sv_type in ('DEL', 'DUP') and sv_len >= MIN_ALLOSOME_EVENT_SIZE:
+        is_y = (chromosome == chrY)
+
+        for sample in record.samples:
+            genotype = record.samples[sample]
+            sex = genotype.get('EXPECTED_COPY_NUMBER_FORMAT', None)
+
+            if sex == 1:  # Male
+                if is_revisable_event(record, is_y, sex):
+                    record.info[REVISED_EVENT] = True
+                    adjust_male_genotype(genotype, sv_type)
+            elif sex == 2 and is_y:  # Female
+                genotype['GT'] = (None, None)  # NO_CALL for females on chrY
+            elif sex == 0:  # Unknown
+                genotype['GT'] = (None, None)  # NO_CALL for unknown sex
+            
+            updated_samples.append(sample)
+
+    return record
+
+
+def is_revisable_event(record, is_y, sex):
+    genotypes = record.samples.values()
+    male_counts = [0, 0, 0, 0]
+    female_counts = [0, 0, 0, 0]
+
+    for genotype in genotypes:
+        rd_cn = genotype.get('RD_CN', -1)
+        rd_cn_val = min(rd_cn, 3) if rd_cn != -1 else -1
+        if rd_cn_val == -1:
+            continue
+
+        if sex == 1:  # Male
+            male_counts[rd_cn_val] += 1
+        elif sex == 2:  # Female
+            female_counts[rd_cn_val] += 1
+
+    male_median = calc_median_distribution(male_counts)
+    female_median = calc_median_distribution(female_counts)
+
+    return male_median == 2 and (is_y and female_median == 0 or not is_y and female_median == 4)
+
+
+def adjust_male_genotype(genotype, sv_type):
+    rd_cn = genotype.get('RD_CN', 0)
+    genotype['RD_CN'] = rd_cn + 1
+    ref_allele, alt_allele = genotype['alleles']
+
+    if sv_type == 'DEL':
+        if rd_cn >= 1:
+            genotype['GT'] = (ref_allele, ref_allele)
+        elif rd_cn == 0:
+            genotype['GT'] = (ref_allele, alt_allele)
+    elif sv_type == 'DUP':
+        if rd_cn <= 1:
+            genotype['GT'] = (ref_allele, ref_allele)
+        elif rd_cn == 2:
+            genotype['GT'] = (ref_allele, alt_allele)
+        else:
+            genotype['GT'] = (alt_allele, alt_allele)
+
+
+def calc_median_distribution(counts):
+    total = sum(counts)
+    if total == 0:
+        return -1
+
+    target = total // 2
+    running_total = 0
+    for i, count in enumerate(counts):
+        running_total += count
+        if running_total >= target:
+            return i * 2 if running_total > target else i * 2 + 1
+
+
 if __name__ == '__main__':
     # Parse arguments
     parser = argparse.ArgumentParser(description='CleanVcf preprocessing.')
     parser.add_argument('-V', '--input', dest='input_vcf', required=True, help='Input VCF file')
     parser.add_argument('-O', '--output', dest='output_vcf', required=True, help='Output VCF file')
+    parser.add_argument('--chrX', required=True, help='Chromosome X representation in VCF')
+    parser.add_argument('--chrY', required=True, help='Chromosome Y representation in VCF')
     parser.add_argument('--fail-list', required=True, help='File with variants failing the background test')
     parser.add_argument('--pass-list', required=True, help='File with variants passing both sides')
     args = parser.parse_args()
 
     # Read input files
+    chrX = args.chrX
+    chrY = args.chrY
     fail_set = read_last_column(args.fail_list)
     pass_set = read_last_column(args.pass_list)
     if args.input_vcf.endswith('.gz'):
@@ -93,7 +183,7 @@ if __name__ == '__main__':
 
     # Process records
     for record in vcf_in:
-        record = process_record(record, fail_set, pass_set)
+        record = process_record(record, chrX, chrY, fail_set, pass_set)
         vcf_out.write(record)
     
     # Close files

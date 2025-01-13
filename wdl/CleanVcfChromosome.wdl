@@ -65,6 +65,8 @@ workflow CleanVcfChromosome {
 	call CleanVcfPreprocess {
 		input:
 			vcf=FormatVcfToClean.out,
+			chr_x=chr_x,
+			chr_y=chr_y,
 			background_list=background_list,
 			bothsides_pass_list=bothsides_pass_list,
 			prefix="~{prefix}.preprocess",
@@ -208,6 +210,8 @@ workflow CleanVcfChromosome {
 task CleanVcfPreprocess {
 	input {
 		File vcf
+		String chr_x
+		String chr_y
 		File background_list
 		File bothsides_pass_list
 		String prefix
@@ -266,6 +270,8 @@ task CleanVcfPreprocess {
 		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
 			-V processed.reheader.vcf.gz \
 			-O ~{output_vcf} \
+			--chrX ~{chr_x} \
+			--chrY ~{chr_y} \
 			--fail-list ~{background_list} \
 			--pass-list ~{bothsides_pass_list}
 
