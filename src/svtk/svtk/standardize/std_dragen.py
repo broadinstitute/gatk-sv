@@ -47,7 +47,10 @@ class DragenStandardizer(VCFStandardizer):
         Skip mated events that are not marked with SECONDARY tag.
         """
 
+        # Track IDs of observed records
         mate_IDs = deque()
+
+        # Iterate over records
         for record in self.filter_raw_vcf():
             # Filter unmarked SECONDARY on same chromosome
             if 'MATEID' in record.info:
@@ -56,8 +59,7 @@ class DragenStandardizer(VCFStandardizer):
                 # Skip records with an observed mate
                 if mate_ID in mate_IDs:
                     continue
-
-                # Track IDs of observed records
+                
                 mate_IDs.append(record.id)
 
             yield self.standardize_record(record)
@@ -117,15 +119,9 @@ class DragenStandardizer(VCFStandardizer):
             strands = '+-'
         elif svtype == 'DUP':
             strands = '-+'
-        elif svtype == 'INS':  # Treat DUPSVLEN as DUP
-            if 'DUPSVLEN' in raw_rec.info:
-                svtype = 'DUP'
-                std_rec.info['SVTYPE'] = svtype
-                strands = '-+'
-            else:
-                strands = '+-'
-        else:  # Default
+        elif svtype == 'INS':
             strands = '+-'
+        
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
         std_rec.info['STRANDS'] = strands
