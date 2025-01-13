@@ -6,8 +6,8 @@ workflow ConcatVcfContigs {
     input {
         Array[File] vcf_list
         Array[File] vcf_list_idx
-        outfile_prefix = outfile_prefix,
-        sv_base_mini_docker = sv_base_mini_docker,
+        String outfile_prefix
+        String sv_base_mini_docker
         RuntimeAttr? runtime_attr_concat_vcfs
     }
 
