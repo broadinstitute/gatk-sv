@@ -125,7 +125,7 @@ workflow CombineBatches {
   Array[String] contigs = transpose(read_tsv(contig_list))[0]
   scatter ( contig in contigs ) {
 
-    # First round of clustering
+    # Naively join across batches
     call ClusterTasks.SVCluster as JoinVcfs {
       input:
         vcfs=FormatVcf.out,

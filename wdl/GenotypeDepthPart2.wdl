@@ -20,8 +20,6 @@ workflow GenotypeDepthPart2 {
     File coveragefile
     File? coveragefile_index
 
-    File? reformat_script
-
     String sv_pipeline_docker
     String sv_base_mini_docker
     RuntimeAttr? runtime_attr_split_variants

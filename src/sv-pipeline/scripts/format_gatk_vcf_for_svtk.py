@@ -197,7 +197,7 @@ def __parse_arg_list(arg: Text) -> List[Text]:
 def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
     # noinspection PyTypeChecker
     parser = argparse.ArgumentParser(
-        description="Convert a GATK-style SV VCF from ClusterBatch for consumption by GenerateBatchMetrics.",
+        description="Convert a GATK-style SV VCF for consumption by svtk. Not to be used after CleanVcf.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
     parser.add_argument("--vcf", type=str, required=True,
@@ -212,8 +212,6 @@ def __parse_arguments(argv: List[Text]) -> argparse.Namespace:
                         help="Comma-delimited list of FORMAT fields to remove")
     parser.add_argument("--remove-infos", type=str,
                         help="Comma-delimited list of INFO fields to remove")
-    parser.add_argument("--intervaled-ins", default=False, action='store_true',
-                        help="Set INS record END to POS+SVLEN")
     parser.add_argument("--set-pass", default=False, action='store_true',
                         help="Set empty FILTER fields (\".\") to PASS")
     if len(argv) <= 1:

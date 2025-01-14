@@ -31,8 +31,6 @@ workflow GenotypePESRPart2 {
     Int? sr_median_hom_ins
     Float? sr_hom_cutoff_multiplier
 
-    File? reformat_script
-
     String sv_pipeline_docker
     String sv_base_mini_docker
     String linux_docker

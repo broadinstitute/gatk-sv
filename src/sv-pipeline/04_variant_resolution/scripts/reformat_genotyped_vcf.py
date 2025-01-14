@@ -44,7 +44,6 @@ def get_new_header(header):
             continue
         else:
             new_header_lines.append(line)
-    # Incorporate SR evidence flags
     new_header = pysam.VariantHeader()
     for s in header.samples:
         new_header.add_sample(s)
