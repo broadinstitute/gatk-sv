@@ -14,28 +14,28 @@ from svtk.famfile import parse_famfile
 
 
 def has_depth_support_autosome(record, sample):
-    return record.samples[sample]['RD_CN'] is not None and \
-        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > 2) or
-            (record.info['SVTYPE'] == 'DEL' and record.samples[sample]['RD_CN'] < 2))
+    return record.samples[sample].get('RD_CN') is not None and \
+        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample].get('RD_CN') > 2) or
+            (record.info['SVTYPE'] == 'DEL' and record.samples[sample].get('RD_CN') < 2))
 
 
 def has_sr_or_pe_support(record, sample):
-    return (record.samples[sample]['PE_GT'] is not None and record.samples[sample]['PE_GT'] > 0) \
-        or (record.samples[sample]['SR_GT'] is not None and record.samples[sample]['SR_GT'] > 0)
+    return (record.samples[sample].get('PE_GT') is not None and record.samples[sample].get('PE_GT') > 0) \
+        or (record.samples[sample].get('SR_GT') is not None and record.samples[sample].get('SR_GT') > 0)
 
 
 def has_depth_support_allosome(record, sample, samples_with_same_sex):
-    if record.samples[sample]['RD_CN'] is None:
+    if record.samples[sample].get('RD_CN') is None:
         return False
-    cns = [record.samples[s]['RD_CN'] for s in samples_with_same_sex]
+    cns = [record.samples[s].get('RD_CN') for s in samples_with_same_sex]
     cns = [cn for cn in cns if cn is not None]
     if len(cns) == 0:
         return False
     cns.sort()
     median_cn = cns[int((len(cns) + 1) / 2)]
-    return record.samples[sample]['RD_CN'] is not None and \
-        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample]['RD_CN'] > median_cn) or
-         (record.info['SVTYPE'] == 'DEL' and record.samples[sample]['RD_CN'] < median_cn))
+    return record.samples[sample].get('RD_CN') is not None and \
+        ((record.info['SVTYPE'] == 'DUP' and record.samples[sample].get('RD_CN') > median_cn) or
+         (record.info['SVTYPE'] == 'DEL' and record.samples[sample].get('RD_CN') < median_cn))
 
 
 def read_contigs_list(contigs_list):
@@ -92,7 +92,7 @@ def main():
         svtype = record.info['SVTYPE']
         if (svtype == 'DEL' or svtype == 'DUP') and record.info['SVLEN'] >= min_size:
             pesr_support = has_sr_or_pe_support(record, case_sample)
-            if record.samples[case_sample]['RD_CN'] is None:
+            if record.samples[case_sample].get('RD_CN') is None:
                 if not pesr_support:
                     sys.stderr.write("Record {} has a missing depth genotype and no PE/SR support; dropping\n".format(record.id))
                     continue
