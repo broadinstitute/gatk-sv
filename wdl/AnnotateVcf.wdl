@@ -12,7 +12,7 @@ workflow AnnotateVcf {
     File contig_list  # Ordered list of contigs to annotate that are present in the input VCF
     String prefix
 
-    File protein_coding_gtf
+    File? protein_coding_gtf  # Provide at least one of protein_coding_gtf or noncoding_bed to perform functional annotation
     File? noncoding_bed
     Int? promoter_window
     Int? max_breakend_as_cnv_length
