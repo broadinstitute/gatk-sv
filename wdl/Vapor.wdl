@@ -1,14 +1,17 @@
 version 1.0
 
+import "Utils.wdl" as utils
 import "Structs.wdl"
 
 workflow Vapor {
   input {
-    String prefix
+    String sample_id
     File bam_or_cram_file
     File bam_or_cram_index
-    File bed_file
-    String sample_id
+
+    # One of the following must be specified. May be single- or multi-sample.
+    File? bed_file
+    File? vcf_file
 
     Boolean save_plots  # Control whether plots are final output
 
@@ -21,31 +24,52 @@ workflow Vapor {
     String sv_base_mini_docker
     String sv_pipeline_docker
 
+    RuntimeAttr? runtime_attr_subset_sample
+    RuntimeAttr? runtime_attr_vcf_to_bed
     RuntimeAttr? runtime_attr_vapor
-    RuntimeAttr? runtime_attr_bcf2vcf
-    RuntimeAttr? runtime_attr_vcf2bed
     RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_concat_beds
-    RuntimeAttr? runtime_attr_LocalizeCram
 
     File? NONE_FILE_ # Create a null file - do not use this input
+  }
+
+  # Convert vcf to bed if provided
+  if (defined(vcf_file) && !defined(bed_file)) {
+
+    call utils.SubsetVcfToSample {
+      input:
+        vcf=select_first([vcf_file]),
+        vcf_idx=select_first([vcf_file]) + ".tbi",
+        sample=sample_id,
+        outfile_name=sample_id,
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override = runtime_attr_subset_sample
+    }
+
+    call utils.VcfToBed {
+      input:
+        vcf_file = SubsetVcfToSample.vcf_subset,
+        variant_interpretation_docker = sv_pipeline_docker,
+        runtime_attr_override = runtime_attr_vcf_to_bed
+    }
+
   }
 
   scatter (contig in read_lines(contigs)) {
 
     call PreprocessBedForVapor {
       input:
-        prefix = "~{prefix}.~{contig}.preprocess",
+        prefix = "~{sample_id}.~{contig}.preprocess",
         contig = contig,
         sample_to_extract = sample_id,
-        bed_file = bed_file,
+        bed_file = select_first([bed_file, VcfToBed.bed_output]),
         sv_pipeline_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_split_vcf
     }
 
     call RunVaporWithCram {
       input:
-        prefix = "~{prefix}.~{contig}",
+        prefix = "~{sample_id}.~{contig}",
         contig = contig,
         bam_or_cram_file = bam_or_cram_file,
         bam_or_cram_index = bam_or_cram_index,
@@ -62,7 +86,7 @@ workflow Vapor {
     input:
       shard_bed_files = RunVaporWithCram.vapor,
       shard_plots = RunVaporWithCram.vapor_plot,
-      prefix = prefix,
+      prefix = sample_id,
       sv_base_mini_docker = sv_base_mini_docker,
       runtime_attr_override = runtime_attr_concat_beds
   }
@@ -101,9 +125,16 @@ task PreprocessBedForVapor {
 
   command <<<
     set -euo pipefail
+
+    if [[ ~{bed_file} == *.gz ]]; then
+      gunzip -c ~{bed_file} > in.bed
+    else
+      cp ~{bed_file} in.bed
+    fi
+
     python /opt/sv-pipeline/scripts/preprocess_bed_for_vapor.py \
       --contig ~{contig} \
-      --bed-in ~{bed_file} \
+      --bed-in in.bed \
       --bed-out ~{prefix}.bed \
       ~{"-s " + sample_to_extract}
   >>>
