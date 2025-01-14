@@ -59,7 +59,7 @@ section apply here.
 Array of filtered depth VCFs across batches generated in [FilterBatch](./fb#filtered_depth_vcf).
 
 #### `pesr_vcfs`
-Array of filtered depth VCFs across batches generated in [FilterBatch](./fb#filtered_pesr_vcf).
+Array of filtered PE/SR VCFs across batches generated in [FilterBatch](./fb#filtered_pesr_vcf).
 
 ### Outputs
 
