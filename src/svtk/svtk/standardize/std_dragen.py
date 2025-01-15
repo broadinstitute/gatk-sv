@@ -75,15 +75,25 @@ class DragenStandardizer(VCFStandardizer):
         5. Define ALGORITHMS.
         """
 
+        # Update SVTYPE
+        svtype = raw_rec.info['SVTYPE']
+
+        # Check INV
+        isInv3, isInv5, matePos = checkInversion(raw_rec)
+        if isInv3 or isInv5:
+            svtype = 'INV'
+        
+        # Check TANDEM DUP
+        if 'DUPSVLEN' in raw_rec.info:
+            svtype = 'DUP'
+        
+        std_rec.info['SVTYPE'] = svtype
+
         # Update ID
         std_rec.id = std_rec.id.replace(':', '_')
 
-        # Update SVTYPE
-        svtype = raw_rec.info['SVTYPE']
-        std_rec.info['SVTYPE'] = svtype
-
         # Update CHR2 and END
-        if svtype == 'BND':
+        if svtype == 'BND' or svtype == 'INV':
             chrA, posA = raw_rec.chrom, raw_rec.pos
             chrB, posB = parse_bnd_pos(raw_rec.alts[0])
             if not is_smaller_chrom(chrA, chrB):
@@ -99,13 +109,6 @@ class DragenStandardizer(VCFStandardizer):
             posB = raw_rec.stop
         std_rec.info['CHR2'] = chrB
         std_rec.stop = posB
-
-        # Update INV
-        isInv3, isInv5, matePos = checkInversion(raw_rec)
-        if isInv3 or isInv5:
-            std_rec.stop = matePos
-            std_rec.info['SVTYPE'] = 'INV'
-            std_rec.info['SVLEN'] = matePos - std_rec.pos
 
         # Update STRANDS
         if svtype == 'INV':
