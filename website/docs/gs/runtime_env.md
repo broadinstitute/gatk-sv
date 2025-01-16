@@ -13,7 +13,7 @@ To facilitate easy-of-use, security, and collaboration, GATK-SV is available on 
 platform. Users should clone pre-configured Terra workspaces as a starting point for running GATK-SV:
 
 - [Single-sample workspace](https://app.terra.bio/#workspaces/help-gatk/GATK-Structural-Variants-Single-Sample)
-- Joint calling workspace (TODO)
+- [Joint calling workspace](https://app.terra.bio/#workspaces/broad-firecloud-dsde-methods/GATK-Structural-Variants-Joint-Calling)
 
 These workspaces are actively maintained by the development team and will be updated with critical fixes and major releases.
 
