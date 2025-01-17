@@ -119,7 +119,7 @@ def is_revisable_event(record, is_y, sex):
     male_median = calc_median_distribution(male_counts)
     female_median = calc_median_distribution(female_counts)
 
-    return male_median == 2 and (is_y and female_median == 0 or not is_y and female_median == 4)
+    return male_median == 1 and (female_median == 0 if is_y else female_median == 2)
 
 
 def adjust_male_genotype(genotype, sv_type):
