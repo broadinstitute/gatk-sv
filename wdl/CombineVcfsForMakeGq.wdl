@@ -53,6 +53,7 @@ workflow CombineVcfsForMakeGq {
 			ref_fasta      				= ref_fasta,
 			ref_fasta_fai  				= ref_fasta_fai,
 			ref_dict       				= ref_dict,
+			variant_prefix				= "clustered",
 			gatk_docker    				= gatk_docker
 	}
 
@@ -161,6 +162,7 @@ task SVCluster {
 		File ref_fasta
 		File ref_fasta_fai
 		File ref_dict
+		String variant_prefix
 		String gatk_docker
 	}
 
@@ -174,9 +176,10 @@ task SVCluster {
 			--output clustered.vcf.gz \
 			--ploidy-table ~{ploidy_table} \
 			--reference ~{ref_fasta} \
+			--variant-prefix ~{variant_prefix} \
 			--depth-interval-overlap 1 --depth-breakend-window 0 \
 			--mixed-interval-overlap 1 --mixed-breakend-window 0 \
-			--pesr-interval-overlap 1 --pesr-breakend-window 0
+			--pesr-interval-overlap 1 --pesr-breakend-window 0 \
 	>>>
 
 	output {
