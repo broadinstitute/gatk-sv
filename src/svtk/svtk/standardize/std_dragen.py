@@ -59,7 +59,7 @@ class DragenStandardizer(VCFStandardizer):
                 # Skip records with an observed mate
                 if mate_ID in mate_IDs:
                     continue
-                
+
                 mate_IDs.append(record.id)
 
             yield self.standardize_record(record)
@@ -80,11 +80,11 @@ class DragenStandardizer(VCFStandardizer):
         isInv3, isInv5, matePos = checkInversion(raw_rec)
         if isInv3 or isInv5:
             svtype = 'INV'
-        
+
         # Convert INS to DUP for tandem duplications
         # if 'DUPSVLEN' in raw_rec.info:
             # svtype = 'DUP'
-        
+
         # Update SVTYPE
         std_rec.info['SVTYPE'] = svtype
 
@@ -123,7 +123,7 @@ class DragenStandardizer(VCFStandardizer):
             strands = '-+'
         elif svtype == 'INS':
             strands = '+-'
-        
+
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
         std_rec.info['STRANDS'] = strands
