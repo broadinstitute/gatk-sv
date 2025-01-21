@@ -75,18 +75,17 @@ class DragenStandardizer(VCFStandardizer):
         5. Define ALGORITHMS.
         """
 
-        # Update SVTYPE
+        # Retrieve record data
         svtype = raw_rec.info['SVTYPE']
-
-        # Check INV
         isInv3, isInv5, matePos = checkInversion(raw_rec)
         if isInv3 or isInv5:
             svtype = 'INV'
         
-        # Check TANDEM DUP
-        if 'DUPSVLEN' in raw_rec.info:
-            svtype = 'DUP'
+        # Convert INS to DUP for tandem duplications
+        # if 'DUPSVLEN' in raw_rec.info:
+            # svtype = 'DUP'
         
+        # Update SVTYPE
         std_rec.info['SVTYPE'] = svtype
 
         # Update ID
