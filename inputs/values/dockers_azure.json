@@ -2,7 +2,7 @@
   "name": "dockers",
   "cnmops_docker": "vahid.azurecr.io/gatk-sv/cnmops:2024-11-08-v1.0-62adb329",
   "condense_counts_docker": "vahid.azurecr.io/tsharpe/gatk:4.2.6.1-57-g9e03432",
-  "gatk_docker": "vahid.azurecr.io/gatk-sv/gatk:2024-07-02-4.6.0.0-1-g4af2b49e9-NIGHTLY-SNAPSHOT",
+  "gatk_docker": "vahid.azurecr.io/gatk-sv/gatk:2024-12-05-4.6.1.0-6-gfc248dfc1-NIGHTLY-SNAPSHOT",
   "gatk_docker_pesr_override": "vahid.azurecr.io/tsharpe/gatk:4.2.6.1-57-g9e03432",
   "genomes_in_the_cloud_docker": "vahid.azurecr.io/genomes-in-the-cloud:2.3.2-1510681135",
   "linux_docker": "vahid.azurecr.io/google/ubuntu1804",
