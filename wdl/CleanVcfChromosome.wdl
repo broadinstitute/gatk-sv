@@ -34,8 +34,6 @@ workflow CleanVcfChromosome {
 		# overrides for local tasks
 		RuntimeAttr? runtime_attr_preprocess
 		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
-		RuntimeAttr? runtime_attr_revise_overlapping_cnv_gts
-		RuntimeAttr? runtime_attr_revise_overlapping_cnv_cns
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
@@ -325,102 +323,6 @@ task CleanVcfReviseOverlappingCnvs {
 	}
 }
 
-task CleanVcfReviseOverlappingCnvGts {
-	input {
-		File vcf
-		String prefix
-		String gatk_docker
-		RuntimeAttr? runtime_attr_override
-	}
-
-	RuntimeAttr runtime_default = object {
-		mem_gb: 3.75,
-		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}						
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: gatk_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
-
-	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
-	String output_vcf = "~{prefix}.vcf.gz"
-
-	command <<<
-		set -euo pipefail
-
-		if [ ! -f "~{vcf}.tbi" ]; then
-			tabix -p vcf ~{vcf}
-		fi
-		
-		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvGts \
-			-V ~{vcf} \
-			-O ~{output_vcf}
-	>>>
-
-	output {
-		File out="~{output_vcf}"
-		File out_idx="~{output_vcf}.tbi"
-	}
-}
-
-task CleanVcfReviseOverlappingCnvCns {
-	input {
-		File vcf
-		String prefix
-		String gatk_docker
-		RuntimeAttr? runtime_attr_override
-	}
-
-	RuntimeAttr runtime_default = object {
-		mem_gb: 3.75,
-		disk_gb: ceil(10.0 + size(vcf, "GB") * 2),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}					
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: gatk_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
-
-	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
-	String output_vcf = "~{prefix}.vcf.gz"
-
-	command <<<
-		set -euo pipefail
-
-		if [ ! -f "~{vcf}.tbi" ]; then
-			tabix -p vcf ~{vcf}
-		fi
-		
-		gatk --java-options "-Xmx~{java_mem_mb}m" SVReviseOverlappingCnvCns \
-			-V ~{vcf} \
-			-O ~{output_vcf}
-	>>>
-
-	output {
-		File out="~{output_vcf}"
-		File out_idx="~{output_vcf}.tbi"
-	}
-}
-
 task CleanVcfReviseLargeCnvs {
 	input {
 		File vcf
@@ -633,297 +535,297 @@ task CleanVcfPostprocess {
 }
 
 task RescueMobileElementDeletions {
-	input {
-		File vcf
-		String prefix
-		File LINE1
-		File HERVK
-		String sv_pipeline_docker
-		RuntimeAttr? runtime_attr_override
-	}
+  input {
+    File vcf
+    String prefix
+    File LINE1
+    File HERVK
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-	Float input_size = size(vcf, "GiB")
-	RuntimeAttr runtime_default = object {
-		mem_gb: 3.75 + input_size * 1.5,
-		disk_gb: ceil(100.0 + input_size * 3.0),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: sv_pipeline_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
+  Float input_size = size(vcf, "GiB")
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75 + input_size * 1.5,
+    disk_gb: ceil(100.0 + input_size * 3.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
-	command <<<
-		set -euo pipefail
+  command <<<
+    set -euo pipefail
 
-		python <<CODE
+    python <<CODE
 import os
 import pysam
 fin=pysam.VariantFile("~{vcf}")
 fo=pysam.VariantFile("~{prefix}.bnd_del.vcf.gz", 'w', header = fin.header)
 for record in fin:
-		if record.info['SVTYPE'] in ['BND'] and record.info['STRANDS']=="+-" and record.chrom == record.info['CHR2'] and record.info['END2'] - record.start < 10000:
-				record.info['SVLEN'] = record.info['END2'] - record.start
-				fo.write(record)
+    if record.info['SVTYPE'] in ['BND'] and record.info['STRANDS']=="+-" and record.chrom == record.info['CHR2'] and record.info['END2'] - record.start < 10000:
+        record.info['SVLEN'] = record.info['END2'] - record.start
+        fo.write(record)
 fin.close()
 fo.close()
 CODE
 
-		tabix -p vcf ~{prefix}.bnd_del.vcf.gz
+    tabix -p vcf ~{prefix}.bnd_del.vcf.gz
 
-		svtk vcf2bed ~{prefix}.bnd_del.vcf.gz -i ALL --include-filters ~{prefix}.bnd_del.bed
-		bgzip ~{prefix}.bnd_del.bed
+    svtk vcf2bed ~{prefix}.bnd_del.vcf.gz -i ALL --include-filters ~{prefix}.bnd_del.bed
+    bgzip ~{prefix}.bnd_del.bed
 
-		bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{LINE1} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_LINE1/' > manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
-		bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{HERVK} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_HERVK/' >> manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
+    bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{LINE1} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_LINE1/' > manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
+    bedtools coverage -wo -a ~{prefix}.bnd_del.bed.gz -b ~{HERVK} | awk '{if ($NF>.5) print}' | cut -f4 | sed -e 's/$/\tDEL\tPASS\toverlap_HERVK/' >> manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv
 
-		python <<CODE
+    python <<CODE
 import pysam
 def SVID_MEI_DEL_readin(MEI_DEL_reset):
-		out={}
-		fin=open(MEI_DEL_reset)
-		for line in fin:
-				pin=line.strip().split()
-				if not pin[0] in out.keys():
-						out[pin[0]] = pin[3]
-		fin.close()
-		return out
+    out={}
+    fin=open(MEI_DEL_reset)
+    for line in fin:
+        pin=line.strip().split()
+        if not pin[0] in out.keys():
+            out[pin[0]] = pin[3]
+    fin.close()
+    return out
 
 hash_MEI_DEL_reset = SVID_MEI_DEL_readin("manual_revise.MEI_DEL_from_BND.SVID_SVTYPE_FILTER_INFO.tsv")
 fin=pysam.VariantFile("~{vcf}")
 fo=pysam.VariantFile("~{prefix}.vcf.gz", 'w', header = fin.header)
 for record in fin:
-		if record.id in hash_MEI_DEL_reset.keys():
-				del record.filter['UNRESOLVED']
-				record.info['SVTYPE'] = 'DEL'
-				record.info['SVLEN'] = record.info['END2'] - record.start
-				record.stop = record.info['END2']
-				record.info.pop("CHR2")
-				record.info.pop("END2")
-				record.info.pop("UNRESOLVED_TYPE")
-				if hash_MEI_DEL_reset[record.id] == 'overlap_LINE1':
-						record.alts = ('<DEL:ME:LINE1>',)
-				if hash_MEI_DEL_reset[record.id] == 'overlap_HERVK':
-						record.alts = ('<DEL:ME:HERVK>',)
-		fo.write(record)
+    if record.id in hash_MEI_DEL_reset.keys():
+        del record.filter['UNRESOLVED']
+        record.info['SVTYPE'] = 'DEL'
+        record.info['SVLEN'] = record.info['END2'] - record.start
+        record.stop = record.info['END2']
+        record.info.pop("CHR2")
+        record.info.pop("END2")
+        record.info.pop("UNRESOLVED_TYPE")
+        if hash_MEI_DEL_reset[record.id] == 'overlap_LINE1':
+            record.alts = ('<DEL:ME:LINE1>',)
+        if hash_MEI_DEL_reset[record.id] == 'overlap_HERVK':
+            record.alts = ('<DEL:ME:HERVK>',)
+    fo.write(record)
 fin.close()
 fo.close()
 CODE
-	>>>
+  >>>
 
-	output {
-		File out = "~{prefix}.vcf.gz"
-	}
+  output {
+    File out = "~{prefix}.vcf.gz"
+  }
 }
 
 
 # Remove CNVs that are redundant with CPX events or other CNVs
 task DropRedundantCnvs {
-	input {
-		File vcf
-		String prefix
-		String contig
-		String sv_pipeline_docker
-		RuntimeAttr? runtime_attr_override
-	}
+  input {
+    File vcf
+    String prefix
+    String contig
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-	Float input_size = size(vcf, "GiB")
-	# disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
-	# in tests on large VCFs, memory usage is ~1.0 * input VCF size
-	# the biggest disk usage is at the end of the task, with input + output VCF on disk
-	Int cpu_cores = 2 # speed up compression / decompression of VCFs
-	RuntimeAttr runtime_default = object {
-		mem_gb: 3.75 + input_size * 1.5,
-		disk_gb: ceil(100.0 + input_size * 2.0),
-		cpu_cores: cpu_cores,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: sv_pipeline_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
+  Float input_size = size(vcf, "GiB")
+  # disk is cheap, read/write speed is proportional to disk size, and disk IO is a significant time factor:
+  # in tests on large VCFs, memory usage is ~1.0 * input VCF size
+  # the biggest disk usage is at the end of the task, with input + output VCF on disk
+  Int cpu_cores = 2 # speed up compression / decompression of VCFs
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75 + input_size * 1.5,
+    disk_gb: ceil(100.0 + input_size * 2.0),
+    cpu_cores: cpu_cores,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
-	command <<<
-		set -euo pipefail
-		/opt/sv-pipeline/04_variant_resolution/scripts/resolve_cpx_cnv_redundancies.py \
-			~{vcf} ~{prefix}.vcf.gz --temp-dir ./tmp
-	>>>
+  command <<<
+    set -euo pipefail
+    /opt/sv-pipeline/04_variant_resolution/scripts/resolve_cpx_cnv_redundancies.py \
+      ~{vcf} ~{prefix}.vcf.gz --temp-dir ./tmp
+  >>>
 
-	output {
-		File out = "~{prefix}.vcf.gz"
-	}
+  output {
+    File out = "~{prefix}.vcf.gz"
+  }
 }
 
 
 # Stitch fragmented RD-only calls found in 100% of the same samples
 task StitchFragmentedCnvs {
-	input {
-		File vcf
-		String prefix
-		String sv_pipeline_docker
-		RuntimeAttr? runtime_attr_override
-	}
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-	Float input_size = size(vcf, "GB")
-	RuntimeAttr runtime_default = object {
-		mem_gb: 7.5,
-		disk_gb: ceil(10.0 + input_size * 2),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
-	Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
+  Float input_size = size(vcf, "GB")
+  RuntimeAttr runtime_default = object {
+                                  mem_gb: 7.5,
+                                  disk_gb: ceil(10.0 + input_size * 2),
+                                  cpu_cores: 1,
+                                  preemptible_tries: 3,
+                                  max_retries: 1,
+                                  boot_disk_gb: 10
+                                }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  Float mem_gb = select_first([runtime_override.mem_gb, runtime_default.mem_gb])
+  Int java_mem_mb = ceil(mem_gb * 1000 * 0.8)
 
-	runtime {
-		memory: "~{mem_gb} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: sv_pipeline_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
+  runtime {
+    memory: "~{mem_gb} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
-	command <<<
-		set -euo pipefail
-		echo "First pass..."
-		java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 ~{vcf} \
-			| bgzip \
-			> tmp.vcf.gz
-		rm ~{vcf}
-		echo "Second pass..."
-		java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
-			| bgzip \
-			> ~{prefix}.vcf.gz
-	>>>
+  command <<<
+    set -euo pipefail
+    echo "First pass..."
+    java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 ~{vcf} \
+      | bgzip \
+      > tmp.vcf.gz
+    rm ~{vcf}
+    echo "Second pass..."
+    java -Xmx~{java_mem_mb}M -jar ${STITCH_JAR} 0.2 200000 0.2 tmp.vcf.gz \
+      | bgzip \
+      > ~{prefix}.vcf.gz
+  >>>
 
-	output {
-		File stitched_vcf_shard = "~{prefix}.vcf.gz"
-	}
+  output {
+    File stitched_vcf_shard = "~{prefix}.vcf.gz"
+  }
 }
 
 # Add FILTER status for pockets of variants with high FP rate: wham-only DELs and Scramble-only SVAs with HIGH_SR_BACKGROUND
 task AddHighFDRFilters {
-	input {
-		File vcf
-		String prefix
-		String sv_pipeline_docker
-		RuntimeAttr? runtime_attr_override
-	}
+  input {
+    File vcf
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-	Float input_size = size(vcf, "GiB")
-	RuntimeAttr runtime_default = object {
-		mem_gb: 3.75,
-		disk_gb: ceil(10.0 + input_size * 3.0),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: sv_pipeline_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
+  Float input_size = size(vcf, "GiB")
+  RuntimeAttr runtime_default = object {
+    mem_gb: 3.75,
+    disk_gb: ceil(10.0 + input_size * 3.0),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
-	command <<<
-		set -euo pipefail
+  command <<<
+    set -euo pipefail
 
-		python <<CODE
-	import pysam
-	with pysam.VariantFile("~{vcf}", 'r') as fin:
-	header = fin.header
-	header.add_line("##FILTER=<ID=HIGH_ALGORITHM_FDR,Description=\"Categories of variants with low precision including Wham-only deletions and certain Scramble SVAs\">")
-	with pysam.VariantFile("~{prefix}.vcf.gz", 'w', header=header) as fo:
-		for record in fin:
-			if (record.info['ALGORITHMS'] == ('wham',) and record.info['SVTYPE'] == 'DEL') or \
-			(record.info['ALGORITHMS'] == ('scramble',) and record.info['HIGH_SR_BACKGROUND'] and record.alts == ('<INS:ME:SVA>',)):
-				record.filter.add('HIGH_ALGORITHM_FDR')
-			fo.write(record)
-	CODE
-	>>>
+    python <<CODE
+import pysam
+with pysam.VariantFile("~{vcf}", 'r') as fin:
+  header = fin.header
+  header.add_line("##FILTER=<ID=HIGH_ALGORITHM_FDR,Description=\"Categories of variants with low precision including Wham-only deletions and certain Scramble SVAs\">")
+  with pysam.VariantFile("~{prefix}.vcf.gz", 'w', header=header) as fo:
+    for record in fin:
+        if (record.info['ALGORITHMS'] == ('wham',) and record.info['SVTYPE'] == 'DEL') or \
+          (record.info['ALGORITHMS'] == ('scramble',) and record.info['HIGH_SR_BACKGROUND'] and record.alts == ('<INS:ME:SVA>',)):
+            record.filter.add('HIGH_ALGORITHM_FDR')
+        fo.write(record)
+CODE
+  >>>
 
-	output {
-		File out = "~{prefix}.vcf.gz"
-	}
+  output {
+    File out = "~{prefix}.vcf.gz"
+  }
 }
 
 
 
 # Final VCF cleanup
 task FinalCleanup {
-	input {
-		File vcf
-		String contig
-		String prefix
-		String sv_pipeline_docker
-		RuntimeAttr? runtime_attr_override
-	}
+  input {
+    File vcf
+    String contig
+    String prefix
+    String sv_pipeline_docker
+    RuntimeAttr? runtime_attr_override
+  }
 
-	# generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
-	# generally assume working memory is ~3 * inputs
-	Float input_size = size(vcf, "GB")
-	Float base_disk_gb = 10.0
-	Float base_mem_gb = 2.0
-	Float input_mem_scale = 3.0
-	Float input_disk_scale = 5.0
-	RuntimeAttr runtime_default = object {
-		mem_gb: base_mem_gb + input_size * input_mem_scale,
-		disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
-		cpu_cores: 1,
-		preemptible_tries: 3,
-		max_retries: 1,
-		boot_disk_gb: 10
-	}
-	RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
-	runtime {
-		memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
-		disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
-		cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
-		preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
-		maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
-		docker: sv_pipeline_docker
-		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
-	}
+  # generally assume working disk size is ~2 * inputs, and outputs are ~2 *inputs, and inputs are not removed
+  # generally assume working memory is ~3 * inputs
+  Float input_size = size(vcf, "GB")
+  Float base_disk_gb = 10.0
+  Float base_mem_gb = 2.0
+  Float input_mem_scale = 3.0
+  Float input_disk_scale = 5.0
+  RuntimeAttr runtime_default = object {
+    mem_gb: base_mem_gb + input_size * input_mem_scale,
+    disk_gb: ceil(base_disk_gb + input_size * input_disk_scale),
+    cpu_cores: 1,
+    preemptible_tries: 3,
+    max_retries: 1,
+    boot_disk_gb: 10
+  }
+  RuntimeAttr runtime_override = select_first([runtime_attr_override, runtime_default])
+  runtime {
+    memory: "~{select_first([runtime_override.mem_gb, runtime_default.mem_gb])} GB"
+    disks: "local-disk ~{select_first([runtime_override.disk_gb, runtime_default.disk_gb])} HDD"
+    cpu: select_first([runtime_override.cpu_cores, runtime_default.cpu_cores])
+    preemptible: select_first([runtime_override.preemptible_tries, runtime_default.preemptible_tries])
+    maxRetries: select_first([runtime_override.max_retries, runtime_default.max_retries])
+    docker: sv_pipeline_docker
+    bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
+  }
 
-	command <<<
-		set -eu -o pipefail
-		
-		/opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
-			--chrom ~{contig} \
-			--prefix ~{prefix} \
-			~{vcf} stdout \
-			| bcftools annotate --no-version -e 'SVTYPE=="CNV" && SVLEN<5000' -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
-		tabix ~{prefix}.vcf.gz
-	>>>
+  command <<<
+    set -eu -o pipefail
+    
+    /opt/sv-pipeline/04_variant_resolution/scripts/rename_after_vcfcluster.py \
+      --chrom ~{contig} \
+      --prefix ~{prefix} \
+      ~{vcf} stdout \
+      | bcftools annotate --no-version -e 'SVTYPE=="CNV" && SVLEN<5000' -x INFO/MEMBERS -Oz -o ~{prefix}.vcf.gz
+    tabix ~{prefix}.vcf.gz
+  >>>
 
-	output {
-		File final_cleaned_shard = "~{prefix}.vcf.gz"
-		File final_cleaned_shard_idx = "~{prefix}.vcf.gz.tbi"
-	}
+  output {
+    File final_cleaned_shard = "~{prefix}.vcf.gz"
+    File final_cleaned_shard_idx = "~{prefix}.vcf.gz.tbi"
+  }
 }

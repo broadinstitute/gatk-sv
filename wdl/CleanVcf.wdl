@@ -59,8 +59,7 @@ workflow CleanVcf {
 
     # overrides for CleanVcfContig
     RuntimeAttr? runtime_attr_preprocess
-		RuntimeAttr? runtime_attr_revise_overlapping_cnv_gts
-		RuntimeAttr? runtime_attr_revise_overlapping_cnv_cns
+		RuntimeAttr? runtime_attr_revise_overlapping_cnvs
 		RuntimeAttr? runtime_attr_revise_large_cnvs
 		RuntimeAttr? runtime_attr_revise_abnormal_allosomes
 		RuntimeAttr? runtime_attr_revise_multiallelics
@@ -70,19 +69,11 @@ workflow CleanVcf {
     RuntimeAttr? runtime_attr_format
     RuntimeAttr? runtime_override_rescue_me_dels
 
-    RuntimeAttr? runtime_override_preconcat_step1
-    RuntimeAttr? runtime_override_hail_merge_step1
-    RuntimeAttr? runtime_override_fix_header_step1
-
     RuntimeAttr? runtime_override_preconcat_drc
     RuntimeAttr? runtime_override_hail_merge_drc
     RuntimeAttr? runtime_override_fix_header_drc
 
-    RuntimeAttr? runtime_override_split_vcf_to_clean
-    RuntimeAttr? runtime_override_split_include_list
-    RuntimeAttr? runtime_override_combine_clean_vcf_2
     RuntimeAttr? runtime_override_drop_redundant_cnvs
-    RuntimeAttr? runtime_override_combine_step_1_vcfs
     RuntimeAttr? runtime_override_sort_drop_redundant_cnvs
   }
 
@@ -130,25 +121,17 @@ workflow CleanVcf {
         sv_pipeline_docker=sv_pipeline_docker,
         
         runtime_attr_preprocess=runtime_attr_preprocess,
-        runtime_attr_revise_overlapping_cnv_gts=runtime_attr_revise_overlapping_cnv_gts,
-        runtime_attr_revise_overlapping_cnv_cns=runtime_attr_revise_overlapping_cnv_cns,
+        runtime_attr_revise_overlapping_cnvs=runtime_attr_revise_overlapping_cnvs,
         runtime_attr_revise_large_cnvs=runtime_attr_revise_large_cnvs,
         runtime_attr_revise_abnormal_allosomes=runtime_attr_revise_abnormal_allosomes,
         runtime_attr_revise_multiallelics=runtime_attr_revise_multiallelics,
         runtime_attr_postprocess=runtime_attr_postprocess,
         runtime_override_stitch_fragmented_cnvs=runtime_override_stitch_fragmented_cnvs,
         runtime_override_final_cleanup=runtime_override_final_cleanup,
-        runtime_override_split_vcf_to_clean=runtime_override_split_vcf_to_clean,
-        runtime_override_split_include_list=runtime_override_split_include_list,
-        runtime_override_combine_clean_vcf_2=runtime_override_combine_clean_vcf_2,
-        runtime_override_preconcat_step1=runtime_override_preconcat_step1,
-        runtime_override_hail_merge_step1=runtime_override_hail_merge_step1,
-        runtime_override_fix_header_step1=runtime_override_fix_header_step1,
         runtime_override_preconcat_drc=runtime_override_preconcat_drc,
         runtime_override_hail_merge_drc=runtime_override_hail_merge_drc,
         runtime_override_fix_header_drc=runtime_override_fix_header_drc,
         runtime_override_drop_redundant_cnvs=runtime_override_drop_redundant_cnvs,
-        runtime_override_combine_step_1_vcfs=runtime_override_combine_step_1_vcfs,
         runtime_override_sort_drop_redundant_cnvs=runtime_override_sort_drop_redundant_cnvs,
         runtime_attr_format=runtime_attr_format,
         runtime_override_rescue_me_dels=runtime_override_rescue_me_dels
