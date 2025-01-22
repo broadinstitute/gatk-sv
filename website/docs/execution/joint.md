@@ -66,7 +66,7 @@ algorithms (Manta, MELT, and Wham), read depth (RD), split read positions (SR), 
 6. `04-GatherBatchEvidence`: Per-batch copy number variant calling using cn.MOPS and GATK gCNV; B-allele frequency (BAF) 
 generation; call and evidence aggregation
 7. `05-ClusterBatch`: Per-batch variant clustering
-8. `06-GenerateBatchMetrics`: Per-batch variant filtering, metric generation
+8. `06-GenerateBatchMetrics`: Per-batch metric generation
 9. `07-FilterBatchSites`: Per-batch variant filtering and plot SV counts per sample per SV type to enable choice of IQR 
 cutoff for outlier filtration in `08-FilterBatchSamples`
 10. `08-FilterBatchSamples`: Per-batch outlier sample filtration

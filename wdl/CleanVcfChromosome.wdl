@@ -26,10 +26,15 @@ workflow CleanVcfChromosome {
 		Boolean use_hail
 		String? gcs_project
 
+<<<<<<< HEAD
 		String gatk_docker
 		String linux_docker
 		String sv_base_mini_docker
 		String sv_pipeline_docker
+=======
+    File? svtk_to_gatk_script  # For debugging
+    File? make_clean_gq_script
+>>>>>>> main
 
 		# overrides for local tasks
 		RuntimeAttr? runtime_attr_preprocess
@@ -155,7 +160,137 @@ workflow CleanVcfChromosome {
 			runtime_attr_override=runtime_override_stitch_fragmented_cnvs
 	}
 
+<<<<<<< HEAD
 	call RescueMobileElementDeletions {
+=======
+  call MiniTasks.SplitUncompressed as SplitIncludeList {
+    input:
+      whole_file=CleanVcf1a.include_list[0],
+      lines_per_shard=samples_per_step2_shard,
+      shard_prefix="~{prefix}.split_include_list.",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_split_include_list
+  }
+
+  scatter ( i in range(length(SplitIncludeList.shards)) ){
+    call CleanVcf2 {
+      input:
+        normal_revise_vcf=CleanVcf1b.normal,
+        prefix="~{prefix}.clean_vcf_2.shard_~{i}",
+        include_list=SplitIncludeList.shards[i],
+        multi_cnvs=CleanVcf1b.multi,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_clean_vcf_2
+      }
+  }
+
+  call MiniTasks.CatUncompressedFiles as CombineCleanVcf2 {
+    input:
+      shards=CleanVcf2.out,
+      outfile_name="~{prefix}.combine_clean_vcf_2.txt",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_combine_clean_vcf_2
+  }
+
+  call CleanVcf3 {
+    input:
+      rd_cn_revise=CombineCleanVcf2.outfile,
+      max_samples_shard = max_samples_per_shard_step3,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_clean_vcf_3
+  }
+
+  scatter ( i in range(length(CleanVcf3.shards)) ){
+    call CleanVcf4 {
+      input:
+        rd_cn_revise=CleanVcf3.shards[i],
+        normal_revise_vcf=CleanVcf1b.normal,
+        prefix="~{prefix}.clean_vcf_4.shard_~{i}",
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_attr_override=runtime_override_clean_vcf_4
+    }
+  }
+
+  call MiniTasks.CatUncompressedFiles as CombineRevised4 {
+    input:
+      shards=CleanVcf4.out,
+      outfile_name="~{prefix}.combine_revised_4.txt.gz",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_combine_revised_4
+  }
+
+  call MiniTasks.CatUncompressedFiles as CombineMultiIds4 {
+    input:
+      shards=CleanVcf4.multi_ids,
+      outfile_name="~{prefix}.combine_multi_ids_4.txt.gz",
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override=runtime_override_combine_multi_ids_4
+  }
+
+  call c5.CleanVcf5 {
+    input:
+      revise_vcf_lines=CombineRevised4.outfile,
+      normal_revise_vcf=CleanVcf1b.normal,
+      ped_file=ped_file,
+      sex_chr_revise=CombineStep1SexChrRevisions.outfile,
+      multi_ids=CombineMultiIds4.outfile,
+      outlier_samples_list=outlier_samples_list,
+      contig=contig,
+      prefix="~{prefix}.clean_vcf_5",
+      records_per_shard=clean_vcf5_records_per_shard,
+      threads_per_task=clean_vcf5_threads_per_task,
+      make_clean_gq_script=make_clean_gq_script,
+      sv_pipeline_docker=sv_pipeline_docker,
+      sv_base_mini_docker=sv_base_mini_docker,
+      runtime_attr_override_scatter=runtime_override_clean_vcf_5_scatter,
+      runtime_attr_override_make_cleangq=runtime_override_clean_vcf_5_make_cleangq,
+      runtime_attr_override_find_redundant_multiallelics=runtime_override_clean_vcf_5_find_redundant_multiallelics,
+      runtime_attr_override_polish=runtime_override_clean_vcf_5_polish
+  }
+
+  call DropRedundantCnvs {
+    input:
+      vcf=CleanVcf5.polished,
+      prefix="~{prefix}.drop_redundant_cnvs",
+      contig=contig,
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_drop_redundant_cnvs
+  }
+
+  if (use_hail) {
+    call HailMerge.HailMerge as SortDropRedundantCnvsHail {
+      input:
+        vcfs=[DropRedundantCnvs.out],
+        prefix="~{prefix}.drop_redundant_cnvs.sorted",
+        gcs_project=gcs_project,
+        reset_cnv_gts=true,
+        sv_base_mini_docker=sv_base_mini_docker,
+        sv_pipeline_docker=sv_pipeline_docker,
+        runtime_override_preconcat=runtime_override_preconcat_drc,
+        runtime_override_hail_merge=runtime_override_hail_merge_drc,
+        runtime_override_fix_header=runtime_override_fix_header_drc
+    }
+  }
+  if (!use_hail) {
+    call MiniTasks.SortVcf as SortDropRedundantCnvs {
+      input:
+        vcf=DropRedundantCnvs.out,
+        outfile_prefix="~{prefix}.drop_redundant_cnvs.sorted",
+        sv_base_mini_docker=sv_base_mini_docker,
+        runtime_attr_override=runtime_override_sort_drop_redundant_cnvs
+    }
+  }
+
+  call StitchFragmentedCnvs {
+    input:
+      vcf=select_first([SortDropRedundantCnvs.out, SortDropRedundantCnvsHail.merged_vcf]),
+      prefix="~{prefix}.stitch_fragmented_cnvs",
+      sv_pipeline_docker=sv_pipeline_docker,
+      runtime_attr_override=runtime_override_stitch_fragmented_cnvs
+  }
+
+  call RescueMobileElementDeletions {
+>>>>>>> main
     input:
       vcf = StitchFragmentedCnvs.stitched_vcf_shard,
       prefix = "~{prefix}.rescue_me_dels",
@@ -450,8 +585,46 @@ task CleanVcfReviseMultiallelicCnvs {
 		bootDiskSizeGb: select_first([runtime_override.boot_disk_gb, runtime_default.boot_disk_gb])
 	}
 
+<<<<<<< HEAD
 	Int java_mem_mb = ceil(select_first([runtime_override.mem_gb, runtime_default.mem_gb]) * 1000 * 0.7)
 	String output_vcf = "~{prefix}.vcf.gz"
+=======
+    vcf = pysam.VariantFile(VCF_FILE)
+    # Max sample count with PE or SR GT over 3
+    max_vf = max(len(vcf.header.samples) * 0.01, 2)
+    record_start = (batch_num - 1) * segments
+    record_end = batch_num * segments
+    record_idx = 0
+    print("{} {} {}".format(max_vf, record_start, record_end))
+    multi_geno_ids = set([])
+    for record in vcf:
+      record_idx += 1
+      if record_idx < record_start:
+        continue
+      elif record_idx > record_end:
+        break
+      num_gt_over_2 = 0
+      for sid in record.samples:
+        s = record.samples[sid]
+        # Pick best GT
+        if s.get('PE_GT') is None:
+          continue
+        elif s.get('SR_GT') is None:
+          gt = s.get('PE_GT')
+        elif s.get('PE_GT') > 0 and s.get('SR_GT') == 0:
+          gt = s.get('PE_GT')
+        elif s.get('PE_GT') == 0:
+          gt = s.get('SR_GT')
+        elif s.get('PE_GQ') >= s.get('SR_GQ'):
+          gt = s.get('PE_GT')
+        else:
+          gt = s.get('SR_GT')
+        if gt > 2:
+          num_gt_over_2 += 1
+      if num_gt_over_2 > max_vf:
+        multi_geno_ids.add(record.id)
+    vcf.close()
+>>>>>>> main
 
 	command <<<
 		set -euo pipefail
