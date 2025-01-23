@@ -3,7 +3,7 @@
 # IntegrateGQ.sh
 #
 
-# set -euo pipefail
+set -euo pipefail
 
 vcf=$1
 RD_melted_genotypes=$2 
@@ -30,55 +30,77 @@ zcat $RD_melted_genotypes \
   |gzip \
   >rd_indiv_geno.txt.gz
 
-##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
 ##PE##
-zcat $pegeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; }  \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >pe_indiv_geno.txt
-    
-##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
-count_nonDEL=$(awk '{if ($5!="DEL") print $4}' int.bed | wc -l)
-if [ "$count_nonDEL" -gt 0 ]; then
-  zcat "$pegeno_indiv_file" \
-    | { fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true; } \
-    | awk '{if ($4>0) print $1"@"$2,$1,$2,$4,$4+2,$5; else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-    | awk '!seen[$1"@"$2]++' \
-    >> pe_indiv_geno.txt
-fi
-sort -k1,1 pe_indiv_geno.txt|gzip>pe_indiv_geno.txt.gz
+zcat "$pegeno_indiv_file" > tmp.pe.zcat
 
-rm pe_indiv_geno.txt
+##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
+fgrep -wf <(awk '{if ($5 == "DEL") print $4}' int.bed) tmp.pe.zcat \
+  > tmp.pe.del.txt || true
+  
+awk '{
+  if ($4>1)      print $1"@"$2, $1,$2, $4, 0, $5;
+  else if ($4==1)print $1"@"$2, $1,$2, $4, 1, $5;
+  else           print $1"@"$2, $1,$2, $4, 2, $5
+}' OFS="\t" tmp.pe.del.txt \
+| awk '!seen[$1"@"$2]++' \
+> pe_indiv_geno.del.txt
+
+##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
+fgrep -wf <(awk '{if ($5 != "DEL") print $4}' int.bed) tmp.pe.zcat \
+  > tmp.pe.nodel.txt || true
+
+awk '{
+  if ($4>0)      print $1"@"$2, $1,$2, $4, $4+2, $5;
+  else           print $1"@"$2, $1,$2, $4, 2,    $5
+}' OFS="\t" tmp.pe.nodel.txt \
+| awk '!seen[$1"@"$2]++' \
+> pe_indiv_geno.nodel.txt
+
+cat pe_indiv_geno.del.txt pe_indiv_geno.nodel.txt > pe_indiv_geno.txt
+sort -k1,1 pe_indiv_geno.txt | gzip > pe_indiv_geno.txt.gz
+
+rm -f tmp.pe.zcat tmp.pe.del.txt tmp.pe.nodel.txt pe_indiv_geno.del.txt pe_indiv_geno.nodel.txt pe_indiv_geno.txt
+
 
 ##SR##
-zcat $srgeno_indiv_file \
-  | { fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) || true; } \
-  |awk '{if ($4>1) print $1"@"$2,$1,$2,$4,0,$5;else if ($4==1) print $1"@"$2,$1,$2,$4,1,$5 ;else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-  |awk '!seen[$1"@"$2]++' \
-  >sr_indiv_geno.txt
+zcat "$srgeno_indiv_file" > tmp.sr.zcat
+
+##Deletion events, need to PE-SR genotypes to match RD format (2==ref)##
+fgrep -wf <(awk '{if ($5=="DEL") print $4}' int.bed) tmp.sr.zcat \
+  > tmp.sr.del.txt || true
+
+awk '{
+  if ($4>1)      print $1"@"$2,$1,$2,$4,0,$5;
+  else if ($4==1)print $1"@"$2,$1,$2,$4,1,$5;
+  else           print $1"@"$2,$1,$2,$4,2,$5
+}' OFS="\t" tmp.sr.del.txt \
+| awk '!seen[$1"@"$2]++' \
+> sr_indiv_geno.del.txt
     
 ##Duplications and other events, need to PE-SR genotysrs to match RD (2==ref)##
-count_nonDEL2=$(awk '{if ($5!="DEL") print $4}' int.bed | wc -l)
-if [ "$count_nonDEL2" -gt 0 ]; then
-  zcat "$srgeno_indiv_file" \
-    | { fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) || true; } \
-    | awk '{if ($4>0) print $1"@"$2,$1,$2,$4,$4+2,$5; else print $1"@"$2,$1,$2,$4,2,$5}' OFS='\t' \
-    | awk '!seen[$1"@"$2]++' \
-    >> sr_indiv_geno.txt
-fi
-  
-sort -k1,1 sr_indiv_geno.txt|gzip>sr_indiv_geno.txt.gz
+fgrep -wf <(awk '{if ($5!="DEL") print $4}' int.bed) tmp.sr.zcat \
+  > tmp.sr.nodel.txt || true
 
-rm sr_indiv_geno.txt
+awk '{
+  if ($4>0)      print $1"@"$2,$1,$2,$4,$4+2,$5;
+  else           print $1"@"$2,$1,$2,$4,2,$5
+}' OFS="\t" tmp.sr.nodel.txt \
+| awk '!seen[$1"@"$2]++' \
+> sr_indiv_geno.nodel.txt
+
+cat sr_indiv_geno.del.txt sr_indiv_geno.nodel.txt > sr_indiv_geno.txt
+sort -k1,1 sr_indiv_geno.txt | gzip > sr_indiv_geno.txt.gz
+
+rm -f tmp.sr.zcat tmp.sr.nodel.txt tmp.sr.del.txt sr_indiv_geno.del.txt sr_indiv_geno.nodel.txt sr_indiv_geno.txt
+
 
 ##check to make sure PE and SR are same size which they should be##
 
-# if [ $(zcat sr_indiv_geno.txt.gz|wc -l) !=  $(zcat pe_indiv_geno.txt.gz|wc -l)  ] 
-# then
-#  echo "ERROR: PE and SR genotype files have different sizes"
-#  exit
-# fi
+if [ $(zcat sr_indiv_geno.txt.gz|wc -l) !=  $(zcat pe_indiv_geno.txt.gz|wc -l)  ] 
+then
+ echo "ERROR: PE and SR genotype files have different sizes"
+ exit
+fi
 
 ##All PE/SR .'s for samples missing RD##
 ##Add max PE/SR to use for future GQ integration##
@@ -92,7 +114,7 @@ join -j 1 -a 1 -e "." -o 1.1 1.2 1.3 1.4 1.5 2.4 2.5 2.6  \
   else if ($6>0 && $9==0) print $0 "\t" $6 "\t" $7 "\t" $8  ; \
   else if ($6==0 && $9>0) print $0 "\t" $9 "\t" $10 "\t" $11 ; \
   else if ($8>=$11)  print $0 "\t"$6 "\t" $7 "\t" $8  ; \
-  else if ($11>$8) print $0 "\t" $9 "\t" $10 "\t" $11 }' || true \
+  else if ($11>$8) print $0 "\t" $9 "\t" $10 "\t" $11 }' \
   |gzip \
   >RDall.combined.files.txt.gz
 
@@ -110,7 +132,7 @@ join -j 1 -a 2 -e "." -o 2.1 2.2 2.3 1.4 1.5 2.4 2.6  <(zcat rd_indiv_geno.txt.g
    |tr ' ' '\t' \
    |join -j 1 -o 1.1 1.2 1.3 1.4 1.5 1.6 1.7 2.4 2.6 - <(zcat sr_indiv_geno.txt.gz|sort -k1,1) \
    |tr ' ' '\t' \
-   |gzip || true \
+   |gzip \
    >PESRall.combined.files.txt.gz
 
 ##variant combine##
@@ -213,7 +235,7 @@ then
   | { fgrep -wf gt5kbcnv.del.ids.txt || true; } \
   |awk  '{if ($5==999) print $0,$4,999; \
    else if ($4==$13) print $0,$4,$5+((999-$5) * ($14/999)*0.5); \
-   else print $0,$4,$5-(($5-1) * ($14/999)*0.5) }' OFS='\t' || true \
+   else print $0,$4,$5-(($5-1) * ($14/999)*0.5) }' OFS='\t' \
   |awk '{if ($4==$7 && $4==$10) print $0 "\t" "RD,PE,SR"; \
   else if ($4==2 && $4==$7 && $4!=$10) print $0 "\t" "RD,PE" ; \
   else if ($4==2 && $4!=$7 && $4==$10) print $0 "\t" "RD,SR" ; \
@@ -221,11 +243,11 @@ then
   else if ($4!=2 && $7!=2 && $10!=2) print $0 "\t" "RD,PE,SR" ; \
   else if ($4!=2 && $7!=2 && $10==2) print $0 "\t" "RD,PE" ; \
   else if ($4!=2 && $7==2 && $10!=2) print $0 "\t" "RD,SR" ; \
-  else if ($4!=2 && $7==2 && $10==2) print $0 "\t" "RD" }' || true \
+  else if ($4!=2 && $7==2 && $10==2) print $0 "\t" "RD" }' \
   |cut -f1-6,8-9,11,15- \
   |awk '{if ($4>=2) print $1,$2,$3,$4,$5,$6,$7,$8,$9,0,$11,$12; \
    else if ($4==1) print $1,$2,$3,$4,$5,$6,$7,$8,$9,1,$11,$12; \
-   else if ($4==0) print $1,$2,$3,$4,$5,$6,$7,$8,$9,2,$11,$12; }' || true \
+   else if ($4==0) print $1,$2,$3,$4,$5,$6,$7,$8,$9,2,$11,$12; }' \
   |tr ' ' '\t' \
   >>genotype.indiv.txt
 
@@ -233,7 +255,7 @@ then
   | { fgrep -wf gt5kbcnv.del.ids.txt || true; } \
   |awk  '{if ($2==999) print $0,999; \
    else if ($3>=$4) print $0,$2+((999-$2) * ($3/999)*0.5); \
-   else if ($4>$3) print $0,$2+((999-$2) * ($4/999)*0.5);  }' || true \
+   else if ($4>$3) print $0,$2+((999-$2) * ($4/999)*0.5);  }' \
    |tr ' ' '\t' \
   >>genotype.variant.txt
 fi
@@ -246,7 +268,7 @@ then
   | { fgrep -wf gt5kbcnv.dup.ids.txt || true; } \
   |awk  '{if ($5==999) print $0,$4,999; \
    else if ($4==$13) print $0,$4,$5+((999-$5) * ($14/999)*0.5); \
-   else print $0,$4,$5-(($5-1) * ($14/999)*0.5) }' OFS='\t' || true \
+   else print $0,$4,$5-(($5-1) * ($14/999)*0.5) }' OFS='\t' \
   |awk '{if ($4==$7 && $4==$10) print $0 "\t" "RD,PE,SR"; \
   else if ($4==2 && $4==$7 && $4!=$10) print $0 "\t" "RD,PE" ; \
   else if ($4==2 && $4!=$7 && $4==$10) print $0 "\t" "RD,SR" ; \
@@ -254,10 +276,10 @@ then
   else if ($4!=2 && $7!=2 && $10!=2) print $0 "\t" "RD,PE,SR" ; \
   else if ($4!=2 && $7!=2 && $10==2) print $0 "\t" "RD,PE" ; \
   else if ($4!=2 && $7==2 && $10!=2) print $0 "\t" "RD,SR" ; \
-  else if ($4!=2 && $7==2 && $10==2) print $0 "\t" "RD" }' || true \
+  else if ($4!=2 && $7==2 && $10==2) print $0 "\t" "RD" }' \
   |cut -f1-6,8-9,11,15- \
   |awk '{if ($4<=2) print $1,$2,$3,$4,$5,$6,$7,$8,$9,0,$11,$12; \
-   else if ($4>2) print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10-2,$11,$12}' || true \
+   else if ($4>2) print $1,$2,$3,$4,$5,$6,$7,$8,$9,$10-2,$11,$12}' \
   |tr ' ' '\t' \
   >>genotype.indiv.txt
 
@@ -265,7 +287,7 @@ then
   | { fgrep -wf gt5kbcnv.dup.ids.txt || true; } \
   |awk  '{if ($2==999) print $0,999; \
    else if ($3>=$4) print $0,$2+((999-$2) * ($3/999)*0.5); \
-   else if ($4>$3) print $0,$2+((999-$2) * ($4/999)*0.5);  }' || true \
+   else if ($4>$3) print $0,$2+((999-$2) * ($4/999)*0.5);  }' \
    |tr ' ' '\t' \
   >>genotype.variant.txt
 fi
@@ -284,7 +306,7 @@ then
   | { fgrep -wf gt1_5kbcnv.ids.txt || true; } \
   |awk  '{if ($14==999) print $0,$12,999; \
   else if ($4==$13) print $0,$12,$14+((999-$14) * ($5/999)*0.5); \
-  else print $0,$12,$14-(($14-1) * ($5/999)*0.5) }' OFS='\t' || true \
+  else print $0,$12,$14-(($14-1) * ($5/999)*0.5) }' OFS='\t' \
   |awk '{if ($4==$7 && $4==$10) print $0 "\t" "RD,PE,SR"; \
   else if ($13==2 && $4==2 && $7==2 && $10!=2) print $0 "\t" "RD,PE" ; \
   else if ($13==2 && $4==2 && $7!=2 && $10==2) print $0 "\t" "RD,SR" ; \
@@ -296,7 +318,7 @@ then
   else if ($13!=2 && $4!=2 && $7==2 && $10!=2) print $0 "\t" "RD,SR" ; \
   else if ($13!=2 && $4==2 && $7==2 && $10!=2) print $0 "\t" "SR" ; \
   else if ($13!=2 && $4==2 && $7!=2 && $10==2) print $0 "\t" "PE"; \
-  else if ($13!=2 && $4==2 && $7!=2 && $10!=2) print $0 "\t" "PE,SR" }' || true \
+  else if ($13!=2 && $4==2 && $7!=2 && $10!=2) print $0 "\t" "PE,SR" }' \
   |cut -f1-6,8-9,11,15- \
   |tr ' ' '\t' \
   >>genotype.indiv.txt
@@ -313,7 +335,7 @@ fi
 ###CNV <1kb and removing any CNV with no depth genotype####
 { fgrep -wvf <(zcat RDall.combined.files.txt.gz \
      |awk -F'\t' '{if ($4==".") print $2}') int.bed || true; } \
-  |awk -F'\t' '{if (($5=="DUP" || $5=="DEL") && $3-$2<1000 ) print $4}' || true \
+  |awk -F'\t' '{if (($5=="DUP" || $5=="DEL") && $3-$2<1000 ) print $4}' \
   >lt1kbcnv.ids.txt
 
 if [ $(cat lt1kbcnv.ids.txt|wc -l) -gt 0 ] 
@@ -324,7 +346,7 @@ then
   |awk  '{if ($14==999) print $0,$12,999; \
   else if ($7==$10 && $8>=$11) print $0,$12,$14+((999-$14) * ($11/999)*0.5); \
   else if ($7==$10 && $11>=$8) print $0,$12,$14+((999-$14) * ($8/999)*0.5); \
-  else  print $0 "\t" $12 "\t" $14}' OFS='\t' || true \
+  else  print $0 "\t" $12 "\t" $14}' OFS='\t' \
   |awk '{if ($4==$7 && $4==$10) print $0 "\t" "RD,PE,SR"; \
   else if ($13==2 && $4==2 && $7==2 && $10!=2) print $0 "\t" "RD,PE" ; \
   else if ($13==2 && $4==2 && $7!=2 && $10==2) print $0 "\t" "RD,SR" ; \
@@ -336,7 +358,7 @@ then
   else if ($13!=2 && $4==$13 && $7==2 && $10!=2) print $0 "\t" "RD,SR" ; \
   else if ($13!=2  && $7==2 && $10!=2) print $0 "\t" "SR" ; \
   else if ($13!=2  && $7!=2 && $10==2) print $0 "\t" "PE"; \
-  else if ($13!=2  && $7!=2 && $10!=2) print $0 "\t" "PE,SR" }' || true \
+  else if ($13!=2  && $7!=2 && $10!=2) print $0 "\t" "PE,SR" }' \
   |cut -f1-6,8-9,11,15- \
   |tr ' ' '\t' \
   >>genotype.indiv.txt
@@ -345,7 +367,7 @@ then
   | { fgrep -wf lt1kbcnv.ids.txt || true; } \
   |awk  '{if ($3==999 || $4==999) print $0,999; \
    else if ($3>=$4) print $0,$3+((999-$3) * ($2/999)*0.5); \
-   else if ($4>$3) print $0,$4+((999-$4) * ($2/999)*0.5);  }' || true \
+   else if ($4>$3) print $0,$4+((999-$4) * ($2/999)*0.5);  }' \
    |tr ' ' '\t' \
   >>genotype.variant.txt
 fi
