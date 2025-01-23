@@ -405,3 +405,4 @@ cat genotype.variant.txt \
   |awk '{if ($2==0) $2=1;if ($3==0) $3=1; if ($4==0) $4=1; if ($5==0) $5=1; print}' OFS="\t" \
   |gzip \
   >genotype.variant.txt.gz
+  
