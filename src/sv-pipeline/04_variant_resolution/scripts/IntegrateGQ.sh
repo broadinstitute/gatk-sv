@@ -41,7 +41,6 @@ awk -v OFS="\t" '
     }
     next
   }
-
   ARGIND==2 {
     if ($1 in del) {
       final_gt = ($4>1 ? 0 : ($4==1 ? 1 : 2))
