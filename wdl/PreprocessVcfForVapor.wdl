@@ -7,6 +7,7 @@ workflow PreprocessVcfForVapor {
 
 		File contigs_fai          	# Path to the contigs file
 		Int min_size               	# Minimum size for standardization
+		String variant_prefix 			# Prefix for variant IDs
 
 		String sv_pipeline_docker   # Docker image path for GATK-SV
 	}
@@ -17,20 +18,14 @@ workflow PreprocessVcfForVapor {
 			vcf_path = vcf_path,
 			contigs_fai = contigs_fai,
 			min_size = min_size,
-			sv_pipeline_docker = sv_pipeline_docker
-	}
-
-	call SortVcf {
-		input:
-			sample_id = sample_id,
-			vcf_path = StandardizeVcf.standardized_vcf,
+			variant_prefix = variant_prefix,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 
 	call Vcf2Bed {
 		input:
 			sample_id = sample_id,
-			vcf_path = SortVcf.sorted_vcf,
+			vcf_path = StandardizeVcf.standardized_vcf,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 
@@ -45,6 +40,7 @@ task StandardizeVcf {
 		File vcf_path
 		File contigs_fai
 		Int min_size
+		String variant_prefix
 		String sv_pipeline_docker
 	}
 
@@ -55,6 +51,7 @@ task StandardizeVcf {
 			--sample-names ~{sample_id} \
 			--contigs ~{contigs_fai} \
 			--min-size ~{min_size} \
+			--prefix ~{variant_prefix} \
 			~{vcf_path} \
 			~{sample_id}.std_dragen.vcf.gz \
 			dragen
@@ -62,31 +59,6 @@ task StandardizeVcf {
 
 	output {
 		File standardized_vcf = "~{sample_id}.std_dragen.vcf.gz"
-	}
-
-	runtime {
-		cpu: 1
-		memory: "2 GiB"
-		disks: "local-disk 2 HDD"
-		docker: sv_pipeline_docker
-	}
-}
-
-task SortVcf {
-	input {
-		String sample_id
-		File vcf_path
-		String sv_pipeline_docker
-	}
-
-	command <<<
-		set -eu -o pipefail
-
-		bcftools sort -O z -o ~{sample_id}.std_dragen_sorted.vcf.gz ~{vcf_path}
-	>>>
-
-	output {
-		File sorted_vcf = "~{sample_id}.std_dragen_sorted.vcf.gz"
 	}
 
 	runtime {
