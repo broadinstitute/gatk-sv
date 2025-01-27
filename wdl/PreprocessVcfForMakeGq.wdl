@@ -51,12 +51,15 @@ task StandardizeVcf {
 			--contigs ~{contigs_fai} \
 			--min-size ~{min_size} \
 			~{vcf_path} \
-			~{sample_id}.std_dragen.vcf.gz \
+			~{sample_id}.std.vcf.gz \
 			dragen
+
+		tabix -p vcf ~{sample_id}.std.vcf.gz
 	>>>
 
 	output {
-		File standardized_vcf = "~{sample_id}.std_dragen.vcf.gz"
+		File standardized_vcf = "~{sample_id}.std.vcf.gz"
+		File standardized_vcf_index = "~{sample_id}.std.vcf.gz.tbi"
 	}
 
 	runtime {
@@ -80,7 +83,7 @@ task FormatVcfForGatk {
 
 		python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
 			--vcf ~{vcf_path} \
-			--out ~{sample_id}.formatted.vcf.gz \
+			--out ~{sample_id}.fmt.vcf.gz \
 			--ploidy-table ~{ploidy_table} \
 			--fix-end
 
@@ -88,8 +91,8 @@ task FormatVcfForGatk {
 	>>>
 
 	output {
-		File formatted_vcf = "~{sample_id}.formatted.vcf.gz"
-		File formatted_vcf_index = "~{sample_id}.formatted.vcf.gz.tbi"
+		File formatted_vcf = "~{sample_id}.fmt.vcf.gz"
+		File formatted_vcf_index = "~{sample_id}.fmt.vcf.gz.tbi"
 	}
 
 	runtime {
