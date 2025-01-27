@@ -68,30 +68,31 @@ class DragenStandardizer(VCFStandardizer):
         """
         Standardize Dragen record.
 
-        1. Replace colons in ID with underscores.
-        2. Define CHR2 and END.
-        3. Define strandedness.
+        1. Define SVTYPE.
+        2. Define ID.
+        3. Define CHR2 and END.
+        3. Define STRANDS.
         4. Define SVLEN.
         5. Define ALGORITHMS.
         """
 
         # Retrieve record data
         svtype = raw_rec.info['SVTYPE']
-        isInv3, isInv5, matePos = checkInversion(raw_rec)
+        isInv3, isInv5, _ = checkInversion(raw_rec)
         if isInv3 or isInv5:
             svtype = 'INV'
 
-        # Convert INS to DUP for tandem duplications
-        # if 'DUPSVLEN' in raw_rec.info:
-            # svtype = 'DUP'
+        # Convert INS to DUP for small DUP:TANDEM events
+        if 'DUP:TANDEM' in raw_rec.id:
+            svtype = 'DUP'
 
-        # Update SVTYPE
+        # Define SVTYPE
         std_rec.info['SVTYPE'] = svtype
 
-        # Update ID
+        # Define ID
         std_rec.id = std_rec.id.replace(':', '_')
 
-        # Update CHR2 and END
+        # Define CHR2 and END
         if svtype == 'BND' or svtype == 'INV':
             chrA, posA = raw_rec.chrom, raw_rec.pos
             chrB, posB = parse_bnd_pos(raw_rec.alts[0])
@@ -109,7 +110,7 @@ class DragenStandardizer(VCFStandardizer):
         std_rec.info['CHR2'] = chrB
         std_rec.stop = posB
 
-        # Update STRANDS
+        # Define STRANDS
         if svtype == 'INV':
             if isInv3:
                 strands = '++'
@@ -123,12 +124,11 @@ class DragenStandardizer(VCFStandardizer):
             strands = '-+'
         elif svtype == 'INS':
             strands = '+-'
-
         if not is_smaller_chrom(std_rec.chrom, std_rec.info['CHR2']):
             strands = strands[::-1]
         std_rec.info['STRANDS'] = strands
 
-        # Update SVLEN
+        # Define SVLEN
         if svtype == 'BND' and std_rec.chrom != std_rec.info['CHR2']:
             std_rec.info['SVLEN'] = -1
         elif svtype == 'INS':
@@ -136,7 +136,7 @@ class DragenStandardizer(VCFStandardizer):
         else:
             std_rec.info['SVLEN'] = std_rec.stop - std_rec.pos
 
-        # Update ALGORITHMS
+        # Define ALGORITHMS
         std_rec.info['ALGORITHMS'] = ['dragen']
 
         return std_rec
