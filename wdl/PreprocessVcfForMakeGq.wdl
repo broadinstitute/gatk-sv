@@ -87,7 +87,7 @@ task FormatVcfForGatk {
 			--ploidy-table ~{ploidy_table} \
 			--fix-end
 
-		tabix -p vcf ~{sample_id}.formatted.vcf.gz
+		tabix -p vcf ~{sample_id}.fmt.vcf.gz
 	>>>
 
 	output {
