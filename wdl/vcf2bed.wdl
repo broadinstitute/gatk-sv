@@ -26,7 +26,7 @@ workflow VcfToBed {
     }
   }
 
-  vcf_index = select_first([vcf_idx, TabixVcf.vcf_idx])
+  File vcf_index = select_first([vcf_idx, TabixVcf.vcf_idx])
 
   call vcf2bed{
     input:
