@@ -18,7 +18,7 @@ workflow VcfToBed {
     String sv_base_mini_docker
   }
 
-  if !(defined(vcf_idx)){
+  if (!defined(vcf_idx)){
     call TabixVcf{
       input:
         vcf = vcf,
