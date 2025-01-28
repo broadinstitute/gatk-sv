@@ -35,7 +35,7 @@ zcat "$pegeno_indiv_file" | \
 awk -v OFS="\t" '
   ARGIND==1 {
     if ($5 == "DEL") {
-      del[$4]    # e.g. del["variant_id"]
+      del[$4]
     } else {
       nodel[$4]
     }
@@ -43,13 +43,14 @@ awk -v OFS="\t" '
   }
   ARGIND==2 {
     if ($1 in del) {
+      ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
       final_gt = ($4>1 ? 0 : ($4==1 ? 1 : 2))
       print $1"@"$2, $1, $2, $4, final_gt, $5
     } else if ($1 in nodel) {
+      ##Duplications and other events, need to PE-SR genotypes to match RD (2==ref)##
       final_gt = ($4>0 ? $4+2 : 2)
       print $1"@"$2, $1, $2, $4, final_gt, $5
     }
-    # If $1 not in either array, do nothing.
   }
 ' int.bed - \
 | awk '!seen[$1]++' \
@@ -69,9 +70,11 @@ awk -v OFS="\t" '
   }
   ARGIND==2 {
     if ($1 in del) {
+      ##Deletions, need to PE-SR genotypes to match RD format (2==ref)##
       final_gt = ($4>1 ? 0 : ($4==1 ? 1 : 2))
       print $1"@"$2, $1, $2, $4, final_gt, $5
     } else if ($1 in nodel) {
+      ##Duplications and other events, need to PE-SR genotysrs to match RD (2==ref)##
       final_gt = ($4>0 ? $4+2 : 2)
       print $1"@"$2, $1, $2, $4, final_gt, $5
     }
