@@ -52,7 +52,7 @@ workflow Vapor {
             ref_fasta = ref_fasta,
             ref_fai = ref_fai,
             ref_dict = ref_dict,
-            project_id = project_id,
+            project_id = select_first([project_id]),
             bam_or_cram_file = bam_or_cram_file,
             bam_or_cram_index = bam_or_cram_index,
             sv_pipeline_docker = sv_pipeline_docker,
