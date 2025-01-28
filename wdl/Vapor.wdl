@@ -49,6 +49,7 @@ workflow Vapor {
     call utils.VcfToBed {
       input:
         vcf_file = SubsetVcfToSample.vcf_subset,
+        args = "-i SVLEN",
         variant_interpretation_docker = sv_pipeline_docker,
         runtime_attr_override = runtime_attr_vcf_to_bed
     }
