@@ -10,7 +10,7 @@ workflow Vapor {
     File bam_or_cram_index
     File bed_file
     String sample_id
-    String? project_id # Set if localization needed
+    String? project_id # Set to localize BAM/CRAMs
 
     Boolean save_plots  # Control whether plots are final output
 
