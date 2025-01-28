@@ -116,7 +116,7 @@ task LocalizeCramRequestPay {
 
   output{
     File local_bam = "~{contig}.bam"
-    File local_bai = "~{contig}.bam.bai"
+    File local_bai = "~{contig}.bai"
   }
 
   command <<<
