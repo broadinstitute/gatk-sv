@@ -104,6 +104,13 @@ class DragenStandardizer(VCFStandardizer):
         elif svtype == 'INS':
             chrB = raw_rec.chrom
             posB = raw_rec.pos + 1
+        elif svtype == 'DUP':
+            chrB = raw_rec.chrom
+            if isinstance(raw_rec.info.get('SVLEN', 0), tuple):
+                svlen = raw_rec.info['SVLEN'][0]
+            else:
+                svlen = raw_rec.info.get('SVLEN', 0)
+            posB = raw_rec.pos + svlen
         else:
             chrB = raw_rec.chrom
             posB = raw_rec.stop
