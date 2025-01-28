@@ -11,7 +11,7 @@ version 1.0
 import "Structs.wdl"
 import "TasksBenchmark.wdl" as tasks
 
-workflow ClusterPESR {
+workflow VcfToBed {
   input {
     File vcf
     File? vcf_idx
