@@ -25,9 +25,5 @@
   "sv_utils_docker": "us.gcr.io/broad-dsde-methods/gatk-sv/sv-utils:2025-01-06-v1.0.1-e902bf4e",
   "gq_recalibrator_docker": "us.gcr.io/broad-dsde-methods/markw/gatk:mw-tb-form-sv-filter-training-data-899360a",
   "str": "us.gcr.io/broad-dsde-methods/gatk-sv/str:2023-05-23-v0.27.3-beta-e537bdd6",
-<<<<<<< HEAD
-  "denovo": "us-central1-docker.pkg.dev/talkowski-training/kj-development/denovo:kj-clean-vcf-a2e7381c9f4822c8b171f99d679b394cc4bd60ac"
-=======
   "denovo": "us.gcr.io/broad-dsde-methods/gatk-sv/denovo:2025-01-14-v1.0.1-88dbd052"
->>>>>>> main
 }
