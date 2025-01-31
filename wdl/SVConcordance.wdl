@@ -137,7 +137,6 @@ task SVConcordanceTask {
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --do-not-sort \
       ~{"--clustering-config " + clustering_config} \
       ~{"--stratify-config " + stratification_config} \
       --track-intervals ~{sep=" --track-intervals " track_bed_files} \
