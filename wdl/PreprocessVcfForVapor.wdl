@@ -7,7 +7,6 @@ workflow PreprocessVcfForVapor {
 
 		File contigs_fai          	# Path to the contigs file
 		Int min_size               	# Minimum size for standardization
-		String variant_prefix 			# Prefix for variant IDs
 
 		String sv_pipeline_docker   # Docker image path for GATK-SV
 	}
@@ -18,7 +17,6 @@ workflow PreprocessVcfForVapor {
 			vcf_path = vcf_path,
 			contigs_fai = contigs_fai,
 			min_size = min_size,
-			variant_prefix = variant_prefix,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 
@@ -40,7 +38,6 @@ task StandardizeVcf {
 		File vcf_path
 		File contigs_fai
 		Int min_size
-		String variant_prefix
 		String sv_pipeline_docker
 	}
 
@@ -51,7 +48,6 @@ task StandardizeVcf {
 			--sample-names ~{sample_id} \
 			--contigs ~{contigs_fai} \
 			--min-size ~{min_size} \
-			--prefix ~{variant_prefix} \
 			~{vcf_path} \
 			~{sample_id}.std_dragen.vcf.gz \
 			dragen
