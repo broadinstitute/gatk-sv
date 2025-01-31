@@ -13,6 +13,15 @@ workflow SVConcordance {
     File contig_list
     File reference_dict
 
+    # Reclustering parameters
+    File? clustering_config
+    File? stratification_config
+
+    # These arrays give the names and intervals for reference contexts for stratification (same lengths)
+    # Names must correspond to those in the stratification config files
+    Array[String] track_names
+    Array[File] track_bed_files
+
     String gatk_docker
     String sv_base_mini_docker
 
@@ -30,6 +39,10 @@ workflow SVConcordance {
         truth_vcf=truth_vcf,
         output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
         contig=contig,
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_bed_files=track_bed_files,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
@@ -68,6 +81,10 @@ task SVConcordanceTask {
     String output_prefix
     File reference_dict
     String? contig
+    File? clustering_config
+    File? stratification_config
+    Array[String] track_names
+    Array[File] track_bed_files
     String? additional_args
 
     Float? java_mem_fraction
@@ -121,6 +138,10 @@ task SVConcordanceTask {
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
       --do-not-sort \
+      ~{"--clustering-config " + clustering_config} \
+      ~{"--stratify-config " + stratification_config} \
+      --track-intervals ~{sep=" --track-intervals " track_bed_files} \
+      --track-name ~{sep=" --track-name " track_names} \
       ~{additional_args}
   >>>
   runtime {

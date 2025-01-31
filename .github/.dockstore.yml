@@ -168,6 +168,7 @@ workflows:
     filters:
       branches:
         - main
+        - eph_grouped_concordance
       tags:
         - /.*/
 
