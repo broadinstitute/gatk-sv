@@ -284,7 +284,9 @@ workflow GATKSVPipelineBatch {
       depth_vcfs=RegenotypeCNVs.regenotyped_depth_vcfs,
       contig_list=primary_contigs_fai,
       allosome_fai=allosome_file,
-      ref_dict=reference_dict,
+      reference_fasta=reference_fasta,
+      reference_fasta_fai=reference_index,
+      reference_dict=reference_dict,
       chr_x=chr_x,
       chr_y=chr_y,
       disc_files=[GATKSVPipelinePhase1.merged_PE],
@@ -297,6 +299,7 @@ workflow GATKSVPipelineBatch {
       run_module_metrics = run_makecohortvcf_metrics,
       primary_contigs_list = primary_contigs_list,
       linux_docker=linux_docker,
+      gatk_docker=gatk_docker,
       sv_pipeline_docker=sv_pipeline_docker,
       sv_pipeline_qc_docker=sv_pipeline_qc_docker,
       sv_base_mini_docker=sv_base_mini_docker
