@@ -14,6 +14,7 @@ workflow Vapor {
     File? vcf_file
 
     Boolean save_plots  # Control whether plots are final output
+    String? project_id  # Control whether to localize CRAM files (for requester-pays buckets)
 
     File ref_fasta
     File ref_fai
