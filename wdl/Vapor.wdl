@@ -26,10 +26,11 @@ workflow Vapor {
 
     RuntimeAttr? runtime_attr_subset_sample
     RuntimeAttr? runtime_attr_vcf_to_bed
+    RuntimeAttr? runtime_attr_preprocess_bed
+    RuntimeAttr? runtime_attr_localize_cram
     RuntimeAttr? runtime_attr_vapor
-    RuntimeAttr? runtime_attr_split_vcf
     RuntimeAttr? runtime_attr_concat_beds
-
+    
     File? NONE_FILE_ # Create a null file - do not use this input
   }
 

@@ -1,13 +1,15 @@
 version 1.0
 
-workflow PreprocessVcfForVapor {
+workflow ProcessRawCallerVcfForMakeGq {
 	input {
 		String sample_id            # Sample identifier
 		File vcf_path             	# Path to the input VCF file
 
 		File contigs_fai          	# Path to the contigs file
+		File ploidy_table		  			# Path to the ploidy table file
 		Int min_size               	# Minimum size for standardization
-
+		String caller								# Caller name
+		
 		String sv_pipeline_docker   # Docker image path for GATK-SV
 	}
 
@@ -17,18 +19,21 @@ workflow PreprocessVcfForVapor {
 			vcf_path = vcf_path,
 			contigs_fai = contigs_fai,
 			min_size = min_size,
+			caller = caller,
 			sv_pipeline_docker = sv_pipeline_docker
 	}
 
-	call Vcf2Bed {
+	call FormatVcfForGatk {
 		input:
 			sample_id = sample_id,
 			vcf_path = StandardizeVcf.standardized_vcf,
-			sv_pipeline_docker = sv_pipeline_docker
+			ploidy_table = ploidy_table,
+			sv_pipeline_docker  = sv_pipeline_docker
 	}
 
 	output {
-		File dragen_sr_bed = Vcf2Bed.vcf2bed_vapor
+		File dragen_vcf_std = FormatVcfForGatk.formatted_vcf
+		File dragen_vcf_idx_std = FormatVcfForGatk.formatted_vcf_index
 	}
 }
 
@@ -38,6 +43,7 @@ task StandardizeVcf {
 		File vcf_path
 		File contigs_fai
 		Int min_size
+		String caller
 		String sv_pipeline_docker
 	}
 
@@ -49,12 +55,15 @@ task StandardizeVcf {
 			--contigs ~{contigs_fai} \
 			--min-size ~{min_size} \
 			~{vcf_path} \
-			~{sample_id}.std_dragen.vcf.gz \
-			dragen
+			~{sample_id}.std.vcf.gz \
+			~{caller}
+
+		tabix -p vcf ~{sample_id}.std.vcf.gz
 	>>>
 
 	output {
-		File standardized_vcf = "~{sample_id}.std_dragen.vcf.gz"
+		File standardized_vcf = "~{sample_id}.std.vcf.gz"
+		File standardized_vcf_index = "~{sample_id}.std.vcf.gz.tbi"
 	}
 
 	runtime {
@@ -65,27 +74,35 @@ task StandardizeVcf {
 	}
 }
 
-task Vcf2Bed {
+task FormatVcfForGatk {
 	input {
 		String sample_id
 		File vcf_path
+		File ploidy_table
 		String sv_pipeline_docker
 	}
 
 	command <<<
 		set -eu -o pipefail
 
-		svtk vcf2bed --info SVTYPE --info SVLEN ~{vcf_path} - | awk '$7 != "BND"' > ~{sample_id}.bed
+		python /opt/sv-pipeline/scripts/format_svtk_vcf_for_gatk.py \
+			--vcf ~{vcf_path} \
+			--out ~{sample_id}.fmt.vcf.gz \
+			--ploidy-table ~{ploidy_table} \
+			--fix-end
+
+		tabix -p vcf ~{sample_id}.fmt.vcf.gz
 	>>>
 
 	output {
-		File vcf2bed_vapor = "~{sample_id}.bed"
+		File formatted_vcf = "~{sample_id}.fmt.vcf.gz"
+		File formatted_vcf_index = "~{sample_id}.fmt.vcf.gz.tbi"
 	}
 
 	runtime {
 		cpu: 1
-		memory: "2 GiB"
-		disks: "local-disk 2 HDD"
+		memory: "4 GiB"
+		disks: "local-disk 5 SSD"
 		docker: sv_pipeline_docker
 	}
 }
