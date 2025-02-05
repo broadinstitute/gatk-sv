@@ -15,6 +15,7 @@ workflow Scramble {
     File original_bam_or_cram_file
     File original_bam_or_cram_index
     File counts_file
+    # TODO: Do I also update this to reference Dragen?
     File manta_vcf
     String sample_name
     File reference_fasta

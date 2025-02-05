@@ -493,6 +493,7 @@ def main(argv: Optional[List[Text]] = None):
                     l1_size=arguments.l1_size)
     logging.info("Loading MEI bed...")
     mei_trees = create_trees_from_bed_records(arguments.mei_bed, padding=arguments.mei_padding)
+    # TODO: Do I also update this to reference Dragen?
     logging.info("Loading Manta deletions...")
     with pysam.VariantFile(arguments.manta_vcf) as f_manta:
         del_filter_trees = dict()

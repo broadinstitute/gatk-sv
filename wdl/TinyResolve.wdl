@@ -8,6 +8,7 @@ import "Utils.wdl" as util
 workflow TinyResolve {
   input {
     Array[String] samples         # Sample ID
+    # TODO: Do I also update this to reference Dragen?
     File manta_vcf_tar           # tarballed Manta VCFs
     File cytoband
     Array[File] discfile
