@@ -258,7 +258,7 @@ task CleanVcfPreprocess {
 
 		bcftools view processed.vcf.gz | bcftools reheader -h header.txt | bgzip -c > processed.reheader.vcf.gz
 
-		rm header.txt
+		rm processed.vcf.gz header.txt
 		
 		python /opt/sv-pipeline/04_variant_resolution/scripts/cleanvcf_preprocess.py \
 			-V processed.reheader.vcf.gz \

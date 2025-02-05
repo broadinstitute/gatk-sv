@@ -4,6 +4,7 @@ import argparse
 import pysam
 import gzip
 
+DUP_SVTYPE = 'DUP'
 
 def process_record(record):
     record = process_svtype(record)
@@ -11,7 +12,7 @@ def process_record(record):
 
 
 def process_svtype(record):
-    if not any(':ME' in alt for alt in record.alts):
+    if record.info.get('SVTYPE') == DUP_SVTYPE:
         record.alts = ('<' + record.info.get('SVTYPE') + '>',)
     return record
 

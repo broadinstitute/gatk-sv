@@ -5,6 +5,8 @@ import pysam
 import gzip
 
 
+ME_ALT = ':ME'
+DUP_SVTYPE = 'DUP'
 VAR_GQ = 'varGQ'
 MULTIALLELIC = 'MULTIALLELIC'
 UNRESOLVED = 'UNRESOLVED'
@@ -29,6 +31,7 @@ def process_record(record, chrX, chrY, fail_set, pass_set):
     record = process_varGQ(record)
     record = process_multiallelic(record)
     record = process_unresolved(record)
+    record = process_svtype(record)
     record = process_noisy(record, fail_set)
     record = process_bothsides_support(record, pass_set)
     record = process_allosomes(record, chrX, chrY)
@@ -55,6 +58,12 @@ def process_unresolved(record):
     if UNRESOLVED in record.info:
         del record.info[UNRESOLVED]
         record.filter.add(UNRESOLVED)
+    return record
+
+
+def process_svtype(record):
+    if not any(ME_ALT in alt for alt in record.alts) and not record.info.get('SVTYPE') == DUP_SVTYPE:
+        record.alts = ('<' + record.info.get('SVTYPE') + '>',)
     return record
 
 
