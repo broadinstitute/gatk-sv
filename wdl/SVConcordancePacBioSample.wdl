@@ -107,16 +107,6 @@ task PrepPacBioVcf {
     RuntimeAttr? runtime_attr_override
   }
 
-  RuntimeAttr default_attr = object {
-                               cpu_cores: 1,
-                               mem_gb: 1.5,
-                               disk_gb: ceil(10 + 3 * size(vcf, "GB")),
-                               boot_disk_gb: 10,
-                               preemptible_tries: 3,
-                               max_retries: 1
-                             }
-  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
-
   output {
     File out = "~{output_prefix}.vcf.gz"
     File out_index = "~{output_prefix}.vcf.gz.tbi"
@@ -136,6 +126,17 @@ task PrepPacBioVcf {
       | bcftools annotate --set-id '~{truth_tool_name}_%CHROM\_%POS\_%END\_%SVTYPE\_%SVLEN' -Oz -o ~{output_prefix}.vcf.gz
     tabix ~{output_prefix}.vcf.gz
   >>>
+
+  RuntimeAttr default_attr = object {
+    cpu_cores: 1,
+    mem_gb: 1.5,
+    disk_gb: ceil(10 + 3 * size(vcf, "GB")),
+    boot_disk_gb: 10,
+    preemptible_tries: 3,
+    max_retries: 1
+  }
+  RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
+
   runtime {
     cpu: select_first([runtime_attr.cpu_cores, default_attr.cpu_cores])
     memory: select_first([runtime_attr.mem_gb, default_attr.mem_gb]) + " GiB"
