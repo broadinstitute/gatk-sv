@@ -20,6 +20,11 @@ workflow SVConcordancePacBioSample {
     Float? pesr_size_similarity
     Int? pesr_breakend_window
 
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_bed_files
+
     File reference_dict
 
     # For debugging
@@ -55,32 +60,29 @@ workflow SVConcordancePacBioSample {
       input:
         truth_vcf=PrepPacBioVcf.out,
         eval_vcf=sample_vcf,
-        output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.unsorted",
+        output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}",
         additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window}",
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_bed_files=track_bed_files,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
     }
-    call tasks_cohort.SortVcf {
-      input:
-        vcf=SVConcordanceTask.out_unsorted,
-        outfile_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_sort_vcf
-    }
   }
 
   call utils.TarFiles {
     input:
-      files=flatten([SortVcf.out, SortVcf.out_index]),
+      files=flatten([SVConcordanceTask.out, SVConcordanceTask.out_index]),
       prefix="~{prefix}.pacbio_concordance_vcfs.~{sample_id}",
       linux_docker=linux_docker,
       runtime_attr_override=runtime_attr_tar
   }
 
   output {
-    Array[File] pacbio_concordance_vcfs = SortVcf.out
+    Array[File] pacbio_concordance_vcfs = SVConcordanceTask.out
     File pacbio_concordance_vcfs_tar = TarFiles.out
   }
 }
