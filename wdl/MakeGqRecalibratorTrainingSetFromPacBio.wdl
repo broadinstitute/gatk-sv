@@ -44,9 +44,19 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
     Float? pesr_size_similarity_strict = 0.5
     Int? pesr_breakend_window_strict = 5000
 
+    File? clustering_config_strict
+    File? stratification_config_strict
+    Array[String]? track_names_strict
+    Array[File]? track_intervals_strict
+
     Float? pesr_interval_overlap_loose = 0
     Float? pesr_size_similarity_loose = 0
     Int? pesr_breakend_window_loose = 5000
+
+    File? clustering_config_loose
+    File? stratification_config_loose
+    Array[String]? track_names_loose
+    Array[File]? track_intervals_loose
 
     File reference_dict
 
@@ -184,6 +194,10 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_loose,
         pesr_size_similarity=pesr_size_similarity_loose,
         pesr_breakend_window=pesr_breakend_window_loose,
+        clustering_config = clustering_config_loose,
+        stratification_config = stratification_config_loose,
+        track_names = track_names_loose,
+        track_intervals = track_intervals_loose,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,
@@ -201,6 +215,10 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         pesr_interval_overlap=pesr_interval_overlap_strict,
         pesr_size_similarity=pesr_size_similarity_strict,
         pesr_breakend_window=pesr_breakend_window_strict,
+        clustering_config = clustering_config_strict,
+        stratification_config = stratification_config_strict,
+        track_names = track_names_strict,
+        track_intervals = track_intervals_strict,
         sv_base_mini_docker=sv_base_mini_docker,
         sv_pipeline_docker=sv_pipeline_docker,
         gatk_docker=gatk_docker,

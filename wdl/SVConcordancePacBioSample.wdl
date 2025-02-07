@@ -20,6 +20,11 @@ workflow SVConcordancePacBioSample {
     Float? pesr_size_similarity
     Int? pesr_breakend_window
 
+    File? clustering_config
+    File? stratification_config
+    Array[String]? track_names
+    Array[File]? track_intervals
+
     File reference_dict
 
     # For debugging
@@ -57,6 +62,10 @@ workflow SVConcordancePacBioSample {
         eval_vcf=sample_vcf,
         output_prefix="~{prefix}.concordance.~{tool_names[i]}.~{sample_id}.unsorted",
         additional_args="--pesr-interval-overlap ~{pesr_interval_overlap} --pesr-size-similarity ~{pesr_size_similarity} --pesr-breakend-window ~{pesr_breakend_window}",
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_intervals=track_intervals,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
