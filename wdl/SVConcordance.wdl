@@ -10,6 +10,12 @@ workflow SVConcordance {
     File truth_vcf
     String output_prefix
 
+    String? additional_args
+    File? clustering_config
+    File? stratification_config
+    Array[File]? track_bed_files
+    Array[String]? track_names
+
     File contig_list
     File reference_dict
 
@@ -28,27 +34,24 @@ workflow SVConcordance {
       input:
         eval_vcf=eval_vcf,
         truth_vcf=truth_vcf,
-        output_prefix="~{output_prefix}.concordance.~{contig}.unsorted",
+        output_prefix="~{output_prefix}.concordance.~{contig}",
         contig=contig,
+        additional_args=additional_args,
+        clustering_config=clustering_config,
+        stratification_config=stratification_config,
+        track_names=track_names,
+        track_bed_files=track_bed_files,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
         runtime_attr_override=runtime_attr_sv_concordance
     }
-
-    call tasks_cohort.SortVcf {
-      input:
-        vcf=SVConcordanceTask.out_unsorted,
-        outfile_prefix="~{output_prefix}.concordance.~{contig}.sorted",
-        sv_base_mini_docker=sv_base_mini_docker,
-        runtime_attr_override=runtime_attr_sort_vcf
-    }
   }
 
   call tasks_cohort.ConcatVcfs {
     input:
-      vcfs=SortVcf.out,
-      vcfs_idx=SortVcf.out_index,
+      vcfs=SVConcordanceTask.out,
+      vcfs_idx=SVConcordanceTask.out_index,
       naive=true,
       outfile_prefix="~{output_prefix}.concordance",
       sv_base_mini_docker=sv_base_mini_docker,
@@ -69,6 +72,11 @@ task SVConcordanceTask {
     File reference_dict
     String? contig
     String? additional_args
+
+    File? clustering_config
+    File? stratification_config
+    Array[File]? track_bed_files
+    Array[String]? track_names
 
     Float? java_mem_fraction
     String gatk_docker
@@ -95,7 +103,8 @@ task SVConcordanceTask {
   RuntimeAttr runtime_attr = select_first([runtime_attr_override, default_attr])
 
   output {
-    File out_unsorted = "~{output_prefix}.vcf.gz"
+    File out = "~{output_prefix}.vcf.gz"
+    File out_index = "~{output_prefix}.vcf.gz.tbi"
   }
   command <<<
     set -euo pipefail
@@ -113,14 +122,26 @@ task SVConcordanceTask {
     JVM_MAX_MEM=$(getJavaMem MemTotal)
     echo "JVM memory: $JVM_MAX_MEM"
 
+    touch args.txt
+    while read line; do
+      echo "--track-intervals $line " >> args.txt
+    done < ~{write_lines(if defined(track_bed_files) then select_first([track_bed_files]) else [])}
+    while read line; do
+      echo "--track-intervals $line " >> args.txt
+    done < ~{write_lines(if defined(track_names) then select_first([track_names]) else [])}
+    echo "args.txt:"
+    cat args.txt
+
     # As of 12/15/2023, the gatk docker contains an outdated version of bcftools so we sort in a subsequent task
     gatk --java-options "-Xmx${JVM_MAX_MEM}" SVConcordance \
+      --arguments_file args.txt \
       ~{"-L " + contig} \
       --sequence-dictionary ~{reference_dict} \
       --eval ~{eval_vcf} \
       --truth ~{truth_vcf} \
       -O ~{output_prefix}.vcf.gz \
-      --do-not-sort \
+      ~{"--clustering-config " + clustering_config} \
+      ~{"--stratify-config " + stratification_config} \
       ~{additional_args}
   >>>
   runtime {
