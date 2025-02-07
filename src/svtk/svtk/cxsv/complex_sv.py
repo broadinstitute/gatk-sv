@@ -525,6 +525,7 @@ class ComplexSV:
             self.svtype = 'INS'
 
     # Where Manta calls two insertions flanking a duplication, report just the dup
+    # TODO: Do we also have to do this for Dragen calls?
     def report_manta_tandem_dup(self):
         record = self.dups[0]
         self.cpx_type = record.alts[0].strip('<>')

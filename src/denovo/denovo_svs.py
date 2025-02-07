@@ -772,7 +772,7 @@ def main():
     print("Took %f seconds to process" % delta)
 
     # Filter out INS that are manta or melt only and are SR only, have GQ=0, and FILTER contains 'HIGH_SR_BACKGROUND'
-    # TODO: Do I also update this to reference Dragen?
+    # TODO: Do we also have to filter out DRAGEN-only records?
     verbose_print('Filtering out INS that are manta or melt only and SR only, with GQ=0 and FILTER contains HIGH_SR_BACKGROUND', verbose)
     start = time.time()
     remove_ins = bed_child[(bed_child['SVTYPE'] == 'INS') & ((bed_child['ALGORITHMS'] == 'manta') | (bed_child['ALGORITHMS'] == 'melt')) & (bed_child['EVIDENCE_FIX'] == 'SR') & ((bed_child['GQ'] == '0') | (bed_child.FILTER.str.contains('HIGH_SR_BACKGROUND')))]['name_famid'].to_list()
