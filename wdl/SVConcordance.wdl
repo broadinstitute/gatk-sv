@@ -39,7 +39,7 @@ workflow SVConcordance {
         clustering_config=clustering_config,
         stratification_config=stratification_config,
         track_names=track_names,
-        track_bed_files=track_bed_files,
+        track_intervals=track_intervals,
         reference_dict=reference_dict,
         java_mem_fraction=java_mem_fraction,
         gatk_docker=gatk_docker,
