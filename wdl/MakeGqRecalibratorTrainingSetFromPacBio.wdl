@@ -34,6 +34,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
 
     Boolean write_detail_report = true
     Int? vapor_max_cnv_size = 5000
+    Int? vapor_max_non_cnv_size = 5000
     Float? vapor_min_precision = 0.999
     Int? vapor_pos_read_threshold = 2
     Int? irs_min_cnv_size = 10000
@@ -182,6 +183,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
+
     call concordance.SVConcordancePacBioSample as SVConcordanceLoose {
       input:
         sample_id=pacbio_sample_ids[i],
@@ -203,6 +205,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         gatk_docker=gatk_docker,
         linux_docker=linux_docker
     }
+
     call concordance.SVConcordancePacBioSample as SVConcordanceStrict {
       input:
         sample_id=pacbio_sample_ids[i],
@@ -234,6 +237,8 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
           tool_names=tool_names,
           loose_concordance_vcfs=SVConcordanceLoose.pacbio_concordance_vcfs,
           strict_concordance_vcfs=SVConcordanceStrict.pacbio_concordance_vcfs,
+          vapor_max_cnv_size=vapor_max_cnv_size,
+          vapor_max_non_cnv_size=vapor_max_non_cnv_size,
           output_prefix="~{output_prefix_}.gq_training_labels.~{pacbio_sample_ids[i]}",
           sv_pipeline_docker=sv_pipeline_docker
       }
@@ -524,6 +529,8 @@ task RefineSampleLabels {
     Array[String] tool_names
     Array[File] loose_concordance_vcfs
     Array[File] strict_concordance_vcfs
+    Int? vapor_max_cnv_size
+    Int? vapor_max_non_cnv_size
     String? additional_args
     File? script
     String output_prefix
@@ -554,6 +561,8 @@ task RefineSampleLabels {
       --main-vcf ~{main_vcf} \
       --vapor-json ~{vapor_json} \
       --sample-id ~{sample_id} \
+      --cnv-size-cutoff ~{vapor_max_cnv_size} \
+      --non-cnv-size-cutoff ~{vapor_max_non_cnv_size} \
       --json-out ~{output_prefix}.json \
       --table-out ~{output_prefix}.tsv \
       --truth-algorithms ~{sep="," tool_names} \
