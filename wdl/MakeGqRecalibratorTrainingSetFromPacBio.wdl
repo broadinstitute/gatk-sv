@@ -180,6 +180,7 @@ workflow MakeGqRecalibratorTrainingSetFromPacBio {
         sample_id=pacbio_sample_ids[i],
         vcf=ConcatPacbioSampleVcfs.concat_vcf,
         vcf_index=ConcatPacbioSampleVcfs.concat_vcf_idx,
+        max_variant_size=vapor_max_cnv_size,
         output_prefix=output_prefix_,
         sv_pipeline_docker=sv_pipeline_docker
     }
@@ -387,6 +388,7 @@ task PrepSampleVcf {
     String sample_id
     File vcf
     File vcf_index
+    Int? max_variant_size
     File? script
     String output_prefix
     String sv_pipeline_docker
@@ -412,7 +414,9 @@ task PrepSampleVcf {
 
     # Subset to DEL/DUP/INS and convert DUP to INS
     bcftools view -s "~{sample_id}" ~{vcf} | bcftools view --no-update --min-ac 1 -Oz -o tmp1.vcf.gz
-    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" script} tmp1.vcf.gz \
+    python ~{default="/opt/sv-pipeline/scripts/preprocess_gatk_for_pacbio_eval.py" script} \
+      tmp1.vcf.gz \
+      --max-variant-size ~{max_variant_size} \
       | bcftools sort -Oz -o ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
     tabix ~{output_prefix}.~{sample_id}.prepped_for_pb.vcf.gz
   >>>
