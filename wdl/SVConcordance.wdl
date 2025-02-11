@@ -127,7 +127,7 @@ task SVConcordanceTask {
       echo "--track-intervals $line " >> args.txt
     done < ~{write_lines(if defined(track_bed_files) then select_first([track_bed_files]) else [])}
     while read line; do
-      echo "--track-intervals $line " >> args.txt
+      echo "--track-name $line " >> args.txt
     done < ~{write_lines(if defined(track_names) then select_first([track_names]) else [])}
     echo "args.txt:"
     cat args.txt
