@@ -150,7 +150,6 @@ task SVConcordanceTask {
       ~{if defined(stratification_config) then "--stratify-config " + stratification_config else ""} \
       $TRACK_INTERVALS_CMD \
       $TRACK_NAMES_CMD \
-      --do-not-sort \
       ~{additional_args}
   >>>
   runtime {
