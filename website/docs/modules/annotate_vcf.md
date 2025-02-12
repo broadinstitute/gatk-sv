@@ -5,7 +5,7 @@ sidebar_position: 20
 slug: av
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 Adds annotations, such as the inferred function and allele frequencies of variants, to a VCF.
 
@@ -75,7 +75,7 @@ If provided, sex-specific allele frequencies will be annotated.
 Pseudo-autosomal region (PAR) bed file. If provided, variants overlapping PARs will be annotated with the `PAR` field.
 
 #### `sv_per_shard`
-Shard sized for parallel processing. Decreasing this may help if the workflow is running too slowly.
+Shard size for parallel processing. Decreasing this may help if the workflow is running too slowly.
 
 #### <HighlightOptionalArg>Optional</HighlightOptionalArg> `external_af_ref_bed`
 Reference SV set (see [here](/docs/resources#external_af_ref_bed)). If provided, annotates variants with allele frequencies 

@@ -5,7 +5,7 @@ sidebar_position: 15
 slug: refcv
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/RefineComplexVariants.wdl)
 
@@ -24,14 +24,14 @@ stateDiagram
 
   cvcf: CleanVcf
   refcv: RefineComplexVariants
-  amvf: ApplyManualVariantFilter
+  svc: SVConcordance
   
   cvcf --> refcv
-  refcv --> amvf
+  refcv --> svc
   
   class refcv thisModule
   class cvcf inModules
-  class amvf outModules
+  class svc outModules
 ```
 
 ### Inputs

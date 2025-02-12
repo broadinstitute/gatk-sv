@@ -77,7 +77,7 @@ class PESRTest:
         counts = pd.merge(counts, self.medians, on='sample', how='left')
         counts['norm_count'] = counts['count'] * \
             target_cov / counts['median_cov']
-        counts['count'] = counts['norm_count'].round()
+        counts['count'] = counts['norm_count'].astype(float).round()
         counts.drop(['norm_count', 'median_cov'], axis=1, inplace=True)
 
         return counts

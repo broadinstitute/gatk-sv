@@ -5,18 +5,12 @@ sidebar_position: 2
 slug: eqc
 ---
 
-import { Highlight, HighlightOptionalArg } from "../../src/components/highlight.js"
+import { Highlight, HighlightOptionalArg } from "@site/src/components/highlight.js"
 
 [WDL source code](https://github.com/broadinstitute/gatk-sv/blob/main/wdl/EvidenceQC.wdl)
 
 Runs ploidy estimation, dosage scoring, and optionally VCF QC. 
-The results from this module can be used for QC and batching.
-
-For large cohorts, this workflow can be run on arbitrary cohort 
-partitions of up to about 500 samples. Afterward, we recommend 
-using the results to divide samples into smaller batches (~100-500 samples) 
-with ~1:1 male:female ratio. Refer to the [Batching](/docs/execution/joint#batching) section 
-for further guidance on creating batches.
+The results from this module can be used for [QC](#preliminary-sample-qc) and [batching](#batching).
 
 We also recommend using sex assignments generated from the ploidy 
 estimates and incorporating them into the PED file, with sex = 0 for sex aneuploidies.
@@ -76,6 +70,34 @@ stage if necessary. Here are a few of the basic QC checks that we recommend:
 
 - Remove samples with autosomal aneuploidies based on
   the per-batch binned coverage plots of each chromosome.
+
+In the joint calling mode Terra workspace, we provide a Jupyter notebook `SampleQC.ipynb`
+for sample QC and filtering.
+
+
+### Batching
+
+For larger cohorts, samples should be split up into batches of about 100-500
+samples with similar characteristics. We recommend batching based on overall
+coverage and dosage score (WGD), which is generated in EvidenceQC.
+You may also wish to batch samples based on other characteristics that could
+impact SV calling, such as mean insert size or PCR status.
+An example batching process is outlined below:
+
+1. Divide the cohort by chromosome X ploidy (less than 2, greater than or equal to 2)
+   based on copy ratio estimates from EvidenceQC. In this way, males and females will be
+   batched separately before being merged back together for batches with equal sex balance
+2. Partition the samples by median coverage from EvidenceQC,
+   grouping samples with similar median coverage together
+3. Partition the samples further by dosage score (WGD) from
+   EvidenceQC, grouping samples with similar WGD score together
+4. Optionally, partition the samples further by mean insert size if available,
+   grouping samples with similar mean insert size together
+5. Merge corresponding male and female partitions together to generate
+   roughly equally sized batches of 100-500 samples with roughly equal sex balance
+
+In the joint calling mode Terra workspace, we provide a Jupyter notebook `Batching.ipynb`
+for batch creation.
 
 
 ### Inputs

@@ -25,16 +25,16 @@ stateDiagram
   classDef thisModule font-weight:bold,stroke-width:0px,fill:#ff9900,color:white
   classDef outModules stroke-width:0px,fill:#caf0f8,color:#00509d
 
-  amvf: ApplyManualVariantFilter
+  refcv: RefineComplexVariants
   jrc: JoinRawCalls
   svc: SVConcordance
   fg: FilterGenotypes
-  amvf --> svc
+  refcv --> svc
   jrc --> svc
   svc --> fg
   
   class svc thisModule
-  class amvf inModules
+  class refcv inModules
   class jrc inModules
   class fg outModules
 ```
@@ -45,7 +45,7 @@ stateDiagram
 Prefix for the output VCF, such as the cohort name. May be alphanumeric with underscores.
 
 #### `eval_vcf`
-VCF to annotate. In the recommended pipeline, this is generated in [ApplyManualVariantFilter](./amvf).
+VCF to annotate. In the recommended pipeline, this is generated in [RefineComplexVariants](./refcv).
 
 #### `truth_vcf`
 VCF to compare against. This should contain the same samples as `eval_vcf`. In the recommended pipeline, this is 

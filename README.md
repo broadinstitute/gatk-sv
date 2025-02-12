@@ -2,7 +2,7 @@
 
 A structural variation discovery pipeline for Illumina short-read whole-genome sequencing (WGS) data.
 
-For technical documentation on GATK-SV, including how to run the pipeline, please refer to our website.
+For technical documentation on GATK-SV, including how to run the pipeline, please refer to our [website](https://broadinstitute.github.io/gatk-sv/).
 
 ## Repository structure
 * `/carrot`: [Carrot](https://github.com/broadinstitute/carrot) tests
