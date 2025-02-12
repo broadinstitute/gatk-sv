@@ -129,13 +129,13 @@ task SVConcordanceTask {
 
     TRACK_NAMES_CMD=$( 
       if [ ~{if defined(track_names) then "1" else "0"} -eq 1 ]; then
-        echo "--track-name ~{sep='--track-name' track_names}"
+        echo "--track-name ~{sep=' --track-name ' track_names}"
       fi
     )
 
     TRACK_INTERVALS_CMD=$(
       if [ ~{if defined(track_intervals) then "1" else "0"} -eq 1 ]; then
-        echo "--track-intervals ~{sep='--track-intervals' track_intervals}"
+        echo "--track-intervals ~{sep=' --track-intervals ' track_intervals}"
       fi
     )
 
