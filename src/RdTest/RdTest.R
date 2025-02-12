@@ -1186,8 +1186,8 @@ runRdTest<-function(bed)
     non_outlier_samples <- setdiff(sampleIDs, outlier_ids)
     if (length(non_outlier_samples) > 0) {
       sampleIDs <- non_outlier_samples
+      cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_ids), , drop = FALSE]
     }
-    cnv_matrix <- cnv_matrix[!(rownames(cnv_matrix) %in% outlier_ids), , drop = FALSE]
   }
   samplesPrior <-unlist(strsplit(as.character(sampleIDs),split=","))
 

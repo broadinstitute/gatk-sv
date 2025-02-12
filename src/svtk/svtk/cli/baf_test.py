@@ -53,8 +53,11 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
         return bafs, bafs, called_samples
     bafs.columns = ['chr', 'pos', 'baf', 'sample']
 
-    bafs = bafs[bafs['sample'].isin(samples) & ~bafs['sample'].isin(outlier_sample_ids)]
-
+    # Exclude outlier samples from all samples only if non-outlier samples exist
+    bafs_no_outliers = bafs[bafs['sample'].isin(samples) & ~bafs['sample'].isin(outlier_sample_ids)]
+    if not bafs_no_outliers.empty:
+        bafs = bafs_no_outliers
+    
     # Exclude outlier samples from called samples only if non-outlier samples exist
     non_outlier_called_samples = [s for s in called_samples if s not in outlier_sample_ids]
     if non_outlier_called_samples:
