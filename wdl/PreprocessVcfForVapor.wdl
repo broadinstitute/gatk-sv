@@ -4,6 +4,7 @@ workflow PreprocessVcfForVapor {
 	input {
 		String sample_id            # Sample identifier
 		File vcf_path             	# Path to the input VCF file
+		String caller				# Caller to standardize VCF for
 
 		File contigs_fai          	# Path to the contigs file
 		Int min_size               	# Minimum size for standardization
@@ -15,6 +16,7 @@ workflow PreprocessVcfForVapor {
 		input:
 			sample_id = sample_id,
 			vcf_path = vcf_path,
+			caller = caller,
 			contigs_fai = contigs_fai,
 			min_size = min_size,
 			sv_pipeline_docker = sv_pipeline_docker
@@ -36,6 +38,7 @@ task StandardizeVcf {
 	input {
 		String sample_id
 		File vcf_path
+		String caller
 		File contigs_fai
 		Int min_size
 		String sv_pipeline_docker
@@ -50,7 +53,7 @@ task StandardizeVcf {
 			--min-size ~{min_size} \
 			~{vcf_path} \
 			~{sample_id}.std_dragen.vcf.gz \
-			dragen
+			~{caller}
 	>>>
 
 	output {
