@@ -9,6 +9,8 @@ workflow AnnotateILFeatures{
         Array[File] query_file_list
         Array[File] ref_file_list
         Array[String] contig_list
+        File compare_callset_sh
+        File compare_callse_helper_R
         String prefix
 
         String rdpesr_benchmark_docker
@@ -44,6 +46,8 @@ task BedComparisons{
         File query_file
         File ref_file
         String prefix
+        File compare_callset_sh
+        File compare_callse_helper_R
         String rdpesr_benchmark_docker
         RuntimeAttr? runtime_attr_override
     }
@@ -64,7 +68,7 @@ task BedComparisons{
     }
 
     command <<<
-        bash /src/compare_callsets_V2.sh -O ~{prefix}.bed -p ~{prefix} ~{query_file} ~{ref_file}
+        bash ~{compare_callset_sh} -r ~{compare_callse_helper_R} -O ~{prefix}.bed -p ~{prefix} ~{query_file} ~{ref_file}
         bgzip ~{prefix}.bed
     >>>
     runtime {
