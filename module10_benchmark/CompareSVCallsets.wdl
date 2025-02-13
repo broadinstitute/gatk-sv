@@ -9,7 +9,7 @@ workflow AnnotateILFeatures{
         Array[File] query_file_list
         Array[File] ref_file_list
         Array[String] contig_list
-        Array prefix
+        String prefix
 
         String rdpesr_benchmark_docker
         String sv_base_mini_docker
