@@ -22,6 +22,8 @@ workflow AnnotateILFeatures{
             input:
                 query_file = query_file_list[i],
                 ref_file = ref_file_list[i],
+                compare_callset_sh = compare_callset_sh,
+                compare_callse_helper_R = compare_callse_helper_R,
                 prefix = "~{prefix}.~{contig_list[i]}",
                 rdpesr_benchmark_docker=rdpesr_benchmark_docker
         }
