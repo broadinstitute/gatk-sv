@@ -93,7 +93,7 @@ task MergeJSONs {
 
     files_str = "~{sep=" " json_files}"
     files = files_str.split()
-    
+
     for file in files:
         with open(file, "r") as f:
             data = json.load(f)
@@ -101,6 +101,7 @@ task MergeJSONs {
         
     with open(output_file, "w") as f:
         json.dump(merged_dict, f, indent=4)
+    CODE
   >>>
 
   output {
