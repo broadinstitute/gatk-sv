@@ -60,13 +60,11 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
     
     # Exclude outlier samples from called samples only if non-outlier samples exist
     non_outlier_called_samples = [s for s in called_samples if s not in outlier_sample_ids]
-    if non_outlier_called_samples:
-        retained_samples = non_outlier_called_samples
-    else:
-        retained_samples = called_samples
-
+    if len(non_outlier_called_samples) > 0:
+        called_samaples = non_outlier_called_samples
+    
     if bafs.empty:
-        return bafs, bafs, retained_samples
+        return bafs, bafs, called_samaples
     
     bafs['pos'] = bafs.pos.astype(int)
     bafs['baf'] = bafs.baf.astype(float)
@@ -84,7 +82,7 @@ def preprocess(chrom, start, end, tbx, samples, window=None, called_samples=None
     
     # Report BAF for variants inside CNV
     called_bafs = bafs.loc[bafs.region == 'inside'].copy()
-    return het_counts, called_bafs, retained_samples
+    return het_counts, called_bafs, called_samaples
 
 
 def main(argv):
@@ -163,12 +161,7 @@ def main(argv):
                                        min(end - start, 1000000), random_state=random_state)
                     KS = KS2sample(called_bafs, samplelist)
                     ks, ksp = KS.test(samplelist)
-                    try:
-                        mean, delp = Del.Ttest(samplelist)
-                    except Exception:
-                        print(samplelist)
-                        print(het_counts)
-                        raise Exception
+                    mean, delp = Del.Ttest(samplelist)
                     statis = Del.stats(samplelist)
                     line = chrom + '\t' + str(start) + '\t' + str(end) + '\t' + id + '\t' + samples + '\t' + type + '\t' + str(
                         mean) + ',' + str(delp) + "\t" + str(ks) + ',' + str(ksp) + '\t' + statis
