@@ -91,14 +91,16 @@ task MergeJSONs {
     output_file = "merged.json"
     merged_dict = {}
 
-    for file in ~{json_files}:
-      with open(file, "r") as f:
-        data = json.load(f)
-        merged_dict.update(data)
+    files_str = "~{sep=" " json_files}"
+    files = files_str.split()
     
+    for file in files:
+        with open(file, "r") as f:
+            data = json.load(f)
+            merged_dict.update(data)
+        
     with open(output_file, "w") as f:
-      json.dump(merged_dict, f, indent=4)
-    CODE
+        json.dump(merged_dict, f, indent=4)
   >>>
 
   output {
